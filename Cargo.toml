@@ -17,3 +17,10 @@ bellman = { git = "https://github.com/zcash/librustzcash" }
 rand = "0.7.3"
 sha2 = "0.9.1"
 
+[[bin]]
+name = "sha256"
+path = "src/sha256.rs"
+
+[[bin]]
+name = "mimc"
+path = "src/mimc.rs"
