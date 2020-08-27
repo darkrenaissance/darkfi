@@ -11,11 +11,15 @@ ff = { git = "https://github.com/zcash/librustzcash" }
 group = { git = "https://github.com/zcash/librustzcash" }
 pairing = { git = "https://github.com/zcash/librustzcash" }
 bellman = { git = "https://github.com/zcash/librustzcash" }
-#zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-#zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
+bls12_381 = { git = "https://github.com/zcash/librustzcash" }
+zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+jubjub = { git = "https://github.com/zcash/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
+rand_core = "0.5.1"
 sha2 = "0.9.1"
+rand_xorshift = "0.2"
 
 [[bin]]
 name = "sha256"
@@ -24,3 +28,7 @@ path = "src/sha256.rs"
 [[bin]]
 name = "mimc"
 path = "src/mimc.rs"
+
+[[bin]]
+name = "zec"
+path = "src/zec.rs"
