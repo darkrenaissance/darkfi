@@ -1,6 +1,6 @@
 use bellman::groth16::*;
 use bls12_381::Bls12;
-use ff::Field;
+use ff::{Field, PrimeField};
 use group::Group;
 use rand::{rngs::OsRng, seq::SliceRandom, CryptoRng};
 use rand_core::{RngCore, SeedableRng};
@@ -11,43 +11,67 @@ use zcash_primitives::note_encryption::{Memo, SaplingNoteEncryption};
 use zcash_primitives::primitives::{Diversifier, Note, ProofGenerationKey, Rseed, ValueCommitment};
 use zcash_primitives::transaction::components::{Amount, GROTH_PROOF_SIZE};
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_proofs::circuit::sapling::Spend;
+use zcash_primitives::sapling::Node;
+use zcash_proofs::circuit::sapling::{Spend, Output};
 use zcash_proofs::sapling::SaplingProvingContext;
+use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 
 const TREE_DEPTH: usize = 32;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn main() -> Result<()> {
-    let rng = &mut XorShiftRng::from_seed([
-        0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
-        0xe5,
-    ]);
+fn generate_params() -> Result<()> {
+    let mut rng = OsRng;
 
-    //println!("Creating sample parameters...");
-    //let start = Instant::now();
-    //let groth_params = generate_random_parameters::<Bls12, _, _>(
-    //    Spend {
-    //        value_commitment: None,
-    //        proof_generation_key: None,
-    //        payment_address: None,
-    //        commitment_randomness: None,
-    //        ar: None,
-    //        auth_path: vec![None; TREE_DEPTH],
-    //        anchor: None,
-    //    },
-    //    rng,
-    //)
-    //.unwrap();
-    //let buffer = File::create("foo.txt")?;
-    //groth_params.write(buffer)?;
-    //println!("Finished paramgen [{:?}]", start.elapsed());
-
-    println!("Reading parameters from file...");
+    println!("Creating spend parameters...");
     let start = Instant::now();
-    let buffer = File::open("foo.txt")?;
-    let groth_params = Parameters::<Bls12>::read(buffer, false)?;
-    println!("Finished paramgen [{:?}]", start.elapsed());
+    let spend_params = generate_random_parameters::<Bls12, _, _>(
+        Spend {
+            value_commitment: None,
+            proof_generation_key: None,
+            payment_address: None,
+            commitment_randomness: None,
+            ar: None,
+            auth_path: vec![None; TREE_DEPTH],
+            anchor: None,
+        },
+        &mut rng,
+    )
+    .unwrap();
+    let buffer = File::create("spend.params")?;
+    spend_params.write(buffer)?;
+    println!("Finished spend paramgen [{:?}]", start.elapsed());
+
+    println!("Creating output parameters...");
+    let start = Instant::now();
+    let output_params = generate_random_parameters::<Bls12, _, _>(
+        Output {
+            value_commitment: None,
+            payment_address: None,
+            commitment_randomness: None,
+            esk: None,
+        },
+        &mut rng,
+    )
+    .unwrap();
+    let buffer = File::create("output.params")?;
+    output_params.write(buffer)?;
+    println!("Finished output paramgen [{:?}]", start.elapsed());
+
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    //generate_params()?;
+
+    let mut rng = OsRng;
+
+    println!("Reading output parameters from file...");
+    let start = Instant::now();
+    let buffer = File::open("output.params")?;
+    let output_params = Parameters::<Bls12>::read(buffer, false)?;
+    let output_vk = prepare_verifying_key(&output_params.vk);
+    println!("Finished load output params [{:?}]", start.elapsed());
 
     let mut ctx = SaplingProvingContext::new();
 
@@ -65,7 +89,6 @@ fn main() -> Result<()> {
     let ovk = viewing_key.fvk.ovk;
 
     let g_d = payment_address.g_d().expect("invalid address");
-    let mut rng = OsRng;
     let mut buffer = [0u8; 32];
     &rng.fill_bytes(&mut buffer);
     let rseed = Rseed::AfterZip212(buffer);
@@ -95,7 +118,7 @@ fn main() -> Result<()> {
     let esk = encryptor.esk().clone();
     let rcm = note.rcm();
     let value = note.value;
-    let (proof, cv) = ctx.output_proof(esk, payment_address, rcm, value, &groth_params);
+    let (proof, cv) = ctx.output_proof(esk, payment_address.clone(), rcm, value, &output_params);
 
     let mut zkproof = [0u8; GROTH_PROOF_SIZE];
     proof
@@ -118,6 +141,76 @@ fn main() -> Result<()> {
     //     out_ciphertext,
     //     zkproof,
     // }
+
+    println!("Reading spend parameters from file...");
+    let start = Instant::now();
+    let buffer = File::open("spend.params")?;
+    let spend_params = Parameters::<Bls12>::read(buffer, false)?;
+    let spend_vk = prepare_verifying_key(&spend_params.vk);
+    println!("Finished spend paramgen [{:?}]", start.elapsed());
+
+    let start = Instant::now();
+
+    let cmu1 = Node::new(note.cmu().to_repr());
+    let mut tree = CommitmentTree::new();
+    tree.append(cmu1).unwrap();
+    let witness = IncrementalWitness::from_tree(&tree);
+
+    let alpha = jubjub::Fr::random(&mut rng);
+
+    // Now we have the spend
+    // SpendDescriptionInfo {
+    //     extsk,
+    //     diversifier,
+    //     note,
+    //     alpha,
+    //     merkle_path,
+    // }
+
+    let proof_generation_key = secret_key.expsk.proof_generation_key();
+
+    let merkle_path = witness.path().unwrap();
+
+    let cmu = Node::new(note.cmu().into());
+    let anchor = merkle_path.root(cmu).into();
+
+    let mut nullifier = [0u8; 32];
+    nullifier.copy_from_slice(&note.nf(
+        &proof_generation_key.to_viewing_key(),
+        merkle_path.position,
+    ));
+
+    let (proof, cv, rk) = ctx.spend_proof(
+        proof_generation_key,
+        payment_address.diversifier().clone(),
+        rseed,
+        alpha,
+        value,
+        anchor,
+        merkle_path,
+        &spend_params,
+        &spend_vk,
+    ).expect("Making proof failed");
+
+    let mut zkproof = [0u8; GROTH_PROOF_SIZE];
+    proof
+        .write(&mut zkproof[..])
+        .expect("should be able to serialize a proof");
+
+    // Now we have a shielded spend
+    // SpendDescription {
+    //     cv,
+    //     anchor,
+    //     nullifier,
+    //     rk,
+    //     zkproof,
+    //     spend_auth_sig: None,
+    // }
+
+    //let extsk = ExtendedSpendingKey::master(&[]);
+    //let extfvk = ExtendedFullViewingKey::from(&extsk);
+    //let to_address = extfvk.default_address().unwrap().1;
+    // We will spend the address from above
 
     //pub extern "C" fn librustzcash_sapling_output_proof(
     //    ctx: *mut SaplingProvingContext,                  X
