@@ -1,21 +1,23 @@
 use bellman::groth16::*;
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
-use group::Group;
-use rand::{rngs::OsRng, seq::SliceRandom, CryptoRng};
-use rand_core::{RngCore, SeedableRng};
-use rand_xorshift::XorShiftRng;
+use rand::rngs::OsRng;
+use rand_core::RngCore;
 use std::fs::File;
-use std::time::{Duration, Instant};
-use zcash_primitives::note_encryption::{Memo, SaplingNoteEncryption};
-use zcash_primitives::primitives::{Diversifier, Note, ProofGenerationKey, Rseed, ValueCommitment};
-use zcash_primitives::transaction::components::{Amount, GROTH_PROOF_SIZE};
-use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_primitives::sapling::{spend_sig, Node};
-use zcash_primitives::redjubjub::PrivateKey;
-use zcash_proofs::circuit::sapling::{Spend, Output};
-use zcash_proofs::sapling::SaplingProvingContext;
-use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
+use std::time::Instant;
+use zcash_primitives::{
+    merkle_tree::{CommitmentTree, IncrementalWitness},
+    note_encryption::{Memo, SaplingNoteEncryption},
+    primitives::{Diversifier, Note, ProofGenerationKey, Rseed, ValueCommitment},
+    redjubjub::PrivateKey,
+    sapling::{spend_sig, Node},
+    transaction::components::{Amount, GROTH_PROOF_SIZE},
+    zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey},
+};
+use zcash_proofs::{
+    circuit::sapling::{Output, Spend},
+    sapling::SaplingProvingContext,
+};
 
 const TREE_DEPTH: usize = 32;
 
@@ -182,22 +184,22 @@ fn main() -> Result<()> {
     let anchor = merkle_path.root(cmu).into();
 
     let mut nullifier = [0u8; 32];
-    nullifier.copy_from_slice(&note.nf(
-        &proof_generation_key.to_viewing_key(),
-        merkle_path.position,
-    ));
+    nullifier
+        .copy_from_slice(&note.nf(&proof_generation_key.to_viewing_key(), merkle_path.position));
 
-    let (proof, cv, rk) = ctx.spend_proof(
-        proof_generation_key,
-        payment_address.diversifier().clone(),
-        rseed,
-        alpha,
-        value,
-        anchor,
-        merkle_path,
-        &spend_params,
-        &spend_vk,
-    ).expect("Making proof failed");
+    let (proof, cv, rk) = ctx
+        .spend_proof(
+            proof_generation_key,
+            payment_address.diversifier().clone(),
+            rseed,
+            alpha,
+            value,
+            anchor,
+            merkle_path,
+            &spend_params,
+            &spend_vk,
+        )
+        .expect("Making proof failed");
 
     let mut zkproof = [0u8; GROTH_PROOF_SIZE];
     proof
@@ -221,17 +223,14 @@ fn main() -> Result<()> {
     // Transaction hash into sighash. Just like in Bitcoin
     // Contains our SpendDescriptions and OutputDescriptions
     let mut sighash = [0u8; 32];
-    let spend_auth_sig = spend_sig(
-        PrivateKey(secret_key.expsk.ask),
-        alpha,
-        &sighash,
-        &mut rng,
-    );
+    let spend_auth_sig = spend_sig(PrivateKey(secret_key.expsk.ask), alpha, &sighash, &mut rng);
 
     // And now use the sighash value (since it's signed by all inputs) to create a new key
     // which is used to sign the balance commitments.
     let amount = Amount::from_u64(0).unwrap();
-    let binding_sig = ctx.binding_sig(amount, &sighash).expect("sighash binding sig failed");
+    let binding_sig = ctx
+        .binding_sig(amount, &sighash)
+        .expect("sighash binding sig failed");
 
     Ok(())
 }
