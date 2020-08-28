@@ -263,5 +263,9 @@ fn main() -> Result<()> {
     let success = ctx.final_check(amount, &sighash, binding_sig);
     assert!(success);
 
+    // The anchor must be a valid merkle root from some past block header
+    // The nullifier must not already exist
+    // And the amount is the 'fee' for the block.
+
     Ok(())
 }
