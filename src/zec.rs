@@ -11,7 +11,8 @@ use zcash_primitives::note_encryption::{Memo, SaplingNoteEncryption};
 use zcash_primitives::primitives::{Diversifier, Note, ProofGenerationKey, Rseed, ValueCommitment};
 use zcash_primitives::transaction::components::{Amount, GROTH_PROOF_SIZE};
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_primitives::sapling::Node;
+use zcash_primitives::sapling::{spend_sig, Node};
+use zcash_primitives::redjubjub::PrivateKey;
 use zcash_proofs::circuit::sapling::{Spend, Output};
 use zcash_proofs::sapling::SaplingProvingContext;
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
@@ -206,6 +207,25 @@ fn main() -> Result<()> {
     //     zkproof,
     //     spend_auth_sig: None,
     // }
+
+    // Now for each spend in the tx, we create a signature
+    // spendAuthSig
+    // Signature of the entire transaction
+
+    // Transaction hash into sighash. Just like in Bitcoin
+    // Contains our SpendDescriptions and OutputDescriptions
+    let mut sighash = [0u8; 32];
+    let spend_auth_sig = spend_sig(
+        PrivateKey(secret_key.expsk.ask),
+        alpha,
+        &sighash,
+        &mut rng,
+    );
+
+    // And now use the sighash value (since it's signed by all inputs) to create a new key
+    // which is used to sign the balance commitments.
+    let amount = Amount::from_u64(0).unwrap();
+    let binding_sig = ctx.binding_sig(amount, &sighash).expect("sighash binding sig failed");
 
     //let extsk = ExtendedSpendingKey::master(&[]);
     //let extfvk = ExtendedFullViewingKey::from(&extsk);
