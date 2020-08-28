@@ -16,7 +16,7 @@ use zcash_primitives::{
 };
 use zcash_proofs::{
     circuit::sapling::{Output, Spend},
-    sapling::SaplingProvingContext,
+    sapling::{SaplingProvingContext, SaplingVerificationContext},
 };
 
 const TREE_DEPTH: usize = 32;
@@ -121,17 +121,18 @@ fn main() -> Result<()> {
     let esk = encryptor.esk().clone();
     let rcm = note.rcm();
     let value = note.value;
-    let (proof, cv) = ctx.output_proof(esk, payment_address.clone(), rcm, value, &output_params);
+    let (proof_output, cv_output) =
+        ctx.output_proof(esk, payment_address.clone(), rcm, value, &output_params);
 
     let mut zkproof = [0u8; GROTH_PROOF_SIZE];
-    proof
+    proof_output
         .write(&mut zkproof[..])
         .expect("should be able to serialize a proof");
 
     let cmu = note.cmu();
 
     let enc_ciphertext = encryptor.encrypt_note_plaintext();
-    let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv, &cmu);
+    let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv_output, &cmu);
 
     let ephemeral_key: jubjub::ExtendedPoint = encryptor.epk().clone().into();
 
@@ -187,7 +188,7 @@ fn main() -> Result<()> {
     nullifier
         .copy_from_slice(&note.nf(&proof_generation_key.to_viewing_key(), merkle_path.position));
 
-    let (proof, cv, rk) = ctx
+    let (proof_spend, cv_spend, rk) = ctx
         .spend_proof(
             proof_generation_key,
             payment_address.diversifier().clone(),
@@ -202,7 +203,7 @@ fn main() -> Result<()> {
         .expect("Making proof failed");
 
     let mut zkproof = [0u8; GROTH_PROOF_SIZE];
-    proof
+    proof_spend
         .write(&mut zkproof[..])
         .expect("should be able to serialize a proof");
 
@@ -231,6 +232,36 @@ fn main() -> Result<()> {
     let binding_sig = ctx
         .binding_sig(amount, &sighash)
         .expect("sighash binding sig failed");
+
+    ////////////////////////////////////////
+
+    // Now lets verify the tx
+
+    let mut ctx = SaplingVerificationContext::new();
+
+    let success = ctx.check_output(
+        cv_output,
+        note.cmu(),
+        ephemeral_key,
+        proof_output,
+        &output_vk,
+    );
+    assert!(success);
+
+    let success = ctx.check_spend(
+        cv_spend,
+        anchor,
+        &nullifier,
+        rk,
+        &sighash,
+        spend_auth_sig,
+        proof_spend,
+        &spend_vk,
+    );
+    assert!(success);
+
+    let success = ctx.final_check(amount, &sighash, binding_sig);
+    assert!(success);
 
     Ok(())
 }
