@@ -168,6 +168,12 @@ fn main() -> Result<()> {
     //     merkle_path,
     // }
 
+    // We will spend the address from above
+    // Leaving these here for reference.
+    //let extsk = ExtendedSpendingKey::master(&[]);
+    //let extfvk = ExtendedFullViewingKey::from(&extsk);
+    //let to_address = extfvk.default_address().unwrap().1;
+
     let proof_generation_key = secret_key.expsk.proof_generation_key();
 
     let merkle_path = witness.path().unwrap();
@@ -227,36 +233,5 @@ fn main() -> Result<()> {
     let amount = Amount::from_u64(0).unwrap();
     let binding_sig = ctx.binding_sig(amount, &sighash).expect("sighash binding sig failed");
 
-    //let extsk = ExtendedSpendingKey::master(&[]);
-    //let extfvk = ExtendedFullViewingKey::from(&extsk);
-    //let to_address = extfvk.default_address().unwrap().1;
-    // We will spend the address from above
-
-    //pub extern "C" fn librustzcash_sapling_output_proof(
-    //    ctx: *mut SaplingProvingContext,                  X
-    //    esk: *const [c_uchar; 32],
-    //    payment_address: *const [c_uchar; 43],
-    //    rcm: *const [c_uchar; 32],
-    //    value: u64,
-    //    cv: *mut [c_uchar; 32],
-    //    zkproof: *mut [c_uchar; GROTH_PROOF_SIZE],
-    //) -> bool
-
-    // Create proof
-    //let (proof, value_commitment) = unsafe { &mut *ctx }.output_proof(
-    //    esk,
-    //    payment_address,
-    //    rcm,
-    //    value,
-    //    unsafe { SAPLING_OUTPUT_PARAMS.as_ref() }.unwrap(),
-    //);
-
-    //// Write the proof out to the caller
-    //proof
-    //    .write(&mut (unsafe { &mut *zkproof })[..])
-    //    .expect("should be able to serialize a proof");
-
-    //// Write the value commitment to the caller
-    //*unsafe { &mut *cv } = value_commitment.to_bytes();
     Ok(())
 }
