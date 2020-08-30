@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use ff::{Field, PrimeField};
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.
-use pairing::bls12_381::{Bls12, Fr};
+use bls12_381::{Bls12, Scalar};
 
 // We'll use these interfaces to construct our circuit.
 use bellman::{Circuit, ConstraintSystem, SynthesisError};
@@ -150,7 +150,7 @@ fn main() {
 
     // Generate the MiMC round constants
     let constants = (0..MIMC_ROUNDS)
-        .map(|_| Fr::random(rng))
+        .map(|_| Scalar::random(rng))
         .collect::<Vec<_>>();
 
     println!("Creating parameters...");
@@ -182,8 +182,8 @@ fn main() {
 
     for _ in 0..SAMPLES {
         // Generate a random preimage and compute the image
-        let xl = Fr::random(rng);
-        let xr = Fr::random(rng);
+        let xl = Scalar::random(rng);
+        let xr = Scalar::random(rng);
         let image = mimc(xl, xr, &constants);
 
         proof_vec.truncate(0);
@@ -213,12 +213,12 @@ fn main() {
         total_verifying += start.elapsed();
     }
     let proving_avg = total_proving / SAMPLES;
-    let proving_avg =
-        proving_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (proving_avg.as_secs() as f64);
+    //let proving_avg =
+    //    proving_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (proving_avg.as_secs() as f64);
 
     let verifying_avg = total_verifying / SAMPLES;
-    let verifying_avg =
-        verifying_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (verifying_avg.as_secs() as f64);
+    //let verifying_avg =
+    //    verifying_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (verifying_avg.as_secs() as f64);
 
     println!("Average proving time: {:?} seconds", proving_avg);
     println!("Average verifying time: {:?} seconds", verifying_avg);
