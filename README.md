@@ -1,4 +1,8 @@
 ```
+cargo run --bin blake --release
+```
+
+```
 cargo run --bin sha256 --release
 ```
 

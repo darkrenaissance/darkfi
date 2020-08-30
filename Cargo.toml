@@ -20,6 +20,7 @@ rand = "0.7.3"
 rand_core = "0.5.1"
 sha2 = "0.9.1"
 rand_xorshift = "0.2"
+blake2s_simd = "0.5"
 
 [[bin]]
 name = "sha256"
@@ -28,6 +29,10 @@ path = "src/sha256.rs"
 [[bin]]
 name = "mimc"
 path = "src/mimc.rs"
+
+[[bin]]
+name = "blake"
+path = "src/blake.rs"
 
 [[bin]]
 name = "zec"
