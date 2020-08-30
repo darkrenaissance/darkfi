@@ -1,51 +1,15 @@
-// Say we want to write a circuit that proves we know the preimage to some hash computed
-// using SHA-256d (calling SHA-256 twice). The preimage must have a fixed length known in
-// advance (because the circuit parameters will depend on it), but can otherwise have any value.
-// We take the following strategy:
-//
-// * Witness each bit of the preimage.
-// * Compute hash = SHA-256d(preimage) inside the circuit.
-// * Expose hash as a public input using multiscalar packing.
-//
 use bellman::{
     gadgets::{
         boolean::{AllocatedBit, Boolean},
         multipack,
-        sha256::sha256,
     },
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };
 use bls12_381::Bls12;
-use ff::PrimeField;
+use group::Curve;
 use rand::rngs::OsRng;
-use sha2::{Digest, Sha256};
 
-/// Our own SHA-256d gadget. Input and output are in little-endian bit order.
-fn sha256d<Scalar: PrimeField, CS: ConstraintSystem<Scalar>>(
-    mut cs: CS,
-    data: &[Boolean],
-) -> Result<Vec<Boolean>, SynthesisError> {
-    // Flip endianness of each input byte
-    // NOTE: data is a vec of Bool so it is iterating over 8 'bits' at a time
-    // This is needed because Rust sha256 and ZC sha256 have different endianness.
-    let input: Vec<_> = data
-        .chunks(8)
-        .map(|c| c.iter().rev())
-        .flatten()
-        .cloned()
-        .collect();
-
-    let mid = sha256(cs.namespace(|| "SHA-256(input)"), &input)?;
-    let res = sha256(cs.namespace(|| "SHA-256(mid)"), &mid)?;
-
-    // Flip endianness of each output byte
-    Ok(res
-        .chunks(8)
-        .map(|c| c.iter().rev())
-        .flatten()
-        .cloned()
-        .collect())
-}
+pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
 
 struct MyCircuit {
     /// The input to SHA-256d we are proving that we know. Set to `None` when we
@@ -53,14 +17,17 @@ struct MyCircuit {
     preimage: Option<[u8; 80]>,
 }
 
-impl<Scalar: PrimeField> Circuit<Scalar> for MyCircuit {
-    fn synthesize<CS: ConstraintSystem<Scalar>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+impl Circuit<bls12_381::Scalar> for MyCircuit {
+    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
         // Compute the values for the bits of the preimage. If we are verifying a proof,
         // we still need to create the same constraints, so we return an equivalent-size
         // Vec of None (indicating that the value of each bit is unknown).
         let bit_values = if let Some(preimage) = self.preimage {
             preimage
-                .into_iter()
+                .iter()
                 .map(|byte| (0..8).map(move |i| (byte >> i) & 1u8 == 1u8))
                 .flatten()
                 .map(|b| Some(b))
@@ -80,16 +47,20 @@ impl<Scalar: PrimeField> Circuit<Scalar> for MyCircuit {
             .map(|b| b.map(Boolean::from))
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Compute hash = SHA-256d(preimage).
-        let hash = sha256d(cs.namespace(|| "SHA-256d(preimage)"), &preimage_bits)?;
+        let hash = zcash_proofs::circuit::pedersen_hash::pedersen_hash(
+            cs.namespace(|| "computation of ivk"),
+            zcash_primitives::pedersen_hash::Personalization::MerkleTree(0),
+            &preimage_bits,
+        )?;
 
-        // Expose the vector of 32 boolean variables as compact public inputs.
-        multipack::pack_into_inputs(cs.namespace(|| "pack hash"), &hash)
+        hash.get_u().inputize(cs.namespace(|| "commitment"))?;
+
+        Ok(())
     }
 }
 
 fn main() {
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     let start = Instant::now();
     println!("Starting...");
@@ -109,9 +80,9 @@ fn main() {
     let start = Instant::now();
     // Pick a preimage and compute its hash.
     let preimage = [42; 80];
-    let hash = Sha256::digest(&Sha256::digest(&preimage));
+    //let hash = Sha256::digest(&Sha256::digest(&preimage));
     println!(
-        "Computed sha256(sha256(preimage)) witness data [{:?}]",
+        "Computed pedersen_hash(preimage) witness data [{:?}]",
         start.elapsed()
     );
 
@@ -126,13 +97,31 @@ fn main() {
     println!("Generated random proof [{:?}]", start.elapsed());
 
     let start = Instant::now();
+
+    let input_bools: Vec<bool> = preimage
+        .iter()
+        .map(|byte| (0..8).map(move |i| (byte >> i) & 1u8 == 1u8))
+        .flatten()
+        .collect();
+    let hash_result = jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
+        zcash_primitives::pedersen_hash::Personalization::MerkleTree(0),
+        input_bools.into_iter(),
+    ));
+
+    let mut public_input = [bls12_381::Scalar::zero(); 1];
+    {
+        let affine = hash_result.to_affine();
+        //let (u, v) = (affine.get_u(), affine.get_v());
+        let u = affine.get_u();
+        public_input[0] = u;
+    }
+
     // Pack the hash as inputs for proof verification.
-    let hash_bits = multipack::bytes_to_bits_le(&hash);
-    let inputs = multipack::compute_multipacking(&hash_bits);
+
     println!("Packed data and verifying proof... [{:?}]", start.elapsed());
 
     let start = Instant::now();
     // Check the proof!
-    assert!(groth16::verify_proof(&pvk, &proof, &inputs).is_ok());
+    assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
     println!("Done! [{:?}]", start.elapsed());
 }

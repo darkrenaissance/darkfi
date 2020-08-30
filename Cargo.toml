@@ -27,6 +27,10 @@ name = "sha256"
 path = "src/sha256.rs"
 
 [[bin]]
+name = "pedersen_hash"
+path = "src/pedersen_hash.rs"
+
+[[bin]]
 name = "mimc"
 path = "src/mimc.rs"
 
