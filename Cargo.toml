@@ -7,14 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ff = { git = "https://github.com/zcash/librustzcash" }
-group = { git = "https://github.com/zcash/librustzcash" }
-pairing = { git = "https://github.com/zcash/librustzcash" }
-bellman = { git = "https://github.com/zcash/librustzcash" }
+ff = "0.7"
+group = "0.7"
+bellman = { version = "0.7", default-features = false, features = ["groth16"] }
+bls12_381 = "0.2"
+jubjub = "0.4"
+
 zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-bls12_381 = { git = "https://github.com/zcash/librustzcash" }
 zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
-jubjub = { git = "https://github.com/zcash/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
 rand_core = "0.5.1"
