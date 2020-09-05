@@ -87,6 +87,15 @@ fn main() {
     );
 
     // Create an instance of our circuit (with the preimage as a witness).
+    let test_c = MyCircuit {
+        preimage: Some(preimage.clone()),
+    };
+
+    let mut cs = bellman::gadgets::test::TestConstraintSystem::new();
+    test_c.synthesize(&mut cs).unwrap();
+    assert!(cs.is_satisfied());
+    println!("Constraints: {}", cs.num_constraints());
+
     let c = MyCircuit {
         preimage: Some(preimage),
     };
