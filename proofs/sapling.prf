@@ -5,6 +5,7 @@
 
 # What is the LC stuff?
 # Difference between AllocatedNum and Num
+# Why BlsScalar vs JJScalar?
 const:
     G_VCV: Point
     G_VCR: Point
