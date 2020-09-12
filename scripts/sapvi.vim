@@ -2,7 +2,7 @@ if exists('b:current_syntax')
     finish
 endif
 
-syn keyword sapviKeyword assert enforce for in def return const as let
+syn keyword sapviKeyword assert enforce for in def return const as let emit contract private proof
 syn keyword sapviAttr mut
 syn keyword sapviType Point Scalar EncryptedNum list bool u64 Num
 syn match sapviFunction "\zs[a-zA-Z0-9_]*\ze("
