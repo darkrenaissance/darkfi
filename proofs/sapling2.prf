@@ -50,7 +50,7 @@ proof input_burn:
 
         anchor: Scalar
 
-    contract -> (Point, Point, Point, list<bool>)
+    contract -> (Point, Point, Point, list<bool>):
         let ak = witness(ak)
         ak.assert_not_small_order()
 
