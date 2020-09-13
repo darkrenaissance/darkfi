@@ -19,7 +19,7 @@ const:
     MERKLE: list<PedersenPersonalization>
     PRF_NF: Blake2sPersonalization
 
-def value_commit(value: u64, randomness: Scalar) -> (Point):
+def value_commit(value: u64, randomness: Scalar) -> (Point, list<bool>):
     let value_bits: list<bool> = value as list<bool>
     let value: Point = value * G_VCV
 
@@ -27,8 +27,7 @@ def value_commit(value: u64, randomness: Scalar) -> (Point):
     let rcv: Point = rcv * G_VCR
 
     let cv: Point = value + rcv
-    emit cv
-    return value_bits
+    return cv, value_bits
 
 # The parameters to this function are the same as in:
 #   struct Spend
@@ -56,7 +55,6 @@ contract input_burn(
     let ar: Point = ar * G_SPEND
 
     let rk: Point = ak + ar
-    emit rk
 
     let nsk: list<bool> = nsk as list<bool>
     let nk: Point = nsk * G_PROOF
@@ -123,7 +121,6 @@ contract input_burn(
     let rt: Point = EncryptedNum.from(anchor)
 
     enforce (cur - rt) * value_num == 0
-    emit rt
 
     let position: Point = position_bits * G_NULL
     let rho: Point = cm + position
@@ -131,9 +128,10 @@ contract input_burn(
     nf_preimage.extend(rho)
     assert len(nf_preimage) == 512
     let nf: list<bool> = blake2s(nf_preimage, PRF_NF)
-    emit nf
 
-def output_mint(
+    emit (rk, cv, rt, nf)
+
+contract output_mint(
     value: u64,
     randomness: Scalar,
 
@@ -173,5 +171,5 @@ def output_mint(
 
     let cmu: Scalar = cm.u
 
-    return (cv, epk, cmu)
+    emit (cv, epk, cmu)
 
