@@ -19,20 +19,21 @@ const:
     MERKLE: list<PedersenPersonalization>
     PRF_NF: Blake2sPersonalization
 
-def value_commit(value: u64, randomness: Scalar) -> (Point, list<bool>):
-    let value_bits: list<bool> = value as list<bool>
+def value_commit(value: U64, randomness: Scalar) -> Binary:
+    let value_bits: Binary = value as Binary
     let value: Point = value * G_VCV
 
-    let rcv: list<bool> = randomness as list<bool>
+    let rcv: Binary = randomness as Binary
     let rcv: Point = rcv * G_VCR
 
     let cv: Point = value + rcv
-    return cv, value_bits
+    emit cv
+    return value_bits
 
 # The parameters to this function are the same as in:
 #   struct Spend
 contract input_burn(
-    value: u64,                 # ValueCommitment.value
+    value: U64,                 # ValueCommitment.value
     randomness: Scalar,         # ValueCommitment.randomness
 
     ak: Point,                  # from ProofGenerationKey
@@ -44,34 +45,34 @@ contract input_burn(
 
     commitment_randomness: Scalar,
 
-    auth_path: list<(Scalar, bool)>,
+    auth_path: list<(Scalar, Bool)>,
 
     anchor: Scalar
-) -> (Point, Point, Point, list<bool>):
+) -> (Point, Point, Point, Binary):
     let ak = witness(ak)
     ak.assert_not_small_order()
 
-    let ar: list<bool> = ar as list<bool>
+    let ar: Binary = ar as Binary
     let ar: Point = ar * G_SPEND
 
     let rk: Point = ak + ar
 
-    let nsk: list<bool> = nsk as list<bool>
+    let nsk: Binary = nsk as Binary
     let nk: Point = nsk * G_PROOF
 
-    let mut ivk_preimage: list<bool> = []
-    # Must be list<bool> as well
+    let mut ivk_preimage: Binary = []
+    # Must be Binary as well
     ivk_preimage.extend(ak.repr())
 
-    let mut nf_preimage: list<bool> = []
-    let nk_repr: list<bool> = nk.repr()
+    let mut nf_preimage: Binary = []
+    let nk_repr: Binary = nk.repr()
     ivk_preimage.extend(nk_repr)
     nf_preimage.extend(nk_repr)
 
     assert len(ivk_preimage) == 512
     assert len(nf_preimage) == 256
 
-    let mut ivk: list<bool> = blake2s(ivk_preimage, CRH_IVK)
+    let mut ivk: Binary = blake2s(ivk_preimage, CRH_IVK)
     ivk.truncate(Scalar::CAPACITY)
 
     let g_d: Point = witness g_d
@@ -79,14 +80,14 @@ contract input_burn(
 
     let pk_d: Point = ivk * g_d
 
-    let mut note_contents: list<bool> = []
+    let mut note_contents: Binary = []
 
-    let (cv: Point, value_bits: list<bool>) = value_commit(value, randomness)
+    let (cv: Point, value_bits: Binary) = value_commit(value, randomness)
 
     let mut value_num: Num = Num.zero()
     let mut coeff: Scalar = Scalar.one()
     for bit in value_bits:
-        value_num = value_num.add_bool_with_coeff(bit, coeff)
+        value_num = value_num.add_Bool_with_coeff(bit, coeff)
         coeff = coeff.double()
     # Is this equivalent?
     let value_num = value_bits as Num
@@ -98,21 +99,22 @@ contract input_burn(
     assert len(note_contents) == 64 + 256 + 256
 
     let mut cm: Point = pedersen_hash(NOTE_COMMIT, note_contents)
-    let rcm: list<bool> = commitment_randomness as list<bool>
+    let rcm: Binary = commitment_randomness as Binary
     let rcm: Point = rcm * G_NOTE_COMMIT_R
     cm += rcm
 
-    let mut position_bits: list<bool> = []
+    let mut position_bits: Binary = []
     let mut cur: Scalar = cm.u
 
+    # This should be fixed: for i in 0..N then use array indexing
     for i, (node, is_right) in enumerate(auth_path):
         position_bits.push(is_right)
 
         let node: EncryptedNum = EncryptedNum.from(node)
         print(node)
-        let (left: list<bool>, right: list<bool>) = Num.swap_if(is_right, cur, node)
+        let (left: Binary, right: Binary) = Num.swap_if(is_right, cur, node)
 
-        let mut preimage: list<bool> = []
+        let mut preimage: Binary = []
         preimage.extend(left)
         preimage.extend(right)
 
@@ -127,12 +129,12 @@ contract input_burn(
 
     nf_preimage.extend(rho)
     assert len(nf_preimage) == 512
-    let nf: list<bool> = blake2s(nf_preimage, PRF_NF)
+    let nf: Binary = blake2s(nf_preimage, PRF_NF)
 
     emit (rk, cv, rt, nf)
 
 contract output_mint(
-    value: u64,
+    value: U64,
     randomness: Scalar,
 
     g_d: Point,
@@ -142,20 +144,20 @@ contract output_mint(
 
     commitment_randomness: Scalar
 ) -> (Point, Point, Scalar):
-    let (cv: Point, value_bits: list<bool>) = value_commit(value, randomness)
+    let (cv: Point, value_bits: Binary) = value_commit(value, randomness)
 
-    let mut note_contents: list<bool> = []
+    let mut note_contents: Binary = []
     note_contents.extend(value_bits)
 
     let g_d: Point = witness g_d
     assert is_not_small_order(g_d)
 
-    let esk: list<bool> = esk as list<bool>
+    let esk: Binary = esk as Binary
     let epk: Point = esk * g_d
 
-    let v_contents: list<bool> = pk_d.v as list<bool>
+    let v_contents: Binary = pk_d.v as Binary
 
-    let sign_bit: bool = pk_d.u.is_odd() as bool
+    let sign_bit: Bool = pk_d.u.is_odd() as Bool
 
     note_contents.extend(v_contents)
     note_contents.push(sign_bit)
@@ -164,7 +166,7 @@ contract output_mint(
 
     let mut cm: Point = pedersen_hash(NOTE_COMMIT, note_contents)
 
-    let rcm: list<bool> = commitment_randomness as list<bool>
+    let rcm: Binary = commitment_randomness as Binary
     let rcm: Point = rcm * G_NOTE_COMMIT_R
 
     cm += rcm
