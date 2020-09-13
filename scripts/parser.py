@@ -217,9 +217,7 @@ def parse_func_def(text):
     assert len(tokens) == 3
     return tokens
 
-def interpret_func(func, consts):
-    func_def = parse_func_def(func[0].text)
-
+def compile_func_header(func_def):
     func_name, params, retvals = func_def
     #print("Function:", func_name)
     #print("Params:", params)
@@ -255,7 +253,7 @@ def interpret_func(func, consts):
     else:
         retstr = "(" + ", ".join(retvals) + ")"
 
-    subroutine = r"""
+    header = r"""
 fn %s<CS>(
     mut cs: CS,
     %s
@@ -264,88 +262,125 @@ where
     CS: ConstraintSystem<bls12_381::Scalar>,
 {
 """ % (func_name, param_str, retstr)
+    return header
 
+def as_expr(line, stack, consts, expr, code):
+    var_from, type_to = expr.children
+    if var_from not in stack:
+        print("error: variable from not in stack frame:", var_from,
+              file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    type_from = stack[var_from]
+
+    if type_from == "U64" and type_to == "Binary":
+        code += "boolean::u64_into_boolean_vec_le(" + \
+            "cs.namespace(|| \"" + line.text + "\"), " + var_from + \
+            ")?;"
+    elif type_from == "Scalar" and type_to == "Binary":
+        code += "boolean::field_into_boolean_vec_le(" + \
+            "cs.namespace(|| \"" + line.text + "\"), &" + var_from + \
+            ")?;"
+    else:
+        print("error: unknown type conversion!", file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    #print(var_from, type_from, type_to)
+    return code, type_to
+
+def mul_expr(line, stack, consts, expr, code):
+    var_a, var_b = expr.children
+    #print("MUL", var_a, var_b)
+
+    if var_b not in consts:
+        print("error: unknown base!", file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    base_type = consts[var_b]
+    if base_type != "Point":
+        print("error: unknown base type!", file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    code += "ecc::fixed_base_multiplication(" + \
+        "cs.namespace(|| \"" + line.text + "\"), &" + var_b + \
+        ", &" + var_a + ")?;"
+
+    return code, base_type
+
+def add_expr(line, stack, consts, expr, code):
+    var_a, var_b = expr.children
+
+    if var_a not in stack or var_b not in stack:
+        print("error: missing stack item!", file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    result_type = stack[var_a]
+    if stack[var_b] != result_type:
+        print("error: non matching items for addition!", file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    code += var_a + ".add(cs.namespace(|| \"" + line.text \
+        + "\"), &" + var_b + ")?;"
+
+    return (code, result_type)
+
+def compile_let(line, stack, consts, statement):
+    is_mutable = False
+    if statement[0] == "mut":
+        is_mutable = True
+        statement = statement[1:]
+    variable_name, variable_type = statement[0], statement[1]
+    expr = statement[2]
+    #print("LET", is_mutable, variable_name, variable_type)
+    #print("  ", expr)
+    code = "let " + ("mut " if is_mutable else "") + variable_name + " = "
+
+    if expr.data == "as_expr":
+        ceval = as_expr(line, stack, consts, expr, code)
+    elif expr.data == "mul_expr":
+        ceval = mul_expr(line, stack, consts, expr, code)
+    elif expr.data == "add_expr":
+        ceval = add_expr(line, stack, consts, expr, code)
+
+    if ceval is None:
+        return None
+
+    code, type_to = ceval
+
+    if variable_type != type_to:
+        print("error: sub expr does not evaluate to correct type",
+              file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    stack[variable_name] = variable_type
+            
+    return code
+
+def interpret_func(func, consts):
+    func_def = parse_func_def(func[0].text)
+
+    header = compile_func_header(func_def)
+    if header is None:
+        return
+
+    subroutine = header
     indent = " " * 4
 
-    stack = dict(params)
+    stack = dict(func_def[1])
     emitted_types = []
     for line in func[1:]:
         statement_type, statement = interpret_func_line(line.text, stack, consts)
         if statement_type == "let":
-            is_mutable = False
-            if statement[0] == "mut":
-                is_mutable = True
-                statement = statement[1:]
-            variable_name, variable_type = statement[0], statement[1]
-            expr = statement[2]
-            #print("LET", is_mutable, variable_name, variable_type)
-            #print("  ", expr)
-            code = "let " + ("mut " if is_mutable else "") + variable_name + " = "
-
-            if expr.data == "as_expr":
-                var_from, type_to = expr.children
-                if var_from not in stack:
-                    print("error: variable from not in stack frame:", var_from,
-                          file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                type_from = stack[var_from]
-
-                if type_from == "U64" and type_to == "Binary":
-                    code += "boolean::u64_into_boolean_vec_le(" + \
-                        "cs.namespace(|| \"" + line.text + "\"), " + var_from + \
-                        ")?;"
-                elif type_from == "Scalar" and type_to == "Binary":
-                    code += "boolean::field_into_boolean_vec_le(" + \
-                        "cs.namespace(|| \"" + line.text + "\"), &" + var_from + \
-                        ")?;"
-                else:
-                    print("error: unknown type conversion!", file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                #print(var_from, type_from, type_to)
-                stack[variable_name] = type_to
-
-            elif expr.data == "mul_expr":
-                var_a, var_b = expr.children
-                #print("MUL", var_a, var_b)
-
-                if var_b not in consts:
-                    print("error: unknown base!", file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                base_type = consts[var_b]
-                if base_type != "Point":
-                    print("error: unknown base type!", file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                code += "ecc::fixed_base_multiplication(" + \
-                    "cs.namespace(|| \"" + line.text + "\"), &" + var_b + \
-                    ", &" + var_a + ")?;"
-                stack[variable_name] = "Point"
-
-            elif expr.data == "add_expr":
-                var_a, var_b = expr.children
-
-                if var_a not in stack or var_b not in stack:
-                    print("error: missing stack item!", file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                result_type = stack[var_a]
-                if stack[var_b] != result_type:
-                    print("error: non matching items for addition!", file=sys.stderr)
-                    print("line:", line.text, "line:", line.lineno)
-                    return None
-
-                code += var_a + ".add(cs.namespace(|| \"" + line.text \
-                    + "\"), &" + var_b + ")?;"
-                stack[variable_name] = result_type
-                    
+            code = compile_let(line, stack, consts, statement)
+            if code is None:
+                return
             subroutine += indent + code + "\n"
 
         elif statement_type == "return":
