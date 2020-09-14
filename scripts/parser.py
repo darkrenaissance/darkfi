@@ -253,8 +253,7 @@ def compile_func_header(func_def):
     else:
         retstr = "(" + ", ".join(retvals) + ")"
 
-    header = r"""
-fn %s<CS>(
+    header = r"""fn %s<CS>(
     mut cs: CS,
     %s
 ) -> Result<%s, SynthesisError>
@@ -417,8 +416,8 @@ def interpret_func(func, consts):
             emitted_types.append(variable_type)
             subroutine += indent + code + "\n"
 
-    subroutine += "}"
-    print(subroutine)
+    subroutine += "}\n\n"
+    return subroutine, emitted_types, func_def
 
 class CodeLineTransformer(lark.Transformer):
     def variable_name(self, name):
@@ -487,6 +486,264 @@ def interpret_func_line(text, stack, consts):
     tokens = CodeLineTransformer().transform(tree)[0]
     return tokens
 
+class ContractDefTransformer(lark.Transformer):
+    def contract_name(self, name):
+        return str(name[0])
+
+    def param(self, obj):
+        return tuple(obj)
+
+    def param_name(self, name):
+        return str(name[0])
+
+    def u64(self, _):
+        return "U64"
+    def scalar(self, _):
+        return "Scalar"
+    def point(self, _):
+        return "Point"
+    def binary(self, _):
+        return "Binary"
+
+    def type(self, obj):
+        return obj[0]
+
+    contract_def = list
+    params = list
+    type_list = list
+
+def parse_contract_def(text):
+    parser = lark.Lark(r"""
+        contract_def: "contract" contract_name "(" params+ ")" "->" type_list ":"
+
+        contract_name: NAME
+        params: param ("," param)*
+
+        type_list: type
+                 | "(" type ("," type)* ")"
+
+        param: param_name ":" type
+        param_name: NAME
+
+        type: u64 | scalar | point | binary
+
+        u64: "U64"
+        scalar: "Scalar"
+        point: "Point"
+        binary: "Binary"
+
+        %import common.CNAME -> NAME
+        %import common.WS
+        %ignore WS
+    """, start="contract_def")
+    tree = parser.parse(text)
+    tokens = ContractDefTransformer().transform(tree)
+    assert len(tokens) == 3
+    return tokens
+
+class ContractCodeLineTransformer(lark.Transformer):
+    def variable_name(self, name):
+        return str(name[0])
+
+    def let_statement(self, obj):
+        return ("let", obj)
+    def return_statement(self, obj):
+        return ("return", obj)
+    def emit_statement(self, obj):
+        return ("emit", obj)
+
+    def point(self, _):
+        return "Point"
+    def scalar(self, _):
+        return "Scalar"
+    def binary(self, _):
+        return "Binary"
+    def u64(self, _):
+        return "U64"
+
+    def type(self, typename):
+        return str(typename[0])
+
+    def mutable(self, _):
+        return "mut"
+
+    def function_name(self, name):
+        return str(name[0])
+
+    statement = list
+    variable_assign = list
+    variable_decl = tuple
+
+def interpret_contract_line(text, stack, consts):
+    parser = lark.Lark(r"""
+        statement: let_statement
+                 | return_statement
+                 | emit_statement
+
+        let_statement: "let" variable_assign "=" expr
+        mutable: "mut"
+
+        variable_assign: variable_decl
+                       | "(" variable_decl ("," variable_decl)* ")"
+        variable_decl: [mutable] variable_name ":" type
+
+        ?expr: as_expr
+            | mul_expr
+            | add_expr
+            | funccall_expr
+
+        as_expr: variable_name "as" type
+        mul_expr: variable_name "*" variable_name
+        add_expr: variable_name "+" variable_name
+        funccall_expr: function_name "(" [variable_name ("," variable_name)*] ")"
+
+        return_statement: "return" variable_name
+                        | "return" variable_tuple
+        variable_tuple: "(" variable_name ("," variable_name)* ")"
+
+        emit_statement: "emit" variable_name
+
+        variable_name: NAME
+        function_name: NAME
+        type: u64 | scalar | point | binary
+
+        u64: "U64"
+        scalar: "Scalar"
+        point: "Point"
+        binary: "Binary"
+
+        %import common.CNAME -> NAME
+        %import common.WS
+        %ignore WS
+    """, start="statement")
+    tree = parser.parse(text)
+    tokens = ContractCodeLineTransformer().transform(tree)[0]
+    return tokens
+
+def to_initial_caps(snake_str):
+    components = snake_str.split("_")
+    return "".join(x.title() for x in components)
+
+def create_contract_header(contract_def):
+    contract_name, params, retvals = contract_def
+    contract_name = to_initial_caps(contract_name)
+
+    header = "pub struct %s {\n" % contract_name
+
+    for param_name, param_type in params:
+        header += " " * 4 + "pub %s: Option<%s>,\n" % (param_name, param_type)
+
+    header += "}\n\n"
+
+    header += r"""impl Circuit<bls12_381::Scalar> for %s {
+    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+""" % contract_name
+
+    return header
+
+# Worst code ever
+def compile_let2(line, stack, consts, funcs, statement):
+    lhs = []
+    for variable_decl in statement[0]:
+        assert len(variable_decl) == 2 or \
+            (len(variable_decl) == 3 and variable_decl[0] == "mut")
+
+        if len(variable_decl) == 2:
+            mutable = False
+        elif len(variable_decl) == 3:
+            assert variable_decl[0] == "mut"
+            mutable = True
+            variable_decl = variable_decl[1:]
+        #else:
+            # Error!
+
+        lhs.append(list(variable_decl) + [mutable])
+
+    variable_types = []
+
+    code = "let "
+    if len(lhs) == 1:
+        name, type, is_mutable = lhs[0]
+        variable_types.append(type)
+        code += ("mut " if is_mutable else "") + name
+    else:
+        code += "("
+        start = True
+        for name, type, is_mutable in lhs:
+            if not start:
+                code += ", "
+            start = False
+
+            code += name
+
+            variable_types.append(type)
+        code += ")"
+    code += " = "
+
+    expr = statement[1]
+    expr_type = expr.data
+    expr = expr.children
+    if expr_type == "funccall_expr":
+        ceval = funccall_expr(line, stack, consts, funcs, expr, code)
+    #code = "let " + ("mut " if is_mutable else "") + variable_name + " = "
+
+    if ceval is None:
+        return None
+
+    code, types_to = ceval
+
+    if variable_types != types_to:
+        print("error: sub expr does not evaluate to correct type",
+              file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    for name, type, _ in lhs:
+        stack[name] = type
+            
+    return code
+
+def funccall_expr(line, stack, consts, funcs, expr, code):
+    func_name, arguments = expr[0], expr[1:]
+
+    if func_name not in funcs:
+        print("error: non-existant function call",
+              file=sys.stderr)
+        print("line:", line.text, "line:", line.lineno)
+        return None
+
+    code += "%s(cs.namespace(|| \"%s\"), %s)?;" % (
+        func_name, line.text, ", ".join(arguments))
+
+    return_type = funcs[func_name][-1][-1]
+    return code, return_type
+
+def interpret_contract(contract, consts, funcs):
+    contract_def = parse_contract_def(contract[0].text)
+    contract_code = create_contract_header(contract_def)
+
+    stack = dict(contract_def[1])
+    for line in contract[1:2]:
+        indent = " " * 4 * int(line.level + 1)
+        statement_type, statement = interpret_contract_line(line.text, stack, consts)
+        #pprint.pprint(statement_type)
+        if statement_type == "let":
+            code = compile_let2(line, stack, consts, funcs, statement)
+            if code is None:
+                return
+            contract_code += indent + code + "\n"
+
+    contract_code += " " * 8 + "Ok(())\n"
+    contract_code += " " * 4 + "}\n"
+    contract_code += "}\n\n"
+
+    #print("-------------------------------")
+    #print(contract_code)
+    return contract_code, contract_def
+
 def main(argv):
     if len(argv) == 1:
         print("error: missing proof file", file=sys.stderr)
@@ -503,8 +760,37 @@ def main(argv):
 
     consts = read_consts(consts)
 
+    compiled_funcs = {}
     for func in funcs:
-        interpret_func(func, consts)
+        if (compiled := interpret_func(func, consts)) is None:
+            return -1
+
+        _, _, func_def = compiled
+        func_name, _, _ = func_def
+
+        compiled_funcs[func_name] = compiled
+    funcs = compiled_funcs
+
+    compiled_contracts = {}
+    for contract in contracts[1:]:
+        if (compiled := interpret_contract(contract, consts, funcs)) is None:
+            return -1
+        #print(contract)
+
+        _, contract_def = compiled
+        contract_name, _, _ = contract_def
+
+        compiled_contracts[contract_name] = compiled
+    contracts = compiled_contracts
+
+    # Concat
+    output = ""
+    for _, func in funcs.items():
+        output += func[0]
+    for _, contract in contracts.items():
+        output += contract[0]
+
+    print(output)
 
 if __name__ == "__main__":
     main(sys.argv)

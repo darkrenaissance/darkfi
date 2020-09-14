@@ -73,7 +73,7 @@ contract input_burn(
     assert len(nf_preimage) == 256
 
     let mut ivk: Binary = blake2s(ivk_preimage, CRH_IVK)
-    ivk.truncate(Scalar::CAPACITY)
+    ivk.truncate(Scalar.CAPACITY)
 
     let g_d: Point = witness g_d
     g_d.assert_not_small_order()
@@ -107,7 +107,9 @@ contract input_burn(
     let mut cur: Scalar = cm.u
 
     # This should be fixed: for i in 0..N then use array indexing
-    for i, (node, is_right) in enumerate(auth_path):
+    for i in range(auth_path.size()):
+        let (node: Scalar, is_right: Bool) = auth_path[i]
+
         position_bits.push(is_right)
 
         let node: EncryptedNum = EncryptedNum.from(node)
@@ -144,7 +146,7 @@ contract output_mint(
 
     commitment_randomness: Scalar
 ) -> (Point, Point, Scalar):
-    let (cv: Point, value_bits: Binary) = value_commit(value, randomness)
+    let value_bits: Binary = value_commit(value, randomness)
 
     let mut note_contents: Binary = []
     note_contents.extend(value_bits)
