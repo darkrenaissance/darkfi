@@ -228,15 +228,18 @@ def compile_func_header(func_def):
     for param, type in params:
         if param_str:
             param_str += ", "
-        param_str += param + ": "
+        param_str += param + ": Option<"
         if type == "U64":
             param_str += "u64"
         elif type == "Scalar":
-            param_str += "&jubjub::Fr"
+            param_str += "jubjub::Fr"
+        elif type == "Point":
+            param_str += "jubjub::SubgroupPoint"
         else:
             print("error: unsupported param type", file=sys.stderr)
             print("line:", line.text, "line:", line.lineno)
             return None
+        param_str += ">"
 
     converted_retvals = []
     for type in retvals:
@@ -279,7 +282,7 @@ def as_expr(line, stack, consts, expr, code):
             ")?;"
     elif type_from == "Scalar" and type_to == "Binary":
         code += "boolean::field_into_boolean_vec_le(" + \
-            "cs.namespace(|| \"" + line.text + "\"), &" + var_from + \
+            "cs.namespace(|| \"" + line.text + "\"), " + var_from + \
             ")?;"
     else:
         print("error: unknown type conversion!", file=sys.stderr)
@@ -631,6 +634,12 @@ def create_contract_header(contract_def):
     header = "pub struct %s {\n" % contract_name
 
     for param_name, param_type in params:
+        if param_type == "U64":
+            param_type = "u64"
+        elif param_type == "Scalar":
+            param_type = "jubjub::Fr"
+        elif param_type == "Point":
+            param_type = "jubjub::SubgroupPoint"
         header += " " * 4 + "pub %s: Option<%s>,\n" % (param_name, param_type)
 
     header += "}\n\n"
@@ -714,6 +723,8 @@ def funccall_expr(line, stack, consts, funcs, expr, code):
               file=sys.stderr)
         print("line:", line.text, "line:", line.lineno)
         return None
+
+    arguments = ["self." + arg for arg in arguments]
 
     code += "%s(cs.namespace(|| \"%s\"), %s)?;" % (
         func_name, line.text, ", ".join(arguments))
