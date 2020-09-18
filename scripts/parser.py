@@ -554,6 +554,8 @@ class ContractCodeLineTransformer(lark.Transformer):
         return ("return", obj)
     def emit_statement(self, obj):
         return ("emit", obj)
+    def method_statement(self, obj):
+        return ("method", obj)
 
     def point(self, _):
         return "Point"
@@ -582,6 +584,7 @@ def interpret_contract_line(text, stack, consts):
         statement: let_statement
                  | return_statement
                  | emit_statement
+                 | method_statement
 
         let_statement: "let" variable_assign "=" expr
         mutable: "mut"
@@ -594,17 +597,21 @@ def interpret_contract_line(text, stack, consts):
             | mul_expr
             | add_expr
             | funccall_expr
+            | empty_list_expr
 
         as_expr: variable_name "as" type
         mul_expr: variable_name "*" variable_name
         add_expr: variable_name "+" variable_name
         funccall_expr: function_name "(" [variable_name ("," variable_name)*] ")"
+        empty_list_expr: "[]"
 
         return_statement: "return" variable_name
                         | "return" variable_tuple
         variable_tuple: "(" variable_name ("," variable_name)* ")"
 
         emit_statement: "emit" variable_name
+
+        method_statement: variable_name "." funccall_expr
 
         variable_name: NAME
         function_name: NAME
@@ -654,7 +661,7 @@ def create_contract_header(contract_def):
     return header
 
 # Worst code ever
-def compile_let2(line, stack, consts, funcs, statement):
+def compile_let2(line, stack, consts, funcs, selfvars, statement):
     lhs = []
     for variable_decl in statement[0]:
         assert len(variable_decl) == 2 or \
@@ -696,7 +703,9 @@ def compile_let2(line, stack, consts, funcs, statement):
     expr_type = expr.data
     expr = expr.children
     if expr_type == "funccall_expr":
-        ceval = funccall_expr(line, stack, consts, funcs, expr, code)
+        ceval = funccall_expr(line, stack, consts, funcs, selfvars, expr, code)
+    elif expr_type == "empty_list_expr":
+        ceval = code + "vec![];", ["Binary"]
     #code = "let " + ("mut " if is_mutable else "") + variable_name + " = "
 
     if ceval is None:
@@ -715,7 +724,7 @@ def compile_let2(line, stack, consts, funcs, statement):
             
     return code
 
-def funccall_expr(line, stack, consts, funcs, expr, code):
+def funccall_expr(line, stack, consts, funcs, selfvars, expr, code):
     func_name, arguments = expr[0], expr[1:]
 
     if func_name not in funcs:
@@ -724,7 +733,8 @@ def funccall_expr(line, stack, consts, funcs, expr, code):
         print("line:", line.text, "line:", line.lineno)
         return None
 
-    arguments = ["self." + arg for arg in arguments]
+    arguments = [("self." + arg if arg in selfvars else arg)
+                 for arg in arguments]
 
     code += "%s(cs.namespace(|| \"%s\"), %s)?;" % (
         func_name, line.text, ", ".join(arguments))
@@ -732,20 +742,37 @@ def funccall_expr(line, stack, consts, funcs, expr, code):
     return_type = funcs[func_name][-1][-1]
     return code, return_type
 
+def compile_method_call(line, stack, consts, funcs, selfvars, statement):
+    variable = statement[0]
+    method = statement[1].children[0]
+    arguments = statement[1].children[1:]
+
+    arguments = [("self." + arg if arg in selfvars else arg)
+                 for arg in arguments]
+
+    return "%s.%s(%s);" % (variable, method, ", ".join(arguments))
+
 def interpret_contract(contract, consts, funcs):
     contract_def = parse_contract_def(contract[0].text)
     contract_code = create_contract_header(contract_def)
 
+    selfvars = set(varname[0] for varname in contract_def[1])
     stack = dict(contract_def[1])
-    for line in contract[1:2]:
+    for line in contract[1:10]:
         indent = " " * 4 * int(line.level + 1)
         statement_type, statement = interpret_contract_line(line.text, stack, consts)
         #pprint.pprint(statement_type)
         if statement_type == "let":
-            code = compile_let2(line, stack, consts, funcs, statement)
+            code = compile_let2(line, stack, consts, funcs, selfvars, statement)
             if code is None:
                 return
-            contract_code += indent + code + "\n"
+        elif statement_type == "method":
+            code = compile_method_call(line, stack, consts, funcs,
+                                       selfvars, statement)
+            if code is None:
+                return
+
+        contract_code += indent + code + "\n"
 
     contract_code += " " * 8 + "Ok(())\n"
     contract_code += " " * 4 + "}\n"
@@ -801,7 +828,7 @@ def main(argv):
     for _, contract in contracts.items():
         output += contract[0]
 
-    print(output)
+    #print(output)
 
 if __name__ == "__main__":
     main(sys.argv)

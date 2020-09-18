@@ -4,7 +4,7 @@ endif
 
 syn keyword sapviKeyword assert enforce for in def return const as let emit contract private proof
 syn keyword sapviAttr mut
-syn keyword sapviType Point Scalar EncryptedNum list Bool U64 Num Binary
+syn keyword sapviType BinaryNumber Point Fr SubgroupPoint EdwardsPoint Scalar EncryptedNum list Bool U64 Num Binary
 syn match sapviFunction "\zs[a-zA-Z0-9_]*\ze("
 syn match sapviComment "#.*$"
 syn match sapviNumber '\d\+'

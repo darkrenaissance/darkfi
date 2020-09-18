@@ -7,12 +7,12 @@
 # Difference between AllocatedNum and Num
 # Why BlsScalar vs JJScalar?
 const:
-    G_VCV: Point
-    G_VCR: Point
-    G_SPEND: Point
-    G_PROOF: Point
-    G_NOTE_COMMIT_R: Point
-    G_NULL: Point
+    G_VCV: SubgroupPoint
+    G_VCR: SubgroupPoint
+    G_SPEND: SubgroupPoint
+    G_PROOF: SubgroupPoint
+    G_NOTE_COMMIT_R: SubgroupPoint
+    G_NULL: SubgroupPoint
 
     CRH_IVK: Blake2sPersonalization
     NOTE_COMMIT: PedersenPersonalization
@@ -21,12 +21,12 @@ const:
 
 def value_commit(value: U64, randomness: Scalar) -> Binary:
     let value_bits: Binary = value as Binary
-    let value: Point = value * G_VCV
+    let value: SubgroupPoint = value * G_VCV
 
     let rcv: Binary = randomness as Binary
-    let rcv: Point = rcv * G_VCR
+    let rcv: SubgroupPoint = rcv * G_VCR
 
-    let cv: Point = value + rcv
+    let cv: SubgroupPoint = value + rcv
     emit cv
     return value_bits
 
@@ -36,29 +36,29 @@ contract input_burn(
     value: U64,                 # ValueCommitment.value
     randomness: Scalar,         # ValueCommitment.randomness
 
-    ak: Point,                  # from ProofGenerationKey
+    ak: SubgroupPoint,                  # from ProofGenerationKey
     ar: Scalar,
 
     nsk: Scalar,                # from ProofGenerationKey
 
-    g_d: Point,                 # Computed from payment_address
+    g_d: SubgroupPoint,                 # Computed from payment_address
 
     commitment_randomness: Scalar,
 
     auth_path: list<(Scalar, Bool)>,
 
     anchor: Scalar
-) -> (Point, Point, Point, Binary):
+) -> (SubgroupPoint, SubgroupPoint, SubgroupPoint, Binary):
     let ak = witness(ak)
     ak.assert_not_small_order()
 
     let ar: Binary = ar as Binary
-    let ar: Point = ar * G_SPEND
+    let ar: SubgroupPoint = ar * G_SPEND
 
-    let rk: Point = ak + ar
+    let rk: SubgroupPoint = ak + ar
 
     let nsk: Binary = nsk as Binary
-    let nk: Point = nsk * G_PROOF
+    let nk: SubgroupPoint = nsk * G_PROOF
 
     let mut ivk_preimage: Binary = []
     # Must be Binary as well
@@ -75,14 +75,14 @@ contract input_burn(
     let mut ivk: Binary = blake2s(ivk_preimage, CRH_IVK)
     ivk.truncate(Scalar.CAPACITY)
 
-    let g_d: Point = witness g_d
+    let g_d: SubgroupPoint = witness g_d
     g_d.assert_not_small_order()
 
-    let pk_d: Point = ivk * g_d
+    let pk_d: SubgroupPoint = ivk * g_d
 
     let mut note_contents: Binary = []
 
-    let (cv: Point, value_bits: Binary) = value_commit(value, randomness)
+    let (cv: SubgroupPoint, value_bits: Binary) = value_commit(value, randomness)
 
     let mut value_num: Num = Num.zero()
     let mut coeff: Scalar = Scalar.one()
@@ -98,15 +98,14 @@ contract input_burn(
 
     assert len(note_contents) == 64 + 256 + 256
 
-    let mut cm: Point = pedersen_hash(NOTE_COMMIT, note_contents)
+    let mut cm: SubgroupPoint = pedersen_hash(NOTE_COMMIT, note_contents)
     let rcm: Binary = commitment_randomness as Binary
-    let rcm: Point = rcm * G_NOTE_COMMIT_R
+    let rcm: SubgroupPoint = rcm * G_NOTE_COMMIT_R
     cm += rcm
 
     let mut position_bits: Binary = []
     let mut cur: Scalar = cm.u
 
-    # This should be fixed: for i in 0..N then use array indexing
     for i in range(auth_path.size()):
         let (node: Scalar, is_right: Bool) = auth_path[i]
 
@@ -122,12 +121,12 @@ contract input_burn(
 
         cur = pedersen_hash(MERKLE_TREE[i], preimage).u
 
-    let rt: Point = EncryptedNum.from(anchor)
+    let rt: SubgroupPoint = EncryptedNum.from(anchor)
 
     enforce (cur - rt) * value_num == 0
 
-    let position: Point = position_bits * G_NULL
-    let rho: Point = cm + position
+    let position: SubgroupPoint = position_bits * G_NULL
+    let rho: SubgroupPoint = cm + position
 
     nf_preimage.extend(rho)
     assert len(nf_preimage) == 512
@@ -139,23 +138,23 @@ contract output_mint(
     value: U64,
     randomness: Scalar,
 
-    g_d: Point,
+    g_d: SubgroupPoint,
 
     esk: Scalar,
-    pk_d: Point,
+    pk_d: SubgroupPoint,
 
     commitment_randomness: Scalar
-) -> (Point, Point, Scalar):
+) -> (SubgroupPoint, SubgroupPoint, Scalar):
     let value_bits: Binary = value_commit(value, randomness)
 
     let mut note_contents: Binary = []
     note_contents.extend(value_bits)
 
-    let g_d: Point = witness g_d
-    assert is_not_small_order(g_d)
+    let g_d: EdwardsPoint = witness(g_d)
+    g_d.assert_not_small_order()
 
     let esk: Binary = esk as Binary
-    let epk: Point = esk * g_d
+    let epk: SubgroupPoint = esk * g_d
 
     let v_contents: Binary = pk_d.v as Binary
 
@@ -166,10 +165,10 @@ contract output_mint(
 
     assert len(note_contents) == 64 + 256 + 256
 
-    let mut cm: Point = pedersen_hash(NOTE_COMMIT, note_contents)
+    let mut cm: SubgroupPoint = pedersen_hash(NOTE_COMMIT, note_contents)
 
     let rcm: Binary = commitment_randomness as Binary
-    let rcm: Point = rcm * G_NOTE_COMMIT_R
+    let rcm: SubgroupPoint = rcm * G_NOTE_COMMIT_R
 
     cm += rcm
 
