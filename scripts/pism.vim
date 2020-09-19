@@ -4,7 +4,7 @@ endif
 
 syn keyword sapviKeyword constant contract start end
 "syn keyword sapviAttr
-syn keyword sapviType FixedGenerator BlakePersonalization ByteSize U64 Fr Point Bool Scalar
+syn keyword sapviType FixedGenerator BlakePersonalization PedersenPersonalization ByteSize U64 Fr Point Bool Scalar
 syn match sapviFunction "^[a-z_0-9]* "
 syn match sapviComment "#.*$"
 syn match sapviNumber ' \zs\d\+\ze'
