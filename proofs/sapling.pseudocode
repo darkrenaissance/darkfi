@@ -14,13 +14,13 @@ const:
     PRF_NF: Blake2sPersonalization
 
 contract input_spend(
-    value: BinaryNumber
-    randomness: BinaryNumber
+    value: U64 -> BinaryNumber
+    randomness: Fr -> BinaryNumber
     ak: Point
-    ar: BinaryNumber
-    nsk: BinaryNumber
+    ar: Fr -> BinaryNumber
+    nsk: Fr -> BinaryNumber
     g_d: Point
-    commitment_randomness: BinaryNumber
+    commitment_randomness: Fr -> BinaryNumber
     auth_path: [(Scalar, Bool)]
     anchor: Scalar
 ) -> (Point, Point, Scalar, BinaryNumber):
@@ -41,7 +41,7 @@ contract input_spend(
     assert nf_preimage.len() == 256
 
     let mut ivk = blake2s(ivk_preimage, CRH_IVK)
-    ivk.truncate(Fr.CAPACITY)
+    ivk.truncate(JUBJUB_FR_CAPACITY)
     # This will error if ivk.len() != 256
     #let ivk: Fr = ivk as Fr
     let pk_d: Point = ivk * g_d
@@ -87,12 +87,12 @@ contract input_spend(
     emit nf
 
 contract output_mint(
-    value: BinaryNumber,
-    randomness: BinaryNumber,
-    g_d: Point,
-    esk: BinaryNumber,
-    pk_d: Point,
-    commitment_randomness: Scalar
+    value: U64 -> BinaryNumber
+    randomness: Fr -> BinaryNumber
+    g_d: Point
+    esk: Fr -> BinaryNumber
+    pk_d: Point
+    commitment_randomness: Fr -> BinaryNumber
 ) -> (Point, Point, Scalar):
     let cv: Point = value * G_VCV + rcv * G_VCR
     emit cv

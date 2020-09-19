@@ -1,0 +1,64 @@
+constant G_SPEND FixedGenerator
+constant G_PROOF FixedGenerator
+constant CRH_IVK BlakePersonalization
+constant JUBJUB_FR_CAPACITY ByteSize
+
+contract input_spend
+param value U64
+param randomness Fr
+param ak Point
+param ar Fr
+param nsk Fr
+param g_d Point
+param commitment_randomness Fr
+param auth_path_0_0 Scalar
+param auth_path_0_1 Bool
+param auth_path_1_0 Scalar
+param auth_path_1_1 Bool
+# ...
+param anchor Scalar
+start
+# let rk: Point = ak + ar * G_SPEND
+witness ak param:ak
+assert_not_small_order ak
+fr_as_binary_le ar param:ar
+ec_mul_const ar ar G_SPEND
+ec_add rk ak ar
+# emit rk
+emit_ec rk
+
+# let nk: Point = nsk * G_PROOF
+fr_as_binary_le nsk param:nsk
+ec_mul_const nk nsk G_PROOF
+
+# let mut ivk_preimage: BinaryNumber = []
+alloc_binary ivk_preimage
+# ivk_preimage.put(ak)
+ec_repr repr_ak ak
+binary_extend ivk_preimage repr_ak
+
+# let mut nf_preimage: BinaryNumber = []
+alloc_binary nf_preimage
+ec_repr repr_nk nk
+binary_clone repr_nk repr_nk2
+# ivk_preimage.put(nk)
+binary_extend ivk_preimage repr_nk
+# nf_preimage.put(nk)
+binary_extend ivk_preimage repr_nk2
+
+# assert ivk_preimage.len() == 512
+static_assert_binary_size ivk_preimage 512
+# assert nf_preimage.len() == 256
+static_assert_binary_size nf_preimage 256
+
+# let mut ivk = blake2s(ivk_preimage, CRH_IVK)
+blake2s ivk ivk_preimage CRH_IVK
+# ivk.truncate(JUBJUB_FR_CAPACITY)
+binary_truncate ivk JUBJUB_FR_CAPACITY
+
+# let pk_d: Point = ivk * g_d
+witness g_d param:g_d
+assert_not_small_order g_d
+ec_mul pk_d ivk g_d
+end
+
