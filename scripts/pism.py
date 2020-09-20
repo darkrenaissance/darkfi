@@ -1,3 +1,5 @@
+import json
+import os
 import sys
 
 symbol_table = {
@@ -240,10 +242,33 @@ class Contract:
 
             return True
 
+    def _check_args(self, command, args, line):
+        assert command in command_desc
+        type_list = command_desc[command]
+        assert len(type_list) == len(args)
+
+        for (_, is_new_val), (arg, is_param) in zip(type_list, args):
+            if is_param:
+                continue
+            if is_new_val:
+                continue
+            if arg in self.stack:
+                continue
+            if arg in self.constants:
+                continue
+
+            eprint("error: cannot find '%s' in the stack" % arg)
+            eprint(line)
+            return False
+        return True
+
     def _compile_line(self, command, args, line):
         if (args := self._preprocess_args(args, line)) is None:
             return None
         if not self.type_checking(command, args, line):
+            return None
+
+        if not self._check_args(command, args, line):
             return None
 
         self.modify_stack(command, args)
@@ -277,6 +302,8 @@ r"""let %s = ecc::fixed_base_multiplication(
         argname, is_param = arg
         if is_param:
             return "self.%s" % argname
+        if argname in self.rename_consts:
+            return self.rename_consts[argname]
         return argname
 
     def modify_stack(self, command, args):
@@ -292,8 +319,24 @@ r"""let %s = ecc::fixed_base_multiplication(
             if new_val:
                 self.stack[argname] = expected_type
 
-    def compile(self):
+    def compile(self, constants, aux):
+        self.constants = constants
         code = ""
+
+        self.rename_consts = {}
+        if "constants" in aux:
+            for const_name, value in aux["constants"].items():
+                if "module_includes" not in value:
+                    continue
+                if "maps_to" not in value:
+                    eprint("error: bad aux config '%s', missing maps_to" %
+                           const_name)
+                mapped_type = value["maps_to"]
+                code += "use %s::%s;\n" % (value["module_includes"], mapped_type)
+
+                self.rename_consts[const_name] = mapped_type
+
+        code += "\n"
 
         if (header := self._compile_header()) is None:
             return None
@@ -315,7 +358,7 @@ r"""impl Circuit<bls12_381::Scalar> for %s {
 
         return code
 
-def process(contents):
+def process(contents, aux):
     contents = clean(contents)
     constants, segments = make_segments(contents)
     if (constants := build_constants_table(constants)) is None:
@@ -324,7 +367,7 @@ def process(contents):
     codes = []
     for segment in segments:
         contract = extract(segment)
-        if (code := contract.compile()) is None:
+        if (code := contract.compile(constants, aux)) is None:
             return False
         codes.append(code)
 
@@ -338,8 +381,14 @@ def main(argv):
         eprint("pism FILENAME")
         return -1
 
-    contents = open(argv[1]).read()
-    if not process(contents):
+    src_filename = argv[1]
+
+    basename, _ = os.path.splitext(src_filename)
+    aux_filename = basename + ".aux"
+    aux = json.loads(open(aux_filename).read())
+
+    contents = open(src_filename).read()
+    if not process(contents, aux):
         return -2
 
     return 0
