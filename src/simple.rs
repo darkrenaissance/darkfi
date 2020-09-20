@@ -1,23 +1,11 @@
-use bellman::{
-    gadgets::{
-        boolean,
-        boolean::{AllocatedBit, Boolean},
-        multipack,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
+use bellman::groth16;
 use bls12_381::Bls12;
-use ff::{Field, PrimeField};
+use ff::Field;
 use group::Curve;
 mod simple_circuit;
 use simple_circuit::InputSpend;
 
 fn main() {
-    use core::ops::{Mul, MulAssign};
-    use ff::PrimeField;
-    use group::{Group, GroupEncoding};
-    use jubjub::SubgroupPoint;
-    use jubjub::*;
     use rand::rngs::OsRng;
     //let ak = jubjub::SubgroupPoint::random(&mut OsRng);
 
