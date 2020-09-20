@@ -7,14 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ff = "0.7"
-group = "0.7"
-bellman = { version = "0.7", default-features = false, features = ["groth16"] }
-bls12_381 = "0.2"
-jubjub = "0.4"
+ff = "0.8"
+group = "0.8"
+bellman = { version = "0.8", default-features = false, features = ["groth16"] }
+bls12_381 = "0.3.1"
+jubjub = "0.5.1"
 
 zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+#zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
 rand_core = "0.5.1"
@@ -41,3 +42,8 @@ path = "src/blake.rs"
 [[bin]]
 name = "zec"
 path = "src/zec.rs"
+
+[[bin]]
+name = "simple"
+path = "src/simple.rs"
+
