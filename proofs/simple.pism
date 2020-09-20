@@ -1,0 +1,12 @@
+# :set syntax=pism
+# :source ../scripts/pism.vim
+constant G_SPEND FixedGenerator
+
+contract input_spend
+    param secret Fr
+start
+    fr_as_binary_le secret param:secret
+    ec_mul_const public secret G_SPEND
+    emit_ec public
+end
+

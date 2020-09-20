@@ -17,22 +17,28 @@ constant PRF_NF BlakePersonalization
 constant JUBJUB_FR_CAPACITY ByteSize
 
 contract input_spend
-param value U64
-param randomness Fr
-param ak Point
-param ar Fr
-param nsk Fr
-param g_d Point
-param commitment_randomness Fr
-param auth_path_0_0 Scalar
-param auth_path_0_1 Bool
-param auth_path_1_0 Scalar
-param auth_path_1_1 Bool
-# ...
-param anchor Scalar
+param secret Fr
+
+#param value U64
+#param randomness Fr
+#param ak Point
+#param ar Fr
+#param nsk Fr
+#param g_d Point
+#param commitment_randomness Fr
+#param auth_path_0_0 Scalar
+#param auth_path_0_1 Bool
+#param auth_path_1_0 Scalar
+#param auth_path_1_1 Bool
+## ...
+#param anchor Scalar
 start
+fr_as_binary_le secret param:secret
+ec_mul_const public secret G_SPEND
+emit_ec public
+
 # let rk: Point = ak + ar * G_SPEND
-witness ak param:ak
+#witness ak param:ak
 #assert_not_small_order ak
 #fr_as_binary_le ar param:ar
 #ec_mul_const ar ar G_SPEND

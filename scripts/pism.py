@@ -1,5 +1,44 @@
 import sys
 
+symbol_table = {
+    "contract": 1,
+    "param": 2,
+    "start": 0,
+    "end": 0,
+
+    "witness": 2,
+    "fr_as_binary_le": 2,
+    "ec_mul_const": 3,
+    "emit_ec": 1
+}
+
+types_map = {
+    "U64": "u64",
+    "Fr": "jubjub::Fr",
+    "Point": "jubjub::SubgroupPoint",
+    "Scalar": "bls12_381::Scalar",
+    "Bool": "bool"
+}
+
+command_desc = {
+    "witness": (
+        ("EdwardsPoint",    True),
+        ("Point",           False)
+    ),
+    "fr_as_binary_le": (
+        ("Vec<Boolean>",    True),
+        ("Fr",              False)
+    ),
+    "ec_mul_const": (
+        ("EdwardsPoint",    True),
+        ("Vec<Boolean>",    False),
+        ("FixedGenerator",  False)
+    ),
+    "emit_ec": (
+        ("EdwardsPoint",    False),
+    )
+}
+
 def eprint(*args):
     print(*args, file=sys.stderr)
 
@@ -71,15 +110,6 @@ def build_constants_table(constants):
         table[name] = type
     return table
 
-symbol_table = {
-    "contract": 1,
-    "param": 2,
-    "start": 0,
-    "end": 0,
-
-    "witness": 2,
-}
-
 def extract(segment):
     assert segment
     # Does it have a declaration?
@@ -139,18 +169,6 @@ def extract(segment):
 def to_initial_caps(snake_str):
     components = snake_str.split("_")
     return "".join(x.title() for x in components)
-
-types_map = {
-    "U64": "u64",
-    "Fr": "jubjub::Fr",
-    "Point": "jubjub::SubgroupPoint",
-    "Scalar": "bls12_381::Scalar",
-    "Bool": "bool"
-}
-
-command_desc = {
-    "witness": (("EdwardsPoint", True), ("Point", False))
-}
 
 class Contract:
 
@@ -238,6 +256,22 @@ class Contract:
 r"""let %s = ecc::EdwardsPoint::witness(
     cs.namespace(|| "%s"),
     %s.map(jubjub::ExtendedPoint::from))?;""" % (out, line, point)
+        elif command == "fr_as_binary_le":
+            out, fr = args
+            return \
+r"""let %s = boolean::field_into_boolean_vec_le(
+    cs.namespace(|| "%s"), %s)?;""" % (out, line, fr)
+        elif command == "ec_mul_const":
+            out, fr, base = args
+            return \
+r"""let %s = ecc::fixed_base_multiplication(
+    cs.namespace(|| "%s"),
+    &%s,
+    &%s,
+)?;""" % (out, line, fr, base)
+        elif command == "emit_ec":
+            point = args[0]
+            return '%s.inputize(cs.namespace(|| "%s"))?;' % (point, line)
 
     def carg(self, arg):
         argname, is_param = arg
