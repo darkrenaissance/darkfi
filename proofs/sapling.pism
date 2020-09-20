@@ -125,7 +125,9 @@ clone_bit cur_is_right2 cur_is_right
 binary_push position cur_is_right2
 alloc_num path_element param:auth_path_0_0
 # let (left: Scalar, right: Scalar) = swap_if(is_right, cur, node)
-conditionally_reverse ul ur cur path_element is_right
+conditionally_reverse ulur cur path_element is_right
+get_0 ul ulur
+get_1 ur ulur
 # let mut preimage: BinaryNumber = []
 alloc_binary preimage
 # preimage.put(left)
