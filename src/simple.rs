@@ -7,54 +7,30 @@ use bellman::{
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };
 use bls12_381::Bls12;
-use ff::{PrimeField, Field};
+use ff::{Field, PrimeField};
 use group::Curve;
-use rand::rngs::OsRng;
-
-use zcash_proofs::constants::{
-    SPENDING_KEY_GENERATOR
-};
-
-//pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
-
-struct MyCircuit {
-    secret: Option<jubjub::Fr>
-}
-
-impl Circuit<bls12_381::Scalar> for MyCircuit {
-    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
-        self, cs: &mut CS) -> Result<(), SynthesisError> {
-
-        let secret = boolean::field_into_boolean_vec_le(cs.namespace(|| "secret"), self.secret)?;
-
-        let public = zcash_proofs::circuit::ecc::fixed_base_multiplication(
-            cs.namespace(|| "public"),
-            &SPENDING_KEY_GENERATOR,
-            &secret,
-        )?;
-
-        public.inputize(cs.namespace(|| "public"))
-    }
-}
+mod simple_circuit;
+use simple_circuit::InputSpend;
 
 fn main() {
-    use jubjub::*;
-    use jubjub::SubgroupPoint;
-    use core::ops::{MulAssign, Mul};
+    use core::ops::{Mul, MulAssign};
     use ff::PrimeField;
     use group::{Group, GroupEncoding};
+    use jubjub::SubgroupPoint;
+    use jubjub::*;
+    use rand::rngs::OsRng;
     //let ak = jubjub::SubgroupPoint::random(&mut OsRng);
 
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
     let params = {
-        let c = MyCircuit { secret: None };
+        let c = InputSpend { secret: None };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
     let pvk = groth16::prepare_verifying_key(&params.vk);
 
-    let c = MyCircuit {
+    let c = InputSpend {
         secret: Some(secret),
     };
 

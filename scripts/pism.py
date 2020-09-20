@@ -179,6 +179,22 @@ class Contract:
         self.params = params
         self.program = program
 
+    def _includes(self):
+        return \
+r"""use bellman::{
+    gadgets::{
+        boolean,
+        boolean::{AllocatedBit, Boolean},
+        multipack,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+use bls12_381::Bls12;
+use ff::{PrimeField, Field};
+use group::Curve;
+use zcash_proofs::circuit::ecc;
+"""
+
     def _compile_header(self):
         code = "pub struct %s {\n" % to_initial_caps(self.name)
         for param_name, param_type in self.params.items():
@@ -293,7 +309,7 @@ r"""let %s = ecc::fixed_base_multiplication(
     cs.namespace(|| "%s"),
     &%s,
     &%s,
-)?;""" % (out, line, fr, base)
+)?;""" % (out, line, base, fr)
         elif command == "emit_ec":
             point = args[0]
             return '%s.inputize(cs.namespace(|| "%s"))?;' % (point, line)
@@ -322,6 +338,8 @@ r"""let %s = ecc::fixed_base_multiplication(
     def compile(self, constants, aux):
         self.constants = constants
         code = ""
+
+        code += self._includes()
 
         self.rename_consts = {}
         if "constants" in aux:
@@ -353,7 +371,9 @@ r"""impl Circuit<bls12_381::Scalar> for %s {
         if (body := self._compile_body()) is None:
             return None
         code += body
+        code += "Ok(())\n"
 
+        code += "    }\n"
         code += "}\n"
 
         return code
