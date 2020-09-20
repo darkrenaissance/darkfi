@@ -17,153 +17,155 @@ constant PRF_NF BlakePersonalization
 constant JUBJUB_FR_CAPACITY ByteSize
 
 contract input_spend
-param secret Fr
+    param secret Fr
 
-#param value U64
-#param randomness Fr
-#param ak Point
-#param ar Fr
-#param nsk Fr
-#param g_d Point
-#param commitment_randomness Fr
-#param auth_path_0_0 Scalar
-#param auth_path_0_1 Bool
-#param auth_path_1_0 Scalar
-#param auth_path_1_1 Bool
-## ...
-#param anchor Scalar
+    param value U64
+    param randomness Fr
+    param ak Point
+    param ar Fr
+    param nsk Fr
+    param g_d Point
+    param commitment_randomness Fr
+    param auth_path_0_0 Scalar
+    param auth_path_0_1 Bool
+    param auth_path_1_0 Scalar
+    param auth_path_1_1 Bool
+    # ...
+    param anchor Scalar
 start
-fr_as_binary_le secret param:secret
-ec_mul_const public secret G_SPEND
-emit_ec public
+    fr_as_binary_le secret param:secret
+    ec_mul_const public secret G_SPEND
+    emit_ec public
 
-# let rk: Point = ak + ar * G_SPEND
-#witness ak param:ak
-#assert_not_small_order ak
-#fr_as_binary_le ar param:ar
-#ec_mul_const ar ar G_SPEND
-#ec_add rk ak ar
-## emit rk
-#emit_ec rk
-#
-## let nk: Point = nsk * G_PROOF
-#fr_as_binary_le nsk param:nsk
-#ec_mul_const nk nsk G_PROOF
-#
-## let mut ivk_preimage: BinaryNumber = []
-#alloc_binary ivk_preimage
-## ivk_preimage.put(ak)
-#ec_repr repr_ak ak
-#binary_extend ivk_preimage repr_ak
-#
-## let mut nf_preimage: BinaryNumber = []
-#alloc_binary nf_preimage
-#ec_repr repr_nk nk
-#binary_clone repr_nk repr_nk2
-## ivk_preimage.put(nk)
-#binary_extend ivk_preimage repr_nk
-## nf_preimage.put(nk)
-#binary_extend ivk_preimage repr_nk2
-#
-## assert ivk_preimage.len() == 512
-#static_assert_binary_size ivk_preimage 512
-## assert nf_preimage.len() == 256
-#static_assert_binary_size nf_preimage 256
-#
-## let mut ivk = blake2s(ivk_preimage, CRH_IVK)
-#blake2s ivk ivk_preimage CRH_IVK
-## ivk.truncate(JUBJUB_FR_CAPACITY)
-#binary_truncate ivk JUBJUB_FR_CAPACITY
-#
-## let pk_d: Point = ivk * g_d
-#witness g_d param:g_d
-#assert_not_small_order g_d
-#ec_mul pk_d ivk g_d
-#
-## let cv: Point = value * G_VCV + rcv * G_VCR
-#u64_as_binary_le value_bits param:value
-#ec_mul_const value value_bits G_VCV
-#fr_as_binary_le rcv param:randomness
-#ec_mul_const rcv rcv G_VCR
-#ec_add cv value rcv
-## emit cv
-#emit_ec cv
-#
-## let mut note_contents: BinaryNumber = []
-#alloc_binary note_contents
-#
-## note_contents.put(value)
-#binary_extend note_contents value
-## note_contents.put(g_d)
-#ec_repr repr_g_d g_d
-#binary_extend note_contents repr_g_d
-## note_contents.put(p_k)
-#ec_repr repr_p_k p_k
-#binary_extend note_contents repr_p_k
-## assert note_contents.len() == 64 + 256 + 256
-#static_assert_binary_size ivk_preimage 576
-#
-## let mut cm = pedersen_hash(note_contents, NOTE_COMMIT)
-#pedersen_hash cm note_contents NOTE_COMMIT
-## cm += commitment_randomness * G_NOTE_COMMIT_R
-#fr_as_binary_le rcm param:commitment_randomness
-#ec_mul_const cm1 rcm G_NOTE_COMMIT_R
-#ec_add cm cm cm1
-#
-## let mut position = []
-#alloc_binary position
-## let mut cur: Scalar = cm.u
-#ec_get_u cur cm
-#
-## There are no loops in this language.
-## ZK proofs must have a fixed size.
-## So in this assembly we UNROLL all loops.
-## for i in range(auth_path.size()):
-##
-## Here we give the example of loop 0.
-## Replace the indexes with the value i
-## Below line is auth_path[0].1
-#
-## let (node: Scalar, is_right: Bool) = auth_path[i]
-## position.push(is_right)
-#alloc_bit cur_is_right param:auth_path_0_1
-#clone_bit cur_is_right2 cur_is_right
-#binary_push position cur_is_right2
-#alloc_num path_element param:auth_path_0_0
-## let (left: Scalar, right: Scalar) = swap_if(is_right, cur, node)
-#conditionally_reverse ulur cur path_element is_right
-#get_0 ul ulur
-#get_1 ur ulur
-## let mut preimage: BinaryNumber = []
-#alloc_binary preimage
-## preimage.put(left)
-#num_to_binary ul_bits ul
-#binary_extend preimage ul_bits
-## preimage.put(right)
-#num_to_binary ur_bits ur
-#binary_extend preimage ur_bits
-## cur = pedersen_hash(MERKLE_TREE[i], preimage).u
-#pedersen_hash curhash preimage MERKLE_0
-#ec_get_u cur curhash
-## ... repeat the above N times
-#
-## enforce cur == rt
-#alloc_num rt param:anchor
-#num_enforce_equal cur rt
-## emit rt
-#emit_num rt
-#
-## let rho: Point = rho + position * G_NULL
-#ec_mul_const position position_bits G_NULL
-#ec_add rho rho position
-## nf_preimage.put(rho)
-#ec_repr repr_rho rho
-#binary_extend nf_preimage repr_rho
-## assert nf_preimage.len() == 512
-#static_assert_binary_size nf_preimage 512
-#
-## let nf: BinaryNumber = blake2s(nf_preimage, PRF_NF)
-#blake2s nf nf_preimage PRF_NF
-#emit_binary nf
+    # let rk: Point = ak + ar * G_SPEND
+    witness ak param:ak
+    assert_not_small_order ak
+    fr_as_binary_le ar param:ar
+    ec_mul_const ar ar G_SPEND
+    ec_add rk ak ar
+    # emit rk
+    emit_ec rk
+
+    # let nk: Point = nsk * G_PROOF
+    fr_as_binary_le nsk param:nsk
+    ec_mul_const nk nsk G_PROOF
+
+    # let mut ivk_preimage: BinaryNumber = []
+    alloc_binary ivk_preimage
+    # ivk_preimage.put(ak)
+    ec_repr repr_ak ak
+    binary_extend ivk_preimage repr_ak
+
+    # let mut nf_preimage: BinaryNumber = []
+    alloc_binary nf_preimage
+    ec_repr repr_nk nk
+    binary_clone repr_nk repr_nk2
+    # ivk_preimage.put(nk)
+    binary_extend ivk_preimage repr_nk
+    # nf_preimage.put(nk)
+    binary_extend ivk_preimage repr_nk2
+
+    # assert ivk_preimage.len() == 512
+    static_assert_binary_size ivk_preimage 512
+    # assert nf_preimage.len() == 256
+    static_assert_binary_size nf_preimage 256
+
+    # let mut ivk = blake2s(ivk_preimage, CRH_IVK)
+    blake2s ivk ivk_preimage CRH_IVK
+    # ivk.truncate(JUBJUB_FR_CAPACITY)
+    binary_truncate ivk JUBJUB_FR_CAPACITY
+
+    # let pk_d: Point = ivk * g_d
+    witness g_d param:g_d
+    assert_not_small_order g_d
+    ec_mul pk_d ivk g_d
+
+    # let cv: Point = value * G_VCV + rcv * G_VCR
+    u64_as_binary_le value_bits param:value
+    ec_mul_const value value_bits G_VCV
+    fr_as_binary_le rcv param:randomness
+    ec_mul_const rcv rcv G_VCR
+    ec_add cv value rcv
+    # emit cv
+    emit_ec cv
+
+    # let mut note_contents: BinaryNumber = []
+    alloc_binary note_contents
+
+    # note_contents.put(value)
+    binary_extend note_contents value
+    # note_contents.put(g_d)
+    ec_repr repr_g_d g_d
+    binary_extend note_contents repr_g_d
+    # note_contents.put(p_k)
+    ec_repr repr_p_k p_k
+    binary_extend note_contents repr_p_k
+    # assert note_contents.len() == 64 + 256 + 256
+    static_assert_binary_size ivk_preimage 576
+
+    # let mut cm = pedersen_hash(note_contents, NOTE_COMMIT)
+    pedersen_hash cm note_contents NOTE_COMMIT
+    # cm += commitment_randomness * G_NOTE_COMMIT_R
+    fr_as_binary_le rcm param:commitment_randomness
+    ec_mul_const cm1 rcm G_NOTE_COMMIT_R
+    ec_add cm cm cm1
+
+    # let mut position = []
+    alloc_binary position
+    # let mut cur: Scalar = cm.u
+    ec_get_u cur cm
+
+    ###############################################
+    # There are no loops in this language.
+    # ZK proofs must have a fixed size.
+    # So in this assembly we UNROLL all loops.
+    # for i in range(auth_path.size()):
+    #
+    # Here we give the example of loop 0.
+    # Replace the indexes with the value i
+    # Below line is auth_path[0].1
+
+    # let (node: Scalar, is_right: Bool) = auth_path[i]
+    # position.push(is_right)
+    alloc_bit cur_is_right param:auth_path_0_1
+    clone_bit cur_is_right2 cur_is_right
+    binary_push position cur_is_right2
+    alloc_num path_element param:auth_path_0_0
+    # let (left: Scalar, right: Scalar) = swap_if(is_right, cur, node)
+    conditionally_reverse ulur cur path_element is_right
+    get_0 ul ulur
+    get_1 ur ulur
+    # let mut preimage: BinaryNumber = []
+    alloc_binary preimage
+    # preimage.put(left)
+    num_to_binary ul_bits ul
+    binary_extend preimage ul_bits
+    # preimage.put(right)
+    num_to_binary ur_bits ur
+    binary_extend preimage ur_bits
+    # cur = pedersen_hash(MERKLE_TREE[i], preimage).u
+    pedersen_hash curhash preimage MERKLE_0
+    ec_get_u cur curhash
+    # ... repeat the above N times
+    ###############################################
+
+    # enforce cur == rt
+    alloc_num rt param:anchor
+    num_enforce_equal cur rt
+    # emit rt
+    emit_num rt
+
+    # let rho: Point = rho + position * G_NULL
+    ec_mul_const position position_bits G_NULL
+    ec_add rho rho position
+    # nf_preimage.put(rho)
+    ec_repr repr_rho rho
+    binary_extend nf_preimage repr_rho
+    # assert nf_preimage.len() == 512
+    static_assert_binary_size nf_preimage 512
+
+    # let nf: BinaryNumber = blake2s(nf_preimage, PRF_NF)
+    blake2s nf nf_preimage PRF_NF
+    emit_binary nf
 end
 
