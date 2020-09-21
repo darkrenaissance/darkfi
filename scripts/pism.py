@@ -72,6 +72,10 @@ command_desc = {
         ("Vec<Boolean>",    False),
         ("Vec<Boolean>",    False),
     ),
+    "binary_push": (
+        ("Vec<Boolean>",    False),
+        ("Boolean",         False),
+    ),
     "binary_truncate": (
         ("Vec<Boolean>",    False),
         ("BinarySize",      False),
@@ -92,6 +96,36 @@ command_desc = {
     ),
     "emit_binary": (
         ("Vec<Boolean>",    False),
+    ),
+    "alloc_bit": (
+        ("Boolean",         True),
+        ("Bool",            False),
+    ),
+    "clone_bit": (
+        ("Boolean",         True),
+        ("Boolean",         False),
+    ),
+    "alloc_scalar": (
+        ("ScalarNum",       True),
+        ("Scalar",          False),
+    ),
+    "scalar_as_binary": (
+        ("Vec<Boolean>",    True),
+        ("ScalarNum",       False),
+    ),
+    "emit_scalar": (
+        ("ScalarNum",       False),
+    ),
+    "scalar_enforce_equal": (
+        ("ScalarNum",       False),
+        ("ScalarNum",       False),
+    ),
+    "conditionally_reverse": (
+        ("Scalar",          True),
+        ("Scalar",          True),
+        ("Scalar",          False),
+        ("Scalar",          False),
+        ("Boolean",         False),
     ),
 }
 
@@ -252,6 +286,8 @@ r"""use bellman::{
         boolean::{AllocatedBit, Boolean},
         multipack,
         blake2s,
+        num,
+        Assignment,
     },
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };

@@ -55,6 +55,9 @@ def binary_clone(line, out, binary):
 def binary_extend(line, binary, value):
     return "%s.extend(%s);" % (binary, value)
 
+def binary_push(line, binary, bit):
+    return "%s.push(%s);" % (binary, bit)
+
 def binary_truncate(line, binary, size):
     return "%s.truncate(%s);" % (binary, size)
 
@@ -80,4 +83,46 @@ r"""let mut %s = pedersen_hash::pedersen_hash(
 def emit_binary(line, binary):
     return 'multipack::pack_into_inputs(cs.namespace(|| "%s"), &%s)?;' % (
         line, binary)
+
+def alloc_bit(line, out, value):
+    return \
+r"""let %s = boolean::Boolean::from(boolean::AllocatedBit::alloc(
+    cs.namespace(|| "%s"),
+    %s
+)?);""" % (out, line, value)
+
+def clone_bit(line, out, value):
+    return "let %s = %s.clone();" % (out, value)
+
+def alloc_scalar(line, out, scalar):
+    return \
+r"""let %s =
+    num::AllocatedNum::alloc(cs.namespace(|| "%s"), || Ok(*%s.get()?))?;""" % (
+    out, line, scalar)
+
+def scalar_as_binary(line, out, scalar):
+    return 'let %s = %s.to_bits_le(cs.namespace(|| "%s"))?;' % (out, scalar,
+                                                                line)
+
+def emit_scalar(line, scalar):
+    return '%s.inputize(cs.namespace(|| "%s"))?;' % (scalar, line)
+
+def scalar_enforce_equal(line, scalar_left, scalar_right):
+    return \
+r"""cs.enforce(
+    || "%s",
+    |lc| lc + %s.get_variable(),
+    |lc| lc + CS::one(),
+    |lc| lc + %s.get_variable(),
+);""" % (line, scalar_left, scalar_right)
+
+def conditionally_reverse(line, out_left, out_right, in_left, in_right,
+                          condition):
+    return \
+r"""let (%s, %s) = num::AllocatedNum::conditionally_reverse(
+    cs.namespace(|| "%s"),
+    &%s,
+    &%s,
+    &%s,
+)?;""" % (out_left, out_right, line, in_left, in_right, condition)
 

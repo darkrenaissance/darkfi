@@ -21,6 +21,8 @@ fn main() {
             secret: None,
             ak: None,
             value: None,
+            is_cool: None,
+            path: None,
         };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
@@ -30,6 +32,8 @@ fn main() {
         secret: Some(secret),
         ak: Some(ak),
         value: Some(110),
+        is_cool: Some(true),
+        path: Some(bls12_381::Scalar::one()),
     };
 
     let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
