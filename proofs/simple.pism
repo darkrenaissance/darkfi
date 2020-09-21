@@ -14,5 +14,10 @@ start
 
     ec_add public public ak
     emit_ec public
+
+    alloc_binary preimage
+    ec_repr repr_ak ak
+    binary_clone repr_ak2 repr_ak
+    binary_extend preimage repr_ak
 end
 

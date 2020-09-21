@@ -15,7 +15,11 @@ symbol_table = {
     "fr_as_binary_le": 2,
     "ec_mul_const": 3,
     "ec_add": 3,
-    "emit_ec": 1
+    "ec_repr": 2,
+    "emit_ec": 1,
+    "alloc_binary": 1,
+    "binary_clone": 2,
+    "binary_extend": 2,
 }
 
 types_map = {
@@ -48,9 +52,24 @@ command_desc = {
         ("EdwardsPoint",    False),
         ("EdwardsPoint",    False),
     ),
+    "ec_repr": (
+        ("Vec<Boolean>",    True),
+        ("EdwardsPoint",    False),
+    ),
     "emit_ec": (
         ("EdwardsPoint",    False),
-    )
+    ),
+    "alloc_binary": (
+        ("Vec<Boolean>",    True),
+    ),
+    "binary_clone": (
+        ("Vec<Boolean>",    True),
+        ("Vec<Boolean>",    False),
+    ),
+    "binary_extend": (
+        ("Vec<Boolean>",    False),
+        ("Vec<Boolean>",    False),
+    ),
 }
 
 def eprint(*args):
@@ -258,6 +277,8 @@ use zcash_proofs::circuit::ecc;
 
             if is_param:
                 actual_type = self.params[argname]
+            elif argname in self.constants:
+                actual_type = self.constants[argname]
             else:
                 # Check the stack here
                 if argname not in self.stack:
@@ -268,7 +289,7 @@ use zcash_proofs::circuit::ecc;
 
                 actual_type = self.stack[argname]
 
-            return True
+        return True
 
     def _check_args(self, command, args, line):
         assert command in command_desc

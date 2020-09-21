@@ -55,7 +55,7 @@ start
     # let mut nf_preimage: BinaryNumber = []
     alloc_binary nf_preimage
     ec_repr repr_nk nk
-    binary_clone repr_nk repr_nk2
+    binary_clone repr_nk2 repr_nk
     # ivk_preimage.put(nk)
     binary_extend ivk_preimage repr_nk
     # nf_preimage.put(nk)

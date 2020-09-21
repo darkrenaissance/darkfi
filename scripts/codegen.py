@@ -26,6 +26,18 @@ r"""let %s = ecc::fixed_base_multiplication(
 def ec_add(line, out, a, b):
     return 'let %s = %s.add(cs.namespace(|| "%s"), &%s)?;' % (out, a, line, b)
 
+def ec_repr(line, out, point):
+    return 'let %s = %s.repr(cs.namespace(|| "%s"))?;' % (out, point, line)
+
 def emit_ec(line, point):
     return '%s.inputize(cs.namespace(|| "%s"))?;' % (point, line)
+
+def alloc_binary(line, out):
+    return "let mut %s = vec![];" % out
+
+def binary_clone(line, out, binary):
+    return "let %s = %s.iter().cloned()" % (out, binary)
+
+def binary_extend(line, binary, value):
+    return "%s.extend(%s);" % (binary, value)
 
