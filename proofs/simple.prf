@@ -1,5 +1,5 @@
-const:
-    G_SPEND: SubgroupPoint
+const G_SPEND: SubgroupPoint
+
 contract input_spend(
     secret: Fr -> BinaryNumber
 ) -> Point:

@@ -33,10 +33,6 @@ contract input_spend
     # ...
     param anchor Scalar
 start
-    fr_as_binary_le secret param:secret
-    ec_mul_const public secret G_SPEND
-    emit_ec public
-
     # let rk: Point = ak + ar * G_SPEND
     witness ak param:ak
     assert_not_small_order ak

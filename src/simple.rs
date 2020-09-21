@@ -1,25 +1,30 @@
 use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
-use group::Curve;
+use group::{Curve, Group};
 mod simple_circuit;
 use simple_circuit::InputSpend;
 
 fn main() {
     use rand::rngs::OsRng;
-    //let ak = jubjub::SubgroupPoint::random(&mut OsRng);
+
+    let ak = jubjub::SubgroupPoint::random(&mut OsRng);
 
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret + ak;
 
     let params = {
-        let c = InputSpend { secret: None };
+        let c = InputSpend {
+            secret: None,
+            ak: None,
+        };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
     let pvk = groth16::prepare_verifying_key(&params.vk);
 
     let c = InputSpend {
         secret: Some(secret),
+        ak: Some(ak),
     };
 
     let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();

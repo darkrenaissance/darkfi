@@ -4,9 +4,15 @@ constant G_SPEND FixedGenerator
 
 contract input_spend
     param secret Fr
+    param ak Point
 start
+    witness ak param:ak
+    assert_not_small_order ak
+
     fr_as_binary_le secret param:secret
     ec_mul_const public secret G_SPEND
+
+    ec_add public public ak
     emit_ec public
 end
 

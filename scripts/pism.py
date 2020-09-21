@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+import codegen
+
 symbol_table = {
     "contract": 1,
     "param": 2,
@@ -9,8 +11,10 @@ symbol_table = {
     "end": 0,
 
     "witness": 2,
+    "assert_not_small_order": 1,
     "fr_as_binary_le": 2,
     "ec_mul_const": 3,
+    "ec_add": 3,
     "emit_ec": 1
 }
 
@@ -27,6 +31,9 @@ command_desc = {
         ("EdwardsPoint",    True),
         ("Point",           False)
     ),
+    "assert_not_small_order": (
+        ("EdwardsPoint",    False),
+    ),
     "fr_as_binary_le": (
         ("Vec<Boolean>",    True),
         ("Fr",              False)
@@ -35,6 +42,11 @@ command_desc = {
         ("EdwardsPoint",    True),
         ("Vec<Boolean>",    False),
         ("FixedGenerator",  False)
+    ),
+    "ec_add": (
+        ("EdwardsPoint",    True),
+        ("EdwardsPoint",    False),
+        ("EdwardsPoint",    False),
     ),
     "emit_ec": (
         ("EdwardsPoint",    False),
@@ -291,28 +303,14 @@ use zcash_proofs::circuit::ecc;
 
         args = [self.carg(arg) for arg in args]
 
-        if command == "witness":
-            out, point = args
-            return \
-r"""let %s = ecc::EdwardsPoint::witness(
-    cs.namespace(|| "%s"),
-    %s.map(jubjub::ExtendedPoint::from))?;""" % (out, line, point)
-        elif command == "fr_as_binary_le":
-            out, fr = args
-            return \
-r"""let %s = boolean::field_into_boolean_vec_le(
-    cs.namespace(|| "%s"), %s)?;""" % (out, line, fr)
-        elif command == "ec_mul_const":
-            out, fr, base = args
-            return \
-r"""let %s = ecc::fixed_base_multiplication(
-    cs.namespace(|| "%s"),
-    &%s,
-    &%s,
-)?;""" % (out, line, base, fr)
-        elif command == "emit_ec":
-            point = args[0]
-            return '%s.inputize(cs.namespace(|| "%s"))?;' % (point, line)
+        try:
+            codegen_method = getattr(codegen, command)
+        except AttributeError:
+            eprint("error: missing command '%s' does not exist" % command)
+            eprint(line)
+            return None
+
+        return codegen_method(line, *args)
 
     def carg(self, arg):
         argname, is_param = arg
