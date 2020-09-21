@@ -36,8 +36,23 @@ def alloc_binary(line, out):
     return "let mut %s = vec![];" % out
 
 def binary_clone(line, out, binary):
-    return "let %s = %s.iter().cloned()" % (out, binary)
+    return "let %s = %s.iter().cloned();" % (out, binary)
 
 def binary_extend(line, binary, value):
     return "%s.extend(%s);" % (binary, value)
+
+def static_assert_binary_size(line, binary, size):
+    return "assert_eq!(%s.len(), %s);" % (binary, size)
+
+def blake2s(line, out, input, personalization):
+    return \
+r"""let mut %s = blake2s::blake2s(
+    cs.namespace(|| "%s"),
+    &%s,
+    %s,
+)?;""" % (out, line, input, personalization)
+
+def emit_binary(line, binary):
+    return 'multipack::pack_into_inputs(cs.namespace(|| "%s"), &%s)?;' % (
+        line, binary)
 

@@ -1,7 +1,10 @@
 use bellman::groth16;
+use bellman::gadgets::multipack;
 use bls12_381::Bls12;
 use ff::Field;
-use group::{Curve, Group};
+use group::{Curve, Group, GroupEncoding};
+use blake2s_simd::Params as Blake2sParams;
+
 mod simple_circuit;
 use simple_circuit::InputSpend;
 
@@ -29,7 +32,7 @@ fn main() {
 
     let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
 
-    let mut public_input = [bls12_381::Scalar::zero(); 2];
+    let mut public_input = [bls12_381::Scalar::zero(); 4];
     {
         let result = jubjub::ExtendedPoint::from(public);
         let affine = result.to_affine();
@@ -38,6 +41,34 @@ fn main() {
         let v = affine.get_v();
         public_input[0] = u;
         public_input[1] = v;
+    }
+
+    {
+        const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
+        let preimage = [42; 80];
+        let hash_result = {
+            let mut hash = [0; 32];
+            hash.copy_from_slice(
+                Blake2sParams::new()
+                .hash_length(32)
+                .personal(CRH_IVK_PERSONALIZATION)
+                .to_state()
+                .update(&ak.to_bytes())
+                .finalize()
+                .as_bytes()
+            );
+            hash
+        };
+
+        // Pack the hash as inputs for proof verification.
+        let hash = multipack::bytes_to_bits_le(&hash_result);
+        let hash = multipack::compute_multipacking(&hash);
+
+        // There are 2 chunks for a blake hash
+        assert_eq!(hash.len(), 2);
+
+        public_input[2] = hash[0];
+        public_input[3] = hash[1];
     }
 
     assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());

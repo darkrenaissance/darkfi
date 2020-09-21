@@ -9,17 +9,6 @@ symbol_table = {
     "param": 2,
     "start": 0,
     "end": 0,
-
-    "witness": 2,
-    "assert_not_small_order": 1,
-    "fr_as_binary_le": 2,
-    "ec_mul_const": 3,
-    "ec_add": 3,
-    "ec_repr": 2,
-    "emit_ec": 1,
-    "alloc_binary": 1,
-    "binary_clone": 2,
-    "binary_extend": 2,
 }
 
 types_map = {
@@ -68,6 +57,18 @@ command_desc = {
     ),
     "binary_extend": (
         ("Vec<Boolean>",    False),
+        ("Vec<Boolean>",    False),
+    ),
+    "static_assert_binary_size": (
+        ("Vec<Boolean>",    False),
+        ("INTEGER",         False),
+    ),
+    "blake2s": (
+        ("Vec<Boolean>",    True),
+        ("Vec<Boolean>",    False),
+        ("BlakePersonalization", False),
+    ),
+    "emit_binary": (
         ("Vec<Boolean>",    False),
     ),
 }
@@ -163,8 +164,19 @@ def extract(segment):
 
     for line in segment:
         command, args = line.command(), line.args()
-        if symbol_table[command] != len(args):
-            eprint("error: wrong number of args for command '%s'" % command)
+
+        if command in symbol_table:
+            if symbol_table[command] != len(args):
+                eprint("error: wrong number of args for command '%s'" % command)
+                eprint(line)
+                return None
+        elif command in command_desc:
+            if len(command_desc[command]) != len(args):
+                eprint("error: wrong number of args for command '%s'" % command)
+                eprint(line)
+                return None
+        else:
+            eprint("error: missing symbol for command '%s'" % command)
             eprint(line)
             return None
 
@@ -217,6 +229,7 @@ r"""use bellman::{
         boolean,
         boolean::{AllocatedBit, Boolean},
         multipack,
+        blake2s,
     },
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };
@@ -275,6 +288,9 @@ use zcash_proofs::circuit::ecc;
             if new_val:
                 continue
 
+            if expected_type == "INTEGER":
+                continue
+
             if is_param:
                 actual_type = self.params[argname]
             elif argname in self.constants:
@@ -296,7 +312,7 @@ use zcash_proofs::circuit::ecc;
         type_list = command_desc[command]
         assert len(type_list) == len(args)
 
-        for (_, is_new_val), (arg, is_param) in zip(type_list, args):
+        for (expected_type, is_new_val), (arg, is_param) in zip(type_list, args):
             if is_param:
                 continue
             if is_new_val:
@@ -304,6 +320,9 @@ use zcash_proofs::circuit::ecc;
             if arg in self.stack:
                 continue
             if arg in self.constants:
+                continue
+
+            if expected_type == "INTEGER":
                 continue
 
             eprint("error: cannot find '%s' in the stack" % arg)
@@ -405,7 +424,8 @@ def process(contents, aux):
 
     codes = []
     for segment in segments:
-        contract = extract(segment)
+        if (contract := extract(segment)) is None:
+            return False
         if (code := contract.compile(constants, aux)) is None:
             return False
         codes.append(code)

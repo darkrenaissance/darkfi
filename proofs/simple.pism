@@ -1,6 +1,7 @@
 # :set syntax=pism
 # :source ../scripts/pism.vim
 constant G_SPEND FixedGenerator
+constant CRH_IVK BlakePersonalization
 
 contract input_spend
     param secret Fr
@@ -17,7 +18,10 @@ start
 
     alloc_binary preimage
     ec_repr repr_ak ak
-    binary_clone repr_ak2 repr_ak
+    #binary_clone repr_ak2 repr_ak
     binary_extend preimage repr_ak
+    static_assert_binary_size preimage 256
+    blake2s ivk preimage CRH_IVK
+    emit_binary ivk
 end
 
