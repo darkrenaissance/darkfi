@@ -38,20 +38,20 @@ start
     #u64_as_binary_le value_bits param:value
     #ec_mul pk_d value_bits public
 
-    pedersen_hash cm ivk NOTE_COMMIT
-    ec_get_u cur cm
-    
-    alloc_bit is_cool param:is_cool
-    clone_bit is_cool2 is_cool
-    binary_push ivk is_cool2
+    #pedersen_hash cm ivk NOTE_COMMIT
+    #ec_get_u cur cm
+    #
+    #alloc_bit is_cool param:is_cool
+    #clone_bit is_cool2 is_cool
+    #binary_push ivk is_cool2
 
-    alloc_scalar path param:path
-    conditionally_reverse ul ur cur path is_cool
+    #alloc_scalar path param:path
+    #conditionally_reverse ul ur cur path is_cool
 
-    scalar_as_binary ul_bin ul
-    binary_extend preimage ul_bin
+    #scalar_as_binary ul_bin ul
+    #binary_extend preimage ul_bin
 
-    scalar_enforce_equal ur ul
-    emit_scalar ur
+    #scalar_enforce_equal ur ul
+    #emit_scalar ur
 end
 
