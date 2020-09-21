@@ -27,6 +27,10 @@ command_desc = {
     "assert_not_small_order": (
         ("EdwardsPoint",    False),
     ),
+    "u64_as_binary_le": (
+        ("Vec<Boolean>",    True),
+        ("U64",             False),
+    ),
     "fr_as_binary_le": (
         ("Vec<Boolean>",    True),
         ("Fr",              False)
@@ -36,6 +40,11 @@ command_desc = {
         ("Vec<Boolean>",    False),
         ("FixedGenerator",  False)
     ),
+    "ec_mul": (
+        ("EdwardsPoint",    True),
+        ("Vec<Boolean>",    False),
+        ("EdwardsPoint",    False),
+    ),
     "ec_add": (
         ("EdwardsPoint",    True),
         ("EdwardsPoint",    False),
@@ -43,6 +52,10 @@ command_desc = {
     ),
     "ec_repr": (
         ("Vec<Boolean>",    True),
+        ("EdwardsPoint",    False),
+    ),
+    "ec_get_u": (
+        ("Scalar",          True),
         ("EdwardsPoint",    False),
     ),
     "emit_ec": (
@@ -59,6 +72,10 @@ command_desc = {
         ("Vec<Boolean>",    False),
         ("Vec<Boolean>",    False),
     ),
+    "binary_truncate": (
+        ("Vec<Boolean>",    False),
+        ("BinarySize",      False),
+    ),
     "static_assert_binary_size": (
         ("Vec<Boolean>",    False),
         ("INTEGER",         False),
@@ -67,6 +84,11 @@ command_desc = {
         ("Vec<Boolean>",    True),
         ("Vec<Boolean>",    False),
         ("BlakePersonalization", False),
+    ),
+    "pedersen_hash": (
+        ("EdwardsPoint",    True),
+        ("Vec<Boolean>",    False),
+        ("PedersenPersonalization", False),
     ),
     "emit_binary": (
         ("Vec<Boolean>",    False),
@@ -95,7 +117,7 @@ class Line:
         return bool(self.text)
 
     def __repr__(self):
-        return "Line %s: %s" % (self.lineno, self.orig)
+        return "Line %s: %s" % (self.lineno, self.orig.lstrip())
 
     def command(self):
         if not self.is_empty():
@@ -236,7 +258,7 @@ r"""use bellman::{
 use bls12_381::Bls12;
 use ff::{PrimeField, Field};
 use group::Curve;
-use zcash_proofs::circuit::ecc;
+use zcash_proofs::circuit::{ecc, pedersen_hash};
 """
 
     def _compile_header(self):
@@ -257,7 +279,8 @@ use zcash_proofs::circuit::ecc;
         for command, args, line in self.program:
             if (code_text := self._compile_line(command, args, line)) is None:
                 return None
-            code += code_text + "\n"
+            code += "// %s\n" % str(line)
+            code += code_text + "\n\n"
         return code
 
     def _preprocess_args(self, args, line):
@@ -382,14 +405,12 @@ use zcash_proofs::circuit::ecc;
         self.rename_consts = {}
         if "constants" in aux:
             for const_name, value in aux["constants"].items():
-                if "module_includes" not in value:
-                    continue
                 if "maps_to" not in value:
                     eprint("error: bad aux config '%s', missing maps_to" %
                            const_name)
-                mapped_type = value["maps_to"]
-                code += "use %s::%s;\n" % (value["module_includes"], mapped_type)
+                    return None
 
+                mapped_type = value["maps_to"]
                 self.rename_consts[const_name] = mapped_type
 
         code += "\n"

@@ -1,12 +1,16 @@
 {
     "constants": {
         "G_SPEND": {
-            "maps_to": "SPENDING_KEY_GENERATOR",
-            "module_includes": "zcash_proofs::constants"
+            "maps_to": "zcash_proofs::constants::SPENDING_KEY_GENERATOR"
         },
         "CRH_IVK": {
-            "maps_to": "CRH_IVK_PERSONALIZATION",
-            "module_includes": "zcash_primitives::constants"
+            "maps_to": "zcash_primitives::constants::CRH_IVK_PERSONALIZATION"
+        },
+        "JUBJUB_FR_CAPACITY": {
+            "maps_to": "jubjub::Fr::CAPACITY as usize"
+        },
+        "NOTE_COMMIT": {
+            "maps_to": "pedersen_hash::Personalization::NoteCommitment"
         }
     }
 }

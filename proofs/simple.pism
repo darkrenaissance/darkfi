@@ -2,10 +2,13 @@
 # :source ../scripts/pism.vim
 constant G_SPEND FixedGenerator
 constant CRH_IVK BlakePersonalization
+constant JUBJUB_FR_CAPACITY BinarySize
+constant NOTE_COMMIT PedersenPersonalization
 
 contract input_spend
     param secret Fr
     param ak Point
+    param value U64
 start
     witness ak param:ak
     assert_not_small_order ak
@@ -18,10 +21,15 @@ start
 
     alloc_binary preimage
     ec_repr repr_ak ak
-    #binary_clone repr_ak2 repr_ak
     binary_extend preimage repr_ak
     static_assert_binary_size preimage 256
     blake2s ivk preimage CRH_IVK
+    binary_clone ivk2 ivk
     emit_binary ivk
+    binary_truncate ivk2 JUBJUB_FR_CAPACITY
+    u64_as_binary_le value_bits param:value
+    ec_mul pk_d value_bits public
+    pedersen_hash cm ivk NOTE_COMMIT
+    ec_get_u cur cm
 end
 

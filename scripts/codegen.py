@@ -10,6 +10,13 @@ r"""let %s = ecc::EdwardsPoint::witness(
 def assert_not_small_order(line, point):
     return '%s.assert_not_small_order(cs.namespace(|| "%s"))?;' % (point, line)
 
+def u64_as_binary_le(line, out, val):
+    return \
+r"""let %s = boolean::u64_into_boolean_vec_le(
+    cs.namespace(|| "%s"),
+    %s,
+)?;""" % (out, line, val)
+
 def fr_as_binary_le(line, out, fr):
     return \
 r"""let %s = boolean::field_into_boolean_vec_le(
@@ -23,11 +30,18 @@ r"""let %s = ecc::fixed_base_multiplication(
     &%s,
 )?;""" % (out, line, base, fr)
 
+def ec_mul(line, out, fr, base):
+    return 'let %s = %s.mul(cs.namespace(|| "%s"), &%s)?;' % (
+        out, base, line, fr)
+
 def ec_add(line, out, a, b):
     return 'let %s = %s.add(cs.namespace(|| "%s"), &%s)?;' % (out, a, line, b)
 
 def ec_repr(line, out, point):
     return 'let %s = %s.repr(cs.namespace(|| "%s"))?;' % (out, point, line)
+
+def ec_get_u(line, out, point):
+    return "let mut %s = %s.get_u().clone();" % (out, point)
 
 def emit_ec(line, point):
     return '%s.inputize(cs.namespace(|| "%s"))?;' % (point, line)
@@ -36,10 +50,13 @@ def alloc_binary(line, out):
     return "let mut %s = vec![];" % out
 
 def binary_clone(line, out, binary):
-    return "let %s = %s.iter().cloned();" % (out, binary)
+    return "let mut %s: Vec<_> = %s.iter().cloned().collect();" % (out, binary)
 
 def binary_extend(line, binary, value):
     return "%s.extend(%s);" % (binary, value)
+
+def binary_truncate(line, binary, size):
+    return "%s.truncate(%s);" % (binary, size)
 
 def static_assert_binary_size(line, binary, size):
     return "assert_eq!(%s.len(), %s);" % (binary, size)
@@ -51,6 +68,14 @@ r"""let mut %s = blake2s::blake2s(
     &%s,
     %s,
 )?;""" % (out, line, input, personalization)
+
+def pedersen_hash(line, out, input, personalization):
+    return \
+r"""let mut %s = pedersen_hash::pedersen_hash(
+    cs.namespace(|| "%s"),
+    %s,
+    &%s,
+)?;""" % (out, line, personalization, input)
 
 def emit_binary(line, binary):
     return 'multipack::pack_into_inputs(cs.namespace(|| "%s"), &%s)?;' % (
