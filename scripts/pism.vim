@@ -19,6 +19,7 @@ syn match sapviFunction "^[ ]*[a-z_0-9]* "
 syn match sapviComment "#.*$"
 syn match sapviNumber ' \zs\d\+\ze'
 syn match sapviConst '[A-Z_]\{2,}[A-Z0-9_]*'
+syn keyword sapviBoolVal true false
 syn match sapviPreproc "{%.*%}"
 syn match sapviPreproc2 "{{.*}}"
 
@@ -31,5 +32,6 @@ hi def link sapviFunction   Function
 hi def link sapviComment    Comment
 hi def link sapviNumber     Constant
 hi def link sapviConst      Constant
+hi def link sapviBoolVal    Constant
 
 let b:current_syntax = "pism"

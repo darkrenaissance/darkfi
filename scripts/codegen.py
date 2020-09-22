@@ -91,6 +91,9 @@ r"""let %s = boolean::Boolean::from(boolean::AllocatedBit::alloc(
     %s
 )?);""" % (out, line, value)
 
+def alloc_const_bit(line, out, value):
+    return "let %s = Boolean::constant(%s);" % (out, value)
+
 def clone_bit(line, out, value):
     return "let %s = %s.clone();" % (out, value)
 

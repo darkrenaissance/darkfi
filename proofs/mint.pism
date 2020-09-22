@@ -16,6 +16,7 @@ contract mint_contract
 
     param public Point
 start
+    # Witness input values
     u64_as_binary_le value param:value
     fr_as_binary_le randomness_value param:randomness_value
     fr_as_binary_le serial param:serial
@@ -24,19 +25,49 @@ start
     witness public param:public
     assert_not_small_order public
 
+    # Make value commitment
+    # V = v * G_VCV + r * G_VCR
+
     ec_mul_const vcv value G_VCV
     ec_mul_const rcv randomness_value G_VCR
     ec_add cv vcv rcv
     # emit cv
     emit_ec cv
 
+    # Build the preimage to hash
+    # coin = Hash(public_key, value, serial, randomness_coin)
+
     alloc_binary preimage
+
+    # public_key
     ec_repr repr_public public
     binary_extend preimage repr_public
-    #binary_extend preimage value
-    #binary_extend preimage serial
-    #binary_extend preimage randomness_coin
-    #static_assert_binary_size preimage 824
+
+    # value
+    binary_extend preimage value
+
+    # serial
+    # This value is 252 bits so we need to pad it with extra 0s
+    # to match the Rust values which are 256 bits
+    binary_extend preimage serial
+{% for n in range(4) %}
+    alloc_const_bit zero_bit false
+    binary_push preimage zero_bit
+{% endfor %}
+
+    # randomness_coin
+    binary_extend preimage randomness_coin
+{% for n in range(4) %}
+    alloc_const_bit zero_bit false
+    binary_push preimage zero_bit
+{% endfor %}
+
+    # Public key:       SubgroupPoint   = 256 bits
+    # Value:            u64             = 64 bits
+    # Serial:           Fr              = 252 + 4 bits padding
+    # Randomness coin   Fr              = 252 + 4 bits padding
+    # TOTAL: 832 bits for preimage
+    static_assert_binary_size preimage 832
     blake2s coin preimage CRH_IVK
     emit_binary coin
 end

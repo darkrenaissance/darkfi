@@ -33,9 +33,9 @@ impl MintRevealedValues {
                 .personal(zcash_primitives::constants::CRH_IVK_PERSONALIZATION)
                 .to_state()
                 .update(&public.to_bytes())
-                //.update(&value.to_bytes())
-                //.update(&serial.to_bytes())
-                //.update(&randomness_coin.to_bytes())
+                .update(&value.to_le_bytes())
+                .update(&serial.to_bytes())
+                .update(&randomness_coin.to_bytes())
                 .finalize()
                 .as_bytes(),
         );

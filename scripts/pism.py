@@ -101,6 +101,10 @@ command_desc = {
         ("Boolean",         True),
         ("Bool",            False),
     ),
+    "alloc_const_bit": (
+        ("Boolean",         True),
+        ("BOOL_CONST",      False),
+    ),
     "clone_bit": (
         ("Boolean",         True),
         ("Boolean",         False),
@@ -347,7 +351,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
             if new_val:
                 continue
 
-            if expected_type == "INTEGER":
+            if expected_type == "INTEGER" or expected_type == "BOOL_CONST":
                 continue
 
             if is_param:
@@ -381,7 +385,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
             if arg in self.constants:
                 continue
 
-            if expected_type == "INTEGER":
+            if expected_type == "INTEGER" or expected_type == "BOOL_CONST":
                 continue
 
             eprint("error: cannot find '%s' in the stack" % arg)
@@ -493,16 +497,14 @@ def process(contents, aux):
     return True
 
 def main(argv):
-    if len(argv) != 2:
-        eprint("pism FILENAME")
+    if len(argv) != 3:
+        eprint("pism FILENAME AUX_FILENAME")
         return -1
 
-    src_filename = argv[1]
-
-    basename, _ = os.path.splitext(src_filename)
-    aux_filename = basename + ".aux"
+    aux_filename = argv[2]
     aux = json.loads(open(aux_filename).read())
 
+    src_filename = argv[1]
     contents = open(src_filename).read()
     if not process(contents, aux):
         return -2
