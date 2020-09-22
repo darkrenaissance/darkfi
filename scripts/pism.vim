@@ -1,3 +1,13 @@
+"For autoload, add this to your VIM config:
+"   VIM:    .vimrc
+"   NeoVIM: .config/nvim/init.vim
+"
+"autocmd BufRead *.pism call SetPismOptions()
+"function SetPismOptions()
+"    set syntax=pism
+"    source /home/narodnik/src/sapvi/scripts/pism.vim
+"endfunction
+
 if exists('b:current_syntax')
     finish
 endif
