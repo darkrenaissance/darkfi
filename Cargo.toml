@@ -47,3 +47,7 @@ path = "src/zec.rs"
 name = "simple"
 path = "src/simple.rs"
 
+[[bin]]
+name = "mint"
+path = "src/mint.rs"
+

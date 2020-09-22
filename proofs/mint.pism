@@ -1,0 +1,43 @@
+# :set syntax=pism
+# :source ../scripts/pism.vim
+constant G_VCV FixedGenerator
+constant G_VCR FixedGenerator
+constant CRH_IVK BlakePersonalization
+#constant JUBJUB_FR_CAPACITY BinarySize
+#constant NOTE_COMMIT PedersenPersonalization
+
+contract mint_contract
+    # Value commitment
+    param value U64
+    param randomness_value Fr
+
+    param serial Fr
+    param randomness_coin Fr
+
+    param public Point
+start
+    u64_as_binary_le value param:value
+    fr_as_binary_le randomness_value param:randomness_value
+    fr_as_binary_le serial param:serial
+    fr_as_binary_le randomness_coin param:randomness_coin
+
+    witness public param:public
+    assert_not_small_order public
+
+    ec_mul_const vcv value G_VCV
+    ec_mul_const rcv randomness_value G_VCR
+    ec_add cv vcv rcv
+    # emit cv
+    emit_ec cv
+
+    alloc_binary preimage
+    ec_repr repr_public public
+    binary_extend preimage repr_public
+    #binary_extend preimage value
+    #binary_extend preimage serial
+    #binary_extend preimage randomness_coin
+    #static_assert_binary_size preimage 824
+    blake2s coin preimage CRH_IVK
+    emit_binary coin
+end
+

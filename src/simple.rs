@@ -1,9 +1,9 @@
-use bellman::groth16;
 use bellman::gadgets::multipack;
+use bellman::groth16;
+use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::Field;
 use group::{Curve, Group, GroupEncoding};
-use blake2s_simd::Params as Blake2sParams;
 
 mod simple_circuit;
 use simple_circuit::InputSpend;
@@ -56,12 +56,12 @@ fn main() {
             let mut hash = [0; 32];
             hash.copy_from_slice(
                 Blake2sParams::new()
-                .hash_length(32)
-                .personal(CRH_IVK_PERSONALIZATION)
-                .to_state()
-                .update(&ak.to_bytes())
-                .finalize()
-                .as_bytes()
+                    .hash_length(32)
+                    .personal(CRH_IVK_PERSONALIZATION)
+                    .to_state()
+                    .update(&ak.to_bytes())
+                    .finalize()
+                    .as_bytes(),
             );
             hash
         };
