@@ -46,21 +46,21 @@ start
     # value
     binary_extend preimage value
 
+# Fr values are 252 bits so we need to pad it with extra 0s
+# to match the Rust values which are 256 bits
+{% macro binary_put_fr(binary, var) -%}
+    binary_extend {{ binary }} {{ var }}
+    {% for n in range(4) %}
+        alloc_const_bit zero_bit false
+        binary_push {{ binary }} zero_bit
+    {% endfor %}
+{%- endmacro %}
+
     # serial
-    # This value is 252 bits so we need to pad it with extra 0s
-    # to match the Rust values which are 256 bits
-    binary_extend preimage serial
-{% for n in range(4) %}
-    alloc_const_bit zero_bit false
-    binary_push preimage zero_bit
-{% endfor %}
+    {{ binary_put_fr("preimage", "serial") }}
 
     # randomness_coin
-    binary_extend preimage randomness_coin
-{% for n in range(4) %}
-    alloc_const_bit zero_bit false
-    binary_push preimage zero_bit
-{% endfor %}
+    {{ binary_put_fr("preimage", "randomness_coin") }}
 
     # Public key:       SubgroupPoint   = 256 bits
     # Value:            u64             = 64 bits
