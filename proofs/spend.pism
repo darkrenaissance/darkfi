@@ -98,8 +98,9 @@ start
     # TOTAL: 832 bits for preimage
     static_assert_binary_size preimage 832
     blake2s coin preimage CRH_IVK
-    binary_clone coin2 coin
-    emit_binary coin2
+    # Debug stuff. Normally we don't reveal the coin in the spend proof.
+    #binary_clone coin2 coin
+    #emit_binary coin2
 
     # coin_commit = PedersenHash(coin)
     pedersen_hash cm coin NOTE_COMMIT

@@ -45,7 +45,8 @@ pub fn merkle_hash(depth: usize, lhs: &bls12_381::Scalar, rhs: &bls12_381::Scala
 struct SpendRevealedValues {
     value_commit: jubjub::SubgroupPoint,
     nullifier: [u8; 32],
-    coin: [u8; 32],
+    // This should not be here, we just have it for debugging
+    //coin: [u8; 32],
     merkle_root: bls12_381::Scalar,
 }
 
@@ -106,11 +107,11 @@ impl SpendRevealedValues {
             }
         }
 
-        SpendRevealedValues { value_commit, nullifier, coin, merkle_root }
+        SpendRevealedValues { value_commit, nullifier, merkle_root }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 7] {
-        let mut public_input = [bls12_381::Scalar::zero(); 7];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 5] {
+        let mut public_input = [bls12_381::Scalar::zero(); 5];
 
         // CV
         {
@@ -136,8 +137,9 @@ impl SpendRevealedValues {
             public_input[3] = hash[1];
         }
 
+        // Not revealed. We leave this code here for debug
         // Coin
-        {
+        /*{
             // Pack the hash as inputs for proof verification.
             let hash = multipack::bytes_to_bits_le(&self.coin);
             let hash = multipack::compute_multipacking(&hash);
@@ -147,9 +149,9 @@ impl SpendRevealedValues {
 
             public_input[4] = hash[0];
             public_input[5] = hash[1];
-        }
+        }*/
 
-        public_input[6] = self.merkle_root;
+        public_input[4] = self.merkle_root;
 
         public_input
     }
