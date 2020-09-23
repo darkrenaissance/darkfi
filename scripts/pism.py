@@ -285,6 +285,7 @@ class Contract:
     def _includes(self):
         return \
 r"""#![allow(unused_imports)]
+#![allow(unused_mut)]
 use bellman::{
     gadgets::{
         boolean,
