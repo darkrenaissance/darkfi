@@ -3,7 +3,7 @@ use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::Field;
-use group::{Curve, Group, GroupEncoding};
+use group::{Curve, GroupEncoding};
 
 mod spend_contract;
 use spend_contract::SpendContract;
@@ -12,6 +12,7 @@ struct SpendRevealedValues {
     value_commit: jubjub::SubgroupPoint,
     nullifier: [u8; 32],
     coin: [u8; 32],
+    merkle_root: bls12_381::Scalar,
 }
 
 impl SpendRevealedValues {
@@ -55,11 +56,18 @@ impl SpendRevealedValues {
                 .as_bytes(),
         );
 
-        SpendRevealedValues { value_commit, nullifier, coin }
+        let merkle_root = jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
+            zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
+            multipack::bytes_to_bits_le(&coin)
+        ));
+        let affine = merkle_root.to_affine();
+        let merkle_root = affine.get_u();
+
+        SpendRevealedValues { value_commit, nullifier, coin, merkle_root }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 6] {
-        let mut public_input = [bls12_381::Scalar::zero(); 6];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 7] {
+        let mut public_input = [bls12_381::Scalar::zero(); 7];
 
         // CV
         {
@@ -97,6 +105,8 @@ impl SpendRevealedValues {
             public_input[4] = hash[0];
             public_input[5] = hash[1];
         }
+
+        public_input[6] = self.merkle_root;
 
         public_input
     }

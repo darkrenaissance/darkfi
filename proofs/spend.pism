@@ -3,6 +3,7 @@ constant G_VCR FixedGenerator
 constant G_SPEND FixedGenerator
 constant PRF_NF BlakePersonalization
 constant CRH_IVK BlakePersonalization
+constant NOTE_COMMIT PedersenPersonalization
 
 contract spend_contract
     # Value commitment
@@ -89,6 +90,24 @@ start
     # TOTAL: 832 bits for preimage
     static_assert_binary_size preimage 832
     blake2s coin preimage CRH_IVK
-    emit_binary coin
+    binary_clone coin2 coin
+    emit_binary coin2
+
+    # coin_commit = PedersenHash(coin)
+    pedersen_hash cm coin NOTE_COMMIT
+    # left = coin_commit.u
+    ec_get_u left cm
+    emit_scalar left
+
+    # Our merkle tree has a height of 4
+{% for i in range(4) %}
+    # right = branch[{{ i }}]
+    # is_right = is_right[{{ i }}]
+    # if is_right:
+    #     left, right = right, left
+    # coin_commit = PedersenHash(left || right)
+    # left = coin_commit.u
+{% endfor %}
+    # Reveal the merkle root
 end
 
