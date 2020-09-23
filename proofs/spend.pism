@@ -1,28 +1,20 @@
-# :set syntax=pism
-# :source ../scripts/pism.vim
 constant G_VCV FixedGenerator
 constant G_VCR FixedGenerator
+constant G_SPEND FixedGenerator
 constant CRH_IVK BlakePersonalization
-#constant JUBJUB_FR_CAPACITY BinarySize
-#constant NOTE_COMMIT PedersenPersonalization
 
-contract mint_contract
+contract spend_contract
     # Value commitment
     param value U64
     param randomness_value Fr
 
     param serial Fr
     param randomness_coin Fr
-    param public Point
+    param secret Fr
 start
     # Witness input values
     u64_as_binary_le value param:value
     fr_as_binary_le randomness_value param:randomness_value
-    fr_as_binary_le serial param:serial
-    fr_as_binary_le randomness_coin param:randomness_coin
-
-    witness public param:public
-    assert_not_small_order public
 
     # Make value commitment
     # V = v * G_VCV + r * G_VCR
@@ -33,18 +25,12 @@ start
     # emit cv
     emit_ec cv
 
-    # Make the coin
-    # C = Hash(public_key, value, serial, randomness_coin)
+    # Make the nullifier
+    # N = Hash(secret, serial)
+    fr_as_binary_le serial param:serial
+    fr_as_binary_le secret param:secret
 
-    # Build the preimage to hash
-    alloc_binary preimage
-
-    # public_key
-    ec_repr repr_public public
-    binary_extend preimage repr_public
-
-    # value
-    binary_extend preimage value
+    alloc_binary nf_preimage
 
 # Fr values are 252 bits so we need to pad it with extra 0s
 # to match the Rust values which are 256 bits
@@ -55,6 +41,39 @@ start
         binary_push {{ binary }} zero_bit
     {% endfor %}
 {%- endmacro %}
+
+    # secret
+    binary_clone secret2 secret
+    {{ binary_put_fr("nf_preimage", "secret2") }}
+
+    # serial
+    binary_clone serial2 serial
+    {{ binary_put_fr("nf_preimage", "serial2") }}
+
+    # Secret:           Fr              = 252 + 4 bits padding
+    # Serial:           Fr              = 252 + 4 bits padding
+    # TOTAL: 512 bits for preimage
+    static_assert_binary_size nf_preimage 512
+    blake2s nf nf_preimage CRH_IVK
+    emit_binary nf
+
+    # Derive the public key
+    # P = secret * G
+    ec_mul_const public secret G_SPEND
+
+    # Make the coin (same as mint contract)
+    # C = Hash(public_key, value, serial, randomness_coin)
+    fr_as_binary_le randomness_coin param:randomness_coin
+
+    # Build the preimage to hash
+    alloc_binary preimage
+
+    # public_key
+    ec_repr repr_public public
+    binary_extend preimage repr_public
+
+    # value
+    binary_extend preimage value
 
     # serial
     {{ binary_put_fr("preimage", "serial") }}

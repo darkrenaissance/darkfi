@@ -14,8 +14,8 @@ bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 
 zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-#zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
-zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
+zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+#zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
 rand_core = "0.5.1"
@@ -50,4 +50,8 @@ path = "src/simple.rs"
 [[bin]]
 name = "mint"
 path = "src/mint.rs"
+
+[[bin]]
+name = "spend"
+path = "src/spend.rs"
 

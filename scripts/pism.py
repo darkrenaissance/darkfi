@@ -284,7 +284,8 @@ class Contract:
 
     def _includes(self):
         return \
-r"""use bellman::{
+r"""#![allow(unused_imports)]
+use bellman::{
     gadgets::{
         boolean,
         boolean::{AllocatedBit, Boolean},
