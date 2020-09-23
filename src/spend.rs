@@ -99,8 +99,11 @@ impl SpendRevealedValues {
         let mut merkle_root = affine.get_u();
 
         for (i, (right, is_right)) in merkle_path.iter().enumerate() {
-            //let mut preimage = vec![];
-            //preimage.extend(multipack::bytes_to_bits_le(
+            if *is_right {
+                merkle_root = merkle_hash(i, &right, &merkle_root);
+            } else {
+                merkle_root = merkle_hash(i, &merkle_root, &right);
+            }
         }
 
         SpendRevealedValues { value_commit, nullifier, coin, merkle_root }

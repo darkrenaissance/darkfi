@@ -4,6 +4,9 @@ constant G_SPEND FixedGenerator
 constant PRF_NF BlakePersonalization
 constant CRH_IVK BlakePersonalization
 constant NOTE_COMMIT PedersenPersonalization
+{% for i in range(4) %}
+    constant MERKLE_{{ i }} PedersenPersonalization
+{% endfor %}
 
 contract spend_contract
     # Value commitment
@@ -101,18 +104,31 @@ start
     # coin_commit = PedersenHash(coin)
     pedersen_hash cm coin NOTE_COMMIT
     # left = coin_commit.u
-    ec_get_u left cm
-    emit_scalar left
+    ec_get_u current cm
 
     # Our merkle tree has a height of 4
 {% for i in range(4) %}
+    # left = current
     # right = branch[{{ i }}]
+    alloc_scalar branch param:branch_{{ i }}
+
     # is_right = is_right[{{ i }}]
-    # if is_right:
-    #     left, right = right, left
+    alloc_bit is_right param:is_right_{{ i }}
+
+    # reverse(a, b, condition) = if condition (b, a) else (a, b)
+    conditionally_reverse left right current branch is_right
+
     # coin_commit = PedersenHash(left || right)
-    # left = coin_commit.u
+    scalar_as_binary left left
+    scalar_as_binary right right
+    alloc_binary preimage
+    binary_extend preimage left
+    binary_extend preimage right
+    pedersen_hash cm preimage MERKLE_{{ i }}
+    # current = coin_commit.u
+    ec_get_u current cm
 {% endfor %}
     # Reveal the merkle root
+    emit_scalar current
 end
 
