@@ -13,6 +13,11 @@ contract spend_contract
     param serial Fr
     param randomness_coin Fr
     param secret Fr
+
+{% for i in range(4) %}
+    param branch_{{ i }} Scalar
+    param is_right_{{ i }} Bool
+{% endfor %}
 start
     # Witness input values
     u64_as_binary_le value param:value

@@ -2,11 +2,45 @@ use bellman::gadgets::multipack;
 use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
-use ff::Field;
+use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
+use bitvec::{order::Lsb0, view::AsBits};
 
 mod spend_contract;
 use spend_contract::SpendContract;
+
+// This thing is nasty lol
+pub fn merkle_hash(depth: usize, lhs: &bls12_381::Scalar, rhs: &bls12_381::Scalar) -> bls12_381::Scalar {
+    let lhs = {
+        let mut tmp = [false; 256];
+        for (a, b) in tmp.iter_mut().zip(lhs.to_repr().as_bits::<Lsb0>()) {
+            *a = *b;
+        }
+        tmp
+    };
+
+    let rhs = {
+        let mut tmp = [false; 256];
+        for (a, b) in tmp.iter_mut().zip(rhs.to_repr().as_bits::<Lsb0>()) {
+            *a = *b;
+        }
+        tmp
+    };
+
+    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
+        zcash_primitives::pedersen_hash::Personalization::MerkleTree(depth),
+        lhs.iter()
+            .copied()
+            .take(bls12_381::Scalar::NUM_BITS as usize)
+            .chain(
+                rhs.iter()
+                    .copied()
+                    .take(bls12_381::Scalar::NUM_BITS as usize),
+            ),
+    ))
+    .to_affine()
+    .get_u()
+}
 
 struct SpendRevealedValues {
     value_commit: jubjub::SubgroupPoint,
@@ -22,6 +56,7 @@ impl SpendRevealedValues {
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
+        merkle_path: &[(bls12_381::Scalar, bool)]
     ) -> Self {
         let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * jubjub::Fr::from(value))
@@ -61,7 +96,12 @@ impl SpendRevealedValues {
             multipack::bytes_to_bits_le(&coin)
         ));
         let affine = merkle_root.to_affine();
-        let merkle_root = affine.get_u();
+        let mut merkle_root = affine.get_u();
+
+        for (i, (right, is_right)) in merkle_path.iter().enumerate() {
+            //let mut preimage = vec![];
+            //preimage.extend(multipack::bytes_to_bits_le(
+        }
 
         SpendRevealedValues { value_commit, nullifier, coin, merkle_root }
     }
@@ -123,8 +163,15 @@ fn main() {
     let randomness_coin: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
+    let merkle_path = [
+        (bls12_381::Scalar::random(&mut OsRng), true),
+        (bls12_381::Scalar::random(&mut OsRng), false),
+        (bls12_381::Scalar::random(&mut OsRng), true),
+        (bls12_381::Scalar::random(&mut OsRng), true),
+    ];
+
     let revealed =
-        SpendRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &secret);
+        SpendRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &secret, &merkle_path);
 
     let start = Instant::now();
     let params = {
@@ -134,6 +181,15 @@ fn main() {
             serial: None,
             randomness_coin: None,
             secret: None,
+
+            branch_0: None,
+            is_right_0: None,
+            branch_1: None,
+            is_right_1: None,
+            branch_2: None,
+            is_right_2: None,
+            branch_3: None,
+            is_right_3: None,
         };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
@@ -146,6 +202,15 @@ fn main() {
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
         secret: Some(secret),
+
+        branch_0: Some(merkle_path[0].0),
+        is_right_0: Some(merkle_path[0].1),
+        branch_1: Some(merkle_path[1].0),
+        is_right_1: Some(merkle_path[1].1),
+        branch_2: Some(merkle_path[2].0),
+        is_right_2: Some(merkle_path[2].1),
+        branch_3: Some(merkle_path[3].0),
+        is_right_3: Some(merkle_path[3].1),
     };
 
     let start = Instant::now();
