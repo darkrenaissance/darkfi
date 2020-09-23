@@ -1,6 +1,7 @@
 constant G_VCV FixedGenerator
 constant G_VCR FixedGenerator
 constant G_SPEND FixedGenerator
+constant PRF_NF BlakePersonalization
 constant CRH_IVK BlakePersonalization
 
 contract spend_contract
@@ -54,7 +55,7 @@ start
     # Serial:           Fr              = 252 + 4 bits padding
     # TOTAL: 512 bits for preimage
     static_assert_binary_size nf_preimage 512
-    blake2s nf nf_preimage CRH_IVK
+    blake2s nf nf_preimage PRF_NF
     emit_binary nf
 
     # Derive the public key

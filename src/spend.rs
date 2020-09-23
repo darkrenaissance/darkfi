@@ -31,7 +31,7 @@ impl SpendRevealedValues {
         nullifier.copy_from_slice(
             Blake2sParams::new()
                 .hash_length(32)
-                .personal(zcash_primitives::constants::CRH_IVK_PERSONALIZATION)
+                .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
                 .to_state()
                 .update(&secret.to_bytes())
                 .update(&serial.to_bytes())
@@ -61,6 +61,7 @@ impl SpendRevealedValues {
     fn make_outputs(&self) -> [bls12_381::Scalar; 6] {
         let mut public_input = [bls12_381::Scalar::zero(); 6];
 
+        // CV
         {
             let result = jubjub::ExtendedPoint::from(self.value_commit);
             let affine = result.to_affine();
@@ -71,6 +72,7 @@ impl SpendRevealedValues {
             public_input[1] = v;
         }
 
+        // NF
         {
             // Pack the hash as inputs for proof verification.
             let hash = multipack::bytes_to_bits_le(&self.nullifier);
@@ -83,6 +85,7 @@ impl SpendRevealedValues {
             public_input[3] = hash[1];
         }
 
+        // Coin
         {
             // Pack the hash as inputs for proof verification.
             let hash = multipack::bytes_to_bits_le(&self.coin);
