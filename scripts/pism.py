@@ -55,7 +55,7 @@ command_desc = {
         ("EdwardsPoint",    False),
     ),
     "ec_get_u": (
-        ("Scalar",          True),
+        ("ScalarNum",       True),
         ("EdwardsPoint",    False),
     ),
     "emit_ec": (
@@ -125,10 +125,10 @@ command_desc = {
         ("ScalarNum",       False),
     ),
     "conditionally_reverse": (
-        ("Scalar",          True),
-        ("Scalar",          True),
-        ("Scalar",          False),
-        ("Scalar",          False),
+        ("ScalarNum",       True),
+        ("ScalarNum",       True),
+        ("ScalarNum",       False),
+        ("ScalarNum",       False),
         ("Boolean",         False),
     ),
 }
@@ -369,6 +369,11 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
                     return False
 
                 actual_type = self.stack[argname]
+
+            if expected_type != actual_type:
+                eprint("error: wrong type for arg '%s'!" % argname)
+                eprint(line)
+                return False
 
         return True
 
