@@ -56,3 +56,7 @@ path = "src/mint.rs"
 name = "spend"
 path = "src/spend.rs"
 
+[[bin]]
+name = "eq"
+path = "src/eq.rs"
+
