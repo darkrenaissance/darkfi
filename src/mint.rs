@@ -73,8 +73,8 @@ impl MintRevealedValues {
 }
 
 fn main() {
-    use std::time::Instant;
     use rand::rngs::OsRng;
+    use std::time::Instant;
 
     let public = jubjub::SubgroupPoint::random(&mut OsRng);
 

@@ -1,16 +1,20 @@
 use bellman::gadgets::multipack;
 use bellman::groth16;
+use bitvec::{order::Lsb0, view::AsBits};
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
-use bitvec::{order::Lsb0, view::AsBits};
 
 mod spend_contract;
 use spend_contract::SpendContract;
 
 // This thing is nasty lol
-pub fn merkle_hash(depth: usize, lhs: &bls12_381::Scalar, rhs: &bls12_381::Scalar) -> bls12_381::Scalar {
+pub fn merkle_hash(
+    depth: usize,
+    lhs: &bls12_381::Scalar,
+    rhs: &bls12_381::Scalar,
+) -> bls12_381::Scalar {
     let lhs = {
         let mut tmp = [false; 256];
         for (a, b) in tmp.iter_mut().zip(lhs.to_repr().as_bits::<Lsb0>()) {
@@ -57,7 +61,7 @@ impl SpendRevealedValues {
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
-        merkle_path: &[(bls12_381::Scalar, bool)]
+        merkle_path: &[(bls12_381::Scalar, bool)],
     ) -> Self {
         let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * jubjub::Fr::from(value))
@@ -92,10 +96,11 @@ impl SpendRevealedValues {
                 .as_bytes(),
         );
 
-        let merkle_root = jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-            zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
-            multipack::bytes_to_bits_le(&coin)
-        ));
+        let merkle_root =
+            jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
+                zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
+                multipack::bytes_to_bits_le(&coin),
+            ));
         let affine = merkle_root.to_affine();
         let mut merkle_root = affine.get_u();
 
@@ -107,7 +112,11 @@ impl SpendRevealedValues {
             }
         }
 
-        SpendRevealedValues { value_commit, nullifier, merkle_root }
+        SpendRevealedValues {
+            value_commit,
+            nullifier,
+            merkle_root,
+        }
     }
 
     fn make_outputs(&self) -> [bls12_381::Scalar; 5] {
@@ -158,8 +167,8 @@ impl SpendRevealedValues {
 }
 
 fn main() {
-    use std::time::Instant;
     use rand::rngs::OsRng;
+    use std::time::Instant;
 
     let value = 110;
     let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
@@ -175,8 +184,14 @@ fn main() {
         (bls12_381::Scalar::random(&mut OsRng), true),
     ];
 
-    let revealed =
-        SpendRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &secret, &merkle_path);
+    let revealed = SpendRevealedValues::compute(
+        value,
+        &randomness_value,
+        &serial,
+        &randomness_coin,
+        &secret,
+        &merkle_path,
+    );
 
     let start = Instant::now();
     let params = {
@@ -228,4 +243,3 @@ fn main() {
     assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
     println!("Verify: [{:?}]", start.elapsed());
 }
-
