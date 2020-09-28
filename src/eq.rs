@@ -15,7 +15,6 @@ use std::ops::{Neg, SubAssign};
 pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
 
 struct MyCircuit {
-    value: Option<bls12_381::Scalar>,
     quantity: Option<bls12_381::Scalar>,
     multiplier: Option<bls12_381::Scalar>,
     entry_price: Option<bls12_381::Scalar>,
@@ -27,10 +26,6 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        let x = num::AllocatedNum::alloc(cs.namespace(|| "conditional anchor"), || {
-            Ok(*self.value.get()?)
-        })?;
-
         // Witness variables
         let quantity = num::AllocatedNum::alloc(cs.namespace(|| "conditional anchor"), || {
             Ok(*self.quantity.get()?)
@@ -101,13 +96,6 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
         //   if pnl > initial_margin:
         //       pnl = initial_margin
 
-        cs.enforce(
-            || "conditionally enforce correct root",
-            |lc| lc + x.get_variable(),
-            |lc| lc + CS::one(),
-            |lc| lc + CS::one(),
-        );
-
         Ok(())
     }
 }
@@ -120,7 +108,6 @@ fn main() {
     // be generated securely using a multiparty computation.
     let params = {
         let c = MyCircuit {
-            value: None,
             quantity: None,
             multiplier: None,
             entry_price: None,
@@ -134,7 +121,6 @@ fn main() {
     let pvk = groth16::prepare_verifying_key(&params.vk);
 
     // Pick a preimage and compute its hash.
-    let value = bls12_381::Scalar::from(1);
     let quantity = bls12_381::Scalar::from(1);
     let multiplier = bls12_381::Scalar::from(1);
     let entry_price = bls12_381::Scalar::from(100);
@@ -142,7 +128,6 @@ fn main() {
 
     // Create an instance of our circuit (with the preimage as a witness).
     let c = MyCircuit {
-        value: Some(value),
         quantity: Some(quantity),
         multiplier: Some(multiplier),
         entry_price: Some(entry_price),
