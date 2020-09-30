@@ -41,18 +41,6 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
             },
         )?;
 
-        let coeff = bls12_381::Scalar::one();
-        let lc0 = bellman::LinearCombination::zero() + (coeff, x_var);
-        let lc1 = bellman::LinearCombination::zero() + (coeff, CS::one());
-        let lc2 = bellman::LinearCombination::zero() + (coeff, x_var);
-
-        cs.enforce(
-            || "multiplication constraint",
-            |_| lc0,
-            |_| lc1,
-            |_| lc2,
-        );
-
         // x2 = x * x
 
         let x2_var = cs.alloc(
