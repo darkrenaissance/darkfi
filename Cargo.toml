@@ -60,3 +60,7 @@ path = "src/spend.rs"
 name = "eq"
 path = "src/eq.rs"
 
+[[bin]]
+name = "basic"
+path = "src/basic_minimal.rs"
+

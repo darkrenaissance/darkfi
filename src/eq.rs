@@ -73,14 +73,13 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
         let ungained = ungained.mul(cs.namespace(|| "ungained 2"), &exit_price_inv)?;
 
         // pnl = initial_margin - ungained
-        let pnl =
-            num::AllocatedNum::alloc(cs.namespace(|| "exit price inverse"), || {
-                let mut tmp = *initial_margin.get_value().get()?;
+        let pnl = num::AllocatedNum::alloc(cs.namespace(|| "exit price inverse"), || {
+            let mut tmp = *initial_margin.get_value().get()?;
 
-                tmp.sub_assign(ungained.get_value().get()?);
+            tmp.sub_assign(ungained.get_value().get()?);
 
-                Ok(tmp)
-            })?;
+            Ok(tmp)
+        })?;
 
         cs.enforce(
             || "constraint pnl calc",
