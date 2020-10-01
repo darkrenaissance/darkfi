@@ -160,8 +160,14 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 ConstraintInstruction::Lc2Add(index) => {
                     lc2 = lc2 + (coeff_one, variables[index]);
                 }
+                ConstraintInstruction::Lc0AddOne => {
+                    lc0 = lc0 + CS::one();
+                }
                 ConstraintInstruction::Lc1AddOne => {
                     lc1 = lc1 + CS::one();
+                }
+                ConstraintInstruction::Lc2AddOne => {
+                    lc2 = lc2 + CS::one();
                 }
                 ConstraintInstruction::Enforce => {
                     cs.enforce(
@@ -186,7 +192,9 @@ enum ConstraintInstruction {
     Lc0Add(VariableIndex),
     Lc1Add(VariableIndex),
     Lc2Add(VariableIndex),
+    Lc0AddOne,
     Lc1AddOne,
+    Lc2AddOne,
     Enforce,
 }
 
