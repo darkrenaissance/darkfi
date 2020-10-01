@@ -43,10 +43,10 @@ impl ZKVirtualMachine {
         for (alloc_type, index) in &self.alloc {
             match alloc_type {
                 AllocType::Private => {
-                    let scalar = self.aux[*index].clone();
-                    publics.push(scalar);
                 }
                 AllocType::Public => {
+                    let scalar = self.aux[*index].clone();
+                    publics.push(scalar);
                 }
             }
         }
