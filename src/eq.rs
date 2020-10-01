@@ -100,6 +100,9 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
 }
 
 fn main() {
+    let x = Scalar::from(2);
+    println!("{:?}", x.invert().unwrap());
+
     use std::time::Instant;
 
     let start = Instant::now();
