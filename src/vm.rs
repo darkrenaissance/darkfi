@@ -40,21 +40,30 @@ enum AllocType {
 impl ZKVirtualMachine {
     fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) {
         // Resize array
-        self.aux = vec![Scalar::zero(); self.ops.len()];
+        self.aux = vec![Scalar::zero(); self.alloc.len()];
 
         // Copy over the parameters
         for (index, value) in params {
+            //println!("Setting {} to {:?}", index, value);
             self.aux[*index] = *value;
         }
 
         for op in &self.ops {
             match op {
                 CryptoOperation::Set(self_index, other_index) => {
+                    //println!(
+                    //    "Setting {} to {} value={:?}",
+                    //    self_index, other_index, self.aux[*other_index]
+                    //);
                     self.aux[*self_index] = self.aux[*other_index];
                 }
                 CryptoOperation::Mul(self_index, other_index) => {
                     let other = self.aux[*other_index].clone();
                     self.aux[*self_index].mul_assign(other);
+                    //println!(
+                    //    "Mul {} by {}, val={:?}",
+                    //    self_index, other_index, self.aux[*self_index]
+                    //);
                 }
             }
         }
@@ -64,8 +73,7 @@ impl ZKVirtualMachine {
         let mut publics = Vec::new();
         for (alloc_type, index) in &self.alloc {
             match alloc_type {
-                AllocType::Private => {
-                }
+                AllocType::Private => {}
                 AllocType::Public => {
                     let scalar = self.aux[*index].clone();
                     publics.push(scalar);
@@ -114,7 +122,12 @@ impl ZKVirtualMachine {
     }
 
     fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &Vec<Scalar>) -> bool {
-        groth16::verify_proof(self.verifying_key.as_ref().unwrap(), proof, public_values).is_ok()
+        let start = Instant::now();
+        let is_passed =
+            groth16::verify_proof(self.verifying_key.as_ref().unwrap(), proof, public_values)
+                .is_ok();
+        println!("Verify: [{:?}]", start.elapsed());
+        is_passed
     }
 }
 
@@ -209,9 +222,10 @@ fn main() {
             CryptoOperation::Set(2, 1),
             // x3 *= x
             CryptoOperation::Mul(2, 0),
+            // input = x3
+            CryptoOperation::Set(3, 2),
         ],
-        aux: vec![
-        ],
+        aux: vec![],
         alloc: vec![
             (AllocType::Private, 0),
             (AllocType::Private, 1),
