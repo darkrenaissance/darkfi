@@ -38,21 +38,6 @@ enum AllocType {
 }
 
 impl ZKVirtualMachine {
-    fn public(&self) -> Vec<Scalar> {
-        let mut publics = Vec::new();
-        for (alloc_type, index) in &self.alloc {
-            match alloc_type {
-                AllocType::Private => {
-                }
-                AllocType::Public => {
-                    let scalar = self.aux[*index].clone();
-                    publics.push(scalar);
-                }
-            }
-        }
-        publics
-    }
-
     fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) {
         // Resize array
         self.aux = vec![Scalar::zero(); self.ops.len()];
@@ -73,6 +58,21 @@ impl ZKVirtualMachine {
                 }
             }
         }
+    }
+
+    fn public(&self) -> Vec<Scalar> {
+        let mut publics = Vec::new();
+        for (alloc_type, index) in &self.alloc {
+            match alloc_type {
+                AllocType::Private => {
+                }
+                AllocType::Public => {
+                    let scalar = self.aux[*index].clone();
+                    publics.push(scalar);
+                }
+            }
+        }
+        publics
     }
 
     fn setup(&mut self) {
