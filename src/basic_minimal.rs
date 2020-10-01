@@ -10,7 +10,7 @@ use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use group::Curve;
 use rand::rngs::OsRng;
-use std::ops::{Neg, SubAssign, MulAssign};
+use std::ops::{MulAssign, Neg, SubAssign};
 
 pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
 
@@ -34,70 +34,40 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
         // ------------------
 
         // x
-        let x_var = cs.alloc(
-            || "num",
-            || {
-                Ok(*self.aux[0].get()?)
-            },
-        )?;
+        let x_var = cs.alloc(|| "num", || Ok(*self.aux[0].get()?))?;
 
         // x2 = x * x
 
-        let x2_var = cs.alloc(
-            || "product num",
-            || {
-                Ok(*self.aux[1].get()?)
-            },
-        )?;
+        let x2_var = cs.alloc(|| "product num", || Ok(*self.aux[1].get()?))?;
+
+        let x3_var = cs.alloc(|| "product num", || Ok(*self.aux[2].get()?))?;
+
+        let input = cs.alloc_input(|| "input variable", || Ok(*self.aux[2].get()?))?;
 
         let coeff = bls12_381::Scalar::one();
         let lc0 = bellman::LinearCombination::zero() + (coeff, x_var);
         let lc1 = bellman::LinearCombination::zero() + (coeff, x_var);
         let lc2 = bellman::LinearCombination::zero() + (coeff, x2_var);
 
-        cs.enforce(
-            || "multiplication constraint",
-            |_| lc0,
-            |_| lc1,
-            |_| lc2,
-        );
+        cs.enforce(|| "multiplication constraint", |_| lc0, |_| lc1, |_| lc2);
 
         // x3 = x2 * x
-
-        let x3_var = cs.alloc(
-            || "product num",
-            || {
-                Ok(*self.aux[2].get()?)
-            },
-        )?;
 
         let coeff = bls12_381::Scalar::one();
         let lc0 = bellman::LinearCombination::zero() + (coeff, x2_var);
         let lc1 = bellman::LinearCombination::zero() + (coeff, x_var);
         let lc2 = bellman::LinearCombination::zero() + (coeff, x3_var);
 
-        cs.enforce(
-            || "multiplication constraint",
-            |_| lc0,
-            |_| lc1,
-            |_| lc2,
-        );
+        cs.enforce(|| "multiplication constraint", |_| lc0, |_| lc1, |_| lc2);
 
         // inputize values
-
-        let input = cs.alloc_input(|| "input variable", || Ok(*self.aux[2].get()?))?;
 
         let coeff = bls12_381::Scalar::one();
         let lc0 = bellman::LinearCombination::zero() + (coeff, input);
         let lc1 = bellman::LinearCombination::zero() + (coeff, CS::one());
         let lc2 = bellman::LinearCombination::zero() + (coeff, x3_var);
 
-        cs.enforce(
-            || "enforce input is correct",
-            |_| lc0,
-            |_| lc1,
-            |_| lc2,
-        );
+        cs.enforce(|| "enforce input is correct", |_| lc0, |_| lc1, |_| lc2);
 
         Ok(())
     }
@@ -110,9 +80,7 @@ fn main() {
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
     let params = {
-        let c = MyCircuit {
-            aux: vec![None],
-        };
+        let c = MyCircuit { aux: vec![None] };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
     println!("Setup: [{:?}]", start.elapsed());
@@ -128,7 +96,7 @@ fn main() {
         aux: vec![
             Some(quantity),
             Some(quantity * quantity),
-            Some(quantity * quantity * quantity)
+            Some(quantity * quantity * quantity),
         ],
     };
 
