@@ -1,4 +1,4 @@
-constant v = 123
+constant v 123
 
 contract input_spend
     param x
@@ -24,7 +24,7 @@ contract input_spend
     set input x3
 
     lc0_add input
-    lc1_add 1
+    lc1_add_one
     lc2_add x3
     enforce
 end
