@@ -3,9 +3,6 @@ constant v = 123
 contract input_spend
     param x
     private x2
-    private x3
-    public input
-start
     set x2 x
     mul x2 x
 
@@ -14,6 +11,7 @@ start
     lc2_add x2
     enforce
 
+    private x3
     set x3 x2
     mul x3 x
 
@@ -22,6 +20,7 @@ start
     lc2_add x3
     enforce
 
+    public input
     set input x3
 
     lc0_add input
