@@ -11,3 +11,16 @@ inv2_bellman = 0x39f6d3a994cebea4199cec0404d0ec02a9ded2017fff2dff7fffffff8000000
 assert inv2.n == inv2_bellman
 assert (2 * inv2.n) % q == 1
 
+# Futures contract calculation
+multiplier = modq(1)
+quantity = modq(100)
+entry_price = modq(10000)
+exit_price = modq(15000)
+
+initial_margin = multiplier * quantity
+print("initial margin =", initial_margin)
+price_return = exit_price * entry_price.inverse()
+print("R =", price_return)
+pnl = initial_margin - (initial_margin * exit_price) * entry_price.inverse()
+print("PNL =", pnl)
+
