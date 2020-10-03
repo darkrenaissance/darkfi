@@ -34,3 +34,11 @@ print(hex(x3.n), hex(y3.n))
 print(is_jubjub(params, x, y))
 print(is_jubjub(params, x3, y3))
 
+print()
+print("Identity (0, 1) is jubjub?", is_jubjub(params, 0, 1))
+print("Torsion (0, -1) is jubjub?", is_jubjub(params, 0, -1))
+double_torsion = add(params, (0, -1), (0, -1))
+print("Double torsion is:", hex(double_torsion[0].n), hex(double_torsion[1].n))
+dbl_ident = add(params, (0, 1), (0, 1))
+print("Double identity is:", hex(dbl_ident[0].n), hex(dbl_ident[1].n))
+
