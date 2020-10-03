@@ -68,3 +68,7 @@ path = "src/basic_minimal.rs"
 name = "vm"
 path = "src/vm.rs"
 
+[[bin]]
+name = "jubjub"
+path = "src/jubjub.rs"
+

@@ -28,5 +28,9 @@ def add(params, point_1, point_2):
 x = 0x15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e
 y = 0x015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891
 
+x3, y3 = add(params, (x, y), (x, y))
+print(hex(x3.n), hex(y3.n))
+
 print(is_jubjub(params, x, y))
+print(is_jubjub(params, x3, y3))
 
