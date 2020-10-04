@@ -52,5 +52,10 @@ fn main() {
     let proof = vm.prove();
 
     let public = vm.public();
+
+    assert_eq!(public.len(), 2);
+    // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
+    // 0x4731570fdd57cf280eadc8946fa00df81112502e44e497e794ab9a221f1bcca
+
     assert!(vm.verify(&proof, &public));
 }
