@@ -2,6 +2,28 @@ import argparse
 import sys
 from enum import Enum
 
+alloc_commands = {
+    "param": 1,
+    "private": 1,
+    "public": 1,
+}
+
+op_commands = {
+    "set": 2,
+    "mul": 2,
+    "local": 1,
+}
+
+constraint_commands = {
+    "lc0_add": 1,
+    "lc1_add": 1,
+    "lc2_add": 1,
+    "lc0_add_one": 0,
+    "lc1_add_one": 0,
+    "lc2_add_one": 0,
+    "enforce": 0,
+}
+
 def eprint(*args):
     print(*args, file=sys.stderr)
 
@@ -95,27 +117,6 @@ def divide_sections(contents):
 
     return segments
 
-alloc_commands = {
-    "param": 1,
-    "private": 1,
-    "public": 1,
-}
-
-op_commands = {
-    "set": 2,
-    "mul": 2,
-}
-
-constraint_commands = {
-    "lc0_add": 1,
-    "lc1_add": 1,
-    "lc2_add": 1,
-    "lc0_add_one": 0,
-    "lc1_add_one": 0,
-    "lc2_add_one": 0,
-    "enforce": 0,
-}
-
 def extract_relevant_lines(contract, commands_table):
     relevant_lines = []
 
@@ -175,19 +176,6 @@ def generate_alloc_table(contract):
 
     return alloc_table
 
-def symbols_list_to_indexes(line, alloc):
-    indexes = []
-    for symbol in line.args():
-        if symbol not in alloc:
-            eprint("error: missing unallocated symbol")
-            eprint(line)
-            return None
-
-        # Lookup variable index
-        index = alloc[symbol].index
-        indexes.append(index)
-    return indexes
-
 class Operation:
 
     def __init__(self, line, indexes):
@@ -195,11 +183,52 @@ class Operation:
         self.args = indexes
         self.line = line
 
+class VariableRefType(Enum):
+    AUX = 1
+    LOCAL = 2
+
+class VariableRef:
+
+    def __init__(self, type, index):
+        self.type = type
+        self.index = index
+
+    def __repr__(self):
+        return "%s(%s)" % (self.type.name, self.index)
+
+def symbols_list_to_refs(line, alloc, local_vars):
+    indexes = []
+    for symbol in line.args():
+        if symbol in alloc:
+            # Lookup variable index
+            index = alloc[symbol].index
+            index = VariableRef(VariableRefType.AUX, index)
+        elif symbol in local_vars:
+            index = local_vars[symbol]
+            index = VariableRef(VariableRefType.LOCAL, index)
+        else:
+            eprint("error: missing unallocated symbol")
+            eprint(line)
+            return None
+        indexes.append(index)
+    return indexes
+
 def generate_ops_table(contract, alloc):
     relevant_lines = extract_relevant_lines(contract, op_commands)
     ops = []
+    local_vars = {}
     for line in relevant_lines:
-        indexes = symbols_list_to_indexes(line, alloc)
+        # This is a special case which creates a new local stack value
+        if line.command() == "local":
+            assert len(line.args()) == 1
+            symbol = line.args()[0]
+            local_vars[symbol] = len(local_vars)
+            indexes = []
+        else:
+            if (indexes := symbols_list_to_refs(line, alloc, 
+                                                local_vars)) is None:
+                return None
+
         ops.append(Operation(line, indexes))
     return ops
 
@@ -213,11 +242,25 @@ class Constraint:
     def args_comment(self):
         return ", ".join("%s" % symbol for symbol in self.line.args())
 
+def symbols_list_to_indexes(line, alloc):
+    indexes = []
+    for symbol in line.args():
+        if symbol not in alloc:
+            eprint("error: missing unallocated symbol")
+            eprint(line)
+            return None
+
+        # Lookup variable index
+        index = alloc[symbol].index
+        indexes.append(index)
+    return indexes
+
 def generate_constraints_table(contract, alloc):
     relevant_lines = extract_relevant_lines(contract, constraint_commands)
     constraints = []
     for line in relevant_lines:
-        indexes = symbols_list_to_indexes(line, alloc)
+        if (indexes := symbols_list_to_indexes(line, alloc)) is None:
+            return None
         constraints.append(Constraint(line, indexes))
     return constraints
 

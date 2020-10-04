@@ -1,4 +1,4 @@
-from vm import VariableType
+from vm import VariableType, VariableRefType
 
 def to_initial_caps(snake_str):
     components = snake_str.split("_")
@@ -7,7 +7,7 @@ def to_initial_caps(snake_str):
 def display(contract):
     indent = " " * 4
 
-    print(r"""use super::vm::{ZKVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction};
+    print(r"""use super::vm::{ZKVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction, VariableRef};
 
 pub fn load_zkvm() -> ZKVirtualMachine {
     ZKVirtualMachine {
@@ -29,12 +29,24 @@ pub fn load_zkvm() -> ZKVirtualMachine {
     print("%s]," % (indent * 2))
     print("%sops: vec![" % (indent * 2))
 
+    def var_ref_str(var_ref):
+        if var_ref.type.name == VariableRefType.AUX.name:
+            return "VariableRef::Aux(%s)" % var_ref.index
+        elif var_ref.type.name == VariableRefType.LOCAL.name:
+            return "VariableRef::Local(%s)" % var_ref.index
+        else:
+            assert False
+
     for op in contract.ops:
         print("%s// %s" % (indent * 3, op.line))
-        print("%sCryptoOperation::%s(%s)," % (
+        args_part = ""
+        if op.args:
+            args_part = ", ".join(var_ref_str(var_ref) for var_ref in op.args)
+            args_part = "(%s)" % args_part
+        print("%sCryptoOperation::%s%s," % (
             indent * 3,
             to_initial_caps(op.command),
-            ", ".join(str(index) for index in op.args)
+            args_part
         ))
 
     print("%s]," % (indent * 2))

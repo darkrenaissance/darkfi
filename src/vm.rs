@@ -24,9 +24,15 @@ pub struct ZKVirtualMachine {
 
 type VariableIndex = usize;
 
+pub enum VariableRef {
+    Aux(VariableIndex),
+    Local(VariableIndex)
+}
+
 pub enum CryptoOperation {
-    Set(VariableIndex, VariableIndex),
-    Mul(VariableIndex, VariableIndex),
+    Set(VariableRef, VariableRef),
+    Mul(VariableRef, VariableRef),
+    Local
 }
 
 #[derive(Clone)]
@@ -46,22 +52,34 @@ impl ZKVirtualMachine {
             self.aux[*index] = *value;
         }
 
+        let mut local_stack: Vec<Scalar> = Vec::new();
+
         for op in &self.ops {
             match op {
-                CryptoOperation::Set(self_index, other_index) => {
-                    //println!(
-                    //    "Setting {} to {} value={:?}",
-                    //    self_index, other_index, self.aux[*other_index]
-                    //);
-                    self.aux[*self_index] = self.aux[*other_index];
+                CryptoOperation::Set(self_, other) => {
+                    let other = match other {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone()
+                    };
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index]
+                    };
+                    *self_ = other;
                 }
-                CryptoOperation::Mul(self_index, other_index) => {
-                    let other = self.aux[*other_index].clone();
-                    self.aux[*self_index].mul_assign(other);
-                    //println!(
-                    //    "Mul {} by {}, val={:?}",
-                    //    self_index, other_index, self.aux[*self_index]
-                    //);
+                CryptoOperation::Mul(self_, other) => {
+                    let other = match other {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone()
+                    };
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index]
+                    };
+                    self_.mul_assign(other);
+                }
+                CryptoOperation::Local => {
+                    local_stack.push(Scalar::zero());
                 }
             }
         }
