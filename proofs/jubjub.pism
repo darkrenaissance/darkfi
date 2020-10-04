@@ -84,5 +84,20 @@ contract input_spend
     param y2
 
     {{ jubjub_add("P", "x1", "y1", "x2", "y2") }}
+
+    public x3
+    set x3 P_x
+    public y3
+    set y3 P_y
+
+    lc0_add x3
+    lc1_add_one
+    lc2_add P_x
+    enforce
+
+    lc0_add y3
+    lc1_add_one
+    lc2_add P_y
+    enforce
 end
 
