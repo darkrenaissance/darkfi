@@ -278,10 +278,12 @@ def process(contents):
 
 def main(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument("filename")
+    parser.add_argument("filename", help="VM PISM file: proofs/vm.pism")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--display', action='store_true')
-    group.add_argument('--rust', action='store_true')
+    group.add_argument('--display', action='store_true',
+                       help="show the compiled code in human readable format")
+    group.add_argument('--rust', action='store_true',
+                       help="output compiled code to rust for testing")
     args = parser.parse_args()
 
     src_filename = args.filename
