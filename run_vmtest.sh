@@ -1,4 +1,5 @@
 #!/bin/bash -x
-python scripts/vm.py --rust proofs/vm.pism > src/vm_load.rs
+python scripts/preprocess.py proofs/jubjub.pism > /tmp/jubjub.pism
+python scripts/vm.py --rust /tmp/jubjub.pism > src/vm_load.rs
 cargo run --release --bin vmtest
 

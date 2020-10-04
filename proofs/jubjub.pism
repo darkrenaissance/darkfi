@@ -1,0 +1,88 @@
+constant a 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000
+constant d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
+constant one 0x0000000000000000000000000000000000000000000000000000000000000001
+
+{% macro jubjub_add(prefix, x1, y1, x2, y2) -%}
+    # Compute U = (x1 + y1) * (y2 - EDWARDS_A*x2)
+    #           = (x1 + y1) * (x2 + y2)
+    private {{prefix}}_U
+    set {{prefix}}_U {{ x1 }}
+    add {{prefix}}_U {{ y1 }}
+    local {{prefix}}_tmp
+    set {{prefix}}_tmp {{ x2 }}
+    add {{prefix}}_tmp {{ y2 }}
+    mul {{prefix}}_U {{prefix}}_tmp
+
+    # assert (x1 + y1) * (x2 + y2) == U
+    lc0_add {{ x1 }}
+    lc0_add {{ y1 }}
+    lc1_add {{ x2 }}
+    lc1_add {{ y2 }}
+    lc2_add {{prefix}}_U
+    enforce
+
+    # Compute A = y2 * x1
+    private {{prefix}}_A
+    set {{prefix}}_A {{ y2 }}
+    mul {{prefix}}_A {{ x1 }}
+    # Compute B = x2 * y1
+    private {{prefix}}_B
+    set {{prefix}}_B {{ x2 }}
+    mul {{prefix}}_B {{ y1 }}
+    # Compute C = d*A*B
+    private {{prefix}}_C
+    load {{prefix}}_C d
+    mul {{prefix}}_C {{prefix}}_A
+    mul {{prefix}}_C {{prefix}}_B
+
+    # assert (d * A) * (B) == C
+    lc0_add_coeff d {{prefix}}_A
+    lc1_add {{prefix}}_B
+    lc2_add {{prefix}}_C
+    enforce
+
+    # Compute u3 = (A + B) / (1 + C)
+    private {{prefix}}_u3
+    set {{prefix}}_u3 {{prefix}}_A
+    add {{prefix}}_u3 {{prefix}}_B
+    local {{prefix}}_u3_denom
+    load {{prefix}}_u3_denom one
+    add {{prefix}}_u3_denom {{prefix}}_C
+    divide {{prefix}}_u3 {{prefix}}_u3_denom
+
+    lc0_add_one
+    lc0_add {{prefix}}_C
+    lc1_add {{prefix}}_u3
+    lc2_add {{prefix}}_A
+    lc2_add {{prefix}}_B
+    enforce
+
+    # Compute v3 = (U - A - B) / (1 - C)
+    private {{prefix}}_v3
+    set {{prefix}}_v3 {{prefix}}_U
+    sub {{prefix}}_v3 {{prefix}}_A
+    sub {{prefix}}_v3 {{prefix}}_B
+    local {{prefix}}_v3_denom
+    load {{prefix}}_v3_denom one
+    sub {{prefix}}_v3_denom {{prefix}}_C
+    divide {{prefix}}_v3 {{prefix}}_v3_denom
+
+    lc0_add_one
+    lc0_sub {{prefix}}_C
+    lc1_add {{prefix}}_v3
+    lc2_add {{prefix}}_U
+    lc2_sub {{prefix}}_A
+    lc2_sub {{prefix}}_B
+    enforce
+{%- endmacro %}
+
+contract input_spend
+    param x1
+    param y1
+
+    param x2
+    param y2
+
+    {{ jubjub_add("P", "x1", "y1", "x2", "y2") }}
+end
+

@@ -11,6 +11,10 @@ alloc_commands = {
 op_commands = {
     "set": 2,
     "mul": 2,
+    "add": 2, 
+    "sub": 2,
+    "divide": 2,
+    "load": 2,
     "local": 1,
 }
 
@@ -18,9 +22,15 @@ constraint_commands = {
     "lc0_add": 1,
     "lc1_add": 1,
     "lc2_add": 1,
+    "lc0_sub": 1,
+    "lc1_sub": 1,
+    "lc2_sub": 1,
     "lc0_add_one": 0,
     "lc1_add_one": 0,
     "lc2_add_one": 0,
+    "lc0_add_coeff": 2,
+    "lc1_add_coeff": 2,
+    "lc2_add_coeff": 2,
     "enforce": 0,
 }
 
@@ -172,6 +182,11 @@ def generate_alloc_table(contract):
         else:
             assert False
 
+        if symbol in alloc_table:
+            eprint("error: duplicate symbol '%s'" % symbol)
+            eprint(line)
+            return None
+
         alloc_table[symbol] = Variable(symbol, i, type, is_param)
 
     return alloc_table
@@ -186,6 +201,7 @@ class Operation:
 class VariableRefType(Enum):
     AUX = 1
     LOCAL = 2
+    CONST = 3
 
 class VariableRef:
 
@@ -196,7 +212,7 @@ class VariableRef:
     def __repr__(self):
         return "%s(%s)" % (self.type.name, self.index)
 
-def symbols_list_to_refs(line, alloc, local_vars):
+def symbols_list_to_refs(line, alloc, local_vars, constants):
     indexes = []
     for symbol in line.args():
         if symbol in alloc:
@@ -206,14 +222,17 @@ def symbols_list_to_refs(line, alloc, local_vars):
         elif symbol in local_vars:
             index = local_vars[symbol]
             index = VariableRef(VariableRefType.LOCAL, index)
+        elif symbol in constants:
+            index = constants[symbol][0]
+            index = VariableRef(VariableRefType.CONST, index)
         else:
-            eprint("error: missing unallocated symbol")
+            eprint("error: missing unallocated symbol '%s'" % symbol)
             eprint(line)
             return None
         indexes.append(index)
     return indexes
 
-def generate_ops_table(contract, alloc):
+def generate_ops_table(contract, alloc, constants):
     relevant_lines = extract_relevant_lines(contract, op_commands)
     ops = []
     local_vars = {}
@@ -226,7 +245,21 @@ def generate_ops_table(contract, alloc):
             indexes = []
         else:
             if (indexes := symbols_list_to_refs(line, alloc, 
-                                                local_vars)) is None:
+                                                local_vars, constants)) is None:
+                return None
+
+            # Handle this here directly since only the
+            # load command deals with constants
+            if line.command() == "load":
+                assert len(indexes) == 2
+                # This is the only command which uses consts
+                if indexes[1].type != VariableRefType.CONST:
+                    eprint("error: load command takes a const argument")
+                    eprint(line)
+                    return None
+            elif any(index.type == VariableRefType.CONST for index in indexes):
+                eprint("error: invalid const arg")
+                eprint(line)
                 return None
 
         ops.append(Operation(line, indexes))
@@ -234,45 +267,55 @@ def generate_ops_table(contract, alloc):
 
 class Constraint:
 
-    def __init__(self, line, indexes):
+    def __init__(self, line, lcargs):
         self.command = line.command()
-        self.args = indexes
+        self.args = lcargs
         self.line = line
 
     def args_comment(self):
         return ", ".join("%s" % symbol for symbol in self.line.args())
 
-def symbols_list_to_indexes(line, alloc):
-    indexes = []
+def symbols_list_to_lcargs(line, alloc, constants):
+    lcargs = []
     for symbol in line.args():
-        if symbol not in alloc:
-            eprint("error: missing unallocated symbol")
+        if symbol in alloc:
+            # Lookup variable index
+            index = alloc[symbol].index
+            lcargs.append(index)
+        elif symbol in constants:
+            value = constants[symbol]
+            lcargs.append(value)
+        else:
+            eprint("error: missing unallocated symbol '%s'" % symbol)
             eprint(line)
             return None
+    return lcargs
 
-        # Lookup variable index
-        index = alloc[symbol].index
-        indexes.append(index)
-    return indexes
-
-def generate_constraints_table(contract, alloc):
+def generate_constraints_table(contract, alloc, constants):
     relevant_lines = extract_relevant_lines(contract, constraint_commands)
     constraints = []
     for line in relevant_lines:
-        if (indexes := symbols_list_to_indexes(line, alloc)) is None:
+        if (lcargs := symbols_list_to_lcargs(line, alloc, constants)) is None:
             return None
-        constraints.append(Constraint(line, indexes))
+        constraints.append(Constraint(line, lcargs))
     return constraints
 
 class Contract:
 
-    def __init__(self, alloc, ops, constraints):
+    def __init__(self, constants, alloc, ops, constraints):
+        self.constants = constants
         self.alloc = alloc
         self.ops = ops
         self.constraints = constraints
 
     def __repr__(self):
         repr_str = ""
+
+        repr_str += "Constants:\n"
+        for symbol, value in self.constants.items():
+            repr_str += "    // %s\n" % symbol
+            repr_str += "    %s: %s\n" % value
+
         repr_str += "Alloc table:\n"
         for symbol, variable in self.alloc.items():
             repr_str += "    // %s\n" % symbol
@@ -294,20 +337,52 @@ class Contract:
 def compile(contract, constants):
     # Allocation table
     # symbol: Private/Public, is_param, index
-    alloc = generate_alloc_table(contract)
+    if (alloc := generate_alloc_table(contract)) is None:
+        return None
     # Operations lines list
-    if (ops := generate_ops_table(contract, alloc)) is None:
+    if (ops := generate_ops_table(contract, alloc, constants)) is None:
         return None
     # Constraint commands
-    if (constraints := generate_constraints_table(contract, alloc)) is None:
+    if (constraints := generate_constraints_table(
+            contract, alloc, constants)) is None:
         return None
-    return Contract(alloc, ops, constraints)
+    return Contract(constants, alloc, ops, constraints)
+
+def parse_constants(contents):
+    relevant_lines = [line for line in contents if line.command() == "constant"]
+    constants = {}
+    for line in relevant_lines:
+        assert line.command() == "constant"
+        if len(line.args()) != 2:
+            eprint("error: wrong number of args for constant")
+            eprint(line)
+            return None
+        symbol, value = line.args()
+
+        try:
+            int(value, 16)
+        except ValueError:
+            eprint("error: invalid constant value for '%s'" % symbol)
+            eprint(line)
+            return None
+
+        if len(value) != 32*2 + 2 or value[:2] != "0x":
+            eprint("error: invalid hex value for constant")
+            eprint(line)
+            return None
+
+        # Remove 0x prefix
+        value = value[2:]
+
+        constants[symbol] = (len(constants), value)
+    return constants
 
 def process(contents):
     # Remove left whitespace
     contents = clean(contents)
     # Parse all constants
-    constants = [line for line in contents if line.command() == "constant"]
+    if (constants := parse_constants(contents)) is None:
+        return None
     # Divide into contract sections
     if (pre_contracts := divide_sections(contents)) is None:
         return None

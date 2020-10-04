@@ -1,6 +1,7 @@
 use ff::PrimeField;
 use group::Group;
 use jubjub::SubgroupPoint;
+use bls12_381::Scalar;
 
 fn main() {
     let g = SubgroupPoint::from_raw_unchecked(
@@ -20,5 +21,19 @@ fn main() {
     let x = g + g;
     let x = jubjub::AffinePoint::from(jubjub::ExtendedPoint::from(x));
     println!("{:?}", x);
-}
 
+    let one = Scalar::from_bytes(&[
+        0x01, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    ]).unwrap();
+    assert_eq!(Scalar::one(), one);
+}

@@ -10,7 +10,7 @@ use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use group::Curve;
 use rand::rngs::OsRng;
-use std::ops::{MulAssign, Neg, SubAssign};
+use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;
 
 pub struct ZKVirtualMachine {
@@ -20,19 +20,24 @@ pub struct ZKVirtualMachine {
     pub constraints: Vec<ConstraintInstruction>,
     pub params: Option<groth16::Parameters<Bls12>>,
     pub verifying_key: Option<groth16::PreparedVerifyingKey<Bls12>>,
+    pub constants: Vec<Scalar>,
 }
 
 type VariableIndex = usize;
 
 pub enum VariableRef {
     Aux(VariableIndex),
-    Local(VariableIndex)
+    Local(VariableIndex),
 }
 
 pub enum CryptoOperation {
     Set(VariableRef, VariableRef),
     Mul(VariableRef, VariableRef),
-    Local
+    Add(VariableRef, VariableRef),
+    Sub(VariableRef, VariableRef),
+    Load(VariableRef, VariableIndex),
+    Divide(VariableRef, VariableRef),
+    Local,
 }
 
 #[derive(Clone)]
@@ -41,8 +46,29 @@ pub enum AllocType {
     Public,
 }
 
+#[derive(Clone)]
+pub enum ConstraintInstruction {
+    Lc0Add(VariableIndex),
+    Lc1Add(VariableIndex),
+    Lc2Add(VariableIndex),
+    Lc0Sub(VariableIndex),
+    Lc1Sub(VariableIndex),
+    Lc2Sub(VariableIndex),
+    Lc0AddOne,
+    Lc1AddOne,
+    Lc2AddOne,
+    Lc0AddCoeff(VariableIndex, VariableIndex),
+    Lc1AddCoeff(VariableIndex, VariableIndex),
+    Lc2AddCoeff(VariableIndex, VariableIndex),
+    Enforce,
+}
+
+pub enum ZKVMError {
+    DivisionByZero,
+}
+
 impl ZKVirtualMachine {
-    pub fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) {
+    pub fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) -> std::result::Result<(), ZKVMError> {
         // Resize array
         self.aux = vec![Scalar::zero(); self.alloc.len()];
 
@@ -59,30 +85,77 @@ impl ZKVirtualMachine {
                 CryptoOperation::Set(self_, other) => {
                     let other = match other {
                         VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone()
+                        VariableRef::Local(index) => local_stack[*index].clone(),
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index]
+                        VariableRef::Local(index) => &mut local_stack[*index],
                     };
                     *self_ = other;
                 }
                 CryptoOperation::Mul(self_, other) => {
                     let other = match other {
                         VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone()
+                        VariableRef::Local(index) => local_stack[*index].clone(),
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index]
+                        VariableRef::Local(index) => &mut local_stack[*index],
                     };
                     self_.mul_assign(other);
+                }
+                CryptoOperation::Add(self_, other) => {
+                    let other = match other {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone(),
+                    };
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    self_.add_assign(other);
+                }
+                CryptoOperation::Sub(self_, other) => {
+                    let other = match other {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone(),
+                    };
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    self_.sub_assign(other);
+                }
+                CryptoOperation::Load(self_, const_index) => {
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    *self_ = self.constants[*const_index];
+                }
+                CryptoOperation::Divide(self_, other) => {
+                    let other = match other {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone(),
+                    };
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    let ret = other.invert().map(|other| *self_ * other);
+                    if bool::from(ret.is_some()) {
+                        *self_ = ret.unwrap();
+                    } else {
+                        return Err(ZKVMError::DivisionByZero);
+                    }
                 }
                 CryptoOperation::Local => {
                     local_stack.push(Scalar::zero());
                 }
             }
         }
+
+        Ok(())
     }
 
     pub fn public(&self) -> Vec<Scalar> {
@@ -108,6 +181,7 @@ impl ZKVirtualMachine {
                 aux: vec![None; self.aux.len()],
                 alloc: self.alloc.clone(),
                 constraints: self.constraints.clone(),
+                constants: self.constants.clone(),
             };
             groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng).unwrap()
         });
@@ -126,6 +200,7 @@ impl ZKVirtualMachine {
             aux,
             alloc: self.alloc.clone(),
             constraints: self.constraints.clone(),
+            constants: self.constants.clone(),
         };
 
         let start = Instant::now();
@@ -151,6 +226,7 @@ pub struct ZKVMCircuit {
     aux: Vec<Option<bls12_381::Scalar>>,
     alloc: Vec<(AllocType, VariableIndex)>,
     constraints: Vec<ConstraintInstruction>,
+    constants: Vec<Scalar>,
 }
 
 impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
@@ -189,6 +265,15 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 ConstraintInstruction::Lc2Add(index) => {
                     lc2 = lc2 + (coeff_one, variables[index]);
                 }
+                ConstraintInstruction::Lc0Sub(index) => {
+                    lc0 = lc0 - (coeff_one, variables[index]);
+                }
+                ConstraintInstruction::Lc1Sub(index) => {
+                    lc1 = lc1 - (coeff_one, variables[index]);
+                }
+                ConstraintInstruction::Lc2Sub(index) => {
+                    lc2 = lc2 - (coeff_one, variables[index]);
+                }
                 ConstraintInstruction::Lc0AddOne => {
                     lc0 = lc0 + CS::one();
                 }
@@ -197,6 +282,15 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 }
                 ConstraintInstruction::Lc2AddOne => {
                     lc2 = lc2 + CS::one();
+                }
+                ConstraintInstruction::Lc0AddCoeff(const_index, index) => {
+                    lc0 = lc0 + (self.constants[const_index], variables[index]);
+                }
+                ConstraintInstruction::Lc1AddCoeff(const_index, index) => {
+                    lc1 = lc1 + (self.constants[const_index], variables[index]);
+                }
+                ConstraintInstruction::Lc2AddCoeff(const_index, index) => {
+                    lc2 = lc2 + (self.constants[const_index], variables[index]);
                 }
                 ConstraintInstruction::Enforce => {
                     cs.enforce(
@@ -214,16 +308,5 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
 
         Ok(())
     }
-}
-
-#[derive(Clone)]
-pub enum ConstraintInstruction {
-    Lc0Add(VariableIndex),
-    Lc1Add(VariableIndex),
-    Lc2Add(VariableIndex),
-    Lc0AddOne,
-    Lc1AddOne,
-    Lc2AddOne,
-    Enforce,
 }
 
