@@ -13,32 +13,30 @@ use rand::rngs::OsRng;
 use std::ops::{MulAssign, Neg, SubAssign};
 use std::time::Instant;
 
-pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
-
-struct ZKVirtualMachine {
-    ops: Vec<CryptoOperation>,
-    aux: Vec<Scalar>,
-    alloc: Vec<(AllocType, VariableIndex)>,
-    constraints: Vec<ConstraintInstruction>,
-    params: Option<groth16::Parameters<Bls12>>,
-    verifying_key: Option<groth16::PreparedVerifyingKey<Bls12>>,
+pub struct ZKVirtualMachine {
+    pub ops: Vec<CryptoOperation>,
+    pub aux: Vec<Scalar>,
+    pub alloc: Vec<(AllocType, VariableIndex)>,
+    pub constraints: Vec<ConstraintInstruction>,
+    pub params: Option<groth16::Parameters<Bls12>>,
+    pub verifying_key: Option<groth16::PreparedVerifyingKey<Bls12>>,
 }
 
 type VariableIndex = usize;
 
-enum CryptoOperation {
+pub enum CryptoOperation {
     Set(VariableIndex, VariableIndex),
     Mul(VariableIndex, VariableIndex),
 }
 
 #[derive(Clone)]
-enum AllocType {
+pub enum AllocType {
     Private,
     Public,
 }
 
 impl ZKVirtualMachine {
-    fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) {
+    pub fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) {
         // Resize array
         self.aux = vec![Scalar::zero(); self.alloc.len()];
 
@@ -69,7 +67,7 @@ impl ZKVirtualMachine {
         }
     }
 
-    fn public(&self) -> Vec<Scalar> {
+    pub fn public(&self) -> Vec<Scalar> {
         let mut publics = Vec::new();
         for (alloc_type, index) in &self.alloc {
             match alloc_type {
@@ -83,7 +81,7 @@ impl ZKVirtualMachine {
         publics
     }
 
-    fn setup(&mut self) {
+    pub fn setup(&mut self) {
         let start = Instant::now();
         // Create parameters for our circuit. In a production deployment these would
         // be generated securely using a multiparty computation.
@@ -103,7 +101,7 @@ impl ZKVirtualMachine {
         ))
     }
 
-    fn prove(&self) -> groth16::Proof<Bls12> {
+    pub fn prove(&self) -> groth16::Proof<Bls12> {
         let aux = self.aux.iter().map(|scalar| Some(scalar.clone())).collect();
         // Create an instance of our circuit (with the preimage as a witness).
         let circuit = ZKVMCircuit {
@@ -121,7 +119,7 @@ impl ZKVirtualMachine {
         proof
     }
 
-    fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &Vec<Scalar>) -> bool {
+    pub fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &Vec<Scalar>) -> bool {
         let start = Instant::now();
         let is_passed =
             groth16::verify_proof(self.verifying_key.as_ref().unwrap(), proof, public_values)
@@ -131,7 +129,7 @@ impl ZKVirtualMachine {
     }
 }
 
-struct ZKVMCircuit {
+pub struct ZKVMCircuit {
     aux: Vec<Option<bls12_381::Scalar>>,
     alloc: Vec<(AllocType, VariableIndex)>,
     constraints: Vec<ConstraintInstruction>,
@@ -201,7 +199,7 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
 }
 
 #[derive(Clone)]
-enum ConstraintInstruction {
+pub enum ConstraintInstruction {
     Lc0Add(VariableIndex),
     Lc1Add(VariableIndex),
     Lc2Add(VariableIndex),
@@ -211,57 +209,3 @@ enum ConstraintInstruction {
     Enforce,
 }
 
-fn main() {
-    let mut vm = ZKVirtualMachine {
-        ops: vec![
-            // x2 = x
-            CryptoOperation::Set(1, 0),
-            // x2 *= x
-            CryptoOperation::Mul(1, 0),
-            // x3 = x2
-            CryptoOperation::Set(2, 1),
-            // x3 *= x
-            CryptoOperation::Mul(2, 0),
-            // input = x3
-            CryptoOperation::Set(3, 2),
-        ],
-        aux: vec![],
-        alloc: vec![
-            (AllocType::Private, 0),
-            (AllocType::Private, 1),
-            (AllocType::Private, 2),
-            (AllocType::Public, 3),
-        ],
-        constraints: vec![
-            // x * x = x2
-            ConstraintInstruction::Lc0Add(0),
-            ConstraintInstruction::Lc1Add(0),
-            ConstraintInstruction::Lc2Add(1),
-            ConstraintInstruction::Enforce,
-            // x2 * x = x3
-            ConstraintInstruction::Lc0Add(1),
-            ConstraintInstruction::Lc1Add(0),
-            ConstraintInstruction::Lc2Add(2),
-            ConstraintInstruction::Enforce,
-            // x3 * 1 = public_x3
-            ConstraintInstruction::Lc0Add(2),
-            ConstraintInstruction::Lc1AddOne,
-            ConstraintInstruction::Lc2Add(3),
-            ConstraintInstruction::Enforce,
-        ],
-        params: None,
-        verifying_key: None,
-    };
-
-    vm.setup();
-
-    let params = vec![
-        (0, Scalar::from(3))
-    ];
-    vm.initialize(&params);
-
-    let proof = vm.prove();
-
-    let public = vm.public();
-    assert!(vm.verify(&proof, &public));
-}

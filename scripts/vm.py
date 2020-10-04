@@ -1,3 +1,4 @@
+import argparse
 import sys
 from enum import Enum
 
@@ -220,38 +221,44 @@ def generate_constraints_table(contract, alloc):
         constraints.append(Constraint(line, indexes))
     return constraints
 
+class Contract:
+
+    def __init__(self, alloc, ops, constraints):
+        self.alloc = alloc
+        self.ops = ops
+        self.constraints = constraints
+
+    def __repr__(self):
+        repr_str = ""
+        repr_str += "Alloc table:\n"
+        for symbol, variable in self.alloc.items():
+            repr_str += "    // %s\n" % symbol
+            repr_str += "    %s %s\n" % (variable.type, variable.index)
+
+        repr_str += "Operations:\n"
+        for op in self.ops:
+            repr_str += "    // %s\n" % op.line
+            repr_str += "    %s %s\n" % (op.command, op.args)
+
+        repr_str += "Constraints:\n"
+        for constraint in self.constraints:
+            if constraint.args:
+                repr_str += "    // %s\n" % constraint.args_comment()
+            repr_str += "    %s %s\n" % (constraint.command, constraint.args)
+
+        return repr_str
+
 def compile(contract, constants):
     # Allocation table
     # symbol: Private/Public, is_param, index
     alloc = generate_alloc_table(contract)
     # Operations lines list
     if (ops := generate_ops_table(contract, alloc)) is None:
-        return False
+        return None
     # Constraint commands
     if (constraints := generate_constraints_table(contract, alloc)) is None:
-        return False
-    display(alloc, ops, constraints)
-    return True
-
-def display(alloc, ops, constraints):
-    print("Alloc table:")
-    for symbol, variable in alloc.items():
-        print("  //", symbol)
-        print(" ", variable.type, variable.index)
-    print()
-
-    print("Operations:")
-    for op in ops:
-        print("  //", op.line)
-        print(" ", op.command, op.args)
-    print()
-
-    print("Constraints:")
-    for constraint in constraints:
-        if constraint.args:
-            print("  //", constraint.args_comment())
-        print(" ", constraint.command, constraint.args)
-    print()
+        return None
+    return Contract(alloc, ops, constraints)
 
 def process(contents):
     # Remove left whitespace
@@ -259,23 +266,42 @@ def process(contents):
     # Parse all constants
     constants = [line for line in contents if line.command() == "constant"]
     # Divide into contract sections
-    if (contracts := divide_sections(contents)) is None:
-        return False
+    if (pre_contracts := divide_sections(contents)) is None:
+        return None
     # Process each contract
-    for contract_name, contract in contracts.items():
-        if not compile(contract, constants):
-            return False
-    return True
+    contracts = {}
+    for contract_name, pre_contract in pre_contracts.items():
+        if (contract := compile(pre_contract, constants)) is None:
+            return None
+        contracts[contract_name] = contract
+    return contracts
 
 def main(argv):
-    if len(argv) != 2:
-        eprint("pism FILENAME")
-        return -1
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--display', action='store_true')
+    group.add_argument('--rust', action='store_true')
+    args = parser.parse_args()
 
-    src_filename = argv[1]
+    src_filename = args.filename
     contents = open(src_filename).read()
-    if not process(contents):
+    if (contracts := process(contents)) is None:
         return -2
+
+    def default_display():
+        for contract_name, contract in contracts.items():
+            print("Contract:", contract_name)
+            print(contract)
+
+    if args.display:
+        default_display()
+    elif args.rust:
+        import vm_export_rust
+        for contract_name, contract in contracts.items():
+            vm_export_rust.display(contract)
+    else:
+        default_display()
 
     return 0
 

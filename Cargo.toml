@@ -65,8 +65,8 @@ name = "basic"
 path = "src/basic_minimal.rs"
 
 [[bin]]
-name = "vm"
-path = "src/vm.rs"
+name = "vmtest"
+path = "src/vmtest.rs"
 
 [[bin]]
 name = "jubjub"
