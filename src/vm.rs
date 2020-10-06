@@ -38,6 +38,7 @@ pub enum CryptoOperation {
     Load(VariableRef, VariableIndex),
     Divide(VariableRef, VariableRef),
     Double(VariableRef),
+    Square(VariableRef),
     UnpackBits(VariableRef, VariableRef, VariableRef),
     Local,
 }
@@ -62,6 +63,9 @@ pub enum ConstraintInstruction {
     Lc0AddCoeff(VariableIndex, VariableIndex),
     Lc1AddCoeff(VariableIndex, VariableIndex),
     Lc2AddCoeff(VariableIndex, VariableIndex),
+    Lc0AddOneCoeff(VariableIndex),
+    Lc1AddOneCoeff(VariableIndex),
+    Lc2AddOneCoeff(VariableIndex),
     Lc0AddBits(VariableIndex),
     Lc1AddBits(VariableIndex),
     Lc2AddBits(VariableIndex),
@@ -165,6 +169,13 @@ impl ZKVirtualMachine {
                         VariableRef::Local(index) => &mut local_stack[*index],
                     };
                     *self_ = self_.double();
+                }
+                CryptoOperation::Square(self_) => {
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    *self_ = self_.square();
                 }
                 CryptoOperation::UnpackBits(value, start, end) => {
                     let value = match value {
@@ -364,6 +375,15 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 }
                 ConstraintInstruction::Lc2AddCoeff(const_index, index) => {
                     lc2 = lc2 + (self.constants[const_index], variables[index]);
+                }
+                ConstraintInstruction::Lc0AddOneCoeff(const_index) => {
+                    lc0 = lc0 + (self.constants[const_index], CS::one());
+                }
+                ConstraintInstruction::Lc1AddOneCoeff(const_index) => {
+                    lc1 = lc1 + (self.constants[const_index], CS::one());
+                }
+                ConstraintInstruction::Lc2AddOneCoeff(const_index) => {
+                    lc2 = lc2 + (self.constants[const_index], CS::one());
                 }
                 ConstraintInstruction::Lc0AddBits(start_index) => {
                     lc0 = lc_add_bits(lc0, &variables, start_index)?;

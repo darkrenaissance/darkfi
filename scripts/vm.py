@@ -15,6 +15,7 @@ op_commands = {
     "sub": 2,
     "divide": 2,
     "double": 1,
+    "square": 1,
     "unpack_bits": 3,
     "load": 2,
     "local": 1,
@@ -33,6 +34,9 @@ constraint_commands = {
     "lc0_add_coeff": 2,
     "lc1_add_coeff": 2,
     "lc2_add_coeff": 2,
+    "lc0_add_one_coeff": 1,
+    "lc1_add_one_coeff": 1,
+    "lc2_add_one_coeff": 1,
     "lc0_add_bits": 1,
     "lc1_add_bits": 1,
     "lc2_add_bits": 1,
@@ -71,7 +75,7 @@ class Line:
     def args(self):
         if not self.is_empty():
             return None
-        return self.text.split(" ")[1:]
+        return self.text.split()[1:]
 
 def clean(contents):
     # Split input into lines

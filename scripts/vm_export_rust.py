@@ -84,7 +84,10 @@ pub fn load_zkvm() -> ZKVirtualMachine {
             args = constraint.args[:]
             if (constraint.command == "lc0_add_coeff" or
                 constraint.command == "lc1_add_coeff" or
-                constraint.command == "lc2_add_coeff"):
+                constraint.command == "lc2_add_coeff" or
+                constraint.command == "lc0_add_one_coeff" or
+                constraint.command == "lc1_add_one_coeff" or
+                constraint.command == "lc2_add_one_coeff"):
                 args[0] = args[0][0]
             args_part = ", ".join(str(index) for index in args)
             args_part = "(%s)" % args_part

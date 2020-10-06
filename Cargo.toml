@@ -24,6 +24,8 @@ rand_xorshift = "0.2"
 blake2s_simd = "0.5"
 bitvec = "0.18"
 
+hex = "0.4.2"
+
 [[bin]]
 name = "sha256"
 path = "src/sha256.rs"
@@ -75,4 +77,8 @@ path = "src/jubjub.rs"
 [[bin]]
 name = "bits"
 path = "src/bits.rs"
+
+[[bin]]
+name = "zkmimc"
+path = "src/zkmimc.rs"
 
