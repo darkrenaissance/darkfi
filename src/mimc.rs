@@ -144,13 +144,11 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
 }
 
 fn main() {
-    // This may not be cryptographically safe, use
-    // `OsRng` (for example) in production software.
-    let rng = &mut thread_rng();
+    use rand::rngs::OsRng;
 
     // Generate the MiMC round constants
     let constants = (0..MIMC_ROUNDS)
-        .map(|_| Scalar::random(rng))
+        .map(|_| Scalar::random(&mut OsRng))
         .collect::<Vec<_>>();
 
     println!("Creating parameters...");
@@ -163,7 +161,7 @@ fn main() {
             constants: &constants,
         };
 
-        generate_random_parameters::<Bls12, _, _>(c, rng).unwrap()
+        generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
 
     // Prepare the verification key (for proof verification)
@@ -182,8 +180,8 @@ fn main() {
 
     for _ in 0..SAMPLES {
         // Generate a random preimage and compute the image
-        let xl = Scalar::random(rng);
-        let xr = Scalar::random(rng);
+        let xl = Scalar::random(&mut OsRng);
+        let xr = Scalar::random(&mut OsRng);
         let image = mimc(xl, xr, &constants);
 
         proof_vec.truncate(0);
@@ -199,7 +197,7 @@ fn main() {
             };
 
             // Create a groth16 proof with our parameters.
-            let proof = create_random_proof(c, &params, rng).unwrap();
+            let proof = create_random_proof(c, &params, &mut OsRng).unwrap();
 
             proof.write(&mut proof_vec).unwrap();
         }
