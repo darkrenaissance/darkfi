@@ -1,8 +1,4 @@
-constant a 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000
-constant d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
-constant one 0x0000000000000000000000000000000000000000000000000000000000000001
-
-contract input_spend
+contract bits_decomposition
     param x
     {% for n in range(255) %}
         private b_{{n}}
