@@ -72,3 +72,7 @@ path = "src/vmtest.rs"
 name = "jubjub"
 path = "src/jubjub.rs"
 
+[[bin]]
+name = "bits"
+path = "src/bits.rs"
+

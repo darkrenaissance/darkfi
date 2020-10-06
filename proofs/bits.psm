@@ -1,0 +1,27 @@
+constant a 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000
+constant d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
+constant one 0x0000000000000000000000000000000000000000000000000000000000000001
+
+contract input_spend
+    param x
+    {% for n in range(255) %}
+        private b_{{n}}
+    {% endfor %}
+
+    unpack_bits x b_0 b_254
+
+    {% for n in range(255) %}
+        # (1 - b) * b == 0
+        lc0_add_one
+        lc0_sub b_{{n}}
+
+        lc1_add b_{{n}}
+
+        enforce
+    {% endfor %}
+
+    lc0_add_bits b_0
+    lc0_sub x
+    enforce
+end
+

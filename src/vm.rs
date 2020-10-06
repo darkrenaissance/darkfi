@@ -10,7 +10,7 @@ use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use group::Curve;
 use rand::rngs::OsRng;
-use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
+use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;
 
 pub struct ZKVirtualMachine {
@@ -37,6 +37,8 @@ pub enum CryptoOperation {
     Sub(VariableRef, VariableRef),
     Load(VariableRef, VariableIndex),
     Divide(VariableRef, VariableRef),
+    Double(VariableRef),
+    UnpackBits(VariableRef, VariableRef, VariableRef),
     Local,
 }
 
@@ -60,15 +62,23 @@ pub enum ConstraintInstruction {
     Lc0AddCoeff(VariableIndex, VariableIndex),
     Lc1AddCoeff(VariableIndex, VariableIndex),
     Lc2AddCoeff(VariableIndex, VariableIndex),
+    Lc0AddBits(VariableIndex),
+    Lc1AddBits(VariableIndex),
+    Lc2AddBits(VariableIndex),
     Enforce,
 }
 
+#[derive(Debug)]
 pub enum ZKVMError {
     DivisionByZero,
+    MalformedRange,
 }
 
 impl ZKVirtualMachine {
-    pub fn initialize(&mut self, params: &Vec<(VariableIndex, Scalar)>) -> std::result::Result<(), ZKVMError> {
+    pub fn initialize(
+        &mut self,
+        params: &Vec<(VariableIndex, Scalar)>,
+    ) -> std::result::Result<(), ZKVMError> {
         // Resize array
         self.aux = vec![Scalar::zero(); self.alloc.len()];
 
@@ -147,6 +157,51 @@ impl ZKVirtualMachine {
                         *self_ = ret.unwrap();
                     } else {
                         return Err(ZKVMError::DivisionByZero);
+                    }
+                }
+                CryptoOperation::Double(self_) => {
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    *self_ = self_.double();
+                }
+                CryptoOperation::UnpackBits(value, start, end) => {
+                    let value = match value {
+                        VariableRef::Aux(index) => self.aux[*index].clone(),
+                        VariableRef::Local(index) => local_stack[*index].clone(),
+                    };
+                    let (self_, start_index, end_index) = match start {
+                        VariableRef::Aux(start_index) => match end {
+                            VariableRef::Aux(end_index) => (&mut self.aux, start_index, end_index),
+                            VariableRef::Local(end_index) => {
+                                return Err(ZKVMError::MalformedRange);
+                            }
+                        },
+                        VariableRef::Local(start_index) => match end {
+                            VariableRef::Aux(end_index) => {
+                                return Err(ZKVMError::MalformedRange);
+                            }
+                            VariableRef::Local(end_index) => {
+                                (&mut local_stack, start_index, end_index)
+                            }
+                        },
+                    };
+                    if start_index > end_index {
+                        return Err(ZKVMError::MalformedRange);
+                    }
+                    if (end_index + 1) - start_index != Scalar::NUM_BITS as usize {
+                        return Err(ZKVMError::MalformedRange);
+                    }
+                    if *end_index >= self_.len() {
+                        return Err(ZKVMError::MalformedRange);
+                    }
+
+                    for (i, bit) in value.to_le_bits().into_iter().rev().cloned().enumerate() {
+                        match bit {
+                            true => self_[i] = Scalar::one(),
+                            false => self_[i] = Scalar::zero(),
+                        }
                     }
                 }
                 CryptoOperation::Local => {
@@ -229,6 +284,24 @@ pub struct ZKVMCircuit {
     constants: Vec<Scalar>,
 }
 
+fn lc_add_bits(
+    mut lc: bellman::LinearCombination<Scalar>,
+    variables: &Vec<bellman::Variable>,
+    start_index: usize,
+) -> std::result::Result<bellman::LinearCombination<Scalar>, SynthesisError> {
+    if variables.len() - start_index > Scalar::NUM_BITS as usize {
+        return Err(SynthesisError::Unsatisfiable);
+    }
+
+    let mut coeff = Scalar::one();
+    for i in 0..Scalar::NUM_BITS as usize {
+        lc = lc + (coeff, variables[start_index + i]);
+
+        coeff = coeff.double();
+    }
+    Ok(lc)
+}
+
 impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
@@ -292,6 +365,15 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 ConstraintInstruction::Lc2AddCoeff(const_index, index) => {
                     lc2 = lc2 + (self.constants[const_index], variables[index]);
                 }
+                ConstraintInstruction::Lc0AddBits(start_index) => {
+                    lc0 = lc_add_bits(lc0, &variables, start_index)?;
+                }
+                ConstraintInstruction::Lc1AddBits(start_index) => {
+                    lc1 = lc_add_bits(lc1, &variables, start_index)?;
+                }
+                ConstraintInstruction::Lc2AddBits(start_index) => {
+                    lc2 = lc_add_bits(lc2, &variables, start_index)?;
+                }
                 ConstraintInstruction::Enforce => {
                     cs.enforce(
                         || "constraint",
@@ -309,4 +391,3 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
         Ok(())
     }
 }
-
