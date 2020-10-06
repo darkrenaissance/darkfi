@@ -29,4 +29,12 @@ fn main() {
     ])
     .unwrap();
     assert_eq!(Scalar::one(), one);
+
+    // Scalar stuff
+    println!("-Scalar::one: {:?}", -Scalar::one());
+    let bits = (-Scalar::one()).to_le_bits();
+    for b in bits.iter() {
+        print!("{}", if *b { 1 } else { 0 });
+    }
+    println!("");
 }

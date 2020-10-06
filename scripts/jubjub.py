@@ -4,6 +4,7 @@ q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
 modq = IntegersModP(q)
 
 a = modq(-1)
+print("a:", hex(a.n))
 d = -(modq(10240)/modq(10241))
 params = (a, d)
 
