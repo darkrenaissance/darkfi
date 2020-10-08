@@ -73,17 +73,17 @@ fn main() -> std::result::Result<(), vm::ZKVMError> {
 
     let public = vm.public();
 
-    assert_eq!(public.len(), 0);
+    assert_eq!(public.len(), 2);
 
     // Use this code for testing point doubling
-    //let dbl = public_point.double().to_affine();
+    let dbl = public_point.double().to_affine();
+    println!("{:?}", dbl.get_u());
+    println!("{:?}", public[0]);
+    println!("{:?}", dbl.get_v());
+    println!("{:?}", public[1]);
     //assert_eq!(public.len(), 2);
     //assert_eq!(public[0], dbl.get_u());
     //assert_eq!(public[1], dbl.get_v());
-    //println!("{:?}", dbl.get_u());
-    //println!("{:?}", public[0]);
-    //println!("{:?}", dbl.get_v());
-    //println!("{:?}", public[1]);
 
     assert!(vm.verify(&proof, &public));
     Ok(())

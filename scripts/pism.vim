@@ -15,7 +15,7 @@ endif
 syn keyword sapviKeyword constant contract start end constraint
 "syn keyword sapviAttr
 syn keyword sapviType FixedGenerator BlakePersonalization PedersenPersonalization ByteSize U64 Fr Point Bool Scalar BinarySize
-syn keyword sapviFunctionKeyword enforce lc0_add_one lc1_add_one lc2_add_one lc_coeff_reset lc_coeff_double
+syn keyword sapviFunctionKeyword enforce lc0_add_one lc1_add_one lc2_add_one lc_coeff_reset lc_coeff_double lc0_sub_one lc1_sub_one lc2_sub_one
 syn match sapviFunction "^[ ]*[a-z_0-9]* "
 syn match sapviComment "#.*$"
 syn match sapviNumber ' \zs\d\+\ze'

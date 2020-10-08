@@ -1,5 +1,6 @@
 constant edwards_d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
 constant one 0x0000000000000000000000000000000000000000000000000000000000000001
+constant zero 0x0000000000000000000000000000000000000000000000000000000000000000
 constant G_VCR_u 0x6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337
 constant G_VCR_v 0x6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b
 constant G_VCV_u 0x273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51
@@ -146,7 +147,11 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     enforce
 {% endmacro %}
 
-{% macro jubjub_add(P, x1, y1, x2, y2) -%}
+{% macro jubjub_add(P, x1, y1, x2, y2) %}
+    ########################################################
+    # jubjub_add({{p}}, {{x1}}, {{y1}}, {{x2}}, {{y2}})
+    ########################################################
+
     # Compute U = (x1 + y1) * (y2 - EDWARDS_A*x2)
     #           = (x1 + y1) * (x2 + y2)
     private {{P}}_U
@@ -175,12 +180,12 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     mul {{P}}_B {{ y1 }}
     # Compute C = d*A*B
     private {{P}}_C
-    load {{P}}_C d
+    load {{P}}_C edwards_d
     mul {{P}}_C {{P}}_A
     mul {{P}}_C {{P}}_B
 
     # assert (d * A) * (B) == C
-    lc0_add_coeff d {{P}}_A
+    lc0_add_coeff edwards_d {{P}}_A
     lc1_add {{P}}_B
     lc2_add {{P}}_C
     enforce
@@ -218,7 +223,49 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     lc2_sub {{P}}_A
     lc2_sub {{P}}_B
     enforce
-{%- endmacro %}
+{% endmacro %}
+
+{% macro jubjub_conditionally_select(p, u, v, condition) %}
+    ########################################################
+    # jubjub_conditionally_select({{p}}, {{u}}, {{v}}, {{condition}})
+    ########################################################
+
+    # Compute u' = self.u if condition, and 0 otherwise
+    private {{p}}_u
+    set {{p}}_u {{u}}
+    mul {{p}}_u condition
+
+    # condition * u = u'
+    # if condition is 0, u' must be 0
+    # if condition is 1, u' must be u
+    lc0_add {{u}}
+    lc1_add {{condition}}
+    lc2_add {{p}}_u
+    enforce
+
+    # Compute v' = self.v if condition, and 1 otherwise
+    # v' = condition * v + 1 - condition
+    private {{p}}_v
+    set {{p}}_v {{v}}
+    mul {{p}}_v {{condition}}
+    local {{p}}_one
+    load {{p}}_one one
+    add {{p}}_v {{p}}_one
+    sub {{p}}_v {{condition}}
+
+    # condition * v = v' - (1 - condition)
+    # if condition is 0, v' must be 1
+    # if condition is 1, v' must be v
+    lc0_add {{v}}
+    lc1_add {{condition}}
+    lc2_add {{p}}_v
+    lc2_sub_one
+    lc2_add {{condition}}
+    enforce
+{% endmacro %}
+
+{% macro jubjub_mul(p, u, v, x, n) %}
+{% endmacro %}
 
 contract mint_contract
     param public_u
@@ -234,22 +281,26 @@ contract mint_contract
     {% endfor %}
 
     #############
-    {#
-        {{ jubjub_double("pub_dbl", "public_u", "public_v") }}
+    #{
+        {{ jubjub_double("pub_dbl_pre", "public_u", "public_v") }}
+
+        private condition
+        load condition one
+        {{ jubjub_conditionally_select("pub_dbl", "pub_dbl_pre_u", "pub_dbl_pre_v", "condition") }}
 
         # Use this code for testing point doubling
-        #public dbl_u
-        #set dbl_u pub_dbl_u
-        #lc0_add dbl_u
-        #lc1_add_one
-        #lc2_add pub_dbl_u
-        #enforce
-        #public dbl_v
-        #set dbl_v pub_dbl_v
-        #lc0_add dbl_v
-        #lc1_add_one
-        #lc2_add pub_dbl_v
-        #enforce
-    #}
+        public dbl_u
+        set dbl_u pub_dbl_u
+        lc0_add dbl_u
+        lc1_add_one
+        lc2_add pub_dbl_u
+        enforce
+        public dbl_v
+        set dbl_v pub_dbl_v
+        lc0_add dbl_v
+        lc1_add_one
+        lc2_add pub_dbl_v
+        enforce
+    #
 end
 

@@ -61,6 +61,9 @@ pub enum ConstraintInstruction {
     Lc0AddOne,
     Lc1AddOne,
     Lc2AddOne,
+    Lc0SubOne,
+    Lc1SubOne,
+    Lc2SubOne,
     Lc0AddCoeff(VariableIndex, VariableIndex),
     Lc1AddCoeff(VariableIndex, VariableIndex),
     Lc2AddCoeff(VariableIndex, VariableIndex),
@@ -359,6 +362,15 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 }
                 ConstraintInstruction::Lc2AddOne => {
                     lc2 = lc2 + CS::one();
+                }
+                ConstraintInstruction::Lc0SubOne => {
+                    lc0 = lc0 - CS::one();
+                }
+                ConstraintInstruction::Lc1SubOne => {
+                    lc1 = lc1 - CS::one();
+                }
+                ConstraintInstruction::Lc2SubOne => {
+                    lc2 = lc2 - CS::one();
                 }
                 ConstraintInstruction::Lc0AddCoeff(const_index, index) => {
                     lc0 = lc0 + (self.constants[const_index], variables[index]);
