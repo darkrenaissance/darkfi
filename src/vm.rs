@@ -39,6 +39,7 @@ pub enum CryptoOperation {
     Divide(VariableRef, VariableRef),
     Double(VariableRef),
     Square(VariableRef),
+    Invert(VariableRef),
     UnpackBits(VariableRef, VariableRef, VariableRef),
     Local,
 }
@@ -175,6 +176,17 @@ impl ZKVirtualMachine {
                         VariableRef::Local(index) => &mut local_stack[*index],
                     };
                     *self_ = self_.square();
+                }
+                CryptoOperation::Invert(self_) => {
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    if self_.is_zero() {
+                        return Err(ZKVMError::DivisionByZero);
+                    } else {
+                        *self_ = self_.invert().unwrap();
+                    }
                 }
                 CryptoOperation::UnpackBits(value, start, end) => {
                     let value = match value {

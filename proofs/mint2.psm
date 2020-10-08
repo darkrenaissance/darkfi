@@ -2,6 +2,9 @@ constant edwards_d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d63
 constant one 0x0000000000000000000000000000000000000000000000000000000000000001
 
 {% macro square(x2, x) %}
+    ########################################################
+    # square({{x2}}, {{x}})
+    ########################################################
     private {{x2}}
     set {{x2}} {{x}}
     mul {{x2}} {{x}}
@@ -13,6 +16,9 @@ constant one 0x0000000000000000000000000000000000000000000000000000000000000001
 {% endmacro %}
 
 {% macro jubjub_witness(p, u, v) %}
+    ########################################################
+    # jubjub_witness({{p}}, {{u}}, {{v}})
+    ########################################################
     # -u^2 + v^2 = 1 + du^2v^2
     {{ square(p + "_u2", u) }}
     {{ square(p + "_v2", v) }}
@@ -29,6 +35,10 @@ constant one 0x0000000000000000000000000000000000000000000000000000000000000001
 {% endmacro %}
 
 {% macro jubjub_double(p, u, v) %}
+    ########################################################
+    # jubjub_double({{p}}, {{u}}, {{v}})
+    ########################################################
+
     # Compute T = (u + v) * (v - EDWARDS_A*u)
     #           = (u + v) * (u + v)
     private {{p}}_t
@@ -100,24 +110,59 @@ constant one 0x0000000000000000000000000000000000000000000000000000000000000001
     enforce
 {% endmacro %}
 
+{% macro assert_not_small_order(p, u, v) %}
+    ########################################################
+    # assert_not_small_order({{p}}, {{u}}, {{v}})
+    ########################################################
+
+    # First doubling
+    {{ jubjub_double(p + "1", u, v) }}
+    # Second doubling
+    {{ jubjub_double(p + "2", p + "1_u", p + "1_v") }}
+    # Third doubling
+    {{ jubjub_double(p + "3", p + "2_u", p + "2_v") }}
+
+    # (0, -1) is a small order point, but won't ever appear here
+    # because cofactor is 2^3, and we performed three doublings.
+    # (0, 1) is the neutral element, so checking if u is nonzero
+    # is sufficient to prevent small order points here.
+
+    # Check u != 0
+
+    # Constrain a * inv = 1, which is only valid
+    # iff a has a multiplicative inverse, untrue
+    # for zero.
+    private {{p}}_u3_inv
+    set {{p}}_u3_inv {{p}}3_u
+    invert {{p}}_u3_inv
+
+    lc0_add {{p}}3_u
+    lc1_add {{p}}_u3_inv
+    lc2_add_one
+    enforce
+{% endmacro %}
+
 contract mint_contract
     param public_u
     param public_v
     {{ jubjub_witness("public", "public_u", "public_v") }}
-    {{ jubjub_double("pub_dbl", "public_u", "public_v") }}
+    {{ assert_not_small_order("not_small", "public_u", "public_v") }}
+    {#
+        {{ jubjub_double("pub_dbl", "public_u", "public_v") }}
 
-    # Use this code for testing point doubling
-    #public dbl_u
-    #set dbl_u pub_dbl_u
-    #lc0_add dbl_u
-    #lc1_add_one
-    #lc2_add pub_dbl_u
-    #enforce
-    #public dbl_v
-    #set dbl_v pub_dbl_v
-    #lc0_add dbl_v
-    #lc1_add_one
-    #lc2_add pub_dbl_v
-    #enforce
+        # Use this code for testing point doubling
+        #public dbl_u
+        #set dbl_u pub_dbl_u
+        #lc0_add dbl_u
+        #lc1_add_one
+        #lc2_add pub_dbl_u
+        #enforce
+        #public dbl_v
+        #set dbl_v pub_dbl_v
+        #lc0_add dbl_v
+        #lc1_add_one
+        #lc2_add pub_dbl_v
+        #enforce
+    #}
 end
 

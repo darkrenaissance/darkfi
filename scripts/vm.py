@@ -16,6 +16,7 @@ op_commands = {
     "divide": 2,
     "double": 1,
     "square": 1,
+    "invert": 1,
     "unpack_bits": 3,
     "load": 2,
     "local": 1,
