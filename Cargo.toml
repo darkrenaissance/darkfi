@@ -82,3 +82,7 @@ path = "src/bits.rs"
 name = "zkmimc"
 path = "src/zkmimc.rs"
 
+[[bin]]
+name = "mint2"
+path = "src/mint2.rs"
+

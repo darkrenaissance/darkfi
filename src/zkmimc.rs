@@ -1,9 +1,9 @@
 use bls12_381::Scalar;
-use ff::{PrimeField, Field};
+use ff::{Field, PrimeField};
 use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 
-mod zkmimc_contract;
 mod vm;
+mod zkmimc_contract;
 use zkmimc_contract::load_zkvm;
 mod mimc_constants;
 use mimc_constants::mimc_constants;
@@ -92,4 +92,3 @@ fn main() -> std::result::Result<(), vm::ZKVMError> {
     assert!(vm.verify(&proof, &public));
     Ok(())
 }
-

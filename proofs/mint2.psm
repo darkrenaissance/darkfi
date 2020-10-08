@@ -1,0 +1,123 @@
+constant edwards_d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
+constant one 0x0000000000000000000000000000000000000000000000000000000000000001
+
+{% macro square(x2, x) %}
+    private {{x2}}
+    set {{x2}} {{x}}
+    mul {{x2}} {{x}}
+
+    lc0_add {{x}}
+    lc1_add {{x}}
+    lc2_add {{x2}}
+    enforce
+{% endmacro %}
+
+{% macro jubjub_witness(p, u, v) %}
+    # -u^2 + v^2 = 1 + du^2v^2
+    {{ square(p + "_u2", u) }}
+    {{ square(p + "_v2", v) }}
+    private {{p}}_u2v2
+    set {{p}}_u2v2 {{p + "_u2"}}
+    mul {{p}}_u2v2 {{p + "_v2"}}
+    # on curve check
+    lc0_sub {{p + "_u2"}}
+    lc0_add {{p + "_v2"}}
+    lc1_add_one
+    lc2_add_one
+    lc2_add_coeff edwards_d {{p}}_u2v2
+    enforce
+{% endmacro %}
+
+{% macro jubjub_double(p, u, v) %}
+    # Compute T = (u + v) * (v - EDWARDS_A*u)
+    #           = (u + v) * (u + v)
+    private {{p}}_t
+    set {{p}}_t {{u}}
+    add {{p}}_t {{v}}
+    local {{p}}_t1
+    set {{p}}_t1 {{u}}
+    add {{p}}_t1 {{v}}
+    mul {{p}}_t {{p}}_t1
+
+    lc0_add {{u}}
+    lc0_add {{v}}
+    lc1_add {{u}}
+    lc1_add {{v}}
+    lc2_add {{p}}_t
+    enforce
+
+    # Compute A = u * v
+    private {{p}}_A
+    set {{p}}_A {{u}}
+    mul {{p}}_A {{v}}
+
+    # Compute C = d*A*A
+    private {{p}}_C
+    load {{p}}_C edwards_d
+    mul {{p}}_C {{p}}_A
+    mul {{p}}_C {{p}}_A
+
+    lc0_add_coeff edwards_d {{p}}_A
+    lc1_add {{p}}_A
+    lc2_add {{p}}_C
+    enforce
+
+    # Compute u3 = (2.A) / (1 + C)
+    private {{p}}_u
+    set {{p}}_u {{p}}_A
+    add {{p}}_u {{p}}_A
+    local {{p}}_u3_t1
+    load {{p}}_u3_t1 one
+    add {{p}}_u3_t1 {{p}}_C
+    divide {{p}}_u {{p}}_u3_t1
+
+    lc0_add_one
+    lc0_add {{p}}_C
+    lc1_add {{p}}_u
+    lc2_add {{p}}_A
+    lc2_add {{p}}_A
+    enforce
+
+    # Compute v3 = (T + (EDWARDS_A-1)*A) / (1 - C)
+    #            = (T - 2.A) / (1 - C)
+    private {{p}}_v
+    set {{p}}_v {{p}}_t
+    local {{p}}_2A
+    set {{p}}_2A {{p}}_A
+    add {{p}}_2A {{p}}_A
+    sub {{p}}_v {{p}}_2A
+    local {{p}}_v3_t1
+    load {{p}}_v3_t1 one
+    sub {{p}}_v3_t1 {{p}}_C
+    divide {{p}}_v {{p}}_v3_t1
+
+    lc0_add_one
+    lc0_sub {{p}}_C
+    lc1_add {{p}}_v
+    lc2_add {{p}}_t
+    lc2_sub {{p}}_A
+    lc2_sub {{p}}_A
+    enforce
+{% endmacro %}
+
+contract mint_contract
+    param public_u
+    param public_v
+    {{ jubjub_witness("public", "public_u", "public_v") }}
+    {{ jubjub_double("pub_dbl", "public_u", "public_v") }}
+
+    # Use this code for testing point doubling
+    #public dbl_u
+    #set dbl_u pub_dbl_u
+    #lc0_add dbl_u
+    #lc1_add_one
+    #lc2_add pub_dbl_u
+    #enforce
+    #public dbl_v
+    #set dbl_v pub_dbl_v
+    #lc0_add dbl_v
+    #lc1_add_one
+    #lc2_add pub_dbl_v
+    #enforce
+end
+

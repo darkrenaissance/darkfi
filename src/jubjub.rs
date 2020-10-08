@@ -3,6 +3,13 @@ use ff::PrimeField;
 use group::Group;
 use jubjub::SubgroupPoint;
 
+const EDWARDS_D: Scalar = Scalar::from_raw([
+    0x0106_5fd6_d634_3eb1,
+    0x292d_7f6d_3757_9d26,
+    0xf5fd_9207_e6bd_7fd4,
+    0x2a93_18e7_4bfa_2b48,
+]);
+
 fn main() {
     let g = SubgroupPoint::from_raw_unchecked(
         bls12_381::Scalar::from_raw([
@@ -37,4 +44,6 @@ fn main() {
         print!("{}", if *b { 1 } else { 0 });
     }
     println!("");
+
+    println!("Edwards d: {:?}", EDWARDS_D);
 }
