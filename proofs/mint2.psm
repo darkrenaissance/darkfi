@@ -149,7 +149,7 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
 
 {% macro jubjub_add(P, x1, y1, x2, y2) %}
     ########################################################
-    # jubjub_add({{p}}, {{x1}}, {{y1}}, {{x2}}, {{y2}})
+    # jubjub_add({{P}}, {{x1}}, {{y1}}, {{x2}}, {{y2}})
     ########################################################
 
     # Compute U = (x1 + y1) * (y2 - EDWARDS_A*x2)
@@ -191,34 +191,34 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     enforce
 
     # Compute P.x = (A + B) / (1 + C)
-    private {{P}}_x
-    set {{P}}_x {{P}}_A
-    add {{P}}_x {{P}}_B
-    local {{P}}_x_denom
-    load {{P}}_x_denom one
-    add {{P}}_x_denom {{P}}_C
-    divide {{P}}_x {{P}}_x_denom
+    private {{P}}_u
+    set {{P}}_u {{P}}_A
+    add {{P}}_u {{P}}_B
+    local {{P}}_u_denom
+    load {{P}}_u_denom one
+    add {{P}}_u_denom {{P}}_C
+    divide {{P}}_u {{P}}_u_denom
 
     lc0_add_one
     lc0_add {{P}}_C
-    lc1_add {{P}}_x
+    lc1_add {{P}}_u
     lc2_add {{P}}_A
     lc2_add {{P}}_B
     enforce
 
     # Compute P.y = (U - A - B) / (1 - C)
-    private {{P}}_y
-    set {{P}}_y {{P}}_U
-    sub {{P}}_y {{P}}_A
-    sub {{P}}_y {{P}}_B
-    local {{P}}_y_denom
-    load {{P}}_y_denom one
-    sub {{P}}_y_denom {{P}}_C
-    divide {{P}}_y {{P}}_y_denom
+    private {{P}}_v
+    set {{P}}_v {{P}}_U
+    sub {{P}}_v {{P}}_A
+    sub {{P}}_v {{P}}_B
+    local {{P}}_v_denom
+    load {{P}}_v_denom one
+    sub {{P}}_v_denom {{P}}_C
+    divide {{P}}_v {{P}}_v_denom
 
     lc0_add_one
     lc0_sub {{P}}_C
-    lc1_add {{P}}_y
+    lc1_add {{P}}_v
     lc2_add {{P}}_U
     lc2_sub {{P}}_A
     lc2_sub {{P}}_B
@@ -233,7 +233,7 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     # Compute u' = self.u if condition, and 0 otherwise
     private {{p}}_u
     set {{p}}_u {{u}}
-    mul {{p}}_u condition
+    mul {{p}}_u {{condition}}
 
     # condition * u = u'
     # if condition is 0, u' must be 0
@@ -265,6 +265,57 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
 {% endmacro %}
 
 {% macro jubjub_mul(p, u, v, x, n) %}
+    ########################################################
+    # jubjub_mul({{p}}, {{u}}, {{v}}, {{x}}, {{n}})
+    ########################################################
+    # Performs a scalar multiplication of this twisted Edwards
+    # point by a scalar represented as a sequence of booleans
+    # in little-endian bit order.
+    private {{p}}_currbase_0_u
+    set {{p}}_currbase_0_u {{u}}
+    private {{p}}_currbase_0_v
+    set {{p}}_currbase_0_v {{v}}
+
+    {% for i in range(n) %}
+        {{ jubjub_conditionally_select(
+            p + "_this_base_" + i|string,
+            p + "_currbase_" + i|string + "_u",
+            p + "_currbase_" + i|string + "_v",
+            x + "_" + i|string
+        ) }}
+
+        {% if i == 0 %}
+            {{ jubjub_add(
+                p + "_result_" + (i + 1)|string,
+                p + "_this_base_" + i|string + "_u",
+                p + "_this_base_" + i|string + "_v",
+                u,
+                v
+            ) }}
+        {% elif i == (n - 1) %}
+            {{ jubjub_add(
+                p,
+                p + "_this_base_" + i|string + "_u",
+                p + "_this_base_" + i|string + "_v",
+                p + "_result_" + i|string + "_u",
+                p + "_result_" + i|string + "_v",
+            ) }}
+        {% else %}
+            {{ jubjub_add(
+                p + "_result_" + (i + 1)|string,
+                p + "_this_base_" + i|string + "_u",
+                p + "_this_base_" + i|string + "_v",
+                p + "_result_" + i|string + "_u",
+                p + "_result_" + i|string + "_v",
+            ) }}
+        {% endif %}
+
+        {{ jubjub_double(
+            p + "_currbase_" + (i + 1)|string,
+            p + "_currbase_" + i|string + "_u",
+            p + "_currbase_" + i|string + "_v"
+        ) }}
+    {% endfor %}
 {% endmacro %}
 
 contract mint_contract
@@ -280,12 +331,32 @@ contract mint_contract
         enforce
     {% endfor %}
 
+    private g_vcr_u
+    private g_vcr_v
+    load g_vcr_u G_VCR_u
+    load g_vcr_v G_VCR_v
+    {{ jubjub_mul("rcv", "g_vcr_u", "g_vcr_v", "vc_randomness", 256) }}
+
+    public rcvu
+    set rcvu rcv_u
+    lc0_add rcvu
+    lc1_add_one
+    lc2_add rcv_u
+    enforce
+
+    public rcvv
+    set rcvv rcv_v
+    lc0_add rcvv
+    lc1_add_one
+    lc2_add rcv_v
+    enforce
+
     #############
-    #{
+    {#
         {{ jubjub_double("pub_dbl_pre", "public_u", "public_v") }}
 
         private condition
-        load condition one
+        load condition zero
         {{ jubjub_conditionally_select("pub_dbl", "pub_dbl_pre_u", "pub_dbl_pre_v", "condition") }}
 
         # Use this code for testing point doubling
@@ -301,6 +372,6 @@ contract mint_contract
         lc1_add_one
         lc2_add pub_dbl_v
         enforce
-    #
+    #}
 end
 

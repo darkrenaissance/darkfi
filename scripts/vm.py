@@ -83,7 +83,7 @@ class Line:
 def clean(contents):
     # Split input into lines
     contents = contents.split("\n")
-    contents = [Line(line, i) for i, line in enumerate(contents)]
+    contents = [Line(line, i + 1) for i, line in enumerate(contents)]
     # Remove empty blank lines
     contents = [line for line in contents if line.is_empty()]
     return contents
