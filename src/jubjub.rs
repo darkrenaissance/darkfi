@@ -10,7 +10,19 @@ const EDWARDS_D: Scalar = Scalar::from_raw([
     0x2a93_18e7_4bfa_2b48,
 ]);
 
+fn print_generators() {
+    use group::{Curve, Group, GroupEncoding};
+    use zcash_primitives::constants::*;
+
+    let x = jubjub::ExtendedPoint::from(VALUE_COMMITMENT_RANDOMNESS_GENERATOR.clone()).to_affine();
+    println!("G_VCR: {:?}", x);
+    let x = jubjub::ExtendedPoint::from(VALUE_COMMITMENT_VALUE_GENERATOR.clone()).to_affine();
+    println!("G_VCV: {:?}", x);
+}
+
 fn main() {
+    print_generators();
+
     let g = SubgroupPoint::from_raw_unchecked(
         bls12_381::Scalar::from_raw([
             0xb981_9dc8_2d90_607e,

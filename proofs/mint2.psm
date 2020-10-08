@@ -1,5 +1,9 @@
 constant edwards_d 0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1
 constant one 0x0000000000000000000000000000000000000000000000000000000000000001
+constant G_VCR_u 0x6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337
+constant G_VCR_v 0x6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b
+constant G_VCV_u 0x273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51
+constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7
 
 {% macro square(x2, x) %}
     ########################################################
@@ -110,9 +114,9 @@ constant one 0x0000000000000000000000000000000000000000000000000000000000000001
     enforce
 {% endmacro %}
 
-{% macro assert_not_small_order(p, u, v) %}
+{% macro jubjub_assert_not_small_order(p, u, v) %}
     ########################################################
-    # assert_not_small_order({{p}}, {{u}}, {{v}})
+    # jubjub_assert_not_small_order({{p}}, {{u}}, {{v}})
     ########################################################
 
     # First doubling
@@ -142,11 +146,94 @@ constant one 0x0000000000000000000000000000000000000000000000000000000000000001
     enforce
 {% endmacro %}
 
+{% macro jubjub_add(P, x1, y1, x2, y2) -%}
+    # Compute U = (x1 + y1) * (y2 - EDWARDS_A*x2)
+    #           = (x1 + y1) * (x2 + y2)
+    private {{P}}_U
+    set {{P}}_U {{ x1 }}
+    add {{P}}_U {{ y1 }}
+    local {{P}}_tmp
+    set {{P}}_tmp {{ x2 }}
+    add {{P}}_tmp {{ y2 }}
+    mul {{P}}_U {{P}}_tmp
+
+    # assert (x1 + y1) * (x2 + y2) == U
+    lc0_add {{ x1 }}
+    lc0_add {{ y1 }}
+    lc1_add {{ x2 }}
+    lc1_add {{ y2 }}
+    lc2_add {{P}}_U
+    enforce
+
+    # Compute A = y2 * x1
+    private {{P}}_A
+    set {{P}}_A {{ y2 }}
+    mul {{P}}_A {{ x1 }}
+    # Compute B = x2 * y1
+    private {{P}}_B
+    set {{P}}_B {{ x2 }}
+    mul {{P}}_B {{ y1 }}
+    # Compute C = d*A*B
+    private {{P}}_C
+    load {{P}}_C d
+    mul {{P}}_C {{P}}_A
+    mul {{P}}_C {{P}}_B
+
+    # assert (d * A) * (B) == C
+    lc0_add_coeff d {{P}}_A
+    lc1_add {{P}}_B
+    lc2_add {{P}}_C
+    enforce
+
+    # Compute P.x = (A + B) / (1 + C)
+    private {{P}}_x
+    set {{P}}_x {{P}}_A
+    add {{P}}_x {{P}}_B
+    local {{P}}_x_denom
+    load {{P}}_x_denom one
+    add {{P}}_x_denom {{P}}_C
+    divide {{P}}_x {{P}}_x_denom
+
+    lc0_add_one
+    lc0_add {{P}}_C
+    lc1_add {{P}}_x
+    lc2_add {{P}}_A
+    lc2_add {{P}}_B
+    enforce
+
+    # Compute P.y = (U - A - B) / (1 - C)
+    private {{P}}_y
+    set {{P}}_y {{P}}_U
+    sub {{P}}_y {{P}}_A
+    sub {{P}}_y {{P}}_B
+    local {{P}}_y_denom
+    load {{P}}_y_denom one
+    sub {{P}}_y_denom {{P}}_C
+    divide {{P}}_y {{P}}_y_denom
+
+    lc0_add_one
+    lc0_sub {{P}}_C
+    lc1_add {{P}}_y
+    lc2_add {{P}}_U
+    lc2_sub {{P}}_A
+    lc2_sub {{P}}_B
+    enforce
+{%- endmacro %}
+
 contract mint_contract
     param public_u
     param public_v
     {{ jubjub_witness("public", "public_u", "public_v") }}
-    {{ assert_not_small_order("not_small", "public_u", "public_v") }}
+    {{ jubjub_assert_not_small_order("not_small", "public_u", "public_v") }}
+
+    {% for i in range(256) %}
+        param vc_randomness_{{i}}
+
+        lc0_add vc_randomness_{{i}}
+        enforce
+    {% endfor %}
+
+    #############
     {#
         {{ jubjub_double("pub_dbl", "public_u", "public_v") }}
 
