@@ -66,10 +66,9 @@ pub enum ConstraintInstruction {
     Lc0AddOneCoeff(VariableIndex),
     Lc1AddOneCoeff(VariableIndex),
     Lc2AddOneCoeff(VariableIndex),
-    Lc0AddBits(VariableIndex),
-    Lc1AddBits(VariableIndex),
-    Lc2AddBits(VariableIndex),
     Enforce,
+    LcCoeffReset,
+    LcCoeffDouble,
 }
 
 #[derive(Debug)]
@@ -201,17 +200,17 @@ impl ZKVirtualMachine {
                     if start_index > end_index {
                         return Err(ZKVMError::MalformedRange);
                     }
-                    if (end_index + 1) - start_index != Scalar::NUM_BITS as usize {
+                    if (end_index + 1) - start_index != 256 {
                         return Err(ZKVMError::MalformedRange);
                     }
                     if *end_index >= self_.len() {
                         return Err(ZKVMError::MalformedRange);
                     }
 
-                    for (i, bit) in value.to_le_bits().into_iter().rev().cloned().enumerate() {
+                    for (i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
                         match bit {
-                            true => self_[i] = Scalar::one(),
-                            false => self_[i] = Scalar::zero(),
+                            true => self_[start_index + i] = Scalar::one(),
+                            false => self_[start_index + i] = Scalar::zero(),
                         }
                     }
                 }
@@ -295,24 +294,6 @@ pub struct ZKVMCircuit {
     constants: Vec<Scalar>,
 }
 
-fn lc_add_bits(
-    mut lc: bellman::LinearCombination<Scalar>,
-    variables: &Vec<bellman::Variable>,
-    start_index: usize,
-) -> std::result::Result<bellman::LinearCombination<Scalar>, SynthesisError> {
-    if variables.len() - start_index > Scalar::NUM_BITS as usize {
-        return Err(SynthesisError::Unsatisfiable);
-    }
-
-    let mut coeff = Scalar::one();
-    for i in 0..Scalar::NUM_BITS as usize {
-        lc = lc + (coeff, variables[start_index + i]);
-
-        coeff = coeff.double();
-    }
-    Ok(lc)
-}
-
 impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
@@ -333,7 +314,7 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
             }
         }
 
-        let coeff_one = bls12_381::Scalar::one();
+        let mut coeff = bls12_381::Scalar::one();
         let mut lc0 = bellman::LinearCombination::<Scalar>::zero();
         let mut lc1 = bellman::LinearCombination::<Scalar>::zero();
         let mut lc2 = bellman::LinearCombination::<Scalar>::zero();
@@ -341,22 +322,22 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
         for constraint in self.constraints {
             match constraint {
                 ConstraintInstruction::Lc0Add(index) => {
-                    lc0 = lc0 + (coeff_one, variables[index]);
+                    lc0 = lc0 + (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc1Add(index) => {
-                    lc1 = lc1 + (coeff_one, variables[index]);
+                    lc1 = lc1 + (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc2Add(index) => {
-                    lc2 = lc2 + (coeff_one, variables[index]);
+                    lc2 = lc2 + (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc0Sub(index) => {
-                    lc0 = lc0 - (coeff_one, variables[index]);
+                    lc0 = lc0 - (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc1Sub(index) => {
-                    lc1 = lc1 - (coeff_one, variables[index]);
+                    lc1 = lc1 - (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc2Sub(index) => {
-                    lc2 = lc2 - (coeff_one, variables[index]);
+                    lc2 = lc2 - (coeff, variables[index]);
                 }
                 ConstraintInstruction::Lc0AddOne => {
                     lc0 = lc0 + CS::one();
@@ -385,15 +366,6 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 ConstraintInstruction::Lc2AddOneCoeff(const_index) => {
                     lc2 = lc2 + (self.constants[const_index], CS::one());
                 }
-                ConstraintInstruction::Lc0AddBits(start_index) => {
-                    lc0 = lc_add_bits(lc0, &variables, start_index)?;
-                }
-                ConstraintInstruction::Lc1AddBits(start_index) => {
-                    lc1 = lc_add_bits(lc1, &variables, start_index)?;
-                }
-                ConstraintInstruction::Lc2AddBits(start_index) => {
-                    lc2 = lc_add_bits(lc2, &variables, start_index)?;
-                }
                 ConstraintInstruction::Enforce => {
                     cs.enforce(
                         || "constraint",
@@ -401,9 +373,16 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                         |_| lc1.clone(),
                         |_| lc2.clone(),
                     );
+                    coeff = bls12_381::Scalar::one();
                     lc0 = bellman::LinearCombination::<Scalar>::zero();
                     lc1 = bellman::LinearCombination::<Scalar>::zero();
                     lc2 = bellman::LinearCombination::<Scalar>::zero();
+                }
+                ConstraintInstruction::LcCoeffReset => {
+                    coeff = bls12_381::Scalar::one();
+                }
+                ConstraintInstruction::LcCoeffDouble => {
+                    coeff = coeff.double();
                 }
             }
         }

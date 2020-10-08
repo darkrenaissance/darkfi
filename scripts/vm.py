@@ -37,10 +37,9 @@ constraint_commands = {
     "lc0_add_one_coeff": 1,
     "lc1_add_one_coeff": 1,
     "lc2_add_one_coeff": 1,
-    "lc0_add_bits": 1,
-    "lc1_add_bits": 1,
-    "lc2_add_bits": 1,
     "enforce": 0,
+    "lc_coeff_reset": 0,
+    "lc_coeff_double": 0,
 }
 
 def eprint(*args):
