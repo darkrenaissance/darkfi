@@ -7,10 +7,23 @@ def to_initial_caps(snake_str):
 def display(contract):
     indent = " " * 4
 
-    print(r"""use super::vm::{ZKVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction, VariableRef};
+    print(r"""use super::vm::{ZKVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction, VariableIndex, VariableRef};
 use bls12_381::Scalar;
 
-pub fn load_zkvm() -> ZKVirtualMachine {
+pub fn load_params(params: Vec<Scalar>) -> Vec<(VariableIndex, Scalar)> {""")
+    params = [(symbol, var) for symbol, var in contract.alloc.items() if var.is_param]
+    print("%sassert_eq!(params.len(), %s);" % (indent, len(params)))
+    print("%slet mut result = vec![(0, Scalar::zero()); %s];" % (
+        indent, len(params)))
+    for i, (symbol, variable) in enumerate(params):
+        assert variable.is_param
+        print("%s// %s" % (indent, symbol))
+        print("%sresult[%s] = (%s, params[%s]);" % (
+            indent, i, variable.index, i))
+    print("%sresult" % indent)
+    print("}\n")
+
+    print(r"""pub fn load_zkvm() -> ZKVirtualMachine {
     ZKVirtualMachine {
         constants: vec![""")
 
@@ -65,6 +78,10 @@ pub fn load_zkvm() -> ZKVirtualMachine {
         if op.command == "load":
             assert len(op.args) == 2
             args_part = "(%s, %s)" % (var_ref_str(op.args[0]), op.args[1].index)
+        elif op.command == "debug":
+            assert len(op.args) == 1
+            args_part = '(String::from("%s"), %s)' % (
+                op.line, var_ref_str(op.args[0]))
         elif op.args:
             args_part = ", ".join(var_ref_str(var_ref) for var_ref in op.args)
             args_part = "(%s)" % args_part

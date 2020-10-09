@@ -23,7 +23,7 @@ pub struct ZKVirtualMachine {
     pub constants: Vec<Scalar>,
 }
 
-type VariableIndex = usize;
+pub type VariableIndex = usize;
 
 pub enum VariableRef {
     Aux(VariableIndex),
@@ -42,6 +42,9 @@ pub enum CryptoOperation {
     Invert(VariableRef),
     UnpackBits(VariableRef, VariableRef, VariableRef),
     Local,
+    Debug(String, VariableRef),
+    DumpAlloc,
+    DumpLocal,
 }
 
 #[derive(Clone)]
@@ -231,6 +234,32 @@ impl ZKVirtualMachine {
                 }
                 CryptoOperation::Local => {
                     local_stack.push(Scalar::zero());
+                }
+                CryptoOperation::Debug(debug_str, self_) => {
+                    let self_ = match self_ {
+                        VariableRef::Aux(index) => &mut self.aux[*index],
+                        VariableRef::Local(index) => &mut local_stack[*index],
+                    };
+                    println!("{}", debug_str);
+                    println!("value = {:?}", self_);
+                }
+                CryptoOperation::DumpAlloc => {
+                    println!("-------------------");
+                    println!("alloc");
+                    println!("-------------------");
+                    for (i, value) in self.aux.iter().enumerate() {
+                        println!("{}: {:?}", i, value);
+                    }
+                    println!("-------------------");
+                }
+                CryptoOperation::DumpLocal => {
+                    println!("-------------------");
+                    println!("local");
+                    println!("-------------------");
+                    for (i, value) in local_stack.iter().enumerate() {
+                        println!("{}: {:?}", i, value);
+                    }
+                    println!("-------------------");
                 }
             }
         }

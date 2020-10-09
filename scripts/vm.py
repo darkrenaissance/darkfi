@@ -20,6 +20,9 @@ op_commands = {
     "unpack_bits": 3,
     "load": 2,
     "local": 1,
+    "debug": 1,
+    "dump_alloc": 0,
+    "dump_local": 0,
 }
 
 constraint_commands = {

@@ -271,27 +271,45 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     # Performs a scalar multiplication of this twisted Edwards
     # point by a scalar represented as a sequence of booleans
     # in little-endian bit order.
-    private {{p}}_currbase_0_u
-    set {{p}}_currbase_0_u {{u}}
-    private {{p}}_currbase_0_v
-    set {{p}}_currbase_0_v {{v}}
 
     {% for i in range(n) %}
-        {{ jubjub_conditionally_select(
-            p + "_this_base_" + i|string,
-            p + "_currbase_" + i|string + "_u",
-            p + "_currbase_" + i|string + "_v",
-            x + "_" + i|string
-        ) }}
+        {% if i == 0 %}
+            {{ jubjub_conditionally_select(
+                p + "_this_base_" + i|string,
+                u,
+                v,
+                x + "_" + i|string
+            ) }}
+
+            debug {{x + "_" + i|string}}
+            debug {{p + "_this_base_" + i|string}}_u
+            debug {{p + "_this_base_" + i|string}}_v
+        {% else %}
+            {{ jubjub_conditionally_select(
+                p + "_this_base_" + i|string,
+                p + "_currbase_" + i|string + "_u",
+                p + "_currbase_" + i|string + "_v",
+                x + "_" + i|string
+            ) }}
+
+            debug {{x + "_" + i|string}}
+            debug {{p + "_this_base_" + i|string}}_u
+            debug {{p + "_this_base_" + i|string}}_v
+        {% endif %}
 
         {% if i == 0 %}
+            # Do nothing on first round
+        {% elif i == 1 %}
             {{ jubjub_add(
-                p + "_result_" + (i + 1)|string,
-                p + "_this_base_" + i|string + "_u",
-                p + "_this_base_" + i|string + "_v",
-                u,
-                v
+                p + "_result_2",
+                p + "_this_base_1_u",
+                p + "_this_base_1_v",
+                p + "_this_base_0_u",
+                p + "_this_base_0_v"
             ) }}
+
+            debug {{p + "_result_" + (i + 1)|string}}_u
+            debug {{p + "_result_" + (i + 1)|string}}_v
         {% elif i == (n - 1) %}
             {{ jubjub_add(
                 p,
@@ -300,6 +318,9 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
                 p + "_result_" + i|string + "_u",
                 p + "_result_" + i|string + "_v",
             ) }}
+
+            debug {{p}}_u
+            debug {{p}}_v
         {% else %}
             {{ jubjub_add(
                 p + "_result_" + (i + 1)|string,
@@ -308,13 +329,24 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
                 p + "_result_" + i|string + "_u",
                 p + "_result_" + i|string + "_v",
             ) }}
+
+            debug {{p + "_result_" + (i + 1)|string}}_u
+            debug {{p + "_result_" + (i + 1)|string}}_v
         {% endif %}
 
-        {{ jubjub_double(
-            p + "_currbase_" + (i + 1)|string,
-            p + "_currbase_" + i|string + "_u",
-            p + "_currbase_" + i|string + "_v"
-        ) }}
+        {% if i == 0 %}
+            {{ jubjub_double(
+                p + "_currbase_" + (i + 1)|string,
+                u,
+                v
+            ) }}
+        {% else %}
+            {{ jubjub_double(
+                p + "_currbase_" + (i + 1)|string,
+                p + "_currbase_" + i|string + "_u",
+                p + "_currbase_" + i|string + "_v"
+            ) }}
+        {% endif %}
     {% endfor %}
 {% endmacro %}
 
