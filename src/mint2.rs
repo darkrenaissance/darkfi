@@ -20,6 +20,20 @@ fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {
     bits
 }
 
+fn unpack_u64(value: u64) -> Vec<Scalar> {
+    let mut result = Vec::with_capacity(64);
+
+    for i in 0..64 {
+        if (value >> i) & 1 == 1 {
+            result.push(Scalar::one());
+        } else {
+            result.push(Scalar::zero());
+        }
+    }
+
+    result
+}
+
 fn do_vcr_test(value: &jubjub::Fr) {
     let mut curbase = zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR;
     let mut result = jubjub::SubgroupPoint::identity();
