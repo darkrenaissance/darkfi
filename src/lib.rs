@@ -72,4 +72,3 @@ impl ZKSupervisor {
         // takes proof and public values
     }
 }
-

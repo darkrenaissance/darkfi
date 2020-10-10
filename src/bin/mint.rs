@@ -21,7 +21,10 @@ fn main() -> Result<()> {
     println!("    Constants: {}", visor.vm.constants.len());
     println!("    Alloc: {}", visor.vm.alloc.len());
     println!("    Operations: {}", visor.vm.ops.len());
-    println!("    Constraint Instructions: {}", visor.vm.constraints.len());
+    println!(
+        "    Constraint Instructions: {}",
+        visor.vm.constraints.len()
+    );
 
     visor.vm.setup();
 

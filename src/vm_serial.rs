@@ -21,12 +21,9 @@ impl Decodable for ZKSupervisor {
             name: Decodable::decode(&mut d)?,
             vm: ZKVirtualMachine {
                 constants: Decodable::decode(&mut d)?,
-                alloc: 
-                    Decodable::decode(&mut d)?,
-                ops: 
-                    Decodable::decode(&mut d)?,
-                constraints: 
-                    Decodable::decode(&mut d)?,
+                alloc: Decodable::decode(&mut d)?,
+                ops: Decodable::decode(&mut d)?,
+                constraints: Decodable::decode(&mut d)?,
 
                 aux: Vec::new(),
                 params: None,
@@ -155,57 +152,36 @@ impl Decodable for ConstraintInstruction {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let constraint_type = ReadExt::read_u8(&mut d)?;
         match constraint_type {
-            0 =>
-                Ok(Self::Lc0Add(Decodable::decode(&mut d)?)),
-            1 =>
-                Ok(Self::Lc1Add(Decodable::decode(&mut d)?)),
-            2 =>
-                Ok(Self::Lc2Add(Decodable::decode(&mut d)?)),
-            3 =>
-                Ok(Self::Lc0Sub(Decodable::decode(&mut d)?)),
-            4 =>
-                Ok(Self::Lc1Sub(Decodable::decode(&mut d)?)),
-            5 =>
-                Ok(Self::Lc2Sub(Decodable::decode(&mut d)?)),
-            6 =>
-                Ok(Self::Lc0AddOne),
-            7 =>
-                Ok(Self::Lc1AddOne),
-            8 =>
-                Ok(Self::Lc2AddOne),
-            9 =>
-                Ok(Self::Lc0SubOne),
-            10 =>
-                Ok(Self::Lc1SubOne),
-            11 =>
-                Ok(Self::Lc2SubOne),
-            12 =>
-                Ok(Self::Lc0AddCoeff(
+            0 => Ok(Self::Lc0Add(Decodable::decode(&mut d)?)),
+            1 => Ok(Self::Lc1Add(Decodable::decode(&mut d)?)),
+            2 => Ok(Self::Lc2Add(Decodable::decode(&mut d)?)),
+            3 => Ok(Self::Lc0Sub(Decodable::decode(&mut d)?)),
+            4 => Ok(Self::Lc1Sub(Decodable::decode(&mut d)?)),
+            5 => Ok(Self::Lc2Sub(Decodable::decode(&mut d)?)),
+            6 => Ok(Self::Lc0AddOne),
+            7 => Ok(Self::Lc1AddOne),
+            8 => Ok(Self::Lc2AddOne),
+            9 => Ok(Self::Lc0SubOne),
+            10 => Ok(Self::Lc1SubOne),
+            11 => Ok(Self::Lc2SubOne),
+            12 => Ok(Self::Lc0AddCoeff(
                 Decodable::decode(&mut d)?,
                 Decodable::decode(&mut d)?,
             )),
-            13 =>
-                Ok(Self::Lc1AddCoeff(
+            13 => Ok(Self::Lc1AddCoeff(
                 Decodable::decode(&mut d)?,
                 Decodable::decode(&mut d)?,
             )),
-            14 =>
-                Ok(Self::Lc2AddCoeff(
+            14 => Ok(Self::Lc2AddCoeff(
                 Decodable::decode(&mut d)?,
                 Decodable::decode(&mut d)?,
             )),
-            15 =>
-                Ok(Self::Lc0AddOneCoeff(Decodable::decode(&mut d)?)),
-            16 =>
-                Ok(Self::Lc1AddOneCoeff(Decodable::decode(&mut d)?)),
-            17 =>
-                Ok(Self::Lc2AddOneCoeff(Decodable::decode(&mut d)?)),
-            18 =>
-                Ok(Self::Enforce),
-            19 =>
-                Ok(Self::LcCoeffReset),
-            20 =>
-                Ok(Self::LcCoeffDouble),
+            15 => Ok(Self::Lc0AddOneCoeff(Decodable::decode(&mut d)?)),
+            16 => Ok(Self::Lc1AddOneCoeff(Decodable::decode(&mut d)?)),
+            17 => Ok(Self::Lc2AddOneCoeff(Decodable::decode(&mut d)?)),
+            18 => Ok(Self::Enforce),
+            19 => Ok(Self::LcCoeffReset),
+            20 => Ok(Self::LcCoeffDouble),
             _ => Err(Error::BadConstraintType),
         }
     }
