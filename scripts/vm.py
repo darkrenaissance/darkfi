@@ -347,6 +347,12 @@ class Contract:
                 repr_str += "    // %s\n" % constraint.args_comment()
             repr_str += "    %s %s\n" % (constraint.command, constraint.args)
 
+        repr_str += "Stats:\n"
+        repr_str += "    Constants: %s\n" % len(self.constants)
+        repr_str += "    Alloc: %s\n" % len(self.alloc)
+        repr_str += "    Operations: %s\n" % len(self.ops)
+        repr_str += "    Constraint Instructions: %s\n" % len(self.constraints)
+
         return repr_str
 
 def compile(contract, constants):
@@ -412,11 +418,15 @@ def process(contents):
 def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("filename", help="VM PISM file: proofs/vm.pism")
+    parser.add_argument("--output", type=argparse.FileType('wb', 0),
+                        default=sys.stdout.buffer, help="Output file")
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--display', action='store_true',
                        help="show the compiled code in human readable format")
     group.add_argument('--rust', action='store_true',
                        help="output compiled code to rust for testing")
+    group.add_argument('--supervisor', action='store_true',
+                       help="output compiled code to zkvm supervisor")
     args = parser.parse_args()
 
     src_filename = args.filename
@@ -435,6 +445,10 @@ def main(argv):
         import vm_export_rust
         for contract_name, contract in contracts.items():
             vm_export_rust.display(contract)
+    elif args.supervisor:
+        import vm_export_supervisor
+        for contract_name, contract in contracts.items():
+            vm_export_supervisor.export(args.output, contract_name, contract)
     else:
         default_display()
 

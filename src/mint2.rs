@@ -1,5 +1,5 @@
 use bls12_381::Scalar;
-use ff::{PrimeField, Field};
+use ff::{Field, PrimeField};
 use group::{Curve, Group, GroupEncoding};
 
 mod mint2_contract;
@@ -46,7 +46,7 @@ fn do_vcr_test(value: &jubjub::Fr) {
         };
         result += thisbase;
         curbase = curbase.double();
-        print!("{}", if bit { 1} else { 0 });
+        print!("{}", if bit { 1 } else { 0 });
     }
     println!("");
     let result = jubjub::ExtendedPoint::from(result).to_affine();
@@ -79,10 +79,7 @@ fn main() -> std::result::Result<(), vm::ZKVMError> {
 
     vm.setup();
 
-    let mut params = vec![
-        public_affine.get_u(),
-        public_affine.get_v(),
-    ];
+    let mut params = vec![public_affine.get_u(), public_affine.get_v()];
     for x in unpack(randomness_value) {
         params.push(x);
     }

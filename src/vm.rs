@@ -14,13 +14,15 @@ use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;
 
 pub struct ZKVirtualMachine {
-    pub ops: Vec<CryptoOperation>,
-    pub aux: Vec<Scalar>,
+    pub constants: Vec<Scalar>,
     pub alloc: Vec<(AllocType, VariableIndex)>,
+    pub ops: Vec<CryptoOperation>,
     pub constraints: Vec<ConstraintInstruction>,
+
+    pub aux: Vec<Scalar>,
+
     pub params: Option<groth16::Parameters<Bls12>>,
     pub verifying_key: Option<groth16::PreparedVerifyingKey<Bls12>>,
-    pub constants: Vec<Scalar>,
 }
 
 pub type VariableIndex = usize;
@@ -202,12 +204,12 @@ impl ZKVirtualMachine {
                     let (self_, start_index, end_index) = match start {
                         VariableRef::Aux(start_index) => match end {
                             VariableRef::Aux(end_index) => (&mut self.aux, start_index, end_index),
-                            VariableRef::Local(end_index) => {
+                            VariableRef::Local(_) => {
                                 return Err(ZKVMError::MalformedRange);
                             }
                         },
                         VariableRef::Local(start_index) => match end {
-                            VariableRef::Aux(end_index) => {
+                            VariableRef::Aux(_) => {
                                 return Err(ZKVMError::MalformedRange);
                             }
                             VariableRef::Local(end_index) => {

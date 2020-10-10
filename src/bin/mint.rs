@@ -1,13 +1,29 @@
+use sapvi::{Decodable, ZKSupervisor};
+use std::fs::File;
+use std::time::Instant;
+
 use bls12_381::Scalar;
+use ff::{Field, PrimeField};
+use group::{Curve, Group, GroupEncoding};
+use rand::rngs::OsRng;
 
-mod vm;
-mod vm_load;
-use vm_load::load_zkvm;
+type Result<T> = std::result::Result<T, failure::Error>;
 
-fn main() {
-    let mut vm = load_zkvm();
+fn main() -> Result<()> {
+    let start = Instant::now();
+    let file = File::open("mint.zcd")?;
+    let mut visor = ZKSupervisor::decode(file)?;
+    println!("{}", visor.name);
+    //ZKSupervisor::load_contract(bytes);
+    println!("Finished: [{:?}]", start.elapsed());
 
-    vm.setup();
+    println!("Stats:");
+    println!("    Constants: {}", visor.vm.constants.len());
+    println!("    Alloc: {}", visor.vm.alloc.len());
+    println!("    Operations: {}", visor.vm.ops.len());
+    println!("    Constraint Instructions: {}", visor.vm.constraints.len());
+
+    visor.vm.setup();
 
     let params = vec![
         (
@@ -47,11 +63,11 @@ fn main() {
             ]),
         ),
     ];
-    vm.initialize(&params);
+    visor.vm.initialize(&params);
 
-    let proof = vm.prove();
+    let proof = visor.vm.prove();
 
-    let public = vm.public();
+    let public = visor.vm.public();
 
     assert_eq!(public.len(), 2);
     // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
@@ -59,5 +75,7 @@ fn main() {
     println!("u = {:?}", public[0]);
     println!("v = {:?}", public[1]);
 
-    assert!(vm.verify(&proof, &public));
+    assert!(visor.vm.verify(&proof, &public));
+
+    Ok(())
 }

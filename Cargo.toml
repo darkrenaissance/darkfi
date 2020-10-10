@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "sapvi"
+
 [dependencies]
 ff = "0.8"
 group = "0.8"
@@ -25,6 +28,11 @@ blake2s_simd = "0.5"
 bitvec = "0.18"
 
 hex = "0.4.2"
+
+simplelog = "0.7.4"
+clap = "3.0.0-beta.1"
+failure = "0.1.8"
+failure_derive = "0.1.8"
 
 [[bin]]
 name = "sha256"
@@ -85,4 +93,12 @@ path = "src/zkmimc.rs"
 [[bin]]
 name = "mint2"
 path = "src/mint2.rs"
+
+[[bin]]
+name = "zkvm"
+path = "src/zkvm.rs"
+
+[[bin]]
+name = "mint3"
+path = "src/bin/mint.rs"
 
