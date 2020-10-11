@@ -8,6 +8,8 @@ use crate::{impl_vec, ZKSupervisor};
 use std::collections::HashMap;
 use std::io;
 
+impl_vec!((String, VariableIndex));
+
 impl Encodable for ZKSupervisor {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         unimplemented!();
@@ -29,9 +31,12 @@ impl Decodable for ZKSupervisor {
                 params: None,
                 verifying_key: None,
             },
-            params_map: HashMap::new(),
-            params: HashMap::new(),
+            params_map: Vec::<(String, VariableIndex)>::decode(&mut d)?
+                .into_iter()
+                .collect(),
             public_map: HashMap::new(),
+
+            params: HashMap::new(),
         })
     }
 }
@@ -59,6 +64,13 @@ impl Decodable for (AllocType, VariableIndex) {
 }
 
 impl_vec!((AllocType, VariableIndex));
+
+impl Encodable for VariableIndex {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        unimplemented!();
+        Ok(0)
+    }
+}
 
 impl Decodable for VariableIndex {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {

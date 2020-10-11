@@ -24,6 +24,7 @@ pub enum Error {
     BadVariableRefType,
     BadOperationType,
     BadConstraintType,
+    InvalidParamName,
 }
 
 impl std::error::Error for Error {}
@@ -53,6 +54,7 @@ impl fmt::Display for Error {
             Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
             Error::BadOperationType => f.write_str("Bad operation type byte"),
             Error::BadConstraintType => f.write_str("Bad constraint type byte"),
+            Error::InvalidParamName => f.write_str("Invalid param name"),
         }
     }
 }

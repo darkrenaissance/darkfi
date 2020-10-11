@@ -1,4 +1,4 @@
-use sapvi::{Decodable, ZKSupervisor};
+use sapvi::{BlsStringConversion, Decodable, ZKSupervisor};
 use std::fs::File;
 use std::time::Instant;
 
@@ -8,6 +8,36 @@ use group::{Curve, Group, GroupEncoding};
 use rand::rngs::OsRng;
 
 type Result<T> = std::result::Result<T, failure::Error>;
+
+// Unpack a value (such as jubjub::Fr) into 256 Scalar binary digits
+fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {
+    let mut bits = Vec::new();
+    print!("Unpack: ");
+    for (i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+        match bit {
+            true => bits.push(Scalar::one()),
+            false => bits.push(Scalar::zero()),
+        }
+        print!("{}", if bit { 1 } else { 0 });
+    }
+    println!("");
+    bits
+}
+
+// Unpack a u64 value in 64 Scalar binary digits
+fn unpack_u64(value: u64) -> Vec<Scalar> {
+    let mut result = Vec::with_capacity(64);
+
+    for i in 0..64 {
+        if (value >> i) & 1 == 1 {
+            result.push(Scalar::one());
+        } else {
+            result.push(Scalar::zero());
+        }
+    }
+
+    result
+}
 
 fn main() -> Result<()> {
     let start = Instant::now();
@@ -28,45 +58,35 @@ fn main() -> Result<()> {
 
     visor.vm.setup();
 
-    let params = vec![
-        (
-            0,
-            Scalar::from_raw([
-                0xb981_9dc8_2d90_607e,
-                0xa361_ee3f_d48f_df77,
-                0x52a3_5a8c_1908_dd87,
-                0x15a3_6d1f_0f39_0d88,
-            ]),
-        ),
-        (
-            1,
-            Scalar::from_raw([
-                0x7b0d_c53c_4ebf_1891,
-                0x1f3a_beeb_98fa_d3e8,
-                0xf789_1142_c001_d925,
-                0x015d_8c7f_5b43_fe33,
-            ]),
-        ),
-        (
-            2,
-            Scalar::from_raw([
-                0xb981_9dc8_2d90_607e,
-                0xa361_ee3f_d48f_df77,
-                0x52a3_5a8c_1908_dd87,
-                0x15a3_6d1f_0f39_0d88,
-            ]),
-        ),
-        (
-            3,
-            Scalar::from_raw([
-                0x7b0d_c53c_4ebf_1891,
-                0x1f3a_beeb_98fa_d3e8,
-                0xf789_1142_c001_d925,
-                0x015d_8c7f_5b43_fe33,
-            ]),
-        ),
-    ];
-    visor.vm.initialize(&params);
+    // We use the ExtendedPoint in calculations because it's faster
+    let public_point = jubjub::ExtendedPoint::from(jubjub::SubgroupPoint::random(&mut OsRng));
+    // But to serialize we need to convert to affine (which has the (u, v) values)
+    let public_affine = public_point.to_affine();
+
+    let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+
+    for param in visor.param_names() {
+        println!("Param name: {}", param);
+    }
+
+    visor.set_param(
+        "x1",
+        Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
+    )?;
+    visor.set_param(
+        "y1",
+        Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
+    )?;
+    visor.set_param(
+        "x2",
+        Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
+    )?;
+    visor.set_param(
+        "y2",
+        Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
+    )?;
+
+    visor.vm.initialize(&visor.params.into_iter().collect());
 
     let proof = visor.vm.prove();
 

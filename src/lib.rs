@@ -9,6 +9,7 @@ pub mod vm;
 pub mod vm_serial;
 
 pub use crate::bls_extensions::BlsStringConversion;
+pub use crate::error::{Error, Result};
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
@@ -21,7 +22,7 @@ pub struct ZKSupervisor {
     pub name: String,
     pub vm: ZKVirtualMachine,
     params_map: HashMap<String, VariableIndex>,
-    params: HashMap<VariableIndex, Scalar>,
+    pub params: HashMap<VariableIndex, Scalar>,
     public_map: HashMap<String, VariableIndex>,
 }
 
@@ -57,10 +58,18 @@ impl ZKSupervisor {
 
     fn load_setup(&self) {}
 
-    fn param_names(&self) -> Vec<String> {
+    pub fn param_names(&self) -> Vec<String> {
         self.params_map.keys().cloned().collect()
     }
-    fn set_param(&self, name: &str, value: Scalar) {}
+    pub fn set_param(&mut self, name: &str, value: Scalar) -> Result<()> {
+        match self.params_map.get(name) {
+            Some(index) => {
+                self.params.insert(*index, value);
+                Ok(())
+            }
+            None => Err(Error::InvalidParamName),
+        }
+    }
 
     fn prove(&self) {
         // error if params not all set

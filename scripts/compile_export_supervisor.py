@@ -89,6 +89,7 @@ def export(output, contract_name, contract):
     constants.sort(key=lambda obj: obj[1][0])
     constants = [(obj[0], obj[1][1]) for obj in constants]
 
+    # Constants
     output.write(varuint(len(constants)))
     for symbol, value in constants:
         print("Constant '%s' = %s" % (symbol, value))
@@ -97,6 +98,7 @@ def export(output, contract_name, contract):
         assert len(const_bytes) == 32
         output.write(const_bytes)
 
+    # Alloc
     output.write(varuint(len(contract.alloc)))
     for symbol, variable in contract.alloc.items():
         print("Alloc '%s' = (%s, %s)" % (symbol, 
@@ -111,6 +113,7 @@ def export(output, contract_name, contract):
         assert len(alloc_bytes) == 5
         output.write(alloc_bytes)
 
+    # Ops
     output.write(varuint(len(contract.ops)))
     for op in contract.ops:
         op_form = ops_table[op.command]
@@ -143,6 +146,7 @@ def export(output, contract_name, contract):
         print("Operation", op.command,
               [(arg.type.name, arg.index) for arg in op.args])
 
+    # Constraints
     output.write(varuint(len(contract.constraints)))
     for constraint in contract.constraints:
         args = constraint.args[:]
@@ -158,4 +162,16 @@ def export(output, contract_name, contract):
         output.write(struct.pack("B", enum_ident))
         for arg in args:
             output.write(struct.pack("<I", arg))
+
+    # Params Map
+    param_alloc = [(symbol, variable) for (symbol, variable)
+                   in contract.alloc.items() if variable.is_param]
+    output.write(varuint(len(param_alloc)))
+    for symbol, variable in param_alloc:
+        assert variable.is_param
+        print("Public '%s' = %s" % (symbol, variable.index))
+        symbol = symbol.encode()
+        output.write(varuint(len(symbol)))
+        output.write(symbol)
+        output.write(struct.pack("<I", variable.index))
 
