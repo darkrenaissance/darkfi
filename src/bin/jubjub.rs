@@ -15,9 +15,7 @@ fn main() -> Result<()> {
     let start = Instant::now();
     let file = File::open("jubjub.zcd")?;
     let mut visor = ZKSupervisor::decode(file)?;
-    println!("{}", visor.name);
-    //ZKSupervisor::load_contract(bytes);
-    println!("Loaded contract: [{:?}]", start.elapsed());
+    println!("Loaded contract '{}': [{:?}]", visor.name, start.elapsed());
 
     println!("Stats:");
     println!("    Constants: {}", visor.vm.constants.len());
