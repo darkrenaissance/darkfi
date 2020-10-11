@@ -169,7 +169,7 @@ def export(output, contract_name, contract):
     output.write(varuint(len(param_alloc)))
     for symbol, variable in param_alloc:
         assert variable.is_param
-        print("Public '%s' = %s" % (symbol, variable.index))
+        print("Parameter '%s' = %s" % (symbol, variable.index))
         symbol = symbol.encode()
         output.write(varuint(len(symbol)))
         output.write(symbol)
