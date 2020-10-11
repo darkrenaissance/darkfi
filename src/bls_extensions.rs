@@ -5,6 +5,34 @@ use std::io;
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
+macro_rules! from_slice {
+    ($data:expr, $len:literal) => {{
+        let mut array = [0; $len];
+        // panics if not enough data
+        let bytes = &$data[..array.len()];
+        array.copy_from_slice(bytes);
+        array
+    }};
+}
+
+pub trait BlsStringConversion {
+    fn to_string(&self) -> String;
+    fn from_string(object: &str) -> Self;
+}
+
+impl BlsStringConversion for bls::Scalar {
+    fn to_string(&self) -> String {
+        let mut bytes = self.to_bytes();
+        bytes.reverse();
+        hex::encode(bytes)
+    }
+    fn from_string(object: &str) -> Self {
+        let mut bytes = from_slice!(&hex::decode(object).unwrap(), 32);
+        bytes.reverse();
+        bls::Scalar::from_bytes(&bytes).unwrap()
+    }
+}
+
 macro_rules! serialization_bls {
     ($type:ty, $to_x:ident, $from_x:ident, $size:literal) => {
         impl Encodable for $type {

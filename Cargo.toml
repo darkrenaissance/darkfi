@@ -59,7 +59,7 @@ name = "simple"
 path = "src/simple.rs"
 
 [[bin]]
-name = "mint"
+name = "mint-old"
 path = "src/mint.rs"
 
 [[bin]]
@@ -79,7 +79,7 @@ name = "vmtest"
 path = "src/vmtest.rs"
 
 [[bin]]
-name = "jubjub"
+name = "jubjub-old"
 path = "src/jubjub.rs"
 
 [[bin]]
@@ -99,6 +99,10 @@ name = "zkvm"
 path = "src/zkvm.rs"
 
 [[bin]]
-name = "mint3"
+name = "mint"
 path = "src/bin/mint.rs"
+
+[[bin]]
+name = "jubjub"
+path = "src/bin/jubjub.rs"
 

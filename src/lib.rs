@@ -8,6 +8,7 @@ pub mod serial;
 pub mod vm;
 pub mod vm_serial;
 
+pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
