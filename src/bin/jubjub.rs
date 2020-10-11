@@ -10,6 +10,8 @@ use rand::rngs::OsRng;
 type Result<T> = std::result::Result<T, failure::Error>;
 
 fn main() -> Result<()> {
+    // Load the contract from file
+
     let start = Instant::now();
     let file = File::open("jubjub.zcd")?;
     let mut visor = ZKSupervisor::decode(file)?;
@@ -26,7 +28,11 @@ fn main() -> Result<()> {
         visor.vm.constraints.len()
     );
 
+    // Do the trusted setup
+
     visor.setup();
+
+    // Put in our input parameters
 
     visor.set_param(
         "x1",
@@ -45,7 +51,11 @@ fn main() -> Result<()> {
         Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
     )?;
 
+    // Generate the ZK proof
+
     let proof = visor.prove()?;
+
+    // Test and show our output values
 
     assert_eq!(proof.public.len(), 2);
     // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
@@ -60,6 +70,8 @@ fn main() -> Result<()> {
     );
     println!("u = {:?}", proof.public.get("x3").unwrap());
     println!("v = {:?}", proof.public.get("y3").unwrap());
+
+    // Verify the proof
 
     assert!(visor.verify(&proof));
 
