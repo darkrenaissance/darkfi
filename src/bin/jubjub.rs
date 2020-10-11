@@ -1,11 +1,7 @@
+use bls12_381::Scalar;
 use sapvi::{BlsStringConversion, Decodable, ZKContract};
 use std::fs::File;
 use std::time::Instant;
-
-use bls12_381::Scalar;
-use ff::{Field, PrimeField};
-use group::{Curve, Group, GroupEncoding};
-use rand::rngs::OsRng;
 
 type Result<T> = std::result::Result<T, failure::Error>;
 
