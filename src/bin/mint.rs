@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         visor.vm.constraints.len()
     );
 
-    visor.vm.setup();
+    visor.setup();
 
     // We use the ExtendedPoint in calculations because it's faster
     let public_point = jubjub::ExtendedPoint::from(jubjub::SubgroupPoint::random(&mut OsRng));
@@ -84,19 +84,14 @@ fn main() -> Result<()> {
         )?;
     }
 
-    visor.vm.initialize(&visor.params.into_iter().collect());
+    let proof = visor.prove()?;
 
-    let proof = visor.vm.prove();
+    assert_eq!(proof.public.len(), 2);
+    for (name, value) in &proof.public {
+        println!("Public {} = {:?}", name, value);
+    }
 
-    let public = visor.vm.public();
-
-    assert_eq!(public.len(), 2);
-    // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
-    // 0x4731570fdd57cf280eadc8946fa00df81112502e44e497e794ab9a221f1bcca
-    println!("u = {:?}", public[0]);
-    println!("v = {:?}", public[1]);
-
-    assert!(visor.vm.verify(&proof, &public));
+    assert!(visor.verify(&proof));
 
     Ok(())
 }
