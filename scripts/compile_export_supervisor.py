@@ -1,5 +1,5 @@
 import struct
-from vm import VariableType, VariableRefType
+from compile import VariableType, VariableRefType
 
 class Operation:
 

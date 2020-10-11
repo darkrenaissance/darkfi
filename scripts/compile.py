@@ -442,13 +442,14 @@ def main(argv):
     if args.display:
         default_display()
     elif args.rust:
-        import vm_export_rust
+        import compile_export_rust
         for contract_name, contract in contracts.items():
-            vm_export_rust.display(contract)
+            compile_export_rust.display(contract)
     elif args.supervisor:
-        import vm_export_supervisor
+        import compile_export_supervisor
         for contract_name, contract in contracts.items():
-            vm_export_supervisor.export(args.output, contract_name, contract)
+            compile_export_supervisor.export(args.output, contract_name,
+                                             contract)
     else:
         default_display()
 
