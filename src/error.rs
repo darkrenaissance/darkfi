@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::vm::ZKVMError;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -25,6 +27,9 @@ pub enum Error {
     BadOperationType,
     BadConstraintType,
     InvalidParamName,
+    MissingParams,
+    VMError(ZKVMError),
+    BadContract,
 }
 
 impl std::error::Error for Error {}
@@ -55,6 +60,9 @@ impl fmt::Display for Error {
             Error::BadOperationType => f.write_str("Bad operation type byte"),
             Error::BadConstraintType => f.write_str("Bad constraint type byte"),
             Error::InvalidParamName => f.write_str("Invalid param name"),
+            Error::MissingParams => f.write_str("Missing params"),
+            Error::VMError(_) => f.write_str("VM error"),
+            Error::BadContract => f.write_str("Contract is poorly defined"),
         }
     }
 }
@@ -62,5 +70,11 @@ impl fmt::Display for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::Io(err)
+    }
+}
+
+impl From<ZKVMError> for Error {
+    fn from(err: ZKVMError) -> Error {
+        Error::VMError(err)
     }
 }

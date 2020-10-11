@@ -269,14 +269,14 @@ impl ZKVirtualMachine {
         Ok(())
     }
 
-    pub fn public(&self) -> Vec<Scalar> {
+    pub fn public(&self) -> Vec<(VariableIndex, Scalar)> {
         let mut publics = Vec::new();
         for (alloc_type, index) in &self.alloc {
             match alloc_type {
                 AllocType::Private => {}
                 AllocType::Public => {
                     let scalar = self.aux[*index].clone();
-                    publics.push(scalar);
+                    publics.push((*index, scalar));
                 }
             }
         }

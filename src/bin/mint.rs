@@ -45,7 +45,7 @@ fn main() -> Result<()> {
     let mut visor = ZKSupervisor::decode(file)?;
     println!("{}", visor.name);
     //ZKSupervisor::load_contract(bytes);
-    println!("Finished: [{:?}]", start.elapsed());
+    println!("Loaded contract: [{:?}]", start.elapsed());
 
     println!("Stats:");
     println!("    Constants: {}", visor.vm.constants.len());

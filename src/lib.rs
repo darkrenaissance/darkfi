@@ -1,5 +1,6 @@
-use bls12_381::Scalar;
-use std::collections::HashMap;
+use bellman::groth16;
+use bls12_381::{Bls12, Scalar};
+use std::collections::{HashMap, HashSet};
 
 pub mod bls_extensions;
 pub mod endian;
@@ -23,40 +24,21 @@ pub struct ZKSupervisor {
     pub vm: ZKVirtualMachine,
     params_map: HashMap<String, VariableIndex>,
     pub params: HashMap<VariableIndex, Scalar>,
-    public_map: HashMap<String, VariableIndex>,
+    public_map: bimap::BiMap<String, VariableIndex>,
 }
 
-struct ZKProof {
-    public_values: HashMap<String, Scalar>,
-    //proof:
+pub struct ZKProof {
+    pub public: HashMap<String, Scalar>,
+    pub proof: groth16::Proof<Bls12>
 }
 
 impl ZKSupervisor {
     // Just have a load() and save()
     // Load the contract, do the setup, save it...
 
-    pub fn load_contract(bytes: Bytes) -> Self {
-        Self {
-            name: "".to_string(),
-            vm: ZKVirtualMachine {
-                ops: Vec::new(),
-                aux: Vec::new(),
-                alloc: Vec::new(),
-                constraints: Vec::new(),
-                params: None,
-                verifying_key: None,
-                constants: Vec::new(),
-            },
-            params_map: HashMap::new(),
-            params: HashMap::new(),
-            public_map: HashMap::new(),
-        }
+    pub fn setup(&mut self) {
+        self.vm.setup();
     }
-
-    fn setup(&self) {}
-    fn save_setup(&self) {}
-
-    fn load_setup(&self) {}
 
     pub fn param_names(&self) -> Vec<String> {
         self.params_map.keys().cloned().collect()
@@ -71,14 +53,47 @@ impl ZKSupervisor {
         }
     }
 
-    fn prove(&self) {
-        // error if params not all set
+    pub fn prove(&mut self) -> Result<ZKProof> {
+        // Error if params not all set
+        let user_params: HashSet<_> = self.params.keys().collect();
+        let req_params: HashSet<_> = self.params_map.values().collect();
+        if user_params != req_params {
+            return Err(Error::MissingParams);
+        }
 
         // execute
+        let params = std::mem::replace(&mut self.params, HashMap::default());
+        self.vm.initialize(&params.into_iter().collect())?;
+
         // prove
+        let proof = self.vm.prove();
+
+        let mut public = HashMap::new();
+        for (index, value) in self.vm.public() {
+            match self.public_map.get_by_right(&index) {
+                Some(name) => { public.insert(name.clone(), value); },
+                None => return Err(Error::BadContract)
+            }
+        }
+
         // return proof and public values (Hashmap string -> scalars)
+        Ok(ZKProof {
+            public,
+            proof
+        })
     }
-    fn verify(&self) {
-        // takes proof and public values
+    pub fn verify(&self, proof: &ZKProof) -> bool {
+        let mut public = vec![];
+        for (name, value) in &proof.public {
+            match self.public_map.get_by_left(name) {
+                Some(index) => { public.push((index, value.clone())); },
+                None => return false
+            }
+        }
+        public.sort_by(|a, b| a.0.partial_cmp(b.0).unwrap());
+        let (_, public): (Vec<VariableIndex>, Vec<Scalar>) = public.into_iter().unzip();
+
+        // Takes proof and public values
+        self.vm.verify(&proof.proof, &public)
     }
 }

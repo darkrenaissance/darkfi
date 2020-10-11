@@ -175,3 +175,17 @@ def export(output, contract_name, contract):
         output.write(symbol)
         output.write(struct.pack("<I", variable.index))
 
+    # Public Map
+    public_alloc = [(symbol, variable) for (symbol, variable)
+                    in contract.alloc.items()
+                    if variable.type.name == VariableType.PUBLIC.name]
+    output.write(varuint(len(public_alloc)))
+    for symbol, variable in public_alloc:
+        assert not variable.is_param
+        assert variable.type.name == VariableType.PUBLIC.name
+        print("Public '%s' = %s" % (symbol, variable.index))
+        symbol = symbol.encode()
+        output.write(varuint(len(symbol)))
+        output.write(symbol)
+        output.write(struct.pack("<I", variable.index))
+

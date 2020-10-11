@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let mut visor = ZKSupervisor::decode(file)?;
     println!("{}", visor.name);
     //ZKSupervisor::load_contract(bytes);
-    println!("Finished: [{:?}]", start.elapsed());
+    println!("Loaded contract: [{:?}]", start.elapsed());
 
     println!("Stats:");
     println!("    Constants: {}", visor.vm.constants.len());
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         visor.vm.constraints.len()
     );
 
-    visor.vm.setup();
+    visor.setup();
 
     visor.set_param(
         "x1",
@@ -45,27 +45,23 @@ fn main() -> Result<()> {
         Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
     )?;
 
-    visor.vm.initialize(&visor.params.into_iter().collect());
+    let proof = visor.prove()?;
 
-    let proof = visor.vm.prove();
-
-    let public = visor.vm.public();
-
-    assert_eq!(public.len(), 2);
+    assert_eq!(proof.public.len(), 2);
     // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
     assert_eq!(
-        public[0],
+        *proof.public.get("x3").unwrap(),
         Scalar::from_string("66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a")
     );
     // 0x4731570fdd57cf280eadc8946fa00df81112502e44e497e794ab9a221f1bcca
     assert_eq!(
-        public[1],
+        *proof.public.get("y3").unwrap(),
         Scalar::from_string("04731570fdd57cf280eadc8946fa00df81112502e44e497e794ab9a221f1bcca")
     );
-    println!("u = {:?}", public[0]);
-    println!("v = {:?}", public[1]);
+    println!("u = {:?}", proof.public.get("x3").unwrap());
+    println!("v = {:?}", proof.public.get("y3").unwrap());
 
-    assert!(visor.vm.verify(&proof, &public));
+    assert!(visor.verify(&proof));
 
     Ok(())
 }

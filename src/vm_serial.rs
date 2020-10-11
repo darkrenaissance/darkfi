@@ -34,7 +34,9 @@ impl Decodable for ZKSupervisor {
             params_map: Vec::<(String, VariableIndex)>::decode(&mut d)?
                 .into_iter()
                 .collect(),
-            public_map: HashMap::new(),
+            public_map: Vec::<(String, VariableIndex)>::decode(&mut d)?
+                .into_iter()
+                .collect(),
 
             params: HashMap::new(),
         })
