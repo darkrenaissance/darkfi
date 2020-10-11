@@ -70,21 +70,19 @@ fn main() -> Result<()> {
     }
 
     visor.set_param(
-        "x1",
-        Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
+        "public_u",
+        public_affine.get_u()
     )?;
     visor.set_param(
-        "y1",
-        Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
+        "public_v",
+        public_affine.get_v()
     )?;
-    visor.set_param(
-        "x2",
-        Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
-    )?;
-    visor.set_param(
-        "y2",
-        Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
-    )?;
+    for (i, param_bit) in unpack(randomness_value).into_iter().enumerate() {
+        visor.set_param(
+            &format!("vc_randomness_{}", i),
+            param_bit
+        )?;
+    }
 
     visor.vm.initialize(&visor.params.into_iter().collect());
 
