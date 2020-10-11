@@ -19,7 +19,7 @@ pub use crate::vm::{
 
 pub type Bytes = Vec<u8>;
 
-pub struct ZKSupervisor {
+pub struct ZKContract {
     pub name: String,
     pub vm: ZKVirtualMachine,
     params_map: HashMap<String, VariableIndex>,
@@ -32,7 +32,7 @@ pub struct ZKProof {
     pub proof: groth16::Proof<Bls12>
 }
 
-impl ZKSupervisor {
+impl ZKContract {
     // Just have a load() and save()
     // Load the contract, do the setup, save it...
 

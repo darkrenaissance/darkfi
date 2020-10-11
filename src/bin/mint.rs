@@ -1,4 +1,4 @@
-use sapvi::{BlsStringConversion, Decodable, ZKSupervisor};
+use sapvi::{BlsStringConversion, Decodable, ZKContract};
 use std::fs::File;
 use std::time::Instant;
 
@@ -42,9 +42,9 @@ fn unpack_u64(value: u64) -> Vec<Scalar> {
 fn main() -> Result<()> {
     let start = Instant::now();
     let file = File::open("mint.zcd")?;
-    let mut visor = ZKSupervisor::decode(file)?;
+    let mut visor = ZKContract::decode(file)?;
     println!("{}", visor.name);
-    //ZKSupervisor::load_contract(bytes);
+    //ZKContract::load_contract(bytes);
     println!("Loaded contract: [{:?}]", start.elapsed());
 
     println!("Stats:");

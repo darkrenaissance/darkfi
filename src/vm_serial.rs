@@ -4,20 +4,20 @@ use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
     ZKVirtualMachine,
 };
-use crate::{impl_vec, ZKSupervisor};
+use crate::{impl_vec, ZKContract};
 use std::collections::HashMap;
 use std::io;
 
 impl_vec!((String, VariableIndex));
 
-impl Encodable for ZKSupervisor {
+impl Encodable for ZKContract {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
 }
 
-impl Decodable for ZKSupervisor {
+impl Decodable for ZKContract {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             name: Decodable::decode(&mut d)?,

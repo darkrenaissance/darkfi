@@ -1,4 +1,4 @@
-use sapvi::{BlsStringConversion, Decodable, ZKSupervisor};
+use sapvi::{BlsStringConversion, Decodable, ZKContract};
 use std::fs::File;
 use std::time::Instant;
 
@@ -14,44 +14,44 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     let file = File::open("jubjub.zcd")?;
-    let mut visor = ZKSupervisor::decode(file)?;
-    println!("Loaded contract '{}': [{:?}]", visor.name, start.elapsed());
+    let mut contract = ZKContract::decode(file)?;
+    println!("Loaded contract '{}': [{:?}]", contract.name, start.elapsed());
 
     println!("Stats:");
-    println!("    Constants: {}", visor.vm.constants.len());
-    println!("    Alloc: {}", visor.vm.alloc.len());
-    println!("    Operations: {}", visor.vm.ops.len());
+    println!("    Constants: {}", contract.vm.constants.len());
+    println!("    Alloc: {}", contract.vm.alloc.len());
+    println!("    Operations: {}", contract.vm.ops.len());
     println!(
         "    Constraint Instructions: {}",
-        visor.vm.constraints.len()
+        contract.vm.constraints.len()
     );
 
     // Do the trusted setup
 
-    visor.setup();
+    contract.setup();
 
     // Put in our input parameters
 
-    visor.set_param(
+    contract.set_param(
         "x1",
         Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
     )?;
-    visor.set_param(
+    contract.set_param(
         "y1",
         Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
     )?;
-    visor.set_param(
+    contract.set_param(
         "x2",
         Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"),
     )?;
-    visor.set_param(
+    contract.set_param(
         "y2",
         Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"),
     )?;
 
     // Generate the ZK proof
 
-    let proof = visor.prove()?;
+    let proof = contract.prove()?;
 
     // Test and show our output values
 
@@ -71,7 +71,7 @@ fn main() -> Result<()> {
 
     // Verify the proof
 
-    assert!(visor.verify(&proof));
+    assert!(contract.verify(&proof));
 
     Ok(())
 }
