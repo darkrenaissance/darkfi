@@ -72,9 +72,9 @@ pub enum ConstraintInstruction {
     Lc0AddCoeff(VariableIndex, VariableIndex),
     Lc1AddCoeff(VariableIndex, VariableIndex),
     Lc2AddCoeff(VariableIndex, VariableIndex),
-    Lc0AddOneCoeff(VariableIndex),
-    Lc1AddOneCoeff(VariableIndex),
-    Lc2AddOneCoeff(VariableIndex),
+    Lc0AddConstant(VariableIndex),
+    Lc1AddConstant(VariableIndex),
+    Lc2AddConstant(VariableIndex),
     Enforce,
     LcCoeffReset,
     LcCoeffDouble,
@@ -412,13 +412,13 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
                 ConstraintInstruction::Lc2AddCoeff(const_index, index) => {
                     lc2 = lc2 + (self.constants[const_index], variables[index]);
                 }
-                ConstraintInstruction::Lc0AddOneCoeff(const_index) => {
+                ConstraintInstruction::Lc0AddConstant(const_index) => {
                     lc0 = lc0 + (self.constants[const_index], CS::one());
                 }
-                ConstraintInstruction::Lc1AddOneCoeff(const_index) => {
+                ConstraintInstruction::Lc1AddConstant(const_index) => {
                     lc1 = lc1 + (self.constants[const_index], CS::one());
                 }
-                ConstraintInstruction::Lc2AddOneCoeff(const_index) => {
+                ConstraintInstruction::Lc2AddConstant(const_index) => {
                     lc2 = lc2 + (self.constants[const_index], CS::one());
                 }
                 ConstraintInstruction::Enforce => {

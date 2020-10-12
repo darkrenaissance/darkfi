@@ -44,7 +44,7 @@ name = "pedersen_hash"
 path = "src/pedersen_hash.rs"
 
 [[bin]]
-name = "mimc"
+name = "oldmimc"
 path = "src/mimc.rs"
 
 [[bin]]
@@ -88,8 +88,8 @@ name = "bits"
 path = "src/bits.rs"
 
 [[bin]]
-name = "zkmimc"
-path = "src/zkmimc.rs"
+name = "mimc"
+path = "src/bin/mimc.rs"
 
 [[bin]]
 name = "mint2"

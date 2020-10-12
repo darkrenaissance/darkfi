@@ -63,9 +63,9 @@ constraint_ident_map = {
     "lc0_add_coeff": 12,
     "lc1_add_coeff": 13,
     "lc2_add_coeff": 14,
-    "lc0_add_one_coeff": 15,
-    "lc1_add_one_coeff": 16,
-    "lc2_add_one_coeff": 17,
+    "lc0_add_constant": 15,
+    "lc1_add_constant": 16,
+    "lc2_add_constant": 17,
     "enforce": 18,
     "lc_coeff_reset": 19,
     "lc_coeff_double": 20,
@@ -154,9 +154,9 @@ def export(output, contract_name, contract):
         if (constraint.command == "lc0_add_coeff" or
             constraint.command == "lc1_add_coeff" or
             constraint.command == "lc2_add_coeff" or
-            constraint.command == "lc0_add_one_coeff" or
-            constraint.command == "lc1_add_one_coeff" or
-            constraint.command == "lc2_add_one_coeff"):
+            constraint.command == "lc0_add_constant" or
+            constraint.command == "lc1_add_constant" or
+            constraint.command == "lc2_add_constant"):
             args[0] = args[0][0]
         print("#", constraint.line)
         print("Constraint", constraint.command, args if args else "")

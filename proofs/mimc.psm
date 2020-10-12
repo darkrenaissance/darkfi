@@ -20,9 +20,9 @@ contract mimc
         square tmp_{{i}}
 
         lc0_add left_{{i}}
-        lc0_add_one_coeff mimc_constant_{{i}}
+        lc0_add_constant mimc_constant_{{i}}
         lc1_add left_{{i}}
-        lc1_add_one_coeff mimc_constant_{{i}}
+        lc1_add_constant mimc_constant_{{i}}
         lc2_add tmp_{{i}}
         enforce
 
@@ -37,7 +37,7 @@ contract mimc
 
         lc0_add tmp_{{i}}
         lc1_add left_{{i}}
-        lc1_add_one_coeff mimc_constant_{{i}}
+        lc1_add_constant mimc_constant_{{i}}
         lc2_add left_{{i+1}}
         lc2_sub {{ns.right}}
         enforce
