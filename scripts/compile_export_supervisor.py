@@ -143,6 +143,7 @@ def export(output, contract_name, contract):
                 arg_type = 1
             arg = arg_form(arg_type, op_arg.index)
             output.write(arg.bytes())
+        print(op.line)
         print("Operation", op.command,
               [(arg.type.name, arg.index) for arg in op.args])
 
@@ -157,6 +158,7 @@ def export(output, contract_name, contract):
             constraint.command == "lc1_add_one_coeff" or
             constraint.command == "lc2_add_one_coeff"):
             args[0] = args[0][0]
+        print(constraint.line)
         print("Constraint", constraint.command, args)
         enum_ident = constraint_ident_map[constraint.command]
         output.write(struct.pack("B", enum_ident))
