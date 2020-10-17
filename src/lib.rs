@@ -36,8 +36,21 @@ impl ZKContract {
     // Just have a load() and save()
     // Load the contract, do the setup, save it...
 
-    pub fn setup(&mut self) {
-        self.vm.setup();
+    pub fn setup(&mut self, filename: &str) -> Result<()> {
+        self.vm.setup()?;
+
+        let buffer = std::fs::File::create(filename)?;
+        self.vm.params.as_ref().unwrap().write(buffer)?;
+        Ok(())
+    }
+
+    pub fn load_setup(&mut self, filename: &str) -> Result<()> {
+        let buffer = std::fs::File::open(filename)?;
+        let setup = groth16::Parameters::<Bls12>::read(buffer, false)?;
+        let vk = groth16::prepare_verifying_key(&setup.vk);
+        self.vm.params = Some(setup);
+        self.vm.verifying_key = Some(vk);
+        Ok(())
     }
 
     pub fn param_names(&self) -> Vec<String> {

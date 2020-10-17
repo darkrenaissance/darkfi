@@ -6,6 +6,28 @@ use std::time::Instant;
 type Result<T> = std::result::Result<T, failure::Error>;
 
 fn main() -> Result<()> {
+    {
+        // Load the contract from file
+
+        let start = Instant::now();
+        let file = File::open("jubjub.zcd")?;
+        let mut contract = ZKContract::decode(file)?;
+        println!("Loaded contract '{}': [{:?}]", contract.name, start.elapsed());
+
+        println!("Stats:");
+        println!("    Constants: {}", contract.vm.constants.len());
+        println!("    Alloc: {}", contract.vm.alloc.len());
+        println!("    Operations: {}", contract.vm.ops.len());
+        println!(
+            "    Constraint Instructions: {}",
+            contract.vm.constraints.len()
+        );
+
+        // Do the trusted setup
+
+        contract.setup("jubjub.zts")?;
+    }
+
     // Load the contract from file
 
     let start = Instant::now();
@@ -13,18 +35,7 @@ fn main() -> Result<()> {
     let mut contract = ZKContract::decode(file)?;
     println!("Loaded contract '{}': [{:?}]", contract.name, start.elapsed());
 
-    println!("Stats:");
-    println!("    Constants: {}", contract.vm.constants.len());
-    println!("    Alloc: {}", contract.vm.alloc.len());
-    println!("    Operations: {}", contract.vm.ops.len());
-    println!(
-        "    Constraint Instructions: {}",
-        contract.vm.constraints.len()
-    );
-
-    // Do the trusted setup
-
-    contract.setup();
+    contract.load_setup("jubjub.zts")?;
 
     // Put in our input parameters
 

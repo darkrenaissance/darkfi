@@ -13,6 +13,8 @@ use rand::rngs::OsRng;
 use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;
 
+use crate::error::Result;
+
 pub struct ZKVirtualMachine {
     pub constants: Vec<Scalar>,
     pub alloc: Vec<(AllocType, VariableIndex)>,
@@ -283,7 +285,7 @@ impl ZKVirtualMachine {
         publics
     }
 
-    pub fn setup(&mut self) {
+    pub fn setup(&mut self) -> Result<()> {
         let start = Instant::now();
         // Create parameters for our circuit. In a production deployment these would
         // be generated securely using a multiparty computation.
@@ -294,14 +296,15 @@ impl ZKVirtualMachine {
                 constraints: self.constraints.clone(),
                 constants: self.constants.clone(),
             };
-            groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng).unwrap()
+            groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
         });
 
         println!("Setup: [{:?}]", start.elapsed());
 
         self.verifying_key = Some(groth16::prepare_verifying_key(
             &self.params.as_ref().unwrap().vk,
-        ))
+        ));
+        Ok(())
     }
 
     pub fn prove(&self) -> groth16::Proof<Bls12> {
@@ -344,7 +347,7 @@ impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
         cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    ) -> std::result::Result<(), SynthesisError> {
         let mut variables = Vec::new();
 
         for (alloc_type, index) in &self.alloc {

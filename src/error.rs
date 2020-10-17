@@ -30,6 +30,7 @@ pub enum Error {
     MissingParams,
     VMError(ZKVMError),
     BadContract,
+    Groth16Error(bellman::SynthesisError)
 }
 
 impl std::error::Error for Error {}
@@ -63,6 +64,7 @@ impl fmt::Display for Error {
             Error::MissingParams => f.write_str("Missing params"),
             Error::VMError(_) => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
+            Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
         }
     }
 }
@@ -78,3 +80,10 @@ impl From<ZKVMError> for Error {
         Error::VMError(err)
     }
 }
+
+impl From<bellman::SynthesisError> for Error {
+    fn from(err: bellman::SynthesisError) -> Error {
+        Error::Groth16Error(err)
+    }
+}
+
