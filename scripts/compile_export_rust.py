@@ -1,4 +1,4 @@
-from vm import VariableType, VariableRefType
+from compile import VariableType, VariableRefType
 
 def to_initial_caps(snake_str):
     components = snake_str.split("_")
