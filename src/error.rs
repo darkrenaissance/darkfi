@@ -30,7 +30,7 @@ pub enum Error {
     MissingParams,
     VMError(ZKVMError),
     BadContract,
-    Groth16Error(bellman::SynthesisError)
+    Groth16Error(bellman::SynthesisError),
 }
 
 impl std::error::Error for Error {}
@@ -86,4 +86,3 @@ impl From<bellman::SynthesisError> for Error {
         Error::Groth16Error(err)
     }
 }
-

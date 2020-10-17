@@ -29,7 +29,7 @@ pub struct ZKContract {
 
 pub struct ZKProof {
     pub public: HashMap<String, Scalar>,
-    pub proof: groth16::Proof<Bls12>
+    pub proof: groth16::Proof<Bls12>,
 }
 
 impl ZKContract {
@@ -84,23 +84,24 @@ impl ZKContract {
         let mut public = HashMap::new();
         for (index, value) in self.vm.public() {
             match self.public_map.get_by_right(&index) {
-                Some(name) => { public.insert(name.clone(), value); },
-                None => return Err(Error::BadContract)
+                Some(name) => {
+                    public.insert(name.clone(), value);
+                }
+                None => return Err(Error::BadContract),
             }
         }
 
         // return proof and public values (Hashmap string -> scalars)
-        Ok(ZKProof {
-            public,
-            proof
-        })
+        Ok(ZKProof { public, proof })
     }
     pub fn verify(&self, proof: &ZKProof) -> bool {
         let mut public = vec![];
         for (name, value) in &proof.public {
             match self.public_map.get_by_left(name) {
-                Some(index) => { public.push((index, value.clone())); },
-                None => return false
+                Some(index) => {
+                    public.push((index, value.clone()));
+                }
+                None => return false,
             }
         }
         public.sort_by(|a, b| a.0.partial_cmp(b.0).unwrap());

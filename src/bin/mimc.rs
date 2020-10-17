@@ -1,9 +1,9 @@
 use bls12_381::Scalar;
+use ff::{Field, PrimeField};
 use sapvi::{BlsStringConversion, Decodable, ZKContract};
 use std::fs::File;
-use std::time::Instant;
-use ff::{Field, PrimeField};
 use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
+use std::time::Instant;
 
 type Result<T> = std::result::Result<T, failure::Error>;
 
@@ -60,7 +60,11 @@ fn main() -> Result<()> {
     let start = Instant::now();
     let file = File::open("mimc.zcd")?;
     let mut contract = ZKContract::decode(file)?;
-    println!("Loaded contract '{}': [{:?}]", contract.name, start.elapsed());
+    println!(
+        "Loaded contract '{}': [{:?}]",
+        contract.name,
+        start.elapsed()
+    );
 
     println!("Stats:");
     println!("    Constants: {}", contract.vm.constants.len());
@@ -77,26 +81,21 @@ fn main() -> Result<()> {
 
     // Put in our input parameters
 
-    let left =
-            Scalar::from_raw([
-                0xb981_9dc8_2d90_607e,
-                0xa361_ee3f_d48f_df77,
-                0x52a3_5a8c_1908_dd87,
-                0x15a3_6d1f_0f39_0d88,
-            ]);
-            let right = Scalar::from_raw([
-                0x7b0d_c53c_4ebf_1891,
-                0x1f3a_beeb_98fa_d3e8,
-                0xf789_1142_c001_d925,
-                0x015d_8c7f_5b43_fe33,
-            ]);
+    let left = Scalar::from_raw([
+        0xb981_9dc8_2d90_607e,
+        0xa361_ee3f_d48f_df77,
+        0x52a3_5a8c_1908_dd87,
+        0x15a3_6d1f_0f39_0d88,
+    ]);
+    let right = Scalar::from_raw([
+        0x7b0d_c53c_4ebf_1891,
+        0x1f3a_beeb_98fa_d3e8,
+        0xf789_1142_c001_d925,
+        0x015d_8c7f_5b43_fe33,
+    ]);
 
-    contract.set_param(
-        "left_0", left.clone()
-    )?;
-    contract.set_param(
-        "right", right.clone()
-    )?;
+    contract.set_param("left_0", left.clone())?;
+    contract.set_param("right", right.clone())?;
 
     // Generate the ZK proof
 
@@ -104,14 +103,14 @@ fn main() -> Result<()> {
 
     // Test and show our output values
 
-    let mimc_hash = mimc(left,right, &constants);
+    let mimc_hash = mimc(left, right, &constants);
     assert_eq!(proof.public.len(), 1);
     // 0x66ced46f14e5616d12b993f60a6e66558d6b6afe4c321ed212e0b9cfbd81061a
-    assert_eq!(
-        *proof.public.get("hash_result").unwrap(),
-        mimc_hash
+    assert_eq!(*proof.public.get("hash_result").unwrap(), mimc_hash);
+    println!(
+        "hash result = {:?}",
+        proof.public.get("hash_result").unwrap()
     );
-    println!("hash result = {:?}", proof.public.get("hash_result").unwrap());
 
     // Verify the proof
 

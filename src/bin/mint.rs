@@ -69,19 +69,10 @@ fn main() -> Result<()> {
         println!("Param name: {}", param);
     }
 
-    visor.set_param(
-        "public_u",
-        public_affine.get_u()
-    )?;
-    visor.set_param(
-        "public_v",
-        public_affine.get_v()
-    )?;
+    visor.set_param("public_u", public_affine.get_u())?;
+    visor.set_param("public_v", public_affine.get_v())?;
     for (i, param_bit) in unpack(randomness_value).into_iter().enumerate() {
-        visor.set_param(
-            &format!("vc_randomness_{}", i),
-            param_bit
-        )?;
+        visor.set_param(&format!("vc_randomness_{}", i), param_bit)?;
     }
 
     let proof = visor.prove()?;

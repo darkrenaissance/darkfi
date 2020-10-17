@@ -4,11 +4,14 @@ use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
     ZKVirtualMachine,
 };
-use crate::{impl_vec, ZKContract};
+use crate::{impl_vec, ZKContract, ZKProof};
+use bellman::groth16;
+use bls12_381 as bls;
 use std::collections::HashMap;
 use std::io;
 
 impl_vec!((String, VariableIndex));
+impl_vec!((String, bls::Scalar));
 
 impl Encodable for ZKContract {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -40,6 +43,44 @@ impl Decodable for ZKContract {
 
             params: HashMap::new(),
         })
+    }
+}
+
+impl Encodable for ZKProof {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = self
+            .public
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>()
+            .encode(&mut s)?;
+        len += self.proof.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for ZKProof {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            public: Vec::<(String, bls::Scalar)>::decode(&mut d)?
+                .into_iter()
+                .collect(),
+            proof: Decodable::decode(&mut d)?,
+        })
+    }
+}
+
+impl Encodable for groth16::Proof<bls::Bls12> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        self.write(s)?;
+        // Depends on groth16 impl
+        Ok(48 + 96 + 48)
+    }
+}
+
+impl Decodable for groth16::Proof<bls::Bls12> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(groth16::Proof::read(d)?)
     }
 }
 
