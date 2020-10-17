@@ -1,111 +1,6 @@
 #lang racket
 
-(struct zk_variable 
-    (name type)
-)
-
-(define (zk_constant name hex_value)
-    (fprintf out "constant ~a ~a\n" name hex_value)
-    name
-)
-
-(define (zk_param name)
-    (fprintf out "param ~a\n" name)
-    (zk_variable name 'param)
-)
-
-(define (zk_public name)
-    (fprintf out "public ~a\n" name)
-    (zk_variable name 'public)
-)
-
-(define (strings->string sts)
-    (apply string-append sts))
-
-(define (apply_ns namespace name)
-    (strings->string
-        (append namespace
-            (list "__" (symbol->string name))
-        )))
-
-(define (zk_local namespace name)
-    (let ([name (apply_ns namespace name)])
-        (fprintf out "local ~a\n" name)
-        (zk_variable name 'local)
-    )
-)
-
-(define (zk_private namespace name)
-    (let ([name (apply_ns namespace name)])
-        (fprintf out "private ~a\n" name)
-        (zk_variable name 'private)
-    )
-)
-
-(define (zk_comment str)
-    (fprintf out "# ~a\n" str)
-)
-
-(define (zk_set self other)
-    (fprintf out "set ~a ~a\n" (zk_variable-name self) (zk_variable-name other))
-)
-(define (zk_add self other)
-    (fprintf out "add ~a ~a\n" (zk_variable-name self) (zk_variable-name other))
-)
-(define (zk_sub self other)
-    (fprintf out "sub ~a ~a\n" (zk_variable-name self) (zk_variable-name other))
-)
-(define (zk_mul self other)
-    (fprintf out "mul ~a ~a\n" (zk_variable-name self) (zk_variable-name other))
-)
-(define (zk_divide self other)
-    (fprintf out "divide ~a ~a\n"
-        (zk_variable-name self) (zk_variable-name other))
-)
-
-(define (zk_load self constant)
-    (fprintf out "load ~a ~a\n" (zk_variable-name self) constant)
-)
-
-(define (zk_lc0_add self)
-    (fprintf out "lc0_add ~a\n" (zk_variable-name self)))
-(define (zk_lc1_add self)
-    (fprintf out "lc1_add ~a\n" (zk_variable-name self)))
-(define (zk_lc2_add self)
-    (fprintf out "lc2_add ~a\n" (zk_variable-name self)))
-(define (zk_lc0_sub self)
-    (fprintf out "lc0_sub ~a\n" (zk_variable-name self)))
-(define (zk_lc1_sub self)
-    (fprintf out "lc1_sub ~a\n" (zk_variable-name self)))
-(define (zk_lc2_sub self)
-    (fprintf out "lc2_sub ~a\n" (zk_variable-name self)))
-(define (zk_lc0_add_coeff constant self)
-    (fprintf out "lc0_add_coeff ~a ~a\n" constant (zk_variable-name self)))
-(define (zk_lc1_add_coeff constant self)
-    (fprintf out "lc1_add_coeff ~a ~a\n" constant (zk_variable-name self)))
-(define (zk_lc2_add_coeff constant self)
-    (fprintf out "lc2_add_coeff ~a ~a\n" constant (zk_variable-name self)))
-(define (zk_lc0_add_one)
-    (fprintf out "lc0_add_one\n"))
-(define (zk_lc1_add_one)
-    (fprintf out "lc1_add_one\n"))
-(define (zk_lc2_add_one)
-    (fprintf out "lc2_add_one\n"))
-(define (zk_enforce)
-    (fprintf out "enforce\n")
-)
-
-(define (zk_distance namespace result x y)
-    (let ([namespace (append namespace (list "_distance"))])
-        (zk_set result x)
-        (zk_mul result x)
-        (let ([tmp (zk_local namespace 'tmp)])
-            (zk_set tmp y)
-            (zk_mul tmp y)
-            (zk_add result tmp)
-        )
-    )
-)
+(require "zk.rkt")
 
 (struct jj_point
     (u v)
@@ -201,26 +96,18 @@
     )
 )
 
-(define-syntax-rule (create_param name)
-    (define name (zk_param 'name))
-)
-(define-syntax-rule (create_public name)
-    (define name (zk_public 'name))
-)
-
-(define out (open-output-file "jj.psm" #:exists 'truncate))
+(create_zk_output "jj.psm")
 
 (define const_d (zk_constant
     "d" "0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1"))
 (define const_one (zk_constant
     "one" "0x0000000000000000000000000000000000000000000000000000000000000001"))
 
-(fprintf out "contract foo\n")
+(zk_contract_begin "foo")
 (define namespace (list "_"))
 (define a (create_jj_param_point "a"))
 (define b (create_jj_param_point "b"))
 (define result (create_jj_public_point "result"))
-;(zk_distance (list "_") result x y)
 (zk_jj_add namespace result a b)
-(fprintf out "end\n")
+(zk_contract_end)
 
