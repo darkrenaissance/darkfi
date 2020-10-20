@@ -97,7 +97,7 @@ path = "src/mint2.rs"
 
 [[bin]]
 name = "zkvm"
-path = "src/zkvm.rs"
+path = "src/bin/zkvm.rs"
 
 [[bin]]
 name = "mint"
