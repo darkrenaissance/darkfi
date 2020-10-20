@@ -13,7 +13,7 @@ type Result<T> = std::result::Result<T, failure::Error>;
 // do the setup for mint.zcd, save the params in mint.setup
 fn trusted_setup(contract_data: String, setup_file: String) -> Result<()> {
     let start = Instant::now();
-    let file = File::open("jubjub.zcd")?;
+    let file = File::open(contract_data)?;
     let mut contract = ZKContract::decode(file)?;
     println!(
         "loaded contract '{}': [{:?}]",
@@ -27,7 +27,7 @@ fn trusted_setup(contract_data: String, setup_file: String) -> Result<()> {
     println!("    Constraint Instructions: {}",
         contract.vm.constraints.len()
     );
-    contract.setup("jubjub.zts")?;
+    contract.setup(&setup_file)?;
     Ok(())
 }
 
@@ -39,14 +39,14 @@ fn create_proof(
     zk_proof: String,
 ) -> Result<()> {
     let start = Instant::now();
-    let file = File::open("jubjub.zcd")?;
+    let file = File::open(contract_data)?;
     let mut contract = ZKContract::decode(file)?;
     println!(
         "Loaded contract '{}': [{:?}]",
         contract.name,
         start.elapsed()
     );
-    contract.load_setup("jubjub.zts")?;
+    contract.load_setup(&setup_file)?;
     let param_content = fs::read_to_string(params).expect("something went wrong reading the file");
     let lines: Vec<&str> = param_content.lines().collect();
     for line in lines {
@@ -55,7 +55,7 @@ fn create_proof(
         contract.set_param(name, Scalar::from_string(value));
     }
     let proof = contract.prove()?;
-    let mut file = File::create("jubjub.prf")?;
+    let mut file = File::create(zk_proof)?;
     proof.encode(&mut file)?;
     Ok(())
 }
@@ -63,19 +63,19 @@ fn create_proof(
 //verify the proof
 fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> Result<()> {
     let start = Instant::now();
-    let proof_file = File::open("jubjub.prf")?;
-    let proof = ZKProof::decode(proof_file)?;
-    let contract_file = File::open("jubjub.zcd")?;
+    let contract_file = File::open(contract_data)?;
     let mut contract = ZKContract::decode(contract_file)?;
-    contract.load_setup("jubjub.zts")?;
-    assert!(contract.verify(&proof));
+    contract.load_setup(&setup_file)?;
+    let proof_file = File::open(zk_proof)?;
+    let proof = ZKProof::decode(proof_file)?;
+    //assert!(contract.verify(&proof));
     Ok(())
 }
 
 // show public values in proof
 fn show_public(zk_proof: String) -> Result<()> {
     let start = Instant::now();
-    let file = File::open("jubjub.prf")?;
+    let file = File::open(zk_proof)?;
     let proof = ZKProof::decode(file)?;
     assert_eq!(proof.public.len(), 2);
     println!("Public values: {:?}", proof.public);
