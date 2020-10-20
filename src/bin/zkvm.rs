@@ -24,7 +24,8 @@ fn trusted_setup(contract_data: String, setup_file: String) -> Result<()> {
     println!("    Constants: {}", contract.vm.constants.len());
     println!("    Alloc: {}", contract.vm.alloc.len());
     println!("    Operations: {}", contract.vm.ops.len());
-    println!("    Constraint Instructions: {}",
+    println!(
+        "    Constraint Instructions: {}",
         contract.vm.constraints.len()
     );
     contract.setup(&setup_file)?;
@@ -68,7 +69,11 @@ fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> 
     contract.load_setup(&setup_file)?;
     let proof_file = File::open(zk_proof)?;
     let proof = ZKProof::decode(proof_file)?;
-    //assert!(contract.verify(&proof));
+    if (contract.verify(&proof)) {
+        println!("Zero-knowledge proof verified correctly.")
+    } else {
+        println!("Verification failed.")
+    }
     Ok(())
 }
 
