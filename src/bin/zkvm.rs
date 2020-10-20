@@ -42,18 +42,20 @@ fn create_proof(
     let start = Instant::now();
     let file = File::open(contract_data)?;
     let mut contract = ZKContract::decode(file)?;
+    contract.load_setup(&setup_file)?;
     println!(
         "Loaded contract '{}': [{:?}]",
         contract.name,
         start.elapsed()
     );
-    contract.load_setup(&setup_file)?;
     let param_content = fs::read_to_string(params).expect("something went wrong reading the file");
     let lines: Vec<&str> = param_content.lines().collect();
     for line in lines {
         let name = line.split_whitespace().next().unwrap_or("");
         let value = line.trim_start_matches(name).trim_left();
         contract.set_param(name, Scalar::from_string(value));
+        println!("Set parameter: {}", name);
+        println!("      Value: {}", value);
     }
     let proof = contract.prove()?;
     let mut file = File::create(zk_proof)?;
@@ -129,24 +131,24 @@ fn main() -> Result<()> {
         Some(("init", matches)) => {
             let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
             let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
-            trusted_setup(contract_data, setup_file);
+            trusted_setup(contract_data, setup_file)?;
         }
         Some(("prove", matches)) => {
             let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
             let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
             let params: String = matches.value_of("PARAMS").unwrap().parse()?;
             let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            create_proof(contract_data, setup_file, params, zk_proof);
+            create_proof(contract_data, setup_file, params, zk_proof)?;
         }
         Some(("verify", matches)) => {
             let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
             let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
             let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            verify_proof(contract_data, setup_file, zk_proof);
+            verify_proof(contract_data, setup_file, zk_proof)?;
         }
         Some(("show", matches)) => {
             let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            show_public(zk_proof);
+            show_public(zk_proof)?;
         }
         _ => {
             eprintln!("error: Invalid subcommand invoked");
