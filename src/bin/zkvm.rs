@@ -53,7 +53,7 @@ fn create_proof(
     for line in lines {
         let name = line.split_whitespace().next().unwrap_or("");
         let value = line.trim_start_matches(name).trim_start();
-        contract.set_param(name, Scalar::from_string(value));
+        contract.set_param(name, Scalar::from_string(value))?;
         println!("Set parameter: {}", name);
         println!("      Value: {}", value);
     }
