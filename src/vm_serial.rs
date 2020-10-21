@@ -1,7 +1,8 @@
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, VarInt};
 use crate::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, 
+    ZKVirtualMachine,
 };
 use crate::{impl_vec, ZKContract, ZKProof};
 use bellman::groth16;
@@ -13,7 +14,7 @@ impl_vec!((String, VariableIndex));
 impl_vec!((String, bls::Scalar));
 
 impl Encodable for ZKContract {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
@@ -70,7 +71,7 @@ impl Decodable for ZKProof {
 }
 
 impl Encodable for groth16::Proof<bls::Bls12> {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         self.write(s)?;
         // Depends on groth16 impl
         Ok(48 + 96 + 48)
@@ -78,13 +79,13 @@ impl Encodable for groth16::Proof<bls::Bls12> {
 }
 
 impl Decodable for groth16::Proof<bls::Bls12> {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
         Ok(groth16::Proof::read(d)?)
     }
 }
 
 impl Encodable for (AllocType, VariableIndex) {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         //let len = self.x.encode(&mut s)?;
         //Ok(len + self.y.encode(s)?)
         unimplemented!();
@@ -108,7 +109,7 @@ impl Decodable for (AllocType, VariableIndex) {
 impl_vec!((AllocType, VariableIndex));
 
 impl Encodable for VariableIndex {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
@@ -121,7 +122,7 @@ impl Decodable for VariableIndex {
 }
 
 impl Encodable for VariableRef {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
@@ -139,7 +140,7 @@ impl Decodable for VariableRef {
 }
 
 impl Encodable for CryptoOperation {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
@@ -196,7 +197,7 @@ impl Decodable for CryptoOperation {
 impl_vec!(CryptoOperation);
 
 impl Encodable for ConstraintInstruction {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         unimplemented!();
         Ok(0)
     }
