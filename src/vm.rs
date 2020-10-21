@@ -1,7 +1,6 @@
 use bellman::{
     gadgets::{
-        boolean::{AllocatedBit, Boolean},
-        multipack, num, Assignment,
+        Assignment,
     },
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };
