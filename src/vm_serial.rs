@@ -16,7 +16,7 @@ impl_vec!((String, bls::Scalar));
 impl Encodable for ZKContract {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
@@ -89,7 +89,7 @@ impl Encodable for (AllocType, VariableIndex) {
         //let len = self.x.encode(&mut s)?;
         //Ok(len + self.y.encode(s)?)
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
@@ -111,7 +111,7 @@ impl_vec!((AllocType, VariableIndex));
 impl Encodable for VariableIndex {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
@@ -124,7 +124,7 @@ impl Decodable for VariableIndex {
 impl Encodable for VariableRef {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
@@ -142,7 +142,7 @@ impl Decodable for VariableRef {
 impl Encodable for CryptoOperation {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
@@ -199,7 +199,7 @@ impl_vec!(CryptoOperation);
 impl Encodable for ConstraintInstruction {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
-        Ok(0)
+        //Ok(0)
     }
 }
 
