@@ -8,9 +8,8 @@ use bellman::{
 use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
-use group::Curve;
 use rand::rngs::OsRng;
-use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
+use std::ops::{AddAssign, MulAssign, SubAssign};
 use std::time::Instant;
 
 use crate::error::Result;
