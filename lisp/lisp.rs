@@ -81,18 +81,15 @@ impl InPort {
 
     pub fn next_token(&mut self) -> String {
         loop {
-           if self.line.is_empty()  || self.line == "#<eof-object>".to_string() {
-               // TODO add match 
+           if self.line.is_empty() {
                self.line = self.lines.get(self.cur_line).unwrap_or(&"#<eof-object>".to_string()).to_string();
                self.cur_line = self.cur_line + 1;
            }
            if self.line.is_empty() {
-               self.cur_line = self.cur_line + 1;
                return "#<eof-object>".to_string();
            }
            let (token, rest) = InPort::tokenize(self.line.clone());
            self.line = rest;
-            self.cur_line = self.cur_line + 1;
            if !token.is_empty() {
                return token;
            }
