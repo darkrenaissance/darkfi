@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         visor.vm.constraints.len()
     );
 
-    visor.setup();
+    visor.setup("mint.zts");
 
     // We use the ExtendedPoint in calculations because it's faster
     let public_point = jubjub::ExtendedPoint::from(jubjub::SubgroupPoint::random(&mut OsRng));
