@@ -35,6 +35,9 @@ clap = "3.0.0-beta.1"
 failure = "0.1.8"
 failure_derive = "0.1.8"
 
+regex = "1"
+fancy-regex = "0.4.0"
+
 [[bin]]
 name = "sha256"
 path = "src/sha256.rs"
@@ -107,3 +110,6 @@ path = "src/bin/mint.rs"
 name = "jubjub"
 path = "src/bin/jubjub.rs"
 
+[[bin]]
+name = "lisp"
+path = "lisp/lisp.rs"
