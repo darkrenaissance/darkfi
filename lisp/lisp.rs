@@ -111,6 +111,30 @@ impl InPort {
     }
 }
 
+// TODO change return type to Symbol
+fn read(inport: InPort) -> String {
+    fn read_ahead(token: String) {
+        match token {
+            "(" => {
+                let L = Vec::new();
+                loop {
+                    let token = inport.next_token();
+                    if token == ")" { 
+                        return L;
+                    } else {
+                        L.append(read_ahead(token));
+                    }
+                }
+            },
+            _ => { println!("{}", token); }
+        }
+    }
+    let token1 = inport.next_token();
+    if token1 == "#<eof-object>".to_string() {
+        return "#<eof-object>".to_string();
+    }
+}
+
 fn parse_atom(token: &str) -> RispExp {
     match token.as_ref() {
         "true" => RispExp::Bool(true),
@@ -383,15 +407,7 @@ fn main() {
     let env = &mut default_env();
     let mut reader = InPort::init("new.lisp".to_string());
     let mut token = String::new();
-    loop {
-        if token == "#<eof-object>".to_string() {
-            println!("EOF");
-            break;
-        }
-
-        token = reader.next_token().as_str().to_string();
-        println!("{}", token);
-    }
+    read(reader); 
     // read from file
 //    let file = File::open("new.lisp").unwrap();
 //    let lines = io::BufReader::new(file).lines();
