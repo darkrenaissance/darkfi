@@ -63,36 +63,42 @@ struct RispEnv<'a> {
 
 struct InPort {
     line: String,
-    lines: Vec<String>, 
-    cur_line: usize
+    lines: Vec<String>,
+    cur_line: usize,
 }
 
 impl InPort {
-
     fn init(filename: String) -> InPort {
         let file = File::open(filename).unwrap();
-        let reader = io::BufReader::new(file).lines().map(|s| s.ok().unwrap().to_string()).collect();
-        InPort { 
-            line : String::new(),
+        let reader = io::BufReader::new(file)
+            .lines()
+            .map(|s| s.ok().unwrap().to_string())
+            .collect();
+        InPort {
+            line: String::new(),
             lines: reader,
-            cur_line: 0
+            cur_line: 0,
         }
     }
 
     pub fn next_token(&mut self) -> String {
         loop {
-           if self.line.is_empty() {
-               self.line = self.lines.get(self.cur_line).unwrap_or(&"#<eof-object>".to_string()).to_string();
-               self.cur_line = self.cur_line + 1;
-           }
-           if self.line.is_empty() {
-               return "#<eof-object>".to_string();
-           }
-           let (token, rest) = InPort::tokenize(self.line.clone());
-           self.line = rest;
-           if !token.is_empty() {
-               return token;
-           }
+            if self.line.is_empty() {
+                self.line = self
+                    .lines
+                    .get(self.cur_line)
+                    .unwrap_or(&"#<eof-object>".to_string())
+                    .to_string();
+                self.cur_line = self.cur_line + 1;
+            }
+            if self.line.is_empty() {
+                return "#<eof-object>".to_string();
+            }
+            let (token, rest) = InPort::tokenize(self.line.clone());
+            self.line = rest;
+            if !token.is_empty() {
+                return token;
+            }
         }
     }
 
@@ -103,7 +109,7 @@ impl InPort {
         let captures = result
             .expect("Error running regex")
             .expect("No match found");
-//        println!("{}", captures.get(0).unwrap().as_str().to_string());
+        //        println!("{}", captures.get(0).unwrap().as_str().to_string());
         (
             captures.get(1).unwrap().as_str().to_string(),
             captures.get(2).unwrap().as_str().to_string(),
@@ -111,27 +117,48 @@ impl InPort {
     }
 }
 
-// TODO change return type to Symbol
-fn read(inport: InPort) -> String {
-    fn read_ahead(token: String) {
-        match token {
-            "(" => {
-                let L = Vec::new();
-                loop {
-                    let token = inport.next_token();
-                    if token == ")" { 
-                        return L;
+fn read_ahead(inport: &InPort, token: String) -> String {
+    match token.as_str() {
+        "(" => {
+            let mut L = Vec::new();
+            loop {
+                let t = &inport.next_token();
+                if t.to_string() == ")" {
+                        return L.into_iter().collect();
                     } else {
-                        L.append(read_ahead(token));
+                        L.push(read_ahead(&inport, t.to_string()));
                     }
                 }
-            },
-            _ => { println!("{}", token); }
+            }
+        _ => {
+            println!("{}", token);
+            return token;
         }
     }
-    let token1 = inport.next_token();
-    if token1 == "#<eof-object>".to_string() {
+}
+
+fn read_seq<'a>(tokens: &'a [String]) -> Result<(RispExp, &'a [String]), RispErr> {
+    let mut res: Vec<RispExp> = vec![];
+    let mut xs = tokens;
+    loop {
+        let (next_token, rest) = xs
+            .split_first()
+            .ok_or(RispErr::Reason("could not find closing `)`".to_string()))?;
+        if next_token == ")" {
+            return Ok((RispExp::List(res), rest)); // skip `)`, head to the token after
+        }
+        let (exp, new_xs) = parse(&xs)?;
+        res.push(exp);
+        xs = new_xs;
+    }
+}
+// TODO change return type to Symbol
+fn read(inport: &InPort) -> String {
+    let token1 = &inport.next_token().as_str();
+    if token1.to_string() == "#<eof-object>".to_string() {
         return "#<eof-object>".to_string();
+    } else {
+        return read_ahead(&inport, token1.to_string());
     }
 }
 
@@ -402,22 +429,21 @@ fn eval(exp: &RispExp, env: &mut RispEnv) -> Result<RispExp, RispErr> {
     }
 }
 
-
 fn main() {
     let env = &mut default_env();
     let mut reader = InPort::init("new.lisp".to_string());
     let mut token = String::new();
-    read(reader); 
+    read(&reader);
     // read from file
-//    let file = File::open("new.lisp").unwrap();
-//    let lines = io::BufReader::new(file).lines();
-//    let mut cur_line = String::new();
-//    let mut token = String::new();
-//    for line in lines {
-//        let (token, cur_line) = tokenize(line.ok().unwrap().as_str().to_string());
-//        println!("token {:?}", token);
-//        println!("line {:?}", cur_line);
- //   }
+    //    let file = File::open("new.lisp").unwrap();
+    //    let lines = io::BufReader::new(file).lines();
+    //    let mut cur_line = String::new();
+    //    let mut token = String::new();
+    //    for line in lines {
+    //        let (token, cur_line) = tokenize(line.ok().unwrap().as_str().to_string());
+    //        println!("token {:?}", token);
+    //        println!("line {:?}", cur_line);
+    //   }
 
     /*
     loop {
