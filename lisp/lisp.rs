@@ -1,460 +1,354 @@
-use std::collections::HashMap;
+#![allow(non_snake_case)]
 
-use fancy_regex::Regex;
-use std::fmt;
-use std::fs::File;
-use std::io;
-use std::io::{BufRead, BufReader};
-use std::num::ParseFloatError;
 use std::rc::Rc;
-/*
-  Types
-*/
+//use std::collections::HashMap;
+use fnv::FnvHashMap;
+use itertools::Itertools;
 
-#[derive(Clone)]
-enum RispExp {
-    Bool(bool),
-    Symbol(String),
-    Number(f64),
-    List(Vec<RispExp>),
-    Func(fn(&[RispExp]) -> Result<RispExp, RispErr>),
-    Lambda(RispLambda),
+#[macro_use]
+extern crate lazy_static;
+extern crate fnv;
+extern crate itertools;
+extern crate regex;
+
+#[macro_use]
+mod types;
+use crate::types::MalErr::{ErrMalVal, ErrString};
+use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
+mod env;
+mod printer;
+mod reader;
+use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
+#[macro_use]
+mod core;
+
+// read
+fn read(str: &str) -> MalRet {
+    reader::read_str(str.to_string())
 }
 
-#[derive(Clone)]
-struct RispLambda {
-    params_exp: Rc<RispExp>,
-    body_exp: Rc<RispExp>,
-}
+// eval
 
-impl fmt::Display for RispExp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let str = match self {
-            RispExp::Bool(a) => a.to_string(),
-            RispExp::Symbol(s) => s.clone(),
-            RispExp::Number(n) => n.to_string(),
-            RispExp::List(list) => {
-                let xs: Vec<String> = list.iter().map(|x| x.to_string()).collect();
-                format!("({})", xs.join(","))
-            }
-            RispExp::Func(_) => "Function {}".to_string(),
-            RispExp::Lambda(_) => "Lambda {}".to_string(),
-        };
-
-        write!(f, "{}", str)
-    }
-}
-
-#[derive(Debug)]
-enum RispErr {
-    Reason(String),
-}
-
-#[derive(Clone)]
-struct RispEnv<'a> {
-    data: HashMap<String, RispExp>,
-    outer: Option<&'a RispEnv<'a>>,
-}
-
-/*
- InPort
-*/
-// TODO change to symbol(eof)
-
-struct InPort {
-    line: String,
-    lines: Vec<String>,
-    cur_line: usize,
-}
-
-impl InPort {
-    fn init(filename: String) -> InPort {
-        let file = File::open(filename).unwrap();
-        let reader = io::BufReader::new(file)
-            .lines()
-            .map(|s| s.ok().unwrap().to_string())
-            .collect();
-        InPort {
-            line: String::new(),
-            lines: reader,
-            cur_line: 0,
-        }
-    }
-
-    pub fn next_token(&mut self) -> String {
-        loop {
-            if self.line.is_empty() {
-                self.line = self
-                    .lines
-                    .get(self.cur_line)
-                    .unwrap_or(&"#<eof-object>".to_string())
-                    .to_string();
-                self.cur_line = self.cur_line + 1;
-            }
-            if self.line.is_empty() {
-                return "#<eof-object>".to_string();
-            }
-            let (token, rest) = InPort::tokenize(self.line.clone());
-            self.line = rest;
-            if !token.is_empty() {
-                return token;
-            }
-        }
-    }
-
-    fn tokenize(expr: String) -> (String, String) {
-        let re =
-            Regex::new(r#"\s*(,@|[('`,)]|"(?:[\\].|[^\\"])*"|;.*|[^\s('"`,;)]*)(.*)"#).unwrap();
-        let result = re.captures(&expr);
-        let captures = result
-            .expect("Error running regex")
-            .expect("No match found");
-        //        println!("{}", captures.get(0).unwrap().as_str().to_string());
-        (
-            captures.get(1).unwrap().as_str().to_string(),
-            captures.get(2).unwrap().as_str().to_string(),
-        )
-    }
-}
-
-fn read_ahead(inport: &InPort, token: String) -> String {
-    match token.as_str() {
-        "(" => {
-            let mut L = Vec::new();
-            loop {
-                let t = &inport.next_token();
-                if t.to_string() == ")" {
-                        return L.into_iter().collect();
-                    } else {
-                        L.push(read_ahead(&inport, t.to_string()));
+fn qq_iter(elts: &MalArgs) -> MalVal {
+    let mut acc = list![];
+    for elt in elts.iter().rev() {
+        if let List(v, _) = elt {
+            if v.len() == 2 {
+                if let Sym(ref s) = v[0] {
+                    if s == "splice-unquote" {
+                        acc = list![Sym("concat".to_string()), v[1].clone(), acc];
+                        continue;
                     }
                 }
             }
-        _ => {
-            println!("{}", token);
-            return token;
         }
+        acc = list![Sym("cons".to_string()), quasiquote(&elt), acc];
     }
+    return acc;
 }
 
-fn read_seq<'a>(tokens: &'a [String]) -> Result<(RispExp, &'a [String]), RispErr> {
-    let mut res: Vec<RispExp> = vec![];
-    let mut xs = tokens;
-    loop {
-        let (next_token, rest) = xs
-            .split_first()
-            .ok_or(RispErr::Reason("could not find closing `)`".to_string()))?;
-        if next_token == ")" {
-            return Ok((RispExp::List(res), rest)); // skip `)`, head to the token after
-        }
-        let (exp, new_xs) = parse(&xs)?;
-        res.push(exp);
-        xs = new_xs;
-    }
-}
-// TODO change return type to Symbol
-fn read(inport: &InPort) -> String {
-    let token1 = &inport.next_token().as_str();
-    if token1.to_string() == "#<eof-object>".to_string() {
-        return "#<eof-object>".to_string();
-    } else {
-        return read_ahead(&inport, token1.to_string());
-    }
-}
-
-fn parse_atom(token: &str) -> RispExp {
-    match token.as_ref() {
-        "true" => RispExp::Bool(true),
-        "false" => RispExp::Bool(false),
-        _ => {
-            let potential_float: Result<f64, ParseFloatError> = token.parse();
-            match potential_float {
-                Ok(v) => RispExp::Number(v),
-                Err(_) => RispExp::Symbol(token.to_string().clone()),
-            }
-        }
-    }
-}
-
-/*
-  Env
-*/
-
-macro_rules! ensure_tonicity {
-    ($check_fn:expr) => {{
-        |args: &[RispExp]| -> Result<RispExp, RispErr> {
-            let floats = parse_list_of_floats(args)?;
-            let first = floats
-                .first()
-                .ok_or(RispErr::Reason("expected at least one number".to_string()))?;
-            let rest = &floats[1..];
-            fn f(prev: &f64, xs: &[f64]) -> bool {
-                match xs.first() {
-                    Some(x) => $check_fn(prev, x) && f(x, &xs[1..]),
-                    None => true,
+fn quasiquote(ast: &MalVal) -> MalVal {
+    match ast {
+        List(v, _) => {
+            if v.len() == 2 {
+                if let Sym(ref s) = v[0] {
+                    if s == "unquote" {
+                        return v[1].clone();
+                    }
                 }
-            };
-            Ok(RispExp::Bool(f(first, rest)))
-        }
-    }};
-}
-
-fn default_env<'a>() -> RispEnv<'a> {
-    let mut data: HashMap<String, RispExp> = HashMap::new();
-    data.insert(
-        "+".to_string(),
-        RispExp::Func(|args: &[RispExp]| -> Result<RispExp, RispErr> {
-            let sum = parse_list_of_floats(args)?
-                .iter()
-                .fold(0.0, |sum, a| sum + a);
-
-            Ok(RispExp::Number(sum))
-        }),
-    );
-    data.insert(
-        "-".to_string(),
-        RispExp::Func(|args: &[RispExp]| -> Result<RispExp, RispErr> {
-            let floats = parse_list_of_floats(args)?;
-            let first = *floats
-                .first()
-                .ok_or(RispErr::Reason("expected at least one number".to_string()))?;
-            let sum_of_rest = floats[1..].iter().fold(0.0, |sum, a| sum + a);
-
-            Ok(RispExp::Number(first - sum_of_rest))
-        }),
-    );
-    data.insert(
-        "=".to_string(),
-        RispExp::Func(ensure_tonicity!(|a, b| a == b)),
-    );
-    data.insert(
-        ">".to_string(),
-        RispExp::Func(ensure_tonicity!(|a, b| a > b)),
-    );
-    data.insert(
-        ">=".to_string(),
-        RispExp::Func(ensure_tonicity!(|a, b| a >= b)),
-    );
-    data.insert(
-        "<".to_string(),
-        RispExp::Func(ensure_tonicity!(|a, b| a < b)),
-    );
-    data.insert(
-        "<=".to_string(),
-        RispExp::Func(ensure_tonicity!(|a, b| a <= b)),
-    );
-
-    RispEnv { data, outer: None }
-}
-
-fn parse_list_of_floats(args: &[RispExp]) -> Result<Vec<f64>, RispErr> {
-    args.iter().map(|x| parse_single_float(x)).collect()
-}
-
-fn parse_single_float(exp: &RispExp) -> Result<f64, RispErr> {
-    match exp {
-        RispExp::Number(num) => Ok(*num),
-        _ => Err(RispErr::Reason("expected a number".to_string())),
+            }
+            return qq_iter(&v);
+        },
+        Vector(v, _) => return list![Sym("vec".to_string()), qq_iter(&v)],
+        Hash(_, _) | Sym(_)=> return list![Sym("quote".to_string()), ast.clone()],
+        _ => ast.clone(),
     }
 }
 
-/*
-  Eval
-*/
-
-fn eval_if_args(arg_forms: &[RispExp], env: &mut RispEnv) -> Result<RispExp, RispErr> {
-    let test_form = arg_forms
-        .first()
-        .ok_or(RispErr::Reason("expected test form".to_string()))?;
-    let test_eval = eval(test_form, env)?;
-    match test_eval {
-        RispExp::Bool(b) => {
-            let form_idx = if b { 1 } else { 2 };
-            let res_form = arg_forms
-                .get(form_idx)
-                .ok_or(RispErr::Reason(format!("expected form idx={}", form_idx)))?;
-            let res_eval = eval(res_form, env);
-
-            res_eval
-        }
-        _ => Err(RispErr::Reason(format!(
-            "unexpected test form='{}'",
-            test_form.to_string()
-        ))),
-    }
-}
-
-fn eval_def_args(arg_forms: &[RispExp], env: &mut RispEnv) -> Result<RispExp, RispErr> {
-    let first_form = arg_forms
-        .first()
-        .ok_or(RispErr::Reason("expected first form".to_string()))?;
-    let first_str = match first_form {
-        RispExp::Symbol(s) => Ok(s.clone()),
-        _ => Err(RispErr::Reason(
-            "expected first form to be a symbol".to_string(),
-        )),
-    }?;
-    let second_form = arg_forms
-        .get(1)
-        .ok_or(RispErr::Reason("expected second form".to_string()))?;
-    if arg_forms.len() > 2 {
-        return Err(RispErr::Reason("def can only have two forms ".to_string()));
-    }
-    let second_eval = eval(second_form, env)?;
-    env.data.insert(first_str, second_eval);
-
-    Ok(first_form.clone())
-}
-
-fn eval_lambda_args(arg_forms: &[RispExp]) -> Result<RispExp, RispErr> {
-    let params_exp = arg_forms
-        .first()
-        .ok_or(RispErr::Reason("expected args form".to_string()))?;
-    let body_exp = arg_forms
-        .get(1)
-        .ok_or(RispErr::Reason("expected second form".to_string()))?;
-    if arg_forms.len() > 2 {
-        return Err(RispErr::Reason(
-            "fn definition can only have two forms ".to_string(),
-        ));
-    }
-
-    Ok(RispExp::Lambda(RispLambda {
-        body_exp: Rc::new(body_exp.clone()),
-        params_exp: Rc::new(params_exp.clone()),
-    }))
-}
-
-fn eval_built_in_form(
-    exp: &RispExp,
-    arg_forms: &[RispExp],
-    env: &mut RispEnv,
-) -> Option<Result<RispExp, RispErr>> {
-    match exp {
-        RispExp::Symbol(s) => match s.as_ref() {
-            "if" => Some(eval_if_args(arg_forms, env)),
-            "def" => Some(eval_def_args(arg_forms, env)),
-            "fn" => Some(eval_lambda_args(arg_forms)),
+fn is_macro_call(ast: &MalVal, env: &Env) -> Option<(MalVal, MalArgs)> {
+    match ast {
+        List(v, _) => match v[0] {
+            Sym(ref s) => match env_find(env, s) {
+                Some(e) => match env_get(&e, &v[0]) {
+                    Ok(f @ MalFunc { is_macro: true, .. }) => Some((f, v[1..].to_vec())),
+                    _ => None,
+                },
+                _ => None,
+            },
             _ => None,
         },
         _ => None,
     }
 }
 
-fn env_get(k: &str, env: &RispEnv) -> Option<RispExp> {
-    match env.data.get(k) {
-        Some(exp) => Some(exp.clone()),
-        None => match &env.outer {
-            Some(outer_env) => env_get(k, &outer_env),
-            None => None,
-        },
+fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
+    let mut was_expanded = false;
+    while let Some((mf, args)) = is_macro_call(&ast, env) {
+        //println!("macroexpand 1: {:?}", ast);
+        ast = match mf.apply(args) {
+            Err(e) => return (false, Err(e)),
+            Ok(a) => a,
+        };
+        //println!("macroexpand 2: {:?}", ast);
+        was_expanded = true;
     }
+    ((was_expanded, Ok(ast)))
 }
 
-fn parse_list_of_symbol_strings(form: Rc<RispExp>) -> Result<Vec<String>, RispErr> {
-    let list = match form.as_ref() {
-        RispExp::List(s) => Ok(s.clone()),
-        _ => Err(RispErr::Reason(
-            "expected args form to be a list".to_string(),
-        )),
-    }?;
-    list.iter()
-        .map(|x| match x {
-            RispExp::Symbol(s) => Ok(s.clone()),
-            _ => Err(RispErr::Reason(
-                "expected symbols in the argument list".to_string(),
-            )),
-        })
-        .collect()
-}
-
-fn env_for_lambda<'a>(
-    params: Rc<RispExp>,
-    arg_forms: &[RispExp],
-    outer_env: &'a mut RispEnv,
-) -> Result<RispEnv<'a>, RispErr> {
-    let ks = parse_list_of_symbol_strings(params)?;
-    if ks.len() != arg_forms.len() {
-        return Err(RispErr::Reason(format!(
-            "expected {} arguments, got {}",
-            ks.len(),
-            arg_forms.len()
-        )));
-    }
-    let vs = eval_forms(arg_forms, outer_env)?;
-    let mut data: HashMap<String, RispExp> = HashMap::new();
-    for (k, v) in ks.iter().zip(vs.iter()) {
-        data.insert(k.clone(), v.clone());
-    }
-    Ok(RispEnv {
-        data,
-        outer: Some(outer_env),
-    })
-}
-
-fn eval_forms(arg_forms: &[RispExp], env: &mut RispEnv) -> Result<Vec<RispExp>, RispErr> {
-    arg_forms.iter().map(|x| eval(x, env)).collect()
-}
-
-fn eval(exp: &RispExp, env: &mut RispEnv) -> Result<RispExp, RispErr> {
-    match exp {
-        RispExp::Symbol(k) => {
-            env_get(k, env).ok_or(RispErr::Reason(format!("unexpected symbol k='{}'", k)))
+fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
+    match ast {
+        Sym(_) => Ok(env_get(&env, &ast)?),
+        List(v, _) => {
+            let mut lst: MalArgs = vec![];
+            for a in v.iter() {
+                lst.push(eval(a.clone(), env.clone())?)
+            }
+            Ok(list!(lst))
         }
-        RispExp::Bool(_a) => Ok(exp.clone()),
-        RispExp::Number(_a) => Ok(exp.clone()),
+        Vector(v, _) => {
+            let mut lst: MalArgs = vec![];
+            for a in v.iter() {
+                lst.push(eval(a.clone(), env.clone())?)
+            }
+            Ok(vector!(lst))
+        }
+        Hash(hm, _) => {
+            let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+            for (k, v) in hm.iter() {
+                new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+            }
+            Ok(Hash(Rc::new(new_hm), Rc::new(Nil)))
+        }
+        _ => Ok(ast.clone()),
+    }
+}
 
-        RispExp::List(list) => {
-            let first_form = list
-                .first()
-                .ok_or(RispErr::Reason("expected a non-empty list".to_string()))?;
-            let arg_forms = &list[1..];
-            match eval_built_in_form(first_form, arg_forms, env) {
-                Some(res) => res,
-                None => {
-                    let first_eval = eval(first_form, env)?;
-                    match first_eval {
-                        RispExp::Func(f) => f(&eval_forms(arg_forms, env)?),
-                        RispExp::Lambda(lambda) => {
-                            let new_env = &mut env_for_lambda(lambda.params_exp, arg_forms, env)?;
-                            eval(&lambda.body_exp, new_env)
-                        }
-                        _ => Err(RispErr::Reason("first form must be a function".to_string())),
+fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
+    let ret: MalRet;
+
+    'tco: loop {
+        ret = match ast.clone() {
+            List(l, _) => {
+                if l.len() == 0 {
+                    return Ok(ast);
+                }
+                match macroexpand(ast.clone(), &env) {
+                    (true, Ok(new_ast)) => {
+                        ast = new_ast;
+                        continue 'tco;
                     }
+                    (_, Err(e)) => return Err(e),
+                    _ => (),
+                }
+
+                if l.len() == 0 {
+                    return Ok(ast);
+                }
+                let a0 = &l[0];
+                match a0 {
+                    Sym(ref a0sym) if a0sym == "def!" => {
+                        env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
+                    }
+                    Sym(ref a0sym) if a0sym == "let*" => {
+                        env = env_new(Some(env.clone()));
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        match a1 {
+                            List(ref binds, _) | Vector(ref binds, _) => {
+                                for (b, e) in binds.iter().tuples() {
+                                    match b {
+                                        Sym(_) => {
+                                            let _ = env_set(
+                                                &env,
+                                                b.clone(),
+                                                eval(e.clone(), env.clone())?,
+                                            );
+                                        }
+                                        _ => {
+                                            return error("let* with non-Sym binding");
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                return error("let* with non-List bindings");
+                            }
+                        };
+                        ast = a2;
+                        continue 'tco;
+                    }
+                    Sym(ref a0sym) if a0sym == "quote" => Ok(l[1].clone()),
+                    Sym(ref a0sym) if a0sym == "quasiquoteexpand" => Ok(quasiquote(&l[1])),
+                    Sym(ref a0sym) if a0sym == "quasiquote" => {
+                        ast = quasiquote(&l[1]);
+                        continue 'tco;
+                    }
+                    Sym(ref a0sym) if a0sym == "defmacro!" => {
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        let r = eval(a2, env.clone())?;
+                        match r {
+                            MalFunc {
+                                eval,
+                                ast,
+                                env,
+                                params,
+                                ..
+                            } => Ok(env_set(
+                                &env,
+                                a1.clone(),
+                                MalFunc {
+                                    eval: eval,
+                                    ast: ast.clone(),
+                                    env: env.clone(),
+                                    params: params.clone(),
+                                    is_macro: true,
+                                    meta: Rc::new(Nil),
+                                },
+                            )?),
+                            _ => error("set_macro on non-function"),
+                        }
+                    }
+                    Sym(ref a0sym) if a0sym == "macroexpand" => {
+                        match macroexpand(l[1].clone(), &env) {
+                            (_, Ok(new_ast)) => Ok(new_ast),
+                            (_, e) => return e,
+                        }
+                    }
+                    Sym(ref a0sym) if a0sym == "try*" => match eval(l[1].clone(), env.clone()) {
+                        Err(ref e) if l.len() >= 3 => {
+                            let exc = match e {
+                                ErrMalVal(mv) => mv.clone(),
+                                ErrString(s) => Str(s.to_string()),
+                            };
+                            match l[2].clone() {
+                                List(c, _) => {
+                                    let catch_env = env_bind(
+                                        Some(env.clone()),
+                                        list!(vec![c[1].clone()]),
+                                        vec![exc],
+                                    )?;
+                                    eval(c[2].clone(), catch_env)
+                                }
+                                _ => error("invalid catch block"),
+                            }
+                        }
+                        res => res,
+                    },
+                    Sym(ref a0sym) if a0sym == "do" => {
+                        match eval_ast(&list!(l[1..l.len() - 1].to_vec()), &env)? {
+                            List(_, _) => {
+                                ast = l.last().unwrap_or(&Nil).clone();
+                                continue 'tco;
+                            }
+                            _ => error("invalid do form"),
+                        }
+                    }
+                    Sym(ref a0sym) if a0sym == "if" => {
+                        let cond = eval(l[1].clone(), env.clone())?;
+                        match cond {
+                            Bool(false) | Nil if l.len() >= 4 => {
+                                ast = l[3].clone();
+                                continue 'tco;
+                            }
+                            Bool(false) | Nil => Ok(Nil),
+                            _ if l.len() >= 3 => {
+                                ast = l[2].clone();
+                                continue 'tco;
+                            }
+                            _ => Ok(Nil),
+                        }
+                    }
+                    Sym(ref a0sym) if a0sym == "fn*" => {
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        Ok(MalFunc {
+                            eval: eval,
+                            ast: Rc::new(a2),
+                            env: env,
+                            params: Rc::new(a1),
+                            is_macro: false,
+                            meta: Rc::new(Nil),
+                        })
+                    }
+                    Sym(ref a0sym) if a0sym == "eval" => {
+                        ast = eval(l[1].clone(), env.clone())?;
+                        while let Some(ref e) = env.clone().outer {
+                            env = e.clone();
+                        }
+                        continue 'tco;
+                    }
+                    _ => match eval_ast(&ast, &env)? {
+                        List(ref el, _) => {
+                            let ref f = el[0].clone();
+                            let args = el[1..].to_vec();
+                            match f {
+                                Func(_, _) => f.apply(args),
+                                MalFunc {
+                                    ast: mast,
+                                    env: menv,
+                                    params,
+                                    ..
+                                } => {
+                                    let a = &**mast;
+                                    let p = &**params;
+                                    env = env_bind(Some(menv.clone()), p.clone(), args)?;
+                                    ast = a.clone();
+                                    continue 'tco;
+                                }
+                                _ => error("attempt to call non-function"),
+                            }
+                        }
+                        _ => error("expected a list"),
+                    },
                 }
             }
-        }
-        RispExp::Func(_) => Err(RispErr::Reason("unexpected form".to_string())),
-        RispExp::Lambda(_) => Err(RispErr::Reason("unexpected form".to_string())),
-    }
+            _ => eval_ast(&ast, &env),
+        };
+
+        break;
+    } // end 'tco loop
+
+    ret
+}
+
+// print
+fn print(ast: &MalVal) -> String {
+    ast.pr_str(true)
+}
+
+fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
+    let ast = read(str)?;
+    let exp = eval(ast, env.clone())?;
+    Ok(print(&exp))
 }
 
 fn main() {
-    let env = &mut default_env();
-    let mut reader = InPort::init("new.lisp".to_string());
-    let mut token = String::new();
-    read(&reader);
-    // read from file
-    //    let file = File::open("new.lisp").unwrap();
-    //    let lines = io::BufReader::new(file).lines();
-    //    let mut cur_line = String::new();
-    //    let mut token = String::new();
-    //    for line in lines {
-    //        let (token, cur_line) = tokenize(line.ok().unwrap().as_str().to_string());
-    //        println!("token {:?}", token);
-    //        println!("line {:?}", cur_line);
-    //   }
+    let mut args = std::env::args();
+    let arg1 = args.nth(1);
 
-    /*
-    loop {
-      println!("risp >");
-      let expr = slurp_expr();
-      match parse_eval(expr, env) {
-        Ok(res) => println!("// 🔥 => {}", res),
-        Err(e) => match e {
-          RispErr::Reason(msg) => println!("// 🙀 => {}", msg),
-        },
-      }
+    // core.rs: defined using rust
+    let repl_env = env_new(None);
+    for (k, v) in core::ns() {
+        env_sets(&repl_env, k, v);
     }
-    */
+    env_sets(&repl_env, "*ARGV*", list!(args.map(Str).collect()));
+
+    // core.mal: defined using the language itself
+    let _ = rep("(def! *host-language* \"rust\")", &repl_env);
+    let _ = rep("(def! not (fn* (a) (if a false true)))", &repl_env);
+    let _ = rep(
+        "(def! load-file (fn* (f) (eval (read-string (str \"(do \" (slurp f) \"\nnil)\")))))",
+        &repl_env,
+    );
+    let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
+
+    // Invoked with arguments
+    if let Some(f) = arg1 {
+        match rep(&format!("(load-file \"{}\")", f), &repl_env) {
+            Ok(_) => std::process::exit(0),
+            Err(e) => {
+                println!("Error: {}", format_error(e));
+                std::process::exit(1);
+            }
+        }
+    }
 }
