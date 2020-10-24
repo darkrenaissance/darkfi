@@ -82,7 +82,7 @@ fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> 
 fn show_public(zk_proof: String) -> Result<()> {
     let file = File::open(zk_proof)?;
     let proof = ZKProof::decode(file)?;
-    assert_eq!(proof.public.len(), 2);
+    //assert_eq!(proof.public.len(), 2);
     println!("Public values: {:?}", proof.public);
     Ok(())
 }
