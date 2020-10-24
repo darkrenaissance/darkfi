@@ -153,6 +153,20 @@ fn nth(a: MalArgs) -> MalRet {
     }
 }
 
+// (unpack-bits x 256 it produces a Vec
+fn unpack_bits(a: MalArgs) -> MalRet {
+    // Scalar::from_string(
+    match (a[0].clone(), a[1].clone()) {
+        (List(seq, _), Int(idx)) | (Vector(seq, _), Int(idx)) => {
+            if seq.len() <= idx as usize {
+                return error("nth: index out of range");
+            }
+            Ok(seq[idx as usize].clone())
+        }
+        _ => error("invalid args to nth"),
+    }
+}
+
 fn first(a: MalArgs) -> MalRet {
     match a[0].clone() {
         List(ref seq, _) | Vector(ref seq, _) if seq.len() == 0 => Ok(Nil),
@@ -315,5 +329,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("deref", func(|a| a[0].deref())),
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
+        ("unpack_bits", func(unpack_bits)),
     ]
 }
