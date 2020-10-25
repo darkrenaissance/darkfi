@@ -4,6 +4,25 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use sapvi::bls_extensions::BlsStringConversion;
+use sapvi::error::{Error, Result};
+use sapvi::serial::{Decodable, Encodable};
+use sapvi::vm::{
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
+    ZKVirtualMachine,
+};
+use bellman::{
+    gadgets::{
+        Assignment,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+use bls12_381::Bls12;
+use bls12_381::Scalar;
+use ff::{Field, PrimeField};
+use rand::rngs::OsRng;
+use std::ops::{AddAssign, MulAssign, SubAssign};
+use std::time::Instant;
 use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
@@ -153,17 +172,20 @@ fn nth(a: MalArgs) -> MalRet {
     }
 }
 
-// (unpack-bits x 256 it produces a Vec
 fn unpack_bits(a: MalArgs) -> MalRet {
-    // Scalar::from_string(
+    let mut result = vec![];
     match (a[0].clone(), a[1].clone()) {
-        (List(seq, _), Int(idx)) | (Vector(seq, _), Int(idx)) => {
-            if seq.len() <= idx as usize {
-                return error("nth: index out of range");
-            }
-            Ok(seq[idx as usize].clone())
+        (Str(ref s), Int(size)) => {
+            let value = Scalar::from_string(s);
+                    for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+                        match bit {
+                            true => result.push(Scalar::one()),
+                            false => result.push(Scalar::zero()),
+                        }
+                    }
+            Ok(list!(result.iter().map(|a| Str(std::string::ToString::to_string(&a))).collect::<Vec<MalVal>>()))
         }
-        _ => error("invalid args to nth"),
+        _ => error("invalid args to unpack-bits"),
     }
 }
 
@@ -241,6 +263,22 @@ fn seq(a: MalArgs) -> MalRet {
         Nil => Ok(Nil),
         _ => error("seq: called with non-seq"),
     }
+}
+
+fn add_one_lc0(a: MalArgs) -> MalRet {
+    Ok(Sym("add-one-lc0".to_string()))
+}
+
+fn enforce(a: MalArgs) -> MalRet {
+    Ok(Sym("enforce".to_string()))
+}
+
+fn double_coeff_lc(a: MalArgs) -> MalRet {
+    Ok(Sym("double-coeff-lc".to_string()))
+}
+
+fn reset_coeff_lc(a: MalArgs) -> MalRet {
+    Ok(Sym("reset-coeff-lc".to_string()))
 }
 
 pub fn ns() -> Vec<(&'static str, MalVal)> {
@@ -329,6 +367,30 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("deref", func(|a| a[0].deref())),
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
-        ("unpack_bits", func(unpack_bits)),
+        ("unpack-bits", func(unpack_bits)),
+        ("add-lc0", 
+            func(|a| {
+                println!("add-lc0 {}", pr_seq(&a, false, "", "", " "));
+                Ok(Nil)
+            })),
+        ("sub-lc0", 
+            func(|a| {
+                println!("sub-lc0 {}", pr_seq(&a, false, "", "", " "));
+                Ok(Nil)
+            })),
+        ("enforce", func(enforce)),
+        ("double-coeff-lc", func(double_coeff_lc)),
+        ("reset-coeff-lc", func(double_coeff_lc)),
+        ("sub-lc0", 
+            func(|a| {
+                println!("sub-lc0 {}", pr_seq(&a, false, "", "", " "));
+                Ok(Nil)
+            })),
+        ("add-one-lc0", func(add_one_lc0)),
+        ("add-lc1", 
+            func(|a| {
+                println!("add-lc1 {}", pr_seq(&a, false, "", "", " "));
+                Ok(Nil)
+            })),
     ]
 }
