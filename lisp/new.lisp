@@ -1,4 +1,4 @@
-(def! circuit (fn* [x] (
+(def! circuit (zk* [x] (
     (def! bits (unpack-bits x 256))
     (map (fn* [b] (println b
                     '(add lc0 one) 
