@@ -77,6 +77,9 @@ def evaluate(poly, encrypted_powers):
     for power, coeff in zip(encrypted_powers, coeffs):
         #print(coeff, power)
         coeff = int(coeff)
+        # I have to do this for some strange reason
+        # Because if coeff is negative and I do += power * coeff
+        # then it gives me a different result than what I expect
         if coeff < 0:
             result -= power * (-coeff)
         else:
