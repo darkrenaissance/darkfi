@@ -1,10 +1,16 @@
 #![allow(non_snake_case)]
-
+use simplelog::*;
+use std::fs;
+use std::fs::File;
+use std::time::Instant;
+use bls12_381::Scalar;
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 
+#[macro_use]
+extern crate clap;
 #[macro_use]
 extern crate lazy_static;
 extern crate fnv;
@@ -301,7 +307,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 }
                                 _ => { 
                                     Ok(Nil)
-                                    //error("attempt to call non-function")
                                 },
                             }
                         }
@@ -329,18 +334,46 @@ fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
     Ok(print(&exp))
 }
 
-fn main() {
-    let mut args = std::env::args();
-    let arg1 = args.nth(1);
+fn main() -> Result<(), ()> {
+    
+    let matches = clap_app!(zklisp =>
+        (version: "0.1.0")
+        (author: "Roberto Santacroce Martins <miles.chet@gmail.com>")
+        (about: "A Lisp Interpreter for Zero Knowledge Virtual Machine")
+        (@subcommand load =>
+            (about: "Load the file into the interpreter")
+            (@arg FILE: +required "Lisp Contract filename")
+        )
+    )
+    .get_matches();
 
-    // core.rs: defined using rust
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Debug,
+        Config::default(),
+        TerminalMode::Mixed,
+    )
+    .unwrap()])
+    .unwrap();
+
+    match matches.subcommand() {
+        Some(("load", matches)) => {
+            let file : String = matches.value_of("FILE").unwrap().parse().unwrap();
+            repl_load(file);
+        }
+        _ => {
+            eprintln!("error: Invalid subcommand invoked");
+            std::process::exit(-1);
+        }
+    }
+
+    Ok(())
+}
+
+fn repl_load(file: String) -> Result<(), ()> {
     let repl_env = env_new(None);
     for (k, v) in core::ns() {
         env_sets(&repl_env, k, v);
     }
-    env_sets(&repl_env, "*ARGV*", list!(args.map(Str).collect()));
-
-    // core.mal: defined using the language itself
     let _ = rep("(def! *host-language* \"rust\")", &repl_env);
     let _ = rep("(def! not (fn* (a) (if a false true)))", &repl_env);
     let _ = rep(
@@ -348,15 +381,12 @@ fn main() {
         &repl_env,
     );
     let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
-
-    // Invoked with arguments
-    if let Some(f) = arg1 {
-        match rep(&format!("(load-file \"{}\")", f), &repl_env) {
+        match rep(&format!("(load-file \"{}\")", file), &repl_env) {
             Ok(_) => std::process::exit(0),
             Err(e) => {
                 println!("Error: {}", format_error(e));
                 std::process::exit(1);
             }
         }
-    }
+        Ok(())
 }
