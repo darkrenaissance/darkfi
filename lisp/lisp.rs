@@ -263,18 +263,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
-                    Sym(ref a0sym) if a0sym == "zk*" => {
-                        // TODO create zk circuit and evaluate the rest
-                        let (a1, a2) = (l[1].clone(), l[2].clone());
-                        Ok(MalFunc {
-                            eval: eval,
-                            ast: Rc::new(a2),
-                            env: env,
-                            params: Rc::new(a1),
-                            is_macro: false,
-                            meta: Rc::new(Nil),
-                        })
-                    }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         Ok(MalFunc {
@@ -311,8 +299,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     ast = a.clone();
                                     continue 'tco;
                                 }
-                                _ => { println!("{:?}", el); 
-                                    error("attempt to call non-function")},
+                                _ => { 
+                                    Ok(Nil)
+                                    //error("attempt to call non-function")
+                                },
                             }
                         }
                         _ => error("expected a list"),
