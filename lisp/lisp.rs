@@ -269,6 +269,19 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
+                    Sym(ref a0sym) if a0sym == "zk*" => {
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        println!("---> {:?} {:?}", a1, a2);
+                        // TODO add alloc name and nested eval to zkcircuit
+                        Ok(MalFunc {
+                            eval: eval,
+                            ast: Rc::new(a2),
+                            env: env,
+                            params: Rc::new(a1),
+                            is_macro: false,
+                            meta: Rc::new(Nil),
+                        })
+                    }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         Ok(MalFunc {
