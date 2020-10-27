@@ -311,7 +311,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     ast = a.clone();
                                     continue 'tco;
                                 }
-                                _ => error("attempt to call non-function"),
+                                _ => { println!("{:?}", el); 
+                                    error("attempt to call non-function")},
                             }
                         }
                         _ => error("expected a list"),
