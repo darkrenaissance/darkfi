@@ -20,7 +20,7 @@ null = ec.AffinePoint(Fq(Q, 0), Fq(Q, 1), True, bls12381)
 assert g1 + null == g1
 
 #################################
-# Verifier
+# Verifier (trusted setup)
 #################################
 
 # samples a random value (a secret)
