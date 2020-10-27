@@ -37,6 +37,7 @@ encrypted_powers = [
 target = (s - 1) * (s - 2)
 
 # encrypted values of s provided to the prover
+# Actual values of s are toxic waste and discarded
 
 #################################
 # Prover
