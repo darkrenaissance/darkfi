@@ -5,3 +5,4 @@
 [] - Document the language
 [] - Improve output for debug, log and error with ast and env dump
 [] - Integrate with zkvm command line
+[] - Integrate with ZKVMCircuit: allocs and constraints
