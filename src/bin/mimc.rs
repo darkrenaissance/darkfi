@@ -77,7 +77,7 @@ fn main() -> Result<()> {
 
     // Do the trusted setup
 
-    contract.setup();
+    contract.setup("mimc.zts");
 
     // Put in our input parameters
 

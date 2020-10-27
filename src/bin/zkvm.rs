@@ -52,8 +52,8 @@ fn create_proof(
     let lines: Vec<&str> = param_content.lines().collect();
     for line in lines {
         let name = line.split_whitespace().next().unwrap_or("");
-        let value = line.trim_start_matches(name).trim_left();
-        contract.set_param(name, Scalar::from_string(value));
+        let value = line.trim_start_matches(name).trim_start();
+        contract.set_param(name, Scalar::from_string(value))?;
         println!("Set parameter: {}", name);
         println!("      Value: {}", value);
     }
@@ -65,26 +65,24 @@ fn create_proof(
 
 //verify the proof
 fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> Result<()> {
-    let start = Instant::now();
     let contract_file = File::open(contract_data)?;
     let mut contract = ZKContract::decode(contract_file)?;
     contract.load_setup(&setup_file)?;
     let proof_file = File::open(zk_proof)?;
     let proof = ZKProof::decode(proof_file)?;
-    if (contract.verify(&proof)) {
+    if contract.verify(&proof) {
         println!("Zero-knowledge proof verified correctly.")
     } else {
-        println!("Verification failed.")
+        eprintln!("Verification failed.")
     }
     Ok(())
 }
 
 // show public values in proof
 fn show_public(zk_proof: String) -> Result<()> {
-    let start = Instant::now();
     let file = File::open(zk_proof)?;
     let proof = ZKProof::decode(file)?;
-    assert_eq!(proof.public.len(), 2);
+    //assert_eq!(proof.public.len(), 2);
     println!("Public values: {:?}", proof.public);
     Ok(())
 }
