@@ -265,22 +265,6 @@ fn seq(a: MalArgs) -> MalRet {
     }
 }
 
-fn add_one_lc0(a: MalArgs) -> MalRet {
-    Ok(Sym("add-one-lc0".to_string()))
-}
-
-fn enforce(a: MalArgs) -> MalRet {
-    Ok(Sym("enforce".to_string()))
-}
-
-fn double_coeff_lc(a: MalArgs) -> MalRet {
-    Ok(Sym("double-coeff-lc".to_string()))
-}
-
-fn reset_coeff_lc(a: MalArgs) -> MalRet {
-    Ok(Sym("reset-coeff-lc".to_string()))
-}
-
 pub fn ns() -> Vec<(&'static str, MalVal)> {
     vec![
         ("=", func(|a| Ok(Bool(a[0] == a[1])))),
@@ -368,29 +352,5 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
-        ("add-lc0", 
-            func(|a| {
-                println!("add-lc0 {}", pr_seq(&a, false, "", "", " "));
-                Ok(Nil)
-            })),
-        ("sub-lc0", 
-            func(|a| {
-                println!("sub-lc0 {}", pr_seq(&a, false, "", "", " "));
-                Ok(Nil)
-            })),
-        ("enforce", func(enforce)),
-        ("double-coeff-lc", func(double_coeff_lc)),
-        ("reset-coeff-lc", func(double_coeff_lc)),
-        ("sub-lc0", 
-            func(|a| {
-                println!("sub-lc0 {}", pr_seq(&a, false, "", "", " "));
-                Ok(Nil)
-            })),
-        ("add-one-lc0", func(add_one_lc0)),
-        ("add-lc1", 
-            func(|a| {
-                println!("add-lc1 {}", pr_seq(&a, false, "", "", " "));
-                Ok(Nil)
-            })),
     ]
 }

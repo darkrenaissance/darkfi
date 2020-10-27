@@ -1,5 +1,5 @@
 use crate::types::MalVal;
-use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector, Zk};
 
 fn escape_str(s: &str) -> String {
     s.chars()
@@ -45,6 +45,7 @@ impl MalVal {
                 ast: a, params: p, ..
             } => format!("(fn* {} {})", p.pr_str(true), a.pr_str(true)),
             Atom(a) => format!("(atom {})", a.borrow().pr_str(true)),
+            Zk(a) => format!("ZKCircuit")
         }
     }
 }

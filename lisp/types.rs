@@ -8,6 +8,17 @@ use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 
+use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof, ZKVMCircuit, ConstraintInstruction};
+use bls12_381::Scalar;
+
+use bellman::{
+    gadgets::{
+        boolean::{AllocatedBit, Boolean},
+        multipack, num, Assignment,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+
 #[derive(Debug, Clone)]
 pub enum MalVal {
     Nil,
@@ -29,6 +40,15 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
+    Zk(ZKCircuit),
+}
+
+#[derive(Debug, Clone)]
+pub struct ZKCircuit {
+    name: String,
+    constraints: Vec<ConstraintInstruction>,
+    private: Vec<Scalar>,
+    public: Vec<Scalar>,
 }
 
 #[derive(Debug)]
