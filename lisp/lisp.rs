@@ -23,6 +23,11 @@ use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
 
+// zk circuit
+fn zkcircuit_load(val: &MalVal) -> MalRet {
+    Ok(val.clone())
+}
+
 // read
 fn read(str: &str) -> MalRet {
     reader::read_str(str.to_string())
@@ -257,6 +262,18 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => Ok(Nil),
                         }
+                    }
+                    Sym(ref a0sym) if a0sym == "zk*" => {
+                        // TODO create zk circuit and evaluate the rest
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        Ok(MalFunc {
+                            eval: eval,
+                            ast: Rc::new(a2),
+                            env: env,
+                            params: Rc::new(a1),
+                            is_macro: false,
+                            meta: Rc::new(Nil),
+                        })
                     }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());

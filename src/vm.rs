@@ -57,7 +57,7 @@ pub enum AllocType {
     Public,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ConstraintInstruction {
     Lc0Add(VariableIndex),
     Lc1Add(VariableIndex),
