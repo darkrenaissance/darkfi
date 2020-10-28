@@ -48,7 +48,7 @@ encrypted_shifted_powers = [
 target = (s - 1) * (s - 2)
 # CRS = common reference string = trusted setup parameters
 target_crs = g1 * target
-alpha_crs = g1 * a
+alpha_crs = g2 * a
 
 # Proving key = (encrypted_powers, encrypted_shifted_powers)
 # Verify key = (target_crs, alpha_crs)
@@ -133,13 +133,18 @@ encrypted_shift_poly = evaluate(main_poly, encrypted_shifted_powers, null)
 
 # Last check that p = t(s) h
 
+# Check polynomial cofactors:
 #assert encrypted_poly == encrypted_cofactor * target
 # e(g^p, g) == e(g^t, g^h)
 res1 = pairing.ate_pairing(encrypted_poly, g2)
-res2 = pairing.ate_pairing(g1 * target, encrypted_cofactor)
+res2 = pairing.ate_pairing(target_crs, encrypted_cofactor)
 assert res1 == res2
 
 # Verify (g^p)^a == g^p'
+# Check polynomial restriction:
 
-assert encrypted_poly * a == encrypted_shift_poly
+res1 = pairing.ate_pairing(encrypted_shift_poly, g2)
+res2 = pairing.ate_pairing(encrypted_poly, alpha_crs)
+assert res1 == res2
+#assert encrypted_poly * a == encrypted_shift_poly
 
