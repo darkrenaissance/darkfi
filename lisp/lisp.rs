@@ -267,7 +267,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "zk*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        println!("---> {:?} {:?}", a1, a2);
                         let zk_circuit = ZKCircuit{  
                             name: a1.pr_str(true),
                             constraints: Vec::new(),
