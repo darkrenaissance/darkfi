@@ -41,6 +41,12 @@ pub enum MalVal {
     },
     Atom(Rc<RefCell<MalVal>>),
     Zk(ZKCircuit),
+    Lc0,
+    Lc1,
+    Lc2,
+    Enforce(bool),
+    Add(Rc<MalVal>, Rc<MalVal>),
+    Sub(Rc<MalVal>, Rc<MalVal>),
 }
 
 #[derive(Debug, Clone)]

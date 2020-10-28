@@ -174,8 +174,8 @@ fn nth(a: MalArgs) -> MalRet {
 
 fn unpack_bits(a: MalArgs) -> MalRet {
     let mut result = vec![];
-    match (a[0].clone(), a[1].clone()) {
-        (Str(ref s), Int(size)) => {
+    match (a[0].clone()) {
+        (Str(ref s)) => {
             let value = Scalar::from_string(s);
                     for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
                         match bit {
@@ -253,7 +253,6 @@ fn conj(a: MalArgs) -> MalRet {
 }
 
 fn add(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
     Ok(Nil)
 }
 
@@ -358,5 +357,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("add", func(add)),
+        ("lc0", func(|a| Ok(MalVal::Lc0))),
     ]
 }
