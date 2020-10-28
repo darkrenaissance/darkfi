@@ -5,7 +5,7 @@ from bls_py.fields import Fq, Fq2, Fq6, Fq12, bls12381_q as Q
 import random
 import numpy as np
 
-# Section 3.3.4 from "Why and How zk-SNARK Works"
+# Section 3.5 from "Why and How zk-SNARK Works"
 
 def rand_scalar():
     return random.randrange(1, bls12381.q)
