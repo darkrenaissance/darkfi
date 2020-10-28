@@ -252,6 +252,11 @@ fn conj(a: MalArgs) -> MalRet {
     }
 }
 
+fn add(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+
 fn seq(a: MalArgs) -> MalRet {
     match a[0] {
         List(ref v, _) | Vector(ref v, _) if v.len() == 0 => Ok(Nil),
@@ -352,5 +357,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
+        ("add", func(add)),
     ]
 }
