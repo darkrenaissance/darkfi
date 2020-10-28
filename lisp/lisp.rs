@@ -21,6 +21,7 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
@@ -28,11 +29,6 @@ mod reader;
 use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
-
-// zk circuit
-fn zkcircuit_load(val: &MalVal) -> MalRet {
-    Ok(val.clone())
-}
 
 // read
 fn read(str: &str) -> MalRet {
@@ -272,6 +268,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "zk*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         println!("---> {:?} {:?}", a1, a2);
+                        let zk_circuit = ZKCircuit{  
+                            name: a1.pr_str(true),
+                            constraints: Vec::new(),
+                            private: Vec::new(),
+                            public: Vec::new()
+                        };
+                        env_set(&env, l[1].clone(), MalVal::Zk(zk_circuit));
+
                         // TODO add alloc name and nested eval to zkcircuit
                         Ok(MalFunc {
                             eval: eval,

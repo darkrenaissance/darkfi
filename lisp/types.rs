@@ -45,10 +45,10 @@ pub enum MalVal {
 
 #[derive(Debug, Clone)]
 pub struct ZKCircuit {
-    name: String,
-    constraints: Vec<ConstraintInstruction>,
-    private: Vec<Scalar>,
-    public: Vec<Scalar>,
+    pub name: String,
+    pub constraints: Vec<ConstraintInstruction>,
+    pub private: Vec<Scalar>,
+    pub public: Vec<Scalar>,
 }
 
 #[derive(Debug)]
