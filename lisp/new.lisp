@@ -2,11 +2,11 @@
 (defzk! circuit ())
 (def! bits (unpack-bits x 256))
 ;;zkcons add a constraints instruction to the circuit
-    (map (fn* [b] (zkcons! 
-                    (add 'lc0 'one) 
-                    '(sub b)
-                    '(add lc1 x)
-                    'enforce)
+    (map (fn* [b] (zkcons! circuit 
+                    (add lc0 one) 
+                    (sub lc0 b)
+                    (add lc1 x)
+                    enforce)
               ) bits)
    (map (fn* [b] (quote '(add lc0 b) 
                           'double-coeff-lc)
