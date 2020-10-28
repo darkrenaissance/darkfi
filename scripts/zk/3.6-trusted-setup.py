@@ -127,6 +127,8 @@ encrypted_shift_poly = evaluate(main_poly, encrypted_shifted_powers, null)
 
 # resulting g^p and g^h are provided to the verifier
 
+# proof = (encrypted_poly, encrypted_cofactor, encrypted_shift_poly)
+
 #################################
 # Verifier
 #################################
