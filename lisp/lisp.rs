@@ -267,14 +267,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "zkcons!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        // a1 circuit name, get it from env
-                        // a2 evaluate expression
                         let c = env_get(&env, &a1);
-                        let cond = eval(a2.clone(), env.clone());
-                        println!("{:?} {:?} {:?}", c, a1, cond);
-                        match cond {
-                            _ => Ok(Nil)
-                        }
+                        let cond = eval_ast(&a2, &env);
+                        cond
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());

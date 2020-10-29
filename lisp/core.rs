@@ -26,7 +26,7 @@ use std::time::Instant;
 use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
-use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector, Add, Lc0};
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
 macro_rules! fn_t_int_int {
@@ -254,9 +254,7 @@ fn conj(a: MalArgs) -> MalRet {
 
 fn add(a: MalArgs) -> MalRet {
     // get next symbol should be lc0 lc1 lc2
-    println!("{:?}", a[0]);
-    println!("{:?}", a[1]);
-    Ok(MalVal::Lc0)
+    Ok(Add(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
 }
 
 fn seq(a: MalArgs) -> MalRet {
