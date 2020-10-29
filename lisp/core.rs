@@ -253,7 +253,10 @@ fn conj(a: MalArgs) -> MalRet {
 }
 
 fn add(a: MalArgs) -> MalRet {
-    Ok(Nil)
+    // get next symbol should be lc0 lc1 lc2
+    println!("{:?}", a[0]);
+    println!("{:?}", a[1]);
+    Ok(MalVal::Lc0)
 }
 
 fn seq(a: MalArgs) -> MalRet {
