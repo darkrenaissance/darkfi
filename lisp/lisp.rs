@@ -281,11 +281,12 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                             Add(b1, b2) => {
                                                 println!("Add {:?} {:?}", b1, b2);
                                                 zk.private.push(Scalar::from_string(&b2.pr_str(false).to_string()));
-                                                env_set(&env, l[1].clone(), zk.clone());
-                                                println!("{:?}", zk);
+                                                env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
                                             }
                                             Sub(b1, b2) => {
                                                 println!("Sub {:?} {:?}", b1, b2);
+                                                zk.private.push(Scalar::from_string(&b2.pr_str(false).to_string()));
+                                                env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
                                             }
                                             _ => {
                                                 println!("not mapped");
