@@ -4,6 +4,18 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::printer::pr_seq;
+use crate::reader::read_str;
+use crate::types::MalErr::ErrMalVal;
+use crate::types::MalVal::{
+    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector,
+};
+use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
+use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
+use bls12_381::Bls12;
+use bls12_381::Scalar;
+use ff::{Field, PrimeField};
+use rand::rngs::OsRng;
 use sapvi::bls_extensions::BlsStringConversion;
 use sapvi::error::{Error, Result};
 use sapvi::serial::{Decodable, Encodable};
@@ -11,23 +23,8 @@ use sapvi::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
     ZKVirtualMachine,
 };
-use bellman::{
-    gadgets::{
-        Assignment,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
-use bls12_381::Bls12;
-use bls12_381::Scalar;
-use ff::{Field, PrimeField};
-use rand::rngs::OsRng;
 use std::ops::{AddAssign, MulAssign, SubAssign};
 use std::time::Instant;
-use crate::printer::pr_seq;
-use crate::reader::read_str;
-use crate::types::MalErr::ErrMalVal;
-use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector, Add, Lc0};
-use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
 macro_rules! fn_t_int_int {
     ($ret:ident, $fn:expr) => {{
@@ -65,7 +62,6 @@ fn symbol(a: MalArgs) -> MalRet {
         _ => error("illegal symbol call"),
     }
 }
-
 
 fn slurp(f: String) -> MalRet {
     let mut s = String::new();
@@ -177,13 +173,16 @@ fn unpack_bits(a: MalArgs) -> MalRet {
     match (a[0].clone()) {
         (Str(ref s)) => {
             let value = Scalar::from_string(s);
-                    for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
-                        match bit {
-                            true => result.push(Scalar::one()),
-                            false => result.push(Scalar::zero()),
-                        }
-                    }
-            Ok(list!(result.iter().map(|a| Str(std::string::ToString::to_string(&a))).collect::<Vec<MalVal>>()))
+            for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+                match bit {
+                    true => result.push(Scalar::one()),
+                    false => result.push(Scalar::zero()),
+                }
+            }
+            Ok(list!(result
+                .iter()
+                .map(|a| Str(std::string::ToString::to_string(&a)))
+                .collect::<Vec<MalVal>>()))
         }
         _ => error("invalid args to unpack-bits"),
     }

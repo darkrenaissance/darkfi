@@ -8,8 +8,11 @@ use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 
-use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof, ZKVMCircuit, ConstraintInstruction};
 use bls12_381::Scalar;
+use sapvi::{
+    BlsStringConversion, ConstraintInstruction, Decodable, Encodable, ZKContract, ZKProof,
+    ZKVMCircuit,
+};
 
 use bellman::{
     gadgets::{

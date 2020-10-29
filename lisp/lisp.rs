@@ -1,10 +1,12 @@
 #![allow(non_snake_case)]
+use bls12_381::Scalar;
+use sapvi::bls_extensions::BlsStringConversion;
+use sapvi::serial::{Decodable, Encodable};
 use simplelog::*;
 use std::fs;
 use std::fs::File;
-use std::time::Instant;
-use bls12_381::Scalar;
 use std::rc::Rc;
+use std::time::Instant;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
@@ -20,7 +22,9 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::MalVal::{
+    Add, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Str, Sub, Sym, Vector, Zk,
+};
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
@@ -66,9 +70,9 @@ fn quasiquote(ast: &MalVal) -> MalVal {
                 }
             }
             return qq_iter(&v);
-        },
+        }
         Vector(v, _) => return list![Sym("vec".to_string()), qq_iter(&v)],
-        Hash(_, _) | Sym(_)=> return list![Sym("quote".to_string()), ast.clone()],
+        Hash(_, _) | Sym(_) => return list![Sym("quote".to_string()), ast.clone()],
         _ => ast.clone(),
     }
 }
@@ -267,17 +271,44 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "zkcons!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        let c = env_get(&env, &a1);
-                        let cond = eval_ast(&a2, &env);
-                        cond
+                        match env_get(&env, &a1).ok().unwrap() {
+                            Zk(mut zk) => match eval_ast(&a2, &env)? {
+                                List(ref el, _) => {
+                                    let args = el.to_vec();
+                                    for b in args.iter() {
+                                        match b {
+                                            Sym(_) => {}
+                                            Add(b1, b2) => {
+                                                println!("Add {:?} {:?}", b1, b2);
+                                                zk.private.push(Scalar::from_string(&b2.pr_str(false).to_string()));
+                                                println!("{:?}", zk);
+                                            }
+                                            Sub(b1, b2) => {
+                                                println!("Sub {:?} {:?}", b1, b2);
+                                            }
+                                            _ => {
+                                                println!("not mapped");
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    error("not mapped");
+                                }
+                            },
+                            _ => {
+                                error("zk circuit not found on env");
+                            }
+                        }
+                        Ok(Nil)
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        let zk_circuit = MalVal::Zk(ZKCircuit{  
+                        let zk_circuit = MalVal::Zk(ZKCircuit {
                             name: a1.pr_str(true),
                             constraints: Vec::new(),
                             private: Vec::new(),
-                            public: Vec::new()
+                            public: Vec::new(),
                         });
                         env_set(&env, l[1].clone(), zk_circuit.clone());
                         Ok(zk_circuit)
@@ -318,10 +349,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     ast = a.clone();
                                     continue 'tco;
                                 }
-                                _ => { 
+                                _ => {
                                     Ok(Nil)
                                     //error("call non-function")
-                                },
+                                }
                             }
                         }
                         _ => error("expected a list"),
@@ -349,7 +380,6 @@ fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
 }
 
 fn main() -> Result<(), ()> {
-    
     let matches = clap_app!(zklisp =>
         (version: "0.1.0")
         (author: "Roberto Santacroce Martins <miles.chet@gmail.com>")
@@ -371,7 +401,7 @@ fn main() -> Result<(), ()> {
 
     match matches.subcommand() {
         Some(("load", matches)) => {
-            let file : String = matches.value_of("FILE").unwrap().parse().unwrap();
+            let file: String = matches.value_of("FILE").unwrap().parse().unwrap();
             repl_load(file);
         }
         _ => {
@@ -395,12 +425,12 @@ fn repl_load(file: String) -> Result<(), ()> {
         &repl_env,
     );
     let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
-        match rep(&format!("(load-file \"{}\")", file), &repl_env) {
-            Ok(_) => std::process::exit(0),
-            Err(e) => {
-                println!("Error: {}", format_error(e));
-                std::process::exit(1);
-            }
+    match rep(&format!("(load-file \"{}\")", file), &repl_env) {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            println!("Error: {}", format_error(e));
+            std::process::exit(1);
         }
-        Ok(())
+    }
+    Ok(())
 }
