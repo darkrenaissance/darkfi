@@ -252,6 +252,11 @@ fn conj(a: MalArgs) -> MalRet {
     }
 }
 
+fn sub(a: MalArgs) -> MalRet {
+    // get next symbol should be lc0 lc1 lc2
+    Ok(Sub(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
+}
+
 fn add(a: MalArgs) -> MalRet {
     // get next symbol should be lc0 lc1 lc2
     Ok(Add(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
@@ -358,6 +363,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("add", func(add)),
+        ("sub", func(sub)),
         ("lc0", func(|a| Ok(MalVal::Lc0))),
     ]
 }

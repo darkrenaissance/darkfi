@@ -5,6 +5,7 @@
 ;;zkcons add a constraints instruction to the circuit
     (zkcons! circuit (
                     (add lc0 one) 
+                    (sub lc0 x)
                     )
               )
 ;;    (map (fn* [b] (zkcons! circuit (
