@@ -11,8 +11,7 @@ use std::time::Instant;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use sapvi::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, 
-    ZKVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVirtualMachine,
 };
 
 #[macro_use]
@@ -275,96 +274,22 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "zkcons!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        match env_get(&env, &a1).ok().unwrap() {
-                            Zk(mut zk) => match eval_ast(&a2, &env)? {
-                                List(ref el, _) => {
-                                    let args = el.to_vec();
-                                    for b in args.iter() {
-                                        match b {
-                                            Sym(_) => {}
-                                            Add(b1, b2) => {
-                                                println!("Add {:?} {:?}", b1, b2);
-                                                // TODO extract a method
-                                                zk.private.push(Scalar::from_string(
-                                                    &b2.pr_str(false).to_string(),
-                                                ));
-                                                let const_a: ConstraintInstruction = match b1.as_ref() {
-                                                    Lc0 => 
-                                                        ConstraintInstruction::Lc0Add(
-                                                            zk.private.len(),
-                                                        
-                                                    ),
-                                                    Lc1 => 
-                                                        ConstraintInstruction::Lc1Add(
-                                                            zk.private.len(),
-                                                    ),
-                                                    Lc2 => 
-                                                        ConstraintInstruction::Lc2Add(
-                                                            zk.private.len(),
-                                                    ),
-                                                    _ => ConstraintInstruction::Lc0Add(0) 
-                                                };
-                                                zk.constraints.push(const_a);
-                                                env_set(
-                                                    &env,
-                                                    a1.clone(),
-                                                    types::MalVal::Zk(zk.clone()),
-                                                );
-                                            }
-                                            Sub(b1, b2) => {
-                                                println!("Sub {:?} {:?}", b1, b2);
-                                                zk.private.push(Scalar::from_string(
-                                                    &b2.pr_str(false).to_string(),
-                                                ));
-                                                let const_a: ConstraintInstruction = match b1.as_ref() {
-                                                    Lc0 => 
-                                                        ConstraintInstruction::Lc0Sub(
-                                                            zk.private.len(),
-                                                        
-                                                    ),
-                                                    Lc1 => 
-                                                        ConstraintInstruction::Lc1Add(
-                                                            zk.private.len(),
-                                                    ),
-                                                    Lc2 => 
-                                                        ConstraintInstruction::Lc2Add(
-                                                            zk.private.len(),
-                                                    ),
-                                                    _ => ConstraintInstruction::Lc0Add(0) 
-                                                };
-                                                zk.constraints.push(const_a);
-                                                env_set(
-                                                    &env,
-                                                    a1.clone(),
-                                                    types::MalVal::Zk(zk.clone()),
-                                                );
-                                            }
-                                            _ => {
-                                                println!("not mapped");
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    error("not mapped");
-                                }
-                            },
-                            _ => {
-                                error("zk circuit not found on env");
+                        let value = eval(a2.clone(), env.clone())?;
+                        println!("{:?}", value);
+                        match value {
+                            List(ref el, _) => {
+                                zkcons_eval(el.to_vec(), &a1, &env);
                             }
+                            _ => println!("invalid format"),
                         }
                         Ok(Nil)
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        let zk_circuit = MalVal::Zk(ZKCircuit {
-                            name: a1.pr_str(true),
-                            constraints: Vec::new(),
-                            private: Vec::new(),
-                            public: Vec::new(),
-                        });
-                        env_set(&env, l[1].clone(), zk_circuit.clone());
-                        Ok(zk_circuit)
+                        let circuit = zk_circuit_create(&a1, &env);
+                        let val = types::MalVal::Zk(circuit.clone());
+                        env_set(&env, a1.clone(), val.clone());
+                        Ok(val.clone())
                     }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
@@ -419,6 +344,57 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     } // end 'tco loop
 
     ret
+}
+
+fn zk_circuit_create(a1: &MalVal, env: &Env) -> ZKCircuit {
+    let zk_circuit = ZKCircuit {
+        name: a1.pr_str(true),
+        constraints: Vec::new(),
+        private: Vec::new(),
+        public: Vec::new(),
+    };
+    zk_circuit
+}
+
+fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
+    let mut zk = match env_get(&env, &a1).ok().unwrap() {
+        Zk(v) => v,
+        n => zk_circuit_create(a1, env),
+    };
+    println!("{:?}", zk);
+    for b in elements.iter() {
+        match b {
+            Sym(_) => {}
+            Add(b1, b2) => {
+                zk.private
+                    .push(Scalar::from_string(&b2.pr_str(false).to_string()));
+                let const_a: ConstraintInstruction = match b1.as_ref() {
+                    Lc0 => ConstraintInstruction::Lc0Add(zk.private.len()),
+                    Lc1 => ConstraintInstruction::Lc1Add(zk.private.len()),
+                    Lc2 => ConstraintInstruction::Lc2Add(zk.private.len()),
+                    _ => ConstraintInstruction::Lc0Add(0),
+                };
+                zk.constraints.push(const_a);
+                env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
+                println!("{:?}", a1.clone());
+                println!("{:?}", zk.clone());
+            }
+            Sub(b1, b2) => {
+                zk.private
+                    .push(Scalar::from_string(&b2.pr_str(false).to_string()));
+                let const_a: ConstraintInstruction = match b1.as_ref() {
+                    Lc0 => ConstraintInstruction::Lc0Sub(zk.private.len()),
+                    Lc1 => ConstraintInstruction::Lc1Add(zk.private.len()),
+                    Lc2 => ConstraintInstruction::Lc2Add(zk.private.len()),
+                    _ => ConstraintInstruction::Lc0Add(0),
+                };
+                zk.constraints.push(const_a);
+                env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
+            }
+            v => println!("not match"),
+        }
+    }
+    Ok(Nil)
 }
 
 // print

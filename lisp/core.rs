@@ -181,7 +181,7 @@ fn unpack_bits(a: MalArgs) -> MalRet {
             }
             Ok(list!(result
                 .iter()
-                .map(|a| Str(std::string::ToString::to_string(&a)))
+                .map(|a| Str(std::string::ToString::to_string(&a)[2..].to_string()))
                 .collect::<Vec<MalVal>>()))
         }
         _ => error("invalid args to unpack-bits"),
@@ -364,5 +364,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("add", func(add)),
         ("sub", func(sub)),
         ("lc0", func(|a| Ok(MalVal::Lc0))),
+        ("lc1", func(|a| Ok(MalVal::Lc1))),
     ]
 }
