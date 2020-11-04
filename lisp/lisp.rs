@@ -274,10 +274,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "zkcons!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
-                        let value = eval(a2.clone(), env.clone())?;
-                        println!("{:?}", value);
+                        let value = eval_ast(&a2, &env)?;
                         match value {
-                            List(ref el, _) => {
+                            List(ref el, _)  => {
                                 zkcons_eval(el.to_vec(), &a1, &env);
                             }
                             _ => println!("invalid format"),
@@ -361,10 +360,9 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
         Zk(v) => v,
         n => zk_circuit_create(a1, env),
     };
-    println!("{:?}", zk);
+    
     for b in elements.iter() {
         match b {
-            Sym(_) => {}
             Add(b1, b2) => {
                 zk.private
                     .push(Scalar::from_string(&b2.pr_str(false).to_string()));
@@ -391,7 +389,7 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                 zk.constraints.push(const_a);
                 env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
             }
-            v => println!("not match"),
+            val => println!("not match"),
         }
     }
     Ok(Nil)

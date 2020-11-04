@@ -15,13 +15,13 @@
                     (add lc1 x)
 ;;                    'enforce)
               )) bits))
-    (def! enforce-loop-const (map (fn* [b] (
-                    (add lc0 one) 
-                    (sub lc0 b)
-                    (add lc1 x)
+;;    (def! enforce-loop-const (map (fn* [b] (
+;;                    (add lc0 one) 
+;;                    (sub lc0 b)
+;;                    (add lc1 x)
 ;;                    'enforce)
-              )) bits))
-    (zkcons! circuit enforce-loop-const)
+;;              )) bits))
+;;    (zkcons! circuit enforce-loop-const)
 ;;   (zkcons! circuit (
 ;;                    'reset-coeff-lc
 ;;                    '(sub lc0 x)
