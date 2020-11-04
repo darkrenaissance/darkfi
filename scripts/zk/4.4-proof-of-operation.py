@@ -48,7 +48,7 @@ encrypted_shifted_powers_g2 = [
 ]
 
 # evaluates unencrypted target polynomial with s: t(s)
-target = (s - 1) * (s - 2)
+target = (s - 1)
 # CRS = common reference string = trusted setup parameters
 target_crs = g1 * target
 alpha_crs = g2 * a
@@ -63,32 +63,6 @@ alpha_crs_g1 = g1 * a
 #################################
 # Prover
 #################################
-
-# delta shift
-# Removed for now
-#delta = rand_scalar()
-
-# E(p(s)) = p(s)G
-#         = c_d s^d G + ... + c_1 s^1 G + c_0 s^0 G
-#         = s^3 G - 3 s^2 G + 2 s G
-# E(h(s)) = sG
-# t(s) = s^2 - 3s + 2
-# E(h(s)) t(s) = s^3 G - 3 s^2 G + 2 s G
-
-# Lets test these manually:
-
-e_s = encrypted_powers
-e_p_s = e_s[3] - 3 * e_s[2] + 2 * e_s[1]
-e_h_s = e_s[1]
-t_s = s**2 - 3*s + 2
-assert t_s == target
-assert e_p_s == e_h_s * t_s
-
-e_as = encrypted_shifted_powers
-e_p_as = e_as[3] - 3 * e_as[2] + 2 * e_as[1]
-assert e_p_s * a == e_p_as
-
-#############################
 
 left_poly = np.poly1d([3])
 right_poly = np.poly1d([2])
@@ -118,8 +92,6 @@ def evaluate(poly, encrypted_powers, identity):
             result -= power * (-coeff)
         else:
             result += power * coeff
-    # Add delta to the result
-    # Free extra obfuscation to the polynomial
     return result
 
 assert left_poly * right_poly == out_poly
