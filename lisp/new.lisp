@@ -9,12 +9,19 @@
 ;;                    (sub lc0 x)
 ;;                    )
 ;;              )
-    (zkcons! circuit (map (fn* [b] (
+    (map (fn* [b] (
+                    (zkcons! circuit (
                     (add lc0 one) 
                     (sub lc0 b)
-                    (add lc1 x)
+                    (add lc1 x))
 ;;                    'enforce)
-              )) bits))
+              ))) bits)
+;;    (zkcons! circuit (map (fn* [b] (
+;;                    (add lc0 one) 
+;;                    (sub lc0 b)
+;;                    (add lc1 x)
+;;                    'enforce)
+;;              )) bits))
 ;;    (def! enforce-loop-const (map (fn* [b] (
 ;;                    (add lc0 one) 
 ;;                    (sub lc0 b)
