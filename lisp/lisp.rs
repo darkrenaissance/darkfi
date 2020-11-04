@@ -277,8 +277,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval_ast(&a2, &env)?;
                         match value {
                             List(ref el, _)  => {
-                                println!("{:?}", el);
-                              //zkcons_eval(el.to_vec(), &a1, &env);
+                              zkcons_eval(el.to_vec(), &a1, &env);
                             }
                             _ => println!("invalid format"),
                         }
