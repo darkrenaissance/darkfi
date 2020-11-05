@@ -283,8 +283,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => println!("invalid format"),
                         }
-//                        println!("--> {:?}", zk);
-                        Ok(Nil)
+                        
+                        let zk = zk_circuit_get(&a1, &env);
+                        Ok(types::MalVal::Zk(zk))
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
                         let (a1, a2, a3) = (l[1].clone(), l[2].clone(), l[3].clone());
@@ -382,11 +383,11 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, mut zk: ZKCircuit) -> MalRet 
             Add(b1, b2) => {
                 zk.private
                     .push(Scalar::from_string(&b2.pr_str(false).to_string()));
-                let const_a: ConstraintInstruction = match b1.as_ref() {
+                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
                     Lc0 => ConstraintInstruction::Lc0Add(zk.private.len()),
                     Lc1 => ConstraintInstruction::Lc1Add(zk.private.len()),
                     Lc2 => ConstraintInstruction::Lc2Add(zk.private.len()),
-                    _ => ConstraintInstruction::Lc0Add(0),
+                    _ => { println!("{:?}", b1.apply(vec![])); ConstraintInstruction::Lc0Add(0) },
                 };
                 zk.constraints.push(const_a);
 //                env_sets(&env, &a1.pr_str(false), types::MalVal::Zk(zk.clone()));
@@ -394,11 +395,11 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, mut zk: ZKCircuit) -> MalRet 
             Sub(b1, b2) => {
                 zk.private
                     .push(Scalar::from_string(&b2.pr_str(false).to_string()));
-                let const_a: ConstraintInstruction = match b1.as_ref() {
+                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
                     Lc0 => ConstraintInstruction::Lc0Sub(zk.private.len()),
-                    Lc1 => ConstraintInstruction::Lc1Add(zk.private.len()),
-                    Lc2 => ConstraintInstruction::Lc2Add(zk.private.len()),
-                    _ => ConstraintInstruction::Lc0Add(0),
+                    Lc1 => ConstraintInstruction::Lc1Sub(zk.private.len()),
+                    Lc2 => ConstraintInstruction::Lc2Sub(zk.private.len()),
+                    _ => { println!("{:?}", b1.apply(vec![])); ConstraintInstruction::Lc0Sub(0) },
                 };
                 zk.constraints.push(const_a);
 //                env_sets(&env, &a1.pr_str(false), types::MalVal::Zk(zk.clone()));
