@@ -276,19 +276,34 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         let value = eval_ast(&a2, &env)?;
                         match value {
-                            List(ref el, _)  => {
-                              zkcons_eval(el.to_vec(), &a1, &env);
+                            List(ref el, _) => {
+                                zkcons_eval(el.to_vec(), &a1, &env);
                             }
                             _ => println!("invalid format"),
                         }
-                        Ok(Nil)
+                        let mut zk = match env_get(&env, &a1).ok().unwrap() {
+                            Zk(v) => v,
+                            n => zk_circuit_create(&a1, &env),
+                        };
+                        println!("--> {:?}", zk);
+                        Ok(types::MalVal::Zk(zk))
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
-                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        let (a1, a2, a3) = (l[1].clone(), l[2].clone(), l[3].clone());
                         let circuit = zk_circuit_create(&a1, &env);
                         let val = types::MalVal::Zk(circuit.clone());
                         env_set(&env, a1.clone(), val.clone());
-                        Ok(val.clone())
+                        println!("{:?}", a1);
+                        println!("{:?}", a2);
+                        println!("{:?}", a3);
+                        Ok(MalFunc {
+                            eval: eval,
+                            ast: Rc::new(a3),
+                            env: env,
+                            params: Rc::new(a2),
+                            is_macro: false,
+                            meta: Rc::new(Nil),
+                        })
                     }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
@@ -356,11 +371,14 @@ fn zk_circuit_create(a1: &MalVal, env: &Env) -> ZKCircuit {
 }
 
 fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
-    let mut zk = match env_get(&env, &a1).ok().unwrap() {
-        Zk(v) => v,
-        n => zk_circuit_create(a1, env),
+    // TODO change for nested match
+    let mut zk: ZKCircuit = match env_get(&env, &a1) {
+        Ok(v) => match v {
+            Zk(v) => v,
+            _ =>  zk_circuit_create(a1, env)
+        },
+        _ => zk_circuit_create(a1, env)
     };
-    
     for b in elements.iter() {
         match b {
             Add(b1, b2) => {
@@ -392,7 +410,7 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
             val => println!("not match"),
         }
     }
-    Ok(Nil)
+    Ok(types::MalVal::Zk(zk))
 }
 
 // print
