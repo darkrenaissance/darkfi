@@ -48,7 +48,7 @@ impl MalVal {
             Zk(a) => format!("{:?}", a),
             Add => format!("add"),
             Lc0 => format!("Lc0"),
-            i_ => format!(""),
+            i => format!("{:?}", i.pr_str(true)),
         }
     }
 }
