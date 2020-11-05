@@ -8,11 +8,11 @@
                     (add lc1 x)))
 ;;                    'enforce)
               ))) bits)
-(println   (zkcons! circuit (
+(zkcons! circuit (
 ;;                    'reset-coeff-lc
                     (sub lc0 x)
                     (add lc1 one)
 ;;                    'enforce)
-            )))
+            ))
 (println "bit-dec")
 (println circuit)

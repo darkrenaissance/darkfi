@@ -1,9 +1,7 @@
 ## TODO
 
-[] - Check for recursive
-[] - Disable functions not utilized
 [] - Document the language
-[] - Improve output for debug, log and error with ast and env dump
 [] - Integrate with zkvm command line
-[] - Integrate with ZKVMCircuit: allocs and constraints
-[] - Added CryptoOperation such double and square to core.rs
+[x] - Integrate with ZKVMCircuit: allocs and constraints
+[x] - Added CryptoOperation such double and square to core.rs
+[] - Adapt ZKContract to use lisp to read contract and execute
