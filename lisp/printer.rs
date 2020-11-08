@@ -47,6 +47,7 @@ impl MalVal {
             Atom(a) => format!("(atom {})", a.borrow().pr_str(true)),
             Zk(a) => format!("{:?}", a),
             Add => format!("add"),
+            Sub => format!("sub"),
             Lc0 => format!("Lc0"),
             i => format!("{:?}", i.pr_str(true)),
         }
