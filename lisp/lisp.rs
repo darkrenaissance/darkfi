@@ -282,7 +282,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => println!("invalid format"),
                         }
-                        println!("3 {:?}", eval(a1.clone(), env.clone()));
+//                        println!("3 {:?}", eval(a1.clone(), env.clone()));
                         env_set(&env, a1.clone(), eval(a1.clone(), env.clone())?); 
                         eval(a1.clone(), env.clone())
                     }
@@ -368,7 +368,6 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                     for b in elements.iter() {
                         match b {
                             Add(b1, b2) => {
-                                // ONE is a const if it's capital case or *VARIABLE NAME*
                                 zk.private
                                     .push(Scalar::from_string(&b2.pr_str(false).to_string()));
                                 let const_a: ConstraintInstruction = match b1.apply(vec![])? {
@@ -397,6 +396,9 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                                 };
                                 zk.constraints.push(const_a);
                                 //env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
+                            },
+                            Enforce => {
+                                zk.constraints.push(ConstraintInstruction::Enforce);
                             }
                             val => println!("not mapped"),
                         }

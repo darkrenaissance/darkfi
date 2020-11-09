@@ -47,7 +47,7 @@ pub enum MalVal {
     Lc0,
     Lc1,
     Lc2,
-    Enforce(bool),
+    Enforce,
     Add(Rc<MalVal>, Rc<MalVal>),
     Sub(Rc<MalVal>, Rc<MalVal>),
 }
