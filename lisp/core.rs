@@ -256,20 +256,36 @@ fn sub(a: MalArgs) -> MalRet {
     Ok(Sub(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
 }
 
-fn add_scalar(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
+fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
-        (Sym(a0), Sym(a1)) => {
-            println!("{:?}", a0);
-            //let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
-            //let result = s0.add_assign(&s1);
-            //println!("{:?}", result);
-            Ok(Str(std::string::ToString::to_string(&Scalar::one())[2..].to_string()))
+        (Str(a0), Str(a1)) => {
+            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            s0.sub_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
         _ => error("expected (scalar, scalar"),
-    };
+    }
+}
 
-    Ok(Str(std::string::ToString::to_string(&Scalar::one())[2..].to_string()))
+fn mul_scalar(a: MalArgs) -> MalRet {
+    match (a[0].clone(), a[1].clone()) {
+        (Str(a0), Str(a1)) => {
+            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        _ => error("expected (scalar, scalar"),
+    }
+}
+fn add_scalar(a: MalArgs) -> MalRet {
+    match (a[0].clone(), a[1].clone()) {
+        (Str(a0), Str(a1)) => {
+            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            s0.add_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        _ => error("expected (scalar, scalar"),
+    }
 }
 
 fn add(a: MalArgs) -> MalRet {
@@ -340,14 +356,18 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         (">", func(fn_t_int_int!(Bool, |i, j| { i > j }))),
         (">=", func(fn_t_int_int!(Bool, |i, j| { i >= j }))),
         ("+", func(add_scalar)),
-        ("-", func(fn_t_int_int!(Int, |i, j| { i - j }))),
-        //        ("*", func(mul_scalar)),
+        ("-", func(sub_scalar)),
+        ("*", func(mul_scalar)),
         ("/", func(fn_t_int_int!(Int, |i, j| { i / j }))),
         ("time-ms", func(time_ms)),
         ("i+", func(fn_t_int_int!(Int, |i, j| { i + j }))),
         ("i-", func(fn_t_int_int!(Int, |i, j| { i - j }))),
         ("i*", func(fn_t_int_int!(Int, |i, j| { i * j }))),
         ("i/", func(fn_t_int_int!(Int, |i, j| { i / j }))),
+        ("i<", func(fn_t_int_int!(Bool, |i, j| { i < j }))),
+        ("i<=", func(fn_t_int_int!(Bool, |i, j| { i <= j }))),
+        ("i>", func(fn_t_int_int!(Bool, |i, j| { i > j }))),
+        ("i>=", func(fn_t_int_int!(Bool, |i, j| { i >= j }))),
         ("time-ms", func(time_ms)),
         ("sequential?", func(fn_is_type!(List(_, _), Vector(_, _)))),
         ("list", func(|a| Ok(list!(a)))),

@@ -16,4 +16,4 @@
                     enforce
                     ))))
 (println (jubjub-add a_u a_v b_u b_v))
-(println circuit)
+(println (U a_u a_v b_u b_v))

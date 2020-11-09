@@ -400,7 +400,7 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                             Enforce => {
                                 zk.constraints.push(ConstraintInstruction::Enforce);
                             }
-                            val => println!("not mapped"),
+                            _ => println!("not mapped"),
                         }
                     }
                     env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
