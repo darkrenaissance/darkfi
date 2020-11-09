@@ -49,6 +49,7 @@ pub enum MalVal {
     Lc2,
     Enforce,
     Add(Rc<MalVal>, Rc<MalVal>),
+    AddOne(Rc<MalVal>),
     Sub(Rc<MalVal>, Rc<MalVal>),
     Public(Rc<MalVal>),
     Private(Rc<MalVal>),

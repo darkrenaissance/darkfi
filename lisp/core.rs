@@ -8,7 +8,7 @@ use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector, Public, Private
+    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector, Public, Private, AddOne
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
@@ -308,6 +308,10 @@ fn add_scalar(a: MalArgs) -> MalRet {
     }
 }
 
+fn add_one(a: MalArgs) -> MalRet {
+    Ok(AddOne(Rc::new(a[0].clone())))
+}
+
 fn add(a: MalArgs) -> MalRet {
     // get next symbol should be lc0 lc1 lc2
     Ok(Add(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
@@ -423,6 +427,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("add", func(add)),
+        ("add-one", func(add_one)),
         ("sub", func(sub)),
         ("lc0", func(|a| Ok(MalVal::Lc0))),
         ("lc1", func(|a| Ok(MalVal::Lc1))),

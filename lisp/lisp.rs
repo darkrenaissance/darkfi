@@ -27,7 +27,7 @@ mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
     Add, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Private, Public, Str, Sub, Sym,
-    Vector, Zk,
+    Vector, Zk, AddOne
 };
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
@@ -397,6 +397,22 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                                 };
                                 zk.constraints.push(const_a);
                                 //env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
+                            }
+                            AddOne(b1) => {
+                                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
+                                    Lc0 => ConstraintInstruction::Lc0AddOne,
+                                    Lc1 => ConstraintInstruction::Lc1AddOne,
+                                    Lc2 => ConstraintInstruction::Lc2AddOne,
+                                    _ => {
+                                        println!("{:?}", b1.apply(vec![]));
+                                        ConstraintInstruction::Lc0AddOne
+                                    }
+                                };
+                                zk.constraints.push(const_a);
+                            }
+                            Private(a) => {
+                                zk.private
+                                    .push(Scalar::from_string(&a.pr_str(false).to_string()));
                             }
                             Public(a) => {
                                 zk.public

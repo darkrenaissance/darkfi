@@ -21,14 +21,14 @@
                     (add lc2 (U x1 y1 x2 y2))
                     enforce
 ;; Compute P.x = (A + B) / (1 + C)
-                    (add lc0 one)
+                    (add-one lc0)
                     (add lc0 (C x1 y1 x2 y2))
                     (add lc1 (P.x x1 y1 x2 y2))
                     (add lc1 (A x1 y2))
                     (add lc1 (B y1 x2))
                     enforce
 ;; Compute P.y = (U - A - B) / (1 - C)                    
-                    (add lc0 one)
+                    (add-one lc0)
                     (sub lc0 (C x1 y1 x2 y2))
                     (add lc1 (P.y x1 y1 x2 y2))
                     (add lc2 (U x1 y1 x2 y2))
@@ -42,11 +42,11 @@
                     (public (P.x a_u a_v b_u b_v)) 
                     (public (P.y a_u a_v b_u b_v)) 
                     (add lc0 (P.x a_u a_v b_u b_v))
-                    (add lc1 one)
+                    (add-one lc1)
                     (add lc2 (P.x a_u a_v b_u b_v))
                     enforce
                     (add lc0 (P.y a_u a_v b_u b_v))
-                    (add lc1 one)
+                    (add-one lc1)
                     (add lc2 (P.y a_u a_v b_u b_v))
                     enforce
                   )))
