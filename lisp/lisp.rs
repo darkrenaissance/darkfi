@@ -26,7 +26,8 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
-    Add, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Str, Sub, Sym, Vector, Zk,
+    Add, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Private, Public, Str, Sub, Sym,
+    Vector, Zk,
 };
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
@@ -272,7 +273,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
-                    Sym(ref a0sym) if a0sym == "zkcons!" => {
+                    Sym(ref a0sym) if a0sym == "cs!" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         let value = eval_ast(&a2, &env)?;
                         match value {
@@ -282,8 +283,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => println!("invalid format"),
                         }
-//                        println!("3 {:?}", eval(a1.clone(), env.clone()));
-                        env_set(&env, a1.clone(), eval(a1.clone(), env.clone())?); 
+                        //                        println!("3 {:?}", eval(a1.clone(), env.clone()));
+                        env_set(&env, a1.clone(), eval(a1.clone(), env.clone())?);
                         eval(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "defzk!" => {
@@ -396,7 +397,11 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                                 };
                                 zk.constraints.push(const_a);
                                 //env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
-                            },
+                            }
+                            Public(a) => {
+                                zk.public
+                                    .push(Scalar::from_string(&a.pr_str(false).to_string()));
+                            }
                             Enforce => {
                                 zk.constraints.push(ConstraintInstruction::Enforce);
                             }

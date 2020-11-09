@@ -12,7 +12,8 @@
 (def! C (fn* [x1 y1 x2 y2] (* d (A x1 y2) (B y1 x2))))
 (def! P.x (fn* [x1 y1 x2 y2] (/ (+ (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
 (def! P.y (fn* [x1 y1 x2 y2] (/ (- (U x1 y1 x2 y2) (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
-(def! jubjub-add (fn* [x1 y1 x2 y2] (zkcons! circuit (
+;; *cs* is the symbol that create a zkvm with a constraint system
+(def! jubjub-add (fn* [x1 y1 x2 y2] (cs! circuit (
                     (add lc0 x1)
                     (add lc0 y1)
                     (add lc1 x2)
@@ -35,4 +36,18 @@
                     (sub lc2 (B y1 x2))
                     enforce 
                     ))))
-(println (jubjub-add a_u a_v b_u b_v))
+(def! circuit (jubjub-add a_u a_v b_u b_v))
+(println circuit)
+(def! circuit (cs! circuit (
+                    (public (P.x a_u a_v b_u b_v)) 
+                    (public (P.y a_u a_v b_u b_v)) 
+                    (add lc0 (P.x a_u a_v b_u b_v))
+                    (add lc1 one)
+                    (add lc2 (P.x a_u a_v b_u b_v))
+                    enforce
+                    (add lc0 (P.y a_u a_v b_u b_v))
+                    (add lc1 one)
+                    (add lc2 (P.y a_u a_v b_u b_v))
+                    enforce
+                  )))
+(println circuit)

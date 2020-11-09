@@ -8,7 +8,7 @@ use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector,
+    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector, Public, Private
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
@@ -288,6 +288,15 @@ fn div_scalar(a: MalArgs) -> MalRet {
         _ => error("expected (scalar, scalar"),
     }
 }
+
+fn cs_public(a: MalArgs) -> MalRet {
+    Ok(Public(Rc::new(a[0].clone()).clone()))
+}
+
+fn cs_private(a: MalArgs) -> MalRet {
+    Ok(Private(Rc::new(a[0].clone()).clone()))
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
@@ -419,5 +428,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("lc1", func(|a| Ok(MalVal::Lc1))),
         ("lc2", func(|a| Ok(MalVal::Lc2))),
         ("enforce", func(|a| Ok(MalVal::Enforce))),
+        ("public", func(cs_public)),
+        ("private", func(cs_private))
     ]
 }

@@ -14,4 +14,4 @@
                  (add lc1 one)
                  'enforce)))
 (println "bit-dec")
-(zkcons! circuit cs)
+(cs! circuit cs)
