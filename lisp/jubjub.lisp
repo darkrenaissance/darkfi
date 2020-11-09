@@ -12,8 +12,8 @@
                     (add lc0 y1)
                     (add lc1 x2)
                     (add lc1 y2)
-                    (add lc2 (U x1 y1 x2 y2))))
+                    (add lc2 (U x1 y1 x2 y2))
                     enforce
-                    ))
+                    ))))
 (println (jubjub-add a_u a_v b_u b_v))
 (println circuit)
