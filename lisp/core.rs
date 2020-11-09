@@ -277,6 +277,17 @@ fn mul_scalar(a: MalArgs) -> MalRet {
         _ => error("expected (scalar, scalar"),
     }
 }
+
+fn div_scalar(a: MalArgs) -> MalRet {
+    match (a[0].clone(), a[1].clone()) {
+        (Str(a0), Str(a1)) => {
+            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let ret = s1.invert().map(|other| *&s0 * other);
+            Ok(Str(std::string::ToString::to_string(&ret.unwrap())[2..].to_string()))
+        }
+        _ => error("expected (scalar, scalar"),
+    }
+}
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
@@ -358,7 +369,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("+", func(add_scalar)),
         ("-", func(sub_scalar)),
         ("*", func(mul_scalar)),
-        ("/", func(fn_t_int_int!(Int, |i, j| { i / j }))),
+        ("/", func(div_scalar)),
         ("time-ms", func(time_ms)),
         ("i+", func(fn_t_int_int!(Int, |i, j| { i + j }))),
         ("i-", func(fn_t_int_int!(Int, |i, j| { i - j }))),
