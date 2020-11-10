@@ -8,7 +8,8 @@ use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Add, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Str, Sub, Sym, Vector, Public, Private, AddOne
+    Add, AddOne, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Params, Private, Public,
+    Str, Sub, Sym, Vector,
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
@@ -283,10 +284,16 @@ fn div_scalar(a: MalArgs) -> MalRet {
         (Str(a0), Str(a1)) => {
             let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             let ret = s1.invert().map(|other| *&s0 * other);
-            Ok(Str(std::string::ToString::to_string(&ret.unwrap())[2..].to_string()))
+            Ok(Str(
+                std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
+            ))
         }
         _ => error("expected (scalar, scalar"),
     }
+}
+
+fn cs_params(a: MalArgs) -> MalRet {
+    Ok(Params(Rc::new(a[0].clone())))
 }
 
 fn cs_public(a: MalArgs) -> MalRet {
@@ -434,6 +441,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("lc2", func(|a| Ok(MalVal::Lc2))),
         ("enforce", func(|a| Ok(MalVal::Enforce))),
         ("public", func(cs_public)),
-        ("private", func(cs_private))
+        ("private", func(cs_private)),
+        ("params", func(cs_params)),
     ]
 }

@@ -1,3 +1,4 @@
+;; public params
 (def! a_u "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e")
 (def! a_v "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891")
 (def! b_u "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e")
@@ -12,7 +13,6 @@
 (def! C (fn* [x1 y1 x2 y2] (* d (A x1 y2) (B y1 x2))))
 (def! P.x (fn* [x1 y1 x2 y2] (/ (+ (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
 (def! P.y (fn* [x1 y1 x2 y2] (/ (- (U x1 y1 x2 y2) (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
-;; *cs* is the symbol that create a zkvm with a constraint system
 (def! jubjub-add (fn* [x1 y1 x2 y2] (cs! circuit (
                     (add lc0 x1)
                     (add lc0 y1)
@@ -37,7 +37,7 @@
                     enforce 
                     ))))
 (def! circuit (jubjub-add a_u a_v b_u b_v))
-(println circuit)
+;;(println circuit)
 (def! circuit (cs! circuit (
                     (public (P.x a_u a_v b_u b_v)) 
                     (public (P.y a_u a_v b_u b_v)) 
@@ -50,4 +50,10 @@
                     (add lc2 (P.y a_u a_v b_u b_v))
                     enforce
                   )))
+;;(println circuit)
+;; contract exection
+(def! circuit (cs! circuit (
+                            (params [a_u a_v b_u b_v])
+                            )))
+
 (println circuit)

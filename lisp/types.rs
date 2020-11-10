@@ -6,7 +6,9 @@ use itertools::Itertools;
 
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector, Public, Private };
+use crate::types::MalVal::{
+    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Private, Public, Str, Sym, Vector,
+};
 
 use bls12_381::Scalar;
 use sapvi::{
@@ -53,6 +55,7 @@ pub enum MalVal {
     Sub(Rc<MalVal>, Rc<MalVal>),
     Public(Rc<MalVal>),
     Private(Rc<MalVal>),
+    Params(Rc<MalVal>),
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +64,8 @@ pub struct ZKCircuit {
     pub constraints: Vec<ConstraintInstruction>,
     pub private: Vec<Scalar>,
     pub public: Vec<Scalar>,
+    pub params: Vec<Scalar>,
+    pub verifying_key: Vec<Scalar>,
 }
 
 #[derive(Debug)]

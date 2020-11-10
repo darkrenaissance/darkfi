@@ -26,8 +26,8 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
-    Add, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Private, Public, Str, Sub, Sym,
-    Vector, Zk, AddOne
+    Add, AddOne, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Params, Private, Public, Str,
+    Sub, Sym, Vector, Zk,
 };
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
@@ -357,6 +357,8 @@ fn zk_circuit_create(a1: &MalVal, env: &Env) -> ZKCircuit {
         constraints: Vec::new(),
         private: Vec::new(),
         public: Vec::new(),
+        params: Vec::new(),
+        verifying_key: Vec::new(),
     };
     zk_circuit
 }
@@ -417,6 +419,18 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                             Public(a) => {
                                 zk.public
                                     .push(Scalar::from_string(&a.pr_str(false).to_string()));
+                            }
+                            Params(a) => {
+                                match a.as_ref() {
+                                    Vector(v, _) => {
+                                        for i in v.iter() {
+                                            zk.params.push(Scalar::from_string(
+                                                &i.pr_str(false).to_string(),
+                                            ));
+                                        }
+                                    }
+                                    _ => println!("params called with a non-seq"),
+                                };
                             }
                             Enforce => {
                                 zk.constraints.push(ConstraintInstruction::Enforce);
@@ -485,7 +499,6 @@ fn repl_load(file: String) -> Result<(), ()> {
     for (k, v) in core::ns() {
         env_sets(&repl_env, k, v);
     }
-    let _ = rep("(def! *host-language* \"rust\")", &repl_env);
     let _ = rep("(def! not (fn* (a) (if a false true)))", &repl_env);
     let _ = rep(
         "(def! load-file (fn* (f) (eval (read-string (str \"(do \" (slurp f) \"\nnil)\")))))",
