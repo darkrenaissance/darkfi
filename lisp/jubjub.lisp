@@ -7,12 +7,23 @@
 (def! d "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1")
 (def! one "0000000000000000000000000000000000000000000000000000000000000001")
 (defzk! circuit ())
-(def! U (fn* [x1 y1 x2 y2] (+ (+ x1 y1) (+ x2 y2))))
+;; U should be evaluated just once
+(def! U (fn* [x1 y1 x2 y2] (* (+ x1 y1) (+ x2 y2))))
 (def! A (fn* [x1 y2] (* y2 x1)))
 (def! B (fn* [y1 x2] (* x2 y1)))
 (def! C (fn* [x1 y1 x2 y2] (* d (A x1 y2) (B y1 x2))))
 (def! P.x (fn* [x1 y1 x2 y2] (/ (+ (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
 (def! P.y (fn* [x1 y1 x2 y2] (/ (- (U x1 y1 x2 y2) (A x1 y2) (B y1 x2)) (+ one (C x1 y1 x2 y2)))))
+
+
+
+;; lc0 = bellman::LinearCombination::<Scalar>::zero();
+;; (lc0-args LinearCombination<Scalar>)
+
+;; (cs! circuit (lc0-args) (lc1-args) (lc2-args))
+
+;; (lc-add-coeff 1 1)
+
 (def! jubjub-add (fn* [x1 y1 x2 y2] (cs! circuit (
                     (add lc0 x1)
                     (add lc0 y1)

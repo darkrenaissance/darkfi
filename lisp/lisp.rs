@@ -421,6 +421,7 @@ fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
                                     .push(Scalar::from_string(&a.pr_str(false).to_string()));
                             }
                             Params(a) => {
+                                // todo add multiple matchs
                                 match a.as_ref() {
                                     Vector(v, _) => {
                                         for i in v.iter() {
