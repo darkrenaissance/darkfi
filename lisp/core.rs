@@ -8,7 +8,7 @@ use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Add, AddOne, Atom, Bool, Func, Hash, Int, Lc0, List, MalFunc, Nil, Private, Public, Str, Sub,
+    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Private, Public, Str,
     Sym, Vector, Params
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
@@ -252,11 +252,6 @@ fn conj(a: MalArgs) -> MalRet {
     }
 }
 
-fn sub(a: MalArgs) -> MalRet {
-    // get next symbol should be lc0 lc1 lc2
-    Ok(Sub(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
-}
-
 fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
@@ -328,15 +323,6 @@ fn add_scalar(a: MalArgs) -> MalRet {
         }
         _ => error("expected (scalar, scalar"),
     }
-}
-
-fn add_one(a: MalArgs) -> MalRet {
-    Ok(AddOne(Rc::new(a[0].clone())))
-}
-
-fn add(a: MalArgs) -> MalRet {
-    // get next symbol should be lc0 lc1 lc2
-    Ok(Add(Rc::new(a[0].clone()), Rc::new(a[1].clone())))
 }
 
 fn seq(a: MalArgs) -> MalRet {
@@ -448,12 +434,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
-        ("add", func(add)),
-        ("add-one", func(add_one)),
-        ("sub", func(sub)),
-        ("lc0", func(|a| Ok(MalVal::Lc0))),
-        ("lc1", func(|a| Ok(MalVal::Lc1))),
-        ("lc2", func(|a| Ok(MalVal::Lc2))),
         ("enforce", func(|a| Ok(MalVal::Enforce))),
         ("public", func(cs_public)),
         ("private", func(cs_private)),

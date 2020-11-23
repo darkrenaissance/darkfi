@@ -26,8 +26,8 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
-    Add, AddOne, Bool, Func, Hash, Lc0, Lc1, Lc2, List, MalFunc, Nil, Params, Private, Public, Str,
-    Sub, Sym, Vector, Zk,
+    Bool, Func, Hash, List, MalFunc, Nil, Params, Private, Public, Str,
+    Sym, Vector, Zk,
 };
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
@@ -278,8 +278,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval_ast(&a2, &env)?;
                         match value {
                             List(ref el, _) => {
-                                let val = zkcons_eval(el.to_vec(), &a1, &env)?;
-                                val.clone();
+                                //let val = zkcons_eval(el.to_vec(), &a1, &env)?;
+                                //val.clone();
+                                println!("{:?}", el.to_vec());
                             }
                             _ => println!("invalid format"),
                         }
@@ -361,93 +362,6 @@ fn zk_circuit_create(a1: &MalVal, env: &Env) -> ZKCircuit {
         verifying_key: Vec::new(),
     };
     zk_circuit
-}
-
-fn zkcons_eval(elements: Vec<MalVal>, a1: &MalVal, env: &Env) -> MalRet {
-    let zkc = match eval(a1.clone(), env.clone()) {
-        Ok(mut zkv) => {
-            match zkv {
-                Zk(mut zk) => {
-                    for b in elements.iter() {
-                        match b {
-                            Add(b1, b2) => {
-                                zk.private
-                                    .push(Scalar::from_string(&b2.pr_str(false).to_string()));
-                                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
-                                    Lc0 => ConstraintInstruction::Lc0Add(zk.private.len()),
-                                    Lc1 => ConstraintInstruction::Lc1Add(zk.private.len()),
-                                    Lc2 => ConstraintInstruction::Lc2Add(zk.private.len()),
-                                    _ => {
-                                        println!("{:?}", b1.apply(vec![]));
-                                        ConstraintInstruction::Lc0Add(0)
-                                    }
-                                };
-                                zk.constraints.push(const_a);
-                                //env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
-                            }
-                            Sub(b1, b2) => {
-                                zk.private
-                                    .push(Scalar::from_string(&b2.pr_str(false).to_string()));
-                                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
-                                    Lc0 => ConstraintInstruction::Lc0Sub(zk.private.len()),
-                                    Lc1 => ConstraintInstruction::Lc1Sub(zk.private.len()),
-                                    Lc2 => ConstraintInstruction::Lc2Sub(zk.private.len()),
-                                    _ => {
-                                        println!("{:?}", b1.apply(vec![]));
-                                        ConstraintInstruction::Lc0Sub(0)
-                                    }
-                                };
-                                zk.constraints.push(const_a);
-                                //env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
-                            }
-                            AddOne(b1) => {
-                                let const_a: ConstraintInstruction = match b1.apply(vec![])? {
-                                    Lc0 => ConstraintInstruction::Lc0AddOne,
-                                    Lc1 => ConstraintInstruction::Lc1AddOne,
-                                    Lc2 => ConstraintInstruction::Lc2AddOne,
-                                    _ => {
-                                        println!("{:?}", b1.apply(vec![]));
-                                        ConstraintInstruction::Lc0AddOne
-                                    }
-                                };
-                                zk.constraints.push(const_a);
-                            }
-                            Private(a) => {
-                                zk.private
-                                    .push(Scalar::from_string(&a.pr_str(false).to_string()));
-                            }
-                            Public(a) => {
-                                zk.public
-                                    .push(Scalar::from_string(&a.pr_str(false).to_string()));
-                            }
-                            Params(a) => {
-                                // todo add multiple matchs
-                                match a.as_ref() {
-                                    Vector(v, _) => {
-                                        for i in v.iter() {
-                                            zk.params.push(Scalar::from_string(
-                                                &i.pr_str(false).to_string(),
-                                            ));
-                                        }
-                                    }
-                                    _ => println!("params called with a non-seq"),
-                                };
-                            }
-                            Enforce => {
-                                zk.constraints.push(ConstraintInstruction::Enforce);
-                            }
-                            _ => println!("not mapped"),
-                        }
-                    }
-                    env_set(&env, a1.clone(), types::MalVal::Zk(zk.clone()));
-                }
-                _ => println!("not parsed"),
-            }
-        }
-        _ => println!("not a circuit"),
-    };
-
-    env_get(&env, &a1.clone())
 }
 
 // print
