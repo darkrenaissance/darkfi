@@ -272,7 +272,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         }
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
-                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        let (a1, _a2) = (l[1].clone(), l[2].clone());
                         eval(a1.clone(), env.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "prove" => {

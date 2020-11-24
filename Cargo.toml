@@ -46,10 +46,6 @@ name = "basic"
 path = "src/old/basic_minimal.rs"
 
 [[bin]]
-name = "bits"
-path = "src/old/bits.rs"
-
-[[bin]]
 name = "mimc"
 path = "src/bin/mimc.rs"
 
