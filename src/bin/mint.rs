@@ -1,10 +1,10 @@
-use sapvi::{BlsStringConversion, Decodable, ZKContract};
+use sapvi::{Decodable, ZKContract};
 use std::fs::File;
 use std::time::Instant;
 
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
-use group::{Curve, Group, GroupEncoding};
+use group::{Curve, Group};
 use rand::rngs::OsRng;
 
 type Result<T> = std::result::Result<T, failure::Error>;
@@ -13,7 +13,7 @@ type Result<T> = std::result::Result<T, failure::Error>;
 fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {
     let mut bits = Vec::new();
     print!("Unpack: ");
-    for (i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+    for (_i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
         match bit {
             true => bits.push(Scalar::one()),
             false => bits.push(Scalar::zero()),
