@@ -81,9 +81,9 @@ path = "src/eq.rs"
 name = "basic"
 path = "src/basic_minimal.rs"
 
-[[bin]]
-name = "vmtest"
-path = "src/vmtest.rs"
+#[[bin]]
+#name = "vmtest"
+#path = "src/vmtest.rs"
 
 [[bin]]
 name = "jubjub-old"
