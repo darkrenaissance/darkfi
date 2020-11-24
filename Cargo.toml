@@ -65,9 +65,9 @@ path = "src/zec.rs"
 name = "simple"
 path = "src/simple.rs"
 
-[[bin]]
-name = "mint-old"
-path = "src/mint.rs"
+#[[bin]]
+#name = "mint-old"
+#path = "src/mint.rs"
 
 [[bin]]
 name = "spend"
