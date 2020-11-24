@@ -1,5 +1,5 @@
 use bls12_381 as bls;
-use rand_core::{OsRng, RngCore};
+
 use std::io;
 
 use crate::error::{Error, Result};

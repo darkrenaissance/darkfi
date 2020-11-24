@@ -46,9 +46,9 @@ impl MalVal {
             } => format!("(fn* {} {})", p.pr_str(true), a.pr_str(true)),
             Atom(a) => format!("(atom {})", a.borrow().pr_str(true)),
             Zk(a) => format!("{:?}", a),
-            Add => format!("add"),
-            Sub => format!("sub"),
-            Lc0 => format!("Lc0"),
+            _Add => format!("add"),
+            _Sub => format!("sub"),
+            _Lc0 => format!("Lc0"),
             i => format!("{:?}", i.pr_str(true)),
         }
     }

@@ -12,17 +12,10 @@ use crate::types::MalVal::{
 
 use bls12_381::Scalar;
 use sapvi::{
-    BlsStringConversion, ConstraintInstruction, Decodable, Encodable, ZKContract, ZKProof,
-    ZKVMCircuit,
+    BlsStringConversion, ConstraintInstruction,
 };
 
-use bellman::{
-    gadgets::{
-        boolean::{AllocatedBit, Boolean},
-        multipack, num, Assignment,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
+
 
 #[derive(Debug, Clone)]
 pub enum MalVal {

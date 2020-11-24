@@ -1,31 +1,28 @@
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
-use std::sync::Mutex;
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Private, Public, Str,
-    Sym, Vector, Params
+    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str,
+    Sym, Vector
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
-use bls12_381::Bls12;
+
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
-use rand::rngs::OsRng;
+
 use sapvi::bls_extensions::BlsStringConversion;
-use sapvi::error::{Error, Result};
-use sapvi::serial::{Decodable, Encodable};
-use sapvi::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
-    ZKVirtualMachine,
-};
+
+
+
 use std::ops::{AddAssign, MulAssign, SubAssign};
-use std::time::Instant;
+
 
 macro_rules! fn_t_int_int {
     ($ret:ident, $fn:expr) => {{
@@ -171,8 +168,8 @@ fn nth(a: MalArgs) -> MalRet {
 
 fn unpack_bits(a: MalArgs) -> MalRet {
     let mut result = vec![];
-    match (a[0].clone()) {
-        (Str(ref s)) => {
+    match a[0].clone() {
+        Str(ref s) => {
             let value = Scalar::from_string(s);
             for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
                 match bit {
@@ -255,7 +252,7 @@ fn conj(a: MalArgs) -> MalRet {
 fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -266,7 +263,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 fn mul_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             s0.mul_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -277,7 +274,7 @@ fn mul_scalar(a: MalArgs) -> MalRet {
 fn div_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             let ret = s1.invert().map(|other| *&s0 * other);
             Ok(Str(
                 std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
@@ -287,17 +284,6 @@ fn div_scalar(a: MalArgs) -> MalRet {
     }
 }
 
-fn cs_params(a: MalArgs) -> MalRet {
-    Ok(Params(Rc::new(a[0].clone())))
-}
-
-fn cs_public(a: MalArgs) -> MalRet {
-    Ok(Public(Rc::new(a[0].clone()).clone()))
-}
-
-fn cs_private(a: MalArgs) -> MalRet {
-    Ok(Private(Rc::new(a[0].clone()).clone()))
-}
 fn range(a: MalArgs) -> MalRet {
     let mut result = vec![];
     match (a[0].clone(), a[1].clone()) {
@@ -307,17 +293,38 @@ fn range(a: MalArgs) -> MalRet {
             };
             Ok(list!(result
                 .iter()
-                .map(|a| Nil) 
+                .map(|_a| Nil) 
                 .collect::<Vec<MalVal>>()))
         },
         _ => error("expected int int")
     }
 }
 
+fn alloc_input(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+fn scalar_one(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+fn alloc(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+fn cs_one(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+fn bellman_one(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, mut s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             s0.add_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -435,11 +442,11 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("range", func(range)),
-        ("alloc", func(range)),
-        ("alloc-input", func(range)),
-        ("scalar", func(range)),
-        ("scalar::one", func(range)),
-        ("cs::one", func(range)),
-        ("bellman::one", func(range)),
+        ("alloc", func(alloc)),
+        ("alloc-input", func(alloc_input)),
+        ("scalar::one", func(scalar_one)),
+        ("scalar", func(scalar_one)),
+        ("cs::one", func(cs_one)),
+        ("bellman::one", func(bellman_one)),
     ]
 }

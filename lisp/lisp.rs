@@ -1,18 +1,16 @@
 #![allow(non_snake_case)]
-use bls12_381::Scalar;
+
 use sapvi::bls_extensions::BlsStringConversion;
-use sapvi::serial::{Decodable, Encodable};
+
 use simplelog::*;
-use std::fs;
-use std::fs::File;
+
+
 use std::rc::Rc;
-use std::time::Instant;
+
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
-use sapvi::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVirtualMachine,
-};
+
 
 #[macro_use]
 extern crate clap;
@@ -26,8 +24,8 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
-    Bool, Func, Hash, List, MalFunc, Nil, Params, Private, Public, Str,
-    Sym, Vector, Zk,
+    Bool, Func, Hash, List, MalFunc, Nil, Str,
+    Sym, Vector,
 };
 use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
@@ -108,7 +106,7 @@ fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
         //println!("macroexpand 2: {:?}", ast);
         was_expanded = true;
     }
-    ((was_expanded, Ok(ast)))
+    (was_expanded, Ok(ast))
 }
 
 fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
@@ -273,7 +271,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
-                    //Sym(ref a0sym) if a0sym == "setup" => {
+                    Sym(ref a0sym) if a0sym == "setup" => {
+                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        eval(a1.clone(), env.clone())
+                    }
                     //Sym(ref a0sym) if a0sym == "prove" => {
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
@@ -294,7 +295,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "defzk!" => {
                         // private, public and constrains
                         //let (a1, a2, a3) = (l[1].clone(), l[2].clone(), l[3].clone());
-                        let (a1) = (l[1].clone());
+                        let a1 = l[1].clone();
                         let circuit = zk_circuit_create(&a1, &env);
                         let val = types::MalVal::Zk(circuit.clone());
                         env_set(&env, a1.clone(), val.clone());
@@ -355,7 +356,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-fn zk_circuit_create(a1: &MalVal, env: &Env) -> ZKCircuit {
+fn zk_circuit_create(a1: &MalVal, _env: &Env) -> ZKCircuit {
     let zk_circuit = ZKCircuit {
         name: a1.pr_str(true),
         constraints: Vec::new(),

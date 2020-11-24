@@ -1,7 +1,7 @@
 use bls12_381 as bls;
 use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
-use std::rc::Rc;
+
 use std::{io, mem};
 
 use crate::endian;
