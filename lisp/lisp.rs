@@ -273,7 +273,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
-                    Sym(ref a0sym) if a0sym == "cs!" => {
+                    //Sym(ref a0sym) if a0sym == "setup" => {
+                    //Sym(ref a0sym) if a0sym == "prove" => {
+                    //Sym(ref a0sym) if a0sym == "verify" => {
+                    Sym(ref a0sym) if a0sym == "enforce" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         let value = eval_ast(&a2, &env)?;
                         match value {

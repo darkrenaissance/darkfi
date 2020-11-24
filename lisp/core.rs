@@ -434,10 +434,12 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("reset!", func(|a| a[0].reset_bang(&a[1]))),
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
-        ("enforce", func(|a| Ok(MalVal::Enforce))),
-        ("public", func(cs_public)),
-        ("private", func(cs_private)),
-        ("params", func(cs_params)),
         ("range", func(range)),
+        ("alloc", func(range)),
+        ("alloc-input", func(range)),
+        ("scalar", func(range)),
+        ("scalar::one", func(range)),
+        ("cs::one", func(range)),
+        ("bellman::one", func(range)),
     ]
 }

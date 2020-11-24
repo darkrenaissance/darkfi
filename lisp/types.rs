@@ -7,7 +7,7 @@ use itertools::Itertools;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{
-    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Private, Public, Str, Sym, Vector,
+    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector,
 };
 
 use bls12_381::Scalar;
@@ -45,10 +45,7 @@ pub enum MalVal {
     },
     Atom(Rc<RefCell<MalVal>>),
     Zk(ZKCircuit),
-    Enforce,
-    Public(Rc<MalVal>),
-    Private(Rc<MalVal>),
-    Params(Rc<MalVal>),
+    Enforce(Rc<Vec<MalVal>>)
 }
 
 #[derive(Debug, Clone)]
