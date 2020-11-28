@@ -45,10 +45,7 @@ impl MalVal {
                 ast: a, params: p, ..
             } => format!("(fn* {} {})", p.pr_str(true), a.pr_str(true)),
             Atom(a) => format!("(atom {})", a.borrow().pr_str(true)),
-            Zk(a) => format!("{:?}", a),
-            _Add => format!("add"),
-            _Sub => format!("sub"),
-            _Lc0 => format!("Lc0"),
+            MalVal::Scalar(a) => format!("{:?}", a),
             i => format!("{:?}", i.pr_str(true)),
         }
     }

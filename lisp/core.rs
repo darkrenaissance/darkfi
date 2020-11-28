@@ -256,18 +256,18 @@ fn sub_scalar(a: MalArgs) -> MalRet {
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("expected (scalar, scalar"),
+        _ => error("expected (scalar, scalar)"),
     }
 }
 
 fn mul_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
-        (Str(a0), Str(a1)) => {
+        (MalVal::Scalar(a0), MalVal::Scalar(a1)) => {
             let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
             s0.mul_assign(s1);
-            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+            Ok(MalVal::Scalar(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("expected (scalar, scalar"),
+        _ => error("expected (scalar, scalar)"),
     }
 }
 
@@ -307,6 +307,18 @@ fn alloc_input(a: MalArgs) -> MalRet {
 fn scalar_one(a: MalArgs) -> MalRet {
     println!("{:?}", a);
     Ok(Nil)
+}
+fn scalar_from(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    match (a[0].clone()) {
+        (Str(a0)) => {
+            let (s0) = (Scalar::from_string(&a0.to_string()));
+            Ok(MalVal::Scalar(
+                std::string::ToString::to_string(&s0)[2..].to_string()
+            ))
+        }
+        _ => error("expected (string)"),
+    }
 }
 fn alloc(a: MalArgs) -> MalRet {
     println!("{:?}", a);
@@ -445,7 +457,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("alloc", func(alloc)),
         ("alloc-input", func(alloc_input)),
         ("scalar::one", func(scalar_one)),
-        ("scalar", func(scalar_one)),
+        ("scalar", func(scalar_from)),
         ("cs::one", func(cs_one)),
         ("bellman::one", func(bellman_one)),
     ]

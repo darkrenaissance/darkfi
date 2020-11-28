@@ -272,7 +272,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         }
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
-                        let (a1, _a2) = (l[1].clone(), l[2].clone());
+                        let a1 = l[1].clone();
                         eval(a1.clone(), env.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "prove" => {
@@ -291,15 +291,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         //                        println!("3 {:?}", eval(a1.clone(), env.clone()));
                         env_set(&env, a1.clone(), eval(a1.clone(), env.clone())?);
                         eval(a1.clone(), env.clone())
-                    }
-                    Sym(ref a0sym) if a0sym == "defzk!" => {
-                        // private, public and constrains
-                        //let (a1, a2, a3) = (l[1].clone(), l[2].clone(), l[3].clone());
-                        let a1 = l[1].clone();
-                        let circuit = zk_circuit_create(&a1, &env);
-                        let val = types::MalVal::Zk(circuit.clone());
-                        env_set(&env, a1.clone(), val.clone());
-                        Ok(val.clone())
                     }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
