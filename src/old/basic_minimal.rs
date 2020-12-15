@@ -104,8 +104,6 @@ fn main() {
     let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
 
-    let _start = Instant::now();
-
     let public_input = vec![bls12_381::Scalar::from(27)];
 
     let start = Instant::now();

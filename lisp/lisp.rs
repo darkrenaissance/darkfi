@@ -1,10 +1,22 @@
 #![allow(non_snake_case)]
 
+use sapvi::ZKVMCircuit;
 use sapvi::bls_extensions::BlsStringConversion;
 
 use simplelog::*;
 
-
+use bellman::{
+    gadgets::{
+        Assignment,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+use bls12_381::Bls12;
+use bls12_381::Scalar;
+use ff::{Field, PrimeField};
+use rand::rngs::OsRng;
+use std::ops::{AddAssign, MulAssign, SubAssign};
+use std::time::Instant;
 use std::rc::Rc;
 
 //use std::collections::HashMap;
@@ -347,16 +359,56 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-fn zk_circuit_create(a1: &MalVal, _env: &Env) -> ZKCircuit {
-    let zk_circuit = ZKCircuit {
-        name: a1.pr_str(true),
-        constraints: Vec::new(),
-        private: Vec::new(),
-        public: Vec::new(),
-        params: Vec::new(),
-        verifying_key: Vec::new(),
+struct MyCircuit {
+    params: Vec<Option<bls12_381::Scalar>>,
+}
+
+impl Circuit<bls12_381::Scalar> for MyCircuit {
+    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        Ok(())
+    }
+}
+
+pub fn setup(ast: &MalVal) -> Result<String, MalErr> {
+    let start = Instant::now();
+    // Create parameters for our circuit. In a production deployment these would
+    // be generated securely using a multiparty computation.
+    let params = {
+        let c = MyCircuit { params: vec![None] };
+        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
-    zk_circuit
+    println!("Setup: [{:?}]", start.elapsed());
+
+    // Prepare the verification key (for proof verification).
+    let pvk = groth16::prepare_verifying_key(&params.vk);
+/*
+    // Pick a preimage and compute its hash.
+    let quantity = bls12_381::Scalar::from(3);
+
+    // Create an instance of our circuit (with the preimage as a witness).
+    let c = MyCircuit {
+        params: vec![
+            Some(quantity),
+            Some(quantity * quantity),
+            Some(quantity * quantity * quantity),
+        ],
+    };
+
+    let start = Instant::now();
+    // Create a Groth16 proof with our parameters.
+    let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
+    println!("Prove: [{:?}]", start.elapsed());
+    
+    
+    let public_input = vec![bls12_381::Scalar::from(27)];
+    let start = Instant::now();
+    // Check the proof!
+    assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
+    println!("Verify: [{:?}]", start.elapsed());
+*/
 }
 
 // print
@@ -373,7 +425,7 @@ fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
 fn main() -> Result<(), ()> {
     let matches = clap_app!(zklisp =>
         (version: "0.1.0")
-        (author: "Roberto Santacroce Martins <miles.chet@gmail.com>")
+        (author: "mileschet <miles.chet@gmail.com>")
         (about: "A Lisp Interpreter for Zero Knowledge Virtual Machine")
         (@subcommand load =>
             (about: "Load the file into the interpreter")

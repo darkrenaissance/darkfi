@@ -186,6 +186,14 @@ fn unpack_bits(a: MalArgs) -> MalRet {
     }
 }
 
+fn last(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        List(ref seq, _) | Vector(ref seq, _) if seq.len() == 0 => Ok(Nil),
+        List(ref seq, _) | Vector(ref seq, _) => Ok(seq[seq.len() - 1].clone()),
+        Nil => Ok(Nil),
+        _ => error("invalid args to first"),
+    }
+}
 fn first(a: MalArgs) -> MalRet {
     match a[0].clone() {
         List(ref seq, _) | Vector(ref seq, _) if seq.len() == 0 => Ok(Nil),
@@ -439,6 +447,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("empty?", func(|a| a[0].empty_q())),
         ("nth", func(nth)),
         ("first", func(first)),
+        ("last", func(last)),
         ("rest", func(rest)),
         ("count", func(|a| a[0].count())),
         ("apply", func(apply)),
