@@ -372,7 +372,7 @@ impl Circuit<bls12_381::Scalar> for MyCircuit {
     }
 }
 
-pub fn setup(ast: &MalVal) -> Result<String, MalErr> {
+pub fn setup(ast: &MalVal) -> MalRet {
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
@@ -384,6 +384,8 @@ pub fn setup(ast: &MalVal) -> Result<String, MalErr> {
 
     // Prepare the verification key (for proof verification).
     let pvk = groth16::prepare_verifying_key(&params.vk);
+
+    Ok(MalVal::Str("k".to_string()))
 /*
     // Pick a preimage and compute its hash.
     let quantity = bls12_381::Scalar::from(3);
