@@ -312,9 +312,28 @@ fn alloc_input(a: MalArgs) -> MalRet {
     println!("{:?}", a);
     Ok(Nil)
 }
+
+fn scalar_zero(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    Ok(Nil)
+}
+
 fn scalar_one(a: MalArgs) -> MalRet {
     println!("{:?}", a);
     Ok(Nil)
+}
+
+fn negate_from(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
+    match (a[0].clone()) {
+        (Str(a0)) => {
+            let s0 = Scalar::from_string(&a0.to_string()).neg();
+            Ok(MalVal::Scalar(
+                std::string::ToString::to_string(&s0)[2..].to_string()
+            ))
+        }
+        _ => error("expected (string)"),
+    }
 }
 fn scalar_from(a: MalArgs) -> MalRet {
     println!("{:?}", a);
@@ -466,6 +485,9 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("alloc", func(alloc)),
         ("alloc-input", func(alloc_input)),
         ("scalar::one", func(scalar_one)),
+        ("negate", func(negate_from)),
+        ("scalar::zero", func(scalar_zero)),
+        // TODO add .neg maybe neg, add and sub
         ("scalar", func(scalar_from)),
         ("cs::one", func(cs_one)),
         ("bellman::one", func(bellman_one)),

@@ -19,7 +19,7 @@
    ;; Lc0: [(Scalar::one(), CS::one()), (Scalar::one().neg(), C)]
 ;; Lc1: [(Scalar::one(), y)]
 ;; Lc2: [(Scalar::one(), U), (Scalar::one().neg(), A), (Scalar::one().neg(), B)]
-    (enforce (scalar::one ) (zero + cs::one) (zero + x3))
+    (enforce (scalar::one x) ((negate scalar::one) x2) ((negate scalar::one) x3))
 )))
 (def! a (scalar "0000000000000000000000000000000000000000000000000000000000000003"))
 (setup (MyCircuit (a (* a a) (* (* a a) a))))

@@ -1,3 +1,6 @@
+use bellman::SynthesisError;
+use bellman::ConstraintSystem;
+use bellman::Circuit;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
@@ -15,7 +18,19 @@ use sapvi::{
     BlsStringConversion, ConstraintInstruction,
 };
 
+#[derive(Clone, Debug)]
+pub struct LispCircuit {
+    pub params: Rc<MalVal>,
+}
 
+impl Circuit<bls12_381::Scalar> for LispCircuit {
+    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum MalVal {
@@ -37,19 +52,10 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(ZKCircuit),
+    Zk(Rc<LispCircuit>),
     Enforce(Rc<Vec<MalVal>>),
+    // TODO maybe change to bls scalar
     Scalar(String)
-}
-
-#[derive(Debug, Clone)]
-pub struct ZKCircuit {
-    pub name: String,
-    pub constraints: Vec<ConstraintInstruction>,
-    pub private: Vec<Scalar>,
-    pub public: Vec<Scalar>,
-    pub params: Vec<Scalar>,
-    pub verifying_key: Vec<Scalar>,
 }
 
 #[derive(Debug)]

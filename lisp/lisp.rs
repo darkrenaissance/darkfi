@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use crate::groth16::VerifyingKey;
+use crate::types::LispCircuit;
 use sapvi::ZKVMCircuit;
 use sapvi::bls_extensions::BlsStringConversion;
 
@@ -39,7 +41,6 @@ use crate::types::MalVal::{
     Bool, Func, Hash, List, MalFunc, Nil, Str,
     Sym, Vector,
 };
-use crate::types::ZKCircuit;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
@@ -359,58 +360,47 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-struct MyCircuit {
-    params: Vec<Option<bls12_381::Scalar>>,
-}
-
-impl Circuit<bls12_381::Scalar> for MyCircuit {
-    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
-        Ok(())
-    }
-}
-
 pub fn setup(ast: &MalVal) -> MalRet {
+    // TODO get params from ast 
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
-    let params = {
-        let c = MyCircuit { params: vec![None] };
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
-    };
+    let c = LispCircuit { params: Rc::new(vector!(vec![])) };
+    // TODO move to another fn    
+    let random_parameters = groth16::generate_random_parameters::<Bls12, _, _>(c.clone(), &mut OsRng).unwrap();
+    let pvk = groth16::prepare_verifying_key(&random_parameters.vk);
     println!("Setup: [{:?}]", start.elapsed());
 
-    // Prepare the verification key (for proof verification).
-    let pvk = groth16::prepare_verifying_key(&params.vk);
+    Ok(MalVal::Zk(Rc::new(c)))
+}
 
-    Ok(MalVal::Str("k".to_string()))
-/*
+pub fn prove(ast: &MalVal) -> MalRet {
     // Pick a preimage and compute its hash.
     let quantity = bls12_381::Scalar::from(3);
 
     // Create an instance of our circuit (with the preimage as a witness).
-    let c = MyCircuit {
-        params: vec![
-            Some(quantity),
-            Some(quantity * quantity),
-            Some(quantity * quantity * quantity),
-        ],
+    let c = LispCircuit {
+        params: Rc::new(vector![vec![
+            MalVal::Scalar(std::string::ToString::to_string(&quantity)),
+            MalVal::Scalar(std::string::ToString::to_string(&(quantity * quantity))),
+            MalVal::Scalar(std::string::ToString::to_string(&(quantity * quantity * quantity))),
+        ]]),
     };
 
     let start = Instant::now();
     // Create a Groth16 proof with our parameters.
-    let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
+    //let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
-    
-    
+    Ok(MalVal::Nil)
+} 
+
+pub fn verify(ast: &MalVal) -> MalRet {
     let public_input = vec![bls12_381::Scalar::from(27)];
     let start = Instant::now();
     // Check the proof!
-    assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
+    //assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
     println!("Verify: [{:?}]", start.elapsed());
-*/
+    Ok(MalVal::Nil)
 }
 
 // print
