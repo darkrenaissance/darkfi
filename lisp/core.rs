@@ -320,17 +320,16 @@ fn scalar_zero(a: MalArgs) -> MalRet {
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
+    Ok(ZKScalar(bls12_381::Scalar::one()))
 }
 
 fn negate_from(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    match a[0].clone() {
+    match a[0].apply(vec![])? {
         ZKScalar(a0) => {
             Ok(ZKScalar(a0.neg()))
         },
-        _ => error("expected (string)"),
+        Nil => error("nil not supported"),
+        _ => error("negate error, expected (zkscalar)"),
     }
 }
 fn scalar_from(a: MalArgs) -> MalRet {
@@ -481,7 +480,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("alloc", func(alloc)),
         ("alloc-input", func(alloc_input)),
         ("scalar::one", func(scalar_one)),
-        ("negate", func(negate_from)),
+        ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         // TODO add .neg maybe neg, add and sub
         ("scalar", func(scalar_from)),
