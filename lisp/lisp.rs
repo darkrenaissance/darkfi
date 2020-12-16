@@ -291,19 +291,15 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     //Sym(ref a0sym) if a0sym == "prove" => {
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
-                        let (a1, a2) = (l[1].clone(), l[2].clone());
+                        let (a1, a2) = (l[0].clone(), l[1].clone());
                         let value = eval_ast(&a2, &env)?;
                         match value {
                             List(ref el, _) => {
-                                //let val = zkcons_eval(el.to_vec(), &a1, &env)?;
-                                //val.clone();
                                 println!("{:?}", el.to_vec());
                             }
                             _ => println!("invalid format"),
                         }
-                        //                        println!("3 {:?}", eval(a1.clone(), env.clone()));
-                        env_set(&env, a1.clone(), eval(a1.clone(), env.clone())?);
-                        eval(a1.clone(), env.clone())
+                        Ok(Nil)
                     }
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());

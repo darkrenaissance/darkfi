@@ -310,13 +310,12 @@ fn range(a: MalArgs) -> MalRet {
 }
 
 fn alloc_input(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
+    // TODO implement
+    Ok(ZKScalar(bls12_381::Scalar::zero()))
 }
 
 fn scalar_zero(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
+    Ok(ZKScalar(bls12_381::Scalar::zero()))
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
