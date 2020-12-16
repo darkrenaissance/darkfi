@@ -12,6 +12,7 @@ use crate::types::MalVal::{
     Sym, Vector
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
+use MalVal::ZKScalar;
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 
 use bls12_381::Scalar;
@@ -270,12 +271,12 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 
 fn mul_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
-        (MalVal::Scalar(a0), MalVal::Scalar(a1)) => {
-            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
-            s0.mul_assign(s1);
-            Ok(MalVal::Scalar(std::string::ToString::to_string(&s0)[2..].to_string()))
+        (ZKScalar(mut a0), ZKScalar(a1)) => {
+            // let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            a0.mul_assign(a1);
+            Ok(ZKScalar(a0))
         }
-        _ => error("expected (scalar, scalar)"),
+        _ => error("expected (zkscalar, zkscalar)"),
     }
 }
 
@@ -319,31 +320,25 @@ fn scalar_zero(a: MalArgs) -> MalRet {
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
+    Ok(ZKScalar(bls12_381::Scalar::one()))
 }
 
 fn negate_from(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    match (a[0].clone()) {
-        (Str(a0)) => {
-            let s0 = Scalar::from_string(&a0.to_string()).neg();
-            Ok(MalVal::Scalar(
-                std::string::ToString::to_string(&s0)[2..].to_string()
-            ))
-        }
-        _ => error("expected (string)"),
+    match a[0].apply(vec![])? {
+        ZKScalar(a0) => {
+            Ok(ZKScalar(a0.neg()))
+        },
+        Nil => error("nil not supported"),
+        _ => error("negate error, expected (zkscalar)"),
     }
 }
 fn scalar_from(a: MalArgs) -> MalRet {
     println!("{:?}", a);
-    match (a[0].clone()) {
-        (Str(a0)) => {
-            let (s0) = (Scalar::from_string(&a0.to_string()));
-            Ok(MalVal::Scalar(
-                std::string::ToString::to_string(&s0)[2..].to_string()
-            ))
-        }
+    match a[0].clone() {
+        Str(a0) => {
+            let s0 = Scalar::from_string(&a0.to_string());
+            Ok(ZKScalar(s0))
+        },
         _ => error("expected (string)"),
     }
 }
@@ -485,7 +480,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("alloc", func(alloc)),
         ("alloc-input", func(alloc_input)),
         ("scalar::one", func(scalar_one)),
-        ("negate", func(negate_from)),
+        ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         // TODO add .neg maybe neg, add and sub
         ("scalar", func(scalar_from)),
