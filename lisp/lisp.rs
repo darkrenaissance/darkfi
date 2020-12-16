@@ -286,6 +286,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
+                        let circuit = setup(&ast)?;
+                        println!("{:?}", a1); 
+                        env_sets(&env, &a1.pr_str(false), circuit);
                         eval(a1.clone(), env.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "prove" => {
