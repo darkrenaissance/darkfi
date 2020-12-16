@@ -25,7 +25,7 @@
 )))
 (def! a (scalar "0000000000000000000000000000000000000000000000000000000000000003"))
 (setup (MyCircuit (a (* a a) (* (* a a) a))))
-;; (prove MyCircuit)
+(prove MyCircuit)
 ;; (verify (prove MyCircuit) (scalar 27))
 ;; (U - A - B) / (1 - C)
 ;; [(1 - C)] * [y] = [U - A - B]

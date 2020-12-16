@@ -1,8 +1,9 @@
 #![allow(non_snake_case)]
 
+use crate::MalVal::Zk;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
-use sapvi::ZKVMCircuit;
+use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 use sapvi::bls_extensions::BlsStringConversion;
 
 use simplelog::*;
@@ -48,6 +49,8 @@ mod reader;
 use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
+
+pub const ZK_CIRCUIT_ENV_KEY : &str = "ZKC";
 
 // read
 fn read(str: &str) -> MalRet {
@@ -288,10 +291,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let circuit = setup(&ast)?;
                         println!("{:?}", a1); 
-                        env_sets(&env, &a1.pr_str(false), circuit);
+                        env_sets(&env, ZK_CIRCUIT_ENV_KEY, circuit);
                         eval(a1.clone(), env.clone())
                     }
-                    //Sym(ref a0sym) if a0sym == "prove" => {
+                    Sym(ref a0sym) if a0sym == "prove" => {
+                        let a1 = l[1].clone();
+                        println!("{:?}", a1);
+                        prove(a1.clone(), env.clone())
+                    }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
                         let (a1, a2) = (l[0].clone(), l[1].clone());
@@ -373,10 +380,22 @@ pub fn setup(ast: &MalVal) -> MalRet {
     Ok(MalVal::Zk(Rc::new(c)))
 }
 
-pub fn prove(ast: &MalVal) -> MalRet {
+pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
+    let c = match env_find(&env, ZK_CIRCUIT_ENV_KEY) {
+        Some(e) => match env_get(&e, &Sym(ZK_CIRCUIT_ENV_KEY.to_string()))? {
+            Zk(c) => {
+                MalVal::Zk(c)
+            }
+            _ => { MalVal::Nil }
+        }
+        None => { println!("circuit not found."); MalVal::Nil }
+    };
+
+    println!("{:?}", c);
+    
     // Pick a preimage and compute its hash.
     let quantity = bls12_381::Scalar::from(3);
-
+    
     // Create an instance of our circuit (with the preimage as a witness).
     let c = LispCircuit {
         params: Rc::new(vector![vec![
