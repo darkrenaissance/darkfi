@@ -19,11 +19,13 @@
    ;; Lc0: [(Scalar::one(), CS::one()), (Scalar::one().neg(), C)]
 ;; Lc1: [(Scalar::one(), y)]
 ;; Lc2: [(Scalar::one(), U), (Scalar::one().neg(), A), (Scalar::one().neg(), B)]
-    (enforce (scalar::one x) ((neg scalar::one) x2) ((neg scalar::one) x3))
+(println
+    (enforce ((scalar::one x) ((neg scalar::one) x2) ((neg scalar::one) x3)))
+)
 )))
 (def! a (scalar "0000000000000000000000000000000000000000000000000000000000000003"))
 (setup (MyCircuit (a (* a a) (* (* a a) a))))
-;; (prove MyCircuit)
+(prove MyCircuit)
 ;; (verify (prove MyCircuit) (scalar 27))
 ;; (U - A - B) / (1 - C)
 ;; [(1 - C)] * [y] = [U - A - B]
