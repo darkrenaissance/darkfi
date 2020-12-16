@@ -24,7 +24,7 @@ use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
-
+use MalVal::ZKScalar;
 
 #[macro_use]
 extern crate clap;
@@ -381,9 +381,9 @@ pub fn prove(ast: &MalVal) -> MalRet {
     // Create an instance of our circuit (with the preimage as a witness).
     let c = LispCircuit {
         params: Rc::new(vector![vec![
-            MalVal::Scalar(std::string::ToString::to_string(&quantity)),
-            MalVal::Scalar(std::string::ToString::to_string(&(quantity * quantity))),
-            MalVal::Scalar(std::string::ToString::to_string(&(quantity * quantity * quantity))),
+            ZKScalar(quantity),
+            ZKScalar(quantity * quantity),
+            ZKScalar(quantity * quantity * quantity),
         ]]),
     };
 

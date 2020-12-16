@@ -55,7 +55,7 @@ pub enum MalVal {
     Zk(Rc<LispCircuit>),
     Enforce(Rc<Vec<MalVal>>),
     // TODO maybe change to bls scalar
-    Scalar(String)
+    ZKScalar(bls12_381::Scalar)
 }
 
 #[derive(Debug)]

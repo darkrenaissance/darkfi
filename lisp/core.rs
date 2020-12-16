@@ -12,6 +12,7 @@ use crate::types::MalVal::{
     Sym, Vector
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
+use MalVal::ZKScalar;
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 
 use bls12_381::Scalar;
@@ -270,12 +271,12 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 
 fn mul_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
-        (MalVal::Scalar(a0), MalVal::Scalar(a1)) => {
-            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
-            s0.mul_assign(s1);
-            Ok(MalVal::Scalar(std::string::ToString::to_string(&s0)[2..].to_string()))
+        (ZKScalar(mut a0), ZKScalar(a1)) => {
+            // let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            a0.mul_assign(a1);
+            Ok(ZKScalar(a0))
         }
-        _ => error("expected (scalar, scalar)"),
+        _ => error("expected (zkscalar, zkscalar)"),
     }
 }
 
@@ -325,25 +326,20 @@ fn scalar_one(a: MalArgs) -> MalRet {
 
 fn negate_from(a: MalArgs) -> MalRet {
     println!("{:?}", a);
-    match (a[0].clone()) {
-        (Str(a0)) => {
-            let s0 = Scalar::from_string(&a0.to_string()).neg();
-            Ok(MalVal::Scalar(
-                std::string::ToString::to_string(&s0)[2..].to_string()
-            ))
-        }
+    match a[0].clone() {
+        ZKScalar(a0) => {
+            Ok(ZKScalar(a0.neg()))
+        },
         _ => error("expected (string)"),
     }
 }
 fn scalar_from(a: MalArgs) -> MalRet {
     println!("{:?}", a);
-    match (a[0].clone()) {
-        (Str(a0)) => {
-            let (s0) = (Scalar::from_string(&a0.to_string()));
-            Ok(MalVal::Scalar(
-                std::string::ToString::to_string(&s0)[2..].to_string()
-            ))
-        }
+    match a[0].clone() {
+        Str(a0) => {
+            let s0 = Scalar::from_string(&a0.to_string());
+            Ok(ZKScalar(s0))
+        },
         _ => error("expected (string)"),
     }
 }
