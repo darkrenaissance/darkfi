@@ -21,7 +21,6 @@
     (scalar::one cs::one)
     (scalar::one x3)  
   )
-)))
-
-(prove)
+))
+(prove))
 ;; (println 'verify  (MyCircuit (scalar 27)))

@@ -290,22 +290,22 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
                         let circuit = setup(&ast)?;
-                        println!("{:?}", a1); 
                         env_sets(&env, ZK_CIRCUIT_ENV_KEY, circuit);
                         eval(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
-                        let a1 = l[1].clone();
-                        // TODO
-                        println!("{:?}", a1);
+                        let a1 = l[0].clone();
+                        println!("prove {:?}", a1);
                         prove(a1.clone(), env.clone())
                     }
-                    // Sym(ref a0sym) if a0sym == "alloc" => {
+                    Sym(ref a0sym) if a0sym == "alloc-input" => {
+                        Ok(MalVal::Nil)
+                    }
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
                         let a2 = l[2].clone();
-                        println!("{:?} {:?}", a1, a2);
-                        Ok(MalVal::Nil)
+                        let value = eval_ast(&a2, &env)?;
+                        Ok(value)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
@@ -398,8 +398,7 @@ pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
         }
         None => { println!("circuit not found."); MalVal::Nil }
     };
-
-    println!("{:?}", c);
+    println!("Circuit {:?}", c);
     
     // TODO remove it 
     let quantity = bls12_381::Scalar::from(3);
