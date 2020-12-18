@@ -9,18 +9,14 @@ use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
     Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str,
-    Sym, Vector
+    Sym, Vector, ZKScalar
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
-use MalVal::ZKScalar;
-use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 
-use bls12_381::Scalar;
+use bls12_381;
 use ff::{Field, PrimeField};
 
 use sapvi::bls_extensions::BlsStringConversion;
-
-
 
 use std::ops::{AddAssign, MulAssign, SubAssign};
 
@@ -171,11 +167,11 @@ fn unpack_bits(a: MalArgs) -> MalRet {
     let mut result = vec![];
     match a[0].clone() {
         Str(ref s) => {
-            let value = Scalar::from_string(s);
+            let value = bls12_381::Scalar::from_string(s);
             for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
                 match bit {
-                    true => result.push(Scalar::one()),
-                    false => result.push(Scalar::zero()),
+                    true => result.push(bls12_381::Scalar::one()),
+                    false => result.push(bls12_381::Scalar::zero()),
                 }
             }
             Ok(list!(result
@@ -261,7 +257,7 @@ fn conj(a: MalArgs) -> MalRet {
 fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -283,7 +279,7 @@ fn mul_scalar(a: MalArgs) -> MalRet {
 fn div_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
             let ret = s1.invert().map(|other| *&s0 * other);
             Ok(Str(
                 std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
@@ -309,11 +305,6 @@ fn range(a: MalArgs) -> MalRet {
     }
 }
 
-fn alloc_input(a: MalArgs) -> MalRet {
-    // TODO implement
-    Ok(ZKScalar(bls12_381::Scalar::zero()))
-}
-
 fn scalar_zero(a: MalArgs) -> MalRet {
     Ok(ZKScalar(bls12_381::Scalar::zero()))
 }
@@ -332,19 +323,20 @@ fn negate_from(a: MalArgs) -> MalRet {
     }
 }
 fn scalar_from(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
     match a[0].clone() {
         Str(a0) => {
-            let s0 = Scalar::from_string(&a0.to_string());
+            let s0 = bls12_381::Scalar::from_string(&a0.to_string());
             Ok(ZKScalar(s0))
         },
-        _ => error("expected (string)"),
+        Int(a0) => {
+            println!("{:?}", a0);
+            let s0 = bls12_381::Scalar::from(a0 as u64);
+            Ok(ZKScalar(s0))
+        },
+        _ => error("expected (string or int)"),
     }
 }
-fn alloc(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
-}
+
 fn cs_one(a: MalArgs) -> MalRet {
     println!("{:?}", a);
     Ok(Nil)
@@ -357,7 +349,7 @@ fn bellman_one(a: MalArgs) -> MalRet {
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
             s0.add_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -476,12 +468,9 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("range", func(range)),
-        ("alloc", func(alloc)),
-        ("alloc-input", func(alloc_input)),
         ("scalar::one", func(scalar_one)),
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
-        // TODO add .neg maybe neg, add and sub
         ("scalar", func(scalar_from)),
         ("cs::one", func(cs_one)),
         ("bellman::one", func(bellman_one)),

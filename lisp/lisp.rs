@@ -296,8 +296,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[1].clone();
+                        // TODO
                         println!("{:?}", a1);
                         prove(a1.clone(), env.clone())
+                    }
+                    // Sym(ref a0sym) if a0sym == "alloc" => {
+                    Sym(ref a0sym) if a0sym == "alloc" => {
+                        let a1 = l[1].clone();
+                        let a2 = l[2].clone();
+                        println!("{:?} {:?}", a1, a2);
+                        Ok(MalVal::Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
@@ -393,7 +401,7 @@ pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
 
     println!("{:?}", c);
     
-    // Pick a preimage and compute its hash.
+    // TODO remove it 
     let quantity = bls12_381::Scalar::from(3);
     
     // Create an instance of our circuit (with the preimage as a witness).
