@@ -13,7 +13,9 @@
   )
 
   (enforce 
+    (scalar::one x2)
     (scalar::one x)
+    (scalar::one x3)
   )
 
   (enforce 
