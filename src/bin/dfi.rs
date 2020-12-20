@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
 use async_channel::unbounded;
-use async_dup::Arc;
+use std::sync::Arc;
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
@@ -60,13 +60,13 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     let accept_addr = options.accept_addr.clone();
 
-    let mut client_slots: Vec<ClientProtocol> = vec![];
+    let mut client_slots = vec![];
     for i in 0..options.connection_slots {
         debug!("Starting connection slot {}", i);
 
-        let mut client = ClientProtocol::new(connections.clone());
-        client
-            .start(accept_addr.clone(), stored_addrs.clone(), executor.clone())
+        let mut client = ClientProtocol::new(connections.clone(), accept_addr.clone(), stored_addrs.clone());
+        client.clone()
+            .start(executor.clone())
             .await;
         client_slots.push(client);
     }
@@ -74,12 +74,11 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for remote_addr in options.manual_connects {
         debug!("Starting connection (manual) to {}", remote_addr);
 
-        let mut client = ClientProtocol::new(connections.clone());
-        client
+        let mut client = ClientProtocol::new(connections.clone(), accept_addr.clone(),
+                stored_addrs.clone());
+        client.clone()
             .start_manual(
                 remote_addr,
-                accept_addr.clone(),
-                stored_addrs.clone(),
                 executor.clone(),
             )
             .await;

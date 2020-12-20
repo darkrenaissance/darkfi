@@ -1,4 +1,4 @@
-use async_dup::Arc;
+use std::sync::Arc;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
@@ -92,7 +92,7 @@ impl SeedProtocol {
             .send(net::Message::GetAddrs(net::GetAddrsMessage {}))
             .await?;
 
-        let stream = Arc::new(stream);
+        let stream = async_dup::Arc::new(stream);
 
         // Run event loop
         match Self::event_loop_process(stream, stored_addrs.clone(), (send_sx, send_rx), executor)

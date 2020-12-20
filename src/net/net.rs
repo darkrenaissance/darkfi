@@ -1,4 +1,4 @@
-use async_dup::Arc;
+use std::sync::Arc;
 use futures::prelude::*;
 use log::*;
 use num_enum::{IntoPrimitive, TryFromPrimitive};

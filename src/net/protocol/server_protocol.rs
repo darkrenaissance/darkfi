@@ -1,4 +1,4 @@
-use async_dup::Arc;
+use std::sync::Arc;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpListener};
@@ -33,7 +33,7 @@ impl ServerProtocol {
         &mut self,
         address: SocketAddr,
         stored_addrs: AddrsStorage,
-        executor: async_dup::Arc<Executor<'_>>,
+        executor: std::sync::Arc<Executor<'_>>,
     ) -> Result<()> {
         let listener = Async::<TcpListener>::bind(address)?;
         info!("Listening on {}", listener.get_ref().local_addr()?);
@@ -41,7 +41,7 @@ impl ServerProtocol {
         loop {
             let (stream, peer_addr) = listener.accept().await?;
             info!("Accepted client: {}", peer_addr);
-            let stream = Arc::new(stream);
+            let stream = async_dup::Arc::new(stream);
 
             let (send_sx, send_rx) = (self.send_sx.clone(), self.send_rx.clone());
 

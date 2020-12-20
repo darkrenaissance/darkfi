@@ -1,4 +1,4 @@
-use async_dup::Arc;
+use std::sync::Arc;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -12,13 +12,13 @@ use smol::{Executor, Task};
 //use crate::{net, serial, Channel, ClientProtocol, Result, SlabsManagerSafe};
 use crate::{net::net, serial, Result};
 
-pub type ConnectionsMap = async_dup::Arc<
+pub type ConnectionsMap = std::sync::Arc<
     async_std::sync::Mutex<HashMap<SocketAddr, async_channel::Sender<net::Message>>>,
 >;
 
-pub type AddrsStorage = async_dup::Arc<async_std::sync::Mutex<Vec<SocketAddr>>>;
+pub type AddrsStorage = std::sync::Arc<async_std::sync::Mutex<Vec<SocketAddr>>>;
 
-pub type Clock = async_dup::Arc<AtomicU64>;
+pub type Clock = std::sync::Arc<AtomicU64>;
 
 pub fn get_current_time() -> u64 {
     let start = SystemTime::now();
