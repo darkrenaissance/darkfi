@@ -1,7 +1,7 @@
 use bls12_381 as bls;
 use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
-use std::rc::Rc;
+use std::net::{IpAddr, SocketAddr};
 use std::{io, mem};
 
 use crate::endian;
@@ -411,6 +411,61 @@ macro_rules! impl_vec {
     };
 }
 impl_vec!(bls::Scalar);
+impl_vec!(SocketAddr);
+impl_vec!([u8; 32]);
+
+impl Encodable for IpAddr {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        match self {
+            IpAddr::V4(ip) => {
+                let version: u8 = 4;
+                len += version.encode(&mut s)?;
+                len += ip.octets().encode(s)?;
+            }
+            IpAddr::V6(ip) => {
+                let version: u8 = 6;
+                len += version.encode(&mut s)?;
+                len += ip.octets().encode(s)?;
+            }
+        }
+        Ok(len)
+    }
+}
+
+impl Decodable for IpAddr {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let version: u8 = Decodable::decode(&mut d)?;
+        match version {
+            4 => {
+                let addr: [u8; 4] = Decodable::decode(&mut d)?;
+                Ok(IpAddr::from(addr))
+            }
+            6 => {
+                let addr: [u8; 16] = Decodable::decode(&mut d)?;
+                Ok(IpAddr::from(addr))
+            }
+            _ => Err(Error::ParseFailed("couldn't decode IpAddr")),
+        }
+    }
+}
+
+impl Encodable for SocketAddr {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.ip().encode(&mut s)?;
+        len += self.port().encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for SocketAddr {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let ip = Decodable::decode(&mut d)?;
+        let port: u16 = Decodable::decode(d)?;
+        Ok(SocketAddr::new(ip, port))
+    }
+}
 
 pub fn encode_with_size<S: io::Write>(data: &[u8], mut s: S) -> Result<usize> {
     let vi_len = VarInt(data.len() as u64).encode(&mut s)?;

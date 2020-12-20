@@ -20,6 +20,7 @@ pub enum Error {
     NonMinimalVarInt,
     /// Parsing error
     ParseFailed(&'static str),
+    ParseIntError,
     AsyncChannelError,
     MalformedPacket,
     AddrParseError,
@@ -54,6 +55,7 @@ impl fmt::Display for Error {
             Error::Io(ref err) => fmt::Display::fmt(err, f),
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
+            Error::ParseIntError => f.write_str("Parse int error"),
             Error::AsyncChannelError => f.write_str("async_channel error"),
             Error::MalformedPacket => f.write_str("Malformed packet"),
             Error::AddrParseError => f.write_str("Unable to parse address"),
@@ -84,5 +86,29 @@ impl From<ZKVMError> for Error {
 impl From<bellman::SynthesisError> for Error {
     fn from(err: bellman::SynthesisError) -> Error {
         Error::Groth16Error(err)
+    }
+}
+
+impl<T> From<async_channel::SendError<T>> for Error {
+    fn from(_err: async_channel::SendError<T>) -> Error {
+        Error::AsyncChannelError
+    }
+}
+
+impl From<async_channel::RecvError> for Error {
+    fn from(_err: async_channel::RecvError) -> Error {
+        Error::AsyncChannelError
+    }
+}
+
+impl From<std::net::AddrParseError> for Error {
+    fn from(_err: std::net::AddrParseError) -> Error {
+        Error::AddrParseError
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(_err: std::num::ParseIntError) -> Error {
+        Error::ParseIntError
     }
 }

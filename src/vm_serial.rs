@@ -1,8 +1,7 @@
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, VarInt};
 use crate::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, 
-    ZKVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVirtualMachine,
 };
 use crate::{impl_vec, ZKContract, ZKProof};
 use bellman::groth16;
