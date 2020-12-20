@@ -6,7 +6,7 @@ use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use log::*;
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
@@ -23,11 +23,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     if let Some(accept_addr) = options.accept_addr {
         let accept_addr = accept_addr.clone();
 
-        let mut protocol = ServerProtocol::new(connections.clone());
+        let protocol = ServerProtocol::new(connections.clone(), accept_addr, stored_addrs2);
         server_task = Some(executor.spawn(async move {
-            protocol
-                .start(accept_addr, stored_addrs2, executor2)
-                .await?;
+            protocol.start(executor2).await?;
             Ok::<(), sapvi::Error>(())
         }));
     }
@@ -35,18 +33,11 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let mut seed_protocols = Vec::with_capacity(options.seed_addrs.len());
 
     // Normally we query this from a server
-    let local_addr = options.accept_addr.clone();
+    let accept_addr = options.accept_addr.clone();
 
     for seed_addr in options.seed_addrs.iter() {
-        let mut protocol = SeedProtocol::new();
-        protocol
-            .start(
-                seed_addr.clone(),
-                local_addr,
-                stored_addrs.clone(),
-                executor.clone(),
-            )
-            .await;
+        let protocol = SeedProtocol::new(seed_addr.clone(), accept_addr, stored_addrs.clone());
+        protocol.clone().start(executor.clone()).await;
         seed_protocols.push(protocol);
     }
 
@@ -58,13 +49,11 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     debug!("Seed nodes queried.");
 
-    let accept_addr = options.accept_addr.clone();
-
     let mut client_slots = vec![];
     for i in 0..options.connection_slots {
         debug!("Starting connection slot {}", i);
 
-        let mut client = ClientProtocol::new(
+        let client = ClientProtocol::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),
@@ -76,7 +65,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for remote_addr in options.manual_connects {
         debug!("Starting connection (manual) to {}", remote_addr);
 
-        let mut client = ClientProtocol::new(
+        let client = ClientProtocol::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),

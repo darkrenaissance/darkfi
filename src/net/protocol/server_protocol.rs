@@ -13,29 +13,34 @@ pub struct ServerProtocol {
     send_sx: async_channel::Sender<net::Message>,
     send_rx: async_channel::Receiver<net::Message>,
     connections: ConnectionsMap,
+
+    accept_addr: SocketAddr,
+    stored_addrs: AddrsStorage,
 }
 
 impl ServerProtocol {
-    pub fn new(connections: ConnectionsMap) -> Self {
+    pub fn new(
+        connections: ConnectionsMap,
+        accept_addr: SocketAddr,
+        stored_addrs: AddrsStorage,
+    ) -> Arc<Self> {
         let (send_sx, send_rx) = async_channel::unbounded::<net::Message>();
-        Self {
+        Arc::new(Self {
             send_sx,
             send_rx,
             connections,
-        }
+
+            accept_addr,
+            stored_addrs,
+        })
     }
 
     pub fn get_send_pipe(&self) -> async_channel::Sender<net::Message> {
         self.send_sx.clone()
     }
 
-    pub async fn start(
-        &mut self,
-        address: SocketAddr,
-        stored_addrs: AddrsStorage,
-        executor: std::sync::Arc<Executor<'_>>,
-    ) -> Result<()> {
-        let listener = Async::<TcpListener>::bind(address)?;
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        let listener = Async::<TcpListener>::bind(self.accept_addr)?;
         info!("Listening on {}", listener.get_ref().local_addr()?);
 
         loop {
@@ -43,25 +48,17 @@ impl ServerProtocol {
             info!("Accepted client: {}", peer_addr);
             let stream = async_dup::Arc::new(stream);
 
-            let (send_sx, send_rx) = (self.send_sx.clone(), self.send_rx.clone());
+            self.connections
+                .lock()
+                .await
+                .insert(peer_addr, self.send_sx.clone());
 
-            let connections = self.connections.clone();
-            connections.lock().await.insert(peer_addr, send_sx.clone());
-
-            let stored_addrs = stored_addrs.clone();
             let executor2 = executor.clone();
+            let self2 = self.clone();
 
             executor
                 .spawn(async move {
-                    match Self::event_loop_process(
-                        stream,
-                        stored_addrs,
-                        (send_sx, send_rx),
-                        connections.clone(),
-                        executor2,
-                    )
-                    .await
-                    {
+                    match self2.clone().event_loop_process(stream, executor2).await {
                         Ok(()) => {
                             warn!("Peer {} timeout", peer_addr);
                         }
@@ -69,26 +66,21 @@ impl ServerProtocol {
                             warn!("Peer {} disconnected: {}", peer_addr, err);
                         }
                     }
-                    connections.lock().await.remove(&peer_addr);
+                    self2.connections.lock().await.remove(&peer_addr);
                 })
                 .detach();
         }
     }
 
     pub async fn event_loop_process(
+        self: Arc<Self>,
         mut stream: net::AsyncTcpStream,
-        stored_addrs: AddrsStorage,
-        (send_sx, send_rx): (
-            async_channel::Sender<net::Message>,
-            async_channel::Receiver<net::Message>,
-        ),
-        connections: ConnectionsMap,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let inactivity_timer = net::InactivityTimer::new(executor.clone());
 
         loop {
-            let event = net::select_event(&mut stream, &send_rx, &inactivity_timer).await?;
+            let event = net::select_event(&mut stream, &self.send_rx, &inactivity_timer).await?;
 
             match event {
                 net::Event::Send(message) => {
@@ -98,10 +90,10 @@ impl ServerProtocol {
                     inactivity_timer.reset().await?;
                     protocol_base::protocol(
                         message,
-                        &stored_addrs,
-                        &send_sx,
+                        &self.stored_addrs,
+                        &self.send_sx,
                         None,
-                        connections.clone(),
+                        self.connections.clone(),
                     )
                     .await?;
                 }

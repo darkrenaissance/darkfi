@@ -1,3 +1,4 @@
+use async_std::sync::Mutex;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
@@ -14,7 +15,11 @@ type Clock = Arc<AtomicU64>;
 pub struct SeedProtocol {
     send_sx: async_channel::Sender<net::Message>,
     send_rx: async_channel::Receiver<net::Message>,
-    main_process: Option<smol::Task<()>>,
+    main_process: Mutex<Option<smol::Task<()>>>,
+
+    seed_addr: SocketAddr,
+    accept_addr: Option<SocketAddr>,
+    stored_addrs: AddrsStorage,
 }
 
 #[derive(PartialEq)]
@@ -25,111 +30,97 @@ enum ProtocolSignal {
 }
 
 impl SeedProtocol {
-    pub fn new() -> Self {
+    pub fn new(
+        seed_addr: SocketAddr,
+        accept_addr: Option<SocketAddr>,
+        stored_addrs: AddrsStorage,
+    ) -> Arc<Self> {
         let (send_sx, send_rx) = async_channel::unbounded::<net::Message>();
-        Self {
+        Arc::new(Self {
             send_sx,
             send_rx,
-            main_process: None,
-        }
+            main_process: Mutex::new(None),
+            seed_addr,
+            accept_addr,
+            stored_addrs,
+        })
     }
 
-    pub async fn start(
-        &mut self,
-        seed_addr: SocketAddr,
-        local_addr: Option<SocketAddr>,
-        stored_addrs: AddrsStorage,
-        executor: Arc<Executor<'_>>,
-    ) {
-        let (send_sx, send_rx) = (self.send_sx.clone(), self.send_rx.clone());
-        let ex = executor.clone();
-        self.main_process = Some(ex.spawn(async move {
-            match Async::<TcpStream>::connect(seed_addr.clone()).await {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+        let executor2 = executor.clone();
+        let self2 = self.clone();
+
+        *self2.main_process.lock().await = Some(executor.spawn(async move {
+            match Async::<TcpStream>::connect(self.seed_addr).await {
                 Ok(stream) => {
-                    let _ = Self::handle_connect(
-                        stream,
-                        &stored_addrs,
-                        seed_addr.clone(),
-                        local_addr,
-                        (send_sx.clone(), send_rx.clone()),
-                        executor.clone(),
-                    )
-                    .await;
+                    let _ = self.handle_connect(stream, executor2).await;
                 }
                 Err(err) => {
-                    warn!("Unable to connect to seed {}: {}", seed_addr, err)
+                    warn!("Unable to connect to seed {}: {}", self.seed_addr, err)
                 }
             }
         }));
     }
 
-    pub async fn await_finish(self) {
-        if let Some(process) = self.main_process {
+    pub async fn await_finish(self: Arc<Self>) {
+        let mut process = self.main_process.lock().await;
+        if let Some(process) = &mut *process {
             process.await;
         }
     }
 
     async fn handle_connect(
+        &self,
         stream: Async<TcpStream>,
-        stored_addrs: &AddrsStorage,
-        seed_addr: SocketAddr,
-        local_addr: Option<SocketAddr>,
-        (send_sx, send_rx): (
-            async_channel::Sender<net::Message>,
-            async_channel::Receiver<net::Message>,
-        ),
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        if let Some(local_addr) = local_addr {
-            send_sx
+        if let Some(accept_addr) = self.accept_addr {
+            self.send_sx
                 .send(net::Message::Addrs(net::AddrsMessage {
-                    addrs: vec![local_addr],
+                    addrs: vec![accept_addr],
                 }))
                 .await?;
         }
 
-        send_sx
+        self.send_sx
             .send(net::Message::GetAddrs(net::GetAddrsMessage {}))
             .await?;
 
         let stream = async_dup::Arc::new(stream);
 
         // Run event loop
-        match Self::event_loop_process(stream, stored_addrs.clone(), (send_sx, send_rx), executor)
-            .await
-        {
+        match self.event_loop_process(stream, executor).await {
             Ok(ProtocolSignal::Finished) => {
-                info!("Seed node queried successfully: {}", seed_addr);
+                info!("Seed node queried successfully: {}", self.seed_addr);
             }
             Ok(ProtocolSignal::Timeout) => {
-                warn!("Seed node timeout: {}", seed_addr);
+                warn!("Seed node timeout: {}", self.seed_addr);
             }
             Ok(_) => {
                 unreachable!();
             }
             Err(err) => {
-                warn!("Seed disconnected: {} {}", seed_addr, err);
+                warn!("Seed disconnected: {} {}", self.seed_addr, err);
             }
         }
         Ok(())
     }
 
     async fn event_loop_process(
+        &self,
         mut stream: net::AsyncTcpStream,
-        stored_addrs: AddrsStorage,
-        (send_sx, send_rx): (
-            async_channel::Sender<net::Message>,
-            async_channel::Receiver<net::Message>,
-        ),
         executor: Arc<Executor<'_>>,
     ) -> Result<ProtocolSignal> {
         let inactivity_timer = net::InactivityTimer::new(executor.clone());
 
         let clock = Arc::new(AtomicU64::new(0));
-        let _ping_task = executor.spawn(protocol_base::repeat_ping(send_sx.clone(), clock.clone()));
+        let _ping_task = executor.spawn(protocol_base::repeat_ping(
+            self.send_sx.clone(),
+            clock.clone(),
+        ));
 
         loop {
-            let event = net::select_event(&mut stream, &send_rx, &inactivity_timer).await?;
+            let event = net::select_event(&mut stream, &self.send_rx, &inactivity_timer).await?;
 
             match event {
                 net::Event::Send(message) => {
@@ -137,7 +128,7 @@ impl SeedProtocol {
                 }
                 net::Event::Receive(message) => {
                     inactivity_timer.reset().await?;
-                    let signal = Self::protocol(message, &stored_addrs, &send_sx, &clock).await?;
+                    let signal = self.protocol(message, &clock).await?;
 
                     if signal == ProtocolSignal::Finished {
                         return Ok(ProtocolSignal::Finished);
@@ -152,12 +143,7 @@ impl SeedProtocol {
         //inactivity_timer.stop().await;
     }
 
-    async fn protocol(
-        message: net::Message,
-        stored_addrs: &AddrsStorage,
-        _send_sx: &async_channel::Sender<net::Message>,
-        clock: &Clock,
-    ) -> Result<ProtocolSignal> {
+    async fn protocol(&self, message: net::Message, clock: &Clock) -> Result<ProtocolSignal> {
         match message {
             net::Message::Pong => {
                 let current_time = get_current_time();
@@ -166,7 +152,7 @@ impl SeedProtocol {
             }
             net::Message::Addrs(message) => {
                 info!("received AddrMessage");
-                let mut stored_addrs = stored_addrs.lock().await;
+                let mut stored_addrs = self.stored_addrs.lock().await;
                 for addr in message.addrs {
                     if !stored_addrs.contains(&addr) {
                         stored_addrs.push(addr);
