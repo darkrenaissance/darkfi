@@ -47,76 +47,8 @@ async-std = "1.6.2"
 easy-parallel = "3.1.0"
 
 [[bin]]
-name = "sha256"
-path = "src/sha256.rs"
-
-[[bin]]
-name = "pedersen_hash"
-path = "src/pedersen_hash.rs"
-
-[[bin]]
-name = "oldmimc"
-path = "src/mimc.rs"
-
-[[bin]]
-name = "blake"
-path = "src/blake.rs"
-
-[[bin]]
-name = "zec"
-path = "src/zec.rs"
-
-[[bin]]
-name = "simple"
-path = "src/simple.rs"
-
-[[bin]]
-name = "mint-old"
-path = "src/mint.rs"
-
-[[bin]]
-name = "spend"
-path = "src/spend.rs"
-
-[[bin]]
-name = "eq"
-path = "src/eq.rs"
-
-[[bin]]
-name = "basic"
-path = "src/basic_minimal.rs"
-
-[[bin]]
-name = "vmtest"
-path = "src/vmtest.rs"
-
-[[bin]]
-name = "jubjub-old"
-path = "src/jubjub.rs"
-
-[[bin]]
-name = "bits"
-path = "src/bits.rs"
-
-[[bin]]
-name = "mimc"
-path = "src/bin/mimc.rs"
-
-[[bin]]
-name = "mint2"
-path = "src/mint2.rs"
-
-[[bin]]
 name = "zkvm"
 path = "src/bin/zkvm.rs"
-
-[[bin]]
-name = "mint"
-path = "src/bin/mint.rs"
-
-[[bin]]
-name = "jubjub"
-path = "src/bin/jubjub.rs"
 
 [[bin]]
 name = "dfi"

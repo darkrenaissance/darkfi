@@ -58,7 +58,7 @@ impl ServerProtocol {
                         stored_addrs,
                         (send_sx, send_rx),
                         connections.clone(),
-                        executor2
+                        executor2,
                     )
                     .await
                     {
@@ -91,22 +91,22 @@ impl ServerProtocol {
             let event = net::select_event(&mut stream, &send_rx, &inactivity_timer).await?;
 
             match event {
-                    net::Event::Send(message) => {
-                        net::send_message(&mut stream, message).await?;
-                    }
-                    net::Event::Receive(message) => {
-                        inactivity_timer.reset().await?;
-                        protocol_base::protocol(
-                            message,
-                            &stored_addrs,
-                            &send_sx,
-                            None,
-                            connections.clone(),
-                        )
-                        .await?;
-                    }
-                    net::Event::Timeout => break,
+                net::Event::Send(message) => {
+                    net::send_message(&mut stream, message).await?;
                 }
+                net::Event::Receive(message) => {
+                    inactivity_timer.reset().await?;
+                    protocol_base::protocol(
+                        message,
+                        &stored_addrs,
+                        &send_sx,
+                        None,
+                        connections.clone(),
+                    )
+                    .await?;
+                }
+                net::Event::Timeout => break,
+            }
         }
 
         inactivity_timer.stop().await;

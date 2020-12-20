@@ -1,5 +1,5 @@
-use std::sync::atomic::Ordering;
 use log::*;
+use std::sync::atomic::Ordering;
 
 use crate::net::net;
 use crate::utility::{get_current_time, AddrsStorage, Clock, ConnectionsMap};
@@ -63,7 +63,7 @@ pub async fn protocol(
             }))
             .await?;*/
         }
-        net::Message::Inv(message) => {
+        net::Message::Inv(_message) => {
             info!("received inv message");
             /*
             let mut list_of_hash: Vec<net::CiphertextHash> = vec![];
@@ -82,7 +82,7 @@ pub async fn protocol(
 
         net::Message::GetSlabs(message) => {
             info!("received GetSlabs message.");
-            for slab_hash in message.slabs_hash {
+            for _slab_hash in message.slabs_hash {
                 /*let slab = slabman.get_slab(&slab_hash);
                 if let Some(slab) = slab {
                     send_sx.send(net::Message::Slab(slab.clone())).await?;
@@ -90,13 +90,13 @@ pub async fn protocol(
             }
         }
         net::Message::Slab(message) => {
-            let slab = net::SlabMessage {
+            let _slab = net::SlabMessage {
                 nonce: message.nonce,
                 ciphertext: message.ciphertext.clone(),
             };
 
             // TODO:  it doesn't have to send inv message to the connection which sent the slab.
-            for (a, send) in connections.lock().await.iter() {
+            for (a, _send) in connections.lock().await.iter() {
                 println!("send to {:?}", a);
                 /*send.send(net::Message::Inv(net::InvMessage {
                     slabs_hash: vec![slab.cipher_hash()],

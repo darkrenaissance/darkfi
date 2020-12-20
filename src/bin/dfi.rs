@@ -2,14 +2,14 @@
 extern crate clap;
 use async_channel::unbounded;
 use async_dup::Arc;
-use log::*;
-use async_std::sync::Mutex;
 use async_executor::Executor;
+use async_std::sync::Mutex;
 use easy_parallel::Parallel;
+use log::*;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-use sapvi::{Result, SeedProtocol, ServerProtocol, ClientProtocol};
+use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let connections = Arc::new(Mutex::new(HashMap::new()));
@@ -25,7 +25,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
         let mut protocol = ServerProtocol::new(connections.clone());
         server_task = Some(executor.spawn(async move {
-            protocol.start(accept_addr, stored_addrs2, executor2).await?;
+            protocol
+                .start(accept_addr, stored_addrs2, executor2)
+                .await?;
             Ok::<(), sapvi::Error>(())
         }));
     }
@@ -38,7 +40,12 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for seed_addr in options.seed_addrs.iter() {
         let mut protocol = SeedProtocol::new();
         protocol
-            .start(seed_addr.clone(), local_addr, stored_addrs.clone(), executor.clone())
+            .start(
+                seed_addr.clone(),
+                local_addr,
+                stored_addrs.clone(),
+                executor.clone(),
+            )
             .await;
         seed_protocols.push(protocol);
     }
@@ -58,7 +65,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         debug!("Starting connection slot {}", i);
 
         let mut client = ClientProtocol::new(connections.clone());
-        client.start(accept_addr.clone(), stored_addrs.clone(), executor.clone()).await;
+        client
+            .start(accept_addr.clone(), stored_addrs.clone(), executor.clone())
+            .await;
         client_slots.push(client);
     }
 
@@ -66,7 +75,14 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         debug!("Starting connection (manual) to {}", remote_addr);
 
         let mut client = ClientProtocol::new(connections.clone());
-        client.start_manual(remote_addr, accept_addr.clone(), stored_addrs.clone(), executor.clone()).await;
+        client
+            .start_manual(
+                remote_addr,
+                accept_addr.clone(),
+                stored_addrs.clone(),
+                executor.clone(),
+            )
+            .await;
         client_slots.push(client);
     }
 
@@ -82,7 +98,7 @@ struct ProgramOptions {
     accept_addr: Option<SocketAddr>,
     seed_addrs: Vec<SocketAddr>,
     manual_connects: Vec<SocketAddr>,
-    connection_slots: u32
+    connection_slots: u32,
 }
 
 impl ProgramOptions {
@@ -128,16 +144,19 @@ impl ProgramOptions {
             accept_addr,
             seed_addrs,
             manual_connects,
-            connection_slots
+            connection_slots,
         })
     }
 }
 
 fn main() -> Result<()> {
     use simplelog::*;
-    CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(),
-    ])
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Debug,
+        Config::default(),
+        TerminalMode::Mixed,
+    )
+    .unwrap()])
     .unwrap();
 
     let options = ProgramOptions::load()?;

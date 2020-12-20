@@ -1,9 +1,9 @@
+use async_dup::Arc;
+use log::*;
+use rand::seq::SliceRandom;
+use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::AtomicU64;
-use log::*;
-use smol::{Async, Executor};
-use async_dup::Arc;
-use rand::seq::SliceRandom;
 
 use crate::error::Result;
 use crate::net::net;
@@ -24,7 +24,7 @@ impl ClientProtocol {
             send_sx,
             send_rx,
             connections,
-            main_process: None
+            main_process: None,
         }
     }
 
@@ -38,29 +38,30 @@ impl ClientProtocol {
         connections: &ConnectionsMap,
     ) {
         loop {
-                let addr = match stored_addrs.lock().await.choose(&mut rand_core::OsRng) {
-                    Some(addr) => addr.clone(),
-                    None => {
-                        debug!("No addresses in store. Sleeping for 2 secs before retrying...");
-                        net::sleep(2).await;
-                        continue;
-                    }
-                };
-                if connections.lock().await.contains_key(&addr) {
+            let addr = match stored_addrs.lock().await.choose(&mut rand_core::OsRng) {
+                Some(addr) => addr.clone(),
+                None => {
+                    debug!("No addresses in store. Sleeping for 2 secs before retrying...");
+                    net::sleep(2).await;
                     continue;
                 }
-                if let Some(accept_addr) = accept_addr {
-                    if addr == *accept_addr { continue; }
+            };
+            if connections.lock().await.contains_key(&addr) {
+                continue;
+            }
+            if let Some(accept_addr) = accept_addr {
+                if addr == *accept_addr {
+                    continue;
                 }
+            }
         }
-
     }
 
     pub async fn start(
         &mut self,
         accept_addr: Option<SocketAddr>,
         stored_addrs: AddrsStorage,
-        executor: Arc<Executor<'_>>
+        executor: Arc<Executor<'_>>,
     ) {
         let connections = self.connections.clone();
         let (send_sx, send_rx) = (self.send_sx.clone(), self.send_rx.clone());
@@ -81,12 +82,22 @@ impl ClientProtocol {
                     continue;
                 }
                 if let Some(accept_addr) = accept_addr {
-                    if addr == accept_addr { continue; }
+                    if addr == accept_addr {
+                        continue;
+                    }
                 }
 
                 debug!("Attempting connect to {}", addr);
 
-                Self::try_connect_process(addr, connections.clone(), accept_addr.clone(), stored_addrs.clone(), (send_sx.clone(), send_rx.clone()), executor2.clone()).await;
+                Self::try_connect_process(
+                    addr,
+                    connections.clone(),
+                    accept_addr.clone(),
+                    stored_addrs.clone(),
+                    (send_sx.clone(), send_rx.clone()),
+                    executor2.clone(),
+                )
+                .await;
 
                 // TODO: Fix this
                 net::sleep(2).await;
@@ -99,8 +110,8 @@ impl ClientProtocol {
         remote_addr: SocketAddr,
         accept_addr: Option<SocketAddr>,
         stored_addrs: AddrsStorage,
-        executor: Arc<Executor<'_>>
-        ) {
+        executor: Arc<Executor<'_>>,
+    ) {
         let connections = self.connections.clone();
         let (send_sx, send_rx) = (self.send_sx.clone(), self.send_rx.clone());
 
@@ -111,7 +122,15 @@ impl ClientProtocol {
                 for _ in 0..4 {
                     debug!("Attempting connect to {}", remote_addr);
 
-                    Self::try_connect_process(remote_addr, connections.clone(), accept_addr.clone(), stored_addrs.clone(), (send_sx.clone(), send_rx.clone()), executor2.clone()).await;
+                    Self::try_connect_process(
+                        remote_addr,
+                        connections.clone(),
+                        accept_addr.clone(),
+                        stored_addrs.clone(),
+                        (send_sx.clone(), send_rx.clone()),
+                        executor2.clone(),
+                    )
+                    .await;
                 }
                 net::sleep(2).await;
             }
@@ -127,7 +146,7 @@ impl ClientProtocol {
             async_channel::Sender<net::Message>,
             async_channel::Receiver<net::Message>,
         ),
-        executor: Arc<Executor<'_>>
+        executor: Arc<Executor<'_>>,
     ) {
         match Async::<TcpStream>::connect(address.clone()).await {
             Ok(stream) => {
@@ -138,14 +157,13 @@ impl ClientProtocol {
                     address,
                     (send_sx.clone(), send_rx.clone()),
                     accept_addr,
-                    executor
+                    executor,
                 )
                 .await;
             }
-            Err(_err) => {  warn!(
-                              "Unable to connect to addr {:?}: {}",
-                             address, _err
-                             ); }
+            Err(_err) => {
+                warn!("Unable to connect to addr {:?}: {}", address, _err);
+            }
         }
     }
 
@@ -159,7 +177,7 @@ impl ClientProtocol {
             async_channel::Receiver<net::Message>,
         ),
         accept_addr: Option<SocketAddr>,
-        executor: Arc<Executor<'_>>
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!("Connected to {}", address);
 
@@ -222,9 +240,7 @@ impl ClientProtocol {
         let clock = Arc::new(AtomicU64::new(0));
         let send_sx2 = send_sx.clone();
         let clock2 = clock.clone();
-        let ping_task = executor.spawn(
-            protocol_base::repeat_ping(send_sx2, clock2)
-        );
+        let ping_task = executor.spawn(protocol_base::repeat_ping(send_sx2, clock2));
 
         let mut send_addr_task = None;
         if let Some(accept_addr) = accept_addr {

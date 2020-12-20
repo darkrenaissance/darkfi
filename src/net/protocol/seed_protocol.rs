@@ -21,7 +21,7 @@ pub struct SeedProtocol {
 enum ProtocolSignal {
     Waiting,
     Finished,
-    Timeout
+    Timeout,
 }
 
 impl SeedProtocol {
@@ -56,7 +56,9 @@ impl SeedProtocol {
                     )
                     .await;
                 }
-                Err(err) => { warn!("Unable to connect to seed {}: {}", seed_addr, err) },
+                Err(err) => {
+                    warn!("Unable to connect to seed {}: {}", seed_addr, err)
+                }
             }
         }));
     }
@@ -80,7 +82,9 @@ impl SeedProtocol {
     ) -> Result<()> {
         if let Some(local_addr) = local_addr {
             send_sx
-                .send(net::Message::Addrs(net::AddrsMessage { addrs: vec![local_addr] }))
+                .send(net::Message::Addrs(net::AddrsMessage {
+                    addrs: vec![local_addr],
+                }))
                 .await?;
         }
 
@@ -91,13 +95,8 @@ impl SeedProtocol {
         let stream = Arc::new(stream);
 
         // Run event loop
-        match Self::event_loop_process(
-            stream,
-            stored_addrs.clone(),
-            (send_sx, send_rx),
-            executor,
-        )
-        .await
+        match Self::event_loop_process(stream, stored_addrs.clone(), (send_sx, send_rx), executor)
+            .await
         {
             Ok(ProtocolSignal::Finished) => {
                 info!("Seed node queried successfully: {}", seed_addr);
@@ -105,7 +104,9 @@ impl SeedProtocol {
             Ok(ProtocolSignal::Timeout) => {
                 warn!("Seed node timeout: {}", seed_addr);
             }
-            Ok(_) => { unreachable!(); }
+            Ok(_) => {
+                unreachable!();
+            }
             Err(err) => {
                 warn!("Seed disconnected: {} {}", seed_addr, err);
             }
