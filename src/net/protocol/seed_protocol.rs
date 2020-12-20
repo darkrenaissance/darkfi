@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use crate::error::Result;
 use crate::net::net;

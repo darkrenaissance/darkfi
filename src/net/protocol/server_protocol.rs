@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpListener};
+use std::sync::Arc;
 
 //use super::protocol;
 use crate::error::Result;

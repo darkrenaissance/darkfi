@@ -1,10 +1,10 @@
 use async_std::sync::Mutex;
-use std::sync::Arc;
 use log::*;
 use rand::seq::SliceRandom;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use crate::error::Result;
 use crate::net::net;
@@ -22,9 +22,11 @@ pub struct ClientProtocol {
 }
 
 impl ClientProtocol {
-    pub fn new(connections: ConnectionsMap, accept_addr: Option<SocketAddr>,
-    stored_addrs: AddrsStorage,
-               ) -> Arc<Self> {
+    pub fn new(
+        connections: ConnectionsMap,
+        accept_addr: Option<SocketAddr>,
+        stored_addrs: AddrsStorage,
+    ) -> Arc<Self> {
         let (send_sx, send_rx) = async_channel::unbounded::<net::Message>();
         Arc::new(Self {
             send_sx,
@@ -32,7 +34,7 @@ impl ClientProtocol {
             connections,
             main_process: Mutex::new(None),
             accept_addr,
-            stored_addrs
+            stored_addrs,
         })
     }
 
@@ -66,10 +68,7 @@ impl ClientProtocol {
         }
     }
 
-    pub async fn start(
-        self: Arc<Self>,
-        executor: Arc<Executor<'_>>,
-    ) {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         let executor2 = executor.clone();
         let self2 = self.clone();
 
@@ -94,11 +93,7 @@ impl ClientProtocol {
 
                 debug!("Attempting connect to {}", addr);
 
-                self.try_connect_process(
-                    addr,
-                    executor2.clone(),
-                )
-                .await;
+                self.try_connect_process(addr, executor2.clone()).await;
 
                 // TODO: Fix this
                 net::sleep(2).await;
@@ -119,30 +114,18 @@ impl ClientProtocol {
                 for _ in 0..4 {
                     debug!("Attempting connect to {}", remote_addr);
 
-                    self.try_connect_process(
-                        remote_addr,
-                        executor2.clone(),
-                    )
-                    .await;
+                    self.try_connect_process(remote_addr, executor2.clone())
+                        .await;
                 }
                 net::sleep(2).await;
             }
         }));
     }
 
-    pub async fn try_connect_process(
-        &self,
-        address: SocketAddr,
-        executor: Arc<Executor<'_>>,
-    ) {
+    pub async fn try_connect_process(&self, address: SocketAddr, executor: Arc<Executor<'_>>) {
         match Async::<TcpStream>::connect(address.clone()).await {
             Ok(stream) => {
-                let _ = self.handle_connect(
-                    stream,
-                    address,
-                    executor,
-                )
-                .await;
+                let _ = self.handle_connect(stream, address, executor).await;
             }
             Err(_err) => {
                 warn!("Unable to connect to addr {:?}: {}", address, _err);
@@ -165,12 +148,7 @@ impl ClientProtocol {
             .insert(address.clone(), self.send_sx.clone());
 
         // Run event loop
-        match self.event_loop_process(
-            stream,
-            executor,
-        )
-        .await
-        {
+        match self.event_loop_process(stream, executor).await {
             Ok(()) => {
                 warn!("Server timeout");
             }
@@ -211,7 +189,8 @@ impl ClientProtocol {
 
         let mut send_addr_task = None;
         if let Some(accept_addr) = self.accept_addr {
-            send_addr_task = Some(executor.spawn(Self::send_addr(self.send_sx.clone(), accept_addr.clone())));
+            send_addr_task =
+                Some(executor.spawn(Self::send_addr(self.send_sx.clone(), accept_addr.clone())));
         }
 
         loop {

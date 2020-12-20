@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::seq::SliceRandom;

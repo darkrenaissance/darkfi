@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use futures::prelude::*;
 use log::*;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -8,6 +7,7 @@ use std::convert::TryFrom;
 use std::io;
 use std::io::Cursor;
 use std::net::{SocketAddr, TcpStream};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::async_serial::{AsyncReadExt, AsyncWriteExt};

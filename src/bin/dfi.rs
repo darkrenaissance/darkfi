@@ -1,13 +1,13 @@
 #[macro_use]
 extern crate clap;
 use async_channel::unbounded;
-use std::sync::Arc;
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use log::*;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 
 use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
 
@@ -64,23 +64,26 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for i in 0..options.connection_slots {
         debug!("Starting connection slot {}", i);
 
-        let mut client = ClientProtocol::new(connections.clone(), accept_addr.clone(), stored_addrs.clone());
-        client.clone()
-            .start(executor.clone())
-            .await;
+        let mut client = ClientProtocol::new(
+            connections.clone(),
+            accept_addr.clone(),
+            stored_addrs.clone(),
+        );
+        client.clone().start(executor.clone()).await;
         client_slots.push(client);
     }
 
     for remote_addr in options.manual_connects {
         debug!("Starting connection (manual) to {}", remote_addr);
 
-        let mut client = ClientProtocol::new(connections.clone(), accept_addr.clone(),
-                stored_addrs.clone());
-        client.clone()
-            .start_manual(
-                remote_addr,
-                executor.clone(),
-            )
+        let mut client = ClientProtocol::new(
+            connections.clone(),
+            accept_addr.clone(),
+            stored_addrs.clone(),
+        );
+        client
+            .clone()
+            .start_manual(remote_addr, executor.clone())
             .await;
         client_slots.push(client);
     }
