@@ -1,26 +1,21 @@
 #![allow(non_snake_case)]
 
-use crate::MalVal::Zk;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
-use sapvi::{ZKVMCircuit, ZKVirtualMachine};
+use crate::MalVal::Zk;
 use sapvi::bls_extensions::BlsStringConversion;
+use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 
 use simplelog::*;
 
-use bellman::{
-    gadgets::{
-        Assignment,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
+use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
-use std::ops::{AddAssign, MulAssign, SubAssign};
-use std::time::Instant;
+use std::{cell::RefCell, ops::{AddAssign, MulAssign, SubAssign}};
 use std::rc::Rc;
+use std::time::Instant;
 
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
@@ -38,10 +33,7 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{
-    Bool, Func, Hash, List, MalFunc, Nil, Str,
-    Sym, Vector,
-};
+use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
@@ -50,7 +42,7 @@ use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
 
-pub const ZK_CIRCUIT_ENV_KEY : &str = "ZKC";
+pub const ZK_CIRCUIT_ENV_KEY: &str = "ZKC";
 
 // read
 fn read(str: &str) -> MalRet {
@@ -287,38 +279,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => Ok(Nil),
                         }
                     }
-                    Sym(ref a0sym) if a0sym == "setup" => {
-                        let a1 = l[1].clone();
-                        let circuit = setup(&ast)?;
-                        env_sets(&env, ZK_CIRCUIT_ENV_KEY, circuit);
-                        eval(a1.clone(), env.clone())
-                    }
-                    Sym(ref a0sym) if a0sym == "prove" => {
-                        let a1 = l[0].clone();
-                        println!("prove {:?}", a1);
-                        prove(a1.clone(), env.clone())
-                    }
-                    Sym(ref a0sym) if a0sym == "alloc-input" => {
-                        Ok(MalVal::Nil)
-                    }
-                    Sym(ref a0sym) if a0sym == "alloc" => {
-                        let a1 = l[1].clone();
-                        let a2 = l[2].clone();
-                        let value = eval_ast(&a2, &env)?;
-                        Ok(value)
-                    }
-                    //Sym(ref a0sym) if a0sym == "verify" => {
-                    Sym(ref a0sym) if a0sym == "enforce" => {
-                        let (a1, a2) = (l[0].clone(), l[1].clone());
-                        let value = eval_ast(&a2, &env)?;
-                        match value {
-                            List(ref el, _) => {
-                                println!("{:?}", el.to_vec());
-                            }
-                            _ => println!("invalid format"),
-                        }
-                        Ok(Nil)
-                    }
+
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         Ok(MalFunc {
@@ -336,6 +297,37 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             env = e.clone();
                         }
                         continue 'tco;
+                    }
+                    Sym(ref a0sym) if a0sym == "setup" => {
+                        let a1 = l[1].clone();
+                        let circuit = setup(&ast, env.clone())?;
+                        env_sets(&env, ZK_CIRCUIT_ENV_KEY, circuit);
+                        eval(a1.clone(), env.clone())
+                    }
+                    Sym(ref a0sym) if a0sym == "prove" => {
+                        let a1 = l[0].clone();
+                        println!("prove {:?}", a1);
+                        prove(a1.clone(), env.clone())
+                    }
+                    Sym(ref a0sym) if a0sym == "alloc-input" => Ok(MalVal::Nil),
+                    Sym(ref a0sym) if a0sym == "alloc" => {
+                        let a1 = l[1].clone();
+                        let a2 = l[2].clone();
+                        let value = eval_ast(&a2, &env)?;
+                        println!("a1 {:?} \n value {:?}", a1, value);
+                        Ok(value)
+                    }
+                    //Sym(ref a0sym) if a0sym == "verify" => {
+                    Sym(ref a0sym) if a0sym == "enforce" => {
+                        let (a1, a2) = (l[0].clone(), l[1].clone());
+                        let value = eval_ast(&a2, &env)?;
+                        match value {
+                            List(ref el, _) => {
+                                println!("{:?}", el.to_vec());
+                            }
+                            _ => println!("invalid format"),
+                        }
+                        Ok(Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {
@@ -373,51 +365,58 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 
     ret
 }
-
-pub fn setup(ast: &MalVal) -> MalRet {
-    // TODO get params from ast 
+pub fn setup(ast: &MalVal, mut env: Env) -> MalRet {
+    println!("{:?}", ast);
+    // TODO get params from ast
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
-    let c = LispCircuit { params: Rc::new(vector!(vec![])) };
-    // TODO move to another fn    
-    let random_parameters = groth16::generate_random_parameters::<Bls12, _, _>(c.clone(), &mut OsRng).unwrap();
+    let mut c = LispCircuit {
+        params: vec![],
+        allocs: vec![],
+        alloc_inputs: vec![],
+        constraints: vec![],
+        env: env.clone(),
+    };
+    // TODO move to another fn
+    let random_parameters =
+        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap();
     let pvk = groth16::prepare_verifying_key(&random_parameters.vk);
     println!("Setup: [{:?}]", start.elapsed());
 
-    Ok(MalVal::Zk(Rc::new(c)))
+    Ok(MalVal::Nil)
 }
 
 pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
-    let c = match env_find(&env, ZK_CIRCUIT_ENV_KEY) {
-        Some(e) => match env_get(&e, &Sym(ZK_CIRCUIT_ENV_KEY.to_string()))? {
-            Zk(c) => {
-                MalVal::Zk(c)
-            }
-            _ => { MalVal::Nil }
-        }
-        None => { println!("circuit not found."); MalVal::Nil }
-    };
-    println!("Circuit {:?}", c);
-    
-    // TODO remove it 
+   
+    // TODO remove it
     let quantity = bls12_381::Scalar::from(3);
-    
+
     // Create an instance of our circuit (with the preimage as a witness).
-    let c = LispCircuit {
-        params: Rc::new(vector![vec![
-            ZKScalar(quantity),
-            ZKScalar(quantity * quantity),
-            ZKScalar(quantity * quantity * quantity),
-        ]]),
+    let params = {
+        let  c = LispCircuit {
+            params: vec![],
+            allocs: vec![],
+            alloc_inputs: vec![],
+            constraints: vec![],
+            env: env.clone(),
+        };
+        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
 
+    let  circuit= LispCircuit {
+        params: vec![],
+        allocs: vec![],
+        alloc_inputs: vec![],
+        constraints: vec![],
+        env: env.clone(),
+    };
     let start = Instant::now();
     // Create a Groth16 proof with our parameters.
-    //let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
+    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
     Ok(MalVal::Nil)
-} 
+}
 
 pub fn verify(ast: &MalVal) -> MalRet {
     let public_input = vec![bls12_381::Scalar::from(27)];

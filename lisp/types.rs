@@ -1,26 +1,27 @@
-use bellman::SynthesisError;
-use bellman::ConstraintSystem;
 use bellman::Circuit;
+use bellman::ConstraintSystem;
+use bellman::SynthesisError;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 
+use crate::env;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{
-    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector,
-};
-
+use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 use bls12_381::Scalar;
-use sapvi::{
-    BlsStringConversion, ConstraintInstruction,
-};
+use sapvi::{BlsStringConversion, ConstraintInstruction};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: Rc<MalVal>,
+    // TODO refactor to vec
+    pub params: Vec<Option<Scalar>>,
+    pub allocs: Vec<Option<Scalar>>,
+    pub alloc_inputs: Vec<Option<Scalar>>,
+    pub constraints: Vec<Option<Scalar>>,
+    pub env: Env,
 }
 
 impl Circuit<bls12_381::Scalar> for LispCircuit {
@@ -52,10 +53,10 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(Rc<LispCircuit>),
+    Zk(LispCircuit),
     Enforce(Rc<Vec<MalVal>>),
     // TODO maybe change to bls scalar
-    ZKScalar(bls12_381::Scalar)
+    ZKScalar(bls12_381::Scalar),
 }
 
 #[derive(Debug)]

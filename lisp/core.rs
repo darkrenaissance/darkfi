@@ -8,8 +8,7 @@ use crate::printer::pr_seq;
 use crate::reader::read_str;
 use crate::types::MalErr::ErrMalVal;
 use crate::types::MalVal::{
-    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str,
-    Sym, Vector, ZKScalar
+    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector, ZKScalar,
 };
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
@@ -19,7 +18,6 @@ use ff::{Field, PrimeField};
 use sapvi::bls_extensions::BlsStringConversion;
 
 use std::ops::{AddAssign, MulAssign, SubAssign};
-
 
 macro_rules! fn_t_int_int {
     ($ret:ident, $fn:expr) => {{
@@ -257,7 +255,10 @@ fn conj(a: MalArgs) -> MalRet {
 fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
+            let (mut s0, s1) = (
+                bls12_381::Scalar::from_string(&a0),
+                bls12_381::Scalar::from_string(&a1),
+            );
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -279,7 +280,10 @@ fn mul_scalar(a: MalArgs) -> MalRet {
 fn div_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
+            let (s0, s1) = (
+                bls12_381::Scalar::from_string(&a0),
+                bls12_381::Scalar::from_string(&a1),
+            );
             let ret = s1.invert().map(|other| *&s0 * other);
             Ok(Str(
                 std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
@@ -294,14 +298,11 @@ fn range(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Int(a0), Int(a1)) => {
             for n in a0..a1 {
-               result.push(n);
-            };
-            Ok(list!(result
-                .iter()
-                .map(|_a| Nil) 
-                .collect::<Vec<MalVal>>()))
-        },
-        _ => error("expected int int")
+                result.push(n);
+            }
+            Ok(list!(result.iter().map(|_a| Nil).collect::<Vec<MalVal>>()))
+        }
+        _ => error("expected int int"),
     }
 }
 
@@ -315,9 +316,7 @@ fn scalar_one(a: MalArgs) -> MalRet {
 
 fn negate_from(a: MalArgs) -> MalRet {
     match a[0].apply(vec![])? {
-        ZKScalar(a0) => {
-            Ok(ZKScalar(a0.neg()))
-        },
+        ZKScalar(a0) => Ok(ZKScalar(a0.neg())),
         Nil => error("nil not supported"),
         _ => error("negate error, expected (zkscalar)"),
     }
@@ -327,12 +326,12 @@ fn scalar_from(a: MalArgs) -> MalRet {
         Str(a0) => {
             let s0 = bls12_381::Scalar::from_string(&a0.to_string());
             Ok(ZKScalar(s0))
-        },
+        }
         Int(a0) => {
             println!("{:?}", a0);
             let s0 = bls12_381::Scalar::from(a0 as u64);
             Ok(ZKScalar(s0))
-        },
+        }
         _ => error("expected (string or int)"),
     }
 }
@@ -349,7 +348,10 @@ fn bellman_one(a: MalArgs) -> MalRet {
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Str(a0), Str(a1)) => {
-            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), bls12_381::Scalar::from_string(&a1));
+            let (mut s0, s1) = (
+                bls12_381::Scalar::from_string(&a0),
+                bls12_381::Scalar::from_string(&a1),
+            );
             s0.add_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
