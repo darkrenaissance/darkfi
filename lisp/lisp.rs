@@ -365,6 +365,30 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 
     ret
 }
+
+pub fn env_circuit(mut env: Env) -> MalVal {
+    let s = ZK_CIRCUIT_ENV_KEY;
+    match env_find(&env, s) {
+        Some(e) => match env_get(&e, &Str(s.to_string())) {
+            Ok(v) => v,
+            _ => MalVal::Zk(LispCircuit {
+                params: vec![],
+                allocs: vec![],
+                alloc_inputs: vec![],
+                constraints: vec![],
+                env: env.clone(),
+            }),
+        },
+        _ => MalVal::Zk(LispCircuit {
+            params: vec![],
+            allocs: vec![],
+            alloc_inputs: vec![],
+            constraints: vec![],
+            env: env.clone(),
+        }),
+    }
+}
+
 pub fn setup(ast: &MalVal, mut env: Env) -> MalRet {
     println!("{:?}", ast);
     // TODO get params from ast
