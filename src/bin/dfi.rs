@@ -11,7 +11,91 @@ use std::sync::Arc;
 
 use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
 
+use std::net::TcpListener;
+
+use async_native_tls::{Identity, TlsAcceptor};
+use http_types::{Request, Response, StatusCode, Body, Method};
+use smol::{future, Async};
+
+/// Serves a request and returns a response.
+async fn serve(mut req: Request) -> http_types::Result<Response> {
+    println!("Serving {}", req.url());
+
+    let request = req.body_string().await?;
+
+    let mut io = jsonrpc_core::IoHandler::new();
+    io.add_sync_method("say_hello", |_| {
+        Ok(jsonrpc_core::Value::String("Hello World!".into()))
+    });
+
+    //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
+    //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
+
+    //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
+
+    let response = io.handle_request_sync(&request).ok_or(sapvi::Error::BadOperationType)?;
+
+    let mut res = Response::new(StatusCode::Ok);
+    res.insert_header("Content-Type", "text/plain");
+    res.set_body(response);
+    Ok(res)
+}
+
+/// Listens for incoming connections and serves them.
+async fn listen(executor: Arc<Executor<'_>>, listener: Async<TcpListener>, tls: Option<TlsAcceptor>) -> Result<()> {
+    // Format the full host address.
+    let host = match &tls {
+        None => format!("http://{}", listener.get_ref().local_addr()?),
+        Some(_) => format!("https://{}", listener.get_ref().local_addr()?),
+    };
+    println!("Listening on {}", host);
+
+    loop {
+        // Accept the next connection.
+        let (stream, _) = listener.accept().await?;
+
+        // Spawn a background task serving this connection.
+        let task = match &tls {
+            None => {
+                let stream = async_dup::Arc::new(stream);
+                executor.spawn(async move {
+                    if let Err(err) = async_h1::accept(stream, serve).await {
+                        println!("Connection error: {:#?}", err);
+                    }
+                })
+            }
+            Some(tls) => {
+                // In case of HTTPS, establish a secure TLS connection first.
+                match tls.accept(stream).await {
+                    Ok(stream) => {
+                        let stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
+                        executor.spawn(async move {
+                            if let Err(err) = async_h1::accept(stream, serve).await {
+                                println!("Connection error: {:#?}", err);
+                            }
+                        })
+                    }
+                    Err(err) => {
+                        println!("Failed to establish secure TLS connection: {:#?}", err);
+                        continue;
+                    }
+                }
+            }
+        };
+
+        // Detach the task to let it run in the background.
+        task.detach();
+    }
+}
+
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
+    let http = listen(executor.clone(), Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?, None);
+    http.await;
+
+    return Ok(());
+
+    /*
+
     let connections = Arc::new(Mutex::new(HashMap::new()));
 
     let stored_addrs = Arc::new(Mutex::new(Vec::new()));
@@ -83,6 +167,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     //server_task.cancel().await;
     //Ok(())
+    */
 }
 
 struct ProgramOptions {
