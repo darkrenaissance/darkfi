@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate clap;
-use async_channel::unbounded;
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
@@ -27,6 +26,9 @@ async fn serve(mut req: Request) -> http_types::Result<Response> {
     io.add_sync_method("say_hello", |_| {
         Ok(jsonrpc_core::Value::String("Hello World!".into()))
     });
+    io.add_sync_method("quit", |_| {
+        Ok(jsonrpc_core::Value::Null)
+    });
 
     //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
     //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
@@ -42,7 +44,7 @@ async fn serve(mut req: Request) -> http_types::Result<Response> {
 }
 
 /// Listens for incoming connections and serves them.
-async fn listen(executor: Arc<Executor<'_>>, listener: Async<TcpListener>, tls: Option<TlsAcceptor>) -> Result<()> {
+async fn listen(executor: Arc<Executor<'_>>, rpc: Arc<RpcInterface>, listener: Async<TcpListener>, tls: Option<TlsAcceptor>) -> Result<()> {
     // Format the full host address.
     let host = match &tls {
         None => format!("http://{}", listener.get_ref().local_addr()?),
@@ -58,8 +60,13 @@ async fn listen(executor: Arc<Executor<'_>>, listener: Async<TcpListener>, tls: 
         let task = match &tls {
             None => {
                 let stream = async_dup::Arc::new(stream);
+                let rpc = rpc.clone();
                 executor.spawn(async move {
-                    if let Err(err) = async_h1::accept(stream, serve).await {
+                    if let Err(err) = async_h1::accept(stream, move |mut req| {
+                        let rpc = rpc.clone();
+                        rpc.serve(req)
+                    })
+                    .await {
                         println!("Connection error: {:#?}", err);
                     }
                 })
@@ -88,14 +95,54 @@ async fn listen(executor: Arc<Executor<'_>>, listener: Async<TcpListener>, tls: 
     }
 }
 
+struct RpcInterface {
+    quit_send: async_channel::Sender<()>,
+    quit_recv: async_channel::Receiver<()>
+}
+
+impl RpcInterface {
+    fn new() -> Arc<Self> {
+        let (quit_send, quit_recv) = async_channel::unbounded::<()>();
+
+        Arc::new(Self {
+            quit_send,
+            quit_recv
+        })
+    }
+
+    async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
+        println!("Serving {}", req.url());
+
+        let request = req.body_string().await?;
+
+        let mut io = jsonrpc_core::IoHandler::new();
+        io.add_sync_method("say_hello", |_| {
+            Ok(jsonrpc_core::Value::String("Hello World!".into()))
+        });
+        let quit_send = self.quit_send.clone();
+        io.add_method("quit", move |_| {
+            let quit_send = quit_send.clone();
+            async move {
+                quit_send.send(()).await;
+                Ok(jsonrpc_core::Value::Null)
+            }
+        });
+
+        //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
+        //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
+
+        //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
+
+        let response = io.handle_request_sync(&request).ok_or(sapvi::Error::BadOperationType)?;
+
+        let mut res = Response::new(StatusCode::Ok);
+        res.insert_header("Content-Type", "text/plain");
+        res.set_body(response);
+        Ok(res)
+    }
+}
+
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let http = listen(executor.clone(), Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?, None);
-    http.await;
-
-    return Ok(());
-
-    /*
-
     let connections = Arc::new(Mutex::new(HashMap::new()));
 
     let stored_addrs = Arc::new(Mutex::new(Vec::new()));
@@ -161,13 +208,15 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         client_slots.push(client);
     }
 
-    loop {
-        sapvi::sleep(2).await;
-    }
+    let rpc = RpcInterface::new();
+    let http = listen(executor.clone(), rpc.clone(), Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?, None);
+
+    let http_task = executor.spawn(http);
+
+    rpc.quit_recv.recv().await?;
 
     //server_task.cancel().await;
-    //Ok(())
-    */
+    Ok(())
 }
 
 struct ProgramOptions {
@@ -238,7 +287,7 @@ fn main() -> Result<()> {
     let options = ProgramOptions::load()?;
 
     let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = unbounded::<()>();
+    let (signal, shutdown) = async_channel::unbounded::<()>();
     let ex2 = ex.clone();
 
     let (_, result) = Parallel::new()
