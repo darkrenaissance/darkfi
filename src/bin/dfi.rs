@@ -13,7 +13,7 @@ use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
 use std::net::TcpListener;
 
 use async_native_tls::{Identity, TlsAcceptor};
-use http_types::{Request, Response, StatusCode, Body, Method};
+use http_types::{Body, Method, Request, Response, StatusCode};
 use smol::{future, Async};
 
 /// Serves a request and returns a response.
@@ -26,16 +26,16 @@ async fn serve(mut req: Request) -> http_types::Result<Response> {
     io.add_sync_method("say_hello", |_| {
         Ok(jsonrpc_core::Value::String("Hello World!".into()))
     });
-    io.add_sync_method("quit", |_| {
-        Ok(jsonrpc_core::Value::Null)
-    });
+    io.add_sync_method("quit", |_| Ok(jsonrpc_core::Value::Null));
 
     //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
     //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
 
     //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
 
-    let response = io.handle_request_sync(&request).ok_or(sapvi::Error::BadOperationType)?;
+    let response = io
+        .handle_request_sync(&request)
+        .ok_or(sapvi::Error::BadOperationType)?;
 
     let mut res = Response::new(StatusCode::Ok);
     res.insert_header("Content-Type", "text/plain");
@@ -44,7 +44,12 @@ async fn serve(mut req: Request) -> http_types::Result<Response> {
 }
 
 /// Listens for incoming connections and serves them.
-async fn listen(executor: Arc<Executor<'_>>, rpc: Arc<RpcInterface>, listener: Async<TcpListener>, tls: Option<TlsAcceptor>) -> Result<()> {
+async fn listen(
+    executor: Arc<Executor<'_>>,
+    rpc: Arc<RpcInterface>,
+    listener: Async<TcpListener>,
+    tls: Option<TlsAcceptor>,
+) -> Result<()> {
     // Format the full host address.
     let host = match &tls {
         None => format!("http://{}", listener.get_ref().local_addr()?),
@@ -62,11 +67,12 @@ async fn listen(executor: Arc<Executor<'_>>, rpc: Arc<RpcInterface>, listener: A
                 let stream = async_dup::Arc::new(stream);
                 let rpc = rpc.clone();
                 executor.spawn(async move {
-                    if let Err(err) = async_h1::accept(stream, move |mut req| {
+                    if let Err(err) = async_h1::accept(stream, move |req| {
                         let rpc = rpc.clone();
                         rpc.serve(req)
                     })
-                    .await {
+                    .await
+                    {
                         println!("Connection error: {:#?}", err);
                     }
                 })
@@ -97,7 +103,7 @@ async fn listen(executor: Arc<Executor<'_>>, rpc: Arc<RpcInterface>, listener: A
 
 struct RpcInterface {
     quit_send: async_channel::Sender<()>,
-    quit_recv: async_channel::Receiver<()>
+    quit_recv: async_channel::Receiver<()>,
 }
 
 impl RpcInterface {
@@ -106,7 +112,7 @@ impl RpcInterface {
 
         Arc::new(Self {
             quit_send,
-            quit_recv
+            quit_recv,
         })
     }
 
@@ -123,7 +129,7 @@ impl RpcInterface {
         io.add_method("quit", move |_| {
             let quit_send = quit_send.clone();
             async move {
-                quit_send.send(()).await;
+                let _ = quit_send.send(()).await;
                 Ok(jsonrpc_core::Value::Null)
             }
         });
@@ -133,7 +139,9 @@ impl RpcInterface {
 
         //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
 
-        let response = io.handle_request_sync(&request).ok_or(sapvi::Error::BadOperationType)?;
+        let response = io
+            .handle_request_sync(&request)
+            .ok_or(sapvi::Error::BadOperationType)?;
 
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");
@@ -209,13 +217,24 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     }
 
     let rpc = RpcInterface::new();
-    let http = listen(executor.clone(), rpc.clone(), Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?, None);
+    let http = listen(
+        executor.clone(),
+        rpc.clone(),
+        Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?,
+        None,
+    );
 
     let http_task = executor.spawn(http);
 
     rpc.quit_recv.recv().await?;
 
-    //server_task.cancel().await;
+    http_task.cancel().await;
+    match server_task {
+        None => {}
+        Some(server_task) => {
+            server_task.cancel().await;
+        }
+    }
     Ok(())
 }
 
@@ -224,6 +243,7 @@ struct ProgramOptions {
     seed_addrs: Vec<SocketAddr>,
     manual_connects: Vec<SocketAddr>,
     connection_slots: u32,
+    log_path: Box<std::path::PathBuf>,
 }
 
 impl ProgramOptions {
@@ -236,6 +256,7 @@ impl ProgramOptions {
             (@arg SEED_NODES: -s --seeds ... "Seed nodes")
             (@arg CONNECTS: -c --connect ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
+            (@arg LOG_PATH: --log +takes_value "Logfile path")
         )
         .get_matches();
 
@@ -265,26 +286,36 @@ impl ProgramOptions {
             0
         };
 
+        let log_path = Box::new(if let Some(log_path) = app.value_of("LOG_PATH") {
+            std::path::Path::new(log_path)
+        } else {
+            std::path::Path::new("/tmp/darkfid.log")
+        }.to_path_buf());
+
         Ok(ProgramOptions {
             accept_addr,
             seed_addrs,
             manual_connects,
             connection_slots,
+            log_path,
         })
     }
 }
 
 fn main() -> Result<()> {
     use simplelog::*;
-    CombinedLogger::init(vec![TermLogger::new(
-        LevelFilter::Debug,
-        Config::default(),
-        TerminalMode::Mixed,
-    )
-    .unwrap()])
-    .unwrap();
 
     let options = ProgramOptions::load()?;
+
+    CombinedLogger::init(vec![
+        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(),
+        WriteLogger::new(
+            LevelFilter::Debug,
+            Config::default(),
+            std::fs::File::create(options.log_path.as_path()).unwrap(),
+        ),
+    ])
+    .unwrap();
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
