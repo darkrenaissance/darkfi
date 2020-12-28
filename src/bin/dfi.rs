@@ -12,36 +12,9 @@ use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
 
 use std::net::TcpListener;
 
-use async_native_tls::{Identity, TlsAcceptor};
-use http_types::{Body, Method, Request, Response, StatusCode};
-use smol::{future, Async};
-
-/// Serves a request and returns a response.
-async fn serve(mut req: Request) -> http_types::Result<Response> {
-    println!("Serving {}", req.url());
-
-    let request = req.body_string().await?;
-
-    let mut io = jsonrpc_core::IoHandler::new();
-    io.add_sync_method("say_hello", |_| {
-        Ok(jsonrpc_core::Value::String("Hello World!".into()))
-    });
-    io.add_sync_method("quit", |_| Ok(jsonrpc_core::Value::Null));
-
-    //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
-    //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
-
-    //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
-
-    let response = io
-        .handle_request_sync(&request)
-        .ok_or(sapvi::Error::BadOperationType)?;
-
-    let mut res = Response::new(StatusCode::Ok);
-    res.insert_header("Content-Type", "text/plain");
-    res.set_body(response);
-    Ok(res)
-}
+use async_native_tls::TlsAcceptor;
+use http_types::{Request, Response, StatusCode};
+use smol::Async;
 
 /// Listens for incoming connections and serves them.
 async fn listen(
@@ -81,11 +54,12 @@ async fn listen(
                 // In case of HTTPS, establish a secure TLS connection first.
                 match tls.accept(stream).await {
                     Ok(stream) => {
-                        let stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
+                        let _stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
                         executor.spawn(async move {
-                            if let Err(err) = async_h1::accept(stream, serve).await {
+                            /*if let Err(err) = async_h1::accept(stream, serve).await {
                                 println!("Connection error: {:#?}", err);
-                            }
+                            }*/
+                            unimplemented!();
                         })
                     }
                     Err(err) => {
@@ -125,6 +99,7 @@ impl RpcInterface {
         io.add_sync_method("say_hello", |_| {
             Ok(jsonrpc_core::Value::String("Hello World!".into()))
         });
+
         let quit_send = self.quit_send.clone();
         io.add_method("quit", move |_| {
             let quit_send = quit_send.clone();
@@ -133,11 +108,6 @@ impl RpcInterface {
                 Ok(jsonrpc_core::Value::Null)
             }
         });
-
-        //let request = r#"{"jsonrpc": "2.0", "method": "say_hello", "params": [42, 23], "id": 1}"#;
-        //let response = r#"{"jsonrpc":"2.0","result":"Hello World!","id":1}"#;
-
-        //assert_eq!(io.handle_request_sync(request), Some(response.to_string()));
 
         let response = io
             .handle_request_sync(&request)
