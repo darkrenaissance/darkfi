@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use bellman::groth16::PreparedVerifyingKey;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
 use crate::MalVal::Zk;
@@ -300,7 +301,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
-                        setup(a1.clone(), env.clone())?;
+                        let pvk = setup(a1.clone(), env.clone())?;
                         eval(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
@@ -312,20 +313,17 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
                         let a2 = l[2].clone();
-                        let value = eval_ast(&a2, &env)?;
+                        let value = eval(a2, env.clone())?;
                         println!("a1 {:?} \n value {:?}", a1, value);
-                        Ok(value)
+                        env_set(&env, MalVal::Sym(a1.pr_str(false)), value)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
                         let (a1, a2) = (l[0].clone(), l[1].clone());
-                        let value = eval_ast(&a2, &env)?;
-                        match value {
-                            List(ref el, _) => {
-                                println!("{:?}", el.to_vec());
-                            }
-                            _ => println!("invalid format"),
-                        }
+                        let left = l[1].clone();
+                        let right = l[2].clone();
+                        let out = l[3].clone();
+                        println!("left {:?} \n  right {:?} \n out {:?}", left, right, out);
                         Ok(Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -388,9 +386,7 @@ pub fn env_circuit(mut env: Env) -> MalVal {
     }
 }
 
-pub fn setup(ast: MalVal, mut env: Env) -> MalRet {
-    println!("{:?}", ast);
-    // TODO get params from ast
+pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
@@ -407,7 +403,7 @@ pub fn setup(ast: MalVal, mut env: Env) -> MalRet {
     let pvk = groth16::prepare_verifying_key(&random_parameters.vk);
     println!("Setup: [{:?}]", start.elapsed());
 
-    Ok(MalVal::Nil)
+    Ok(pvk)
 }
 
 pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {

@@ -1,3 +1,5 @@
+use bellman::groth16::PreparedVerifyingKey;
+use bls12_381::Bls12;
 use bellman::Circuit;
 use bellman::ConstraintSystem;
 use bellman::SynthesisError;
@@ -68,8 +70,7 @@ pub enum MalVal {
     Atom(Rc<RefCell<MalVal>>),
     Zk(LispCircuit),
     Enforce(Rc<Vec<MalVal>>),
-    // TODO maybe change to bls scalar
-    ZKScalar(bls12_381::Scalar),
+    ZKScalar(bls12_381::Scalar)
 }
 
 #[derive(Debug)]
