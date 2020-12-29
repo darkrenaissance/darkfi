@@ -300,8 +300,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
-                        let circuit = setup(&ast, env.clone())?;
-                        env_sets(&env, ZK_CIRCUIT_ENV_KEY, circuit);
+                        setup(a1.clone(), env.clone())?;
                         eval(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
@@ -389,7 +388,7 @@ pub fn env_circuit(mut env: Env) -> MalVal {
     }
 }
 
-pub fn setup(ast: &MalVal, mut env: Env) -> MalRet {
+pub fn setup(ast: MalVal, mut env: Env) -> MalRet {
     println!("{:?}", ast);
     // TODO get params from ast
     let start = Instant::now();

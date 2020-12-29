@@ -15,11 +15,17 @@ use bls12_381::Scalar;
 use sapvi::{BlsStringConversion, ConstraintInstruction};
 
 #[derive(Debug, Clone)]
+pub struct Allocation {
+    pub symbol: String,
+    pub value: Scalar
+}
+
+#[derive(Debug, Clone)]
 pub struct LispCircuit {
     // TODO refactor to vec
     pub params: Vec<Option<Scalar>>,
-    pub allocs: Vec<Option<Scalar>>,
-    pub alloc_inputs: Vec<Option<Scalar>>,
+    pub allocs: Vec<Option<Allocation>>,
+    pub alloc_inputs: Vec<Option<Allocation>>,
     pub constraints: Vec<Option<Scalar>>,
     pub env: Env,
 }
@@ -29,6 +35,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        
+        for alloc_value in &self.allocs {
+//            let var = cs.alloc(|| "private alloc", ||)?;
+            // TODO use env  
+            println!("{:?}", alloc_value);
+        }
+
         Ok(())
     }
 }
