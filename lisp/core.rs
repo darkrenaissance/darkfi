@@ -470,7 +470,9 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("range", func(range)),
-        ("scalar::one", func(scalar_one)),
+        ("scalar::one", func(|a| {
+           Ok(MalVal::ZKScalar(bls12_381::Scalar::one()))
+        })),
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),
