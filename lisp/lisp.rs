@@ -323,10 +323,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let left = l[1].clone();
                         let right = l[2].clone();
                         let out = l[3].clone();
-                        // let left_eval =eval(left.clone(), env.clone())?;
                         let left_eval = eval(left.clone(), env.clone())?;
-                       println!("{:?}", left_eval); 
-                        Ok(Nil)
+                        let right_eval = eval(right.clone(), env.clone())?;
+                        let out_eval = eval(out.clone(), env.clone())?;
+                        println!("enforce \n {:?} \n {:?} \n {:?}", left_eval, right_eval, out_eval);
+                        Ok(vector![vec![left_eval, right_eval, out_eval]])
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {

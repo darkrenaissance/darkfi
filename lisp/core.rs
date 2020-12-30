@@ -307,7 +307,7 @@ fn range(a: MalArgs) -> MalRet {
 }
 
 fn scalar_zero(a: MalArgs) -> MalRet {
-    Ok(ZKScalar(bls12_381::Scalar::zero()))
+    Ok(vector![vec![ZKScalar(bls12_381::Scalar::zero()), a[0].clone()]])
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
@@ -334,15 +334,6 @@ fn scalar_from(a: MalArgs) -> MalRet {
         }
         _ => error("expected (string or int)"),
     }
-}
-
-fn cs_one(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
-}
-fn bellman_one(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
-    Ok(Nil)
 }
 
 fn add_scalar(a: MalArgs) -> MalRet {
@@ -474,7 +465,8 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),
-        ("cs::one", func(cs_one)),
-        ("bellman::one", func(bellman_one)),
+        ("cs::one", {
+            Sym("cs::one".to_string())
+        }),
     ]
 }
