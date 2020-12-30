@@ -4,7 +4,7 @@ except ImportError:
     from itertools import izip_longest as zip_longest
 import fractions
 
-from numbertype import *
+from .numbertype import *
 
 # strip all copies of elt from the end of the list
 def strip(L, elt):
