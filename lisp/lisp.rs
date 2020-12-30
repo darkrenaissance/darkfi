@@ -312,10 +312,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "alloc-input" => Ok(MalVal::Nil),
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
-                        let value = eval(l[2].clone(), env.clone());
-                        let result = eval(value.clone(), env.clone());
-                        println!("result {:?} \n value {:?}", result, value);
-                        env_set(&env, MalVal::Sym(a1.pr_str(false)), value)
+                        let value = eval(l[2].clone(), env.clone())?;
+                        let result = eval(value.clone(), env.clone())?;
+                        let symbol = MalVal::Sym(a1.pr_str(false));
+                        env_set(&env, symbol,  result)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
@@ -324,6 +324,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let right = l[2].clone();
                         let out = l[3].clone();
                         println!("left {:?} \n  right {:?} \n out {:?}", left, right, out);
+                        // let left_eval =eval(left.clone(), env.clone())?;
+                        let left_eval = eval_ast(&left.clone(), &env.clone())?;
+                       println!("{:?}", left_eval); 
                         Ok(Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
