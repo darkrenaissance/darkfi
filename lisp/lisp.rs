@@ -315,6 +315,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
+                        let mut circuit = env_circuit(env.clone());
+                        circuit.allocs.push(Some(Allocation{symbol: symbol, value: value }));
+
                         env_set(&env, symbol,  result)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {

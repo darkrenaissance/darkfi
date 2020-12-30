@@ -25,11 +25,7 @@
     (scalar::one x3)  
   )
 
-  ;; (enforce 
-  ;;   (scalar::one tmp) 
-  ;;   ((scalar::one left_i) (mimc_constant cs::one)) 
-  ;;   ((scalar::one left_i_1) ((neg scalar::one) right))
-  ;;  )
+)
   )
 ))
 (prove))
