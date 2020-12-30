@@ -311,7 +311,7 @@ fn scalar_zero(a: MalArgs) -> MalRet {
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
-    Ok(ZKScalar(bls12_381::Scalar::one()))
+    Ok(vector![vec![ZKScalar(bls12_381::Scalar::one()), a[0].clone()]])
 }
 
 fn negate_from(a: MalArgs) -> MalRet {
@@ -470,9 +470,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("swap!", func(|a| a[0].swap_bang(&a[1..].to_vec()))),
         ("unpack-bits", func(unpack_bits)),
         ("range", func(range)),
-        ("scalar::one", func(|a| {
-           Ok(MalVal::ZKScalar(bls12_381::Scalar::one()))
-        })),
+        ("scalar::one", func(scalar_one)),
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),
