@@ -34,7 +34,7 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector, Allocations};
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
@@ -315,9 +315,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
-                        let mut circuit = env_circuit(env.clone());
-                        circuit.allocs.push(Some(Allocation{symbol: symbol, value: value }));
-
+                        let alloc_symbol = &Sym("Allocations".to_string());
+                        let allocations = match env_get(&env.clone(), alloc_symbol) {
+                            Ok(Allocations(v)) => { v },
+                            _ => Rc::new(vec![])
+                        };
+                        
+                        // vec![Allocation { symbol : symbol, value: value }]
                         env_set(&env, symbol,  result)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -369,33 +373,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-pub fn env_circuit(mut env: Env) -> MalVal {
-    let s = ZK_CIRCUIT_ENV_KEY;
-    match env_find(&env, s) {
-        Some(e) => match env_get(&e, &Str(s.to_string())) {
-            Ok(v) => v,
-            _ => MalVal::Zk(LispCircuit {
-                params: vec![],
-                allocs: vec![],
-                alloc_inputs: vec![],
-                constraints: vec![],
-                env: env.clone(),
-            }),
-        },
-        _ => MalVal::Zk(LispCircuit {
-            params: vec![],
-            allocs: vec![],
-            alloc_inputs: vec![],
-            constraints: vec![],
-            env: env.clone(),
-        }),
-    }
-}
-
 pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
+
+    // get all allocs from env 
+
     let mut c = LispCircuit {
         params: vec![],
         allocs: vec![],

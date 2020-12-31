@@ -68,7 +68,8 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(LispCircuit),
+    Zk(Rc<LispCircuit>), // TODO remote it
+    Allocations(Rc<Vec<Allocation>>),
     Enforce(Rc<Vec<MalVal>>),
     ZKScalar(bls12_381::Scalar)
 }
