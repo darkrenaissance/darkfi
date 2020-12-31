@@ -35,7 +35,7 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector, Allocations};
-use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
+use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal, Allocation};
 mod env;
 mod printer;
 mod reader;
@@ -315,14 +315,15 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
-                        let alloc_symbol = &Sym("Allocations".to_string());
-                        let allocations = match env_get(&env.clone(), alloc_symbol) {
-                            Ok(Allocations(v)) => { v },
-                            _ => Rc::new(vec![])
-                        };
-                        
-                        // vec![Allocation { symbol : symbol, value: value }]
-                        env_set(&env, symbol,  result)
+                        let alloc_symbol = Sym("Allocations".to_string());
+                        if let MalVal::Allocations(mut valalloc) = env_get(&env.clone(), &alloc_symbol)? {
+                            if let MalVal::ZKScalar(val) = result {
+                                valalloc.push(Allocation { symbol : symbol.pr_str(false), value: val });
+                                env_set(&env, alloc_symbol, MalVal::Allocations(valalloc));
+                            };
+                            };
+
+                        Ok(Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
