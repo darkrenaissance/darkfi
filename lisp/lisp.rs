@@ -34,7 +34,7 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector, Allocations};
+use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal, Allocation};
 mod env;
 mod printer;
@@ -315,14 +315,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
-                        let alloc_symbol = Sym("Allocations".to_string());
-                        if let MalVal::Allocations(mut valalloc) = env_get(&env.clone(), &alloc_symbol)? {
-                            if let MalVal::ZKScalar(val) = result {
-                                valalloc.push(Allocation { symbol : symbol.pr_str(false), value: val });
-                                env_set(&env, alloc_symbol, MalVal::Allocations(valalloc));
-                            };
-                            };
-
+                        let allocs = get_allocations(&env);
                         Ok(Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -372,6 +365,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     } // end 'tco loop
 
     ret
+}
+
+pub fn get_allocations(env: &Env) -> MalRet {
+    let alloc_symbol = Sym("Allocations".to_string());
+    let mut alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+    //alloc_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+    //// TODO check if there is the alloc on the env already
+    env_set(&env, alloc_symbol, Hash(Rc::new(alloc_hm), Rc::new(Nil)))
 }
 
 pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
