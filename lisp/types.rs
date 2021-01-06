@@ -1,8 +1,8 @@
 use bellman::groth16::PreparedVerifyingKey;
-use bls12_381::Bls12;
 use bellman::Circuit;
 use bellman::ConstraintSystem;
 use bellman::SynthesisError;
+use bls12_381::Bls12;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
@@ -19,7 +19,7 @@ use sapvi::{BlsStringConversion, ConstraintInstruction};
 #[derive(Debug, Clone)]
 pub struct Allocation {
     pub symbol: String,
-    pub value: Scalar
+    pub value: Scalar,
 }
 
 #[derive(Debug, Clone)]
@@ -37,10 +37,9 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        
         for alloc_value in &self.allocs {
-//            let var = cs.alloc(|| "private alloc", ||)?;
-            // TODO use env  
+            //            let var = cs.alloc(|| "private alloc", ||)?;
+            // TODO use env
             println!("{:?}", alloc_value);
         }
 
@@ -70,7 +69,7 @@ pub enum MalVal {
     Atom(Rc<RefCell<MalVal>>),
     Zk(Rc<LispCircuit>), // TODO remote it
     Enforce(Rc<Vec<MalVal>>),
-    ZKScalar(bls12_381::Scalar)
+    ZKScalar(bls12_381::Scalar),
 }
 
 #[derive(Debug)]

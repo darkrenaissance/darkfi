@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
-use bellman::groth16::PreparedVerifyingKey;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
 use crate::MalVal::Zk;
+use bellman::groth16::PreparedVerifyingKey;
 use sapvi::bls_extensions::BlsStringConversion;
 use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 
@@ -14,9 +14,12 @@ use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
-use std::{cell::RefCell, ops::{AddAssign, MulAssign, SubAssign}};
 use std::rc::Rc;
 use std::time::Instant;
+use std::{
+    cell::RefCell,
+    ops::{AddAssign, MulAssign, SubAssign},
+};
 
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
@@ -35,7 +38,7 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
-use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal, Allocation};
+use crate::types::{error, format_error, Allocation, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
 mod reader;
@@ -315,7 +318,18 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
-                        let allocs = get_allocations(&env);
+                        if let Hash(allocs, _) = get_allocations(&env)? {
+                            let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+                            for (k, v) in allocs.iter() {
+                                new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+                            }
+                            new_hm.insert(a1.pr_str(false), result);
+                            env_set(
+                                &env,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            );
+                        };
                         Ok(Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -327,7 +341,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let left_eval = eval(left.clone(), env.clone())?;
                         let right_eval = eval(right.clone(), env.clone())?;
                         let out_eval = eval(out.clone(), env.clone())?;
-                        println!("enforce \n {:?} \n {:?} \n {:?}", left_eval, right_eval, out_eval);
+                        println!(
+                            "enforce \n {:?} \n {:?} \n {:?}",
+                            left_eval, right_eval, out_eval
+                        );
                         Ok(vector![vec![left_eval, right_eval, out_eval]])
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -368,11 +385,24 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 }
 
 pub fn get_allocations(env: &Env) -> MalRet {
-    let alloc_symbol = Sym("Allocations".to_string());
     let mut alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
-    //alloc_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+    match env_find(env, "Allocations") {
+        Some(e) => match env_get(&e, &Sym("Allocations".to_string())) {
+            Ok(f) => Ok(f),
+            _ => env_set(
+                &env,
+                Sym("Allocations".to_string()),
+                Hash(Rc::new(alloc_hm), Rc::new(Nil)),
+            ),
+        },
+        _ => env_set(
+            &env,
+            Sym("Allocations".to_string()),
+            Hash(Rc::new(alloc_hm), Rc::new(Nil)),
+        ),
+    }
+
     //// TODO check if there is the alloc on the env already
-    env_set(&env, alloc_symbol, Hash(Rc::new(alloc_hm), Rc::new(Nil)))
 }
 
 pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
@@ -380,7 +410,7 @@ pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, M
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
 
-    // get all allocs from env 
+    // get all allocs from env
 
     let mut c = LispCircuit {
         params: vec![],
@@ -399,13 +429,12 @@ pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, M
 }
 
 pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
-   
     // TODO remove it
     let quantity = bls12_381::Scalar::from(3);
 
     // Create an instance of our circuit (with the preimage as a witness).
     let params = {
-        let  c = LispCircuit {
+        let c = LispCircuit {
             params: vec![],
             allocs: vec![],
             alloc_inputs: vec![],
@@ -415,7 +444,7 @@ pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
 
-    let  circuit= LispCircuit {
+    let circuit = LispCircuit {
         params: vec![],
         allocs: vec![],
         alloc_inputs: vec![],

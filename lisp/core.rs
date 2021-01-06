@@ -307,11 +307,17 @@ fn range(a: MalArgs) -> MalRet {
 }
 
 fn scalar_zero(a: MalArgs) -> MalRet {
-    Ok(vector![vec![ZKScalar(bls12_381::Scalar::zero()), a[0].clone()]])
+    Ok(vector![vec![
+        ZKScalar(bls12_381::Scalar::zero()),
+        a[0].clone()
+    ]])
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
-    Ok(vector![vec![ZKScalar(bls12_381::Scalar::one()), a[0].clone()]])
+    Ok(vector![vec![
+        ZKScalar(bls12_381::Scalar::one()),
+        a[0].clone()
+    ]])
 }
 
 fn cs_one(a: MalArgs) -> MalRet {
