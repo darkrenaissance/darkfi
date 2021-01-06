@@ -1,5 +1,6 @@
 (println "new-cs.lisp")
-(setup 
+(
+ (setup 
   (let* [aux (scalar 3)
       x (alloc "x" aux)
       x2 (alloc "x2" (* aux aux))
@@ -24,9 +25,9 @@
     (scalar::one cs::one)
     (scalar::one x3)  
   )
-
-)
   )
-))
-(prove))
+  )
+ )
+(prove)
+)
 ;; (println 'verify  (MyCircuit (scalar 27)))

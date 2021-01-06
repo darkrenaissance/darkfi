@@ -310,15 +310,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[0].clone();
                         println!("prove {:?}", a1);
+                        println!("allocation {:?}", get_allocations(&env, "Allocations"));
+                        println!("allocation {:?}", get_allocations(&env, "AllocationsInput"));
                         prove(a1.clone(), env.clone())
                     }
-                    Sym(ref a0sym) if a0sym == "alloc-input" => Ok(MalVal::Nil),
-                    Sym(ref a0sym) if a0sym == "alloc" => {
+                    Sym(ref a0sym) if a0sym == "alloc-input" => {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
                         let symbol = MalVal::Sym(a1.pr_str(false));
-                        if let Hash(allocs, _) = get_allocations(&env)? {
+                        if let Hash(allocs, _) = get_allocations(&env, "AllocationsInput")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
                                 new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
@@ -330,6 +331,27 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
                             );
                         };
+                        println!("allocation {:?}", get_allocations(&env, "AllocationsInput"));
+                        Ok(Nil)
+                    }
+                    Sym(ref a0sym) if a0sym == "alloc" => {
+                        let a1 = l[1].clone();
+                        let value = eval(l[2].clone(), env.clone())?;
+                        let result = eval(value.clone(), env.clone())?;
+                        let symbol = MalVal::Sym(a1.pr_str(false));
+                        if let Hash(allocs, _) = get_allocations(&env, "Allocations")? {
+                            let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+                            for (k, v) in allocs.iter() {
+                                new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+                            }
+                            new_hm.insert(a1.pr_str(false), result);
+                            env_set(
+                                &env,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            );
+                        };
+                        println!("allocation {:?}", get_allocations(&env, "Allocations"));
                         Ok(Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -384,14 +406,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-pub fn get_allocations(env: &Env) -> MalRet {
+pub fn get_allocations(env: &Env, key: &str) -> MalRet {
     let mut alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
-    match env_find(env, "Allocations") {
-        Some(e) => match env_get(&e, &Sym("Allocations".to_string())) {
+    match env_find(env, key) {
+        Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => Ok(f),
             _ => env_set(
                 &env,
-                Sym("Allocations".to_string()),
+                Sym(key.to_string()),
                 Hash(Rc::new(alloc_hm), Rc::new(Nil)),
             ),
         },
@@ -401,8 +423,6 @@ pub fn get_allocations(env: &Env) -> MalRet {
             Hash(Rc::new(alloc_hm), Rc::new(Nil)),
         ),
     }
-
-    //// TODO check if there is the alloc on the env already
 }
 
 pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
