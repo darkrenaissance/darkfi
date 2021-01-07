@@ -305,13 +305,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
                         let pvk = setup(a1.clone(), env.clone())?;
-                        eval(a1.clone(), env.clone())
+                        ast = eval(a1.clone(), env.clone())?;
+                        continue 'tco
+
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[0].clone();
                         println!("prove {:?}", a1);
-                        println!("allocation {:?}", get_allocations(&env, "Allocations"));
-                        println!("allocation {:?}", get_allocations(&env, "AllocationsInput"));
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
@@ -325,13 +325,12 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                             }
                             new_hm.insert(a1.pr_str(false), result);
-                            env_set(
+                             env_set(
                                 &env,
                                 Sym("Allocations".to_string()),
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
                             );
                         };
-                        println!("allocation {:?}", get_allocations(&env, "AllocationsInput"));
                         Ok(Nil)
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
@@ -351,7 +350,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
                             );
                         };
-                        println!("allocation {:?}", get_allocations(&env, "Allocations"));
                         Ok(Nil)
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -367,6 +365,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             "enforce \n {:?} \n {:?} \n {:?}",
                             left_eval, right_eval, out_eval
                         );
+                        println!("allocations {:?}", get_allocations(&env, "Allocations"));
                         Ok(vector![vec![left_eval, right_eval, out_eval]])
                     }
                     _ => match eval_ast(&ast, &env)? {

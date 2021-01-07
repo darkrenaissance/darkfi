@@ -1,12 +1,12 @@
 (println "new-cs.lisp")
-(
- (setup 
-  (let* [aux (scalar 3)
+( (let* [aux (scalar 3)
       x (alloc "x" aux)
       x2 (alloc "x2" (* aux aux))
       x3 (alloc "x3" (* aux (* aux aux)))
       input (alloc-input "input variable" aux)]
-  ;; (enforce left right output)
+
+ (setup 
+   ;; (enforce left right output)
   (
   (enforce  
     (scalar::one x)
