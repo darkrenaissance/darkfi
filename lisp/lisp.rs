@@ -327,7 +327,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(a1.pr_str(false), result);
                              env_set(
                                 &env,
-                                Sym("Allocations".to_string()),
+                                Sym("AllocationsInput".to_string()),
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
                             );
                         };
@@ -366,6 +366,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             left_eval, right_eval, out_eval
                         );
                         println!("allocations {:?}", get_allocations(&env, "Allocations"));
+                        println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
                         Ok(vector![vec![left_eval, right_eval, out_eval]])
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -410,17 +411,9 @@ pub fn get_allocations(env: &Env, key: &str) -> MalRet {
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => Ok(f),
-            _ => env_set(
-                &env,
-                Sym(key.to_string()),
-                Hash(Rc::new(alloc_hm), Rc::new(Nil)),
-            ),
+            _ => Ok(Hash(Rc::new(alloc_hm), Rc::new(Nil))),
         },
-        _ => env_set(
-            &env,
-            Sym("Allocations".to_string()),
-            Hash(Rc::new(alloc_hm), Rc::new(Nil)),
-        ),
+        _ => Ok(Hash(Rc::new(alloc_hm), Rc::new(Nil))),
     }
 }
 
