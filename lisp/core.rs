@@ -314,10 +314,13 @@ fn scalar_zero(a: MalArgs) -> MalRet {
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
-    Ok(vector![vec![
-        ZKScalar(bls12_381::Scalar::one()),
-        a[0].clone()
-    ]])
+    match a.len() {
+        0 => Ok(vector![vec![ZKScalar(bls12_381::Scalar::one())]]),
+        _ => Ok(vector![vec![
+            ZKScalar(bls12_381::Scalar::one()),
+            a[0].clone()
+        ]]),
+    }
 }
 
 fn cs_one(a: MalArgs) -> MalRet {
@@ -325,12 +328,20 @@ fn cs_one(a: MalArgs) -> MalRet {
 }
 
 fn negate_from(a: MalArgs) -> MalRet {
-    match a[0].apply(vec![])? {
+    match a[0].clone() {
         ZKScalar(a0) => Ok(ZKScalar(a0.neg())),
-        Nil => error("nil not supported"),
-        _ => error("negate error, expected (zkscalar)"),
+        _ => match a[0].apply(vec![])? {
+            List(v, _) | Vector(v, _) => {
+                match v[0] {
+                    ZKScalar(val) => Ok(vector![vec![ZKScalar(val.neg())]]),
+                    _ => error("not scalar"),
+                }
+            }
+            _ => return error("non zkscalar passed to negate"),
+        },
     }
 }
+
 fn scalar_from(a: MalArgs) -> MalRet {
     match a[0].clone() {
         Str(a0) => {

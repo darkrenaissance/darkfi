@@ -318,7 +318,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
-                        let symbol = MalVal::Sym(a1.pr_str(false));
+//                        let symbol = MalVal::Sym(a1.pr_str(false));
+                        env_set(&env, a1.clone(), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "AllocationsInput")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -337,7 +338,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
-                        let symbol = MalVal::Sym(a1.pr_str(false));
+ //                       let symbol = MalVal::Sym(a1.pr_str(false));
+                        env_set(&env, a1.clone(), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "Allocations")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -363,10 +365,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let out_eval = eval(out.clone(), env.clone())?;
                         println!(
                             "enforce \n {:?} \n {:?} \n {:?}",
+                            left, right, out
+                        );
+                        println!(
+                            "\n {:?} \n {:?} \n {:?} \n",
                             left_eval, right_eval, out_eval
                         );
-                        println!("allocations {:?}", get_allocations(&env, "Allocations"));
-                        println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
+                        // println!("allocations {:?}", get_allocations(&env, "Allocations"));
+                        // println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
                         Ok(vector![vec![left_eval, right_eval, out_eval]])
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -388,7 +394,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     continue 'tco;
                                 }
                                 _ => {
-                                    Ok(Nil)
+                                    Ok(vector![el.to_vec()])
+
                                     //error("call non-function")
                                 }
                             }
