@@ -32,6 +32,11 @@ pub enum Error {
     VMError(ZKVMError),
     BadContract,
     Groth16Error(bellman::SynthesisError),
+    OperationFailed,
+    ConnectFailed,
+    ConnectTimeout,
+    ChannelStopped,
+    ChannelTimeout,
 }
 
 impl std::error::Error for Error {}
@@ -67,6 +72,11 @@ impl fmt::Display for Error {
             Error::VMError(_) => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
+            Error::OperationFailed => f.write_str("Operation failed"),
+            Error::ConnectFailed => f.write_str("Connection failed"),
+            Error::ConnectTimeout => f.write_str("Connection timed out"),
+            Error::ChannelStopped => f.write_str("Channel stopped"),
+            Error::ChannelTimeout => f.write_str("Channel timed out"),
         }
     }
 }

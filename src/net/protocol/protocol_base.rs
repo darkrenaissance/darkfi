@@ -1,7 +1,7 @@
 use log::*;
 use std::sync::atomic::Ordering;
 
-use crate::net::net;
+use crate::net::messages as net;
 use crate::utility::{get_current_time, AddrsStorage, Clock, ConnectionsMap};
 use crate::Result;
 
@@ -104,6 +104,7 @@ pub async fn protocol(
                 .await?;*/
             }
         }
+        _ => {}
     }
     Ok(())
 }

@@ -7,11 +7,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::net::net;
+use crate::net::messages as net;
 use crate::net::protocol::protocol_base;
 use crate::utility::{AddrsStorage, ConnectionsMap};
 
-pub struct ClientProtocol {
+pub struct Channel {
     send_sx: async_channel::Sender<net::Message>,
     send_rx: async_channel::Receiver<net::Message>,
     connections: ConnectionsMap,
@@ -21,7 +21,7 @@ pub struct ClientProtocol {
     stored_addrs: AddrsStorage,
 }
 
-impl ClientProtocol {
+impl Channel {
     pub fn new(
         connections: ConnectionsMap,
         accept_addr: Option<SocketAddr>,

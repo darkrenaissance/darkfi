@@ -12,17 +12,17 @@ use std::time::Duration;
 
 use crate::async_serial::{AsyncReadExt, AsyncWriteExt};
 use crate::error::{Error, Result};
+pub use crate::net::AsyncTcpStream;
 use crate::serial::{serialize, Decodable, Encodable, VarInt};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 
-pub type AsyncTcpStream = async_dup::Arc<Async<TcpStream>>;
 pub type Ciphertext = Vec<u8>;
 pub type CiphertextHash = [u8; 32];
 
 // Packets and Message because Rust doesn't allow value
 // aliasing from ADL type enums (which Message uses).
-#[derive(IntoPrimitive, TryFromPrimitive, Copy, Clone)]
+#[derive(IntoPrimitive, TryFromPrimitive, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum PacketType {
     Ping = 0,
@@ -33,6 +33,8 @@ pub enum PacketType {
     Inv = 5,
     GetSlabs = 6,
     Slab = 7,
+    Version = 8,
+    Verack = 9,
 }
 
 pub enum Message {
@@ -44,6 +46,8 @@ pub enum Message {
     Inv(InvMessage),
     GetSlabs(GetSlabsMessage),
     Slab(SlabMessage),
+    Version(VersionMessage),
+    Verack(VerackMessage),
 }
 
 pub struct GetAddrsMessage {}
@@ -65,6 +69,10 @@ pub struct InvMessage {
 pub struct AddrsMessage {
     pub addrs: Vec<SocketAddr>,
 }
+
+pub struct VersionMessage {}
+
+pub struct VerackMessage {}
 
 impl Encodable for GetSlabsMessage {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -145,7 +153,56 @@ impl Decodable for AddrsMessage {
     }
 }
 
+impl Encodable for VersionMessage {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        Ok(0)
+    }
+}
+
+impl Decodable for VersionMessage {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
+impl Encodable for VerackMessage {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        Ok(0)
+    }
+}
+
+impl Decodable for VerackMessage {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
 impl Message {
+    pub fn packet_type(&self) -> PacketType {
+        match self {
+            Message::Ping => 
+                PacketType::Ping,
+            Message::Pong => 
+                PacketType::Pong,
+            Message::GetAddrs(message) => 
+                    PacketType::GetAddrs,
+            Message::Addrs(message) =>
+                    PacketType::Addrs,
+            Message::Sync => 
+                    PacketType::Sync,
+            Message::Inv(message) => 
+                    PacketType::Inv,
+            Message::GetSlabs(message) => 
+                    PacketType::GetSlabs,
+            Message::Slab(message) => 
+                    PacketType::Slab,
+            Message::Version(message) => 
+                    PacketType::Version,
+            Message::Verack(message) => 
+                    PacketType::Verack,
+        }
+    }
+
     pub fn pack(&self) -> Result<Packet> {
         match self {
             Message::Ping => Ok(Packet {
@@ -200,6 +257,20 @@ impl Message {
                     payload,
                 })
             }
+            Message::Version(message) => {
+                let payload = serialize(message);
+                Ok(Packet {
+                    command: PacketType::Version,
+                    payload,
+                })
+            }
+            Message::Verack(message) => {
+                let payload = serialize(message);
+                Ok(Packet {
+                    command: PacketType::Verack,
+                    payload,
+                })
+            }
         }
     }
 
@@ -214,6 +285,8 @@ impl Message {
             PacketType::Inv => Ok(Self::Inv(InvMessage::decode(cursor)?)),
             PacketType::GetSlabs => Ok(Self::GetSlabs(GetSlabsMessage::decode(cursor)?)),
             PacketType::Slab => Ok(Self::Slab(SlabMessage::decode(cursor)?)),
+            PacketType::Version => Ok(Self::Version(VersionMessage::decode(cursor)?)),
+            PacketType::Verack => Ok(Self::Verack(VerackMessage::decode(cursor)?)),
         }
     }
 
@@ -227,6 +300,8 @@ impl Message {
             Message::Inv(_) => "Inv",
             Message::GetSlabs(_) => "GetSlabs",
             Message::Slab(_) => "Slab",
+            Message::Version(_) => "Version",
+            Message::Verack(_) => "Verack",
         }
     }
 }
@@ -238,7 +313,7 @@ pub struct Packet {
     pub payload: Vec<u8>,
 }
 
-pub async fn read_packet(stream: &mut AsyncTcpStream) -> Result<Packet> {
+pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet> {
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
     let mut magic = [0u8; 4];
@@ -263,7 +338,7 @@ pub async fn read_packet(stream: &mut AsyncTcpStream) -> Result<Packet> {
     Ok(Packet { command, payload })
 }
 
-pub async fn send_packet(stream: &mut AsyncTcpStream, packet: Packet) -> Result<()> {
+pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
     stream.write_all(&MAGIC_BYTES).await?;
 
     AsyncWriteExt::write_u8(stream, packet.command as u8).await?;
@@ -278,14 +353,14 @@ pub async fn send_packet(stream: &mut AsyncTcpStream, packet: Packet) -> Result<
     Ok(())
 }
 
-async fn receive_message(stream: &mut AsyncTcpStream) -> Result<Message> {
+pub async fn receive_message<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Message> {
     let packet = read_packet(stream).await?;
     let message = Message::unpack(packet)?;
     debug!("received Message::{}", message.name());
     Ok(message)
 }
 
-pub async fn send_message(stream: &mut AsyncTcpStream, message: Message) -> Result<()> {
+pub async fn send_message<W: AsyncWrite + Unpin>(stream: &mut W, message: Message) -> Result<()> {
     debug!("sending Message::{}", message.name());
     let packet = message.pack()?;
     send_packet(stream, packet).await

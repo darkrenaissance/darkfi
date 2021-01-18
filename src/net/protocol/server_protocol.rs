@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 //use super::protocol;
 use crate::error::Result;
-use crate::net::net;
+use crate::net::messages as net;
 use crate::net::protocol::protocol_base;
 use crate::utility::{AddrsStorage, ConnectionsMap};
 

@@ -4,11 +4,13 @@ use async_executor::Executor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use log::*;
+use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
+use sapvi::net;
+use sapvi::{Channel, Result, SeedProtocol, ServerProtocol};
 
 use std::net::TcpListener;
 
@@ -76,15 +78,19 @@ async fn listen(
 }
 
 struct RpcInterface {
+    p2p: Arc<net::P2p>,
+    started: Mutex<bool>,
     quit_send: async_channel::Sender<()>,
     quit_recv: async_channel::Receiver<()>,
 }
 
 impl RpcInterface {
-    fn new() -> Arc<Self> {
+    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
         let (quit_send, quit_recv) = async_channel::unbounded::<()>();
 
         Arc::new(Self {
+            p2p,
+            started: Mutex::new(false),
             quit_send,
             quit_recv,
         })
@@ -98,6 +104,12 @@ impl RpcInterface {
         let mut io = jsonrpc_core::IoHandler::new();
         io.add_sync_method("say_hello", |_| {
             Ok(jsonrpc_core::Value::String("Hello World!".into()))
+        });
+
+        let self2 = self.clone();
+        io.add_method("get_info", move |_| {
+            let self2 = self2.clone();
+            async move { Ok(json!({"started": *self2.started.lock().await})) }
         });
 
         let quit_send = self.quit_send.clone();
@@ -118,9 +130,37 @@ impl RpcInterface {
         res.set_body(response);
         Ok(res)
     }
+
+    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
+        Ok(self.quit_recv.recv().await?)
+    }
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
+    let p2p = net::P2p::new(options.network_settings);
+
+    let rpc = RpcInterface::new(p2p.clone());
+    let http = listen(
+        executor.clone(),
+        rpc.clone(),
+        Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?,
+        None,
+    );
+
+    let http_task = executor.spawn(http);
+
+    *rpc.started.lock().await = true;
+
+    p2p.start(executor.clone()).await?;
+
+    rpc.wait_for_quit().await?;
+
+    http_task.cancel().await;
+
+    Ok(())
+}
+
+async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let connections = Arc::new(Mutex::new(HashMap::new()));
 
     let stored_addrs = Arc::new(Mutex::new(Vec::new()));
@@ -162,7 +202,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for i in 0..options.connection_slots {
         debug!("Starting connection slot {}", i);
 
-        let client = ClientProtocol::new(
+        let client = Channel::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),
@@ -174,7 +214,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for remote_addr in options.manual_connects {
         debug!("Starting connection (manual) to {}", remote_addr);
 
-        let client = ClientProtocol::new(
+        let client = Channel::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),
@@ -186,6 +226,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         client_slots.push(client);
     }
 
+    /*
     let rpc = RpcInterface::new();
     let http = listen(
         executor.clone(),
@@ -199,6 +240,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     rpc.quit_recv.recv().await?;
 
     http_task.cancel().await;
+    */
     match server_task {
         None => {}
         Some(server_task) => {
@@ -209,6 +251,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 }
 
 struct ProgramOptions {
+    network_settings: net::Settings,
     accept_addr: Option<SocketAddr>,
     seed_addrs: Vec<SocketAddr>,
     manual_connects: Vec<SocketAddr>,
@@ -256,13 +299,26 @@ impl ProgramOptions {
             0
         };
 
-        let log_path = Box::new(if let Some(log_path) = app.value_of("LOG_PATH") {
-            std::path::Path::new(log_path)
-        } else {
-            std::path::Path::new("/tmp/darkfid.log")
-        }.to_path_buf());
+        let log_path = Box::new(
+            if let Some(log_path) = app.value_of("LOG_PATH") {
+                std::path::Path::new(log_path)
+            } else {
+                std::path::Path::new("/tmp/darkfid.log")
+            }
+            .to_path_buf(),
+        );
 
         Ok(ProgramOptions {
+            network_settings: net::Settings {
+                inbound: accept_addr.clone(),
+                outbound_connections: connection_slots,
+                connect_timeout_seconds: 10,
+                channel_handshake_seconds: 2,
+                channel_heartbeat_seconds: 10,
+                external_addr: accept_addr.clone(),
+                peers: manual_connects.clone(),
+                seeds: seed_addrs.clone(),
+            },
             accept_addr,
             seed_addrs,
             manual_connects,

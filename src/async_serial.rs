@@ -2,11 +2,11 @@ use futures::prelude::*;
 
 use crate::endian;
 use crate::error::{Error, Result};
-use crate::net::net::AsyncTcpStream;
+use crate::net::AsyncTcpStream;
 use crate::serial::VarInt;
 
 impl VarInt {
-    pub async fn encode_async(&self, stream: &mut AsyncTcpStream) -> Result<usize> {
+    pub async fn encode_async<W: AsyncWrite + Unpin>(&self, stream: &mut W) -> Result<usize> {
         match self.0 {
             0..=0xFC => {
                 AsyncWriteExt::write_u8(stream, self.0 as u8).await?;
@@ -30,7 +30,7 @@ impl VarInt {
         }
     }
 
-    pub async fn decode_async(stream: &mut AsyncTcpStream) -> Result<Self> {
+    pub async fn decode_async<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Self> {
         let n = AsyncReadExt::read_u8(stream).await?;
         match n {
             0xFF => {
@@ -65,7 +65,7 @@ impl VarInt {
 macro_rules! async_encoder_fn {
     ($name:ident, $val_type:ty, $writefn:ident) => {
         #[inline]
-        pub async fn $name(stream: &mut AsyncTcpStream, v: $val_type) -> Result<()> {
+        pub async fn $name<W: AsyncWrite + Unpin>(stream: &mut W, v: $val_type) -> Result<()> {
             stream
                 .write_all(&endian::$writefn(v))
                 .await
@@ -76,7 +76,7 @@ macro_rules! async_encoder_fn {
 
 macro_rules! async_decoder_fn {
     ($name:ident, $val_type:ty, $readfn:ident, $byte_len: expr) => {
-        pub async fn $name(stream: &mut AsyncTcpStream) -> Result<$val_type> {
+        pub async fn $name<R: AsyncRead + Unpin>(stream: &mut R) -> Result<$val_type> {
             assert_eq!(::std::mem::size_of::<$val_type>(), $byte_len); // size_of isn't a constfn in 1.22
             let mut val = [0; $byte_len];
             stream.read_exact(&mut val[..]).await.map_err(Error::Io)?;
@@ -92,7 +92,7 @@ impl AsyncReadExt {
     async_decoder_fn!(read_u32, u32, slice_to_u32_le, 4);
     async_decoder_fn!(read_u16, u16, slice_to_u16_le, 2);
 
-    pub async fn read_u8(stream: &mut AsyncTcpStream) -> Result<u8> {
+    pub async fn read_u8<R: AsyncRead + Unpin>(stream: &mut R) -> Result<u8> {
         let mut slice = [0u8; 1];
         stream.read_exact(&mut slice).await?;
         Ok(slice[0])
@@ -106,7 +106,7 @@ impl AsyncWriteExt {
     async_encoder_fn!(write_u32, u32, u32_to_array_le);
     async_encoder_fn!(write_u16, u16, u16_to_array_le);
 
-    pub async fn write_u8(stream: &mut AsyncTcpStream, v: u8) -> Result<()> {
+    pub async fn write_u8<W: AsyncWrite + Unpin>(stream: &mut W, v: u8) -> Result<()> {
         stream.write_all(&[v]).await.map_err(Error::Io)
     }
 }

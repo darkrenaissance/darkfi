@@ -10,7 +10,7 @@ use rand::seq::SliceRandom;
 use smol::{Executor, Task};
 
 //use crate::{net, serial, Channel, ClientProtocol, Result, SlabsManagerSafe};
-use crate::{net::net, serial, Result};
+use crate::{net::messages as net, serial, Result};
 
 pub type ConnectionsMap = std::sync::Arc<
     async_std::sync::Mutex<HashMap<SocketAddr, async_channel::Sender<net::Message>>>,
