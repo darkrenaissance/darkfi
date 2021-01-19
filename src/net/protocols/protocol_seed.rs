@@ -29,7 +29,6 @@ impl ProtocolSeed {
         self.channel.clone().send(get_addr).await?;
 
         // Receive addresses
-        // TODO: turn this into a macro
         let addrs_msg = receive_message!(addr_sub, messages::Message::Addrs);
         self.hosts.store(addrs_msg.addrs.clone()).await;
 

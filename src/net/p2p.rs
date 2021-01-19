@@ -41,7 +41,11 @@ impl P2p {
 
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
-    pub fn run() {}
+    pub fn run() {
+        //let inbound = InboundSession::new(Arc::downgrade(&self));
+        //let inbound_task = inbound.start(executor.clone());
+        //inbound_task.await;
+    }
 
     pub async fn store(self: Arc<Self>, channel: ChannelPtr) {
         self.pending_channels

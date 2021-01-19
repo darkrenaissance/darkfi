@@ -8,7 +8,6 @@ pub mod message_subscriber;
 pub mod messages;
 pub mod hosts;
 pub mod p2p;
-pub mod protocol;
 pub mod protocols;
 pub mod proxy;
 pub mod sessions;

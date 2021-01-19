@@ -9,8 +9,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use sapvi::net;
-use sapvi::{Channel, Result, SeedProtocol, ServerProtocol};
+use sapvi::{net, Result};
 
 use std::net::TcpListener;
 
@@ -160,6 +159,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     Ok(())
 }
 
+/*
 async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let connections = Arc::new(Mutex::new(HashMap::new()));
 
@@ -226,7 +226,6 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
         client_slots.push(client);
     }
 
-    /*
     let rpc = RpcInterface::new();
     let http = listen(
         executor.clone(),
@@ -240,7 +239,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
     rpc.quit_recv.recv().await?;
 
     http_task.cancel().await;
-    */
+
     match server_task {
         None => {}
         Some(server_task) => {
@@ -249,6 +248,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
     }
     Ok(())
 }
+*/
 
 struct ProgramOptions {
     network_settings: net::Settings,

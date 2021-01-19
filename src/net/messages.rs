@@ -366,28 +366,6 @@ pub async fn send_message<W: AsyncWrite + Unpin>(stream: &mut W, message: Messag
     send_packet(stream, packet).await
 }
 
-// Eventloop event
-pub enum Event {
-    // Message to be sent from event queue
-    Send(Message),
-    // Received message to process by protocol
-    Receive(Message),
-    // Connection ping-pong timeout
-    Timeout,
-}
-
-pub async fn select_event(
-    stream: &mut AsyncTcpStream,
-    send_rx: &async_channel::Receiver<Message>,
-    inactivity_timer: &InactivityTimer,
-) -> Result<Event> {
-    Ok(futures::select! {
-        message = send_rx.recv().fuse() => Event::Send(message?),
-        message = receive_message(stream).fuse() => Event::Receive(message?),
-        _ = inactivity_timer.wait_for_wakeup().fuse() => Event::Timeout
-    })
-}
-
 pub async fn sleep(seconds: u64) {
     Timer::after(Duration::from_secs(seconds)).await;
 }

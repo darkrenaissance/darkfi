@@ -39,6 +39,8 @@ impl ProtocolPing {
 
             // Wait for pong, check nonce matches
             let _pong_msg = pong_sub.receive().await?;
+            // TODO: fix pong enum
+            //let _pong_msg = receive_message!(pong_sub, messages::Message::Pong);
             // TODO: add nonce check here
         }
     }
