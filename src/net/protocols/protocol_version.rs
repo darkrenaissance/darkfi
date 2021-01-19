@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::net::messages;
-use crate::net::utility::{sleep, clone_net_error};
+use crate::net::utility::{clone_net_error, sleep};
 use crate::net::{ChannelPtr, SettingsPtr};
 
 pub struct ProtocolVersion {
@@ -44,7 +44,11 @@ impl ProtocolVersion {
     }
 
     async fn recv_version(self: Arc<Self>) -> Result<()> {
-        let version_sub = self.channel.clone().subscribe_msg(messages::PacketType::Version).await;
+        let version_sub = self
+            .channel
+            .clone()
+            .subscribe_msg(messages::PacketType::Version)
+            .await;
 
         let version_msg = version_sub.receive().await?;
 

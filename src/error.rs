@@ -37,6 +37,7 @@ pub enum Error {
     ConnectTimeout,
     ChannelStopped,
     ChannelTimeout,
+    ServiceStopped,
 }
 
 impl std::error::Error for Error {}
@@ -77,6 +78,7 @@ impl fmt::Display for Error {
             Error::ConnectTimeout => f.write_str("Connection timed out"),
             Error::ChannelStopped => f.write_str("Channel stopped"),
             Error::ChannelTimeout => f.write_str("Channel timed out"),
+            Error::ServiceStopped => f.write_str("Service stopped"),
         }
     }
 }

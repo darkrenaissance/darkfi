@@ -4,12 +4,12 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
 use crate::error::{Error, Result};
-use crate::net::sessions::Session;
-use crate::net::{ChannelPtr, HostsPtr, Connector, P2p, SettingsPtr};
 use crate::net::protocols::{ProtocolPing, ProtocolSeed};
+use crate::net::sessions::Session;
+use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 
 pub struct SeedSession {
-    p2p: Weak<P2p>
+    p2p: Weak<P2p>,
 }
 
 impl SeedSession {
@@ -48,7 +48,11 @@ impl SeedSession {
         Ok(())
     }
 
-    async fn start_seed(self: Arc<Self>, seed: SocketAddr, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start_seed(
+        self: Arc<Self>,
+        seed: SocketAddr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         let (hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
@@ -61,9 +65,12 @@ impl SeedSession {
 
                 info!("Connected seed [{}]", seed);
 
-                self.clone().register_channel(channel.clone(), executor.clone()).await?;
+                self.clone()
+                    .register_channel(channel.clone(), executor.clone())
+                    .await?;
 
-                self.attach_protocols(channel, hosts, settings, executor).await
+                self.attach_protocols(channel, hosts, settings, executor)
+                    .await
             }
             Err(err) => {
                 info!("Failure contacting seed [{}]: {}", seed, err);
@@ -72,7 +79,11 @@ impl SeedSession {
         }
     }
 
-    async fn register_channel(self: Arc<Self>, channel: ChannelPtr, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn register_channel(
+        self: Arc<Self>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         let handshake_task = self.perform_handshake_protocols(channel.clone(), executor.clone());
 
         // start channel
@@ -81,7 +92,13 @@ impl SeedSession {
         handshake_task.await
     }
 
-    async fn attach_protocols(self: Arc<Self>, channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn attach_protocols(
+        self: Arc<Self>,
+        channel: ChannelPtr,
+        hosts: HostsPtr,
+        settings: SettingsPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         let ping_task = protocol_ping.start(executor.clone());
 

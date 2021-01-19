@@ -1,11 +1,11 @@
-use rand::Rng;
 use futures::FutureExt;
+use rand::Rng;
 use smol::{Executor, Task};
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::net::messages;
-use crate::net::utility::{sleep, clone_net_error};
+use crate::net::utility::{clone_net_error, sleep};
 use crate::net::{ChannelPtr, SettingsPtr};
 
 pub struct ProtocolPing {
@@ -23,7 +23,11 @@ impl ProtocolPing {
     }
 
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
-        let pong_sub = self.channel.clone().subscribe_msg(messages::PacketType::Pong).await;
+        let pong_sub = self
+            .channel
+            .clone()
+            .subscribe_msg(messages::PacketType::Pong)
+            .await;
 
         loop {
             // Wait channel_heartbeat amount of time
@@ -50,4 +54,3 @@ impl ProtocolPing {
         rng.gen()
     }
 }
-

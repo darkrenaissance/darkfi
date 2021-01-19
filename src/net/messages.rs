@@ -180,26 +180,16 @@ impl Decodable for VerackMessage {
 impl Message {
     pub fn packet_type(&self) -> PacketType {
         match self {
-            Message::Ping => 
-                PacketType::Ping,
-            Message::Pong => 
-                PacketType::Pong,
-            Message::GetAddrs(message) => 
-                    PacketType::GetAddrs,
-            Message::Addrs(message) =>
-                    PacketType::Addrs,
-            Message::Sync => 
-                    PacketType::Sync,
-            Message::Inv(message) => 
-                    PacketType::Inv,
-            Message::GetSlabs(message) => 
-                    PacketType::GetSlabs,
-            Message::Slab(message) => 
-                    PacketType::Slab,
-            Message::Version(message) => 
-                    PacketType::Version,
-            Message::Verack(message) => 
-                    PacketType::Verack,
+            Message::Ping => PacketType::Ping,
+            Message::Pong => PacketType::Pong,
+            Message::GetAddrs(message) => PacketType::GetAddrs,
+            Message::Addrs(message) => PacketType::Addrs,
+            Message::Sync => PacketType::Sync,
+            Message::Inv(message) => PacketType::Inv,
+            Message::GetSlabs(message) => PacketType::GetSlabs,
+            Message::Slab(message) => PacketType::Slab,
+            Message::Version(message) => PacketType::Version,
+            Message::Verack(message) => PacketType::Verack,
         }
     }
 

@@ -13,7 +13,6 @@ pub fn clone_net_error(error: &Error) -> Error {
         Error::ConnectTimeout => Error::ConnectTimeout,
         Error::ChannelStopped => Error::ChannelStopped,
         Error::ChannelTimeout => Error::ChannelTimeout,
-        _ => Error::OperationFailed
+        _ => Error::OperationFailed,
     }
 }
-

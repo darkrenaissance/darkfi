@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 pub type SettingsPtr = Arc<Settings>;
 

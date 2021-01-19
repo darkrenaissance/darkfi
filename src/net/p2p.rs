@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::net::sessions::{SeedSession, InboundSession};
-use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Connector, Settings, SettingsPtr};
+use crate::net::sessions::{InboundSession, SeedSession};
+use crate::net::{Channel, ChannelPtr, Connector, Hosts, HostsPtr, Settings, SettingsPtr};
 
 pub type Pending<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 

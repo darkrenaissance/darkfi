@@ -1,21 +1,23 @@
 use async_std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
-use log::*;
-use futures::FutureExt;
 use futures::io::{ReadHalf, WriteHalf};
 use futures::AsyncReadExt;
+use futures::FutureExt;
+use log::*;
 use smol::{Async, Executor};
 use std::future::Future;
 use std::net::{SocketAddr, TcpStream};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
+use crate::net::message_subscriber::{
+    MessageSubscriber, MessageSubscriberPtr, MessageSubscription,
+};
 use crate::net::messages;
 use crate::net::settings::SettingsPtr;
-use crate::net::message_subscriber::{MessageSubscriberPtr, MessageSubscription, MessageSubscriber};
 use crate::net::utility::clone_net_error;
-use crate::system::{SubscriberPtr, Subscription, Subscriber};
+use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
 pub type ChannelPtr = Arc<Channel>;
 
@@ -69,7 +71,10 @@ impl Channel {
         self.address
     }
 
-    pub async fn subscribe_msg(self: Arc<Self>, packet_type: messages::PacketType) -> MessageSubscription {
+    pub async fn subscribe_msg(
+        self: Arc<Self>,
+        packet_type: messages::PacketType,
+    ) -> MessageSubscription {
         self.message_subscriber.clone().subscribe(packet_type).await
     }
 

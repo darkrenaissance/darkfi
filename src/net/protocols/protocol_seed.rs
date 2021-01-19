@@ -1,11 +1,11 @@
 use futures::FutureExt;
+use owning_ref::OwningRef;
 use smol::Executor;
 use std::sync::Arc;
-use owning_ref::OwningRef;
 
 use crate::error::{Error, Result};
-use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 use crate::net::messages;
+use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 
 pub struct ProtocolSeed {
     channel: ChannelPtr,
@@ -15,11 +15,19 @@ pub struct ProtocolSeed {
 
 impl ProtocolSeed {
     pub fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
-        Arc::new(Self { channel, hosts, settings })
+        Arc::new(Self {
+            channel,
+            hosts,
+            settings,
+        })
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        let addr_sub = self.channel.clone().subscribe_msg(messages::PacketType::Addrs).await;
+        let addr_sub = self
+            .channel
+            .clone()
+            .subscribe_msg(messages::PacketType::Addrs)
+            .await;
 
         // Send own address to the seed server
         self.send_own_address().await?;
@@ -40,7 +48,7 @@ impl ProtocolSeed {
             Some(addr) => {
                 let addr = messages::Message::Addrs(messages::AddrsMessage { addrs: vec![addr] });
                 self.channel.clone().send(addr).await?;
-            },
+            }
             None => {
                 // Do nothing if external address is not configured
             }
@@ -48,4 +56,3 @@ impl ProtocolSeed {
         Ok(())
     }
 }
-

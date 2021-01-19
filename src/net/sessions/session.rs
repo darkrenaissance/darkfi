@@ -3,9 +3,9 @@ use smol::Executor;
 use std::sync::Arc;
 
 use crate::error::Result;
+use crate::net::p2p::P2pPtr;
 use crate::net::protocols::ProtocolVersion;
 use crate::net::ChannelPtr;
-use crate::net::p2p::P2pPtr;
 
 async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     // Subscribe to stop events
@@ -18,7 +18,11 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 
 #[async_trait]
 pub trait Session {
-    async fn perform_handshake_protocols(&self, channel: ChannelPtr, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn perform_handshake_protocols(
+        &self,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         let p2p = self.p2p();
 
         // Perform handshake

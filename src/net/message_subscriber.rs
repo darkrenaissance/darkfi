@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use rand::Rng;
-use std::sync::Arc;
 use async_std::sync::Mutex;
+use rand::Rng;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::error::Result;
 use crate::net::messages::{Message, PacketType};
@@ -13,21 +13,16 @@ pub type MessageResult = Result<Arc<Message>>;
 pub type MessageSubscriptionID = u64;
 
 macro_rules! receive_message {
-    ($sub:expr, $message_type:path) => {
-        {
-            let wrapped_message = OwningRef::new($sub.receive().await?);
+    ($sub:expr, $message_type:path) => {{
+        let wrapped_message = OwningRef::new($sub.receive().await?);
 
-            wrapped_message.map(|msg|
-                match msg {
-                    $message_type(msg_detail) => {
-                        msg_detail
-                    },
-                    _ => {
-                        panic!("Filter for receive sub invalid!");
-                    }
-            })
-        }
-    };
+        wrapped_message.map(|msg| match msg {
+            $message_type(msg_detail) => msg_detail,
+            _ => {
+                panic!("Filter for receive sub invalid!");
+            }
+        })
+    }};
 }
 
 trait CloneMessageResult {
@@ -38,7 +33,7 @@ impl CloneMessageResult for Result<Arc<Message>> {
     fn clone(&self) -> Self {
         match self {
             Ok(message) => Ok(message.clone()),
-            Err(err) => Err(clone_net_error(err))
+            Err(err) => Err(clone_net_error(err)),
         }
     }
 }
@@ -47,7 +42,7 @@ pub struct MessageSubscription {
     id: MessageSubscriptionID,
     filter: PacketType,
     recv_queue: async_channel::Receiver<MessageResult>,
-    parent: Arc<MessageSubscriber>
+    parent: Arc<MessageSubscriber>,
 }
 
 impl MessageSubscription {
@@ -116,7 +111,7 @@ impl MessageSubscriber {
             id: sub_id,
             filter: packet_type,
             recv_queue: recvr,
-            parent: self.clone()
+            parent: self.clone(),
         }
     }
 
@@ -127,7 +122,7 @@ impl MessageSubscriber {
     pub async fn notify(&self, message_result: Result<Arc<Message>>) {
         for sub in (*self.subs.lock().await).values() {
             match sub.send(message_result.clone()).await {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(err) => {
                     panic!("Error returned sending message in notify() call! {}", err);
                 }
