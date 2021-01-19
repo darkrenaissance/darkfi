@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::net::sessions::SeedSession;
+use crate::net::sessions::{SeedSession, InboundSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Connector, Settings, SettingsPtr};
 
 pub type Pending<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
@@ -41,10 +41,10 @@ impl P2p {
 
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
-    pub fn run() {
-        //let inbound = InboundSession::new(Arc::downgrade(&self));
-        //let inbound_task = inbound.start(executor.clone());
-        //inbound_task.await;
+    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        let inbound = InboundSession::new(Arc::downgrade(&self));
+        let inbound_task = inbound.start(executor.clone());
+        inbound_task.await
     }
 
     pub async fn store(self: Arc<Self>, channel: ChannelPtr) {
