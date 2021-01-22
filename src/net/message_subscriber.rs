@@ -3,13 +3,13 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::error::Result;
+use crate::net::error::NetResult;
 use crate::net::messages::{Message, PacketType};
 use crate::net::utility::clone_net_error;
 
 pub type MessageSubscriberPtr = Arc<MessageSubscriber>;
 
-pub type MessageResult = Result<Arc<Message>>;
+pub type MessageResult = NetResult<Arc<Message>>;
 pub type MessageSubscriptionID = u64;
 
 macro_rules! receive_message {
@@ -23,19 +23,6 @@ macro_rules! receive_message {
             }
         })
     }};
-}
-
-trait CloneMessageResult {
-    fn clone(&self) -> Self;
-}
-
-impl CloneMessageResult for Result<Arc<Message>> {
-    fn clone(&self) -> Self {
-        match self {
-            Ok(message) => Ok(message.clone()),
-            Err(err) => Err(clone_net_error(err)),
-        }
-    }
 }
 
 pub struct MessageSubscription {
@@ -119,7 +106,7 @@ impl MessageSubscriber {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    pub async fn notify(&self, message_result: Result<Arc<Message>>) {
+    pub async fn notify(&self, message_result: NetResult<Arc<Message>>) {
         for sub in (*self.subs.lock().await).values() {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}

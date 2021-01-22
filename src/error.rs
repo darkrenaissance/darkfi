@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::net::error::NetError;
 use crate::vm::ZKVMError;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -124,3 +125,17 @@ impl From<std::num::ParseIntError> for Error {
         Error::ParseIntError
     }
 }
+
+impl From<NetError> for Error {
+    fn from(err: NetError) -> Error {
+        match err {
+            NetError::OperationFailed => Error::OperationFailed,
+            NetError::ConnectFailed => Error::ConnectFailed,
+            NetError::ConnectTimeout => Error::ConnectTimeout,
+            NetError::ChannelStopped => Error::ChannelStopped,
+            NetError::ChannelTimeout => Error::ChannelTimeout,
+            NetError::ServiceStopped => Error::ServiceStopped,
+        }
+    }
+}
+

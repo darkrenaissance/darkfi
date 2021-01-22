@@ -3,7 +3,7 @@ use owning_ref::OwningRef;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::{Error, Result};
+use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
 use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 
@@ -22,7 +22,7 @@ impl ProtocolSeed {
         })
     }
 
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let addr_sub = self
             .channel
             .clone()
@@ -43,7 +43,7 @@ impl ProtocolSeed {
         Ok(())
     }
 
-    pub async fn send_own_address(&self) -> Result<()> {
+    pub async fn send_own_address(&self) -> NetResult<()> {
         match self.settings.external_addr {
             Some(addr) => {
                 let addr = messages::Message::Addrs(messages::AddrsMessage { addrs: vec![addr] });

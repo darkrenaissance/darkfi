@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::error::Result;
+use crate::net::error::NetResult;
 use crate::net::sessions::{InboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Connector, Hosts, HostsPtr, Settings, SettingsPtr};
 
@@ -31,7 +31,7 @@ impl P2p {
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         // Start manual connections
         // Start seed session
         let seed = SeedSession::new(Arc::downgrade(&self));
@@ -41,10 +41,10 @@ impl P2p {
 
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
-    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let inbound = InboundSession::new(Arc::downgrade(&self));
-        let inbound_task = inbound.start(executor.clone());
-        inbound_task.await
+        inbound.start(executor.clone())?;
+        Ok(())
     }
 
     pub async fn store(self: Arc<Self>, channel: ChannelPtr) {

@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::error::{Error, Result};
+use crate::net::error::{NetError, NetResult};
 use crate::net::message_subscriber::{
     MessageSubscriber, MessageSubscriberPtr, MessageSubscription,
 };
@@ -26,7 +26,7 @@ pub struct Channel {
     writer: Mutex<WriteHalf<Async<TcpStream>>>,
     address: SocketAddr,
     message_subscriber: MessageSubscriberPtr,
-    stop_subscriber: SubscriberPtr<Error>,
+    stop_subscriber: SubscriberPtr<NetError>,
     stopped: AtomicBool,
     settings: SettingsPtr,
 }
@@ -51,9 +51,9 @@ impl Channel {
         executor.spawn(self.receive_loop()).detach();
     }
 
-    pub async fn send(self: Arc<Self>, message: messages::Message) -> Result<()> {
+    pub async fn send(self: Arc<Self>, message: messages::Message) -> NetResult<()> {
         if self.stopped.load(Ordering::Relaxed) {
-            return Err(Error::ChannelStopped);
+            return Err(NetError::ChannelStopped);
         }
 
         // Catch failure and stop channel, return a net error
@@ -62,7 +62,7 @@ impl Channel {
             Err(err) => {
                 error!("Channel error {}, closing {}", err, self.address());
                 self.stop().await;
-                Err(Error::ChannelStopped)
+                Err(NetError::ChannelStopped)
             }
         }
     }
@@ -78,17 +78,17 @@ impl Channel {
         self.message_subscriber.clone().subscribe(packet_type).await
     }
 
-    pub async fn subscribe_stop(self: Arc<Self>) -> Subscription<Error> {
+    pub async fn subscribe_stop(self: Arc<Self>) -> Subscription<NetError> {
         self.stop_subscriber.clone().subscribe().await
     }
 
     pub async fn stop(&self) {
         self.stopped.store(false, Ordering::Relaxed);
-        let stop_err = Arc::new(Error::ChannelStopped);
+        let stop_err = Arc::new(NetError::ChannelStopped);
         self.stop_subscriber.notify(stop_err).await;
     }
 
-    async fn receive_loop(self: Arc<Self>) -> Result<()> {
+    async fn receive_loop(self: Arc<Self>) -> NetResult<()> {
         let stop_sub = self.clone().subscribe_stop().await;
         let reader = &mut *self.reader.lock().await;
 
@@ -100,12 +100,12 @@ impl Channel {
                         Err(err) => {
                             error!("Read error on channel {}", err);
                             self.stop().await;
-                            Err(Error::ChannelStopped)
+                            Err(NetError::ChannelStopped)
                         }
                     }
                 }
                 stop_err = stop_sub.receive().fuse() => {
-                    Err(clone_net_error(&*stop_err))
+                    Err(*stop_err)
                 }
             };
 

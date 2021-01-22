@@ -3,7 +3,7 @@ use rand::Rng;
 use smol::{Executor, Task};
 use std::sync::Arc;
 
-use crate::error::{Error, Result};
+use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
 use crate::net::utility::{clone_net_error, sleep};
 use crate::net::{ChannelPtr, SettingsPtr};
@@ -18,11 +18,11 @@ impl ProtocolPing {
         Arc::new(Self { channel, settings })
     }
 
-    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Task<Result<()>> {
+    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Task<NetResult<()>> {
         executor.spawn(self.run_ping_pong())
     }
 
-    async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
+    async fn run_ping_pong(self: Arc<Self>) -> NetResult<()> {
         let pong_sub = self
             .channel
             .clone()

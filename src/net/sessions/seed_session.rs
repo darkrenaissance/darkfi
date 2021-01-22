@@ -3,7 +3,7 @@ use log::*;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
-use crate::error::{Error, Result};
+use crate::net::error::{NetError, NetResult};
 use crate::net::protocols::{ProtocolPing, ProtocolSeed};
 use crate::net::sessions::Session;
 use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
@@ -17,7 +17,7 @@ impl SeedSession {
         Arc::new(Self { p2p })
     }
 
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let settings = {
             let p2p = self.p2p.upgrade().unwrap();
             p2p.settings()
@@ -28,7 +28,7 @@ impl SeedSession {
         // if seeds empty then seeding required but empty
         if settings.seeds.is_empty() {
             error!("Seeding is required but no seeds are configured.");
-            return Err(Error::OperationFailed);
+            return Err(NetError::OperationFailed);
         }
 
         let mut tasks = Vec::new();
@@ -52,7 +52,7 @@ impl SeedSession {
         self: Arc<Self>,
         seed: SocketAddr,
         executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    ) -> NetResult<()> {
         let (hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
@@ -83,7 +83,7 @@ impl SeedSession {
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    ) -> NetResult<()> {
         let handshake_task = self.perform_handshake_protocols(channel.clone(), executor.clone());
 
         // start channel
@@ -98,7 +98,7 @@ impl SeedSession {
         hosts: HostsPtr,
         settings: SettingsPtr,
         executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    ) -> NetResult<()> {
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         let ping_task = protocol_ping.start(executor.clone());
 

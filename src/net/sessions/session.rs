@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::Result;
+use crate::net::error::NetResult;
 use crate::net::p2p::P2pPtr;
 use crate::net::protocols::ProtocolVersion;
 use crate::net::ChannelPtr;
@@ -22,7 +22,7 @@ pub trait Session {
         &self,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    ) -> NetResult<()> {
         let p2p = self.p2p();
 
         // Perform handshake

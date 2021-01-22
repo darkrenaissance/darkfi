@@ -4,6 +4,7 @@ use std::net::TcpStream;
 pub mod acceptor;
 pub mod channel;
 pub mod connector;
+pub mod error;
 #[macro_use]
 pub mod message_subscriber;
 pub mod hosts;

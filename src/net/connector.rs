@@ -4,7 +4,7 @@ use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 
-use crate::error::{Error, Result};
+use crate::net::error::{NetError, NetResult};
 use crate::net::utility::sleep;
 use crate::net::{Channel, ChannelPtr, SettingsPtr};
 
@@ -17,15 +17,15 @@ impl Connector {
         Self { settings }
     }
 
-    pub async fn connect(&self, hostaddr: SocketAddr) -> Result<ChannelPtr> {
+    pub async fn connect(&self, hostaddr: SocketAddr) -> NetResult<ChannelPtr> {
         futures::select! {
             stream_result = Async::<TcpStream>::connect(hostaddr).fuse() => {
                 match stream_result {
                     Ok(stream) => Ok(Channel::new(stream, hostaddr, self.settings.clone())),
-                    Err(_) => Err(Error::ConnectFailed)
+                    Err(_) => Err(NetError::ConnectFailed)
                 }
             }
-            _ = sleep(self.settings.connect_timeout_seconds).fuse() => Err(Error::ConnectTimeout)
+            _ = sleep(self.settings.connect_timeout_seconds).fuse() => Err(NetError::ConnectTimeout)
         }
     }
 }
