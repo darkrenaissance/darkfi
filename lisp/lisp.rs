@@ -319,7 +319,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
 //                        let symbol = MalVal::Sym(a1.pr_str(false));
-                        env_set(&env, a1.clone(), result.clone());
+ //                       env_set(&env, Sym(a1.pr_str(false)), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "AllocationsInput")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -339,7 +339,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
  //                       let symbol = MalVal::Sym(a1.pr_str(false));
-                        env_set(&env, a1.clone(), result.clone());
+//                        env_set(&env, Sym(a1.pr_str(false)), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "Allocations")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -360,20 +360,30 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let left = l[1].clone();
                         let right = l[2].clone();
                         let out = l[3].clone();
-                        let left_eval = eval(left.clone(), env.clone())?;
-                        let right_eval = eval(right.clone(), env.clone())?;
-                        let out_eval = eval(out.clone(), env.clone())?;
-                        println!(
-                            "enforce \n {:?} \n {:?} \n {:?}",
-                            left, right, out
-                        );
-                        println!(
-                            "\n {:?} \n {:?} \n {:?} \n",
-                            left_eval, right_eval, out_eval
-                        );
-                        // println!("allocations {:?}", get_allocations(&env, "Allocations"));
-                        // println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
-                        Ok(vector![vec![left_eval, right_eval, out_eval]])
+                        // here i'm considering that we always have tuple with only two elements
+                        match left.clone() {
+                            List(v, _) | Vector(v, _) => { println!("1st {:?} \n 2nd {:?} \n {:?} {:?}", 
+                                                                    eval(v[0].clone(), env.clone()), 
+                                                                    eval(v[1].clone(), env.clone()),
+                                                                    v[0].clone(), v[1].clone()); },
+                            _ => { println!("unknow"); }
+                        }
+
+
+//                        let left_eval = eval(left.clone(), env.clone())?;
+//                        let right_eval = eval(right.clone(), env.clone())?;
+//                        let out_eval = eval(out.clone(), env.clone())?;
+//                        println!(
+//                            "enforce \n {:?} \n {:?} \n {:?}",
+//                            left, right, out
+//                        );
+//                        println!(
+//                            "\n {:?} \n {:?} \n {:?} \n",
+//                            left_eval, right_eval, out_eval
+//                        );
+                         println!("allocations {:?}", get_allocations(&env, "Allocations"));
+                         println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
+                        Ok(vector![vec![]])
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {

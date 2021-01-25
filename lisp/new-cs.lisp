@@ -12,6 +12,7 @@
   (enforce  
     ((neg scalar::one) x)
     ((scalar::one x) (scalar::one x))
+    ;;(scalar::one x)
     (scalar::one x2)
   )
 
