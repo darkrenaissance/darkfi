@@ -6,14 +6,13 @@ use std::sync::Arc;
 
 use crate::net::error::NetResult;
 use crate::net::sessions::{InboundSession, SeedSession};
-use crate::net::{Channel, ChannelPtr, Connector, Hosts, HostsPtr, Settings, SettingsPtr};
+use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
 
 pub type Pending<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 
 pub type P2pPtr = Arc<P2p>;
 
 pub struct P2p {
-    pending_connects: Pending<Connector>,
     pending_channels: Pending<Channel>,
     hosts: HostsPtr,
     settings: SettingsPtr,
@@ -23,7 +22,6 @@ impl P2p {
     pub fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
         Arc::new(Self {
-            pending_connects: Mutex::new(HashMap::new()),
             pending_channels: Mutex::new(HashMap::new()),
             hosts: Hosts::new(settings.clone()),
             settings,

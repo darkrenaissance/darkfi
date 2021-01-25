@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use smol::{Async};
+use smol::Async;
 use std::net::{SocketAddr, TcpStream};
 
 use crate::net::error::{NetError, NetResult};

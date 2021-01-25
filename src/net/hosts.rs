@@ -24,11 +24,15 @@ impl Hosts {
         self.addrs.lock().await.extend(addrs)
     }
 
-    pub async fn load(&self) -> Option<SocketAddr> {
+    pub async fn load_single(&self) -> Option<SocketAddr> {
         self.addrs
             .lock()
             .await
             .choose(&mut rand::thread_rng())
             .cloned()
+    }
+
+    pub async fn load_all(&self) -> Vec<SocketAddr> {
+        self.addrs.lock().await.clone()
     }
 }

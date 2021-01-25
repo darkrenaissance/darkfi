@@ -7,7 +7,7 @@ use crate::net::error::{NetError, NetResult};
 use crate::net::protocols::{ProtocolAddress, ProtocolPing};
 use crate::net::sessions::Session;
 use crate::net::{Acceptor, AcceptorPtr};
-use crate::net::{ChannelPtr, P2p, SettingsPtr};
+use crate::net::{ChannelPtr, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
 pub struct InboundSession {
@@ -95,21 +95,21 @@ impl InboundSession {
             .register_channel(channel.clone(), executor.clone())
             .await?;
 
-        let settings = self.p2p.upgrade().unwrap().settings();
-
-        self.attach_protocols(channel, settings, executor).await
+        self.attach_protocols(channel, executor).await
     }
 
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
-        settings: SettingsPtr,
         executor: Arc<Executor<'_>>,
     ) -> NetResult<()> {
+        let settings = self.p2p().settings().clone();
+        let hosts = self.p2p().hosts().clone();
+
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         protocol_ping.start(executor.clone()).await;
 
-        let protocol_addr = ProtocolAddress::new(channel, settings);
+        let protocol_addr = ProtocolAddress::new(channel, hosts, settings);
         protocol_addr.start(executor).await;
 
         Ok(())

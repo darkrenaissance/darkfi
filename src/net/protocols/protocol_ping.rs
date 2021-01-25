@@ -1,6 +1,6 @@
 use log::*;
 use rand::Rng;
-use smol::{Executor};
+use smol::Executor;
 use std::sync::Arc;
 
 use crate::net::error::{NetError, NetResult};

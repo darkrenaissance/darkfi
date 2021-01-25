@@ -1,15 +1,15 @@
 #[macro_use]
 extern crate clap;
 use async_executor::Executor;
+use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
-use serde_json::json;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::net::TcpListener;
-use async_native_tls::TlsAcceptor;
 use http_types::{Request, Response, StatusCode};
+use serde_json::json;
 use smol::Async;
+use std::net::SocketAddr;
+use std::net::TcpListener;
+use std::sync::Arc;
 
 use sapvi::{net, Result};
 
@@ -248,10 +248,6 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
 
 struct ProgramOptions {
     network_settings: net::Settings,
-    accept_addr: Option<SocketAddr>,
-    seed_addrs: Vec<SocketAddr>,
-    manual_connects: Vec<SocketAddr>,
-    connection_slots: u32,
     log_path: Box<std::path::PathBuf>,
 }
 
@@ -306,19 +302,15 @@ impl ProgramOptions {
 
         Ok(ProgramOptions {
             network_settings: net::Settings {
-                inbound: accept_addr.clone(),
+                inbound: accept_addr,
                 outbound_connections: connection_slots,
                 connect_timeout_seconds: 10,
                 channel_handshake_seconds: 2,
                 channel_heartbeat_seconds: 10,
-                external_addr: accept_addr.clone(),
-                peers: manual_connects.clone(),
-                seeds: seed_addrs.clone(),
+                external_addr: accept_addr,
+                peers: manual_connects,
+                seeds: seed_addrs,
             },
-            accept_addr,
-            seed_addrs,
-            manual_connects,
-            connection_slots,
             log_path,
         })
     }
