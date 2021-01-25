@@ -1,9 +1,7 @@
-use futures::FutureExt;
-use owning_ref::OwningRef;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::net::error::{NetError, NetResult};
+use crate::net::error::NetResult;
 use crate::net::messages;
 use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 
@@ -22,7 +20,7 @@ impl ProtocolSeed {
         })
     }
 
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> NetResult<()> {
         let addr_sub = self
             .channel
             .clone()

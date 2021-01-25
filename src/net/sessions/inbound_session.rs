@@ -4,10 +4,10 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
 use crate::net::error::{NetError, NetResult};
-use crate::net::protocols::{ProtocolPing, ProtocolAddress, ProtocolSeed};
+use crate::net::protocols::{ProtocolAddress, ProtocolPing};
 use crate::net::sessions::Session;
 use crate::net::{Acceptor, AcceptorPtr};
-use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
+use crate::net::{ChannelPtr, P2p, SettingsPtr};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
 pub struct InboundSession {
@@ -25,13 +25,18 @@ impl InboundSession {
 
         let acceptor = Acceptor::new(settings);
 
-        Arc::new(Self { p2p, acceptor, accept_task: StoppableTask::new() })
+        Arc::new(Self {
+            p2p,
+            acceptor,
+            accept_task: StoppableTask::new(),
+        })
     }
 
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         match self.p2p().settings().inbound {
             Some(accept_addr) => {
-                self.clone().start_accept_session(accept_addr, executor.clone())?;
+                self.clone()
+                    .start_accept_session(accept_addr, executor.clone())?;
             }
             None => {
                 info!("Not configured for accepting incoming connections.");
@@ -42,9 +47,10 @@ impl InboundSession {
         self.accept_task.clone().start(
             self.clone().channel_sub_loop(executor.clone()),
             // Ignore stop handler
-            |_| { async {} },
+            |_| async {},
             NetError::ServiceStopped,
-            executor);
+            executor,
+        );
 
         Ok(())
     }
@@ -60,7 +66,7 @@ impl InboundSession {
     ) -> NetResult<()> {
         info!("Starting inbound session on {}", accept_addr);
         let result = self.acceptor.clone().start(accept_addr, executor);
-        if let Err(err) = result  {
+        if let Err(err) = result {
             error!("Error starting listener: {}", err);
         }
         result
@@ -72,11 +78,17 @@ impl InboundSession {
             let channel = (*channel_sub.receive().await).clone()?;
             // Spawn a detached task to process the channel
             // This will just perform the channel setup then exit.
-            executor.spawn(self.clone().setup_channel(channel, executor.clone())).detach();
+            executor
+                .spawn(self.clone().setup_channel(channel, executor.clone()))
+                .detach();
         }
     }
 
-    async fn setup_channel(self: Arc<Self>, channel: ChannelPtr, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    async fn setup_channel(
+        self: Arc<Self>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> NetResult<()> {
         info!("Connected inbound [{}]", channel.address());
 
         self.clone()
@@ -85,8 +97,7 @@ impl InboundSession {
 
         let settings = self.p2p.upgrade().unwrap().settings();
 
-        self.attach_protocols(channel, settings, executor)
-            .await
+        self.attach_protocols(channel, settings, executor).await
     }
 
     async fn attach_protocols(

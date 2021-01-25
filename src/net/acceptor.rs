@@ -1,4 +1,3 @@
-use futures::FutureExt;
 use log::*;
 use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpListener};
@@ -47,8 +46,7 @@ impl Acceptor {
         self.channel_subscriber.clone().subscribe().await
     }
 
-    fn setup(
-        accept_addr: SocketAddr) -> NetResult<Async<TcpListener>> {
+    fn setup(accept_addr: SocketAddr) -> NetResult<Async<TcpListener>> {
         let listener = match Async::<TcpListener>::bind(accept_addr) {
             Ok(l) => l,
             Err(err) => {
@@ -73,7 +71,7 @@ impl Acceptor {
             self.clone().run_accept_loop(listener),
             |result| self.handle_stop(result),
             NetError::ServiceStopped,
-            executor
+            executor,
         );
     }
 

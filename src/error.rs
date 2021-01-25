@@ -138,4 +138,3 @@ impl From<NetError> for Error {
         }
     }
 }
-

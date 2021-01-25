@@ -2,7 +2,6 @@ use futures::prelude::*;
 
 use crate::endian;
 use crate::error::{Error, Result};
-use crate::net::AsyncTcpStream;
 use crate::serial::VarInt;
 
 impl VarInt {

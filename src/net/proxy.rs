@@ -1,5 +1,5 @@
-use smol::{Async, Executor};
-use std::net::{SocketAddr, TcpStream};
+use smol::{Async};
+use std::net::{TcpStream};
 
 pub struct Proxy {
     stream: Async<TcpStream>,

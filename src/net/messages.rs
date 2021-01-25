@@ -2,11 +2,11 @@ use futures::prelude::*;
 use log::*;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use smol::Executor;
-use smol::{Async, Timer};
+use smol::Timer;
 use std::convert::TryFrom;
 use std::io;
 use std::io::Cursor;
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,11 +49,11 @@ pub enum Message {
 }
 
 pub struct PingMessage {
-    pub nonce: u32
+    pub nonce: u32,
 }
 
 pub struct PongMessage {
-    pub nonce: u32
+    pub nonce: u32,
 }
 
 pub struct GetAddrsMessage {}
@@ -192,25 +192,25 @@ impl Decodable for AddrsMessage {
 }
 
 impl Encodable for VersionMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         Ok(0)
     }
 }
 
 impl Decodable for VersionMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(_d: D) -> Result<Self> {
         Ok(Self {})
     }
 }
 
 impl Encodable for VerackMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         Ok(0)
     }
 }
 
 impl Decodable for VerackMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(_d: D) -> Result<Self> {
         Ok(Self {})
     }
 }
@@ -218,15 +218,15 @@ impl Decodable for VerackMessage {
 impl Message {
     pub fn packet_type(&self) -> PacketType {
         match self {
-            Message::Ping(message) => PacketType::Ping,
-            Message::Pong(message) => PacketType::Pong,
-            Message::GetAddrs(message) => PacketType::GetAddrs,
-            Message::Addrs(message) => PacketType::Addrs,
-            Message::Inv(message) => PacketType::Inv,
-            Message::GetSlabs(message) => PacketType::GetSlabs,
-            Message::Slab(message) => PacketType::Slab,
-            Message::Version(message) => PacketType::Version,
-            Message::Verack(message) => PacketType::Verack,
+            Message::Ping(_message) => PacketType::Ping,
+            Message::Pong(_message) => PacketType::Pong,
+            Message::GetAddrs(_message) => PacketType::GetAddrs,
+            Message::Addrs(_message) => PacketType::Addrs,
+            Message::Inv(_message) => PacketType::Inv,
+            Message::GetSlabs(_message) => PacketType::GetSlabs,
+            Message::Slab(_message) => PacketType::Slab,
+            Message::Version(_message) => PacketType::Version,
+            Message::Verack(_message) => PacketType::Verack,
         }
     }
 

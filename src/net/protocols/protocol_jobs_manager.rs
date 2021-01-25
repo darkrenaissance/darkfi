@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use smol::Task;
-use futures::Future;
 use async_std::sync::Mutex;
+use futures::Future;
+use smol::Task;
+use std::sync::Arc;
 
 use crate::net::error::NetResult;
 use crate::net::ChannelPtr;
@@ -11,14 +11,14 @@ pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 
 pub struct ProtocolJobsManager {
     channel: ChannelPtr,
-    tasks: Mutex<Vec<Task<NetResult<()>>>>
+    tasks: Mutex<Vec<Task<NetResult<()>>>>,
 }
 
 impl ProtocolJobsManager {
     pub fn new(channel: ChannelPtr) -> Arc<Self> {
         Arc::new(Self {
             channel,
-            tasks: Mutex::new(Vec::new())
+            tasks: Mutex::new(Vec::new()),
         })
     }
 
@@ -28,7 +28,7 @@ impl ProtocolJobsManager {
 
     pub async fn spawn<'a, F>(&self, future: F, executor: ExecutorPtr<'a>)
     where
-        F: Future<Output=NetResult<()>> + Send + 'a
+        F: Future<Output = NetResult<()>> + Send + 'a,
     {
         self.tasks.lock().await.push(executor.spawn(future))
     }
@@ -50,4 +50,3 @@ impl ProtocolJobsManager {
         }
     }
 }
-

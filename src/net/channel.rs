@@ -4,9 +4,9 @@ use futures::AsyncReadExt;
 use futures::FutureExt;
 use log::*;
 use smol::{Async, Executor};
-use std::future::Future;
+
 use std::net::{SocketAddr, TcpStream};
-use std::pin::Pin;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -16,7 +16,6 @@ use crate::net::message_subscriber::{
 };
 use crate::net::messages;
 use crate::net::settings::SettingsPtr;
-use crate::net::utility::clone_net_error;
 use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
 pub type ChannelPtr = Arc<Channel>;

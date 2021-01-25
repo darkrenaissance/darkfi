@@ -1,8 +1,6 @@
 use futures::FutureExt;
-use log::*;
-use smol::{Async, Executor};
+use smol::{Async};
 use std::net::{SocketAddr, TcpStream};
-use std::sync::Arc;
 
 use crate::net::error::{NetError, NetResult};
 use crate::net::utility::sleep;

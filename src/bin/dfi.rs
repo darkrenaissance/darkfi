@@ -3,19 +3,15 @@ extern crate clap;
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
-use log::*;
 use serde_json::json;
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use sapvi::{net, Result};
-
 use std::net::TcpListener;
-
 use async_native_tls::TlsAcceptor;
 use http_types::{Request, Response, StatusCode};
 use smol::Async;
+
+use sapvi::{net, Result};
 
 /// Listens for incoming connections and serves them.
 async fn listen(

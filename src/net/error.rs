@@ -26,4 +26,3 @@ impl fmt::Display for NetError {
         }
     }
 }
-

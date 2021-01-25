@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
-use crate::net::utility::{clone_net_error, sleep};
+use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
 pub struct ProtocolVersion {
@@ -50,7 +50,7 @@ impl ProtocolVersion {
             .subscribe_msg(messages::PacketType::Version)
             .await;
 
-        let version_msg = version_sub.receive().await?;
+        let _version_msg = version_sub.receive().await?;
 
         // Check the message is OK
 

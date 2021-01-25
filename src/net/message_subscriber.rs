@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::net::error::NetResult;
 use crate::net::messages::{Message, PacketType};
-use crate::net::utility::clone_net_error;
 
 pub type MessageSubscriberPtr = Arc<MessageSubscriber>;
 

@@ -34,7 +34,7 @@ impl StoppableTask {
         MainFut: Future<Output = std::result::Result<(), Error>> + Send + 'a,
         StopFut: Future<Output = ()> + Send,
         StopFn: FnOnce(std::result::Result<(), Error>) -> StopFut + Send + 'a,
-        Error: std::error::Error + Send + 'a
+        Error: std::error::Error + Send + 'a,
     {
         executor
             .spawn(async move {
