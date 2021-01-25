@@ -14,7 +14,7 @@ pub type MessageSubscriptionID = u64;
 
 macro_rules! receive_message {
     ($sub:expr, $message_type:path) => {{
-        let wrapped_message = OwningRef::new($sub.receive().await?);
+        let wrapped_message = owning_ref::OwningRef::new($sub.receive().await?);
 
         wrapped_message.map(|msg| match msg {
             $message_type(msg_detail) => msg_detail,

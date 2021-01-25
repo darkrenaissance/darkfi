@@ -29,7 +29,6 @@ pub enum PacketType {
     Pong = 1,
     GetAddrs = 2,
     Addrs = 3,
-    Sync = 4,
     Inv = 5,
     GetSlabs = 6,
     Slab = 7,
@@ -38,16 +37,23 @@ pub enum PacketType {
 }
 
 pub enum Message {
-    Ping,
-    Pong,
+    Ping(PingMessage),
+    Pong(PongMessage),
     GetAddrs(GetAddrsMessage),
     Addrs(AddrsMessage),
-    Sync,
     Inv(InvMessage),
     GetSlabs(GetSlabsMessage),
     Slab(SlabMessage),
     Version(VersionMessage),
     Verack(VerackMessage),
+}
+
+pub struct PingMessage {
+    pub nonce: u32
+}
+
+pub struct PongMessage {
+    pub nonce: u32
 }
 
 pub struct GetAddrsMessage {}
@@ -73,6 +79,38 @@ pub struct AddrsMessage {
 pub struct VersionMessage {}
 
 pub struct VerackMessage {}
+
+impl Encodable for PingMessage {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.nonce.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for PingMessage {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            nonce: Decodable::decode(&mut d)?,
+        })
+    }
+}
+
+impl Encodable for PongMessage {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.nonce.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for PongMessage {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            nonce: Decodable::decode(&mut d)?,
+        })
+    }
+}
 
 impl Encodable for GetSlabsMessage {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -180,11 +218,10 @@ impl Decodable for VerackMessage {
 impl Message {
     pub fn packet_type(&self) -> PacketType {
         match self {
-            Message::Ping => PacketType::Ping,
-            Message::Pong => PacketType::Pong,
+            Message::Ping(message) => PacketType::Ping,
+            Message::Pong(message) => PacketType::Pong,
             Message::GetAddrs(message) => PacketType::GetAddrs,
             Message::Addrs(message) => PacketType::Addrs,
-            Message::Sync => PacketType::Sync,
             Message::Inv(message) => PacketType::Inv,
             Message::GetSlabs(message) => PacketType::GetSlabs,
             Message::Slab(message) => PacketType::Slab,
@@ -195,14 +232,22 @@ impl Message {
 
     pub fn pack(&self) -> Result<Packet> {
         match self {
-            Message::Ping => Ok(Packet {
-                command: PacketType::Ping,
-                payload: Vec::new(),
-            }),
-            Message::Pong => Ok(Packet {
-                command: PacketType::Pong,
-                payload: Vec::new(),
-            }),
+            Message::Ping(message) => {
+                let mut payload = Vec::new();
+                message.encode(&mut payload)?;
+                Ok(Packet {
+                    command: PacketType::Ping,
+                    payload: Vec::new(),
+                })
+            }
+            Message::Pong(message) => {
+                let mut payload = Vec::new();
+                message.encode(&mut payload)?;
+                Ok(Packet {
+                    command: PacketType::Pong,
+                    payload: Vec::new(),
+                })
+            }
             Message::GetAddrs(message) => {
                 let mut payload = Vec::new();
                 message.encode(&mut payload)?;
@@ -216,13 +261,6 @@ impl Message {
                 message.encode(Cursor::new(&mut payload))?;
                 Ok(Packet {
                     command: PacketType::Addrs,
-                    payload,
-                })
-            }
-            Message::Sync => {
-                let payload = Vec::new();
-                Ok(Packet {
-                    command: PacketType::Sync,
                     payload,
                 })
             }
@@ -267,11 +305,10 @@ impl Message {
     pub fn unpack(packet: Packet) -> Result<Self> {
         let cursor = Cursor::new(packet.payload.clone());
         match packet.command {
-            PacketType::Ping => Ok(Self::Ping),
-            PacketType::Pong => Ok(Self::Pong),
+            PacketType::Ping => Ok(Self::Ping(PingMessage::decode(cursor)?)),
+            PacketType::Pong => Ok(Self::Pong(PongMessage::decode(cursor)?)),
             PacketType::GetAddrs => Ok(Self::GetAddrs(GetAddrsMessage::decode(cursor)?)),
             PacketType::Addrs => Ok(Self::Addrs(AddrsMessage::decode(cursor)?)),
-            PacketType::Sync => Ok(Self::Sync),
             PacketType::Inv => Ok(Self::Inv(InvMessage::decode(cursor)?)),
             PacketType::GetSlabs => Ok(Self::GetSlabs(GetSlabsMessage::decode(cursor)?)),
             PacketType::Slab => Ok(Self::Slab(SlabMessage::decode(cursor)?)),
@@ -282,11 +319,10 @@ impl Message {
 
     pub fn name(&self) -> &'static str {
         match self {
-            Message::Ping => "Ping",
-            Message::Pong => "Pong",
+            Message::Ping(_) => "Ping",
+            Message::Pong(_) => "Pong",
             Message::GetAddrs(_) => "GetAddrs",
             Message::Addrs(_) => "Addrs",
-            Message::Sync => "Sync",
             Message::Inv(_) => "Inv",
             Message::GetSlabs(_) => "GetSlabs",
             Message::Slab(_) => "Slab",

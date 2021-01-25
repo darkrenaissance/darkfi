@@ -79,19 +79,6 @@ impl SeedSession {
         }
     }
 
-    async fn register_channel(
-        self: Arc<Self>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
-        let handshake_task = self.perform_handshake_protocols(channel.clone(), executor.clone());
-
-        // start channel
-        channel.start(executor);
-
-        handshake_task.await
-    }
-
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
@@ -100,14 +87,10 @@ impl SeedSession {
         executor: Arc<Executor<'_>>,
     ) -> NetResult<()> {
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
-        let ping_task = protocol_ping.start(executor.clone());
+        protocol_ping.start(executor.clone()).await;
 
         let protocol_seed = ProtocolSeed::new(channel, hosts, settings.clone());
         protocol_seed.start(executor.clone()).await?;
-
-        // Close the ping task now we finished.
-        // TODO: channel drop should trigger this automatically anyway via the stop signal
-        ping_task.cancel().await;
 
         Ok(())
     }

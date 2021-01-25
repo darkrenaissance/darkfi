@@ -17,7 +17,20 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 }
 
 #[async_trait]
-pub trait Session {
+pub trait Session: Sync {
+    async fn register_channel(
+        self: Arc<Self>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> NetResult<()> {
+        let handshake_task = self.perform_handshake_protocols(channel.clone(), executor.clone());
+
+        // start channel
+        channel.start(executor);
+
+        handshake_task.await
+    }
+
     async fn perform_handshake_protocols(
         &self,
         channel: ChannelPtr,
