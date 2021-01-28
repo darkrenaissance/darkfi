@@ -75,19 +75,19 @@ async fn listen(
 struct RpcInterface {
     p2p: Arc<net::P2p>,
     started: Mutex<bool>,
-    quit_send: async_channel::Sender<()>,
-    quit_recv: async_channel::Receiver<()>,
+    stop_send: async_channel::Sender<()>,
+    stop_recv: async_channel::Receiver<()>,
 }
 
 impl RpcInterface {
     fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
-        let (quit_send, quit_recv) = async_channel::unbounded::<()>();
+        let (stop_send, stop_recv) = async_channel::unbounded::<()>();
 
         Arc::new(Self {
             p2p,
             started: Mutex::new(false),
-            quit_send,
-            quit_recv,
+            stop_send,
+            stop_recv,
         })
     }
 
@@ -104,14 +104,19 @@ impl RpcInterface {
         let self2 = self.clone();
         io.add_method("get_info", move |_| {
             let self2 = self2.clone();
-            async move { Ok(json!({"started": *self2.started.lock().await})) }
+            async move {
+                Ok(json!({
+                    "started": *self2.started.lock().await,
+                    "connections": self2.p2p.connections_count().await
+                }))
+            }
         });
 
-        let quit_send = self.quit_send.clone();
-        io.add_method("quit", move |_| {
-            let quit_send = quit_send.clone();
+        let stop_send = self.stop_send.clone();
+        io.add_method("stop", move |_| {
+            let stop_send = stop_send.clone();
             async move {
-                let _ = quit_send.send(()).await;
+                let _ = stop_send.send(()).await;
                 Ok(jsonrpc_core::Value::Null)
             }
         });
@@ -127,7 +132,7 @@ impl RpcInterface {
     }
 
     async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
-        Ok(self.quit_recv.recv().await?)
+        Ok(self.stop_recv.recv().await?)
     }
 }
 
@@ -138,7 +143,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let http = listen(
         executor.clone(),
         rpc.clone(),
-        Async::<TcpListener>::bind(([127, 0, 0, 1], 8000))?,
+        Async::<TcpListener>::bind(([127, 0, 0, 1], options.rpc_port))?,
         None,
     );
 
@@ -146,7 +151,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     *rpc.started.lock().await = true;
 
-    p2p.start(executor.clone()).await?;
+    p2p.clone().start(executor.clone()).await?;
+    p2p.run(executor).await?;
 
     rpc.wait_for_quit().await?;
 
@@ -232,7 +238,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
 
     let http_task = executor.spawn(http);
 
-    rpc.quit_recv.recv().await?;
+    rpc.stop_recv.recv().await?;
 
     http_task.cancel().await;
 
@@ -249,6 +255,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
 struct ProgramOptions {
     network_settings: net::Settings,
     log_path: Box<std::path::PathBuf>,
+    rpc_port: u16,
 }
 
 impl ProgramOptions {
@@ -262,6 +269,8 @@ impl ProgramOptions {
             (@arg CONNECTS: -c --connect ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
+            (@arg DISABLE_SEED: -D --disable_seed "Disable seed process")
+            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
         )
         .get_matches();
 
@@ -300,6 +309,14 @@ impl ProgramOptions {
             .to_path_buf(),
         );
 
+        let skip_seed_sync = if app.is_present("DISABLE_SEED") { true } else { false };
+
+        let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
+            rpc_port.parse()?
+        } else {
+            8000
+        };
+
         Ok(ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
@@ -310,8 +327,10 @@ impl ProgramOptions {
                 external_addr: accept_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
+                skip_seed_sync
             },
             log_path,
+            rpc_port,
         })
     }
 }

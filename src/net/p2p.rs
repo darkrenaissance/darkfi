@@ -31,9 +31,11 @@ impl P2p {
     /// Invoke startup and seeding sequence. Call from constructing thread.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         // Start manual connections
+
         // Start seed session
         let seed = SeedSession::new(Arc::downgrade(&self));
         seed.start(executor.clone()).await?;
+
         Ok(())
     }
 
@@ -56,6 +58,10 @@ impl P2p {
             .lock()
             .await
             .remove(&channel.address());
+    }
+
+    pub async fn connections_count(&self) -> usize {
+        self.pending_channels.lock().await.len()
     }
 
     pub fn settings(&self) -> SettingsPtr {

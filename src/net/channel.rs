@@ -97,7 +97,7 @@ impl Channel {
                     match message_result {
                         Ok(message) => Ok(Arc::new(message)),
                         Err(err) => {
-                            error!("Read error on channel {}", err);
+                            error!("Read error on channel: {}", err);
                             self.stop().await;
                             Err(NetError::ChannelStopped)
                         }

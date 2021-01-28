@@ -71,7 +71,7 @@ impl MessageSubscription {
 }
 
 pub struct MessageSubscriber {
-    subs: Mutex<HashMap<u64, async_channel::Sender<MessageResult>>>,
+    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult>>>,
 }
 
 impl MessageSubscriber {
@@ -106,13 +106,26 @@ impl MessageSubscriber {
     }
 
     pub async fn notify(&self, message_result: NetResult<Arc<Message>>) {
-        for sub in (*self.subs.lock().await).values() {
+        let mut garbage_ids = Vec::new();
+
+        for (sub_id, sub) in &*self.subs.lock().await {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}
-                Err(err) => {
-                    panic!("Error returned sending message in notify() call! {}", err);
+                Err(_err) => {
+                    // Automatically clean out closed channels
+                    garbage_ids.push(*sub_id);
+                    //panic!("Error returned sending message in notify() call! {}", err);
                 }
             }
+        }
+
+        self.collect_garbage(garbage_ids).await;
+    }
+
+    async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
+        let mut subs = self.subs.lock().await;
+        for id in &ids {
+            subs.remove(id);
         }
     }
 }

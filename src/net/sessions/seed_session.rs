@@ -23,6 +23,11 @@ impl SeedSession {
             p2p.settings()
         };
 
+        if settings.skip_seed_sync {
+            info!("Configured to skip seed synchronization process.");
+            return Ok(());
+        }
+
         // if cached addresses then quit
 
         // if seeds empty then seeding required but empty

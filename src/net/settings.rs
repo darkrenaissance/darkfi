@@ -15,4 +15,5 @@ pub struct Settings {
     pub external_addr: Option<SocketAddr>,
     pub peers: Vec<SocketAddr>,
     pub seeds: Vec<SocketAddr>,
+    pub skip_seed_sync: bool,
 }
