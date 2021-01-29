@@ -343,6 +343,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
     let mut magic = [0u8; 4];
+    //debug!("reading magic...");
     stream.read_exact(&mut magic).await?;
     //debug!("read magic {:?}", magic);
     if magic != MAGIC_BYTES {

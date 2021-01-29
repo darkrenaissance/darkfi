@@ -94,8 +94,10 @@ impl SeedSession {
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         protocol_ping.start(executor.clone()).await;
 
-        let protocol_seed = ProtocolSeed::new(channel, hosts, settings.clone());
+        let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());
         protocol_seed.start(executor.clone()).await?;
+
+        channel.stop().await;
 
         Ok(())
     }

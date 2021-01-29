@@ -10,6 +10,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::error;
 use crate::net::error::{NetError, NetResult};
 use crate::net::message_subscriber::{
     MessageSubscriber, MessageSubscriberPtr, MessageSubscription,
@@ -87,6 +88,13 @@ impl Channel {
         self.stop_subscriber.notify(stop_err).await;
     }
 
+    fn is_eof_error(err: &error::Error) -> bool {
+        match err {
+            error::Error::Io(io_err) => io_err.kind() == std::io::ErrorKind::UnexpectedEof,
+            _ => false
+        }
+    }
+
     async fn receive_loop(self: Arc<Self>) -> NetResult<()> {
         let stop_sub = self.clone().subscribe_stop().await;
         let reader = &mut *self.reader.lock().await;
@@ -97,7 +105,11 @@ impl Channel {
                     match message_result {
                         Ok(message) => Ok(Arc::new(message)),
                         Err(err) => {
-                            error!("Read error on channel: {}", err);
+                            if Self::is_eof_error(&err) {
+                                info!("Closing channel {} disconnected", self.address());
+                            } else {
+                                error!("Read error on channel: {}", err);
+                            }
                             self.stop().await;
                             Err(NetError::ChannelStopped)
                         }
