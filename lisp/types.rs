@@ -23,6 +23,13 @@ pub struct Allocation {
 }
 
 #[derive(Debug, Clone)]
+pub struct EnforceAllocation {
+    pub left: (String, String),
+    pub right:  (String, String),
+    pub output: (String, String)
+}
+
+#[derive(Debug, Clone)]
 pub struct LispCircuit {
     // TODO refactor to vec
     pub params: Vec<Option<Scalar>>,
@@ -68,7 +75,7 @@ pub enum MalVal {
     },
     Atom(Rc<RefCell<MalVal>>),
     Zk(Rc<LispCircuit>), // TODO remote it
-    Enforce(Rc<Vec<MalVal>>),
+    Enforce(Rc<Vec<EnforceAllocation>>),
     ZKScalar(bls12_381::Scalar),
 }
 

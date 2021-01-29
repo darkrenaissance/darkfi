@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use crate::MalVal::Enforce;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
 use crate::MalVal::Zk;
@@ -14,7 +15,8 @@ use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
-use std::rc::Rc;
+use types::EnforceAllocation;
+use std::{borrow::BorrowMut, rc::Rc};
 use std::time::Instant;
 use std::{
     cell::RefCell,
@@ -337,8 +339,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
-                        //                       let symbol = MalVal::Sym(a1.pr_str(false));
-                        //                        env_set(&env, Sym(a1.pr_str(false)), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "Allocations")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -355,53 +355,50 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
-                        let (a1, a2) = (l[0].clone(), l[1].clone());
                         // here i'm considering that we always have tuple with only two elements
                         // also it's important to keep in mind for the sake of brevity of this v0
                         // we will not allow calculation or any lisp evaluations inside the enforce 
                         // it means that every symbol will be on allocations and we will do the 
                         // find/replace on the bellman circuit, it's nasty v0
-                        println!("Enforce");
-                        match l[1].clone() {
-                            List(v, _) | Vector(v, _) => {
-                                println!(
-                                    "Left \n1st {:?} \n 2nd {:?} \n",
-                                    v[0].clone(),
-                                    v[1].clone()
-                                );
+                        let left = match l[1].clone() {
+                            List(v, _) | Vector(v, _) => {                                
+                                (v[0].pr_str(false), v[1].pr_str(false))
                             }
-                            _ => {
-                                println!("unknow");
+                            _ => {("".to_string(), "".to_string())}
+                        };
+                        let right = match l[1].clone() {
+                            List(v, _) | Vector(v, _) => {                                
+                                (v[0].pr_str(false), v[1].pr_str(false))
                             }
-                        }
-                        match l[2].clone() {
-                            List(v, _) | Vector(v, _) => {
-                                println!(
-                                    "Left \n1st {:?} \n 2nd {:?} \n",
-                                    v[0].clone(),
-                                    v[1].clone()
-                                );
+                            _ => {("".to_string(), "".to_string())}
+                        };
+                        let output = match l[1].clone() {
+                            List(v, _) | Vector(v, _) => {                                
+                                (v[0].pr_str(false), v[1].pr_str(false))
+                            }
+                            _ => {("".to_string(), "".to_string())}
+                        };
+                        let enforce = EnforceAllocation{left : left, right : right, output : output};
+                        let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
+                        match get_enforce_allocs(&env)? {
+                            Enforce(v) => { 
+                                println!("---> {:?}", v);
+                                for value in v.iter() {
+                                    new_vec.push(value.to_owned());
+                                }
+                                },
+                                _ => {}
+                        };
+                        env_set(
+                            &env,
+                            Sym("AllocationsEnforce".to_string()),
+                            vector![vec![Enforce(Rc::new(new_vec))]],
+                        );
 
-                            }
-                            _ => {
-                                println!("unknow");
-                            }
-                        }
-                        match l[3].clone() {
-                            List(v, _) | Vector(v, _) => {
-                                println!(
-                                    "Left \n1st {:?} \n 2nd {:?} \n",
-                                    v[0].clone(),
-                                    v[1].clone()
-                                );
+                        // println!("allocations {:?}", get_allocations(&env, "Allocations"));
+                        // println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
+                        println!("allocations enforce {:?}", get_enforce_allocs(&env));
 
-                            }
-                            _ => {
-                                println!("unknow");
-                            }
-                        }
-                        //                         println!("allocations {:?}", get_allocations(&env, "Allocations"));
-                        //                         println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
                         Ok(vector![vec![]])
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -442,6 +439,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
+pub fn get_enforce_allocs(env: &Env) -> MalRet {
+    let found = match env_find(env, "AllocationsEnforce") {
+        Some(e) => match env_get(&e, &Sym("AllocationsEnforce".to_string())) {
+            Ok(f) => Ok(f),
+            _ => Ok(vector![vec![]])
+        },
+        _ => Ok(vector![vec![]])
+    };
+    found
+}
 pub fn get_allocations(env: &Env, key: &str) -> MalRet {
     let mut alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
     match env_find(env, key) {
