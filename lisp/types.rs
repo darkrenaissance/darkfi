@@ -1,26 +1,42 @@
-use bellman::SynthesisError;
-use bellman::ConstraintSystem;
+use bellman::groth16::PreparedVerifyingKey;
 use bellman::Circuit;
+use bellman::ConstraintSystem;
+use bellman::SynthesisError;
+use bls12_381::Bls12;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 
+use crate::env;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{
-    Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector,
-};
-
+use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 use bls12_381::Scalar;
-use sapvi::{
-    BlsStringConversion, ConstraintInstruction,
-};
+use sapvi::{BlsStringConversion, ConstraintInstruction};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
+pub struct Allocation {
+    pub symbol: String,
+    pub value: Scalar,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnforceAllocation {
+    pub left: (String, String),
+    pub right:  (String, String),
+    pub output: (String, String)
+}
+
+#[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: Rc<MalVal>,
+    // TODO refactor to vec
+    pub params: Vec<Option<Scalar>>,
+    pub allocs: Vec<Option<Allocation>>,
+    pub alloc_inputs: Vec<Option<Allocation>>,
+    pub constraints: Vec<Option<Scalar>>,
+    pub env: Env,
 }
 
 impl Circuit<bls12_381::Scalar> for LispCircuit {
@@ -28,6 +44,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        for alloc_value in &self.allocs {
+            //            let var = cs.alloc(|| "private alloc", ||)?;
+            // TODO use env
+            println!("{:?}", alloc_value);
+        }
+
         Ok(())
     }
 }
@@ -52,10 +74,9 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(Rc<LispCircuit>),
-    Enforce(Rc<Vec<MalVal>>),
-    // TODO maybe change to bls scalar
-    ZKScalar(bls12_381::Scalar)
+    Zk(Rc<LispCircuit>), // TODO remote it
+    Enforce(Rc<Vec<EnforceAllocation>>),
+    ZKScalar(bls12_381::Scalar),
 }
 
 #[derive(Debug)]
