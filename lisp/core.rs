@@ -331,12 +331,10 @@ fn negate_from(a: MalArgs) -> MalRet {
     match a[0].clone() {
         ZKScalar(a0) => Ok(ZKScalar(a0.neg())),
         _ => match a[0].apply(vec![])? {
-            List(v, _) | Vector(v, _) => {
-                match v[0] {
-                    ZKScalar(val) => Ok(vector![vec![ZKScalar(val.neg())]]),
-                    _ => error("not scalar"),
-                }
-            }
+            List(v, _) | Vector(v, _) => match v[0] {
+                ZKScalar(val) => Ok(vector![vec![ZKScalar(val.neg())]]),
+                _ => error("not scalar"),
+            },
             _ => return error("non zkscalar passed to negate"),
         },
     }

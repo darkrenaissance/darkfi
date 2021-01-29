@@ -306,8 +306,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let pvk = setup(a1.clone(), env.clone())?;
                         ast = eval(a1.clone(), env.clone())?;
-                        continue 'tco
-
+                        continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[0].clone();
@@ -318,15 +317,15 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
-//                        let symbol = MalVal::Sym(a1.pr_str(false));
- //                       env_set(&env, Sym(a1.pr_str(false)), result.clone());
+                        //                        let symbol = MalVal::Sym(a1.pr_str(false));
+                        //                       env_set(&env, Sym(a1.pr_str(false)), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "AllocationsInput")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
                                 new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                             }
                             new_hm.insert(a1.pr_str(false), result);
-                             env_set(
+                            env_set(
                                 &env,
                                 Sym("AllocationsInput".to_string()),
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
@@ -338,8 +337,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
- //                       let symbol = MalVal::Sym(a1.pr_str(false));
-//                        env_set(&env, Sym(a1.pr_str(false)), result.clone());
+                        //                       let symbol = MalVal::Sym(a1.pr_str(false));
+                        //                        env_set(&env, Sym(a1.pr_str(false)), result.clone());
                         if let Hash(allocs, _) = get_allocations(&env, "Allocations")? {
                             let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                             for (k, v) in allocs.iter() {
@@ -357,32 +356,52 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
                         let (a1, a2) = (l[0].clone(), l[1].clone());
-                        let left = l[1].clone();
-                        let right = l[2].clone();
-                        let out = l[3].clone();
                         // here i'm considering that we always have tuple with only two elements
-                        match left.clone() {
-                            List(v, _) | Vector(v, _) => { println!("1st {:?} \n 2nd {:?} \n {:?} {:?}", 
-                                                                    eval(v[0].clone(), env.clone()), 
-                                                                    eval(v[1].clone(), env.clone()),
-                                                                    v[0].clone(), v[1].clone()); },
-                            _ => { println!("unknow"); }
+                        // also it's important to keep in mind for the sake of brevity of this v0
+                        // we will not allow calculation or any lisp evaluations inside the enforce 
+                        // it means that every symbol will be on allocations and we will do the 
+                        // find/replace on the bellman circuit, it's nasty v0
+                        println!("Enforce");
+                        match l[1].clone() {
+                            List(v, _) | Vector(v, _) => {
+                                println!(
+                                    "Left \n1st {:?} \n 2nd {:?} \n",
+                                    v[0].clone(),
+                                    v[1].clone()
+                                );
+                            }
+                            _ => {
+                                println!("unknow");
+                            }
                         }
+                        match l[2].clone() {
+                            List(v, _) | Vector(v, _) => {
+                                println!(
+                                    "Left \n1st {:?} \n 2nd {:?} \n",
+                                    v[0].clone(),
+                                    v[1].clone()
+                                );
 
+                            }
+                            _ => {
+                                println!("unknow");
+                            }
+                        }
+                        match l[3].clone() {
+                            List(v, _) | Vector(v, _) => {
+                                println!(
+                                    "Left \n1st {:?} \n 2nd {:?} \n",
+                                    v[0].clone(),
+                                    v[1].clone()
+                                );
 
-//                        let left_eval = eval(left.clone(), env.clone())?;
-//                        let right_eval = eval(right.clone(), env.clone())?;
-//                        let out_eval = eval(out.clone(), env.clone())?;
-//                        println!(
-//                            "enforce \n {:?} \n {:?} \n {:?}",
-//                            left, right, out
-//                        );
-//                        println!(
-//                            "\n {:?} \n {:?} \n {:?} \n",
-//                            left_eval, right_eval, out_eval
-//                        );
-                         println!("allocations {:?}", get_allocations(&env, "Allocations"));
-                         println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
+                            }
+                            _ => {
+                                println!("unknow");
+                            }
+                        }
+                        //                         println!("allocations {:?}", get_allocations(&env, "Allocations"));
+                        //                         println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
                         Ok(vector![vec![]])
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -551,7 +570,7 @@ fn repl_load(file: String) -> Result<(), ()> {
         "(def! load-file (fn* (f) (eval (read-string (str \"(do \" (slurp f) \"\nnil)\")))))",
         &repl_env,
     );
-    let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
+    //let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
     match rep(&format!("(load-file \"{}\")", file), &repl_env) {
         Ok(_) => std::process::exit(0),
         Err(e) => {
