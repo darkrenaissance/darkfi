@@ -24,14 +24,13 @@ pub struct Allocation {
 
 #[derive(Debug, Clone)]
 pub struct EnforceAllocation {
-    pub left: (String, String),
-    pub right:  (String, String),
-    pub output: (String, String)
+    pub left: Vec<(String, String)>,
+    pub right: Vec<(String, String)>,
+    pub output: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    // TODO refactor to vec
     pub params: Vec<Option<Scalar>>,
     pub allocs: Vec<Option<Allocation>>,
     pub alloc_inputs: Vec<Option<Allocation>>,

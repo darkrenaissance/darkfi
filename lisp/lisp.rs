@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
-use crate::MalVal::Enforce;
 use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
+use crate::MalVal::Enforce;
 use crate::MalVal::Zk;
 use bellman::groth16::PreparedVerifyingKey;
 use sapvi::bls_extensions::BlsStringConversion;
@@ -15,13 +15,13 @@ use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
-use types::EnforceAllocation;
-use std::{borrow::BorrowMut, rc::Rc};
 use std::time::Instant;
+use std::{borrow::BorrowMut, rc::Rc};
 use std::{
     cell::RefCell,
     ops::{AddAssign, MulAssign, SubAssign},
 };
+use types::EnforceAllocation;
 
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
@@ -331,7 +331,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 &env,
                                 Sym("AllocationsInput".to_string()),
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
-                            );
+                            )?;
                         };
                         Ok(Nil)
                     }
@@ -349,7 +349,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 &env,
                                 Sym("Allocations".to_string()),
                                 Hash(Rc::new(new_hm), Rc::new(Nil)),
-                            );
+                            )?;
                         };
                         Ok(Nil)
                     }
@@ -357,47 +357,59 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "enforce" => {
                         // here i'm considering that we always have tuple with only two elements
                         // also it's important to keep in mind for the sake of brevity of this v0
-                        // we will not allow calculation or any lisp evaluations inside the enforce 
-                        // it means that every symbol will be on allocations and we will do the 
+                        // we will not allow calculation or any lisp evaluations inside the enforce
+                        // it means that every symbol will be on allocations and we will do the
                         // find/replace on the bellman circuit, it's nasty v0
                         let left = match l[1].clone() {
-                            List(v, _) | Vector(v, _) => {                                
+                            List(v, _) | Vector(v, _) => {
+                                println!("v {:?}", v.to_vec());
                                 (v[0].pr_str(false), v[1].pr_str(false))
                             }
-                            _ => {("".to_string(), "".to_string())}
+                            _ => ("".to_string(), "".to_string()),
                         };
                         let right = match l[1].clone() {
-                            List(v, _) | Vector(v, _) => {                                
+                            List(v, _) | Vector(v, _) => { 
+                                println!("v {:?}", v.to_vec());
                                 (v[0].pr_str(false), v[1].pr_str(false))
                             }
-                            _ => {("".to_string(), "".to_string())}
+                            _ => ("".to_string(), "".to_string()),
                         };
                         let output = match l[1].clone() {
-                            List(v, _) | Vector(v, _) => {                                
-                                (v[0].pr_str(false), v[1].pr_str(false))
-                            }
-                            _ => {("".to_string(), "".to_string())}
+                            List(v, _) | Vector(v, _) => (v[0].pr_str(false), v[1].pr_str(false)),
+                            _ => ("".to_string(), "".to_string()),
                         };
-                        let enforce = EnforceAllocation{left : left, right : right, output : output};
+                        /*
+                        let enforce = EnforceAllocation {
+                            left: left,
+                            right: right,
+                            output: output,
+                        };
                         let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
                         match get_enforce_allocs(&env)? {
-                            Enforce(v) => { 
-                                println!("---> {:?}", v);
+                            Vector(v, _) => {
                                 for value in v.iter() {
-                                    new_vec.push(value.to_owned());
+                                    println!("VALUES {:?} \n", value);
+                                    match value {
+                                        Enforce(v) => {
+                                            println!("{:?}", v);
+                                        },
+                                        _ => {}
+                                    };
                                 }
-                                },
-                                _ => {}
+                            }
+                            v => {
+                                println!("something wrong. {:?}", v)
+                            }
                         };
                         env_set(
                             &env,
                             Sym("AllocationsEnforce".to_string()),
                             vector![vec![Enforce(Rc::new(new_vec))]],
                         );
-
+                        */
                         // println!("allocations {:?}", get_allocations(&env, "Allocations"));
                         // println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
-                        println!("allocations enforce {:?}", get_enforce_allocs(&env));
+                        //println!("allocations enforce {:?}", get_enforce_allocs(&env));
 
                         Ok(vector![vec![]])
                     }
@@ -442,15 +454,18 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 pub fn get_enforce_allocs(env: &Env) -> MalRet {
     let found = match env_find(env, "AllocationsEnforce") {
         Some(e) => match env_get(&e, &Sym("AllocationsEnforce".to_string())) {
-            Ok(f) => Ok(f),
-            _ => Ok(vector![vec![]])
+            Ok(f) => {
+                println!("Found {:?}", f);
+                Ok(f)
+            }
+            _ => Ok(vector![vec![]]),
         },
-        _ => Ok(vector![vec![]])
+        _ => Ok(vector![vec![]]),
     };
     found
 }
 pub fn get_allocations(env: &Env, key: &str) -> MalRet {
-    let mut alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+    let alloc_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => Ok(f),
@@ -460,14 +475,14 @@ pub fn get_allocations(env: &Env, key: &str) -> MalRet {
     }
 }
 
-pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
+pub fn setup(ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
 
     // get all allocs from env
 
-    let mut c = LispCircuit {
+    let c = LispCircuit {
         params: vec![],
         allocs: vec![],
         alloc_inputs: vec![],
@@ -483,7 +498,7 @@ pub fn setup(ast: MalVal, mut env: Env) -> Result<PreparedVerifyingKey<Bls12>, M
     Ok(pvk)
 }
 
-pub fn prove(mut ast: MalVal, mut env: Env) -> MalRet {
+pub fn prove(ast: MalVal, env: Env) -> MalRet {
     // TODO remove it
     let quantity = bls12_381::Scalar::from(3);
 
@@ -556,7 +571,7 @@ fn main() -> Result<(), ()> {
     match matches.subcommand() {
         Some(("load", matches)) => {
             let file: String = matches.value_of("FILE").unwrap().parse().unwrap();
-            repl_load(file);
+            repl_load(file)?;
         }
         _ => {
             eprintln!("error: Invalid subcommand invoked");
