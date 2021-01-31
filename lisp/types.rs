@@ -30,7 +30,7 @@ pub struct LispCircuit {
     pub params: Vec<Option<Scalar>>,
     pub allocs: Vec<Option<Allocation>>,
     pub alloc_inputs: Vec<Option<Allocation>>,
-    pub constraints: Vec<Option<Scalar>>,
+    pub constraints: Vec<Option<EnforceAllocation>>,
     pub env: Env,
 }
 
@@ -39,6 +39,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         _cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        println!("something called this");
         for alloc_value in &self.allocs {
             println!("{:?}", alloc_value);
         }
