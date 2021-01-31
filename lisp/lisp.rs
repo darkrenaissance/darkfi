@@ -1,11 +1,8 @@
 #![allow(non_snake_case)]
 
-use crate::groth16::VerifyingKey;
 use crate::types::LispCircuit;
-use crate::MalVal::Enforce;
 use crate::MalVal::Zk;
 use bellman::groth16::PreparedVerifyingKey;
-use sapvi::bls_extensions::BlsStringConversion;
 use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 
 use simplelog::*;
@@ -13,7 +10,9 @@ use simplelog::*;
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use bls12_381::Bls12;
 use bls12_381::Scalar;
-use ff::{Field, PrimeField};
+use ff::PrimeField;
+use fnv::FnvHashMap;
+use itertools::Itertools;
 use rand::rngs::OsRng;
 use std::time::Instant;
 use std::{borrow::BorrowMut, rc::Rc};
@@ -22,10 +21,6 @@ use std::{
     ops::{AddAssign, MulAssign, SubAssign},
 };
 use types::EnforceAllocation;
-
-//use std::collections::HashMap;
-use fnv::FnvHashMap;
-use itertools::Itertools;
 use MalVal::ZKScalar;
 
 #[macro_use]
@@ -39,8 +34,8 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
-use crate::types::{error, format_error, Allocation, MalArgs, MalErr, MalRet, MalVal};
+use crate::types::MalVal::{Bool, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector, Enforce};
+use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
 mod reader;
@@ -306,7 +301,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
-                        let pvk = setup(a1.clone(), env.clone())?;
+                        // todo
+                        let _pvk = setup(a1.clone(), env.clone())?;
                         ast = eval(a1.clone(), env.clone())?;
                         continue 'tco;
                     }
@@ -360,29 +356,65 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         // we will not allow calculation or any lisp evaluations inside the enforce
                         // it means that every symbol will be on allocations and we will do the
                         // find/replace on the bellman circuit, it's nasty v0
-                        let left = match l[1].clone() {
+                        let mut left_vec = vec![];
+                        let mut right_vec = vec![];
+                        let mut out_vec = vec![];
+                        // todo extract a macro for this
+                        match l[1].clone() {
                             List(v, _) | Vector(v, _) => {
-                                println!("v {:?}", v.to_vec());
-                                (v[0].pr_str(false), v[1].pr_str(false))
+                                if let List(_, _) = &v.to_vec()[0] {
+                                    for ele in v.to_vec().iter() {
+                                        if let List(ele_vec, _) = ele {
+                                            left_vec.push((
+                                                ele_vec[0].pr_str(false),
+                                                ele_vec[1].pr_str(false),
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    left_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                }
                             }
-                            _ => ("".to_string(), "".to_string()),
+                            _ => {}
                         };
-                        let right = match l[1].clone() {
-                            List(v, _) | Vector(v, _) => { 
-                                println!("v {:?}", v.to_vec());
-                                (v[0].pr_str(false), v[1].pr_str(false))
+                        match l[2].clone() {
+                            List(v, _) | Vector(v, _) => {
+                                if let List(_, _) = &v.to_vec()[0] {
+                                    for ele in v.to_vec().iter() {
+                                        if let List(ele_vec, _) = ele {
+                                            right_vec.push((
+                                                ele_vec[0].pr_str(false),
+                                                ele_vec[1].pr_str(false),
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    right_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                }
                             }
-                            _ => ("".to_string(), "".to_string()),
+                            _ => {}
                         };
-                        let output = match l[1].clone() {
-                            List(v, _) | Vector(v, _) => (v[0].pr_str(false), v[1].pr_str(false)),
-                            _ => ("".to_string(), "".to_string()),
+                        match l[3].clone() {
+                            List(v, _) | Vector(v, _) => {
+                                if let List(_, _) = &v.to_vec()[0] {
+                                    for ele in v.to_vec().iter() {
+                                        if let List(ele_vec, _) = ele {
+                                            out_vec.push((
+                                                ele_vec[0].pr_str(false),
+                                                ele_vec[1].pr_str(false),
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    out_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                }
+                            }
+                            _ => {}
                         };
-                        /*
                         let enforce = EnforceAllocation {
-                            left: left,
-                            right: right,
-                            output: output,
+                            left: left_vec,
+                            right: right_vec,
+                            output: out_vec,
                         };
                         let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
                         match get_enforce_allocs(&env)? {
@@ -392,7 +424,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     match value {
                                         Enforce(v) => {
                                             println!("{:?}", v);
-                                        },
+                                        }
                                         _ => {}
                                     };
                                 }
@@ -406,10 +438,12 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             Sym("AllocationsEnforce".to_string()),
                             vector![vec![Enforce(Rc::new(new_vec))]],
                         );
-                        */
-                        // println!("allocations {:?}", get_allocations(&env, "Allocations"));
-                        // println!("allocations input {:?}", get_allocations(&env, "AllocationsInput"));
-                        //println!("allocations enforce {:?}", get_enforce_allocs(&env));
+                        println!("\n\nallocations {:?}", get_allocations(&env, "Allocations"));
+                        println!(
+                            "\n\nallocations input {:?}",
+                            get_allocations(&env, "AllocationsInput")
+                        );
+                        println!("\n\nallocations enforce {:?}", get_enforce_allocs(&env));
 
                         Ok(vector![vec![]])
                     }
@@ -475,7 +509,7 @@ pub fn get_allocations(env: &Env, key: &str) -> MalRet {
     }
 }
 
-pub fn setup(ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
+pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
@@ -498,9 +532,9 @@ pub fn setup(ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalEr
     Ok(pvk)
 }
 
-pub fn prove(ast: MalVal, env: Env) -> MalRet {
+pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     // TODO remove it
-    let quantity = bls12_381::Scalar::from(3);
+    let _quantity = bls12_381::Scalar::from(3);
 
     // Create an instance of our circuit (with the preimage as a witness).
     let params = {
@@ -523,13 +557,13 @@ pub fn prove(ast: MalVal, env: Env) -> MalRet {
     };
     let start = Instant::now();
     // Create a Groth16 proof with our parameters.
-    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
+    let _proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
     Ok(MalVal::Nil)
 }
 
-pub fn verify(ast: &MalVal) -> MalRet {
-    let public_input = vec![bls12_381::Scalar::from(27)];
+pub fn verify(_ast: &MalVal) -> MalRet {
+    let _public_input = vec![bls12_381::Scalar::from(27)];
     let start = Instant::now();
     // Check the proof!
     //assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
@@ -600,5 +634,4 @@ fn repl_load(file: String) -> Result<(), ()> {
             std::process::exit(1);
         }
     }
-    Ok(())
 }

@@ -13,7 +13,7 @@ use crate::types::MalVal::{
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
 use bls12_381;
-use ff::{Field, PrimeField};
+use ff::PrimeField;
 
 use sapvi::bls_extensions::BlsStringConversion;
 
@@ -323,7 +323,7 @@ fn scalar_one(a: MalArgs) -> MalRet {
     }
 }
 
-fn cs_one(a: MalArgs) -> MalRet {
+fn cs_one(_a: MalArgs) -> MalRet {
     Ok(vector![vec![Sym("cs::one".to_string())]])
 }
 

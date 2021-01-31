@@ -1,20 +1,16 @@
-use bellman::groth16::PreparedVerifyingKey;
 use bellman::Circuit;
 use bellman::ConstraintSystem;
 use bellman::SynthesisError;
-use bls12_381::Bls12;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 
-use crate::env;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 use bls12_381::Scalar;
-use sapvi::{BlsStringConversion, ConstraintInstruction};
 
 #[derive(Debug, Clone)]
 pub struct Allocation {
@@ -41,11 +37,9 @@ pub struct LispCircuit {
 impl Circuit<bls12_381::Scalar> for LispCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
-        cs: &mut CS,
+        _cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         for alloc_value in &self.allocs {
-            //            let var = cs.alloc(|| "private alloc", ||)?;
-            // TODO use env
             println!("{:?}", alloc_value);
         }
 
