@@ -1,12 +1,14 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
+use log::*;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::net::error::NetResult;
-use crate::net::sessions::{InboundSession, SeedSession};
+use crate::net::error::{NetError, NetResult};
+use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
+use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
 pub type Pending<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 
@@ -14,6 +16,8 @@ pub type P2pPtr = Arc<P2p>;
 
 pub struct P2p {
     pending_channels: Pending<Channel>,
+    // Used internally
+    stop_subscriber: SubscriberPtr<NetError>,
     hosts: HostsPtr,
     settings: SettingsPtr,
 }
@@ -23,6 +27,7 @@ impl P2p {
         let settings = Arc::new(settings);
         Arc::new(Self {
             pending_channels: Mutex::new(HashMap::new()),
+            stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.clone()),
             settings,
         })
@@ -30,12 +35,15 @@ impl P2p {
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "P2p::start() [BEGIN]");
         // Start manual connections
 
         // Start seed session
         let seed = SeedSession::new(Arc::downgrade(&self));
+        // This will block until all seed queries have finished
         seed.start(executor.clone()).await?;
 
+        debug!(target: "net", "P2p::start() [END]");
         Ok(())
     }
 
@@ -43,7 +51,19 @@ impl P2p {
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let inbound = InboundSession::new(Arc::downgrade(&self));
-        inbound.start(executor.clone())?;
+        inbound.clone().start(executor.clone())?;
+
+        let outbound = OutboundSession::new(Arc::downgrade(&self));
+        outbound.clone().start(executor.clone()).await?;
+
+        let stop_sub = self.subscribe_stop().await;
+        // Wait for stop signal
+        stop_sub.receive().await;
+
+        // Stop the sessions
+        inbound.stop().await;
+        outbound.stop().await;
+
         Ok(())
     }
 
@@ -70,5 +90,9 @@ impl P2p {
 
     pub fn hosts(&self) -> HostsPtr {
         self.hosts.clone()
+    }
+
+    async fn subscribe_stop(&self) -> Subscription<NetError> {
+        self.stop_subscriber.clone().subscribe().await
     }
 }

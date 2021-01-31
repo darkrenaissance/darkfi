@@ -309,7 +309,11 @@ impl ProgramOptions {
             .to_path_buf(),
         );
 
-        let skip_seed_sync = if app.is_present("DISABLE_SEED") { true } else { false };
+        let skip_seed_sync = if app.is_present("DISABLE_SEED") {
+            true
+        } else {
+            false
+        };
 
         let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
             rpc_port.parse()?
@@ -322,12 +326,12 @@ impl ProgramOptions {
                 inbound: accept_addr,
                 outbound_connections: connection_slots,
                 connect_timeout_seconds: 10,
-                channel_handshake_seconds: 2,
+                channel_handshake_seconds: 4,
                 channel_heartbeat_seconds: 10,
                 external_addr: accept_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
-                skip_seed_sync
+                skip_seed_sync,
             },
             log_path,
             rpc_port,
@@ -340,8 +344,12 @@ fn main() -> Result<()> {
 
     let options = ProgramOptions::load()?;
 
+    let logger_config = ConfigBuilder::new()
+        .set_time_format_str("%T%.6f")
+        .build();
+
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(),
+        TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
             LevelFilter::Debug,
             Config::default(),

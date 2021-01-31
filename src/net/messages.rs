@@ -22,7 +22,7 @@ pub type CiphertextHash = [u8; 32];
 
 // Packets and Message because Rust doesn't allow value
 // aliasing from ADL type enums (which Message uses).
-#[derive(IntoPrimitive, TryFromPrimitive, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(IntoPrimitive, TryFromPrimitive, Copy, Clone, PartialEq, Eq, Hash, Debug)]
 #[repr(u8)]
 pub enum PacketType {
     Ping = 0,
@@ -343,16 +343,16 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
     let mut magic = [0u8; 4];
-    //debug!("reading magic...");
+    debug!(target: "net", "reading magic...");
     stream.read_exact(&mut magic).await?;
-    //debug!("read magic {:?}", magic);
+    debug!(target: "net", "read magic {:?}", magic);
     if magic != MAGIC_BYTES {
         return Err(Error::MalformedPacket);
     }
 
     // The type of the message
     let command = AsyncReadExt::read_u8(stream).await?;
-    //debug!("read command: {}", command);
+    //debug!(target: "net", "read command: {}", command);
     let command = PacketType::try_from(command).map_err(|_| Error::MalformedPacket)?;
 
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
@@ -360,7 +360,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     // The message-dependent data (see message types)
     let mut payload = vec![0u8; payload_len];
     stream.read_exact(&mut payload).await?;
-    //debug!("read payload");
+    //debug!(target: "net", "read payload");
 
     Ok(Packet { command, payload })
 }
@@ -383,12 +383,12 @@ pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) 
 pub async fn receive_message<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Message> {
     let packet = read_packet(stream).await?;
     let message = Message::unpack(packet)?;
-    debug!("received Message::{}", message.name());
+    debug!(target: "net", "received Message::{}", message.name());
     Ok(message)
 }
 
 pub async fn send_message<W: AsyncWrite + Unpin>(stream: &mut W, message: Message) -> Result<()> {
-    debug!("sending Message::{}", message.name());
+    debug!(target: "net", "sending Message::{}", message.name());
     let packet = message.pack()?;
     send_packet(stream, packet).await
 }

@@ -57,6 +57,7 @@ impl InboundSession {
 
     pub async fn stop(&self) {
         self.acceptor.stop().await;
+        self.accept_task.stop().await;
     }
 
     fn start_accept_session(

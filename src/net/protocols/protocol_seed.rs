@@ -1,3 +1,4 @@
+use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ impl ProtocolSeed {
     }
 
     pub async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolSeed::start() [START]");
         let addr_sub = self
             .channel
             .clone()
@@ -38,6 +40,7 @@ impl ProtocolSeed {
         let addrs_msg = receive_message!(addr_sub, messages::Message::Addrs);
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
+        debug!(target: "net", "ProtocolSeed::start() [END]");
         Ok(())
     }
 

@@ -1,5 +1,6 @@
 use async_std::sync::Mutex;
 use futures::Future;
+use log::*;
 use smol::Task;
 use std::sync::Arc;
 
@@ -10,13 +11,15 @@ use crate::system::ExecutorPtr;
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 
 pub struct ProtocolJobsManager {
+    name: &'static str,
     channel: ChannelPtr,
     tasks: Mutex<Vec<Task<NetResult<()>>>>,
 }
 
 impl ProtocolJobsManager {
-    pub fn new(channel: ChannelPtr) -> Arc<Self> {
+    pub fn new(name: &'static str, channel: ChannelPtr) -> Arc<Self> {
         Arc::new(Self {
+            name,
             channel,
             tasks: Mutex::new(Vec::new()),
         })
@@ -44,6 +47,11 @@ impl ProtocolJobsManager {
     }
 
     async fn close_all_tasks(self: Arc<Self>) {
+        debug!(target: "net",
+            "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",
+            self.name,
+            self.channel.address()
+        );
         let tasks = std::mem::take(&mut *self.tasks.lock().await);
         for task in tasks {
             let _ = task.cancel().await;

@@ -21,11 +21,12 @@ impl ProtocolPing {
         Arc::new(Self {
             channel: channel.clone(),
             settings,
-            jobsman: ProtocolJobsManager::new(channel),
+            jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
         })
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+        debug!(target: "net", "ProtocolPing::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman
             .clone()
@@ -35,9 +36,11 @@ impl ProtocolPing {
             .clone()
             .spawn(self.reply_to_ping(), executor)
             .await;
+        debug!(target: "net", "ProtocolPing::start() [END]");
     }
 
     async fn run_ping_pong(self: Arc<Self>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
         let pong_sub = self
             .channel
             .clone()
@@ -54,6 +57,7 @@ impl ProtocolPing {
             // Send ping message
             let ping = messages::Message::Ping(messages::PingMessage { nonce });
             self.channel.clone().send(ping).await?;
+            debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
 
             // Wait for pong, check nonce matches
             let pong_msg = receive_message!(pong_sub, messages::Message::Pong);
@@ -62,10 +66,12 @@ impl ProtocolPing {
                 self.channel.stop().await;
                 return Err(NetError::ChannelStopped);
             }
+            debug!(target: "net", "ProtocolPing::run_ping_pong() received Pong message");
         }
     }
 
     async fn reply_to_ping(self: Arc<Self>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolPing::reply_to_ping() [START]");
         let ping_sub = self
             .channel
             .clone()
@@ -75,10 +81,12 @@ impl ProtocolPing {
         loop {
             // Wait for ping, reply with pong that has a matching nonce
             let ping = receive_message!(ping_sub, messages::Message::Ping);
+            debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send ping message
             let pong = messages::Message::Pong(messages::PongMessage { nonce: ping.nonce });
             self.channel.clone().send(pong).await?;
+            debug!(target: "net", "ProtocolPing::reply_to_ping() sent Pong reply");
         }
     }
 

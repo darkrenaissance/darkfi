@@ -18,6 +18,7 @@ impl SeedSession {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "SeedSession::start() [START]");
         let settings = {
             let p2p = self.p2p.upgrade().unwrap();
             p2p.settings()
@@ -38,26 +39,32 @@ impl SeedSession {
 
         let mut tasks = Vec::new();
 
-        for seed in settings.seeds.clone() {
-            tasks.push(executor.spawn(self.clone().start_seed(seed, executor.clone())));
+        for (i, seed) in settings.seeds.iter().enumerate() {
+            tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
         }
 
-        for task in tasks {
+        for (i, task) in tasks.into_iter().enumerate() {
             // Ignore errors
-            let _ = task.await;
+            match task.await {
+                Ok(()) => info!("Successfully queried seed #{}", i),
+                Err(err) => warn!("Seed query #{} failed for reason: {}", i, err),
+            }
         }
 
         // Seed process complete
         // TODO: check increase count of address
 
+        debug!(target: "net", "SeedSession::start() [END]");
         Ok(())
     }
 
     async fn start_seed(
         self: Arc<Self>,
+        seed_index: usize,
         seed: SocketAddr,
         executor: Arc<Executor<'_>>,
     ) -> NetResult<()> {
+        debug!(target: "net", "SeedSession::start_seed(i={}) [START]", seed_index);
         let (hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
@@ -68,17 +75,23 @@ impl SeedSession {
             Ok(channel) => {
                 // Blacklist goes here
 
-                info!("Connected seed [{}]", seed);
+                info!("Connected seed #{} [{}]", seed_index, seed);
 
                 self.clone()
                     .register_channel(channel.clone(), executor.clone())
                     .await?;
 
                 self.attach_protocols(channel, hosts, settings, executor)
-                    .await
+                    .await?;
+
+                debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
+                Ok(())
             }
             Err(err) => {
-                info!("Failure contacting seed [{}]: {}", seed, err);
+                info!(
+                    "Failure contacting seed #{} [{}]: {}",
+                    seed_index, seed, err
+                );
                 Err(err)
             }
         }
@@ -95,6 +108,7 @@ impl SeedSession {
         protocol_ping.start(executor.clone()).await;
 
         let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());
+        // This will block until seed process is complete
         protocol_seed.start(executor.clone()).await?;
 
         channel.stop().await;

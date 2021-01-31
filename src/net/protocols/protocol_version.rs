@@ -1,4 +1,5 @@
 use futures::FutureExt;
+use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
@@ -18,32 +19,49 @@ impl ProtocolVersion {
     }
 
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer
         // Send version, wait for verack
         // Wait for version, send verack
         // Fin.
-        futures::select! {
+        let result = futures::select! {
             _ = self.clone().exchange_versions(executor).fuse() => Ok(()),
             _ = sleep(self.settings.channel_handshake_seconds).fuse() => Err(NetError::ChannelTimeout)
-        }
+        };
+        debug!(target: "net", "ProtocolVersion::run() [END]");
+        result
     }
 
     async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolVersion::exchange_versions() [START]");
         let send = executor.spawn(self.clone().send_version());
         let recv = executor.spawn(self.recv_version());
 
-        send.await.and(recv.await)
+        send.await.and(recv.await)?;
+        debug!(target: "net", "ProtocolVersion::exchange_versions() [END]");
+        Ok(())
     }
 
     async fn send_version(self: Arc<Self>) -> NetResult<()> {
-        let version = messages::Message::Version(messages::VersionMessage {});
+        debug!(target: "net", "ProtocolVersion::send_version() [START]");
+        let verack_sub = self
+            .channel
+            .clone()
+            .subscribe_msg(messages::PacketType::Verack)
+            .await;
 
+        let version = messages::Message::Version(messages::VersionMessage {});
         self.channel.clone().send(version).await?;
 
+        // Wait for version acknowledgement
+        let _verack_msg = verack_sub.receive().await?;
+
+        debug!(target: "net", "ProtocolVersion::send_version() [END]");
         Ok(())
     }
 
     async fn recv_version(self: Arc<Self>) -> NetResult<()> {
+        debug!(target: "net", "ProtocolVersion::recv_version() [START]");
         let version_sub = self
             .channel
             .clone()
@@ -54,6 +72,11 @@ impl ProtocolVersion {
 
         // Check the message is OK
 
+        // Send version acknowledgement
+        let verack = messages::Message::Verack(messages::VerackMessage {});
+        self.channel.clone().send(verack).await?;
+
+        debug!(target: "net", "ProtocolVersion::recv_version() [END]");
         Ok(())
     }
 }
