@@ -10,6 +10,7 @@ use itertools::Itertools;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
+use bellman::Variable;
 use bls12_381::Scalar;
 
 #[derive(Debug, Clone)]
@@ -37,21 +38,57 @@ pub struct LispCircuit {
 impl Circuit<bls12_381::Scalar> for LispCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
-        _cs: &mut CS,
+        cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+
         println!("Allocations\n");
-        for alloc_value in &self.allocs {
-            println!("{:?}", alloc_value);
+        for (k, v) in &self.allocs {
+            if let MalVal::ZKScalar(val) = v {
+                println!("val {:?}", val);
+                let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                variables.insert(k.to_string(), var);
+            } else {
+                println!("k {:?} v {:?}", k, v);
+            }
         }
 
         println!("Allocations Input\n");
-        for alloc_value in &self.alloc_inputs {
-            println!("{:?}", alloc_value);
+        for (k, v) in &self.alloc_inputs {
+            if let MalVal::ZKScalar(val) = v {
+                println!("val {:?}", val);
+                let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                variables.insert(k.to_string(), var);
+            } else {
+                println!("k {:?} v {:?}", k, v);
+            }
         }
 
         println!("Enforce Allocations\n");
         for alloc_value in &self.constraints {
             println!("{:?}", alloc_value);
+            let coeff = bls12_381::Scalar::one();
+            let left = bellman::LinearCombination::<Scalar>::zero();
+            let right = bellman::LinearCombination::<Scalar>::zero();
+            let output = bellman::LinearCombination::<Scalar>::zero();
+            for values in alloc_value.left.iter() {
+                let (a, b) = values;
+                println!("{:?} {:?}", a, variables.get(a));
+                println!("{:?} {:?}", b, variables.get(b));
+                let val_a = variables.get(a).unwrap();
+                let val_b = variables.get(b).unwrap();
+                if a == "scalar::one" {
+                //    val_a = coeff;
+                } 
+                left = left + (val_a, val_b);
+            }
+
+            cs.enforce(
+                || "constraint",
+                |_| left.clone(),
+                |_| right.clone(),
+                |_| output.clone(),
+            );
         }
 
         Ok(())
