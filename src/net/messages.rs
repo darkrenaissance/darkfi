@@ -25,10 +25,10 @@ pub type CiphertextHash = [u8; 32];
 #[derive(IntoPrimitive, TryFromPrimitive, Copy, Clone, PartialEq, Eq, Hash, Debug)]
 #[repr(u8)]
 pub enum PacketType {
-    Ping = 0,
-    Pong = 1,
-    GetAddrs = 2,
-    Addrs = 3,
+    Ping = 1,
+    Pong = 2,
+    GetAddrs = 3,
+    Addrs = 4,
     Inv = 5,
     GetSlabs = 6,
     Slab = 7,
@@ -237,7 +237,7 @@ impl Message {
                 message.encode(&mut payload)?;
                 Ok(Packet {
                     command: PacketType::Ping,
-                    payload: Vec::new(),
+                    payload,
                 })
             }
             Message::Pong(message) => {
@@ -245,7 +245,7 @@ impl Message {
                 message.encode(&mut payload)?;
                 Ok(Packet {
                     command: PacketType::Pong,
-                    payload: Vec::new(),
+                    payload,
                 })
             }
             Message::GetAddrs(message) => {
@@ -352,36 +352,45 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
 
     // The type of the message
     let command = AsyncReadExt::read_u8(stream).await?;
-    //debug!(target: "net", "read command: {}", command);
+    debug!(target: "net", "read command: {}", command);
     let command = PacketType::try_from(command).map_err(|_| Error::MalformedPacket)?;
 
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
 
     // The message-dependent data (see message types)
     let mut payload = vec![0u8; payload_len];
-    stream.read_exact(&mut payload).await?;
-    //debug!(target: "net", "read payload");
+    if payload_len > 0 {
+        stream.read_exact(&mut payload).await?;
+    }
+    debug!(target: "net", "read payload {} bytes", payload_len);
 
     Ok(Packet { command, payload })
 }
 
 pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
+    debug!(target: "net", "sending magic...");
     stream.write_all(&MAGIC_BYTES).await?;
+    debug!(target: "net", "sent magic...");
 
     AsyncWriteExt::write_u8(stream, packet.command as u8).await?;
+    debug!(target: "net", "sent command: {}", packet.command as u8);
 
     assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<u64>());
     VarInt(packet.payload.len() as u64)
         .encode_async(stream)
         .await?;
 
-    stream.write_all(&packet.payload).await?;
+    if packet.payload.len() > 0 {
+        stream.write_all(&packet.payload).await?;
+    }
+    debug!(target: "net", "sent payload {} bytes", packet.payload.len() as u64);
 
     Ok(())
 }
 
 pub async fn receive_message<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Message> {
     let packet = read_packet(stream).await?;
+    debug!(target: "net", "unpacking packet: {:?}", packet.command);
     let message = Message::unpack(packet)?;
     debug!(target: "net", "received Message::{}", message.name());
     Ok(message)

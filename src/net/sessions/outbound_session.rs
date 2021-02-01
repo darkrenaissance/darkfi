@@ -113,9 +113,9 @@ impl OutboundSession {
         let hosts = self.p2p().hosts().clone();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
-        protocol_ping.start(executor.clone()).await;
+        let protocol_addr = ProtocolAddress::new(channel, hosts, settings).await;
 
-        let protocol_addr = ProtocolAddress::new(channel, hosts, settings);
+        protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;
 
         Ok(())

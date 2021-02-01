@@ -344,9 +344,7 @@ fn main() -> Result<()> {
 
     let options = ProgramOptions::load()?;
 
-    let logger_config = ConfigBuilder::new()
-        .set_time_format_str("%T%.6f")
-        .build();
+    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),

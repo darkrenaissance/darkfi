@@ -31,7 +31,10 @@ pub trait Session: Sync {
         executor: Arc<Executor<'_>>,
     ) -> NetResult<()> {
         debug!(target: "net", "Session::register_channel() [START]");
-        let handshake_task = self.perform_handshake_protocols(channel.clone(), executor.clone());
+
+        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
+        let handshake_task =
+            self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // start channel
         channel.start(executor);
@@ -44,22 +47,22 @@ pub trait Session: Sync {
 
     async fn perform_handshake_protocols(
         &self,
+        protocol_version: Arc<ProtocolVersion>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> NetResult<()> {
-        let p2p = self.p2p();
-
         // Perform handshake
-        let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings());
         protocol_version.run(executor.clone()).await?;
 
         // Channel is now initialized
 
         // Add channel to p2p
-        p2p.clone().store(channel.clone()).await;
+        self.p2p().clone().store(channel.clone()).await;
 
         // Subscribe to stop, so can remove from p2p
-        executor.spawn(remove_sub_on_stop(p2p, channel)).detach();
+        executor
+            .spawn(remove_sub_on_stop(self.p2p(), channel))
+            .detach();
 
         // Channel is ready for use
         Ok(())
