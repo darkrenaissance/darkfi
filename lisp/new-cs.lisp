@@ -10,7 +10,10 @@
    ;; (enforce left right output)
   (
   (enforce  
-    (scalar::one x)
+    (
+     (scalar::one x)
+     (scalar::one x2)
+    )
     ;;(scalar::one::neg x)
     (scalar::one x)
     (scalar::one x2)
