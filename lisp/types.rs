@@ -39,8 +39,18 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         _cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        println!("something called this");
+        println!("Allocations\n");
         for alloc_value in &self.allocs {
+            println!("{:?}", alloc_value);
+        }
+
+        println!("Allocations Input\n");
+        for alloc_value in &self.alloc_inputs {
+            println!("{:?}", alloc_value);
+        }
+
+        println!("Enforce Allocations\n");
+        for alloc_value in &self.constraints {
             println!("{:?}", alloc_value);
         }
 

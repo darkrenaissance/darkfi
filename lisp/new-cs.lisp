@@ -6,8 +6,8 @@
       x3 (alloc "x3" (* aux (* aux aux)))
       input (alloc-input "input" aux)
       ]
+(prove
  (setup 
-   ;; (enforce left right output)
   (
   (enforce  
     (
@@ -33,6 +33,6 @@
   )
   )
  )
-(prove)
+)
 )
 ;; (println 'verify  (MyCircuit (scalar 27)))
