@@ -28,9 +28,9 @@ pub struct EnforceAllocation {
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
     pub params: Vec<Option<Scalar>>,
-    pub allocs: Vec<Option<Allocation>>,
-    pub alloc_inputs: Vec<Option<Allocation>>,
-    pub constraints: Vec<Option<EnforceAllocation>>,
+    pub allocs: FnvHashMap<String, MalVal>,
+    pub alloc_inputs: FnvHashMap<String, MalVal>,
+    pub constraints: Vec<EnforceAllocation>,
     pub env: Env,
 }
 

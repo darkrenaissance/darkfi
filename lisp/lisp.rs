@@ -414,7 +414,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         };
                         let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
                         for value in get_enforce_allocs(&env).iter() {
-                            println!("found {:?}", value);
+                            new_vec.push(value.clone());
                         }
                         env_set(
                             &env,
@@ -510,15 +510,15 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
-    //    let allocs_input = get_allocations(&env, "AllocationsInput").to_vec();
-    //    let allocs = get_allocations(&env, "Allocations").to_vec();
-    //    let enforce_allocs = get_enforce_allocs(&env).unwrap().to_vec();
+    let allocs_input = get_allocations(&env, "AllocationsInput");
+    let allocs = get_allocations(&env, "Allocations");
+    let enforce_allocs = get_enforce_allocs(&env);
 
     let c = LispCircuit {
         params: vec![],
-        allocs: vec![],
-        alloc_inputs: vec![],
-        constraints: vec![],
+        allocs: allocs.as_ref().clone(),
+        alloc_inputs: allocs_input.as_ref().clone(),
+        constraints: enforce_allocs,
         env: env.clone(),
     };
     // TODO move to another fn
@@ -538,8 +538,8 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let params = {
         let c = LispCircuit {
             params: vec![],
-            allocs: vec![],
-            alloc_inputs: vec![],
+            allocs: FnvHashMap::default(),
+            alloc_inputs: FnvHashMap::default(),
             constraints: vec![],
             env: env.clone(),
         };
@@ -548,8 +548,8 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
 
     let circuit = LispCircuit {
         params: vec![],
-        allocs: vec![],
-        alloc_inputs: vec![],
+        allocs: FnvHashMap::default(),
+        alloc_inputs: FnvHashMap::default(),
         constraints: vec![],
         env: env.clone(),
     };
