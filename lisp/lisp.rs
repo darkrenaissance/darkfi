@@ -1,27 +1,18 @@
 #![allow(non_snake_case)]
 
 use crate::types::LispCircuit;
-use crate::MalVal::Zk;
 use bellman::groth16::PreparedVerifyingKey;
-use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 
 use simplelog::*;
 
-use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
+use bellman::{groth16};
 use bls12_381::Bls12;
-use bls12_381::Scalar;
-use ff::PrimeField;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use std::time::Instant;
-use std::{borrow::BorrowMut, rc::Rc};
-use std::{
-    cell::RefCell,
-    ops::{AddAssign, MulAssign, SubAssign},
-};
+use std::{rc::Rc};
 use types::EnforceAllocation;
-use MalVal::ZKScalar;
 
 #[macro_use]
 extern crate clap;
