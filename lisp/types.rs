@@ -1,6 +1,10 @@
-use bellman::Circuit;
-use bellman::ConstraintSystem;
-use bellman::SynthesisError;
+use bellman::{
+    gadgets::{
+        Assignment,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
@@ -68,9 +72,9 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         for alloc_value in &self.constraints {
             println!("{:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
-            let left = bellman::LinearCombination::<Scalar>::zero();
-            let right = bellman::LinearCombination::<Scalar>::zero();
-            let output = bellman::LinearCombination::<Scalar>::zero();
+            let mut left = bellman::LinearCombination::<Scalar>::zero();
+            let mut right = bellman::LinearCombination::<Scalar>::zero();
+            let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
                 let (a, b) = values;
                 println!("{:?} {:?}", a, variables.get(a));
@@ -80,7 +84,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 if a == "scalar::one" {
                 //    val_a = coeff;
                 } 
-                left = left + (val_a, val_b);
+                left = left + (coeff, *val_b);
             }
 
             cs.enforce(
