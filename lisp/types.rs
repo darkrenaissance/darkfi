@@ -1,6 +1,10 @@
-use bellman::Circuit;
-use bellman::ConstraintSystem;
-use bellman::SynthesisError;
+use bellman::{
+    gadgets::{
+        Assignment,
+    },
+    groth16, Circuit, ConstraintSystem, SynthesisError,
+};
+use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::cell::RefCell;
 use std::rc::Rc;
 //use std::collections::HashMap;
@@ -10,6 +14,7 @@ use itertools::Itertools;
 use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
+use bellman::Variable;
 use bls12_381::Scalar;
 
 #[derive(Debug, Clone)]
@@ -37,11 +42,84 @@ pub struct LispCircuit {
 impl Circuit<bls12_381::Scalar> for LispCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
-        _cs: &mut CS,
+        cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        println!("something called this");
-        for alloc_value in &self.allocs {
+        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+
+        println!("Allocations\n");
+        for (k, v) in &self.allocs {
+            if let MalVal::ZKScalar(val) = v {
+                println!("val {:?}", val);
+                let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                variables.insert(k.to_string(), var);
+            } else {
+                println!("k {:?} v {:?}", k, v);
+            }
+        }
+
+        println!("Allocations Input\n");
+        for (k, v) in &self.alloc_inputs {
+            if let MalVal::ZKScalar(val) = v {
+                println!("val {:?}", val);
+                let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
+                variables.insert(k.to_string(), var);
+            } else {
+                println!("k {:?} v {:?}", k, v);
+            }
+        }
+
+        println!("Enforce Allocations\n");
+        for alloc_value in &self.constraints {
             println!("{:?}", alloc_value);
+            let coeff = bls12_381::Scalar::one();
+            let mut left = bellman::LinearCombination::<Scalar>::zero();
+            let mut right = bellman::LinearCombination::<Scalar>::zero();
+            let mut output = bellman::LinearCombination::<Scalar>::zero();
+            for values in alloc_value.left.iter() {
+                let (a, b) = values;
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    left = left + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    left = left + (coeff.neg(), val_b);
+                } 
+            }
+
+            for values in alloc_value.right.iter() {
+                let (a, b) = values;
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    right = right + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    right = right + (coeff.neg(), val_b);
+                } 
+            }
+
+            for values in alloc_value.output.iter() {
+                let (a, b) = values;
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    output = output + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    output = output + (coeff.neg(), val_b);
+                } 
+            }
+
+            cs.enforce(
+                || "constraint",
+                |_| left.clone(),
+                |_| right.clone(),
+                |_| output.clone(),
+            );
         }
 
         Ok(())

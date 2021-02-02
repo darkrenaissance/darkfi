@@ -1,27 +1,18 @@
 #![allow(non_snake_case)]
 
 use crate::types::LispCircuit;
-use crate::MalVal::Zk;
 use bellman::groth16::PreparedVerifyingKey;
-use sapvi::{ZKVMCircuit, ZKVirtualMachine};
 
 use simplelog::*;
 
-use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
+use bellman::{groth16};
 use bls12_381::Bls12;
-use bls12_381::Scalar;
-use ff::PrimeField;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use std::time::Instant;
-use std::{borrow::BorrowMut, rc::Rc};
-use std::{
-    cell::RefCell,
-    ops::{AddAssign, MulAssign, SubAssign},
-};
+use std::{rc::Rc};
 use types::EnforceAllocation;
-use MalVal::ZKScalar;
 
 #[macro_use]
 extern crate clap;
@@ -307,8 +298,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
-                        let a1 = l[0].clone();
-                        println!("prove {:?}", a1);
+                        let a1 = l[1].clone();
+                        ast = eval(a1.clone(), env.clone())?;
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
@@ -534,24 +525,22 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     // TODO remove it
     let _quantity = bls12_381::Scalar::from(3);
 
-    // Create an instance of our circuit (with the preimage as a witness).
-    let params = {
-        let c = LispCircuit {
-            params: vec![],
-            allocs: FnvHashMap::default(),
-            alloc_inputs: FnvHashMap::default(),
-            constraints: vec![],
-            env: env.clone(),
-        };
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
-    };
+    let allocs_input = get_allocations(&env, "AllocationsInput");
+    let allocs = get_allocations(&env, "Allocations");
+    let enforce_allocs = get_enforce_allocs(&env);
 
     let circuit = LispCircuit {
         params: vec![],
-        allocs: FnvHashMap::default(),
-        alloc_inputs: FnvHashMap::default(),
-        constraints: vec![],
+        allocs: allocs.as_ref().clone(),
+        alloc_inputs: allocs_input.as_ref().clone(),
+        constraints: enforce_allocs,
         env: env.clone(),
+    };
+    // Create an instance of our circuit (with the preimage as a witness).
+    // todo check if circuit.clone is valid
+    let params = {
+        let c = circuit.clone();
+        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
     let start = Instant::now();
     // Create a Groth16 proof with our parameters.
