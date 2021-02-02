@@ -1,16 +1,15 @@
 use bellman::{
     gadgets::{
-        boolean::{AllocatedBit, Boolean},
-        multipack, num, Assignment,
+        Assignment,
     },
     groth16, Circuit, ConstraintSystem, SynthesisError,
 };
 use bls12_381::Bls12;
-use bls12_381::Scalar;
-use ff::{Field, PrimeField};
-use group::Curve;
+
+use ff::{Field};
+
 use rand::rngs::OsRng;
-use std::ops::{MulAssign, Neg, SubAssign};
+
 
 pub const CRH_IVK_PERSONALIZATION: &[u8; 8] = b"Zcashivk";
 
@@ -104,8 +103,6 @@ fn main() {
     // Create a Groth16 proof with our parameters.
     let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
-
-    let start = Instant::now();
 
     let public_input = vec![bls12_381::Scalar::from(27)];
 
