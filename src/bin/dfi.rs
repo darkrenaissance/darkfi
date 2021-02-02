@@ -1,20 +1,17 @@
 #[macro_use]
 extern crate clap;
 use async_executor::Executor;
+use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
-use log::*;
-use std::collections::HashMap;
+use http_types::{Request, Response, StatusCode};
+use serde_json::json;
+use smol::Async;
 use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::sync::Arc;
 
-use sapvi::{ClientProtocol, Result, SeedProtocol, ServerProtocol};
-
-use std::net::TcpListener;
-
-use async_native_tls::TlsAcceptor;
-use http_types::{Request, Response, StatusCode};
-use smol::Async;
+use sapvi::{net, Result};
 
 /// Listens for incoming connections and serves them.
 async fn listen(
@@ -76,17 +73,21 @@ async fn listen(
 }
 
 struct RpcInterface {
-    quit_send: async_channel::Sender<()>,
-    quit_recv: async_channel::Receiver<()>,
+    p2p: Arc<net::P2p>,
+    started: Mutex<bool>,
+    stop_send: async_channel::Sender<()>,
+    stop_recv: async_channel::Receiver<()>,
 }
 
 impl RpcInterface {
-    fn new() -> Arc<Self> {
-        let (quit_send, quit_recv) = async_channel::unbounded::<()>();
+    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
+        let (stop_send, stop_recv) = async_channel::unbounded::<()>();
 
         Arc::new(Self {
-            quit_send,
-            quit_recv,
+            p2p,
+            started: Mutex::new(false),
+            stop_send,
+            stop_recv,
         })
     }
 
@@ -100,11 +101,22 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::String("Hello World!".into()))
         });
 
-        let quit_send = self.quit_send.clone();
-        io.add_method("quit", move |_| {
-            let quit_send = quit_send.clone();
+        let self2 = self.clone();
+        io.add_method("get_info", move |_| {
+            let self2 = self2.clone();
             async move {
-                let _ = quit_send.send(()).await;
+                Ok(json!({
+                    "started": *self2.started.lock().await,
+                    "connections": self2.p2p.connections_count().await
+                }))
+            }
+        });
+
+        let stop_send = self.stop_send.clone();
+        io.add_method("stop", move |_| {
+            let stop_send = stop_send.clone();
+            async move {
+                let _ = stop_send.send(()).await;
                 Ok(jsonrpc_core::Value::Null)
             }
         });
@@ -118,9 +130,39 @@ impl RpcInterface {
         res.set_body(response);
         Ok(res)
     }
+
+    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
+        Ok(self.stop_recv.recv().await?)
+    }
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
+    let p2p = net::P2p::new(options.network_settings);
+
+    let rpc = RpcInterface::new(p2p.clone());
+    let http = listen(
+        executor.clone(),
+        rpc.clone(),
+        Async::<TcpListener>::bind(([127, 0, 0, 1], options.rpc_port))?,
+        None,
+    );
+
+    let http_task = executor.spawn(http);
+
+    *rpc.started.lock().await = true;
+
+    p2p.clone().start(executor.clone()).await?;
+    p2p.run(executor).await?;
+
+    rpc.wait_for_quit().await?;
+
+    http_task.cancel().await;
+
+    Ok(())
+}
+
+/*
+async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let connections = Arc::new(Mutex::new(HashMap::new()));
 
     let stored_addrs = Arc::new(Mutex::new(Vec::new()));
@@ -162,7 +204,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for i in 0..options.connection_slots {
         debug!("Starting connection slot {}", i);
 
-        let client = ClientProtocol::new(
+        let client = Channel::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),
@@ -174,7 +216,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     for remote_addr in options.manual_connects {
         debug!("Starting connection (manual) to {}", remote_addr);
 
-        let client = ClientProtocol::new(
+        let client = Channel::new(
             connections.clone(),
             accept_addr.clone(),
             stored_addrs.clone(),
@@ -196,9 +238,10 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     let http_task = executor.spawn(http);
 
-    rpc.quit_recv.recv().await?;
+    rpc.stop_recv.recv().await?;
 
     http_task.cancel().await;
+
     match server_task {
         None => {}
         Some(server_task) => {
@@ -207,13 +250,12 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     }
     Ok(())
 }
+*/
 
 struct ProgramOptions {
-    accept_addr: Option<SocketAddr>,
-    seed_addrs: Vec<SocketAddr>,
-    manual_connects: Vec<SocketAddr>,
-    connection_slots: u32,
+    network_settings: net::Settings,
     log_path: Box<std::path::PathBuf>,
+    rpc_port: u16,
 }
 
 impl ProgramOptions {
@@ -227,6 +269,8 @@ impl ProgramOptions {
             (@arg CONNECTS: -c --connect ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
+            (@arg DISABLE_SEED: -D --disable_seed "Disable seed process")
+            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
         )
         .get_matches();
 
@@ -256,18 +300,41 @@ impl ProgramOptions {
             0
         };
 
-        let log_path = Box::new(if let Some(log_path) = app.value_of("LOG_PATH") {
-            std::path::Path::new(log_path)
+        let log_path = Box::new(
+            if let Some(log_path) = app.value_of("LOG_PATH") {
+                std::path::Path::new(log_path)
+            } else {
+                std::path::Path::new("/tmp/darkfid.log")
+            }
+            .to_path_buf(),
+        );
+
+        let skip_seed_sync = if app.is_present("DISABLE_SEED") {
+            true
         } else {
-            std::path::Path::new("/tmp/darkfid.log")
-        }.to_path_buf());
+            false
+        };
+
+        let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
+            rpc_port.parse()?
+        } else {
+            8000
+        };
 
         Ok(ProgramOptions {
-            accept_addr,
-            seed_addrs,
-            manual_connects,
-            connection_slots,
+            network_settings: net::Settings {
+                inbound: accept_addr,
+                outbound_connections: connection_slots,
+                connect_timeout_seconds: 10,
+                channel_handshake_seconds: 4,
+                channel_heartbeat_seconds: 10,
+                external_addr: accept_addr,
+                peers: manual_connects,
+                seeds: seed_addrs,
+                skip_seed_sync,
+            },
             log_path,
+            rpc_port,
         })
     }
 }
@@ -277,8 +344,10 @@ fn main() -> Result<()> {
 
     let options = ProgramOptions::load()?;
 
+    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(),
+        TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
             LevelFilter::Debug,
             Config::default(),

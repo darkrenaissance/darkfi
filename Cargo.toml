@@ -27,9 +27,16 @@ rand_xorshift = "0.2"
 blake2s_simd = "0.5"
 bitvec = "0.18"
 bimap = "0.5.2"
+async-trait = "0.1.42"
+multimap = "0.8.2"
 
 hex = "0.4.2"
 num_enum = "0.5.0"
+
+lazy_static = "1.4.0"
+itertools = "0.8.0"
+fnv = "1.0.6"
+regex = "1"
 
 simplelog = "0.7.4"
 clap = "3.0.0-beta.1"
@@ -37,6 +44,8 @@ failure = "0.1.8"
 failure_derive = "0.1.8"
 log = "0.4"
 ctrlc = "3.1.7"
+serde_json = "1.0.61"
+owning_ref = "0.4.1"
 
 smol = "1.2.4"
 futures = "0.3.5"
@@ -50,6 +59,10 @@ jsonrpc-core = "16.0.0"
 http-types = "2.9.0"
 async-h1 = "2.3.0"
 async-native-tls = "0.3.3"
+
+[[bin]]
+name = "lisp"
+path = "lisp/lisp.rs"
 
 [[bin]]
 name = "zkvm"

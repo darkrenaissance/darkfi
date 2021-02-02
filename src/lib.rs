@@ -8,16 +8,14 @@ pub mod endian;
 pub mod error;
 pub mod net;
 pub mod serial;
+pub mod system;
 pub mod utility;
 pub mod vm;
 pub mod vm_serial;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};
-pub use crate::net::net::{select_event, send_message, sleep};
-pub use crate::net::protocol::client_protocol::ClientProtocol;
-pub use crate::net::protocol::seed_protocol::SeedProtocol;
-pub use crate::net::protocol::server_protocol::ServerProtocol;
+pub use crate::net::p2p::P2p;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,

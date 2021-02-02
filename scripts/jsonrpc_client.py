@@ -7,7 +7,8 @@ def main():
 
     # Example echo method
     payload = {
-        "method": "quit",
+        "method": "stop",
+        #"method": "get_info",
         "params": [],
         "jsonrpc": "2.0",
         "id": 0,
