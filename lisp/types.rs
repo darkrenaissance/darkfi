@@ -77,14 +77,41 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
                 let (a, b) = values;
-                println!("{:?} {:?}", a, variables.get(a));
-                println!("{:?} {:?}", b, variables.get(b));
-                let val_a = variables.get(a).unwrap();
-                let val_b = variables.get(b).unwrap();
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
                 if a == "scalar::one" {
-                //    val_a = coeff;
+                    left = left + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    left = left + (coeff.neg(), val_b);
                 } 
-                left = left + (coeff, *val_b);
+            }
+
+            for values in alloc_value.right.iter() {
+                let (a, b) = values;
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    right = right + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    right = right + (coeff.neg(), val_b);
+                } 
+            }
+
+            for values in alloc_value.output.iter() {
+                let (a, b) = values;
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    output = output + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    output = output + (coeff.neg(), val_b);
+                } 
             }
 
             cs.enforce(
