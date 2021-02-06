@@ -76,6 +76,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             let mut right = bellman::LinearCombination::<Scalar>::zero();
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
+                println!("values {:?}", values);
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {

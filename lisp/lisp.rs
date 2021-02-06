@@ -311,13 +311,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for (k, v) in allocs.iter() {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
-                        new_hm.insert(a1.pr_str(false), result);
+                        new_hm.insert(a1.pr_str(false), result.clone());
                         env_set(
                             &env,
                             Sym("AllocationsInput".to_string()),
                             Hash(Rc::new(new_hm), Rc::new(Nil)),
                         )?;
-                        Ok(Nil)
+                        Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
@@ -328,13 +328,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for (k, v) in allocs.iter() {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
-                        new_hm.insert(a1.pr_str(false), result);
+                        new_hm.insert(a1.pr_str(false), result.clone());
                         env_set(
                             &env,
                             Sym("Allocations".to_string()),
                             Hash(Rc::new(new_hm), Rc::new(Nil)),
                         )?;
-                        Ok(Nil)
+                        Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
                     Sym(ref a0sym) if a0sym == "enforce" => {
