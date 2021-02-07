@@ -35,6 +35,16 @@
     (scalar::one B)
     (scalar::one C)
   )
+  (enforce
+    (scalar::one C)
+    (scalar::one u3)
+    ((scalar::one A) (scalar::one B))
+  )
+  (enforce
+    (scalar::one::neg C)
+    (scalar::one v3)
+    ((scalar::one::neg U) (scalar::one::neg A) (scalar::one::neg B))
+  )
   )
  )
 )

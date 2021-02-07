@@ -6,6 +6,7 @@ use bellman::{
 };
 use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::cell::RefCell;
+use sapvi::bls_extensions::BlsStringConversion;
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
@@ -48,12 +49,18 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations\n");
         for (k, v) in &self.allocs {
-            if let MalVal::ZKScalar(val) = v {
-                println!("val {:?}", val);
-                let var = cs.alloc(|| "alloc", || Ok(*val))?;
-                variables.insert(k.to_string(), var);
-            } else {
-                println!("k {:?} v {:?}", k, v);
+            // match str 
+            match v {
+                MalVal::ZKScalar(val) => {
+                    let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                    variables.insert(k.to_string(), var);
+                }
+                MalVal::Str(val) => {
+                    let val_scalar = bls12_381::Scalar::from_string(&*val);
+                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
+                    variables.insert(k.to_string(), var);
+                }
+                _ => { println!("not allocated k {:?} v {:?}", k, v); }
             }
         }
 
@@ -64,7 +71,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
                 variables.insert(k.to_string(), var);
             } else {
-                println!("k {:?} v {:?}", k, v);
+                println!("not allocated k {:?} v {:?}", k, v);
             }
         }
 
@@ -96,6 +103,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             }
 
             for values in alloc_value.right.iter() {
+                println!("{:?}", values);
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
