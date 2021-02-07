@@ -11,7 +11,10 @@
       A (alloc "A" (* v2 u1))
       B (alloc "B" (* u2 v1))
       C (alloc "C" (* EDWARDS_D (* A B)))
-      u3 (alloc "u3" (/ (* A A) (* scalar::one C)))
+      ;; Compute u3 = (A + B) / (1 + C)
+      u3 (alloc "u3" (/ (+ A B) (+ scalar::one C)))
+      ;; Compute v3 = (U - A - B) / (1 - C)
+      v3 (alloc "v3" (/ (- (- U A) B) (- scalar::one C)))
       ]
 (prove
  (setup 
