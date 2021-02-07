@@ -86,7 +86,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     left = left + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
-                } 
+                } else {
+                  if let Some(value) = self.params.get(a) {
+                    if let MalVal::ZKScalar(val) = value {
+                      left = left + (*val, val_b);
+                    }
+                  }
+                }
             }
 
             for values in alloc_value.right.iter() {

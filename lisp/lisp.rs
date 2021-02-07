@@ -549,7 +549,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
     let circuit = LispCircuit {
-        params:  allocs.as_ref().clone(),
+        params:  allocs_const.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
         alloc_inputs: allocs_input.as_ref().clone(),
         constraints: enforce_allocs,
