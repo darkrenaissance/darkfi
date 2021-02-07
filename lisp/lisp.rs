@@ -302,6 +302,23 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         ast = eval(a1.clone(), env.clone())?;
                         prove(a1.clone(), env.clone())
                     }
+                    Sym(ref a0sym) if a0sym == "alloc-const" => {
+                        let a1 = l[1].clone();
+                        let value = eval(l[2].clone(), env.clone())?;
+                        let result = eval(value.clone(), env.clone())?;
+                        let allocs = get_allocations(&env, "AllocationsConst");
+                        let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+                        for (k, v) in allocs.iter() {
+                            new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
+                        }
+                        new_hm.insert(a1.pr_str(false), result.clone());
+                        env_set(
+                            &env,
+                            Sym("AllocationsConst".to_string()),
+                            Hash(Rc::new(new_hm), Rc::new(Nil)),
+                        )?;
+                        Ok(result.clone())
+                    }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
@@ -503,10 +520,11 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
     // be generated securely using a multiparty computation.
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
+    let allocs_const = get_allocations(&env, "AllocationsConst");
     let enforce_allocs = get_enforce_allocs(&env);
 
     let c = LispCircuit {
-        params: vec![],
+        params: allocs_const.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
         alloc_inputs: allocs_input.as_ref().clone(),
         constraints: enforce_allocs,
@@ -528,9 +546,10 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
+    let allocs_const = get_allocations(&env, "AllocationsConst");
 
     let circuit = LispCircuit {
-        params: vec![],
+        params:  allocs.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
         alloc_inputs: allocs_input.as_ref().clone(),
         constraints: enforce_allocs,
