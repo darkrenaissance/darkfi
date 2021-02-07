@@ -44,7 +44,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations\n");
         for (k, v) in &self.allocs {
-            // match str
+            println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc(|| "alloc", || Ok(*val))?;
@@ -63,15 +63,15 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
+            println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
-                    println!("val {:?}", val);
                     let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
                     variables.insert(k.to_string(), var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
-                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
+                    let var = cs.alloc_input(|| "alloc", || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
                 }
                 _ => {
@@ -82,13 +82,11 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Enforce Allocations\n");
         for alloc_value in &self.constraints {
-            println!("{:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
-                println!("values {:?}", values);
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
@@ -108,7 +106,6 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             }
 
             for values in alloc_value.right.iter() {
-                println!("{:?}", values);
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {

@@ -4,7 +4,10 @@ use crate::types::LispCircuit;
 use bellman::groth16::PreparedVerifyingKey;
 
 use simplelog::*;
+use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
 
+use std::fs;
+use std::fs::File;
 use bellman::{groth16};
 use bls12_381::Bls12;
 use fnv::FnvHashMap;
@@ -540,9 +543,6 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
-    // TODO remove it
-    let _quantity = bls12_381::Scalar::from(3);
-
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
@@ -563,8 +563,10 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     };
     let start = Instant::now();
     // Create a Groth16 proof with our parameters.
-    let _proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
+    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
+    let mut file = File::create("prove.out").unwrap();
+    proof.write(file);
     Ok(MalVal::Nil)
 }
 
