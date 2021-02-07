@@ -267,6 +267,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 }
 
 fn mul_scalar(a: MalArgs) -> MalRet {
+    println!("{:?}", a);
     match (a[0].clone(), a[1].clone()) {
         (ZKScalar(mut a0), ZKScalar(a1)) => {
             // let (mut s0, s1) = (Scalar::from_string(&a0), Scalar::from_string(&a1));
@@ -357,15 +358,20 @@ fn scalar_from(a: MalArgs) -> MalRet {
 
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
+        (ZKScalar(a0), ZKScalar(a1)) => {
+            let (mut z0, z1) = (a0.clone(), a1.clone());
+            z0.add_assign(z1);
+            Ok(ZKScalar(z0))
+        },
         (Str(a0), Str(a1)) => {
             let (mut s0, s1) = (
                 bls12_381::Scalar::from_string(&a0),
                 bls12_381::Scalar::from_string(&a1),
             );
             s0.add_assign(s1);
-            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+            Ok(ZKScalar(s0))
         }
-        _ => error("expected (scalar, scalar"),
+        _ => error(&format!("add scalar expected (scalar, scalar)\n {:?}", a).to_string()),
     }
 }
 

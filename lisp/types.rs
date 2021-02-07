@@ -32,7 +32,7 @@ pub struct EnforceAllocation {
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: Vec<Option<Scalar>>,
+    pub params: FnvHashMap<String, MalVal>,
     pub allocs: FnvHashMap<String, MalVal>,
     pub alloc_inputs: FnvHashMap<String, MalVal>,
     pub constraints: Vec<EnforceAllocation>,
@@ -76,6 +76,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             let mut right = bellman::LinearCombination::<Scalar>::zero();
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
+                println!("values {:?}", values);
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
@@ -85,7 +86,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     left = left + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
-                } 
+                } else {
+                  if let Some(value) = self.params.get(a) {
+                    if let MalVal::ZKScalar(val) = value {
+                      left = left + (*val, val_b);
+                    }
+                  }
+                }
             }
 
             for values in alloc_value.right.iter() {
