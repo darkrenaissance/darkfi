@@ -2,15 +2,20 @@ use bellman::groth16;
 use bls12_381::{Bls12, Scalar};
 use std::collections::{HashMap, HashSet};
 
+pub mod async_serial;
 pub mod bls_extensions;
 pub mod endian;
 pub mod error;
+pub mod net;
 pub mod serial;
+pub mod system;
+pub mod utility;
 pub mod vm;
 pub mod vm_serial;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};
+pub use crate::net::p2p::P2p;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
     AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,

@@ -1,9 +1,4 @@
-use bellman::{
-    gadgets::{
-        Assignment,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
+use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use bls12_381::Bls12;
 use bls12_381::Scalar;
 use ff::{Field, PrimeField};
