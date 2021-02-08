@@ -1,2 +1,2 @@
-#export RUST_BACKTRACE=full
+export RUST_BACKTRACE=full
 cargo run --bin lisp load jubjub-add.lisp

@@ -527,11 +527,11 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
     let enforce_allocs = get_enforce_allocs(&env);
 
     let c = LispCircuit {
-        params: allocs_const.as_ref().clone(),
-        allocs: allocs.as_ref().clone(),
-        alloc_inputs: allocs_input.as_ref().clone(),
-        constraints: enforce_allocs,
-        env: env.clone(),
+        params: None,
+        allocs: None,
+        alloc_inputs: None,
+        constraints: None,
+        env: None 
     };
     // TODO move to another fn
     let random_parameters =
@@ -548,26 +548,48 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
-    let circuit = LispCircuit {
-        params:  allocs_const.as_ref().clone(),
-        allocs: allocs.as_ref().clone(),
-        alloc_inputs: allocs_input.as_ref().clone(),
-        constraints: enforce_allocs,
-        env: env.clone(),
-    };
-    // Create an instance of our circuit (with the preimage as a witness).
-    // todo check if circuit.clone is valid
     let params = {
-        let c = circuit.clone();
+        let c = LispCircuit {
+        params: Some(FnvHashMap::default()), 
+        allocs: Some(FnvHashMap::default()),
+        alloc_inputs: Some(FnvHashMap::default()),
+        constraints: Some(vec![]),
+        env: Some(env.clone()) 
+        };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
+    let pvk = groth16::prepare_verifying_key(&params.vk);
+
+    let circuit = LispCircuit {
+        params:  Some(allocs_const.as_ref().clone()),
+        allocs: Some(allocs.as_ref().clone()),
+        alloc_inputs:  Some(allocs_input.as_ref().clone()),
+        constraints:  Some(enforce_allocs),
+        env: Some(env.clone())
+    };
     let start = Instant::now();
-    // Create a Groth16 proof with our parameters.
-    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
-    println!("Prove: [{:?}]", start.elapsed());
-    let mut file = File::create("prove.out").unwrap();
-    proof.write(file);
-    Ok(MalVal::Nil)
+    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng);
+    match proof {
+        _ => {
+            println!("Prove: [{:?}]", start.elapsed());
+            let mut file = File::create("prove.out").unwrap();
+            //proof.write(file);
+
+            let mut vec_input = vec![];
+            for (k, val) in allocs_input.iter() {
+                if let MalVal::ZKScalar(v) = val {
+                    vec_input.push(*v); 
+                }
+            }
+//            let verify_result = groth16::verify_proof(&pvk, &proof, &vec_input.as_slice()).is_ok();
+//            println!("{:?}", verify_result);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+        }
+    };
+    Ok(MalVal::Nil) 
+
 }
 
 pub fn verify(_ast: &MalVal) -> MalRet {

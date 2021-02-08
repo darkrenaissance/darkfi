@@ -28,11 +28,11 @@ pub struct EnforceAllocation {
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: FnvHashMap<String, MalVal>,
-    pub allocs: FnvHashMap<String, MalVal>,
-    pub alloc_inputs: FnvHashMap<String, MalVal>,
-    pub constraints: Vec<EnforceAllocation>,
-    pub env: Env,
+    pub params: Option<FnvHashMap<String, MalVal>>,
+    pub allocs: Option<FnvHashMap<String, MalVal>>,
+    pub alloc_inputs: Option<FnvHashMap<String, MalVal>>,
+    pub constraints: Option<Vec<EnforceAllocation>>,
+    pub env: Option<Env>,
 }
 
 impl Circuit<bls12_381::Scalar> for LispCircuit {
@@ -41,9 +41,10 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+        let mut params_const = self.params.unwrap_or(FnvHashMap::default()); 
 
         println!("Allocations\n");
-        for (k, v) in &self.allocs {
+        for (k, v) in &self.allocs.unwrap_or(FnvHashMap::default()) {
             println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
@@ -62,7 +63,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         }
 
         println!("Allocations Input\n");
-        for (k, v) in &self.alloc_inputs {
+        for (k, v) in &self.alloc_inputs.unwrap_or(FnvHashMap::default()) {
             println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
@@ -81,7 +82,8 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         }
 
         println!("Enforce Allocations\n");
-        for alloc_value in &self.constraints {
+        for alloc_value in &self.constraints.unwrap_or(Vec::<EnforceAllocation>::new()) {
+            println!("{:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();
@@ -97,7 +99,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
                 } else {
-                    if let Some(value) = self.params.get(a) {
+                    if let Some(value) = params_const.get(a) {
                         if let MalVal::ZKScalar(val) = value {
                             left = left + (*val, val_b);
                         }
