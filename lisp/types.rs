@@ -31,8 +31,7 @@ pub struct LispCircuit {
     pub params: Option<FnvHashMap<String, MalVal>>,
     pub allocs: Option<FnvHashMap<String, MalVal>>,
     pub alloc_inputs: Option<FnvHashMap<String, MalVal>>,
-    pub constraints: Option<Vec<EnforceAllocation>>,
-    pub env: Option<Env>,
+    pub constraints: Option<Vec<EnforceAllocation>>
 }
 
 impl Circuit<bls12_381::Scalar> for LispCircuit {
@@ -41,7 +40,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
-        let mut params_const = self.params.unwrap_or(FnvHashMap::default()); 
+        let mut params_const = self.params.unwrap_or(FnvHashMap::default());
 
         println!("Allocations\n");
         for (k, v) in &self.allocs.unwrap_or(FnvHashMap::default()) {
