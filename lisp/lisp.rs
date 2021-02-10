@@ -3,15 +3,18 @@
 use crate::types::LispCircuit;
 use bellman::groth16::PreparedVerifyingKey;
 
+use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
 use simplelog::*;
 
-use bellman::{groth16};
+use bellman::groth16;
 use bls12_381::Bls12;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
+use std::fs;
+use std::fs::File;
+use std::rc::Rc;
 use std::time::Instant;
-use std::{rc::Rc};
 use types::EnforceAllocation;
 
 #[macro_use]
@@ -518,17 +521,12 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
-    let allocs_input = get_allocations(&env, "AllocationsInput");
-    let allocs = get_allocations(&env, "Allocations");
-    let allocs_const = get_allocations(&env, "AllocationsConst");
-    let enforce_allocs = get_enforce_allocs(&env);
 
     let c = LispCircuit {
-        params: allocs_const.as_ref().clone(),
-        allocs: allocs.as_ref().clone(),
-        alloc_inputs: allocs_input.as_ref().clone(),
-        constraints: enforce_allocs,
-        env: env.clone(),
+        params: None,
+        allocs: None,
+        alloc_inputs: None,
+        constraints: None,
     };
     // TODO move to another fn
     let random_parameters =
@@ -540,31 +538,40 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
-    // TODO remove it
-    let _quantity = bls12_381::Scalar::from(3);
-
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
+    let start = Instant::now();
     let circuit = LispCircuit {
-        params:  allocs_const.as_ref().clone(),
-        allocs: allocs.as_ref().clone(),
-        alloc_inputs: allocs_input.as_ref().clone(),
-        constraints: enforce_allocs,
-        env: env.clone(),
+        params: Some(allocs_const.as_ref().clone()),
+        allocs: Some(allocs.as_ref().clone()),
+        alloc_inputs: Some(allocs_input.as_ref().clone()),
+        constraints: Some(enforce_allocs),
     };
-    // Create an instance of our circuit (with the preimage as a witness).
-    // todo check if circuit.clone is valid
     let params = {
         let c = circuit.clone();
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
-    let start = Instant::now();
-    // Create a Groth16 proof with our parameters.
-    let _proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
+
+    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
+    let mut buf = File::create("proof.output").unwrap();
+    proof.write(buf);
     println!("Prove: [{:?}]", start.elapsed());
+    let proof_file = File::open("proof.output").unwrap();
+    let reader = std::io::BufReader::new(proof_file);
+    let proof_read: groth16::Proof<bls12_381::Bls12> = groth16::Proof::read(reader).unwrap();
+    let mut vec_input = vec![];
+    for (k, val) in allocs_input.iter() {
+        if let MalVal::ZKScalar(v) = val {
+            vec_input.push(*v);
+        }
+    }
+    let pvk = setup(_ast.clone(), env.clone()).unwrap();
+    println!("{:?}", vec_input);
+    let verify_result = groth16::verify_proof(&pvk, &proof, &vec_input.as_slice());
+    println!("{:?}", verify_result);
     Ok(MalVal::Nil)
 }
 
