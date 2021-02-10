@@ -521,16 +521,12 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalE
     let start = Instant::now();
     // Create parameters for our circuit. In a production deployment these would
     // be generated securely using a multiparty computation.
-    let allocs_input = get_allocations(&env, "AllocationsInput");
-    let allocs = get_allocations(&env, "Allocations");
-    let allocs_const = get_allocations(&env, "AllocationsConst");
-    let enforce_allocs = get_enforce_allocs(&env);
 
     let c = LispCircuit {
         params: None,
         allocs: None,
         alloc_inputs: None,
-        constraints: None
+        constraints: None,
     };
     // TODO move to another fn
     let random_parameters =
@@ -558,26 +554,24 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         let c = circuit.clone();
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
-    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
-    /*
-    match proof {
-        Ok(v) => {
-            println!("Prove: [{:?}]", start.elapsed());
 
-            let mut vec_input = vec![];
-            for (k, val) in allocs_input.iter() {
-                if let MalVal::ZKScalar(v) = val {
-                    vec_input.push(*v);
-                }
-            }
-            //            let verify_result = groth16::verify_proof(&pvk, &proof, &vec_input.as_slice()).is_ok();
-            //            println!("{:?}", verify_result);
+    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
+    let mut buf = File::create("proof.output").unwrap();
+    proof.write(buf);
+    println!("Prove: [{:?}]", start.elapsed());
+    let proof_file = File::open("proof.output").unwrap();
+    let reader = std::io::BufReader::new(proof_file);
+    let proof_read: groth16::Proof<bls12_381::Bls12> = groth16::Proof::read(reader).unwrap();
+    let mut vec_input = vec![];
+    for (k, val) in allocs_input.iter() {
+        if let MalVal::ZKScalar(v) = val {
+            vec_input.push(*v);
         }
-        Err(e) => {
-            println!("Error {:?}", e);
-        }
-    };
-    */
+    }
+    let pvk = setup(_ast.clone(), env.clone()).unwrap();
+    println!("{:?}", vec_input);
+    let verify_result = groth16::verify_proof(&pvk, &proof, &vec_input.as_slice());
+    println!("{:?}", verify_result);
     Ok(MalVal::Nil)
 }
 
