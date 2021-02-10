@@ -254,6 +254,22 @@ fn conj(a: MalArgs) -> MalRet {
 
 fn sub_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
+        (Func(_, _), ZKScalar(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.sub_assign(a1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar sub expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar sub expect (zkscalar, zkscalar)")
+            }
+        }
+        (ZKScalar(mut a0), ZKScalar(a1)) => {
+            a0.sub_assign(a1);
+            Ok(ZKScalar(a0))
+        }
         (Str(a0), Str(a1)) => {
             let (mut s0, s1) = (
                 bls12_381::Scalar::from_string(&a0),
@@ -262,7 +278,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("scalar sub expected (scalar, scalar)"),
+        _ => error("scalar sub expected (zkscalar, zkscalar)"),
     }
 }
 
@@ -384,6 +400,18 @@ fn scalar_from(a: MalArgs) -> MalRet {
 
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
+        (Func(_, _), ZKScalar(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.add_assign(a1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar add expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar add expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(a0), ZKScalar(a1)) => {
             let (mut z0, z1) = (a0.clone(), a1.clone());
             z0.add_assign(z1);
@@ -397,7 +425,7 @@ fn add_scalar(a: MalArgs) -> MalRet {
             s0.add_assign(s1);
             Ok(ZKScalar(s0))
         }
-        _ => error(&format!("add scalar expected (scalar, scalar)\n {:?}", a).to_string()),
+        _ => error(&format!("scalar add expect (zkscalar, zkscalar) found \n {:?}", a).to_string()),
     }
 }
 

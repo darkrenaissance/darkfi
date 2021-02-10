@@ -1,11 +1,7 @@
-use bellman::{
-    gadgets::{
-        Assignment,
-    },
-    groth16, Circuit, ConstraintSystem, SynthesisError,
-};
-use std::ops::{Add, AddAssign, MulAssign, SubAssign};
+use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
+use sapvi::bls_extensions::BlsStringConversion;
 use std::cell::RefCell;
+use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::rc::Rc;
 //use std::collections::HashMap;
 use fnv::FnvHashMap;
@@ -32,11 +28,10 @@ pub struct EnforceAllocation {
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: FnvHashMap<String, MalVal>,
-    pub allocs: FnvHashMap<String, MalVal>,
-    pub alloc_inputs: FnvHashMap<String, MalVal>,
-    pub constraints: Vec<EnforceAllocation>,
-    pub env: Env,
+    pub params: Option<FnvHashMap<String, MalVal>>,
+    pub allocs: Option<FnvHashMap<String, MalVal>>,
+    pub alloc_inputs: Option<FnvHashMap<String, MalVal>>,
+    pub constraints: Option<Vec<EnforceAllocation>>,
 }
 
 impl Circuit<bls12_381::Scalar> for LispCircuit {
@@ -45,39 +40,56 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+        let mut params_const = self.params.unwrap_or(FnvHashMap::default());
 
         println!("Allocations\n");
-        for (k, v) in &self.allocs {
-            if let MalVal::ZKScalar(val) = v {
-                println!("val {:?}", val);
-                let var = cs.alloc(|| "alloc", || Ok(*val))?;
-                variables.insert(k.to_string(), var);
-            } else {
-                println!("k {:?} v {:?}", k, v);
+        for (k, v) in &self.allocs.unwrap_or(FnvHashMap::default()) {
+            println!("k {:?} v {:?}", k, v);
+            match v {
+                MalVal::ZKScalar(val) => {
+                    let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                    variables.insert(k.to_string(), var);
+                }
+                MalVal::Str(val) => {
+                    let val_scalar = bls12_381::Scalar::from_string(&*val);
+                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
+                    variables.insert(k.to_string(), var);
+                }
+                _ => {
+                    println!("not allocated k {:?} v {:?}", k, v);
+                }
             }
         }
 
         println!("Allocations Input\n");
-        for (k, v) in &self.alloc_inputs {
-            if let MalVal::ZKScalar(val) = v {
-                println!("val {:?}", val);
-                let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
-                variables.insert(k.to_string(), var);
-            } else {
-                println!("k {:?} v {:?}", k, v);
+        for (k, v) in &self.alloc_inputs.unwrap_or(FnvHashMap::default()) {
+            println!("k {:?} v {:?}", k, v);
+            match v {
+                MalVal::ZKScalar(val) => {
+                    let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
+                    variables.insert(k.to_string(), var);
+                }
+                MalVal::Str(val) => {
+                    let val_scalar = bls12_381::Scalar::from_string(&*val);
+                    let var = cs.alloc_input(|| "alloc", || Ok(val_scalar))?;
+                    variables.insert(k.to_string(), var);
+                }
+                _ => {
+                    println!("not allocated k {:?} v {:?}", k, v);
+                }
             }
         }
 
         println!("Enforce Allocations\n");
-        for alloc_value in &self.constraints {
-            println!("{:?}", alloc_value);
+        // we need to keep order 
+        for alloc_value in self.constraints.unwrap_or(Vec::<EnforceAllocation>::new()).iter() {
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
-                println!("values {:?}", values);
                 let (a, b) = values;
+                println!("a {:?} b {:?}", a, b);
                 let mut val_b = CS::one();
                 if b != "cs::one" {
                     val_b = *variables.get(b).unwrap();
@@ -87,11 +99,11 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
                 } else {
-                  if let Some(value) = self.params.get(a) {
-                    if let MalVal::ZKScalar(val) = value {
-                      left = left + (*val, val_b);
-                    }
-                  }
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            left = left + (*val, val_b);
+                        }
+                    } 
                 }
             }
 
@@ -105,7 +117,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     right = right + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     right = right + (coeff.neg(), val_b);
-                } 
+                }
             }
 
             for values in alloc_value.output.iter() {
@@ -118,7 +130,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     output = output + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     output = output + (coeff.neg(), val_b);
-                } 
+                }
             }
 
             cs.enforce(
@@ -127,6 +139,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 |_| right.clone(),
                 |_| output.clone(),
             );
+            
         }
 
         Ok(())
