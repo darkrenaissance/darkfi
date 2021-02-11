@@ -126,7 +126,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
-                    left = left + (coeff, val_b);
+                    left = left + val_b;
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
                 } else {
