@@ -29,6 +29,7 @@ extern crate regex;
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Bool, Enforce, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector};
+use crate::types::VerifyKeyParams;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
 mod printer;
@@ -297,7 +298,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         // todo
                         ast = eval(a1.clone(), env.clone())?;
-                        let _pvk = setup(a1.clone(), env.clone())?;
+                        //                        let _pvk = setup(a1.clone(), env.clone())?;
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
@@ -517,69 +518,75 @@ pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
     }
 }
 
-pub fn setup(_ast: MalVal, env: Env) -> Result<PreparedVerifyingKey<Bls12>, MalErr> {
+pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     let start = Instant::now();
-    // Create parameters for our circuit. In a production deployment these would
-    // be generated securely using a multiparty computation.
-
     let c = LispCircuit {
-        params: None,
-        allocs: None,
-        alloc_inputs: None,
-        constraints: None,
+        params: FnvHashMap::default(),
+        allocs: FnvHashMap::default(),
+        alloc_inputs: FnvHashMap::default(),
+        constraints: Vec::new(),
     };
-    // TODO move to another fn
     let random_parameters =
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap();
     let pvk = groth16::prepare_verifying_key(&random_parameters.vk);
     println!("Setup: [{:?}]", start.elapsed());
 
-    Ok(pvk)
+    Ok(VerifyKeyParams {
+        verifying_key: pvk,
+        random_params: random_parameters,
+    })
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
+    let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
-    let start = Instant::now();
+    // todo some refactor to improve this 
+    let params = Some({
+//        todo check if we do need to pass everything like this, its important to 
+//        remember that this function runs after the evaluation, we have all allocs in memory now with all enfores
     let circuit = LispCircuit {
-        params: Some(allocs_const.as_ref().clone()),
-        allocs: Some(allocs.as_ref().clone()),
-        alloc_inputs: Some(allocs_input.as_ref().clone()),
-        constraints: Some(enforce_allocs),
+        params: allocs_const.as_ref().clone(),
+        allocs: allocs.as_ref().clone(),
+        alloc_inputs: allocs_input.as_ref().clone(),
+        constraints: enforce_allocs.clone(),
     };
-    let params = {
-        let c = circuit.clone();
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
+        groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
+    });
+    let verifying_key = Some(groth16::prepare_verifying_key(&params.as_ref().unwrap().vk));
+
+    let circuit = LispCircuit {
+        params: allocs_const.as_ref().clone(),
+        allocs: allocs.as_ref().clone(),
+        alloc_inputs: allocs_input.as_ref().clone(),
+        constraints: enforce_allocs.clone(),
     };
 
-    let proof = groth16::create_random_proof(circuit, &params, &mut OsRng).unwrap();
-    let mut buf = File::create("proof.output").unwrap();
-    proof.write(buf);
-    println!("Prove: [{:?}]", start.elapsed());
-    let proof_file = File::open("proof.output").unwrap();
-    let reader = std::io::BufReader::new(proof_file);
-    let proof_read: groth16::Proof<bls12_381::Bls12> = groth16::Proof::read(reader).unwrap();
+    let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
+//    todo save the proof and keys on a file
     let mut vec_input = vec![];
     for (k, val) in allocs_input.iter() {
         if let MalVal::ZKScalar(v) = val {
             vec_input.push(*v);
         }
     }
-    let pvk = setup(_ast.clone(), env.clone()).unwrap();
-    println!("{:?}", vec_input);
-    let verify_result = groth16::verify_proof(&pvk, &proof, &vec_input.as_slice());
-    println!("{:?}", verify_result);
+    println!("vec input {:?}", vec_input);
+    let result = groth16::verify_proof(
+        verifying_key.as_ref().unwrap(),
+        &proof,
+        vec_input.as_slice(),
+    );
+    println!("{:?}", result);
+
     Ok(MalVal::Nil)
 }
 
 pub fn verify(_ast: &MalVal) -> MalRet {
     let _public_input = vec![bls12_381::Scalar::from(27)];
     let start = Instant::now();
-    // Check the proof!
-    //assert!(groth16::verify_proof(&pvk, &proof, &public_input).is_ok());
     println!("Verify: [{:?}]", start.elapsed());
     Ok(MalVal::Nil)
 }
