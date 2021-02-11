@@ -544,7 +544,10 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
+    // todo some refactor to improve this 
     let params = Some({
+//        todo check if we do need to pass everything like this, its important to 
+//        remember that this function runs after the evaluation, we have all allocs in memory now with all enfores
     let circuit = LispCircuit {
         params: allocs_const.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
@@ -563,7 +566,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     };
 
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
-
+//    todo save the proof and keys on a file
     let mut vec_input = vec![];
     for (k, val) in allocs_input.iter() {
         if let MalVal::ZKScalar(v) = val {
