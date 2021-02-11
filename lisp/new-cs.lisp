@@ -4,7 +4,7 @@
       x (alloc "x" aux)
       x2 (alloc "x2" (* aux aux))
       x3 (alloc "x3" (* aux (* aux aux)))
-      input (alloc-input "input" (scalar 27))
+      input (alloc-input "input" (scalar 3))
       ]
 (prove
  (setup 

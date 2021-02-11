@@ -11,6 +11,7 @@ use crate::env::{env_bind, Env};
 use crate::types::MalErr::{ErrMalVal, ErrString};
 use crate::types::MalVal::{Atom, Bool, Func, Hash, Int, List, MalFunc, Nil, Str, Sym, Vector};
 use bellman::Variable;
+use bls12_381::Bls12;
 use bls12_381::Scalar;
 
 #[derive(Debug, Clone)]
@@ -26,124 +27,17 @@ pub struct EnforceAllocation {
     pub output: Vec<(String, String)>,
 }
 
-#[derive(Debug, Clone)]
-pub struct LispCircuit {
-    pub params: Option<FnvHashMap<String, MalVal>>,
-    pub allocs: Option<FnvHashMap<String, MalVal>>,
-    pub alloc_inputs: Option<FnvHashMap<String, MalVal>>,
-    pub constraints: Option<Vec<EnforceAllocation>>,
+pub struct VerifyKeyParams {
+    pub random_params: groth16::Parameters<Bls12>,
+    pub verifying_key: groth16::PreparedVerifyingKey<Bls12>,
 }
 
-impl Circuit<bls12_381::Scalar> for LispCircuit {
-    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
-        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
-        let mut params_const = self.params.unwrap_or(FnvHashMap::default());
-
-        println!("Allocations\n");
-        for (k, v) in &self.allocs.unwrap_or(FnvHashMap::default()) {
-            println!("k {:?} v {:?}", k, v);
-            match v {
-                MalVal::ZKScalar(val) => {
-                    let var = cs.alloc(|| "alloc", || Ok(*val))?;
-                    variables.insert(k.to_string(), var);
-                }
-                MalVal::Str(val) => {
-                    let val_scalar = bls12_381::Scalar::from_string(&*val);
-                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
-                    variables.insert(k.to_string(), var);
-                }
-                _ => {
-                    println!("not allocated k {:?} v {:?}", k, v);
-                }
-            }
-        }
-
-        println!("Allocations Input\n");
-        for (k, v) in &self.alloc_inputs.unwrap_or(FnvHashMap::default()) {
-            println!("k {:?} v {:?}", k, v);
-            match v {
-                MalVal::ZKScalar(val) => {
-                    let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
-                    variables.insert(k.to_string(), var);
-                }
-                MalVal::Str(val) => {
-                    let val_scalar = bls12_381::Scalar::from_string(&*val);
-                    let var = cs.alloc_input(|| "alloc", || Ok(val_scalar))?;
-                    variables.insert(k.to_string(), var);
-                }
-                _ => {
-                    println!("not allocated k {:?} v {:?}", k, v);
-                }
-            }
-        }
-
-        println!("Enforce Allocations\n");
-        // we need to keep order 
-        for alloc_value in self.constraints.unwrap_or(Vec::<EnforceAllocation>::new()).iter() {
-            let coeff = bls12_381::Scalar::one();
-            let mut left = bellman::LinearCombination::<Scalar>::zero();
-            let mut right = bellman::LinearCombination::<Scalar>::zero();
-            let mut output = bellman::LinearCombination::<Scalar>::zero();
-            for values in alloc_value.left.iter() {
-                let (a, b) = values;
-                println!("a {:?} b {:?}", a, b);
-                let mut val_b = CS::one();
-                if b != "cs::one" {
-                    val_b = *variables.get(b).unwrap();
-                }
-                if a == "scalar::one" {
-                    left = left + (coeff, val_b);
-                } else if a == "scalar::one::neg" {
-                    left = left + (coeff.neg(), val_b);
-                } else {
-                    if let Some(value) = params_const.get(a) {
-                        if let MalVal::ZKScalar(val) = value {
-                            left = left + (*val, val_b);
-                        }
-                    } 
-                }
-            }
-
-            for values in alloc_value.right.iter() {
-                let (a, b) = values;
-                let mut val_b = CS::one();
-                if b != "cs::one" {
-                    val_b = *variables.get(b).unwrap();
-                }
-                if a == "scalar::one" {
-                    right = right + (coeff, val_b);
-                } else if a == "scalar::one::neg" {
-                    right = right + (coeff.neg(), val_b);
-                }
-            }
-
-            for values in alloc_value.output.iter() {
-                let (a, b) = values;
-                let mut val_b = CS::one();
-                if b != "cs::one" {
-                    val_b = *variables.get(b).unwrap();
-                }
-                if a == "scalar::one" {
-                    output = output + (coeff, val_b);
-                } else if a == "scalar::one::neg" {
-                    output = output + (coeff.neg(), val_b);
-                }
-            }
-
-            cs.enforce(
-                || "constraint",
-                |_| left.clone(),
-                |_| right.clone(),
-                |_| output.clone(),
-            );
-            
-        }
-
-        Ok(())
-    }
+#[derive(Debug, Clone)]
+pub struct LispCircuit {
+    pub params: FnvHashMap<String, MalVal>,
+    pub allocs: FnvHashMap<String, MalVal>,
+    pub alloc_inputs: FnvHashMap<String, MalVal>,
+    pub constraints: Vec<EnforceAllocation>,
 }
 
 #[derive(Debug, Clone)]
@@ -171,10 +65,134 @@ pub enum MalVal {
     ZKScalar(bls12_381::Scalar),
 }
 
+impl Circuit<bls12_381::Scalar> for LispCircuit {
+    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+        let mut params_const = self.params;
+
+        println!("Allocations\n");
+        for (k, v) in &self.allocs {
+            println!("k {:?} v {:?}", k, v);
+            match v {
+                MalVal::ZKScalar(val) => {
+                    let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                    variables.insert(k.to_string(), var);
+                }
+                MalVal::Str(val) => {
+                    let val_scalar = bls12_381::Scalar::from_string(&*val);
+                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
+                    variables.insert(k.to_string(), var);
+                }
+                _ => {
+                    println!("not allocated k {:?} v {:?}", k, v);
+                }
+            }
+        }
+
+        println!("Allocations Input\n");
+        for (k, v) in &self.alloc_inputs {
+            println!("k {:?} v {:?}", k, v);
+            match v {
+                MalVal::ZKScalar(val) => {
+                    let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
+                    variables.insert(k.to_string(), var);
+                }
+                MalVal::Str(val) => {
+                    let val_scalar = bls12_381::Scalar::from_string(&*val);
+                    let var = cs.alloc_input(|| "alloc", || Ok(val_scalar))?;
+                    variables.insert(k.to_string(), var);
+                }
+                _ => {
+                    println!("not allocated k {:?} v {:?}", k, v);
+                }
+            }
+        }
+
+        println!("Enforce Allocations\n");
+        // we need to keep order
+        for alloc_value in self.constraints.iter() {
+            let coeff = bls12_381::Scalar::one();
+            let mut left = bellman::LinearCombination::<Scalar>::zero();
+            let mut right = bellman::LinearCombination::<Scalar>::zero();
+            let mut output = bellman::LinearCombination::<Scalar>::zero();
+            for values in alloc_value.left.iter() {
+                let (a, b) = values;
+                println!("left: a {:?} b {:?}", a, b);
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    left = left + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    left = left + (coeff.neg(), val_b);
+                } else {
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            left = left + (*val, val_b);
+                        }
+                    }
+                    println!("here i am");
+                }
+            }
+
+            for values in alloc_value.right.iter() {
+                let (a, b) = values;
+                println!("right: a {:?} b {:?}", a, b);
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    right = right + (coeff, val_b);
+                } else if a == "scalar::one::neg" {
+                    right = right + (coeff.neg(), val_b);
+                } else { 
+                    println!("here i am");
+                }
+            }
+
+            for values in alloc_value.output.iter() {
+                let (a, b) = values;
+                println!("output: a {:?} b {:?}", a, b);
+                let mut val_b = CS::one();
+                if b != "cs::one" {
+                    val_b = *variables.get(b).unwrap();
+                }
+                if a == "scalar::one" {
+                    output = output + (Scalar::one(), val_b);
+                } else if a == "scalar::one::neg" {
+                    output = output + (Scalar::one().neg(), val_b);
+                } else { 
+                    println!("here i am");
+                }
+            }
+
+            cs.enforce(
+                || "constraint",
+                |_| left.clone(),
+                |_| right.clone(),
+                |_| output.clone(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub enum MalErr {
     ErrString(String),
     ErrMalVal(MalVal),
+}
+
+impl From<SynthesisError> for MalErr {
+    fn from(err: SynthesisError) -> MalErr {
+        ErrString("SynthesisError".to_string())
+    }
 }
 
 pub type MalArgs = Vec<MalVal>;
