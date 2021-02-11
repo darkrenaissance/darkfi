@@ -283,7 +283,6 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 }
 
 fn mul_scalar(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
@@ -306,7 +305,6 @@ fn mul_scalar(a: MalArgs) -> MalRet {
 }
 
 fn div_scalar(a: MalArgs) -> MalRet {
-    println!("{:?}", a);
     match (a[0].clone(), a[1].clone()) {
         (ZKScalar(s0), ZKScalar(s1)) => {
             let ret = s1.invert().map(|other| *&s0 * other);
@@ -390,7 +388,6 @@ fn scalar_from(a: MalArgs) -> MalRet {
             Ok(ZKScalar(s0))
         }
         Int(a0) => {
-            println!("{:?}", a0);
             let s0 = bls12_381::Scalar::from(a0 as u64);
             Ok(ZKScalar(s0))
         }

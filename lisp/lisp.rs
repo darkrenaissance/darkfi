@@ -298,7 +298,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         // todo
                         ast = eval(a1.clone(), env.clone())?;
-//                        let _pvk = setup(a1.clone(), env.clone())?;
+                        //                        let _pvk = setup(a1.clone(), env.clone())?;
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
@@ -520,12 +520,12 @@ pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
 
 pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     let start = Instant::now();
-        let c = LispCircuit {
-            params: FnvHashMap::default(),
-            allocs: FnvHashMap::default(),
-            alloc_inputs: FnvHashMap::default(),
-            constraints: Vec::new()
-        };
+    let c = LispCircuit {
+        params: FnvHashMap::default(),
+        allocs: FnvHashMap::default(),
+        alloc_inputs: FnvHashMap::default(),
+        constraints: Vec::new(),
+    };
     let random_parameters =
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap();
     let pvk = groth16::prepare_verifying_key(&random_parameters.vk);
@@ -545,13 +545,13 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
     let params = Some({
-        let c = LispCircuit {
-            params: FnvHashMap::default(),
-            allocs: FnvHashMap::default(),
-            alloc_inputs: FnvHashMap::default(),
-            constraints: Vec::new()
-        };
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng)?
+    let circuit = LispCircuit {
+        params: allocs_const.as_ref().clone(),
+        allocs: allocs.as_ref().clone(),
+        alloc_inputs: allocs_input.as_ref().clone(),
+        constraints: enforce_allocs.clone(),
+    };
+        groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
     });
     let verifying_key = Some(groth16::prepare_verifying_key(&params.as_ref().unwrap().vk));
 
@@ -562,8 +562,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         constraints: enforce_allocs.clone(),
     };
 
-    let proof =
-        groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
+    let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
 
     let mut vec_input = vec![];
     for (k, val) in allocs_input.iter() {

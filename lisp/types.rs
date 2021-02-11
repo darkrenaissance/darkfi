@@ -78,12 +78,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
-                    let var = cs.alloc(|| "alloc", || Ok(*val))?;
+                    let var = cs.alloc(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
-                    let var = cs.alloc(|| "alloc", || Ok(val_scalar))?;
+                    let var = cs.alloc(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
                 }
                 _ => {
@@ -97,12 +97,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
-                    let var = cs.alloc_input(|| "alloc", || Ok(*val))?;
+                    let var = cs.alloc_input(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
-                    let var = cs.alloc_input(|| "alloc", || Ok(val_scalar))?;
+                    let var = cs.alloc_input(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
                 }
                 _ => {
@@ -120,13 +120,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             let mut output = bellman::LinearCombination::<Scalar>::zero();
             for values in alloc_value.left.iter() {
                 let (a, b) = values;
-                println!("left: a {:?} b {:?}", a, b);
                 let mut val_b = CS::one();
                 if b != "cs::one" {
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
-                    left = left + val_b;
+                    left = left + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     left = left + (coeff.neg(), val_b);
                 } else {
@@ -135,13 +134,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                             left = left + (*val, val_b);
                         }
                     }
-                    println!("here i am");
                 }
+                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.right.iter() {
                 let (a, b) = values;
-                println!("right: a {:?} b {:?}", a, b);
                 let mut val_b = CS::one();
                 if b != "cs::one" {
                     val_b = *variables.get(b).unwrap();
@@ -150,27 +148,25 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     right = right + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     right = right + (coeff.neg(), val_b);
-                } else { 
-                    println!("here i am");
                 }
+                println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.output.iter() {
                 let (a, b) = values;
-                println!("output: a {:?} b {:?}", a, b);
                 let mut val_b = CS::one();
                 if b != "cs::one" {
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
-                    output = output + (Scalar::one(), val_b);
+                    output = output + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
-                    output = output + (Scalar::one().neg(), val_b);
-                } else { 
-                    println!("here i am");
+                    output = output + (coeff.neg(), val_b);
                 }
+                println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
+            println!("Enforcing ...");
             cs.enforce(
                 || "constraint",
                 |_| left.clone(),
@@ -191,7 +187,7 @@ pub enum MalErr {
 
 impl From<SynthesisError> for MalErr {
     fn from(err: SynthesisError) -> MalErr {
-        ErrString("SynthesisError".to_string())
+        ErrString(err.to_string())
     }
 }
 
