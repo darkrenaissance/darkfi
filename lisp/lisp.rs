@@ -566,18 +566,13 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
 
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
 //    todo save the proof and keys on a file
-    let mut vec_input = vec![];
-    for (k, val) in allocs_input.iter() {
-        if let MalVal::ZKScalar(v) = val {
-            vec_input.push(*v);
-        }
-    }
-    println!("vec input {:?}", vec_input);
+    let mut vec_public = Vec::new(); 
     let result = groth16::verify_proof(
         verifying_key.as_ref().unwrap(),
         &proof,
-        vec_input.as_slice(),
+        &vec_public,
     );
+    println!("vec public {:?}", vec_public);
     println!("{:?}", result);
 
     Ok(MalVal::Nil)
