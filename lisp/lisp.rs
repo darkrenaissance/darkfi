@@ -546,10 +546,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
 
-    // todo some refactor to improve this 
     let params = Some({
-//        todo check if we do need to pass everything like this, its important to 
-//        remember that this function runs after the evaluation, we have all allocs in memory now with all enfores
     let circuit = LispCircuit {
         params: allocs_const.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
