@@ -545,7 +545,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
     let allocs_const = get_allocations(&env, "AllocationsConst");
-
+    //setup
     let params = Some({
     let circuit = LispCircuit {
         params: allocs_const.as_ref().clone(),
@@ -556,7 +556,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
     });
     let verifying_key = Some(groth16::prepare_verifying_key(&params.as_ref().unwrap().vk));
-
+    // prove
     let circuit = LispCircuit {
         params: allocs_const.as_ref().clone(),
         allocs: allocs.as_ref().clone(),
@@ -565,15 +565,20 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     };
 
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
-//    todo save the proof and keys on a file
-    let mut vec_public = Vec::new(); 
+    let mut vec_input = vec![];
+    for (k, val) in allocs_input.iter() {
+        println!("{:?}", val);
+        if let MalVal::Str(v) = val {
+            vec_input.push(bls12_381::Scalar::from_string(&v.to_string()));
+        }
+    }
     let result = groth16::verify_proof(
         verifying_key.as_ref().unwrap(),
         &proof,
-        &vec_public,
+        &vec_input,
     );
-    println!("vec public {:?}", vec_public);
     println!("{:?}", result);
+    println!("vec public {:?}", vec_input);
 
     Ok(MalVal::Nil)
 }
