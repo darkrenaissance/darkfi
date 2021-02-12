@@ -22,6 +22,7 @@ pub struct Allocation {
 
 #[derive(Debug, Clone)]
 pub struct EnforceAllocation {
+    pub idx: usize,
     pub left: Vec<(String, String)>,
     pub right: Vec<(String, String)>,
     pub output: Vec<(String, String)>,
@@ -113,8 +114,10 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         }
 
         println!("Enforce Allocations\n");
-        // we need to keep order
-        for alloc_value in self.constraints.iter() {
+        let mut enforce_sorted = self.constraints.clone();
+        enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx)); 
+        for alloc_value in enforce_sorted.iter() {
+            println!("Enforce -> {:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();

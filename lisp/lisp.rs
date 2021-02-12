@@ -419,13 +419,15 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => {}
                         };
+                        let enforce_vec = get_enforce_allocs(&env);
                         let enforce = EnforceAllocation {
+                            idx: enforce_vec.len() + 1,
                             left: left_vec,
                             right: right_vec,
                             output: out_vec,
                         };
                         let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
-                        for value in get_enforce_allocs(&env).iter() {
+                        for value in enforce_vec.iter() { 
                             new_vec.push(value.clone());
                         }
                         env_set(
