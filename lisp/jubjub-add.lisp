@@ -6,17 +6,17 @@
 
 (
     (let* [
-      u1 (alloc-input "u1" param1)
-      v1 (alloc-input "v1" param2)
-      u2 (alloc-input  "u2" param3)
-      v2 (alloc-input  "v2" param4)
+      u1 (alloc "u1" param1)
+      v1 (alloc "v1" param2)
+      u2 (alloc "u2" param3)
+      v2 (alloc "v2" param4)
       EDWARDS_D (alloc-const "EDWARDS_D" (scalar "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1"))
       U (alloc "U" (* (+ u1 v1) (+ u2 v2)))
       A (alloc "A" (* v2 u1))
       B (alloc "B" (* u2 v1))
       C (alloc "C" (* EDWARDS_D (* A B)))
-      u3 (alloc "u3" (/ (+ A B) (+ scalar::one C)))
-      v3 (alloc "v3" (/ (- (- U A) B) (- scalar::one C)))
+      u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C)))
+      v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C)))
       ]
     (prove
         (setup 
