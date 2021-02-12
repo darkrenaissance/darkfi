@@ -77,16 +77,17 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations\n");
         for (k, v) in &self.allocs {
-            println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
+                    println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
+                    println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
                     println!("not allocated k {:?} v {:?}", k, v);
@@ -101,11 +102,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc_input(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
+                    println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc_input(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
+                    println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
                     println!("not allocated k {:?} v {:?}", k, v);
