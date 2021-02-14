@@ -168,7 +168,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
                     }
                     Sym(ref a0sym) if a0sym == "let*" => {
-                        env = env_new(Some(env.clone()));
+                        // TODO let should be restored to the first purpose
+                        // and the new let* without an env creation should be availaable
+                        //                        env = env_new(Some(env.clone()));
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         match a1 {
                             List(ref binds, _) | Vector(ref binds, _) => {
@@ -427,7 +429,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             output: out_vec,
                         };
                         let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
-                        for value in enforce_vec.iter() { 
+                        for value in enforce_vec.iter() {
                             new_vec.push(value.clone());
                         }
                         env_set(
@@ -547,12 +549,12 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let allocs_const = get_allocations(&env, "AllocationsConst");
     //setup
     let params = Some({
-    let circuit = LispCircuit {
-        params: allocs_const.as_ref().clone(),
-        allocs: allocs.as_ref().clone(),
-        alloc_inputs: allocs_input.as_ref().clone(),
-        constraints: enforce_allocs.clone(),
-    };
+        let circuit = LispCircuit {
+            params: allocs_const.as_ref().clone(),
+            allocs: allocs.as_ref().clone(),
+            alloc_inputs: allocs_input.as_ref().clone(),
+            constraints: enforce_allocs.clone(),
+        };
         groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
     });
     let verifying_key = Some(groth16::prepare_verifying_key(&params.as_ref().unwrap().vk));
@@ -568,15 +570,17 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let mut vec_input = vec![];
     for (k, val) in allocs_input.iter() {
         println!("{:?}", val);
-        if let MalVal::Str(v) = val {
-            vec_input.push(bls12_381::Scalar::from_string(&v.to_string()));
-        }
+        match val {
+            MalVal::Str(v) => {
+                vec_input.push(bls12_381::Scalar::from_string(&v.to_string()));
+            }
+            MalVal::ZKScalar(v) => {
+                vec_input.push(bls12_381::Scalar::from(*v));
+            }
+            _ => {}
+        };
     }
-    let result = groth16::verify_proof(
-        verifying_key.as_ref().unwrap(),
-        &proof,
-        &vec_input,
-    );
+    let result = groth16::verify_proof(verifying_key.as_ref().unwrap(), &proof, &vec_input);
     println!("{:?}", result);
     println!("vec public {:?}", vec_input);
 
