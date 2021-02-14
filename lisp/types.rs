@@ -38,7 +38,7 @@ pub struct LispCircuit {
     pub params: FnvHashMap<String, MalVal>,
     pub allocs: FnvHashMap<String, MalVal>,
     pub alloc_inputs: FnvHashMap<String, MalVal>,
-//    todo change this for a ordered data structure so enforce 
+    //    todo change this for a ordered data structure so enforce
     pub constraints: Vec<EnforceAllocation>,
 }
 
@@ -118,7 +118,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Enforce Allocations\n");
         let mut enforce_sorted = self.constraints.clone();
-        enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx)); 
+        enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
             println!("Enforce -> {:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
