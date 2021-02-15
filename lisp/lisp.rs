@@ -593,7 +593,6 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
     let mut vec_input = vec![];
     for (k, val) in allocs_input.iter() {
-        println!("{:?}", val);
         match val {
             MalVal::Str(v) => {
                 vec_input.push(bls12_381::Scalar::from_string(&v.to_string()));
@@ -605,8 +604,8 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         };
     }
     let result = groth16::verify_proof(verifying_key.as_ref().unwrap(), &proof, &vec_input);
-    println!("{:?}", result);
     println!("vec public {:?}", vec_input);
+    println!("result {:?}", result);
 
     Ok(MalVal::Nil)
 }

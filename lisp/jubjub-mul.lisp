@@ -6,20 +6,7 @@
 
 (setup
     (prove 
-(
-    (zk* [
-      u11 (alloc "u11" (scalar 2))
-      v11 (alloc "v11" (scalar 2))
-      U1 (alloc-input "U1" (* u11 v11))
-      ]
-  (
-    (enforce  
-      (scalar::one u11) 
-      (scalar::one v11)
-      (scalar::one U1)
-    )
-  )
-  )
+      (
     (zk* [
       u1 (alloc "u1" param1)
       v1 (alloc "v1" param2)
