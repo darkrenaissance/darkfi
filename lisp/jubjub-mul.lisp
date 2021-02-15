@@ -1,8 +1,20 @@
-(println "jubjub-mul.lisp")
+ (println "jubjub-mul.lisp")
 (def! param4 (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
 (def! param3 (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
 (def! param2 (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
 (def! param1 (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
+
+    (def! double (fn* [val1 val2] (
+            (def! u11 (alloc "u11" (scalar val1)))
+            (def! v11 (alloc "v11" (scalar val2)))
+            (def! U1 (alloc-input "U1" (* u11 v11)))
+            (enforce  
+                (scalar::one u11) 
+                (scalar::one v11)
+                (scalar::one U1)
+            )
+        )
+    ))
 
 (setup
     (prove 
@@ -19,6 +31,7 @@
       C (alloc "C" (* EDWARDS_D (* A B)))
       u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C)))
       v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C)))
+      v4 (double param1 param1)
       ]
   (
   (enforce  

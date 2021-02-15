@@ -165,9 +165,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                 let a0 = &l[0];
                 match a0 {
                     Sym(ref a0sym) if a0sym == "def!" => {
+                        println!("def {:?}", l[1]);
                         env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
                     }
                     Sym(ref a0sym) if a0sym == "zk*" => {
+                        println!("zk* {:?}", l[1]);
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         match a1 {
                             List(ref binds, _) | Vector(ref binds, _) => {
@@ -490,8 +492,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     continue 'tco;
                                 }
                                 _ => {
+                                    println!("{:?}", args);
                                     Ok(vector![el.to_vec()])
-
                                     //error("call non-function")
                                 }
                             }
