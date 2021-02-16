@@ -142,7 +142,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+//                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.right.iter() {
@@ -156,7 +156,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 } else if a == "scalar::one::neg" {
                     right = right + (coeff.neg(), val_b);
                 }
-                println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                //println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.output.iter() {
@@ -170,7 +170,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 } else if a == "scalar::one::neg" {
                     output = output + (coeff.neg(), val_b);
                 }
-                println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                //println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             println!("Enforcing ...");
