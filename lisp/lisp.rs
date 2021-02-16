@@ -165,7 +165,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                 let a0 = &l[0];
                 match a0 {
                     Sym(ref a0sym) if a0sym == "def!" => {
-                        println!("def {:?}", l[1]);
                         env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
                     }
                     Sym(ref a0sym) if a0sym == "zk*" => {
