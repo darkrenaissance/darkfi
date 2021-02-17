@@ -8,14 +8,12 @@
 (setup
     (prove 
       (
-    (def! double (fn* [val1 val2] (
-            (def! u11 (alloc "u11" (scalar val1)))
-            (def! v11 (alloc "v11" (scalar val2)))
-            (def! U1 (alloc-input "U1" (* u11 v11)))
+    (def! square (fn* [var] (
+            (def! result (alloc "square-var" square var))
             (enforce  
-                (scalar::one u11) 
-                (scalar::one v11)
-                (scalar::one U1)
+                (scalar::one square-var) 
+                (scalar::one square-var)
+                (scalar::one result)
             )
         )
     ))
@@ -31,7 +29,7 @@
      (def! C (alloc "C" (* EDWARDS_D (* A B))))
      (def! u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C))))
      (def! v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C))))
-     (double param1 param1)
+     (square param1)
   (
   (enforce  
     ((scalar::one u1) (scalar::one v1))
