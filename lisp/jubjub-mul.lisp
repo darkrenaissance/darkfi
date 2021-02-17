@@ -8,8 +8,8 @@
 (setup
     (prove 
       (
-    (def! square (fn* [var] (
-            (def! result (alloc "square-var" square var))
+    (def! zk-square (fn* [var] (
+            (def! result (alloc "square-var" (square var)))
             (enforce  
                 (scalar::one square-var) 
                 (scalar::one square-var)
@@ -29,7 +29,7 @@
      (def! C (alloc "C" (* EDWARDS_D (* A B))))
      (def! u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C))))
      (def! v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C))))
-     (square param1)
+     (println 'square (zk-square param1))
   (
   (enforce  
     ((scalar::one u1) (scalar::one v1))

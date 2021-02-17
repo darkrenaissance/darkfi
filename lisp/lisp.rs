@@ -366,6 +366,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
+                        println!("{:?}", l);
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
