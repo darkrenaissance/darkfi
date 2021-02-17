@@ -398,6 +398,20 @@ fn scalar_from(a: MalArgs) -> MalRet {
     }
 }
 
+fn scalar_square(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        ZKScalar(a0) => {
+            let mut z0 = a0.clone();
+            Ok(ZKScalar(z0.square()))
+        }
+        Str(a0) => {
+            let mut s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.square()))
+        }
+        _ => error(&format!("scalar square expect (zkscalar or string) found \n {:?}", a).to_string()),
+    }
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
@@ -544,6 +558,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),
+        ("square", func(scalar_square)),
         ("cs::one", func(cs_one)),
     ]
 }

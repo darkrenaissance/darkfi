@@ -38,8 +38,6 @@ use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
 
-pub const ZK_CIRCUIT_ENV_KEY: &str = "ZKC";
-
 // read
 fn read(str: &str) -> MalRet {
     reader::read_str(str.to_string())
