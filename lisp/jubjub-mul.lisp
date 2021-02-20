@@ -23,13 +23,19 @@
     (def! u2 (alloc "u2" param3))
     (def! v2 (alloc "v2" param4))
     (def! U (alloc "U" (* (+ u1 v1) (+ u2 v2))))
-     (def! A (alloc "A" (* v2 u1)))
-     (def! B (alloc "B" (* u2 v1)))
-     (def! EDWARDS_D (alloc-const "EDWARDS_D" (scalar "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1")))
-     (def! C (alloc "C" (* EDWARDS_D (* A B))))
-     (def! u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C))))
-     (def! v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C))))
+    (def! A (alloc "A" (* v2 u1)))
+    (def! B (alloc "B" (* u2 v1)))
+    (def! EDWARDS_D (alloc-const "EDWARDS_D" (scalar "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1")))
+    (def! C (alloc "C" (* EDWARDS_D (* A B))))
+    (def! u3 (alloc-input "u3" (/ (+ A B) (+ scalar::one C))))
+    (def! v3 (alloc-input "v3" (/ (- (- U A) B) (- scalar::one C))))
     (zk-square param1)
+    ;; first solution to make this not override the last zk-square 
+    ;; is to use similar approach that we used on the pism
+    ;; add a custom arg to append on the variable name and so forth
+    ;; the other option is to infer the call eval number and add 
+    ;; something inside lisp
+    (zk-square param2)
   (enforce  
     ((scalar::one u1) (scalar::one v1))
     ((scalar::one u2) (scalar::one v2))
