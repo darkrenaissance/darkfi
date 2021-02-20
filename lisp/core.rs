@@ -383,9 +383,7 @@ fn negate_from(a: MalArgs) -> MalRet {
 
 fn scalar_from(a: MalArgs) -> MalRet {
     match a[0].clone() {
-        ZKScalar(s0) => {
-            Ok(ZKScalar(s0))
-        }
+        ZKScalar(s0) => Ok(ZKScalar(s0)),
         Str(a0) => {
             let s0 = bls12_381::Scalar::from_string(&a0.to_string());
             Ok(ZKScalar(s0))
@@ -401,14 +399,16 @@ fn scalar_from(a: MalArgs) -> MalRet {
 fn scalar_square(a: MalArgs) -> MalRet {
     match a[0].clone() {
         ZKScalar(a0) => {
-            let mut z0 = a0.clone();
+            let  z0 = a0.clone();
             Ok(ZKScalar(z0.square()))
         }
         Str(a0) => {
-            let mut s0 = bls12_381::Scalar::from_string(&a0);
+            let  s0 = bls12_381::Scalar::from_string(&a0);
             Ok(ZKScalar(s0.square()))
         }
-        _ => error(&format!("scalar square expect (zkscalar or string) found \n {:?}", a).to_string()),
+        _ => error(
+            &format!("scalar square expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
     }
 }
 

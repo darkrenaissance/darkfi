@@ -11,7 +11,7 @@ use bls12_381::Bls12;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::fs;
+use std::{borrow::{Borrow, BorrowMut}, fs};
 use std::fs::File;
 use std::rc::Rc;
 use std::time::Instant;
@@ -366,7 +366,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
-                        println!("{:?}", l);
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
@@ -376,11 +375,20 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("Allocations".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        // TODO change it 
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -456,20 +464,22 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for value in enforce_vec.iter() {
                             new_vec.push(value.clone());
                         }
-                        env_set(
-                            &env,
-                            Sym("AllocationsEnforce".to_string()),
-                            vector![vec![Enforce(Rc::new(new_vec))]],
-                        );
-                        /*
-                                                println!("\n\nallocations {:?}", get_allocations(&env, "Allocations"));
-                                                println!(
-                                                    "\n\nallocations input {:?}",
-                                                    get_allocations(&env, "AllocationsInput")
-                                                );
-                                                println!("\n\nallocations enforce {:?}", get_enforce_allocs(&env));
-                        */
-                        Ok(vector![vec![]])
+                        // TODO change it 
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsEnforce".to_string()),
+                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                            )?;                     
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsEnforce".to_string()),
+                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                            )?;                     
+                        }
+                        
+                        Ok(MalVal::Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {
@@ -509,8 +519,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
-    // todo need some cleanup
+pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {    
+    if let Some(e) = &env.outer {
+        get_enforce_allocs_nested(&e)
+    } else {
+        get_enforce_allocs_nested(&env)
+    }
+}
+
+pub fn get_enforce_allocs_nested(env: &Env) -> Vec<EnforceAllocation> {
+    
     match env_find(env, "AllocationsEnforce") {
         Some(e) => match env_get(&e, &Sym("AllocationsEnforce".to_string())) {
             Ok(f) => {
@@ -529,12 +547,25 @@ pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
         _ => vec![],
     }
 }
+
 pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
+    if let Some(e) = &env.outer {
+        get_allocations_nested(&e, key)
+    } else {
+        get_allocations_nested(&env, key)
+    }
+}
+
+pub fn get_allocations_nested(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
     let alloc_hm: Rc<FnvHashMap<String, MalVal>> = Rc::new(FnvHashMap::default());
+    
+    if let Some(e) = &env.outer {
+    }
+
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => {
-                if let Hash(allocs, _) = f {
+                if let Hash(allocs, _) = f {                  
                     allocs
                 } else {
                     alloc_hm
@@ -545,6 +576,7 @@ pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
         _ => alloc_hm,
     }
 }
+
 
 pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     let start = Instant::now();
@@ -566,7 +598,7 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
-    let start = Instant::now();
+    // let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
@@ -640,13 +672,13 @@ fn main() -> Result<(), ()> {
     )
     .get_matches();
 
-    CombinedLogger::init(vec![TermLogger::new(
-        LevelFilter::Debug,
-        Config::default(),
-        TerminalMode::Mixed,
-    )
-    .unwrap()])
-    .unwrap();
+    // CombinedLogger::init(vec![TermLogger::new(
+    //     LevelFilter::Debug,
+    //     Config::default(),
+    //     TerminalMode::Mixed,
+    // )
+    // .unwrap()])
+    // .unwrap();
 
     match matches.subcommand() {
         Some(("load", matches)) => {
