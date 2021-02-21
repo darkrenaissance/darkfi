@@ -43,8 +43,10 @@
     (scalar::one ~v3)
     ((scalar::one ~U) (scalar::one::neg ~A) (scalar::one::neg ~B))
    )
-  ) 
-)))
+  )
+  ;; improve return values
+)
+))
 
 (def! param4 (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
 (def! param3 (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
@@ -52,6 +54,7 @@
 (def! param1 (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
 
 (prove (
-    (jubjub-add param1 param2 param3 param4)
-    (jubjub-add param3 param4 param1 param2)
+    (def! result1 (jubjub-add param1 param2 param3 param4))
+    (println 'jubjub-result result1)
+    ;;(jubjub-add param3 param4 param1 param2)
 ))
