@@ -53,4 +53,5 @@
 
 (prove (
     (jubjub-add param1 param2 param3 param4)
+    (jubjub-add param3 param4 param1 param2)
 ))
