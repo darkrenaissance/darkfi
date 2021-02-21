@@ -189,10 +189,20 @@ fn last(a: MalArgs) -> MalRet {
         _ => error("invalid args to first"),
     }
 }
+
 fn first(a: MalArgs) -> MalRet {
     match a[0].clone() {
         List(ref seq, _) | Vector(ref seq, _) if seq.len() == 0 => Ok(Nil),
         List(ref seq, _) | Vector(ref seq, _) => Ok(seq[0].clone()),
+        Nil => Ok(Nil),
+        _ => error("invalid args to first"),
+    }
+}
+
+fn second(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        List(ref seq, _) | Vector(ref seq, _) if seq.len() < 2 => Ok(Nil),
+        List(ref seq, _) | Vector(ref seq, _) => Ok(seq[1].clone()),
         Nil => Ok(Nil),
         _ => error("invalid args to first"),
     }
@@ -560,5 +570,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("scalar", func(scalar_from)),
         ("square", func(scalar_square)),
         ("cs::one", func(cs_one)),
+        ("second", func(second)),
     ]
 }

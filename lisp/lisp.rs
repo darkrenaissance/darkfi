@@ -100,12 +100,12 @@ fn is_macro_call(ast: &MalVal, env: &Env) -> Option<(MalVal, MalArgs)> {
 fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
     let mut was_expanded = false;
     while let Some((mf, args)) = is_macro_call(&ast, env) {
-        //println!("macroexpand 1: {:?}", ast);
+        // println!("macroexpand 1: {:?}", ast);
         ast = match mf.apply(args) {
             Err(e) => return (false, Err(e)),
             Ok(a) => a,
         };
-        //println!("macroexpand 2: {:?}", ast);
+        // println!("macroexpand 2: {:?}", ast);
         was_expanded = true;
     }
     (was_expanded, Ok(ast))
@@ -328,7 +328,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[1].clone();
-                        ast = eval(a1.clone(), env.clone())?;
+                        eval(a1.clone(), env.clone())?;
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
@@ -369,6 +369,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
+                        println!("a1 {:?} ", a1);
                         let allocs = get_allocations(&env, "Allocations");
                         let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                         for (k, v) in allocs.iter() {
@@ -392,7 +393,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
-                    Sym(ref a0sym) if a0sym == "enforce" => {
+                    Sym(ref a0sym) if a0sym == "enforce" => {                        
                         // here i'm considering that we always have tuple with only two elements
                         // also it's important to keep in mind for the sake of brevity of this v0
                         // we will not allow calculation or any lisp evaluations inside the enforce
@@ -478,6 +479,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 vector![vec![Enforce(Rc::new(new_vec.clone()))]],
                             )?;                     
                         }
+
+                        println!("allocs here {:?}", get_allocations_nested(&env, "Allocations"));
+                        println!("enforce here {:?}", get_enforce_allocs_nested(&env));
                         
                         Ok(MalVal::Nil)
                     }
@@ -558,10 +562,6 @@ pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
 
 pub fn get_allocations_nested(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
     let alloc_hm: Rc<FnvHashMap<String, MalVal>> = Rc::new(FnvHashMap::default());
-    
-    if let Some(e) = &env.outer {
-    }
-
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => {
