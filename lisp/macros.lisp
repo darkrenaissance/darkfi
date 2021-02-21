@@ -9,6 +9,7 @@
 (defmacro! zk-square (fn* [var] (
         (let* [v1 (gensym)
                v2 (gensym)] (
+          (println 'values var)
         `(alloc ~v1 ~var)
         `(alloc ~v2 (square ~var))
         `(enforce  
@@ -22,6 +23,8 @@
 (def! param1 (scalar 1))
 (def! param2 (scalar 3))
 (prove 
-  (zk-square param1)
-  (zk-square param2)
+  (
+    (zk-square param1)  
+    (zk-square param2)
+  )
 )

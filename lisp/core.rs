@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
+use rand::Rng;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -466,6 +467,11 @@ fn seq(a: MalArgs) -> MalRet {
     }
 }
 
+fn gen_rand(a: MalArgs) -> MalRet {
+    let mut rng = rand::thread_rng();
+    Ok(MalVal::Int(rng.gen::<i64>()))
+}
+
 pub fn ns() -> Vec<(&'static str, MalVal)> {
     vec![
         ("=", func(|a| Ok(Bool(a[0] == a[1])))),
@@ -571,5 +577,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("square", func(scalar_square)),
         ("cs::one", func(cs_one)),
         ("second", func(second)),
+        ("genrand", func(gen_rand)),
     ]
 }
