@@ -25,6 +25,7 @@ impl OutboundSession {
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
+        info!("Starting {} outbound connection slots.", slots_count);
         let mut connect_slots = self.connect_slots.lock().await;
 
         for i in 0..slots_count {
@@ -61,13 +62,13 @@ impl OutboundSession {
 
         loop {
             let addr = self.load_address(slot_number).await?;
-            info!("Connecting to outbound [{}]", addr);
+            info!("#{} connecting to outbound [{}]", slot_number, addr);
 
             match connector.connect(addr).await {
                 Ok(channel) => {
                     // Blacklist goes here
 
-                    info!("Connected outbound [{}]", addr);
+                    info!("#{} connected to outbound [{}]", slot_number, addr);
 
                     let stop_sub = channel.subscribe_stop().await;
 

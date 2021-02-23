@@ -2,6 +2,7 @@ use log::*;
 use rand::Rng;
 use smol::Executor;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
@@ -58,6 +59,8 @@ impl ProtocolPing {
             let ping = messages::Message::Ping(messages::PingMessage { nonce });
             self.channel.clone().send(ping).await?;
             debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
+            // Start the timer for ping timer
+            let start = Instant::now();
 
             // Wait for pong, check nonce matches
             let pong_msg = receive_message!(pong_sub, messages::Message::Pong);
@@ -66,7 +69,8 @@ impl ProtocolPing {
                 self.channel.stop().await;
                 return Err(NetError::ChannelStopped);
             }
-            debug!(target: "net", "ProtocolPing::run_ping_pong() received Pong message");
+            let duration = start.elapsed().as_millis();
+            debug!(target: "net", "Received Pong message {}ms from [{:?}]", duration, self.channel.address());
         }
     }
 

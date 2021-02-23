@@ -50,6 +50,8 @@ impl P2p {
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+        debug!(target: "net", "P2p::run() [BEGIN]");
+
         let inbound = InboundSession::new(Arc::downgrade(&self));
         inbound.clone().start(executor.clone())?;
 
@@ -64,6 +66,7 @@ impl P2p {
         inbound.stop().await;
         outbound.stop().await;
 
+        debug!(target: "net", "P2p::run() [BEGIN]");
         Ok(())
     }
 
