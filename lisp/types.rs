@@ -142,7 +142,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-//                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                //                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.right.iter() {

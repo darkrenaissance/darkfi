@@ -383,9 +383,7 @@ fn negate_from(a: MalArgs) -> MalRet {
 
 fn scalar_from(a: MalArgs) -> MalRet {
     match a[0].clone() {
-        ZKScalar(s0) => {
-            Ok(ZKScalar(s0))
-        }
+        ZKScalar(s0) => Ok(ZKScalar(s0)),
         Str(a0) => {
             let s0 = bls12_381::Scalar::from_string(&a0.to_string());
             Ok(ZKScalar(s0))
