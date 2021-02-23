@@ -92,15 +92,27 @@ impl OutboundSession {
 
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
         let hosts = self.p2p().hosts();
+        let inbound_addr = self.p2p().settings().inbound;
 
-        match hosts.load_single().await {
-            Some(addr) => Ok(addr),
-            None => {
-                error!(
-                    "Hosts address pool is empty. Closing connect slot #{}",
-                    slot_number
-                );
-                Err(NetError::ServiceStopped)
+        loop {
+            match hosts.load_single().await {
+                Some(addr) => match inbound_addr {
+                    Some(inbound_addr) => {
+                        if inbound_addr != addr {
+                            return Ok(addr);
+                        }
+                    }
+                    None => {
+                        return Ok(addr);
+                    }
+                },
+                None => {
+                    error!(
+                        "Hosts address pool is empty. Closing connect slot #{}",
+                        slot_number
+                    );
+                    return Err(NetError::ServiceStopped);
+                }
             }
         }
     }

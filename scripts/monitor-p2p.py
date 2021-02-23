@@ -20,6 +20,8 @@ def debug(line):
     pass
 
 def process(info, line):
+    regex_listen = re.compile(
+        ".* Listening on (\d+[.]\d+[.]\d+[.]\d+:\d+)")
     regex_inbound_connect = re.compile(
         ".* Connected inbound \[(\d+[.]\d+[.]\d+[.]\d+:\d+)\]")
     regex_outbound_slots = re.compile(
@@ -43,6 +45,9 @@ def process(info, line):
         info["status"] = "p2p-run"
     elif "Not configured for accepting incoming connections." in line:
         info["inbounds"] = ["Disabled"]
+    elif (match := regex_listen.match(line)) is not None:
+        address = match.group(1)
+        info["listen"] = address
     elif (match := regex_inbound_connect.match(line)) is not None:
         address = match.group(1)
         info["inbounds"].append(address)
@@ -105,6 +110,9 @@ def table_format(ninfo):
     for filename, info in ninfo.items():
         table_data.append([filename, "", ""])
         table_data.append(["", "status", info["status"]])
+
+        if "listen" in info:
+            table_data.append(["", "listen", info["listen"]])
 
         inbounds = info["inbounds"]
         if inbounds:
