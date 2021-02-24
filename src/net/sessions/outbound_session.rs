@@ -95,24 +95,33 @@ impl OutboundSession {
         let inbound_addr = self.p2p().settings().inbound;
 
         loop {
-            match hosts.load_single().await {
-                Some(addr) => match inbound_addr {
-                    Some(inbound_addr) => {
-                        if inbound_addr != addr {
-                            return Ok(addr);
-                        }
-                    }
-                    None => {
-                        return Ok(addr);
-                    }
-                },
-                None => {
-                    error!(
-                        "Hosts address pool is empty. Closing connect slot #{}",
-                        slot_number
-                    );
-                    return Err(NetError::ServiceStopped);
-                }
+            let addr = hosts.load_single().await;
+
+            if addr.is_none() {
+                error!(
+                    "Hosts address pool is empty. Closing connect slot #{}",
+                    slot_number
+                );
+                return Err(NetError::ServiceStopped);
+            }
+            let addr = addr.unwrap();
+
+            if Self::addr_is_inbound(&addr, &inbound_addr) {
+                continue;
+            }
+
+            return Ok(addr);
+        }
+    }
+
+    fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
+        match inbound_addr {
+            Some(inbound_addr) => {
+                inbound_addr == addr
+            }
+            // No inbound listening address configured
+            None => {
+                false
             }
         }
     }
