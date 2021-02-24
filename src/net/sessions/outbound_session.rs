@@ -76,6 +76,11 @@ impl OutboundSession {
                         .register_channel(channel.clone(), executor.clone())
                         .await?;
 
+                    // Channel is now connected but not yet setup
+
+                    // Remove pending lock since register_channel will add the channel to p2p
+                    self.p2p().remove_pending(&addr).await;
+
                     self.clone()
                         .attach_protocols(channel, executor.clone())
                         .await?;
@@ -91,8 +96,9 @@ impl OutboundSession {
     }
 
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
-        let hosts = self.p2p().hosts();
-        let inbound_addr = self.p2p().settings().inbound;
+        let p2p = self.p2p();
+        let hosts = p2p.hosts();
+        let inbound_addr = p2p.settings().inbound;
 
         loop {
             let addr = hosts.load_single().await;
@@ -107,6 +113,15 @@ impl OutboundSession {
             let addr = addr.unwrap();
 
             if Self::addr_is_inbound(&addr, &inbound_addr) {
+                continue;
+            }
+
+            if p2p.exists(&addr).await {
+                continue;
+            }
+
+            // Obtain a lock on this address to prevent duplicate connections
+            if !p2p.add_pending(addr).await {
                 continue;
             }
 

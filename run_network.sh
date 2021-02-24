@@ -16,13 +16,14 @@ declare -a arr=(
     # Client with 1 outgoing connection
     "cargo run --bin dfi -- -r 9004 --seeds 127.0.0.1:9999 --slots 1 --log /tmp/darkfi/client2.log"
     # Server/client with 2 outgoing connections
-    "cargo run --bin dfi -- -r 9005 --accept 127.0.0.1:10002 --seeds 127.0.0.1:9999 --log /tmp/darkfi/server1.log" --slots 2
+    "cargo run --bin dfi -- -r 9005 --accept 127.0.0.1:10002 --seeds 127.0.0.1:9999 --log /tmp/darkfi/server1.log --slots 2"
 )
 
 for cmd in "${arr[@]}"; do {
   echo "Process \"$cmd\" started";
   RUST_BACKTRACE=1 $cmd & pid=$!
   PID_LIST+=" $pid";
+  sleep 1;
 } done
 
 trap "kill $PID_LIST" SIGINT

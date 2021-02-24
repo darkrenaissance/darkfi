@@ -57,7 +57,7 @@ pub trait Session: Sync {
         // Channel is now initialized
 
         // Add channel to p2p
-        self.p2p().clone().store(channel.clone()).await;
+        self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so can remove from p2p
         executor
