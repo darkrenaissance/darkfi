@@ -35,4 +35,8 @@ impl Hosts {
     pub async fn load_all(&self) -> Vec<SocketAddr> {
         self.addrs.lock().await.clone()
     }
+
+    pub async fn is_empty(&self) -> bool {
+        self.addrs.lock().await.is_empty()
+    }
 }

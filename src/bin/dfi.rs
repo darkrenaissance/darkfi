@@ -10,6 +10,7 @@ use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
+use log::*;
 
 use sapvi::{net, Result};
 
@@ -152,6 +153,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     *rpc.started.lock().await = true;
 
     p2p.clone().start(executor.clone()).await?;
+
     p2p.run(executor).await?;
 
     rpc.wait_for_quit().await?;
@@ -269,7 +271,6 @@ impl ProgramOptions {
             (@arg CONNECTS: -c --connect ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
-            (@arg DISABLE_SEED: -D --disable_seed "Disable seed process")
             (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
         )
         .get_matches();
@@ -309,12 +310,6 @@ impl ProgramOptions {
             .to_path_buf(),
         );
 
-        let skip_seed_sync = if app.is_present("DISABLE_SEED") {
-            true
-        } else {
-            false
-        };
-
         let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
             rpc_port.parse()?
         } else {
@@ -325,13 +320,13 @@ impl ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
                 outbound_connections: connection_slots,
+                seed_query_timeout_seconds: 8,
                 connect_timeout_seconds: 10,
                 channel_handshake_seconds: 4,
                 channel_heartbeat_seconds: 10,
                 external_addr: accept_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
-                skip_seed_sync,
             },
             log_path,
             rpc_port,
