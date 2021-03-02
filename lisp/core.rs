@@ -1,7 +1,7 @@
+use rand::Rng;
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
-use rand::Rng;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -410,11 +410,11 @@ fn scalar_from(a: MalArgs) -> MalRet {
 fn scalar_square(a: MalArgs) -> MalRet {
     match a[0].clone() {
         ZKScalar(a0) => {
-            let  z0 = a0.clone();
+            let z0 = a0.clone();
             Ok(ZKScalar(z0.square()))
         }
         Str(a0) => {
-            let  s0 = bls12_381::Scalar::from_string(&a0);
+            let s0 = bls12_381::Scalar::from_string(&a0);
             Ok(ZKScalar(s0.square()))
         }
         _ => error(

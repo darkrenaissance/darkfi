@@ -11,10 +11,13 @@ use bls12_381::Bls12;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::{borrow::{Borrow, BorrowMut}, fs};
 use std::fs::File;
 use std::rc::Rc;
 use std::time::Instant;
+use std::{
+    borrow::{Borrow, BorrowMut},
+    fs,
+};
 use types::EnforceAllocation;
 
 #[macro_use]
@@ -166,7 +169,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
                     }
                     Sym(ref a0sym) if a0sym == "zk*" => {
-                        println!("zk* {:?}", l[1]);
+                        // println!("zk* {:?}", l[1]);
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         match a1 {
                             List(ref binds, _) | Vector(ref binds, _) => {
@@ -369,14 +372,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
-                        println!("a1 {:?} ", a1);
+                        // println!("a1 {:?} ", a1);
                         let allocs = get_allocations(&env, "Allocations");
                         let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                         for (k, v) in allocs.iter() {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        // TODO change it 
+                        // TODO change it
                         if let Some(e) = &env.outer {
                             env_set(
                                 &e,
@@ -393,7 +396,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
-                    Sym(ref a0sym) if a0sym == "enforce" => {                        
+                    Sym(ref a0sym) if a0sym == "enforce" => {
                         // here i'm considering that we always have tuple with only two elements
                         // also it's important to keep in mind for the sake of brevity of this v0
                         // we will not allow calculation or any lisp evaluations inside the enforce
@@ -465,24 +468,27 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for value in enforce_vec.iter() {
                             new_vec.push(value.clone());
                         }
-                        // TODO change it 
+                        // TODO change it
                         if let Some(e) = &env.outer {
                             env_set(
                                 &e,
                                 Sym("AllocationsEnforce".to_string()),
                                 vector![vec![Enforce(Rc::new(new_vec.clone()))]],
-                            )?;                     
+                            )?;
                         } else {
                             env_set(
                                 &env,
                                 Sym("AllocationsEnforce".to_string()),
                                 vector![vec![Enforce(Rc::new(new_vec.clone()))]],
-                            )?;                     
+                            )?;
                         }
 
-                        println!("allocs here {:?}", get_allocations_nested(&env, "Allocations"));
-                        println!("enforce here {:?}", get_enforce_allocs_nested(&env));
-                        
+                        // println!(
+                        //     "allocs here {:?}",
+                        //     get_allocations_nested(&env, "Allocations")
+                        // );
+                        // println!("enforce here {:?}", get_enforce_allocs_nested(&env));
+
                         Ok(MalVal::Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
@@ -504,7 +510,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     continue 'tco;
                                 }
                                 _ => {
-                                    println!("{:?}", args);
+                                    // println!("{:?}", args);
                                     Ok(vector![el.to_vec()])
                                     //error("call non-function")
                                 }
@@ -523,7 +529,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     ret
 }
 
-pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {    
+pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
     if let Some(e) = &env.outer {
         get_enforce_allocs_nested(&e)
     } else {
@@ -532,7 +538,6 @@ pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
 }
 
 pub fn get_enforce_allocs_nested(env: &Env) -> Vec<EnforceAllocation> {
-    
     match env_find(env, "AllocationsEnforce") {
         Some(e) => match env_get(&e, &Sym("AllocationsEnforce".to_string())) {
             Ok(f) => {
@@ -565,7 +570,7 @@ pub fn get_allocations_nested(env: &Env, key: &str) -> Rc<FnvHashMap<String, Mal
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
             Ok(f) => {
-                if let Hash(allocs, _) = f {                  
+                if let Hash(allocs, _) = f {
                     allocs
                 } else {
                     alloc_hm
@@ -576,7 +581,6 @@ pub fn get_allocations_nested(env: &Env, key: &str) -> Rc<FnvHashMap<String, Mal
         _ => alloc_hm,
     }
 }
-
 
 pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     let start = Instant::now();
@@ -663,7 +667,7 @@ fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
 fn main() -> Result<(), ()> {
     let matches = clap_app!(zklisp =>
         (version: "0.1.0")
-        (author: "mileschet <miles.chet@gmail.com>")
+        (author: "Dark Renaissance")
         (about: "A Lisp Interpreter for Zero Knowledge Virtual Machine")
         (@subcommand load =>
             (about: "Load the file into the interpreter")

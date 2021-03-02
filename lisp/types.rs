@@ -75,52 +75,52 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
         let mut params_const = self.params;
 
-        println!("Allocations\n");
+        // println!("Allocations\n");
         for (k, v) in &self.allocs {
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
-                    println!("not allocated k {:?} v {:?}", k, v);
+                    // println!("not allocated k {:?} v {:?}", k, v);
                 }
             }
         }
 
-        println!("Allocations Input\n");
+        // println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
-            println!("k {:?} v {:?}", k, v);
+            // println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc_input(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc_input(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
-                    println!("not allocated k {:?} v {:?}", k, v);
+                    // println!("not allocated k {:?} v {:?}", k, v);
                 }
             }
         }
 
-        println!("Enforce Allocations\n");
+        // println!("Enforce Allocations\n");
         let mut enforce_sorted = self.constraints.clone();
         enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
-            println!("Enforce -> {:?}", alloc_value);
+            // println!("Enforce -> {:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();
@@ -173,7 +173,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 //println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
-            println!("Enforcing ...");
+            // println!("Enforcing ...");
             cs.enforce(
                 || "constraint",
                 |_| left.clone(),
