@@ -6,7 +6,7 @@
 
 declare -a arr=(
     # Seed node
-    "cargo run --bin dfi -- -r 8999 --accept 127.0.0.1:9999 -D --log /tmp/darkfi/seed.log"
+    "cargo run --bin dfi -- -r 8999 --accept 127.0.0.1:9999 --log /tmp/darkfi/seed.log"
     # Server with no outgoing connections
     "cargo run --bin dfi -- -r 9000 --accept 127.0.0.1:10001 --seeds 127.0.0.1:9999 --log /tmp/darkfi/server.log"
     # Server/client with 2 outgoing connections
