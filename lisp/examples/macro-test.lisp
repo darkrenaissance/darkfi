@@ -39,10 +39,6 @@
 ;; -u^2 + v^2 = 1 + du^2v^2
 (defmacro! zk-witness (fn* [val1 val2] (
         (let* [u2v2 (gensym)] (
-        ;; i know this is ugly, we need to work better on how to 
-        ;; fetch the result of the function that is by design 
-        ;; a list/vector so we use nth to get the element that 
-        ;; is the hashmap defined inside zk-square with key v2
         `(def! ~EDWARDS_D (alloc-const ~EDWARDS_D (scalar "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1")))
         `(def! u2 (alloc ~u2 (get (nth (nth (zk-square ~val1) 0) 3) "v2")))
         `(def! v2 (alloc ~v2 (get (nth (nth (zk-square ~val2) 0) 3) "v2")))
