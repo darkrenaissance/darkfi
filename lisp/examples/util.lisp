@@ -2,6 +2,7 @@
 (def! gensym
   (let* [counter (atom 0)]
     (fn* []
+      ;; (symbol (str "G__" (genrand) (swap! counter inc))))))
       (symbol (str "G__" (swap! counter inc))))))
 
 ;; Like load-file, but will never load the same path twice.

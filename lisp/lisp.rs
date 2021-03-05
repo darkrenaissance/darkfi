@@ -108,7 +108,7 @@ fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
             Err(e) => return (false, Err(e)),
             Ok(a) => a,
         };
-        // println!("macroexpand 2: {:?}", ast);
+        // println!("macroexpand 2: {:?}", ast); 
         was_expanded = true;
     }
     (was_expanded, Ok(ast))
