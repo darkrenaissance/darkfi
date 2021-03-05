@@ -42,7 +42,6 @@
         `(def! ~u2 (alloc ~u2 (get (nth (nth (zk-square ~val1) 0) 3) "v2")))
         `(def! ~v2 (alloc ~v2 (get (nth (nth (zk-square ~val2) 0) 3) "v2")))
         `(def! result (alloc-input ~u2v2 (get (last (last (zk-mul ~u2 ~v2))) "result")))        
-        ;; `(def! result (alloc-input ~result (* ~u2 ~v2)))        
         `(enforce  
             ((scalar::one::neg ~u2) (scalar::one ~v2))
             (scalar::one cs::one)
@@ -61,6 +60,6 @@
   (
     ;; (println (zk-square param1))
     ;; (println (zk-mul param1 param2))
-    (println (zk-witness param-u param-v))
+    (println 'witness (zk-witness param-u param-v))
   )
 )
