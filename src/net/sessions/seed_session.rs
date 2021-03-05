@@ -7,8 +7,8 @@ use std::sync::{Arc, Weak};
 use crate::net::error::{NetError, NetResult};
 use crate::net::protocols::{ProtocolPing, ProtocolSeed};
 use crate::net::sessions::Session;
-use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 use crate::net::utility::sleep;
+use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 
 pub struct SeedSession {
     p2p: Weak<P2p>,

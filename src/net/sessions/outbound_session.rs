@@ -131,13 +131,9 @@ impl OutboundSession {
 
     fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
         match inbound_addr {
-            Some(inbound_addr) => {
-                inbound_addr == addr
-            }
+            Some(inbound_addr) => inbound_addr == addr,
             // No inbound listening address configured
-            None => {
-                false
-            }
+            None => false,
         }
     }
 

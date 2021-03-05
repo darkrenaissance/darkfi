@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use log::*;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -80,10 +80,7 @@ impl P2p {
             .insert(channel.address(), channel);
     }
     pub async fn remove(&self, channel: ChannelPtr) {
-        self.channels
-            .lock()
-            .await
-            .remove(&channel.address());
+        self.channels.lock().await.remove(&channel.address());
     }
 
     pub async fn exists(&self, addr: &SocketAddr) -> bool {

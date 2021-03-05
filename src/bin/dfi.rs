@@ -5,12 +5,12 @@ use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use http_types::{Request, Response, StatusCode};
+use log::*;
 use serde_json::json;
 use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
-use log::*;
 
 use sapvi::{net, Result};
 
@@ -138,6 +138,9 @@ impl RpcInterface {
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
+    sapvi::net::message_subscriber::doteste().await;
+    return Ok(());
+
     let p2p = net::P2p::new(options.network_settings);
 
     let rpc = RpcInterface::new(p2p.clone());
