@@ -151,7 +151,7 @@ pub trait Message2: 'static + Decodable + Send + Sync {
 pub struct MessageSubscription2<M: Message2> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<Arc<M>>,
-    parent: Arc<Box<dyn MessageDispatcherInterface>>
+    parent: Arc<MessageDispatcher<M>>
 }
 
 impl<M: Message2> MessageSubscription2<M> {
@@ -176,9 +176,7 @@ impl<M: Message2> MessageSubscription2<M> {
 trait MessageDispatcherInterface: Sync {
     async fn notify(&self, payload: Vec<u8>);
 
-    async fn unsubscribe(&self, sub_id: MessageSubscriptionID);
-
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
 struct MessageDispatcher<M: Message2> {
@@ -197,7 +195,7 @@ impl<M: Message2> MessageDispatcher<M> {
         rng.gen()
     }
 
-    pub async fn subscribe(&self, self_arc: Arc<Box<dyn MessageDispatcherInterface>>) -> MessageSubscription2<M> {
+    pub async fn subscribe(self: Arc<Self>) -> MessageSubscription2<M> {
         let (sender, recvr) = async_channel::unbounded();
         let sub_id = Self::random_id();
         self.subs.lock().await.insert(sub_id, sender);
@@ -205,8 +203,12 @@ impl<M: Message2> MessageDispatcher<M> {
         MessageSubscription2 {
             id: sub_id,
             recv_queue: recvr,
-            parent: self_arc
+            parent: self
         }
+    }
+
+    async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
+        self.subs.lock().await.remove(&sub_id);
     }
 
     async fn notify_all(&self, message: M) {
@@ -251,11 +253,7 @@ impl<M: Message2> MessageDispatcherInterface for MessageDispatcher<M> {
         }
     }
 
-    async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
-        self.subs.lock().await.remove(&sub_id);
-    }
-
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }
 }
@@ -290,7 +288,7 @@ impl Decodable for MyVersionMessage {
 }
 
 struct MessageSubsystem {
-    dispatchers: Mutex<HashMap<&'static str, Arc<Box<dyn MessageDispatcherInterface>>>>
+    dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>
 }
 
 impl MessageSubsystem {
@@ -301,7 +299,7 @@ impl MessageSubsystem {
     pub async fn add_dispatch<M: Message2>(&self) {
         self.dispatchers.lock().await.insert(
             M::name(),
-            Arc::new(Box::new(MessageDispatcher::<M>::new())),
+            Arc::new(MessageDispatcher::<M>::new()),
         );
     }
 
@@ -313,17 +311,15 @@ impl MessageSubsystem {
             .cloned();
 
         let sub = match dispatcher {
-            Some(dispatcher_arc) => {
-                let dispatcher: &MessageDispatcher<M> = match dispatcher_arc
+            Some(dispatcher) => {
+                let dispatcher: Arc<MessageDispatcher<M>> = dispatcher
                     .as_any()
-                    .downcast_ref::<MessageDispatcher<
+                    .downcast::<MessageDispatcher<
                     M,
-                >>() {
-                    Some(dispatcher) => dispatcher,
-                    None => panic!("Multiple messages registered with different names"),
-                };
+                >>().expect(
+                    "Multiple messages registered with different names");
 
-                dispatcher.subscribe(dispatcher_arc.clone()).await
+                dispatcher.subscribe().await
             }
             None => {
                 // normall return failure here
@@ -376,5 +372,7 @@ pub async fn doteste() {
     //    1. do a get easy
     let msg2 = sub.receive().await;
     println!("{}", msg2.x);
+
+    sub.unsubscribe().await;
 }
 
