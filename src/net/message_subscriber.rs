@@ -150,12 +150,12 @@ pub trait Message2: 'static + Decodable + Send + Sync {
 
 pub struct MessageSubscription2<M: Message2> {
     id: MessageSubscriptionID,
-    recv_queue: async_channel::Receiver<Arc<M>>,
+    recv_queue: async_channel::Receiver<NetResult<Arc<M>>>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
 impl<M: Message2> MessageSubscription2<M> {
-    pub async fn receive(&self) -> Arc<M> {
+    pub async fn receive(&self) -> NetResult<Arc<M>> {
         match self.recv_queue.recv().await {
             Ok(message) => message,
             Err(err) => {
@@ -172,13 +172,15 @@ impl<M: Message2> MessageSubscription2<M> {
 
 #[async_trait]
 trait MessageDispatcherInterface: Sync {
-    async fn notify(&self, payload: Vec<u8>);
+    async fn trigger(&self, payload: Vec<u8>);
+
+    async fn trigger_error(&self, err: NetError);
 
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
 struct MessageDispatcher<M: Message2> {
-    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<Arc<M>>>>,
+    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<NetResult<Arc<M>>>>>,
 }
 
 impl<M: Message2> MessageDispatcher<M> {
@@ -209,8 +211,7 @@ impl<M: Message2> MessageDispatcher<M> {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    async fn notify_all(&self, message: M) {
-        let message = Arc::new(message);
+    async fn trigger_all(&self, message: NetResult<Arc<M>>) {
         let mut garbage_ids = Vec::new();
 
         for (sub_id, sub) in &*self.subs.lock().await {
@@ -237,16 +238,23 @@ impl<M: Message2> MessageDispatcher<M> {
 
 #[async_trait]
 impl<M: Message2> MessageDispatcherInterface for MessageDispatcher<M> {
-    async fn notify(&self, payload: Vec<u8>) {
+    async fn trigger(&self, payload: Vec<u8>) {
         // deserialize data into type
         // send down the pipes
         let cursor = Cursor::new(payload);
         match M::decode(cursor) {
-            Ok(message) => self.notify_all(message).await,
+            Ok(message) => {
+                let message = Ok(Arc::new(message));
+                self.trigger_all(message).await
+            },
             Err(err) => {
                 error!("Unable to decode data. Dropping...: {}", err);
             }
         }
+    }
+
+    async fn trigger_error(&self, err: NetError) {
+        self.trigger_all(Err(err)).await;
     }
 
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -328,14 +336,21 @@ impl MessageSubsystem {
         Ok(sub)
     }
 
-    pub async fn trigger(&self, name: &str, data: Vec<u8>) {
+    pub async fn notify(&self, name: &str, data: Vec<u8>) {
         let dispatcher = self.dispatchers.lock().await.get(name).cloned();
 
         match dispatcher {
             Some(dispatcher) => {
-                dispatcher.notify(data).await;
+                dispatcher.trigger(data).await;
             }
             None => {}
+        }
+    }
+
+    pub async fn trigger_error(&self, err: NetError) {
+        // TODO: this could be parallelized
+        for dispatcher in self.dispatchers.lock().await.values() {
+            dispatcher.trigger_error(err).await;
         }
     }
 }
@@ -359,12 +374,17 @@ pub async fn doteste() {
     // receive message and publish
     //   1. based on string, lookup relevant dispatcher interface
     //   2. publish data there
-    subsystem.trigger("verver", payload).await;
+    subsystem.notify("verver", payload).await;
 
     // receive
     //    1. do a get easy
-    let msg2 = sub.receive().await;
+    let msg2 = sub.receive().await.unwrap();
     println!("{}", msg2.x);
+
+    subsystem.trigger_error(NetError::ChannelStopped).await;
+
+    let msg2 = sub.receive().await;
+    assert!(msg2.is_err());
 
     sub.unsubscribe().await;
 }
