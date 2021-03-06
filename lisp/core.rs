@@ -423,6 +423,22 @@ fn scalar_square(a: MalArgs) -> MalRet {
     }
 }
 
+fn scalar_double(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(ZKScalar(z0.double()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.double()))
+        }
+        _ => error(
+            &format!("scalar double expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
@@ -578,5 +594,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("cs::one", func(cs_one)),
         ("second", func(second)),
         ("genrand", func(gen_rand)),
+        ("double", func(scalar_double)),
     ]
 }

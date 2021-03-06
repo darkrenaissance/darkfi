@@ -97,7 +97,6 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
-            // println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc_input(|| k, || Ok(*val))?;
