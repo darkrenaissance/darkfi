@@ -26,8 +26,9 @@ impl ProtocolSeed {
         let addr_sub = self
             .channel
             .clone()
-            .subscribe_msg(messages::PacketType::Addrs)
-            .await;
+            .subscribe_msg::<messages::AddrsMessage>()
+            .await
+            .expect("Missing addrs dispatcher!");
 
         // Send own address to the seed server
         self.send_own_address().await?;
@@ -37,7 +38,7 @@ impl ProtocolSeed {
         self.channel.clone().send(get_addr).await?;
 
         // Receive addresses
-        let addrs_msg = receive_message!(addr_sub, messages::Message::Addrs);
+        let addrs_msg = addr_sub.receive().await?;
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
         debug!(target: "net", "ProtocolSeed::start() [END]");

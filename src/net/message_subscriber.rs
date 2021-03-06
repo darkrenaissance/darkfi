@@ -14,148 +14,22 @@ use crate::net::messages::{Message, PacketType};
 use crate::serial::Decodable;
 use crate::serial::Encodable;
 
-pub type MessageSubscriberPtr = Arc<MessageSubscriber>;
 
-pub type MessageResult = NetResult<Arc<Message>>;
 pub type MessageSubscriptionID = u64;
-
-macro_rules! receive_message {
-    ($sub:expr, $message_type:path) => {{
-        let wrapped_message = owning_ref::OwningRef::new($sub.receive().await?);
-
-        wrapped_message.map(|msg| match msg {
-            $message_type(msg_detail) => msg_detail,
-            _ => {
-                panic!("Filter for receive sub invalid!");
-            }
-        })
-    }};
-}
-
-pub struct MessageSubscription {
-    id: MessageSubscriptionID,
-    filter: PacketType,
-    recv_queue: async_channel::Receiver<MessageResult>,
-    parent: Arc<MessageSubscriber>,
-}
-
-impl MessageSubscription {
-    fn is_relevant_message(&self, message_result: &MessageResult) -> bool {
-        match message_result {
-            Ok(message) => {
-                let packet_type = message.packet_type();
-
-                // Apply the filter
-                packet_type == self.filter
-            }
-            Err(_) => {
-                // Propagate all errors
-                true
-            }
-        }
-    }
-
-    pub async fn receive(&self) -> MessageResult {
-        loop {
-            let message_result = self.recv_queue.recv().await;
-
-            match message_result {
-                Ok(message_result) => {
-                    if self.clone().is_relevant_message(&message_result) {
-                        return message_result;
-                    }
-                }
-                Err(err) => {
-                    panic!("MessageSubscription::receive() recv_queue failed! {}", err);
-                }
-            }
-        }
-    }
-
-    // Must be called manually since async Drop is not possible in Rust
-    pub async fn unsubscribe(&self) {
-        self.parent.clone().unsubscribe(self.id).await
-    }
-}
-
-pub struct MessageSubscriber {
-    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult>>>,
-}
-
-impl MessageSubscriber {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            subs: Mutex::new(HashMap::new()),
-        })
-    }
-
-    pub fn random_id() -> MessageSubscriptionID {
-        let mut rng = rand::thread_rng();
-        rng.gen()
-    }
-
-    pub async fn subscribe(self: Arc<Self>, packet_type: PacketType) -> MessageSubscription {
-        let (sender, recvr) = async_channel::unbounded();
-
-        let sub_id = Self::random_id();
-
-        self.subs.lock().await.insert(sub_id, sender);
-
-        MessageSubscription {
-            id: sub_id,
-            filter: packet_type,
-            recv_queue: recvr,
-            parent: self.clone(),
-        }
-    }
-
-    async fn unsubscribe(self: Arc<Self>, sub_id: MessageSubscriptionID) {
-        self.subs.lock().await.remove(&sub_id);
-    }
-
-    pub async fn notify(&self, message_result: NetResult<Arc<Message>>) {
-        let mut garbage_ids = Vec::new();
-
-        for (sub_id, sub) in &*self.subs.lock().await {
-            match sub.send(message_result.clone()).await {
-                Ok(()) => {}
-                Err(_err) => {
-                    // Automatically clean out closed channels
-                    garbage_ids.push(*sub_id);
-                    //panic!("Error returned sending message in notify() call! {}", err);
-                }
-            }
-        }
-
-        self.collect_garbage(garbage_ids).await;
-    }
-
-    async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
-        let mut subs = self.subs.lock().await;
-        for id in &ids {
-            subs.remove(id);
-        }
-    }
-}
-
-//
-//
+type MessageResult<M> = NetResult<Arc<M>>;
 
 pub trait Message2: 'static + Decodable + Send + Sync {
     fn name() -> &'static str;
-
-    fn deserialize();
-    fn serialize();
 }
 
-pub struct MessageSubscription2<M: Message2> {
+pub struct MessageSubscription<M: Message2> {
     id: MessageSubscriptionID,
-    recv_queue: async_channel::Receiver<NetResult<Arc<M>>>,
+    recv_queue: async_channel::Receiver<MessageResult<M>>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
-impl<M: Message2> MessageSubscription2<M> {
-    pub async fn receive(&self) -> NetResult<Arc<M>> {
+impl<M: Message2> MessageSubscription<M> {
+    pub async fn receive(&self) -> MessageResult<M> {
         match self.recv_queue.recv().await {
             Ok(message) => message,
             Err(err) => {
@@ -171,7 +45,7 @@ impl<M: Message2> MessageSubscription2<M> {
 }
 
 #[async_trait]
-trait MessageDispatcherInterface: Sync {
+trait MessageDispatcherInterface: Send + Sync {
     async fn trigger(&self, payload: Vec<u8>);
 
     async fn trigger_error(&self, err: NetError);
@@ -180,7 +54,7 @@ trait MessageDispatcherInterface: Sync {
 }
 
 struct MessageDispatcher<M: Message2> {
-    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<NetResult<Arc<M>>>>>,
+    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message2> MessageDispatcher<M> {
@@ -195,12 +69,12 @@ impl<M: Message2> MessageDispatcher<M> {
         rng.gen()
     }
 
-    pub async fn subscribe(self: Arc<Self>) -> MessageSubscription2<M> {
+    pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
         let (sender, recvr) = async_channel::unbounded();
         let sub_id = Self::random_id();
         self.subs.lock().await.insert(sub_id, sender);
 
-        MessageSubscription2 {
+        MessageSubscription {
             id: sub_id,
             recv_queue: recvr,
             parent: self,
@@ -211,7 +85,7 @@ impl<M: Message2> MessageDispatcher<M> {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    async fn trigger_all(&self, message: NetResult<Arc<M>>) {
+    async fn trigger_all(&self, message: MessageResult<M>) {
         let mut garbage_ids = Vec::new();
 
         for (sub_id, sub) in &*self.subs.lock().await {
@@ -262,6 +136,44 @@ impl<M: Message2> MessageDispatcherInterface for MessageDispatcher<M> {
     }
 }
 
+use crate::net::messages::{PingMessage, PongMessage, GetAddrsMessage, AddrsMessage, VersionMessage, VerackMessage};
+
+impl Message2 for PingMessage {
+    fn name() -> &'static str {
+        "ping"
+    }
+}
+
+impl Message2 for PongMessage {
+    fn name() -> &'static str {
+        "pong"
+    }
+}
+
+impl Message2 for GetAddrsMessage {
+    fn name() -> &'static str {
+        "getaddr"
+    }
+}
+
+impl Message2 for AddrsMessage {
+    fn name() -> &'static str {
+        "addr"
+    }
+}
+
+impl Message2 for VersionMessage {
+    fn name() -> &'static str {
+        "version"
+    }
+}
+
+impl Message2 for VerackMessage {
+    fn name() -> &'static str {
+        "verack"
+    }
+}
+
 struct MyVersionMessage {
     x: u32,
 }
@@ -270,9 +182,6 @@ impl Message2 for MyVersionMessage {
     fn name() -> &'static str {
         "verver"
     }
-
-    fn deserialize() {}
-    fn serialize() {}
 }
 
 impl Encodable for MyVersionMessage {
@@ -291,7 +200,7 @@ impl Decodable for MyVersionMessage {
     }
 }
 
-struct MessageSubsystem {
+pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
 
@@ -309,12 +218,12 @@ impl MessageSubsystem {
             .insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
     }
 
-    pub async fn subscribe<M: Message2>(&self) -> NetResult<MessageSubscription2<M>> {
+    pub async fn subscribe<M: Message2>(&self) -> NetResult<MessageSubscription<M>> {
         let dispatcher = self
             .dispatchers
             .lock()
             .await
-            .get(MyVersionMessage::name())
+            .get(M::name())
             .cloned();
 
         let sub = match dispatcher {

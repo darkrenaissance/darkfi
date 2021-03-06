@@ -11,8 +11,8 @@ use crate::net::{ChannelPtr, SettingsPtr};
 
 pub struct ProtocolVersion {
     channel: ChannelPtr,
-    version_sub: MessageSubscription,
-    verack_sub: MessageSubscription,
+    version_sub: MessageSubscription<messages::VersionMessage>,
+    verack_sub: MessageSubscription<messages::VerackMessage>,
     settings: SettingsPtr,
 }
 
@@ -20,13 +20,15 @@ impl ProtocolVersion {
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
         let version_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Version)
-            .await;
+            .subscribe_msg::<messages::VersionMessage>()
+            .await
+            .expect("Missing version dispatcher!");
 
         let verack_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Verack)
-            .await;
+            .subscribe_msg::<messages::VerackMessage>()
+            .await
+            .expect("Missing verack dispatcher!");
 
         Arc::new(Self {
             channel,

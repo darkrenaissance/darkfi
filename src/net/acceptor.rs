@@ -104,7 +104,7 @@ impl Acceptor {
         };
         info!("Accepted client: {}", peer_addr);
 
-        let channel = Channel::new(stream, peer_addr, self.settings.clone());
+        let channel = Channel::new(stream, peer_addr, self.settings.clone()).await;
         Ok(channel)
     }
 }

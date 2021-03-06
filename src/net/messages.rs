@@ -237,6 +237,7 @@ impl Message {
                 message.encode(&mut payload)?;
                 Ok(Packet {
                     command: PacketType::Ping,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -245,6 +246,7 @@ impl Message {
                 message.encode(&mut payload)?;
                 Ok(Packet {
                     command: PacketType::Pong,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -253,6 +255,7 @@ impl Message {
                 message.encode(&mut payload)?;
                 Ok(Packet {
                     command: PacketType::GetAddrs,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -261,6 +264,7 @@ impl Message {
                 message.encode(Cursor::new(&mut payload))?;
                 Ok(Packet {
                     command: PacketType::Addrs,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -268,6 +272,7 @@ impl Message {
                 let payload = serialize(message);
                 Ok(Packet {
                     command: PacketType::Inv,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -275,6 +280,7 @@ impl Message {
                 let payload = serialize(message);
                 Ok(Packet {
                     command: PacketType::GetSlabs,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -282,6 +288,7 @@ impl Message {
                 let payload = serialize(message);
                 Ok(Packet {
                     command: PacketType::Slab,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -289,6 +296,7 @@ impl Message {
                 let payload = serialize(message);
                 Ok(Packet {
                     command: PacketType::Version,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -296,6 +304,7 @@ impl Message {
                 let payload = serialize(message);
                 Ok(Packet {
                     command: PacketType::Verack,
+                    command2: String::from(self.name()),
                     payload,
                 })
             }
@@ -336,6 +345,7 @@ impl Message {
 // These are converted to messages and passed to event loop
 pub struct Packet {
     pub command: PacketType,
+    pub command2: String,
     pub payload: Vec<u8>,
 }
 
@@ -351,9 +361,16 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     }
 
     // The type of the message
-    let command = AsyncReadExt::read_u8(stream).await?;
+    //let command = AsyncReadExt::read_u8(stream).await?;
+    //debug!(target: "net", "read command: {}", command);
+    //let command = PacketType::try_from(command).map_err(|_| Error::MalformedPacket)?;
+    let command_len = VarInt::decode_async(stream).await?.0 as usize;
+    let mut command = vec![0u8; command_len];
+    if command_len > 0 {
+        stream.read_exact(&mut command).await?;
+    }
+    let command = String::from_utf8(command)?;
     debug!(target: "net", "read command: {}", command);
-    let command = PacketType::try_from(command).map_err(|_| Error::MalformedPacket)?;
 
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
 
@@ -364,7 +381,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     }
     debug!(target: "net", "read payload {} bytes", payload_len);
 
-    Ok(Packet { command, payload })
+    Ok(Packet { command: PacketType::Verack, command2: command, payload })
 }
 
 pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
@@ -372,8 +389,15 @@ pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) 
     stream.write_all(&MAGIC_BYTES).await?;
     debug!(target: "net", "sent magic...");
 
-    AsyncWriteExt::write_u8(stream, packet.command as u8).await?;
-    debug!(target: "net", "sent command: {}", packet.command as u8);
+    //AsyncWriteExt::write_u8(stream, packet.command as u8).await?;
+    //debug!(target: "net", "sent command: {}", packet.command as u8);
+
+    VarInt(packet.command2.len() as u64)
+        .encode_async(stream)
+        .await?;
+    assert!(!packet.command2.is_empty());
+    stream.write_all(&packet.command2.as_bytes()).await?;
+    debug!(target: "net", "sent command: {}", packet.command2);
 
     assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<u64>());
     VarInt(packet.payload.len() as u64)

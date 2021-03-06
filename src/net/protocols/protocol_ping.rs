@@ -45,8 +45,9 @@ impl ProtocolPing {
         let pong_sub = self
             .channel
             .clone()
-            .subscribe_msg(messages::PacketType::Pong)
-            .await;
+            .subscribe_msg::<messages::PongMessage>()
+            .await
+            .expect("Missing pong dispatcher!");
 
         loop {
             // Wait channel_heartbeat amount of time
@@ -63,7 +64,7 @@ impl ProtocolPing {
             let start = Instant::now();
 
             // Wait for pong, check nonce matches
-            let pong_msg = receive_message!(pong_sub, messages::Message::Pong);
+            let pong_msg = pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
@@ -79,12 +80,13 @@ impl ProtocolPing {
         let ping_sub = self
             .channel
             .clone()
-            .subscribe_msg(messages::PacketType::Ping)
-            .await;
+            .subscribe_msg::<messages::PingMessage>()
+            .await
+            .expect("Missing ping dispatcher!");
 
         loop {
             // Wait for ping, reply with pong that has a matching nonce
-            let ping = receive_message!(ping_sub, messages::Message::Ping);
+            let ping = ping_sub.receive().await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send ping message

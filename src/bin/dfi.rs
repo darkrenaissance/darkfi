@@ -138,8 +138,8 @@ impl RpcInterface {
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    sapvi::net::message_subscriber::doteste().await;
-    return Ok(());
+    //sapvi::net::message_subscriber::doteste().await;
+    //return Ok(());
 
     let p2p = net::P2p::new(options.network_settings);
 

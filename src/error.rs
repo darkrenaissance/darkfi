@@ -39,6 +39,7 @@ pub enum Error {
     ChannelStopped,
     ChannelTimeout,
     ServiceStopped,
+    Utf8Error,
 }
 
 impl std::error::Error for Error {}
@@ -80,6 +81,7 @@ impl fmt::Display for Error {
             Error::ChannelStopped => f.write_str("Channel stopped"),
             Error::ChannelTimeout => f.write_str("Channel timed out"),
             Error::ServiceStopped => f.write_str("Service stopped"),
+            Error::Utf8Error => f.write_str("Malformed UTF8"),
         }
     }
 }
@@ -136,5 +138,11 @@ impl From<NetError> for Error {
             NetError::ChannelTimeout => Error::ChannelTimeout,
             NetError::ServiceStopped => Error::ServiceStopped,
         }
+    }
+}
+
+impl From<std::string::FromUtf8Error> for Error {
+    fn from(err: std::string::FromUtf8Error) -> Error {
+        Error::Utf8Error
     }
 }

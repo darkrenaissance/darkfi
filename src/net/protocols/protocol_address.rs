@@ -11,8 +11,8 @@ use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 pub struct ProtocolAddress {
     channel: ChannelPtr,
 
-    addrs_sub: MessageSubscription,
-    get_addrs_sub: MessageSubscription,
+    addrs_sub: MessageSubscription<messages::AddrsMessage>,
+    get_addrs_sub: MessageSubscription<messages::GetAddrsMessage>,
 
     hosts: HostsPtr,
     settings: SettingsPtr,
@@ -24,13 +24,15 @@ impl ProtocolAddress {
     pub async fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
         let addrs_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Addrs)
-            .await;
+            .subscribe_msg::<messages::AddrsMessage>()
+            .await
+            .expect("Missing addrs dispatcher!");
 
         let get_addrs_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::GetAddrs)
-            .await;
+            .subscribe_msg::<messages::GetAddrsMessage>()
+            .await
+            .expect("Missing getaddrs dispatcher!");
 
         Arc::new(Self {
             channel: channel.clone(),
@@ -63,7 +65,7 @@ impl ProtocolAddress {
     async fn handle_receive_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
-            let addrs_msg = receive_message!(self.addrs_sub, messages::Message::Addrs);
+            let addrs_msg = self.addrs_sub.receive().await?;
 
             debug!(target: "net", "ProtocolAddress::handle_receive_addrs() storing address in hosts");
             self.hosts.store(addrs_msg.addrs.clone()).await;
@@ -73,7 +75,7 @@ impl ProtocolAddress {
     async fn handle_receive_get_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() [START]");
         loop {
-            let _get_addrs = receive_message!(self.get_addrs_sub, messages::Message::GetAddrs);
+            let _get_addrs = self.get_addrs_sub.receive().await?;
 
             debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
 
