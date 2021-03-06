@@ -155,6 +155,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     right = right + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     right = right + (coeff.neg(), val_b);
+                } else {
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            right = right + (*val, val_b);
+                        }
+                    }
                 }
                 println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
@@ -169,6 +175,12 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     output = output + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     output = output + (coeff.neg(), val_b);
+                } else {
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            output = output + (*val, val_b);
+                        }
+                    }
                 }
                 println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
