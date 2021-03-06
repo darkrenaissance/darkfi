@@ -10,25 +10,23 @@ use std::sync::Arc;
 
 use crate::error::Result;
 use crate::net::error::{NetError, NetResult};
-use crate::net::messages::{Message, PacketType};
-use crate::serial::Decodable;
-use crate::serial::Encodable;
+use crate::serial::{Decodable, Encodable};
 
 
 pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
-pub trait Message2: 'static + Decodable + Send + Sync {
+pub trait Message: 'static + Encodable + Decodable + Send + Sync {
     fn name() -> &'static str;
 }
 
-pub struct MessageSubscription<M: Message2> {
+pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
-impl<M: Message2> MessageSubscription<M> {
+impl<M: Message> MessageSubscription<M> {
     pub async fn receive(&self) -> MessageResult<M> {
         match self.recv_queue.recv().await {
             Ok(message) => message,
@@ -53,11 +51,11 @@ trait MessageDispatcherInterface: Send + Sync {
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
-struct MessageDispatcher<M: Message2> {
+struct MessageDispatcher<M: Message> {
     subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult<M>>>>,
 }
 
-impl<M: Message2> MessageDispatcher<M> {
+impl<M: Message> MessageDispatcher<M> {
     fn new() -> Self {
         MessageDispatcher {
             subs: Mutex::new(HashMap::new()),
@@ -124,7 +122,7 @@ impl<M: Message2> MessageDispatcher<M> {
 }
 
 #[async_trait]
-impl<M: Message2> MessageDispatcherInterface for MessageDispatcher<M> {
+impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     async fn trigger(&self, payload: Vec<u8>) {
         // deserialize data into type
         // send down the pipes
@@ -151,37 +149,37 @@ impl<M: Message2> MessageDispatcherInterface for MessageDispatcher<M> {
 
 use crate::net::messages::{PingMessage, PongMessage, GetAddrsMessage, AddrsMessage, VersionMessage, VerackMessage};
 
-impl Message2 for PingMessage {
+impl Message for PingMessage {
     fn name() -> &'static str {
         "ping"
     }
 }
 
-impl Message2 for PongMessage {
+impl Message for PongMessage {
     fn name() -> &'static str {
         "pong"
     }
 }
 
-impl Message2 for GetAddrsMessage {
+impl Message for GetAddrsMessage {
     fn name() -> &'static str {
         "getaddr"
     }
 }
 
-impl Message2 for AddrsMessage {
+impl Message for AddrsMessage {
     fn name() -> &'static str {
         "addr"
     }
 }
 
-impl Message2 for VersionMessage {
+impl Message for VersionMessage {
     fn name() -> &'static str {
         "version"
     }
 }
 
-impl Message2 for VerackMessage {
+impl Message for VerackMessage {
     fn name() -> &'static str {
         "verack"
     }
@@ -191,7 +189,7 @@ struct MyVersionMessage {
     x: u32,
 }
 
-impl Message2 for MyVersionMessage {
+impl Message for MyVersionMessage {
     fn name() -> &'static str {
         "verver"
     }
@@ -224,14 +222,14 @@ impl MessageSubsystem {
         }
     }
 
-    pub async fn add_dispatch<M: Message2>(&self) {
+    pub async fn add_dispatch<M: Message>(&self) {
         self.dispatchers
             .lock()
             .await
             .insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
     }
 
-    pub async fn subscribe<M: Message2>(&self) -> NetResult<MessageSubscription<M>> {
+    pub async fn subscribe<M: Message>(&self) -> NetResult<MessageSubscription<M>> {
         let dispatcher = self
             .dispatchers
             .lock()

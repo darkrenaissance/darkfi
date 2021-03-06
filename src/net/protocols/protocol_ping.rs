@@ -57,7 +57,7 @@ impl ProtocolPing {
             let nonce = Self::random_nonce();
 
             // Send ping message
-            let ping = messages::Message::Ping(messages::PingMessage { nonce });
+            let ping = messages::PingMessage { nonce };
             self.channel.clone().send(ping).await?;
             debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
             // Start the timer for ping timer
@@ -90,7 +90,7 @@ impl ProtocolPing {
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send ping message
-            let pong = messages::Message::Pong(messages::PongMessage { nonce: ping.nonce });
+            let pong = messages::PongMessage { nonce: ping.nonce };
             self.channel.clone().send(pong).await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() sent Pong reply");
         }

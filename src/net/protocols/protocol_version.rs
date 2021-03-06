@@ -65,7 +65,7 @@ impl ProtocolVersion {
 
     async fn send_version(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
-        let version = messages::Message::Version(messages::VersionMessage {});
+        let version = messages::VersionMessage {};
         self.channel.clone().send(version).await?;
 
         // Wait for version acknowledgement
@@ -82,7 +82,7 @@ impl ProtocolVersion {
         // Check the message is OK
 
         // Send version acknowledgement
-        let verack = messages::Message::Verack(messages::VerackMessage {});
+        let verack = messages::VerackMessage {};
         self.channel.clone().send(verack).await?;
 
         debug!(target: "net", "ProtocolVersion::recv_version() [END]");

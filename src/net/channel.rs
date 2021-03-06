@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::error;
 use crate::net::error::{NetError, NetResult};
 use crate::net::message_subscriber::{
-    MessageSubsystem, MessageSubscription, Message2
+    MessageSubsystem, MessageSubscription, Message
 };
 use crate::net::messages;
 use crate::net::settings::SettingsPtr;
@@ -90,11 +90,10 @@ impl Channel {
         sub
     }
 
-    pub async fn send(self: Arc<Self>, message: messages::Message) -> NetResult<()> {
-        let packet_type = message.packet_type();
+    pub async fn send<M: Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
-            "Channel::send() [START, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::send() [START, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
         if self.stopped.load(Ordering::Relaxed) {
@@ -102,7 +101,7 @@ impl Channel {
         }
 
         // Catch failure and stop channel, return a net error
-        let result = match messages::send_message(&mut *self.writer.lock().await, message).await {
+        let result = match self.send_message(message).await {
             Ok(()) => Ok(()),
             Err(err) => {
                 error!("Channel send error for [{}]: {}", self.address(), err);
@@ -111,15 +110,27 @@ impl Channel {
             }
         };
         debug!(target: "net",
-            "Channel::send() [END, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::send() [END, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
         result
     }
 
-    pub async fn subscribe_msg<M: Message2>(
-        self: Arc<Self>
+    async fn send_message<M: Message>(&self, message: M) -> error::Result<()> {
+        let mut payload = Vec::new();
+        message.encode(&mut payload)?;
+        let packet = messages::Packet {
+            command: String::from(M::name()),
+            payload,
+        };
+        
+        let stream = &mut *self.writer.lock().await;
+        messages::send_packet(stream, packet).await
+    }
+
+    pub async fn subscribe_msg<M: Message>(
+        &self
     ) -> NetResult<MessageSubscription<M>> {
         debug!(target: "net",
             "Channel::subscribe_msg() [START, command={:?}, address={}]",
@@ -182,7 +193,7 @@ impl Channel {
             };
 
             // Send result to our subscribers
-            self.message_subsystem.notify(&packet.command2, packet.payload).await;
+            self.message_subsystem.notify(&packet.command, packet.payload).await;
         }
     }
 

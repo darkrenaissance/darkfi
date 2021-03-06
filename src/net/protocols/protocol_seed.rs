@@ -34,7 +34,7 @@ impl ProtocolSeed {
         self.send_self_address().await?;
 
         // Send get address message
-        let get_addr = messages::Message::GetAddrs(messages::GetAddrsMessage {});
+        let get_addr = messages::GetAddrsMessage {};
         self.channel.clone().send(get_addr).await?;
 
         // Receive addresses
@@ -50,7 +50,7 @@ impl ProtocolSeed {
         match self.settings.external_addr {
             Some(addr) => {
                 debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
-                let addr = messages::Message::Addrs(messages::AddrsMessage { addrs: vec![addr] });
+                let addr = messages::AddrsMessage { addrs: vec![addr] };
                 self.channel.clone().send(addr).await?;
             }
             None => {
