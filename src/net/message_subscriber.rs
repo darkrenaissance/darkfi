@@ -86,6 +86,12 @@ impl<M: Message2> MessageDispatcher<M> {
     }
 
     async fn trigger_all(&self, message: MessageResult<M>) {
+        debug!(
+            "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
+            M::name(),
+            if message.is_ok() { "msg" } else { "err" },
+            self.subs.lock().await.len()
+        );
         let mut garbage_ids = Vec::new();
 
         for (sub_id, sub) in &*self.subs.lock().await {
@@ -100,6 +106,13 @@ impl<M: Message2> MessageDispatcher<M> {
         }
 
         self.collect_garbage(garbage_ids).await;
+
+        debug!(
+            "MessageDispatcher<M={}>::trigger_all({}) [END, subs={}]",
+            M::name(),
+            if message.is_ok() { "msg" } else { "err" },
+            self.subs.lock().await.len()
+        );
     }
 
     async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
@@ -245,14 +258,19 @@ impl MessageSubsystem {
         Ok(sub)
     }
 
-    pub async fn notify(&self, name: &str, data: Vec<u8>) {
-        let dispatcher = self.dispatchers.lock().await.get(name).cloned();
+    pub async fn notify(&self, command: &str, payload: Vec<u8>) {
+        let dispatcher = self.dispatchers.lock().await.get(command).cloned();
 
         match dispatcher {
             Some(dispatcher) => {
-                dispatcher.trigger(data).await;
+                dispatcher.trigger(payload).await;
             }
-            None => {}
+            None => {
+                warn!(
+                    "MessageSubsystem::notify(\"{}\", payload) did not find a dispatcher",
+                    command
+                );
+            }
         }
     }
 

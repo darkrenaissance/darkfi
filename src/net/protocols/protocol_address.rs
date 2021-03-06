@@ -67,7 +67,14 @@ impl ProtocolAddress {
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
 
-            debug!(target: "net", "ProtocolAddress::handle_receive_addrs() storing address in hosts");
+            debug!(
+                target: "net",
+                "ProtocolAddress::handle_receive_addrs() received {} addrs",
+                addrs_msg.addrs.len()
+            );
+            for (i, addr) in addrs_msg.addrs.iter().enumerate() {
+                debug!("  addr[{}]: {}", i, addr);
+            }
             self.hosts.store(addrs_msg.addrs.clone()).await;
         }
     }
@@ -79,11 +86,14 @@ impl ProtocolAddress {
 
             debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
 
-            let addrs = messages::Message::Addrs(messages::AddrsMessage {
-                addrs: self.hosts.load_all().await,
-            });
-            debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() sending Addrs message");
-            self.channel.clone().send(addrs).await?;
+            let addrs = self.hosts.load_all().await;
+            debug!(
+                target: "net",
+                "ProtocolAddress::handle_receive_get_addrs() sending {} addrs",
+                addrs.len()
+            );
+            let addrs_msg = messages::Message::Addrs(messages::AddrsMessage { addrs });
+            self.channel.clone().send(addrs_msg).await?;
         }
     }
 }

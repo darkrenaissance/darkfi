@@ -328,15 +328,15 @@ impl Message {
 
     pub fn name(&self) -> &'static str {
         match self {
-            Message::Ping(_) => "Ping",
-            Message::Pong(_) => "Pong",
-            Message::GetAddrs(_) => "GetAddrs",
-            Message::Addrs(_) => "Addrs",
-            Message::Inv(_) => "Inv",
+            Message::Ping(_) => "ping",
+            Message::Pong(_) => "pong",
+            Message::GetAddrs(_) => "getaddr",
+            Message::Addrs(_) => "addr",
+            Message::Inv(_) => "inv",
             Message::GetSlabs(_) => "GetSlabs",
             Message::Slab(_) => "Slab",
-            Message::Version(_) => "Version",
-            Message::Verack(_) => "Verack",
+            Message::Version(_) => "version",
+            Message::Verack(_) => "verack",
         }
     }
 }

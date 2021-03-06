@@ -31,7 +31,7 @@ impl ProtocolSeed {
             .expect("Missing addrs dispatcher!");
 
         // Send own address to the seed server
-        self.send_own_address().await?;
+        self.send_self_address().await?;
 
         // Send get address message
         let get_addr = messages::Message::GetAddrs(messages::GetAddrsMessage {});
@@ -39,15 +39,17 @@ impl ProtocolSeed {
 
         // Receive addresses
         let addrs_msg = addr_sub.receive().await?;
+        debug!(target: "net", "ProtocolSeed::start() received {} addrs", addrs_msg.addrs.len());
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
         debug!(target: "net", "ProtocolSeed::start() [END]");
         Ok(())
     }
 
-    pub async fn send_own_address(&self) -> NetResult<()> {
+    pub async fn send_self_address(&self) -> NetResult<()> {
         match self.settings.external_addr {
             Some(addr) => {
+                debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
                 let addr = messages::Message::Addrs(messages::AddrsMessage { addrs: vec![addr] });
                 self.channel.clone().send(addr).await?;
             }
