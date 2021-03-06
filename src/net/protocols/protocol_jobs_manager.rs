@@ -29,6 +29,7 @@ impl ProtocolJobsManager {
         executor.spawn(self.handle_stop()).detach()
     }
 
+    /// Spawns a new task adding it to the internal queue
     pub async fn spawn<'a, F>(&self, future: F, executor: ExecutorPtr<'a>)
     where
         F: Future<Output = NetResult<()>> + Send + 'a,
@@ -36,6 +37,7 @@ impl ProtocolJobsManager {
         self.tasks.lock().await.push(executor.spawn(future))
     }
 
+    /// This is run in start(). When the channel closes, we also stop all the tasks
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.clone().subscribe_stop().await;
 
@@ -52,8 +54,10 @@ impl ProtocolJobsManager {
             self.name,
             self.channel.address()
         );
+        // Take all the tasks from our internal queue...
         let tasks = std::mem::take(&mut *self.tasks.lock().await);
         for task in tasks {
+            // ... and cancel them
             let _ = task.cancel().await;
         }
     }

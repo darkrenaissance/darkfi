@@ -6,7 +6,7 @@ use crate::net::error::NetResult;
 use crate::net::message_subscriber::MessageSubscription;
 use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
-use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
+use crate::net::{ChannelPtr, HostsPtr};
 
 pub struct ProtocolAddress {
     channel: ChannelPtr,
@@ -15,13 +15,12 @@ pub struct ProtocolAddress {
     get_addrs_sub: MessageSubscription<messages::GetAddrsMessage>,
 
     hosts: HostsPtr,
-    settings: SettingsPtr,
 
     jobsman: ProtocolJobsManagerPtr,
 }
 
 impl ProtocolAddress {
-    pub async fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(channel: ChannelPtr, hosts: HostsPtr) -> Arc<Self> {
         let addrs_sub = channel
             .clone()
             .subscribe_msg::<messages::AddrsMessage>()
@@ -39,7 +38,6 @@ impl ProtocolAddress {
             addrs_sub,
             get_addrs_sub,
             hosts,
-            settings,
             jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
         })
     }

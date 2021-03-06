@@ -31,7 +31,7 @@ impl P2p {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             stop_subscriber: Subscriber::new(),
-            hosts: Hosts::new(settings.clone()),
+            hosts: Hosts::new(),
             settings,
         })
     }

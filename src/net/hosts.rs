@@ -3,20 +3,16 @@ use rand::seq::SliceRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::net::SettingsPtr;
-
 pub type HostsPtr = Arc<Hosts>;
 
 pub struct Hosts {
     addrs: Mutex<Vec<SocketAddr>>,
-    settings: SettingsPtr,
 }
 
 impl Hosts {
-    pub fn new(settings: SettingsPtr) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Arc::new(Self {
             addrs: Mutex::new(Vec::new()),
-            settings,
         })
     }
 

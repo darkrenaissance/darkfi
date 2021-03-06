@@ -207,7 +207,10 @@ impl MessageSubsystem {
     }
 }
 
-pub async fn doteste() {
+// This is a test function for the message subsystem code above
+// Normall we would use the #[test] macro but cannot since it is async code
+// Instead we call it using smol::block_on() in the unit test code after this func
+async fn _do_message_subscriber_test() {
     struct MyVersionMessage {
         x: u32,
     }
@@ -256,6 +259,7 @@ pub async fn doteste() {
     // receive
     //    1. do a get easy
     let msg2 = sub.receive().await.unwrap();
+    assert_eq!(msg2.x, 110);
     println!("{}", msg2.x);
 
     subsystem.trigger_error(NetError::ChannelStopped).await;
@@ -265,3 +269,14 @@ pub async fn doteste() {
 
     sub.unsubscribe().await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_subscriber() {
+        smol::block_on(_do_message_subscriber_test());
+    }
+}
+

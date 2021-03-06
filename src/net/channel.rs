@@ -13,7 +13,6 @@ use crate::error;
 use crate::net::error::{NetError, NetResult};
 use crate::net::message_subscriber::{MessageSubscription, MessageSubsystem};
 use crate::net::messages;
-use crate::net::settings::SettingsPtr;
 use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
 
 pub type ChannelPtr = Arc<Channel>;
@@ -26,14 +25,12 @@ pub struct Channel {
     stop_subscriber: SubscriberPtr<NetError>,
     receive_task: StoppableTaskPtr,
     stopped: AtomicBool,
-    settings: SettingsPtr,
 }
 
 impl Channel {
     pub async fn new(
         stream: Async<TcpStream>,
         address: SocketAddr,
-        settings: SettingsPtr,
     ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
@@ -50,7 +47,6 @@ impl Channel {
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
-            settings,
         })
     }
 

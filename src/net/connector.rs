@@ -19,7 +19,7 @@ impl Connector {
         futures::select! {
             stream_result = Async::<TcpStream>::connect(hostaddr).fuse() => {
                 match stream_result {
-                    Ok(stream) => Ok(Channel::new(stream, hostaddr, self.settings.clone()).await),
+                    Ok(stream) => Ok(Channel::new(stream, hostaddr).await),
                     Err(_) => Err(NetError::ConnectFailed)
                 }
             }

@@ -95,6 +95,10 @@ impl OutboundSession {
         }
     }
 
+    /// Load a valid address that we can connect to.
+    /// Valid means we aren't connecting (pending state) or connected (open channel)
+    /// in another slot, and it isn't our own inbound address.
+    /// Retry otherwise.
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
         let p2p = self.p2p();
         let hosts = p2p.hosts();
@@ -146,7 +150,7 @@ impl OutboundSession {
         let hosts = self.p2p().hosts().clone();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
-        let protocol_addr = ProtocolAddress::new(channel, hosts, settings).await;
+        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;

@@ -36,6 +36,9 @@ impl SeedSession {
             tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
         }
 
+        // This line loops through all the tasks and waits for them to finish.
+        // But if the seed_query_timeout_seconds times out before they are finished,
+        // then it will simply quit and the tasks will get dropped.
         futures::select! {
             _ = async move {
                 for (i, task) in tasks.into_iter().enumerate() {

@@ -4,7 +4,6 @@ use std::io;
 use std::net::SocketAddr;
 
 use crate::error::{Error, Result};
-pub use crate::net::AsyncTcpStream;
 use crate::serial::{Decodable, Encodable, VarInt};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
