@@ -93,7 +93,7 @@ impl RpcInterface {
     }
 
     async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
-        println!("Serving {}", req.url());
+        info!("RPC serving {}", req.url());
 
         let request = req.body_string().await?;
 
@@ -138,9 +138,6 @@ impl RpcInterface {
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    //sapvi::net::message_subscriber::doteste().await;
-    //return Ok(());
-
     let p2p = net::P2p::new(options.network_settings);
 
     let rpc = RpcInterface::new(p2p.clone());

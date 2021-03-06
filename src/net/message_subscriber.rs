@@ -10,15 +10,11 @@ use std::sync::Arc;
 
 use crate::error::Result;
 use crate::net::error::{NetError, NetResult};
+use crate::net::messages::Message;
 use crate::serial::{Decodable, Encodable};
-
 
 pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
-
-pub trait Message: 'static + Encodable + Decodable + Send + Sync {
-    fn name() -> &'static str;
-}
 
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
@@ -131,7 +127,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             Ok(message) => {
                 let message = Ok(Arc::new(message));
                 self.trigger_all(message).await
-            },
+            }
             Err(err) => {
                 error!("Unable to decode data. Dropping...: {}", err);
             }
@@ -144,70 +140,6 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
-    }
-}
-
-use crate::net::messages::{PingMessage, PongMessage, GetAddrsMessage, AddrsMessage, VersionMessage, VerackMessage};
-
-impl Message for PingMessage {
-    fn name() -> &'static str {
-        "ping"
-    }
-}
-
-impl Message for PongMessage {
-    fn name() -> &'static str {
-        "pong"
-    }
-}
-
-impl Message for GetAddrsMessage {
-    fn name() -> &'static str {
-        "getaddr"
-    }
-}
-
-impl Message for AddrsMessage {
-    fn name() -> &'static str {
-        "addr"
-    }
-}
-
-impl Message for VersionMessage {
-    fn name() -> &'static str {
-        "version"
-    }
-}
-
-impl Message for VerackMessage {
-    fn name() -> &'static str {
-        "verack"
-    }
-}
-
-struct MyVersionMessage {
-    x: u32,
-}
-
-impl Message for MyVersionMessage {
-    fn name() -> &'static str {
-        "verver"
-    }
-}
-
-impl Encodable for MyVersionMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.x.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for MyVersionMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            x: Decodable::decode(&mut d)?,
-        })
     }
 }
 
@@ -230,12 +162,7 @@ impl MessageSubsystem {
     }
 
     pub async fn subscribe<M: Message>(&self) -> NetResult<MessageSubscription<M>> {
-        let dispatcher = self
-            .dispatchers
-            .lock()
-            .await
-            .get(M::name())
-            .cloned();
+        let dispatcher = self.dispatchers.lock().await.get(M::name()).cloned();
 
         let sub = match dispatcher {
             Some(dispatcher) => {
@@ -281,6 +208,31 @@ impl MessageSubsystem {
 }
 
 pub async fn doteste() {
+    struct MyVersionMessage {
+        x: u32,
+    }
+
+    impl Message for MyVersionMessage {
+        fn name() -> &'static str {
+            "verver"
+        }
+    }
+
+    impl Encodable for MyVersionMessage {
+        fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+            let mut len = 0;
+            len += self.x.encode(&mut s)?;
+            Ok(len)
+        }
+    }
+
+    impl Decodable for MyVersionMessage {
+        fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+            Ok(Self {
+                x: Decodable::decode(&mut d)?,
+            })
+        }
+    }
     println!("hello");
 
     let subsystem = MessageSubsystem::new();

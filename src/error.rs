@@ -142,7 +142,7 @@ impl From<NetError> for Error {
 }
 
 impl From<std::string::FromUtf8Error> for Error {
-    fn from(err: std::string::FromUtf8Error) -> Error {
+    fn from(_err: std::string::FromUtf8Error) -> Error {
         Error::Utf8Error
     }
 }

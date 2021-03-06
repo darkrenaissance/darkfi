@@ -1,21 +1,17 @@
 use futures::prelude::*;
 use log::*;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use smol::Executor;
-use smol::Timer;
-use std::convert::TryFrom;
 use std::io;
-use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
 
-use crate::async_serial::{AsyncReadExt, AsyncWriteExt};
 use crate::error::{Error, Result};
 pub use crate::net::AsyncTcpStream;
-use crate::serial::{serialize, Decodable, Encodable, VarInt};
+use crate::serial::{Decodable, Encodable, VarInt};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
+
+pub trait Message: 'static + Encodable + Decodable + Send + Sync {
+    fn name() -> &'static str;
+}
 
 pub struct PingMessage {
     pub nonce: u32,
@@ -34,6 +30,42 @@ pub struct AddrsMessage {
 pub struct VersionMessage {}
 
 pub struct VerackMessage {}
+
+impl Message for PingMessage {
+    fn name() -> &'static str {
+        "ping"
+    }
+}
+
+impl Message for PongMessage {
+    fn name() -> &'static str {
+        "pong"
+    }
+}
+
+impl Message for GetAddrsMessage {
+    fn name() -> &'static str {
+        "getaddr"
+    }
+}
+
+impl Message for AddrsMessage {
+    fn name() -> &'static str {
+        "addr"
+    }
+}
+
+impl Message for VersionMessage {
+    fn name() -> &'static str {
+        "version"
+    }
+}
+
+impl Message for VerackMessage {
+    fn name() -> &'static str {
+        "verack"
+    }
+}
 
 impl Encodable for PingMessage {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -156,7 +188,10 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     }
     debug!(target: "net", "read payload {} bytes", payload_len);
 
-    Ok(Packet { command: command, payload })
+    Ok(Packet {
+        command: command,
+        payload,
+    })
 }
 
 pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
@@ -183,4 +218,3 @@ pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) 
 
     Ok(())
 }
-

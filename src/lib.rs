@@ -9,7 +9,6 @@ pub mod error;
 pub mod net;
 pub mod serial;
 pub mod system;
-pub mod utility;
 pub mod vm;
 pub mod vm_serial;
 

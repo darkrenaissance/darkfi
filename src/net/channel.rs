@@ -11,9 +11,7 @@ use std::sync::Arc;
 
 use crate::error;
 use crate::net::error::{NetError, NetResult};
-use crate::net::message_subscriber::{
-    MessageSubsystem, MessageSubscription, Message
-};
+use crate::net::message_subscriber::{MessageSubscription, MessageSubsystem};
 use crate::net::messages;
 use crate::net::settings::SettingsPtr;
 use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
@@ -32,7 +30,11 @@ pub struct Channel {
 }
 
 impl Channel {
-    pub async fn new(stream: Async<TcpStream>, address: SocketAddr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(
+        stream: Async<TcpStream>,
+        address: SocketAddr,
+        settings: SettingsPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -90,7 +92,7 @@ impl Channel {
         sub
     }
 
-    pub async fn send<M: Message>(&self, message: M) -> NetResult<()> {
+    pub async fn send<M: messages::Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
             "Channel::send() [START, command={:?}, address={}]",
             M::name(),
@@ -117,21 +119,19 @@ impl Channel {
         result
     }
 
-    async fn send_message<M: Message>(&self, message: M) -> error::Result<()> {
+    async fn send_message<M: messages::Message>(&self, message: M) -> error::Result<()> {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
         let packet = messages::Packet {
             command: String::from(M::name()),
             payload,
         };
-        
+
         let stream = &mut *self.writer.lock().await;
         messages::send_packet(stream, packet).await
     }
 
-    pub async fn subscribe_msg<M: Message>(
-        &self
-    ) -> NetResult<MessageSubscription<M>> {
+    pub async fn subscribe_msg<M: messages::Message>(&self) -> NetResult<MessageSubscription<M>> {
         debug!(target: "net",
             "Channel::subscribe_msg() [START, command={:?}, address={}]",
             M::name(),
@@ -158,12 +158,24 @@ impl Channel {
     }
 
     async fn setup_dispatchers(message_subsystem: &MessageSubsystem) {
-        message_subsystem.add_dispatch::<messages::VersionMessage>().await;
-        message_subsystem.add_dispatch::<messages::VerackMessage>().await;
-        message_subsystem.add_dispatch::<messages::PingMessage>().await;
-        message_subsystem.add_dispatch::<messages::PongMessage>().await;
-        message_subsystem.add_dispatch::<messages::GetAddrsMessage>().await;
-        message_subsystem.add_dispatch::<messages::AddrsMessage>().await;
+        message_subsystem
+            .add_dispatch::<messages::VersionMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::VerackMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::PingMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::PongMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::GetAddrsMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::AddrsMessage>()
+            .await;
     }
 
     async fn main_receive_loop(self: Arc<Self>) -> NetResult<()> {
@@ -193,7 +205,9 @@ impl Channel {
             };
 
             // Send result to our subscribers
-            self.message_subsystem.notify(&packet.command, packet.payload).await;
+            self.message_subsystem
+                .notify(&packet.command, packet.payload)
+                .await;
         }
     }
 

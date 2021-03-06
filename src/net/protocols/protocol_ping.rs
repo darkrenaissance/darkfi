@@ -2,7 +2,7 @@ use log::*;
 use rand::Rng;
 use smol::Executor;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
