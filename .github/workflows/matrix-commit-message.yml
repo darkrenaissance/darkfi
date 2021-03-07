@@ -1,0 +1,19 @@
+on: [push]
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    name: Send message via Matrix
+    steps:
+    - name: Send message to test channel
+      id: matrix-chat-message
+      uses: fadenb/matrix-chat-message@v0.0.6
+      with:
+        homeserver: 'dark.fi'
+        token: ${{ secrets.MATRIX_TOKEN }}
+        channel: '!MODZOZydPqCRdulXmR:dark.fi'
+        message: |
+          This is an *example message* using **markdown** for formatting.\
+          Use a `\` character at the end of a line to cause a linebreak (the whole message is treated as markdown).\
+          You can use variables like ${{ github.sha }} anywhere.
+
