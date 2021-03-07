@@ -18,7 +18,8 @@ pub type P2pPtr = Arc<P2p>;
 pub struct P2p {
     pending: PendingChannels,
     channels: ConnectedChannels<Channel>,
-    // Used internally
+    channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
+    // Used both internally and externally
     stop_subscriber: SubscriberPtr<NetError>,
     hosts: HostsPtr,
     settings: SettingsPtr,
@@ -30,6 +31,7 @@ impl P2p {
         Arc::new(Self {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
+            channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(),
             settings,
@@ -77,7 +79,8 @@ impl P2p {
         self.channels
             .lock()
             .await
-            .insert(channel.address(), channel);
+            .insert(channel.address(), channel.clone());
+        self.channel_subscriber.notify(Ok(channel)).await;
     }
     pub async fn remove(&self, channel: ChannelPtr) {
         self.channels.lock().await.remove(&channel.address());
@@ -106,7 +109,11 @@ impl P2p {
         self.hosts.clone()
     }
 
-    async fn subscribe_stop(&self) -> Subscription<NetError> {
+    pub async fn subscribe_channel(&self) -> Subscription<NetResult<ChannelPtr>> {
+        self.channel_subscriber.clone().subscribe().await
+    }
+
+    pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         self.stop_subscriber.clone().subscribe().await
     }
 }

@@ -143,6 +143,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     }
 }
 
+// NOTE: this class is a more general version of system::Subscriber which can dispatch
+// multiple different type of registered types to sub-dispatchers
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }

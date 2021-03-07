@@ -67,9 +67,9 @@ impl Channel {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
         assert_eq!(self.stopped.load(Ordering::Relaxed), false);
         self.stopped.store(false, Ordering::Relaxed);
-        let stop_err = Arc::new(NetError::ChannelStopped);
-        self.stop_subscriber.notify(stop_err).await;
+        self.stop_subscriber.notify(NetError::ChannelStopped).await;
         self.receive_task.stop().await;
+        self.message_subsystem.trigger_error(NetError::ChannelStopped).await;
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 

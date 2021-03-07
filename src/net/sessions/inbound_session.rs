@@ -72,7 +72,7 @@ impl InboundSession {
     async fn channel_sub_loop(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let channel_sub = self.acceptor.clone().subscribe().await;
         loop {
-            let channel = (*channel_sub.receive().await).clone()?;
+            let channel = channel_sub.receive().await?;
             // Spawn a detached task to process the channel
             // This will just perform the channel setup then exit.
             executor

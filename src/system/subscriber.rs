@@ -9,12 +9,12 @@ pub type SubscriptionID = u64;
 
 pub struct Subscription<T> {
     id: SubscriptionID,
-    recv_queue: async_channel::Receiver<Arc<T>>,
+    recv_queue: async_channel::Receiver<T>,
     parent: Arc<Subscriber<T>>,
 }
 
-impl<T> Subscription<T> {
-    pub async fn receive(&self) -> Arc<T> {
+impl<T: Clone> Subscription<T> {
+    pub async fn receive(&self) -> T {
         let message_result = self.recv_queue.recv().await;
 
         match message_result {
@@ -33,10 +33,10 @@ impl<T> Subscription<T> {
 
 // Simple broadcast (publish-subscribe) class
 pub struct Subscriber<T> {
-    subs: Mutex<HashMap<u64, async_channel::Sender<Arc<T>>>>,
+    subs: Mutex<HashMap<u64, async_channel::Sender<T>>>,
 }
 
-impl<T> Subscriber<T> {
+impl<T: Clone> Subscriber<T> {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             subs: Mutex::new(HashMap::new()),
@@ -66,7 +66,7 @@ impl<T> Subscriber<T> {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    pub async fn notify(&self, message_result: Arc<T>) {
+    pub async fn notify(&self, message_result: T) {
         for sub in (*self.subs.lock().await).values() {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}

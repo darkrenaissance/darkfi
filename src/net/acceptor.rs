@@ -76,8 +76,7 @@ impl Acceptor {
     async fn run_accept_loop(self: Arc<Self>, listener: Async<TcpListener>) -> NetResult<()> {
         loop {
             let channel = self.tick_accept(&listener).await?;
-            let channel_result = Arc::new(Ok(channel));
-            self.channel_subscriber.notify(channel_result).await;
+            self.channel_subscriber.notify(Ok(channel)).await;
         }
     }
 
@@ -86,7 +85,7 @@ impl Acceptor {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
             Err(err) => {
                 // Send this error to all channel subscribers
-                let result = Arc::new(Err(err));
+                let result = Err(err);
                 self.channel_subscriber.notify(result).await;
             }
         }
