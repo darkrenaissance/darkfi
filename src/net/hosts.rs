@@ -2,6 +2,7 @@ use async_std::sync::Mutex;
 use rand::seq::SliceRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::collections::HashSet;
 
 pub type HostsPtr = Arc<Hosts>;
 
@@ -16,8 +17,15 @@ impl Hosts {
         })
     }
 
+    async fn contains(&self, addrs: &Vec<SocketAddr>) -> bool {
+        let a_set: HashSet<_> = addrs.iter().copied().collect();
+        self.addrs.lock().await.iter().any(|item| a_set.contains(item))
+    }
+
     pub async fn store(&self, addrs: Vec<SocketAddr>) {
-        self.addrs.lock().await.extend(addrs)
+        if !self.contains(&addrs).await {
+            self.addrs.lock().await.extend(addrs)
+        }
     }
 
     pub async fn load_single(&self) -> Option<SocketAddr> {
