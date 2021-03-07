@@ -343,12 +343,20 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for (k, v) in allocs.iter() {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
-                        new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("AllocationsConst".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        new_hm.insert(a1.pr_str(false), result.clone());      
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsConst".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsConst".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
@@ -361,11 +369,19 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("AllocationsInput".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsInput".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsInput".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
@@ -379,7 +395,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        // TODO change it
                         if let Some(e) = &env.outer {
                             env_set(
                                 &e,

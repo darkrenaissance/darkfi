@@ -1,6 +1,5 @@
 (load-file "util.lisp")
 
-
 (defmacro! zk-nonzero? (fn* [var] (
         (let* [inv (gensym)
                v1 (gensym)] (
@@ -11,11 +10,10 @@
             (scalar::one ~inv) 
             (scalar::one cs::one) 
          )
-        { "result" `(zero? ~var) }
+        ;; { "result" `(zero? ~var) }
         )
     ))
 ))
-
 
 (defmacro! zk-square (fn* [var] (
         (let* [v1 (gensym)
@@ -68,6 +66,19 @@
     ))
 ))
 
+
+(def! zk-not-small-order? (fn* [u v] (
+        (def! first-doubling (last (last (zk-double u v))))
+        (def! second-doubling (last (last 
+            (zk-double (get first-doubling "u3") (get first-doubling "v3")))))
+        (def! third-doubling (last (last 
+            (zk-double (get second-doubling "u3") (get second-doubling "v3")))))
+        (zk-nonzero? (get third-doubling "u3"))
+        )
+    )
+)
+
+
 (defmacro! zk-double (fn* [val1 val2] (
         (let* [u (gensym)
                v (gensym)
@@ -105,7 +116,7 @@
             (scalar::one ~v3)
             ((scalar::one ~T) (scalar::one::neg ~A) (scalar::one::neg ~A))    
          )    
-        ;; `{ "u3" ~u3, "v3" ~v3 }
+        { "u3" u3, "v3" v3 }
         )
     ))
 ))
@@ -120,7 +131,8 @@
     ;; (println (zk-square param1))
     ;; (println (zk-mul param1 param2))
     ;; (println 'witness (zk-witness param-u param-v))
-    ;; (println 'double (zk-double param-u param-v))
-    (println 'nonzero (zk-nonzero? param3))
+    ;; (println 'double (last (last (zk-double param-u param-v))))
+    ;; (println 'nonzero (zk-nonzero? param3))    
+    (println 'not-small-order? (zk-not-small-order? param-u param-v))
   )
 )

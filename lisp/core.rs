@@ -311,6 +311,14 @@ fn mul_scalar(a: MalArgs) -> MalRet {
             a0.mul_assign(a1);
             Ok(ZKScalar(a0))
         }
+        (Str(a0), Str(a1)) => {
+            let (mut s0, s1) = (
+                bls12_381::Scalar::from_string(&a0),
+                bls12_381::Scalar::from_string(&a1),
+            );
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
         _ => error("scalar mul expect (zkscalar, zkscalar)"),
     }
 }
