@@ -9,8 +9,10 @@ jobs:
         with:
           server: 'dark.fi'
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
-          access_token: ${{ secrets.MATRIX_TOKEN }}
-          status: ${{ github.sha }}
+          #access_token: ${{ secrets.MATRIX_TOKEN }}
+          user: 'narodnik'
+          password: ${{ secrets.MATRIX_PASSWORD }}
+          status: 'OK'
           message: Bob the builder
           #- name: Send message to test channel
           #  id: matrix-chat-message
