@@ -14,7 +14,7 @@ use crate::types::MalVal::{
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
 use bls12_381;
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 
 use sapvi::bls_extensions::BlsStringConversion;
 
@@ -359,10 +359,13 @@ fn range(a: MalArgs) -> MalRet {
 }
 
 fn scalar_zero(a: MalArgs) -> MalRet {
-    Ok(vector![vec![
-        ZKScalar(bls12_381::Scalar::zero()),
-        a[0].clone()
-    ]])
+    match a.len() {
+        0 => Ok(vector![vec![ZKScalar(bls12_381::Scalar::zero())]]),
+        _ => Ok(vector![vec![
+            ZKScalar(bls12_381::Scalar::zero()),
+            a[0].clone()
+        ]]),
+    }
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
@@ -439,6 +442,69 @@ fn scalar_double(a: MalArgs) -> MalRet {
     }
 }
 
+fn scalar_invert(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        Func(_, _) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(a0) = values[0] {
+                    if a0.is_zero() {
+                        error(
+                            &format!("scalar invert divizion by zero \n {:?}", a0).to_string())
+                    } else {
+                        Ok(ZKScalar(a0.invert().unwrap()))        
+                    }
+                } else {
+                    error(
+                        &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+                }
+            } else {
+                error(
+                    &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+            }
+        }
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(ZKScalar(z0.invert().unwrap()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.invert().unwrap()))
+        }
+        _ => error(
+            &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
+fn scalar_is_zero(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        Func(_, _) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(a0) = values[0] {
+                    Ok(Bool(a0.is_zero()))        
+                } else {
+                    error(
+                        &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+                }
+            } else {
+                error(
+                    &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+            }
+        }
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(Bool(z0.is_zero()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(Bool(s0.is_zero()))
+        }
+        _ => error(
+            &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
@@ -455,7 +521,7 @@ fn add_scalar(a: MalArgs) -> MalRet {
         }
         (ZKScalar(a0), ZKScalar(a1)) => {
             let (mut z0, z1) = (a0.clone(), a1.clone());
-            z0.add_assign(z1);
+            z0.add_assign(z1);        
             Ok(ZKScalar(z0))
         }
         (Str(a0), Str(a1)) => {
@@ -595,5 +661,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("second", func(second)),
         ("genrand", func(gen_rand)),
         ("double", func(scalar_double)),
+        ("invert", func(scalar_invert)),
+        ("zero?", func(scalar_is_zero)),
     ]
 }

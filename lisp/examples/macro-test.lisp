@@ -1,5 +1,22 @@
 (load-file "util.lisp")
 
+
+(defmacro! zk-nonzero? (fn* [var] (
+        (let* [inv (gensym)
+               v1 (gensym)] (
+        `(alloc ~inv (invert ~var))
+        `(alloc ~v1 ~var)
+        `(enforce  
+            (scalar::one ~v1) 
+            (scalar::one ~inv) 
+            (scalar::one cs::one) 
+         )
+        { "result" `(zero? ~var) }
+        )
+    ))
+))
+
+
 (defmacro! zk-square (fn* [var] (
         (let* [v1 (gensym)
                v2 (gensym)] (
@@ -67,7 +84,6 @@
         `(def! ~A (alloc ~A (* ~u ~v)))
         `(def! ~C (alloc ~C (* (square ~A) ~EDWARDS_D)))
         `(def! ~u3 (alloc-input ~u3 (/ (double ~A) (+ scalar::one ~C))))
-        ;; double check why t1.invert is needed on ecc.rs code 
         `(def! ~v3 (alloc-input ~v3 (/ (- ~T (double ~A)) (- scalar::one ~C))))
         `(enforce  
             ((scalar::one ~u) (scalar::one ~v))
@@ -96,6 +112,7 @@
 
 (def! param1 (scalar 3))
 (def! param2 (scalar 9))
+(def! param3 scalar::zero)
 (def! param-u (scalar "273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51"))
 (def! param-v (scalar "466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7"))
 (prove 
@@ -103,6 +120,7 @@
     ;; (println (zk-square param1))
     ;; (println (zk-mul param1 param2))
     ;; (println 'witness (zk-witness param-u param-v))
-    (println 'double (zk-double param-u param-v))
+    ;; (println 'double (zk-double param-u param-v))
+    (println 'nonzero (zk-nonzero? param3))
   )
 )
