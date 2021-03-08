@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: Numericas/matrix-action@v1
         with:
-          server: 'dark.fi:8008'
+          server: 'matrix.dark.fi'
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
           user: 'narodnik'
