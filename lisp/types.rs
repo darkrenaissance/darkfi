@@ -148,7 +148,6 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
-                    println!("{:?}", b);
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {

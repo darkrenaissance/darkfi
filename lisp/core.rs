@@ -307,6 +307,18 @@ fn mul_scalar(a: MalArgs) -> MalRet {
                 error("scalar mul expect (zkscalar, zkscalar)")
             }
         }
+        (ZKScalar(a1), Func(_, _)) => {
+            if let Vector(ref values, _) = a[1].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.mul_assign(a1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar mul expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar mul expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(mut a0), ZKScalar(a1)) => {
             a0.mul_assign(a1);
             Ok(ZKScalar(a0))
@@ -319,7 +331,8 @@ fn mul_scalar(a: MalArgs) -> MalRet {
             s0.mul_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("scalar mul expect (zkscalar, zkscalar)"),
+        _ => error( 
+            &format!("scalar mul expect (zkscalar, zkscalar) \n {:?}", a).to_string())
     }
 }
 

@@ -1,5 +1,17 @@
 (load-file "util.lisp")
 
+
+(def! zk-not-small-order? (fn* [u v] (
+        (def! first-doubling (last (last (zk-double u v))))
+        (def! second-doubling (last (last 
+            (zk-double (get first-doubling "u3") (get first-doubling "v3")))))
+        (def! third-doubling (last (last 
+            (zk-double (get second-doubling "u3") (get second-doubling "v3")))))
+        (zk-nonzero? (get third-doubling "u3"))
+        )
+    )
+)
+
 (defmacro! zk-nonzero? (fn* [var] (
         (let* [inv (gensym)
                v1 (gensym)] (
@@ -10,7 +22,6 @@
             (scalar::one ~inv) 
             (scalar::one cs::one) 
          )
-        ;; { "result" `(zero? ~var) }
         )
     ))
 ))
@@ -66,19 +77,6 @@
     ))
 ))
 
-
-(def! zk-not-small-order? (fn* [u v] (
-        (def! first-doubling (last (last (zk-double u v))))
-        (def! second-doubling (last (last 
-            (zk-double (get first-doubling "u3") (get first-doubling "v3")))))
-        (def! third-doubling (last (last 
-            (zk-double (get second-doubling "u3") (get second-doubling "v3")))))
-        (zk-nonzero? (get third-doubling "u3"))
-        )
-    )
-)
-
-
 (defmacro! zk-double (fn* [val1 val2] (
         (let* [u (gensym)
                v (gensym)
@@ -121,9 +119,31 @@
     ))
 ))
 
+;; TODO implement alloc_conditionally
+;;   cs.enforce(
+;;             || "boolean constraint",
+;;             |lc| lc + CS::one() - var,
+;;             |lc| lc + var,
+;;             |lc| lc,
+;;         );
+
+(defmacro! conditionally_select (fn* [u v condition] (
+        (let* [u-prime (gensym)] (
+            `(def! ~u-prime (alloc ~u-prime (* ~u ~condition)))
+            ;; `(alloc ~v1 u)
+            ;; `(alloc ~v2 v)
+            ;; `(alloc ~condition ~condition)
+            `(enforce
+                (scalar::one ~u)
+                (scalar::one ~condition)
+                (scalar::one ~u-prime)
+             )
+        )
+))))
+
 (def! param1 (scalar 3))
 (def! param2 (scalar 9))
-(def! param3 scalar::zero)
+(def! param3 (scalar "0000000000000000000000000000000000000000000000000000000000000000"))
 (def! param-u (scalar "273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51"))
 (def! param-v (scalar "466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7"))
 (prove 
@@ -133,6 +153,11 @@
     ;; (println 'witness (zk-witness param-u param-v))
     ;; (println 'double (last (last (zk-double param-u param-v))))
     ;; (println 'nonzero (zk-nonzero? param3))    
-    (println 'not-small-order? (zk-not-small-order? param-u param-v))
+    ;; (println 'not-small-order? (zk-not-small-order? param-u param-v))
+    (def! alloc-u (alloc "alloc-u" param-u))
+    ;; (def! alloc-v (alloc "alloc-v" param-v))
+    (def! condition (alloc "condition" param3))
+    (println 'conditionally_select 
+        (conditionally_select alloc-u alloc-v condition))
   )
 )

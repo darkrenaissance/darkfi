@@ -386,9 +386,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
-                        let value = eval(l[2].clone(), env.clone())?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
+                        if let Func(_, _) = value {
+                            value = value.apply(vec![]).unwrap();
+                        } 
                         let result = eval(value.clone(), env.clone())?;
-                        // println!("a1 {:?} ", a1);
                         let allocs = get_allocations(&env, "Allocations");
                         let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
                         for (k, v) in allocs.iter() {
