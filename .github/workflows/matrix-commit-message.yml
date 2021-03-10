@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
-      - uses: Numericas/matrix-action@v1
+      - uses: zkjanus/matrix-action@v1
         with:
           server: 'matrix.dark.fi'
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
