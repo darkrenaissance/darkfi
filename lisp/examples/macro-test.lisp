@@ -128,15 +128,19 @@
 ;;         );
 
 (defmacro! conditionally_select (fn* [u v condition] (
-        (let* [u-prime (gensym)] (
+        (let* [u-prime (gensym)
+               v-prime (gensym)] (
             `(def! ~u-prime (alloc ~u-prime (* ~u ~condition)))
-            ;; `(alloc ~v1 u)
-            ;; `(alloc ~v2 v)
-            ;; `(alloc ~condition ~condition)
+            `(def! ~v-prime (alloc ~v-prime (* ~v ~condition)))
             `(enforce
                 (scalar::one ~u)
                 (scalar::one ~condition)
                 (scalar::one ~u-prime)
+             )
+            `(enforce
+                (scalar::one ~v)
+                (scalar::one ~condition)
+                (scalar::one ~v-prime)
              )
         )
 ))))
@@ -155,7 +159,7 @@
     ;; (println 'nonzero (zk-nonzero? param3))    
     ;; (println 'not-small-order? (zk-not-small-order? param-u param-v))
     (def! alloc-u (alloc "alloc-u" param-u))
-    ;; (def! alloc-v (alloc "alloc-v" param-v))
+    (def! alloc-v (alloc "alloc-v" param-v))
     (def! condition (alloc "condition" param3))
     (println 'conditionally_select 
         (conditionally_select alloc-u alloc-v condition))
