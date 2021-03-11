@@ -10,6 +10,7 @@ jobs:
           server: 'matrix.dark.fi'
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
+          status: 'OK'
           user: 'narodnik'
           password: ${{ secrets.MATRIX_PASSWORD }}
           message: Bob the builder {{ github.sha }}
