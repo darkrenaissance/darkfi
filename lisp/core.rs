@@ -178,6 +178,18 @@ fn unpack_bits(a: MalArgs) -> MalRet {
                 .map(|a| Str(std::string::ToString::to_string(&a)[2..].to_string()))
                 .collect::<Vec<MalVal>>()))
         }
+        ZKScalar(ref s) => {
+            for (_, bit) in s.to_le_bits().into_iter().cloned().enumerate() {
+                match bit {
+                    true => result.push(bls12_381::Scalar::one()),
+                    false => result.push(bls12_381::Scalar::zero()),
+                }
+            }
+            Ok(list!(result
+                .iter()
+                .map(|a| Str(std::string::ToString::to_string(&a)[2..].to_string()))
+                .collect::<Vec<MalVal>>()))
+        }
         _ => error("invalid args to unpack-bits"),
     }
 }
