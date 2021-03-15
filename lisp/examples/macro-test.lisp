@@ -200,24 +200,42 @@
 (def! jj-mul (fn* [u v b] (
     (def! result (unpack-bits b))
     (eval (map zk-boolean result))
+    ;; (def! double-result (last (last (zk-double u v))))
+    ;; (map (fn* [n] (        
+        ;; (println double-result)
+        ;; conditionally_select u v 
+        ;; jj-add u v (conditionally_select result)        
+    ;; )) (rest result))
     ;; 2nd step
     ;; (map result [n](
-        ;; 1st just clone
-        ;; 2nd zk-double
-        ;; 3rd conditionally_select
-        ;; 4rd jj-add
+        ;; 1st just clone ** ignore this 
+        ;; 2nd zk-double u v
+        ;; 3rd conditionally_select u v 
+        ;; 4rd jj-add u v (conditionally_select result)
     ;; ))
 )))
 
 (def! param3 (scalar "0000000000000000000000000000000000000000000000000000000000000000"))
 (def! param-u (scalar "273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51"))
 (def! param-v (scalar "466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7"))
-(prove 
-  (
-    (jj-mul param-u param-v param3)
-    ;; (println (zk-mul param1 param2))
-  )
-)
+(def! param1 (scalar 42))
+;; (prove 
+;;   (
+;;     ;; (println (zk-square param1))
+;;     ;; (jj-mul param-u param-v param3)
+;;   )
+;; )
+
+;; (def! u-doubling (get double-result "u3"))
+    ;;     (def! v-doubling (get double-result "v3"))
+    ;;     (def! double-result (last (last (zk-double u-doubling v-doubling))))
+
+(def! for-loop (fn* [x len] (
+    (if (i>= x len) 
+        (println 'zero) 
+        (println x (for-loop (i+ x 1) len)))    
+)))
+(for-loop 1 10) 
 
 ;; following some examples 
 ;; (def! alloc-u (alloc "alloc-u" param-u))
@@ -225,6 +243,7 @@
 ;;     (def! condition (alloc "condition" param3))
 ;;     (println 'conditionally_select 
 ;;         (conditionally_select alloc-u alloc-v condition))
+;; (println (zk-mul param1 param2))
 ;; (def! param1 (scalar 3))
 ;; (def! param2 (scalar 9))
 ;; (println (zk-square param1))
