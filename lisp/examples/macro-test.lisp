@@ -119,9 +119,16 @@
     ))
 ))
 
-(defmacro! conditionally_select (fn* [u v condition] (
+(defmacro! conditionally-select (fn* [val1 val2 val3] (
         (let* [u-prime (gensym)
-               v-prime (gensym)] (
+               v-prime (gensym)
+               u (gensym)
+               v (gensym)
+               condition (gensym)
+               ] (
+            `(def! ~u (alloc ~u ~val1))
+            `(def! ~v (alloc ~v ~val2))
+            `(def! ~condition (alloc ~condition ~val3))
             `(def! ~u-prime (alloc-input ~u-prime (* ~u ~condition)))
             `(def! ~v-prime (alloc-input ~v-prime (* ~v ~condition)))
             `(enforce
@@ -142,10 +149,10 @@
     (let* [u1 (gensym) v1 (gensym) u2 (gensym) v2 (gensym)
            EDWARDS_D (gensym) U (gensym) A (gensym) B (gensym)
            C (gensym) u3 (gensym) v3 (gensym)] (
-        `(def! ~u1 (alloc ~u1 param1))
-        `(def! ~v1 (alloc ~v1 param2))
-        `(def! ~u2 (alloc ~u2 param3))
-        `(def! ~v2 (alloc ~v2 param4)) 
+        `(def! ~u1 (alloc ~u1 ~param1))
+        `(def! ~v1 (alloc ~v1 ~param2))
+        `(def! ~u2 (alloc ~u2 ~param3))
+        `(def! ~v2 (alloc ~v2 ~param4)) 
         `(def! ~EDWARDS_D (alloc-const ~EDWARDS_D (scalar "2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1")))
         `(def! ~U (alloc ~U (* (+ ~u1 ~v1) (+ ~u2 ~v2))))
         `(def! ~A (alloc ~A (* ~v2 ~u1)))
@@ -172,9 +179,9 @@
     ((scalar::one cs::one) (scalar::one::neg ~C))
     (scalar::one ~v3)
     ((scalar::one ~U) (scalar::one::neg ~A) (scalar::one::neg ~B))
-   )
-  )
-  ;; improve return values
+   )   
+   { "u3" u3, "v3" v3 }
+  )  
 )
 ))
 
@@ -195,52 +202,35 @@
         )
 ))))
 
-;; b == (scalar "0000000000000000000000000000000000000000000000000000000000000000")
-;; u,v == jubjub ecc point
 (def! jj-mul (fn* [u v b] (
     (def! result (unpack-bits b))
     (eval (map zk-boolean result))
-    (def! double-result (last (last (zk-double u v))))
-    ;; 2nd step
-    ;; (map result [n](
-        ;; 1st just clone ** ignore this 
-        ;; 2nd zk-double u v
-        ;; 3rd conditionally_select u v 
-        ;; 4rd jj-add u v (conditionally_select result)
-    ;; ))
+    (def! val (last (last (zk-double param-u param-v))))
+    (def! acc 1)
+    (dotimes (count result) (            
+        (def! u3 (get val "u3"))
+        (def! v3 (get val "v3"))
+        (def! val (last (last (zk-double u3 v3))))     
+        (def! r (nth result acc))
+        (def! cond-result (last (last (conditionally-select u3 v3 r))))
+        (def! u-prime (get cond-result "u-prime"))
+        (def! v-prime (get cond-result "v-prime"))
+        (def! add-result (last (jj-add u3 v3 u-prime v-prime)))               
+        (def! acc (i+ acc 1))
+        (println acc u3 v3 u-prime v-prime cond-result add-result)        
+    ))
 )))
 
 (def! param3 (scalar "0000000000000000000000000000000000000000000000000000000000000000"))
 (def! param-u (scalar "273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51"))
 (def! param-v (scalar "466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7"))
 (def! param1 (scalar 42))
-;; (prove 
-;;   (
-;;     ;; (println (zk-square param1))
-;;     ;; (jj-mul param-u param-v param3)
-;;   )
-;; )
-;; (def! for-loop (fn* [acc len val] (
-;;         (println acc val)
-;;         (if (i>= acc len) 
-;;             (println 'EOF) 
-;;             (do                            
-;;                 (for-loop (i+ acc 1) len (last (last (zk-double (get val "u3") (get val "v3")))))
-;;             )        
-;;         )
-;; )))
-
-(def! result (unpack-bits param3))
-(def! len (count result))
-(def! val (last (last (zk-double param-u param-v))))
-(dotimes 256 (    
-    (def! u (get val "u3"))
-    (def! v (get val "v3"))
-    (def! val (last (last (zk-double u v))))
-    (println u v val)
-))
-
-;; (for-loop 2 (count result) double-result)
+(prove 
+  (
+    ;; (println (zk-square param1))
+    (jj-mul param-u param-v param3)
+  )
+)
 
 ;; following some examples 
 ;; (def! alloc-u (alloc "alloc-u" param-u))

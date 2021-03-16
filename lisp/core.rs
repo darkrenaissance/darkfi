@@ -289,9 +289,32 @@ fn sub_scalar(a: MalArgs) -> MalRet {
                 error("scalar sub expect (zkscalar, zkscalar)")
             }
         }
+        (Func(_, _), Str(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                let s1 = bls12_381::Scalar::from_string(&a1);
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.sub_assign(s1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar sub expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar sub expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(mut a0), ZKScalar(a1)) => {
             a0.sub_assign(a1);
             Ok(ZKScalar(a0))
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.sub_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        (ZKScalar(a0), Str(a1)) => {
+            let (mut s0, s1) = (a0, bls12_381::Scalar::from_string(&a1));
+            s0.sub_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
         (Str(a0), Str(a1)) => {
             let (mut s0, s1) = (
@@ -301,7 +324,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("scalar sub expected (zkscalar, zkscalar)"),
+        _ => error(&format!("scalar sub expect (zkscalar, zkscalar) found \n {:?}", a).to_string()),
     }
 }
 
@@ -343,6 +366,18 @@ fn mul_scalar(a: MalArgs) -> MalRet {
             s0.mul_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
+        (ZKScalar(a0), Str(a1)) => {
+            let (mut s0, s1) = (a0,
+                bls12_381::Scalar::from_string(&a1),
+            );
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
         _ => error( 
             &format!("scalar mul expect (zkscalar, zkscalar) \n {:?}", a).to_string())
     }
@@ -351,6 +386,17 @@ fn mul_scalar(a: MalArgs) -> MalRet {
 fn div_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (ZKScalar(s0), ZKScalar(s1)) => {
+            let ret = s1.invert().map(|other| *&s0 * other);
+            if bool::from(ret.is_some()) {
+                Ok(Str(
+                    std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
+                ))
+            } else {
+                error("DivisionByZero")
+            }
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
             let ret = s1.invert().map(|other| *&s0 * other);
             if bool::from(ret.is_some()) {
                 Ok(Str(
@@ -374,7 +420,8 @@ fn div_scalar(a: MalArgs) -> MalRet {
                 error("DivisionByZero")
             }
         }
-        _ => error("scalar div expected (scalar, scalar)"),
+        _ => error( 
+            &format!("scalar div expect (zkscalar, zkscalar) \n {:?}", a).to_string())
     }
 }
 
@@ -544,6 +591,19 @@ fn add_scalar(a: MalArgs) -> MalRet {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
                 if let ZKScalar(mut a0) = values[0] {
                     a0.add_assign(a1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar add expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar add expect (zkscalar, zkscalar)")
+            }
+        }
+        (Func(_, _), Str(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    let s1 = bls12_381::Scalar::from_string(&a1);
+                    a0.add_assign(s1);
                     Ok(ZKScalar(a0))
                 } else {
                     error("scalar add expect (zkscalar, zkscalar) found (func, zkscalar)")
