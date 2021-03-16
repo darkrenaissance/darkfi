@@ -200,12 +200,7 @@
 (def! jj-mul (fn* [u v b] (
     (def! result (unpack-bits b))
     (eval (map zk-boolean result))
-    ;; (def! double-result (last (last (zk-double u v))))
-    ;; (map (fn* [n] (        
-        ;; (println double-result)
-        ;; conditionally_select u v 
-        ;; jj-add u v (conditionally_select result)        
-    ;; )) (rest result))
+    (def! double-result (last (last (zk-double u v))))
     ;; 2nd step
     ;; (map result [n](
         ;; 1st just clone ** ignore this 
@@ -225,21 +220,27 @@
 ;;     ;; (jj-mul param-u param-v param3)
 ;;   )
 ;; )
+;; (def! for-loop (fn* [acc len val] (
+;;         (println acc val)
+;;         (if (i>= acc len) 
+;;             (println 'EOF) 
+;;             (do                            
+;;                 (for-loop (i+ acc 1) len (last (last (zk-double (get val "u3") (get val "v3")))))
+;;             )        
+;;         )
+;; )))
 
-(def! for-loop (fn* [acc len u v] (
-    (if (i>= acc len) 
-        (println 'EOF) 
-        (
-            (def! double-result (last (last (zk-double u v))))
-            (println acc double-result)
-            (for-loop (i+ acc 1) len (get double-result "u3") (get double-result "v3"))
-        ))    
-)))
-(def! double-result (last (last (zk-double param-u param-v))))
 (def! result (unpack-bits param3))
-(for-loop 1 
-    (count result) 
-    (get double-result "u3") (get double-result "v3")) 
+(def! len (count result))
+(def! val (last (last (zk-double param-u param-v))))
+(dotimes 256 (    
+    (def! u (get val "u3"))
+    (def! v (get val "v3"))
+    (def! val (last (last (zk-double u v))))
+    (println u v val)
+))
+
+;; (for-loop 2 (count result) double-result)
 
 ;; following some examples 
 ;; (def! alloc-u (alloc "alloc-u" param-u))

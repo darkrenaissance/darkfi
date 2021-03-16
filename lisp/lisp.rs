@@ -288,6 +288,17 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => error("invalid do form"),
                         }
                     }
+                    Sym(ref a0sym) if a0sym == "dotimes" => {
+                        match l[1].clone() {
+                            MalVal::Int(v) => {
+                                for _i in 1..v {
+                                    eval(l[2].clone(), env.clone())?;
+                                }
+                                Ok(Nil)
+                            }
+                            _ => error("invalid args for dotimes"),
+                        }                        
+                    }
                     Sym(ref a0sym) if a0sym == "if" => {
                         let cond = eval(l[1].clone(), env.clone())?;
                         match cond {
