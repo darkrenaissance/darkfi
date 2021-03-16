@@ -226,16 +226,20 @@
 ;;   )
 ;; )
 
-;; (def! u-doubling (get double-result "u3"))
-    ;;     (def! v-doubling (get double-result "v3"))
-    ;;     (def! double-result (last (last (zk-double u-doubling v-doubling))))
-
-(def! for-loop (fn* [x len] (
-    (if (i>= x len) 
-        (println 'zero) 
-        (println x (for-loop (i+ x 1) len)))    
+(def! for-loop (fn* [acc len u v] (
+    (if (i>= acc len) 
+        (println 'EOF) 
+        (
+            (def! double-result (last (last (zk-double u v))))
+            (println acc double-result)
+            (for-loop (i+ acc 1) len (get double-result "u3") (get double-result "v3"))
+        ))    
 )))
-(for-loop 1 10) 
+(def! double-result (last (last (zk-double param-u param-v))))
+(def! result (unpack-bits param3))
+(for-loop 1 
+    (count result) 
+    (get double-result "u3") (get double-result "v3")) 
 
 ;; following some examples 
 ;; (def! alloc-u (alloc "alloc-u" param-u))
