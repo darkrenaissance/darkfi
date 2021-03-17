@@ -27,7 +27,7 @@ jobs:
           status: 'OK'
           user: 'narodnik'
           password: ${{ secrets.MATRIX_PASSWORD }}
-          message: ${{ steps.commit-message.outputs.COMMIT_MESSAGE }}
+          message: '${{ steps.commit-message.outputs.COMMIT_MESSAGE }}'
           #- name: Send message to test channel
           #  id: matrix-chat-message
           #  uses: fadenb/matrix-chat-message@v0.0.6
