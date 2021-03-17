@@ -15,7 +15,7 @@ jobs:
             MSG=$(git --no-pager show -s --format='%h <b>%an</b>: %s' $i)
             # From this link the newline character is: %0A
             # https://github.community/t/set-output-truncates-multiline-strings/16852
-            ALL_MSGS="$ALL_MSGS$MSG%0A"
+            ALL_MSGS="$ALL_MSGS$MSG<br>%0A"
           done
           echo "::set-output name=COMMIT_MESSAGE::$ALL_MSGS"
         id: commit-message
