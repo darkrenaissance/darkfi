@@ -232,23 +232,19 @@
 
 (load-file "mimc-constants.lisp")
 (defmacro! mimc-macro (fn* [xr xl acc] (
-    (let* [tmp-xl (gensym) xl-new (gensym) xl-new-value (gensym) cur-mimc-const (gensym)] (
-    `(def! ~cur-mimc-const (alloc ~cur-mimc-const (nth mimc-constants ~acc)))
+    (let* [tmp-xl (gensym) xl-new-value (gensym) cur-mimc-const (gensym)] (
+    `(def! ~cur-mimc-const (alloc-const ~cur-mimc-const (nth mimc-constants ~acc)))
     `(def! ~tmp-xl (alloc ~tmp-xl (square (+ ~cur-mimc-const ~xl))))        
     `(enforce 
         ((scalar::one xl) (~cur-mimc-const cs::one))
         ((scalar::one xl) (~cur-mimc-const cs::one))
         (scalar::one ~tmp-xl)
     )        
-    `(def! ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr))
-    `(if (= acc 321)
-        (alloc-input "image" ~xl-new-value)
-        (alloc ~xl-new ~xl-new-value)
-    )
+    `(def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
     `(enforce 
         (scalar::one ~tmp-xl)
         ((scalar::one xl) (~cur-mimc-const cs::one))            
-        ((scalar::one ~xl-new) (scalar::one::neg xr))            
+        ((scalar::one ~xl-new-value) (scalar::one::neg xr))            
     )
 )))))
 (def! mimc (fn* [left right] (
@@ -256,8 +252,9 @@
     (def! xr (alloc "xr" right))
     (def! acc 1)
     (dotimes 322 (
-        (mimc-macro xl xr acc)
+        (println (mimc-macro xl xr acc))
         (def! acc (i+ acc 1))
+        (println acc)
     ))
 )))
 

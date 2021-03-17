@@ -185,7 +185,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
-            // println!("Enforcing ...");
+            println!("Enforcing ...");
             cs.enforce(
                 || "constraint",
                 |_| left.clone(),
