@@ -253,7 +253,7 @@
 (def! mimc (fn* [left right] (
     (def! xl (alloc "xl" left))
     (def! xr (alloc "xr" right))
-    (def! acc 1)
+    (def! acc 0)
     (dotimes 322 (
         (println (mimc-macro xl xr acc))
         (def! acc (i+ acc 1))
