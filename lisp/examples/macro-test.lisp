@@ -240,7 +240,10 @@
         ((scalar::one xl) (~cur-mimc-const cs::one))
         (scalar::one ~tmp-xl)
     )        
-    `(def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
+    (if (= acc 321)
+        `(def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
+        `(def! ~xl-new-value (alloc-input ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
+    )
     `(enforce 
         (scalar::one ~tmp-xl)
         ((scalar::one xl) (~cur-mimc-const cs::one))            
