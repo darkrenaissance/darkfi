@@ -11,11 +11,8 @@ use std::sync::Arc;
 
 use crate::error;
 use crate::net::error::{NetError, NetResult};
-use crate::net::message_subscriber::{
-    MessageSubscriber, MessageSubscriberPtr, MessageSubscription,
-};
+use crate::net::message_subscriber::{MessageSubscription, MessageSubsystem};
 use crate::net::messages;
-use crate::net::settings::SettingsPtr;
 use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
 
 pub type ChannelPtr = Arc<Channel>;
@@ -24,27 +21,32 @@ pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
     writer: Mutex<WriteHalf<Async<TcpStream>>>,
     address: SocketAddr,
-    message_subscriber: MessageSubscriberPtr,
+    message_subsystem: MessageSubsystem,
     stop_subscriber: SubscriberPtr<NetError>,
     receive_task: StoppableTaskPtr,
     stopped: AtomicBool,
-    settings: SettingsPtr,
 }
 
 impl Channel {
-    pub fn new(stream: Async<TcpStream>, address: SocketAddr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(
+        stream: Async<TcpStream>,
+        address: SocketAddr,
+    ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
+
+        let message_subsystem = MessageSubsystem::new();
+        Self::setup_dispatchers(&message_subsystem).await;
+
         Arc::new(Self {
             reader,
             writer,
             address,
-            message_subscriber: MessageSubscriber::new(),
+            message_subsystem,
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
-            settings,
         })
     }
 
@@ -52,7 +54,7 @@ impl Channel {
         debug!(target: "net", "Channel::start() [START, address={}]", self.address());
         let self2 = self.clone();
         self.receive_task.clone().start(
-            self.clone().receive_loop(),
+            self.clone().main_receive_loop(),
             // Ignore stop handler
             |result| self2.handle_stop(result),
             NetError::ServiceStopped,
@@ -65,9 +67,9 @@ impl Channel {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
         assert_eq!(self.stopped.load(Ordering::Relaxed), false);
         self.stopped.store(false, Ordering::Relaxed);
-        let stop_err = Arc::new(NetError::ChannelStopped);
-        self.stop_subscriber.notify(stop_err).await;
+        self.stop_subscriber.notify(NetError::ChannelStopped).await;
         self.receive_task.stop().await;
+        self.message_subsystem.trigger_error(NetError::ChannelStopped).await;
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 
@@ -86,11 +88,10 @@ impl Channel {
         sub
     }
 
-    pub async fn send(self: Arc<Self>, message: messages::Message) -> NetResult<()> {
-        let packet_type = message.packet_type();
+    pub async fn send<M: messages::Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
-            "Channel::send() [START, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::send() [START, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
         if self.stopped.load(Ordering::Relaxed) {
@@ -98,7 +99,7 @@ impl Channel {
         }
 
         // Catch failure and stop channel, return a net error
-        let result = match messages::send_message(&mut *self.writer.lock().await, message).await {
+        let result = match self.send_message(message).await {
             Ok(()) => Ok(()),
             Err(err) => {
                 error!("Channel send error for [{}]: {}", self.address(), err);
@@ -107,26 +108,35 @@ impl Channel {
             }
         };
         debug!(target: "net",
-            "Channel::send() [END, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::send() [END, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
         result
     }
 
-    pub async fn subscribe_msg(
-        self: Arc<Self>,
-        packet_type: messages::PacketType,
-    ) -> MessageSubscription {
+    async fn send_message<M: messages::Message>(&self, message: M) -> error::Result<()> {
+        let mut payload = Vec::new();
+        message.encode(&mut payload)?;
+        let packet = messages::Packet {
+            command: String::from(M::name()),
+            payload,
+        };
+
+        let stream = &mut *self.writer.lock().await;
+        messages::send_packet(stream, packet).await
+    }
+
+    pub async fn subscribe_msg<M: messages::Message>(&self) -> NetResult<MessageSubscription<M>> {
         debug!(target: "net",
-            "Channel::subscribe_msg() [START, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::subscribe_msg() [START, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
-        let sub = self.message_subscriber.clone().subscribe(packet_type).await;
+        let sub = self.message_subsystem.subscribe::<M>().await;
         debug!(target: "net",
-            "Channel::subscribe_msg() [END, pkt_type={:?}, address={}]",
-            packet_type,
+            "Channel::subscribe_msg() [END, command={:?}, address={}]",
+            M::name(),
             self.address()
         );
         sub
@@ -143,17 +153,42 @@ impl Channel {
         }
     }
 
-    async fn receive_loop(self: Arc<Self>) -> NetResult<()> {
+    async fn setup_dispatchers(message_subsystem: &MessageSubsystem) {
+        message_subsystem
+            .add_dispatch::<messages::VersionMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::VerackMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::PingMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::PongMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::GetAddrsMessage>()
+            .await;
+        message_subsystem
+            .add_dispatch::<messages::AddrsMessage>()
+            .await;
+    }
+
+    pub fn get_message_subsystem(&self) -> &MessageSubsystem {
+        &self.message_subsystem
+    }
+
+    async fn main_receive_loop(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net",
             "Channel::receive_loop() [START, address={}]",
             self.address()
         );
+
         let reader = &mut *self.reader.lock().await;
 
         loop {
-            let message_result = messages::receive_message(reader).await;
-            let message = match message_result {
-                Ok(message) => Arc::new(message),
+            let packet = match messages::read_packet(reader).await {
+                Ok(packet) => packet,
                 Err(err) => {
                     if Self::is_eof_error(&err) {
                         info!("Channel {} disconnected", self.address());
@@ -170,7 +205,9 @@ impl Channel {
             };
 
             // Send result to our subscribers
-            self.message_subscriber.notify(Ok(message)).await;
+            self.message_subsystem
+                .notify(&packet.command, packet.payload)
+                .await;
         }
     }
 
@@ -180,8 +217,7 @@ impl Channel {
             Ok(()) => panic!("Channel task should never complete without error status"),
             Err(err) => {
                 // Send this error to all channel subscribers
-                let result = Err(err);
-                self.message_subscriber.notify(result).await;
+                self.message_subsystem.trigger_error(err).await;
             }
         }
         debug!(target: "net", "Channel::handle_stop() [END, address={}]", self.address());

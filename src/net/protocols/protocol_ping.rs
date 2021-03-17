@@ -2,6 +2,7 @@ use log::*;
 use rand::Rng;
 use smol::Executor;
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::net::error::{NetError, NetResult};
 use crate::net::messages;
@@ -44,8 +45,9 @@ impl ProtocolPing {
         let pong_sub = self
             .channel
             .clone()
-            .subscribe_msg(messages::PacketType::Pong)
-            .await;
+            .subscribe_msg::<messages::PongMessage>()
+            .await
+            .expect("Missing pong dispatcher!");
 
         loop {
             // Wait channel_heartbeat amount of time
@@ -55,18 +57,21 @@ impl ProtocolPing {
             let nonce = Self::random_nonce();
 
             // Send ping message
-            let ping = messages::Message::Ping(messages::PingMessage { nonce });
+            let ping = messages::PingMessage { nonce };
             self.channel.clone().send(ping).await?;
             debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
+            // Start the timer for ping timer
+            let start = Instant::now();
 
             // Wait for pong, check nonce matches
-            let pong_msg = receive_message!(pong_sub, messages::Message::Pong);
+            let pong_msg = pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
                 return Err(NetError::ChannelStopped);
             }
-            debug!(target: "net", "ProtocolPing::run_ping_pong() received Pong message");
+            let duration = start.elapsed().as_millis();
+            debug!(target: "net", "Received Pong message {}ms from [{:?}]", duration, self.channel.address());
         }
     }
 
@@ -75,16 +80,17 @@ impl ProtocolPing {
         let ping_sub = self
             .channel
             .clone()
-            .subscribe_msg(messages::PacketType::Ping)
-            .await;
+            .subscribe_msg::<messages::PingMessage>()
+            .await
+            .expect("Missing ping dispatcher!");
 
         loop {
             // Wait for ping, reply with pong that has a matching nonce
-            let ping = receive_message!(ping_sub, messages::Message::Ping);
+            let ping = ping_sub.receive().await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send ping message
-            let pong = messages::Message::Pong(messages::PongMessage { nonce: ping.nonce });
+            let pong = messages::PongMessage { nonce: ping.nonce };
             self.channel.clone().send(pong).await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() sent Pong reply");
         }

@@ -6,38 +6,38 @@ use crate::net::error::NetResult;
 use crate::net::message_subscriber::MessageSubscription;
 use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
-use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
+use crate::net::{ChannelPtr, HostsPtr};
 
 pub struct ProtocolAddress {
     channel: ChannelPtr,
 
-    addrs_sub: MessageSubscription,
-    get_addrs_sub: MessageSubscription,
+    addrs_sub: MessageSubscription<messages::AddrsMessage>,
+    get_addrs_sub: MessageSubscription<messages::GetAddrsMessage>,
 
     hosts: HostsPtr,
-    settings: SettingsPtr,
 
     jobsman: ProtocolJobsManagerPtr,
 }
 
 impl ProtocolAddress {
-    pub async fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(channel: ChannelPtr, hosts: HostsPtr) -> Arc<Self> {
         let addrs_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Addrs)
-            .await;
+            .subscribe_msg::<messages::AddrsMessage>()
+            .await
+            .expect("Missing addrs dispatcher!");
 
         let get_addrs_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::GetAddrs)
-            .await;
+            .subscribe_msg::<messages::GetAddrsMessage>()
+            .await
+            .expect("Missing getaddrs dispatcher!");
 
         Arc::new(Self {
             channel: channel.clone(),
             addrs_sub,
             get_addrs_sub,
             hosts,
-            settings,
             jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
         })
     }
@@ -55,7 +55,7 @@ impl ProtocolAddress {
             .await;
 
         // Send get_address message
-        let get_addrs = messages::Message::GetAddrs(messages::GetAddrsMessage {});
+        let get_addrs = messages::GetAddrsMessage {};
         let _ = self.channel.clone().send(get_addrs).await;
         debug!(target: "net", "ProtocolAddress::start() [END]");
     }
@@ -63,9 +63,16 @@ impl ProtocolAddress {
     async fn handle_receive_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
-            let addrs_msg = receive_message!(self.addrs_sub, messages::Message::Addrs);
+            let addrs_msg = self.addrs_sub.receive().await?;
 
-            debug!(target: "net", "ProtocolAddress::handle_receive_addrs() storing address in hosts");
+            debug!(
+                target: "net",
+                "ProtocolAddress::handle_receive_addrs() received {} addrs",
+                addrs_msg.addrs.len()
+            );
+            for (i, addr) in addrs_msg.addrs.iter().enumerate() {
+                debug!("  addr[{}]: {}", i, addr);
+            }
             self.hosts.store(addrs_msg.addrs.clone()).await;
         }
     }
@@ -73,15 +80,18 @@ impl ProtocolAddress {
     async fn handle_receive_get_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() [START]");
         loop {
-            let _get_addrs = receive_message!(self.get_addrs_sub, messages::Message::GetAddrs);
+            let _get_addrs = self.get_addrs_sub.receive().await?;
 
             debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
 
-            let addrs = messages::Message::Addrs(messages::AddrsMessage {
-                addrs: self.hosts.load_all().await,
-            });
-            debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() sending Addrs message");
-            self.channel.clone().send(addrs).await?;
+            let addrs = self.hosts.load_all().await;
+            debug!(
+                target: "net",
+                "ProtocolAddress::handle_receive_get_addrs() sending {} addrs",
+                addrs.len()
+            );
+            let addrs_msg = messages::AddrsMessage { addrs };
+            self.channel.clone().send(addrs_msg).await?;
         }
     }
 }

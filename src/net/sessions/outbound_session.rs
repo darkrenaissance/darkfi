@@ -25,6 +25,7 @@ impl OutboundSession {
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
+        info!("Starting {} outbound connection slots.", slots_count);
         let mut connect_slots = self.connect_slots.lock().await;
 
         for i in 0..slots_count {
@@ -61,19 +62,24 @@ impl OutboundSession {
 
         loop {
             let addr = self.load_address(slot_number).await?;
-            info!("Connecting to outbound [{}]", addr);
+            info!("#{} connecting to outbound [{}]", slot_number, addr);
 
             match connector.connect(addr).await {
                 Ok(channel) => {
                     // Blacklist goes here
 
-                    info!("Connected outbound [{}]", addr);
+                    info!("#{} connected to outbound [{}]", slot_number, addr);
 
                     let stop_sub = channel.subscribe_stop().await;
 
                     self.clone()
                         .register_channel(channel.clone(), executor.clone())
                         .await?;
+
+                    // Channel is now connected but not yet setup
+
+                    // Remove pending lock since register_channel will add the channel to p2p
+                    self.p2p().remove_pending(&addr).await;
 
                     self.clone()
                         .attach_protocols(channel, executor.clone())
@@ -89,18 +95,49 @@ impl OutboundSession {
         }
     }
 
+    /// Load a valid address that we can connect to.
+    /// Valid means we aren't connecting (pending state) or connected (open channel)
+    /// in another slot, and it isn't our own inbound address.
+    /// Retry otherwise.
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
-        let hosts = self.p2p().hosts();
+        let p2p = self.p2p();
+        let hosts = p2p.hosts();
+        let inbound_addr = p2p.settings().inbound;
 
-        match hosts.load_single().await {
-            Some(addr) => Ok(addr),
-            None => {
+        loop {
+            let addr = hosts.load_single().await;
+
+            if addr.is_none() {
                 error!(
                     "Hosts address pool is empty. Closing connect slot #{}",
                     slot_number
                 );
-                Err(NetError::ServiceStopped)
+                return Err(NetError::ServiceStopped);
             }
+            let addr = addr.unwrap();
+
+            if Self::addr_is_inbound(&addr, &inbound_addr) {
+                continue;
+            }
+
+            if p2p.exists(&addr).await {
+                continue;
+            }
+
+            // Obtain a lock on this address to prevent duplicate connections
+            if !p2p.add_pending(addr).await {
+                continue;
+            }
+
+            return Ok(addr);
+        }
+    }
+
+    fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
+        match inbound_addr {
+            Some(inbound_addr) => inbound_addr == addr,
+            // No inbound listening address configured
+            None => false,
         }
     }
 
@@ -113,7 +150,7 @@ impl OutboundSession {
         let hosts = self.p2p().hosts().clone();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
-        let protocol_addr = ProtocolAddress::new(channel, hosts, settings).await;
+        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;

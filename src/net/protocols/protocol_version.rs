@@ -11,8 +11,8 @@ use crate::net::{ChannelPtr, SettingsPtr};
 
 pub struct ProtocolVersion {
     channel: ChannelPtr,
-    version_sub: MessageSubscription,
-    verack_sub: MessageSubscription,
+    version_sub: MessageSubscription<messages::VersionMessage>,
+    verack_sub: MessageSubscription<messages::VerackMessage>,
     settings: SettingsPtr,
 }
 
@@ -20,13 +20,15 @@ impl ProtocolVersion {
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
         let version_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Version)
-            .await;
+            .subscribe_msg::<messages::VersionMessage>()
+            .await
+            .expect("Missing version dispatcher!");
 
         let verack_sub = channel
             .clone()
-            .subscribe_msg(messages::PacketType::Verack)
-            .await;
+            .subscribe_msg::<messages::VerackMessage>()
+            .await
+            .expect("Missing verack dispatcher!");
 
         Arc::new(Self {
             channel,
@@ -63,7 +65,7 @@ impl ProtocolVersion {
 
     async fn send_version(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
-        let version = messages::Message::Version(messages::VersionMessage {});
+        let version = messages::VersionMessage {};
         self.channel.clone().send(version).await?;
 
         // Wait for version acknowledgement
@@ -80,7 +82,7 @@ impl ProtocolVersion {
         // Check the message is OK
 
         // Send version acknowledgement
-        let verack = messages::Message::Verack(messages::VerackMessage {});
+        let verack = messages::VerackMessage {};
         self.channel.clone().send(verack).await?;
 
         debug!(target: "net", "ProtocolVersion::recv_version() [END]");

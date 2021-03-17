@@ -325,5 +325,4 @@ pub fn mimc_constants() -> Vec<&'static str> {
     ]
 }
 
-fn main() {
-}
+fn main() {}

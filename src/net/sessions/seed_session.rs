@@ -1,4 +1,5 @@
 use async_executor::Executor;
+use futures::FutureExt;
 use log::*;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
@@ -6,6 +7,7 @@ use std::sync::{Arc, Weak};
 use crate::net::error::{NetError, NetResult};
 use crate::net::protocols::{ProtocolPing, ProtocolSeed};
 use crate::net::sessions::Session;
+use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 
 pub struct SeedSession {
@@ -19,23 +21,14 @@ impl SeedSession {
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "SeedSession::start() [START]");
-        let settings = {
-            let p2p = self.p2p.upgrade().unwrap();
-            p2p.settings()
-        };
+        let settings = self.p2p().settings();
 
-        if settings.skip_seed_sync {
-            info!("Configured to skip seed synchronization process.");
+        if settings.seeds.is_empty() {
+            warn!("Skipping seed sync process since no seeds are configured.");
             return Ok(());
         }
 
         // if cached addresses then quit
-
-        // if seeds empty then seeding required but empty
-        if settings.seeds.is_empty() {
-            error!("Seeding is required but no seeds are configured.");
-            return Err(NetError::OperationFailed);
-        }
 
         let mut tasks = Vec::new();
 
@@ -43,16 +36,31 @@ impl SeedSession {
             tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
         }
 
-        for (i, task) in tasks.into_iter().enumerate() {
-            // Ignore errors
-            match task.await {
-                Ok(()) => info!("Successfully queried seed #{}", i),
-                Err(err) => warn!("Seed query #{} failed for reason: {}", i, err),
+        // This line loops through all the tasks and waits for them to finish.
+        // But if the seed_query_timeout_seconds times out before they are finished,
+        // then it will simply quit and the tasks will get dropped.
+        futures::select! {
+            _ = async move {
+                for (i, task) in tasks.into_iter().enumerate() {
+                    // Ignore errors
+                    match task.await {
+                        Ok(()) => info!("Successfully queried seed #{}", i),
+                        Err(err) => warn!("Seed query #{} failed for reason: {}", i, err),
+                    }
+                }
+            }.fuse() => {
+            }
+            _ = sleep(settings.seed_query_timeout_seconds).fuse() => {
+                error!("Querying seeds timed out");
+                return Err(NetError::OperationFailed);
             }
         }
 
         // Seed process complete
-        // TODO: check increase count of address
+        if self.p2p().hosts().is_empty().await {
+            error!("Hosts pool still empty after seeding");
+            return Err(NetError::OperationFailed);
+        }
 
         debug!(target: "net", "SeedSession::start() [END]");
         Ok(())

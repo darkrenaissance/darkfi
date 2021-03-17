@@ -2,26 +2,30 @@ use async_std::sync::Mutex;
 use rand::seq::SliceRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use crate::net::SettingsPtr;
+use std::collections::HashSet;
 
 pub type HostsPtr = Arc<Hosts>;
 
 pub struct Hosts {
     addrs: Mutex<Vec<SocketAddr>>,
-    settings: SettingsPtr,
 }
 
 impl Hosts {
-    pub fn new(settings: SettingsPtr) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Arc::new(Self {
             addrs: Mutex::new(Vec::new()),
-            settings,
         })
     }
 
+    async fn contains(&self, addrs: &Vec<SocketAddr>) -> bool {
+        let a_set: HashSet<_> = addrs.iter().copied().collect();
+        self.addrs.lock().await.iter().any(|item| a_set.contains(item))
+    }
+
     pub async fn store(&self, addrs: Vec<SocketAddr>) {
-        self.addrs.lock().await.extend(addrs)
+        if !self.contains(&addrs).await {
+            self.addrs.lock().await.extend(addrs)
+        }
     }
 
     pub async fn load_single(&self) -> Option<SocketAddr> {
@@ -34,5 +38,9 @@ impl Hosts {
 
     pub async fn load_all(&self) -> Vec<SocketAddr> {
         self.addrs.lock().await.clone()
+    }
+
+    pub async fn is_empty(&self) -> bool {
+        self.addrs.lock().await.is_empty()
     }
 }

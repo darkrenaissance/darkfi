@@ -18,12 +18,7 @@ pub struct InboundSession {
 
 impl InboundSession {
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
-        let settings = {
-            let p2p = p2p.upgrade().unwrap();
-            p2p.settings()
-        };
-
-        let acceptor = Acceptor::new(settings);
+        let acceptor = Acceptor::new();
 
         Arc::new(Self {
             p2p,
@@ -73,10 +68,11 @@ impl InboundSession {
         result
     }
 
+    /// Wait for all new channels created by the acceptor and call setup_channel() on them.
     async fn channel_sub_loop(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let channel_sub = self.acceptor.clone().subscribe().await;
         loop {
-            let channel = (*channel_sub.receive().await).clone()?;
+            let channel = channel_sub.receive().await?;
             // Spawn a detached task to process the channel
             // This will just perform the channel setup then exit.
             executor
@@ -108,7 +104,7 @@ impl InboundSession {
         let hosts = self.p2p().hosts().clone();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
-        let protocol_addr = ProtocolAddress::new(channel, hosts, settings).await;
+        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;
