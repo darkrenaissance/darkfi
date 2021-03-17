@@ -5,24 +5,24 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
-        #- uses: zkjanus/matrix-action@main
-        #  with:
-        #    server: 'matrix.dark.fi'
-        #    room-id: '!MODZOZydPqCRdulXmR:dark.fi'
-        #    #access_token: ${{ secrets.MATRIX_TOKEN }}
-        #    status: 'OK'
-        #    user: 'narodnik'
-        #    password: ${{ secrets.MATRIX_PASSWORD }}
-        #    message: Bob the builder ${{ github.sha }}
-      - name: Send message to test channel
-        id: matrix-chat-message
-        uses: fadenb/matrix-chat-message@v0.0.6
+      - uses: narodnik/matrix-action@main
         with:
-          homeserver: 'dark.fi'
-          token: ${{ secrets.MATRIX_TOKEN }}
-          channel: '!MODZOZydPqCRdulXmR:dark.fi'
-          message: |
-            This is an *example message* using **markdown** for formatting.\
-            Use a `\` character at the end of a line to cause a linebreak (the whole message is treated as markdown).\
-            You can use variables like ${{ github.sha }} anywhere.
+          server: 'matrix.dark.fi'
+          room-id: '!MODZOZydPqCRdulXmR:dark.fi'
+          #access_token: ${{ secrets.MATRIX_TOKEN }}
+          status: 'OK'
+          user: 'narodnik'
+          password: ${{ secrets.MATRIX_PASSWORD }}
+          message: Bob the builder ${{ github.sha }}
+          #- name: Send message to test channel
+          #  id: matrix-chat-message
+          #  uses: fadenb/matrix-chat-message@v0.0.6
+          #  with:
+          #    homeserver: 'dark.fi'
+          #    token: ${{ secrets.MATRIX_TOKEN }}
+          #    channel: '!MODZOZydPqCRdulXmR:dark.fi'
+          #    message: |
+          #      This is an *example message* using **markdown** for formatting.\
+          #      Use a `\` character at the end of a line to cause a linebreak (the whole message is treated as markdown).\
+          #      You can use variables like ${{ github.sha }} anywhere.
 
