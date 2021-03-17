@@ -11,10 +11,13 @@ use bls12_381::Bls12;
 use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::fs;
 use std::fs::File;
 use std::rc::Rc;
 use std::time::Instant;
+use std::{
+    borrow::{Borrow, BorrowMut},
+    fs,
+};
 use types::EnforceAllocation;
 
 #[macro_use]
@@ -37,8 +40,6 @@ mod reader;
 use crate::env::{env_bind, env_find, env_get, env_new, env_set, env_sets, Env};
 #[macro_use]
 mod core;
-
-pub const ZK_CIRCUIT_ENV_KEY: &str = "ZKC";
 
 // read
 fn read(str: &str) -> MalRet {
@@ -102,12 +103,12 @@ fn is_macro_call(ast: &MalVal, env: &Env) -> Option<(MalVal, MalArgs)> {
 fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
     let mut was_expanded = false;
     while let Some((mf, args)) = is_macro_call(&ast, env) {
-        //println!("macroexpand 1: {:?}", ast);
+        // println!("macroexpand 1: {:?}", ast);
         ast = match mf.apply(args) {
             Err(e) => return (false, Err(e)),
             Ok(a) => a,
         };
-        //println!("macroexpand 2: {:?}", ast);
+        // println!("macroexpand 2: {:?}", ast); 
         was_expanded = true;
     }
     (was_expanded, Ok(ast))
@@ -168,7 +169,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         env_set(&env, l[1].clone(), eval(l[2].clone(), env.clone())?)
                     }
                     Sym(ref a0sym) if a0sym == "zk*" => {
-                        println!("zk* {:?}", l[1]);
+                        // println!("zk* {:?}", l[1]);
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         match a1 {
                             List(ref binds, _) | Vector(ref binds, _) => {
@@ -287,6 +288,17 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             _ => error("invalid do form"),
                         }
                     }
+                    Sym(ref a0sym) if a0sym == "dotimes" => {
+                        match eval(l[1].clone(), env.clone())? {
+                            MalVal::Int(v) => {
+                                for _i in 1..v {
+                                    eval(l[2].clone(), env.clone())?;
+                                }
+                                Ok(Nil)
+                            }
+                            _ => error("invalid args for dotimes"),
+                        }                        
+                    }
                     Sym(ref a0sym) if a0sym == "if" => {
                         let cond = eval(l[1].clone(), env.clone())?;
                         match cond {
@@ -330,7 +342,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[1].clone();
-                        ast = eval(a1.clone(), env.clone())?;
+                        eval(a1.clone(), env.clone())?;
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
@@ -342,12 +354,20 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for (k, v) in allocs.iter() {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
-                        new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("AllocationsConst".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        new_hm.insert(a1.pr_str(false), result.clone());      
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsConst".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsConst".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
@@ -360,16 +380,27 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("AllocationsInput".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsInput".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsInput".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let a1 = l[1].clone();
-                        let value = eval(l[2].clone(), env.clone())?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
+                        if let Func(_, _) = value {
+                            value = value.apply(vec![]).unwrap();
+                        } 
                         let result = eval(value.clone(), env.clone())?;
                         let allocs = get_allocations(&env, "Allocations");
                         let mut new_hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
@@ -377,11 +408,19 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         }
                         new_hm.insert(a1.pr_str(false), result.clone());
-                        env_set(
-                            &env,
-                            Sym("Allocations".to_string()),
-                            Hash(Rc::new(new_hm), Rc::new(Nil)),
-                        )?;
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("Allocations".to_string()),
+                                Hash(Rc::new(new_hm), Rc::new(Nil)),
+                            )?;
+                        }
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -457,20 +496,28 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         for value in enforce_vec.iter() {
                             new_vec.push(value.clone());
                         }
-                        env_set(
-                            &env,
-                            Sym("AllocationsEnforce".to_string()),
-                            vector![vec![Enforce(Rc::new(new_vec))]],
-                        );
-                        /*
-                                                println!("\n\nallocations {:?}", get_allocations(&env, "Allocations"));
-                                                println!(
-                                                    "\n\nallocations input {:?}",
-                                                    get_allocations(&env, "AllocationsInput")
-                                                );
-                                                println!("\n\nallocations enforce {:?}", get_enforce_allocs(&env));
-                        */
-                        Ok(vector![vec![]])
+                        // TODO change it
+                        if let Some(e) = &env.outer {
+                            env_set(
+                                &e,
+                                Sym("AllocationsEnforce".to_string()),
+                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                            )?;
+                        } else {
+                            env_set(
+                                &env,
+                                Sym("AllocationsEnforce".to_string()),
+                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                            )?;
+                        }
+
+                        // println!(
+                        //     "allocs here {:?}",
+                        //     get_allocations_nested(&env, "Allocations")
+                        // );
+                        // println!("enforce here {:?}", get_enforce_allocs_nested(&env));
+
+                        Ok(MalVal::Nil)
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {
@@ -491,7 +538,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     continue 'tco;
                                 }
                                 _ => {
-                                    println!("{:?}", args);
+                                    // println!("{:?}", args);
                                     Ok(vector![el.to_vec()])
                                     //error("call non-function")
                                 }
@@ -511,7 +558,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 }
 
 pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
-    // todo need some cleanup
+    if let Some(e) = &env.outer {
+        get_enforce_allocs_nested(&e)
+    } else {
+        get_enforce_allocs_nested(&env)
+    }
+}
+
+pub fn get_enforce_allocs_nested(env: &Env) -> Vec<EnforceAllocation> {
     match env_find(env, "AllocationsEnforce") {
         Some(e) => match env_get(&e, &Sym("AllocationsEnforce".to_string())) {
             Ok(f) => {
@@ -530,7 +584,16 @@ pub fn get_enforce_allocs(env: &Env) -> Vec<EnforceAllocation> {
         _ => vec![],
     }
 }
+
 pub fn get_allocations(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
+    if let Some(e) = &env.outer {
+        get_allocations_nested(&e, key)
+    } else {
+        get_allocations_nested(&env, key)
+    }
+}
+
+pub fn get_allocations_nested(env: &Env, key: &str) -> Rc<FnvHashMap<String, MalVal>> {
     let alloc_hm: Rc<FnvHashMap<String, MalVal>> = Rc::new(FnvHashMap::default());
     match env_find(env, key) {
         Some(e) => match env_get(&e, &Sym(key.to_string())) {
@@ -567,7 +630,7 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
-    let start = Instant::now();
+    // let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
@@ -632,7 +695,7 @@ fn rep(str: &str, env: &Env) -> Result<String, MalErr> {
 fn main() -> Result<(), ()> {
     let matches = clap_app!(zklisp =>
         (version: "0.1.0")
-        (author: "mileschet <miles.chet@gmail.com>")
+        (author: "Dark Renaissance")
         (about: "A Lisp Interpreter for Zero Knowledge Virtual Machine")
         (@subcommand load =>
             (about: "Load the file into the interpreter")
@@ -641,13 +704,13 @@ fn main() -> Result<(), ()> {
     )
     .get_matches();
 
-    CombinedLogger::init(vec![TermLogger::new(
-        LevelFilter::Debug,
-        Config::default(),
-        TerminalMode::Mixed,
-    )
-    .unwrap()])
-    .unwrap();
+    // CombinedLogger::init(vec![TermLogger::new(
+    //     LevelFilter::Debug,
+    //     Config::default(),
+    //     TerminalMode::Mixed,
+    // )
+    // .unwrap()])
+    // .unwrap();
 
     match matches.subcommand() {
         Some(("load", matches)) => {
@@ -673,7 +736,6 @@ fn repl_load(file: String) -> Result<(), ()> {
         "(def! load-file (fn* (f) (eval (read-string (str \"(do \" (slurp f) \"\nnil)\")))))",
         &repl_env,
     );
-    //let _ = rep("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))", &repl_env);
     match rep(&format!("(load-file \"{}\")", file), &repl_env) {
         Ok(_) => std::process::exit(0),
         Err(e) => {
