@@ -6,9 +6,12 @@ jobs:
     name: Send message via Matrix
     steps:
       - run: |
+          ALL_MSGS=""
           for i in ${{ join(github.event.commits.*.id, ' ') }}; do
-            echo "::set-output name=COMMIT_MESSAGE::$i"
+            MSG=$(git --no-pager show -s --format='%h %an: %s' $i)
+            ALL_MSGS="$ALL_MSGS\n$MSG"
           done
+          echo "::set-output name=COMMIT_MESSAGE::$ALL_MSGS"
         id: commit-message
       - uses: narodnik/matrix-action@main
         with:
