@@ -150,7 +150,7 @@
            EDWARDS_D (gensym) U (gensym) A (gensym) B (gensym)
            C (gensym) u3 (gensym) v3 (gensym)] (
         ;; debug
-        `(println 'jj-add ~param1 ~param2 ~param3 ~param4)
+        ;; `(println 'jj-add ~param1 ~param2 ~param3 ~param4)
         `(def! ~u1 (alloc ~u1 ~param1))
         `(def! ~v1 (alloc ~v1 ~param2))
         `(def! ~u2 (alloc ~u2 ~param3))
@@ -181,8 +181,8 @@
     ((scalar::one cs::one) (scalar::one::neg ~C))
     (scalar::one ~v3)
     ((scalar::one ~U) (scalar::one::neg ~A) (scalar::one::neg ~B))
-   )   
-   { "u3" u3, "v3" v3 }
+   ) 
+   `{ "u3" u3, "v3" v3 }
   )  
 )
 ))
@@ -225,20 +225,18 @@
         (println 'first-double val)
         (println 'r r)
         (println 'cond cond-result)
-        (println 'add cond-result)
+        (println 'add add-result)
         (println 'double acc val)        
     ))
     (println 'out val)
 )))
 
 (def! param3 (rnd-scalar))
-(println param3)
-(def! param-u (scalar "273f910d9ecc1615d8618ed1d15fef4e9472c89ac043042d36183b2cb4d7ef51"))
-(def! param-v (scalar "466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c8d7"))
-(def! param1 (scalar 42))
+(println 'rnd-scalar param3)
+(def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+(def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
 (prove 
   (
-    ;; (println (zk-square param1))
     (jj-mul param-u param-v param3)
   )
 )
