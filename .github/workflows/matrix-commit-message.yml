@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
+      - run: echo '::set-output name=COMMIT_MESSAGE::fuckyou'
+        id: commit-message
       - uses: narodnik/matrix-action@main
         with:
           server: 'matrix.dark.fi'
@@ -13,7 +15,7 @@ jobs:
           status: 'OK'
           user: 'narodnik'
           password: ${{ secrets.MATRIX_PASSWORD }}
-          message: Bob the builder ${{ github.sha }} ${{ github.events.pusher }}
+          message: The selected <b>color</b> is <i>${{ steps.commit-message.outputs.COMMIT_MESSAGE }}</i>
           #- name: Send message to test channel
           #  id: matrix-chat-message
           #  uses: fadenb/matrix-chat-message@v0.0.6
