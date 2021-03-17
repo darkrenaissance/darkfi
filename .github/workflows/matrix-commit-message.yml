@@ -12,7 +12,7 @@ jobs:
       - run: |
           ALL_MSGS=""
           for i in ${{ join(github.event.commits.*.id, ' ') }}; do
-            MSG=$(git --no-pager show -s --format='%h <b>%an</b>: %s' $i || break)
+            MSG=$(git --no-pager show -s --format='%h <b>%an</b>: %s' $i)
             ALL_MSGS="$ALL_MSGS$MSG"$'\n'
           done
           echo "::set-output name=COMMIT_MESSAGE::$ALL_MSGS"
