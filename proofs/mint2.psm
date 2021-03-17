@@ -271,7 +271,7 @@ constant G_VCV_v 0x466a7e3a82f67ab1d32294fd89774ad6bc3332d0fa1ccd18a77a81f50667c
     # Performs a scalar multiplication of this twisted Edwards
     # point by a scalar represented as a sequence of booleans
     # in little-endian bit order.
-
+    
     {% for i in range(n) %}
         {% if i == 0 %}
             {{ jubjub_conditionally_select(

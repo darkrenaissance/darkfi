@@ -15,6 +15,7 @@ use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, 
 
 use bls12_381;
 use ff::{Field, PrimeField};
+use rand::rngs::OsRng;
 
 use sapvi::bls_extensions::BlsStringConversion;
 
@@ -167,7 +168,7 @@ fn unpack_bits(a: MalArgs) -> MalRet {
     match a[0].clone() {
         Str(ref s) => {
             let value = bls12_381::Scalar::from_string(s);
-            for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+            for (_, bit) in value.to_le_bits().into_iter().enumerate() {
                 match bit {
                     true => result.push(bls12_381::Scalar::one()),
                     false => result.push(bls12_381::Scalar::zero()),
@@ -179,7 +180,7 @@ fn unpack_bits(a: MalArgs) -> MalRet {
                 .collect::<Vec<MalVal>>()))
         }
         ZKScalar(ref s) => {
-            for (_, bit) in s.to_le_bits().into_iter().cloned().enumerate() {
+            for (_, bit) in s.to_le_bits().into_iter().enumerate() {
                 match bit {
                     true => result.push(bls12_381::Scalar::one()),
                     false => result.push(bls12_381::Scalar::zero()),
@@ -647,6 +648,12 @@ fn gen_rand(a: MalArgs) -> MalRet {
     Ok(MalVal::Int(rng.gen::<i64>()))
 }
 
+fn scalar_rnd(a: MalArgs) -> MalRet {
+    let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    let value = bls12_381::Scalar::from_bytes(&randomness_value.to_bytes());
+    Ok(MalVal::ZKScalar(value.unwrap()))
+}
+
 pub fn ns() -> Vec<(&'static str, MalVal)> {
     vec![
         ("=", func(|a| Ok(Bool(a[0] == a[1])))),
@@ -756,5 +763,6 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("double", func(scalar_double)),
         ("invert", func(scalar_invert)),
         ("zero?", func(scalar_is_zero)),
+        ("rnd-scalar", func(scalar_rnd)),
     ]
 }
