@@ -1,6 +1,5 @@
 (load-file "util.lisp")
 
-
 (def! zk-not-small-order? (fn* [u v] (
         (def! first-doubling (last (last (zk-double u v))))
         (def! second-doubling (last (last 
@@ -231,13 +230,45 @@
     (println 'out val)
 )))
 
+(load-file "mimc-constants.lisp")
+(defmacro! mimc-macro (fn* [xr xl acc] (
+    (let* [tmp-xl (gensym) xl-new (gensym) xl-new-value (gensym) cur-mimc-const (gensym)] (
+    `(def! ~cur-mimc-const (alloc ~cur-mimc-const (nth mimc-constants ~acc)))
+    `(def! ~tmp-xl (alloc ~tmp-xl (square (+ ~cur-mimc-const ~xl))))        
+    `(enforce 
+        ((scalar::one xl) (~cur-mimc-const cs::one))
+        ((scalar::one xl) (~cur-mimc-const cs::one))
+        (scalar::one ~tmp-xl)
+    )        
+    `(def! ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr))
+    `(if (= acc 321)
+        (alloc-input "image" ~xl-new-value)
+        (alloc ~xl-new ~xl-new-value)
+    )
+    `(enforce 
+        (scalar::one ~tmp-xl)
+        ((scalar::one xl) (~cur-mimc-const cs::one))            
+        ((scalar::one ~xl-new) (scalar::one::neg xr))            
+    )
+)))))
+(def! mimc (fn* [left right] (
+    (def! xl (alloc "xl" left))
+    (def! xr (alloc "xr" right))
+    (def! acc 1)
+    (dotimes 322 (
+        (mimc-macro xl xr acc)
+        (def! acc (i+ acc 1))
+    ))
+)))
+
 (def! param3 (rnd-scalar))
-(println 'rnd-scalar param3)
+;; (println 'rnd-scalar param3)
 (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
 (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
 (prove 
   (
-    (jj-mul param-u param-v param3)
+    ;; (jj-mul param-u param-v param3)
+    (mimc param-u param-v)
   )
 )
 

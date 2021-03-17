@@ -626,6 +626,11 @@ fn add_scalar(a: MalArgs) -> MalRet {
             s0.add_assign(s1);
             Ok(ZKScalar(s0))
         }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.add_assign(s1);
+            Ok(ZKScalar(s0))
+        }
         _ => error(&format!("scalar add expect (zkscalar, zkscalar) found \n {:?}", a).to_string()),
     }
 }
