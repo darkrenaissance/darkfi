@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
+      - name: checkout
+        uses: actions/checkout@v2
       - run: |
           ALL_MSGS=""
           for i in ${{ join(github.event.commits.*.id, ' ') }}; do
