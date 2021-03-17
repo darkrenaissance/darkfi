@@ -13,7 +13,7 @@ jobs:
           status: 'OK'
           user: 'narodnik'
           password: ${{ secrets.MATRIX_PASSWORD }}
-          message: Bob the builder {{ github.sha }}
+          message: Bob the builder ${{ github.sha }}
           #- name: Send message to test channel
           #  id: matrix-chat-message
           #  uses: fadenb/matrix-chat-message@v0.0.6
