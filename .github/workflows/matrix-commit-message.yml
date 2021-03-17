@@ -7,7 +7,7 @@ jobs:
     steps:
       - run: |
           for i in ${{ join(github.event.commits.*.id, ' ') }}; do
-            echo '::set-output name=COMMIT_MESSAGE::$i'
+            echo "::set-output name=COMMIT_MESSAGE::$i"
           done
         id: commit-message
       - uses: narodnik/matrix-action@main
