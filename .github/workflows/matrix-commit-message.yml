@@ -7,6 +7,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 20
       - run: |
           ALL_MSGS=""
           for i in ${{ join(github.event.commits.*.id, ' ') }}; do
