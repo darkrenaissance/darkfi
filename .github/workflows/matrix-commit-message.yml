@@ -5,7 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
-      - run: echo '::set-output name=COMMIT_MESSAGE::fuckyou'
+      - run: |
+          LAST_MSG=$(git --no-pager show -s --format='%h %an: %s' HEAD)
+          echo '::set-output name=COMMIT_MESSAGE::$LAST_MSG'
         id: commit-message
       - uses: narodnik/matrix-action@main
         with:
