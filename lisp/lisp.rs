@@ -291,7 +291,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "dotimes" => {
                         match eval(l[1].clone(), env.clone())? {
                             MalVal::Int(v) => {
-                                for _i in 1..v {
+                                for _i in 0..v {
                                     eval(l[2].clone(), env.clone())?;
                                 }
                                 Ok(Nil)

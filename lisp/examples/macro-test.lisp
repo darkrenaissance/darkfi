@@ -239,10 +239,10 @@
         ((scalar::one xl) (~cur-mimc-const cs::one))
         ((scalar::one xl) (~cur-mimc-const cs::one))
         (scalar::one ~tmp-xl)
-    )        
-    (if (= acc 321)
-        `(def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
-        `(def! ~xl-new-value (alloc-input ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))    
+    )   
+    `(if (= ~acc 321)        
+        (def! ~xl-new-value (alloc-input ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))
+        (def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))
     )
     `(enforce 
         (scalar::one ~tmp-xl)
@@ -255,9 +255,9 @@
     (def! xr (alloc "xr" right))
     (def! acc 0)
     (dotimes 322 (
-        (println (mimc-macro xl xr acc))
-        (def! acc (i+ acc 1))
         (println acc)
+        (println (mimc-macro xl xr acc))
+        (def! acc (i+ acc 1))        
     ))
 )))
 
