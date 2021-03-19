@@ -60,6 +60,16 @@ http-types = "2.9.0"
 async-h1 = "2.3.0"
 async-native-tls = "0.3.3"
 
+# GUI deps
+anyhow = "1.0"
+bytemuck = { version = "1.4", features = [ "derive" ] }
+image = "0.23"
+winit = "0.22"
+shaderc = "0.7"
+cgmath = "0.17"
+env_logger = "0.7"
+wgpu = "0.7"
+
 [[bin]]
 name = "lisp"
 path = "lisp/lisp.rs"
@@ -71,4 +81,8 @@ path = "src/bin/zkvm.rs"
 [[bin]]
 name = "dfi"
 path = "src/bin/dfi.rs"
+
+[[bin]]
+name = "dfg"
+path = "src/bin/dfg.rs"
 
