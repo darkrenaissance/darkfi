@@ -23,7 +23,7 @@ jobs:
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
           status: 'OK'
-          user: 'narodnik'
+          user: 'b1-66er'
           password: ${{ secrets.MATRIX_PASSWORD }}
           message: '${{ steps.commit-message.outputs.COMMIT_MESSAGE }}'
           #- name: Send message to test channel

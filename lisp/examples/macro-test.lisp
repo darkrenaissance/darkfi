@@ -231,52 +231,52 @@
 )))
 
 (load-file "mimc-constants.lisp")
-(defmacro! mimc-macro (fn* [xr xl acc] (
-    (let* [tmp-xl (gensym2 'tmp_xl) xl-new-value (gensym2 'xl_new_value) cur-mimc-const (gensym2 'cur_mimc_const)] (
+(defmacro! mimc-macro (fn* [left-value right-value acc] (
+    (let* [tmp-xl (gensym2 'tmp_xl) xl-new-value (gensym2 'xl_new_value) cur-mimc-const (gensym2 'cur_mimc_const)
+        xl (gensym2 'xl) xr (gensym2 'xr)] (
+    `(def! ~xl (alloc ~xl ~left-value))
+    `(def! ~xr (alloc ~xr ~right-value))
     `(def! ~cur-mimc-const (alloc-const ~cur-mimc-const (nth mimc-constants ~acc)))
     `(def! ~tmp-xl (alloc ~tmp-xl (square (+ ~cur-mimc-const ~xl))))        
     `(enforce 
-        ((scalar::one xl) (~cur-mimc-const cs::one))
-        ((scalar::one xl) (~cur-mimc-const cs::one))
+        ((scalar::one ~xl) (~cur-mimc-const cs::one))
+        ((scalar::one ~xl) (~cur-mimc-const cs::one))
         (scalar::one ~tmp-xl)
     )   
+    `(def! new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr))
     `(if (= ~acc 321)        
-        (def! ~xl-new-value (alloc-input ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))
-        (def! ~xl-new-value (alloc ~xl-new-value (+ (* ~tmp-xl (+ ~cur-mimc-const ~xl)) ~xr)))
+        (def! ~xl-new-value (alloc-input ~xl-new-value new-value))
+        (def! ~xl-new-value (alloc ~xl-new-value new-value))
     )
     `(enforce 
         (scalar::one ~tmp-xl)
-        ((scalar::one xl) (~cur-mimc-const cs::one))            
-        ((scalar::one ~xl-new-value) (scalar::one::neg xr))            
+        ((scalar::one ~xl) (~cur-mimc-const cs::one))            
+        ((scalar::one ~xl-new-value) (scalar::one::neg ~xr))            
     )
-    { "left" xl-new-value }    
+    `{ "left" new-value }    
     )    
 ))))
 
 (def! mimc (fn* [left right] (
-    (def! xl (alloc "xl" left))
-    (def! xr (alloc "xr" right))
     (def! acc 0)
-    (dotimes 322 (
-        ;; (println acc xr xl)
+    (def! xl left)
+    (def! xr right)
+    (dotimes 322 (        
         (def! result (mimc-macro xl xr acc))
-        (println '-----)
-        (println acc 'print-for-amir result)
-        (println '-----)
-        (def! xl (get (last (last result)) "left"))
+        (def! result-value (get (last (last result)) "left"))
+        (println acc)
+        (println xl xr)
+        (println result-value)
+        (def! xr xl)
+        (def! xl result-value)
         (def! acc (i+ acc 1))        
     ))
 )))
 
-;; (def! param3 (rnd-scalar))
-;; (println 'rnd-scalar param3)
-;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-;; (jj-mul param-u param-v param3)
 (def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
 (def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
 (prove 
-  (    
+  (        
     (mimc left right)
     ;; (def! param3 (rnd-scalar))
     ;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
@@ -286,11 +286,16 @@
 )
 
 ;; following some examples 
-;; (def! alloc-u (alloc "alloc-u" param-u))
-;;     (def! alloc-v (alloc "alloc-v" param-v))
-;;     (def! condition (alloc "condition" param3))
-;;     (println 'conditionally_select 
-;;         (conditionally_select alloc-u alloc-v condition))
+;; (def! param3 (rnd-scalar))
+;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (jj-mul param-u param-v param3)
+;; (def! param3 (rnd-scalar))
+;; (println 'rnd-scalar param3)
+;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (println (zk-mul param1 param2))
+;; (jj-mul param-u param-v param3)
 ;; (println (zk-mul param1 param2))
 ;; (def! param1 (scalar 3))
 ;; (def! param2 (scalar 9))

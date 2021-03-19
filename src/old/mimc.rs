@@ -4,8 +4,15 @@ use rand::thread_rng;
 // For benchmarking
 use std::time::{Duration, Instant};
 
+// from string scalar
+use sapvi::bls_extensions::BlsStringConversion;
+
 // Bring in some tools for using finite fiels
 use ff::{Field, PrimeField};
+
+// mimc constants
+mod mimc_constants;
+use mimc_constants::mimc_constants;
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.
 use bls12_381::{Bls12, Scalar};
@@ -49,6 +56,20 @@ fn mimc<Scalar: PrimeField>(mut xl: Scalar, mut xr: Scalar, constants: &[Scalar]
     xl
 }
 
+macro_rules! from_slice {
+    ($data:expr, $len:literal) => {{
+        let mut array = [0; $len];
+        // panics if not enough data
+        let bytes = &$data[..array.len()];
+        assert_eq!(bytes.len(), array.len());
+        for (a, b) in array.iter_mut().rev().zip(bytes.iter()) {
+            *a = *b;
+        }
+        //array.copy_from_slice(bytes.iter().rev());
+        array
+    }};
+}
+
 /// This is our demo circuit for proving knowledge of the
 /// preimage of a MiMC hash invocation.
 struct MiMCDemo<'a, Scalar: PrimeField> {
@@ -84,9 +105,13 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
 
             // tmp = (xL + Ci)^2
             let tmp_value = xl_value.map(|mut e| {
+                println!("{:?}", e);
                 e.add_assign(&self.constants[i]);
                 e.square()
             });
+            
+            // println!("tmp_value {:?} {:?}", self.constants[i], tmp_value);
+
             let tmp = cs.alloc(
                 || "tmp",
                 || tmp_value.ok_or(SynthesisError::AssignmentMissing),
@@ -130,7 +155,9 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
                 |lc| lc + new_xl - xr,
             );
 
-            println!("{:?} xr_value {:?} xl_value {:?} new_xl_value {:?}", i, xr_value, xl_value, new_xl_value);
+            println!("{:?}", i);
+            println!("{:?} {:?}", xl_value, xr_value);
+            println!("{:?}", new_xl_value);
 
             // xR = xL
             xr = xl;
@@ -148,10 +175,19 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
 fn main() {
     use rand::rngs::OsRng;
 
-    // Generate the MiMC round constants
-    let constants = (0..MIMC_ROUNDS)
-        .map(|_| Scalar::random(&mut OsRng))
-        .collect::<Vec<_>>();
+    // // Generate the MiMC round constants
+    // let constants = (0..MIMC_ROUNDS)
+    //     .map(|_| Scalar::random(&mut OsRng))
+    //     .collect::<Vec<_>>();
+
+    let mut constants = Vec::new();
+    for const_str in mimc_constants() {
+        let bytes = from_slice!(&hex::decode(const_str).unwrap(), 32);
+        assert_eq!(bytes.len(), 32);
+        let constant = Scalar::from_bytes(&bytes).unwrap();
+
+        constants.push(constant);
+    }
 
     println!("Creating parameters...");
 
@@ -172,7 +208,7 @@ fn main() {
     println!("Creating proofs...");
 
     // Let's benchmark stuff!
-    const SAMPLES: u32 = 10;
+    const SAMPLES: u32 = 1;
     let mut total_proving = Duration::new(0, 0);
     let mut total_verifying = Duration::new(0, 0);
 
@@ -182,8 +218,10 @@ fn main() {
 
     for _ in 0..SAMPLES {
         // Generate a random preimage and compute the image
-        let xl = Scalar::random(&mut OsRng);
-        let xr = Scalar::random(&mut OsRng);
+        // let xl = Scalar::random(&mut OsRng);
+        // let xr = Scalar::random(&mut OsRng);
+        let xl = bls12_381::Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e");
+        let xr = bls12_381::Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891");
         let image = mimc(xl, xr, &constants);
 
         proof_vec.truncate(0);
