@@ -1,5 +1,5 @@
 use std::iter;
-
+use rand::Rng;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -314,7 +314,11 @@ impl State {
         }
     }
 
-    fn update(&mut self) {}
+    fn update(&mut self) {
+        if rand::thread_rng().gen_range(0, 10) == 0 {
+            self.is_space_pressed = !self.is_space_pressed;
+        }
+    }
 
     fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
         let frame = self.swap_chain.get_current_frame()?.output;
@@ -364,8 +368,6 @@ impl State {
 }
 
 fn main() {
-    println!("Press spacebar to toggle stallman");
-
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
