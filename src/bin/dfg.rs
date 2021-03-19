@@ -315,7 +315,7 @@ impl State {
     }
 
     fn update(&mut self) {
-        if rand::thread_rng().gen_range(0, 10) == 0 {
+        if rand::thread_rng().gen_range(0, 5) == 0 {
             self.is_space_pressed = !self.is_space_pressed;
         }
     }
