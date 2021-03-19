@@ -38,7 +38,35 @@ impl Vertex {
     }
 }
 
+//  (-1, 1)                  (1, 1)
+//     +-----------------------+
+//     |                       |
+//     |                       |
+//     |                       |
+//     |                       |
+//     |                       |
+//     |                       |
+//     |                       |
+//     +-----------------------+
+//  (-1, -1)                 (1, -1)
 const VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-1.0, 1.0, 0.0],
+        tex_coords: [0.0, 0.0],
+    },
+    Vertex {
+        position: [-1.0, -1.0, 0.0],
+        tex_coords: [0.0, 1.0],
+    },
+    Vertex {
+        position: [1.0, -1.0, 0.0],
+        tex_coords: [1.0, 1.0],
+    },
+    Vertex {
+        position: [1.0, 1.0, 0.0],
+        tex_coords: [1.0, 0.0],
+    },
+    /*
     Vertex {
         position: [-0.0868241, 0.49240386, 0.0],
         tex_coords: [0.4131759, 0.00759614],
@@ -59,9 +87,11 @@ const VERTICES: &[Vertex] = &[
         position: [0.44147372, 0.2347359, 0.0],
         tex_coords: [0.9414737, 0.2652641],
     }, // E
+    */
 ];
 
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+//const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 struct State {
     surface: wgpu::Surface,
