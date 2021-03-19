@@ -130,6 +130,8 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
                 |lc| lc + new_xl - xr,
             );
 
+            println!("{:?} xr_value {:?} xl_value {:?} new_xl_value {:?}", i, xr_value, xl_value, new_xl_value);
+
             // xR = xL
             xr = xl;
             xr_value = xl_value;

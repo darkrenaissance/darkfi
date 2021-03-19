@@ -209,7 +209,6 @@
     (def! val (last (last (zk-double u v))))
     (def! acc 0)
     (dotimes (count result) (                    
-        (def! acc (i+ acc 1))        
         (def! u3 (get val "u3"))
         (def! v3 (get val "v3"))            
         (def! r (nth result acc))        
@@ -226,13 +225,14 @@
         (println 'cond cond-result)
         (println 'add add-result)
         (println 'double acc val)        
+        (def! acc (i+ acc 1))        
     ))
     (println 'out val)
 )))
 
 (load-file "mimc-constants.lisp")
 (defmacro! mimc-macro (fn* [xr xl acc] (
-    (let* [tmp-xl (gensym) xl-new-value (gensym) cur-mimc-const (gensym)] (
+    (let* [tmp-xl (gensym2 'tmp_xl) xl-new-value (gensym2 'xl_new_value) cur-mimc-const (gensym2 'cur_mimc_const)] (
     `(def! ~cur-mimc-const (alloc-const ~cur-mimc-const (nth mimc-constants ~acc)))
     `(def! ~tmp-xl (alloc ~tmp-xl (square (+ ~cur-mimc-const ~xl))))        
     `(enforce 
@@ -249,26 +249,39 @@
         ((scalar::one xl) (~cur-mimc-const cs::one))            
         ((scalar::one ~xl-new-value) (scalar::one::neg xr))            
     )
-)))))
+    { "left" xl-new-value }    
+    )    
+))))
+
 (def! mimc (fn* [left right] (
     (def! xl (alloc "xl" left))
     (def! xr (alloc "xr" right))
     (def! acc 0)
     (dotimes 322 (
-        (println acc)
-        (println (mimc-macro xl xr acc))
+        ;; (println acc xr xl)
+        (def! result (mimc-macro xl xr acc))
+        (println '-----)
+        (println acc 'print-for-amir result)
+        (println '-----)
+        (def! xl (get (last (last result)) "left"))
         (def! acc (i+ acc 1))        
     ))
 )))
 
-(def! param3 (rnd-scalar))
+;; (def! param3 (rnd-scalar))
 ;; (println 'rnd-scalar param3)
-(def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-(def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (jj-mul param-u param-v param3)
+(def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
+(def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
 (prove 
-  (
+  (    
+    (mimc left right)
+    ;; (def! param3 (rnd-scalar))
+    ;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+    ;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
     ;; (jj-mul param-u param-v param3)
-    (mimc param-u param-v)
   )
 )
 

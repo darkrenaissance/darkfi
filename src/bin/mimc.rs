@@ -94,6 +94,9 @@ fn main() -> Result<()> {
         0x015d_8c7f_5b43_fe33,
     ]);
 
+    println!("----> {:?}", left);
+    println!("----> {:?}", right);
+    
     contract.set_param("left_0", left.clone())?;
     contract.set_param("right", right.clone())?;
 

@@ -517,7 +517,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         // );
                         // println!("enforce here {:?}", get_enforce_allocs_nested(&env));
 
-                        Ok(MalVal::Nil)
+                        Ok(MalVal::Str("enforce-eof".to_string()))
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(ref el, _) => {
