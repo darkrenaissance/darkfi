@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
@@ -13,7 +14,8 @@ use crate::types::MalVal::{
 use crate::types::{MalArgs, MalRet, MalVal, _assoc, _dissoc, atom, error, func, hash_map};
 
 use bls12_381;
-use ff::PrimeField;
+use ff::{Field, PrimeField};
+use rand::rngs::OsRng;
 
 use sapvi::bls_extensions::BlsStringConversion;
 
@@ -166,7 +168,19 @@ fn unpack_bits(a: MalArgs) -> MalRet {
     match a[0].clone() {
         Str(ref s) => {
             let value = bls12_381::Scalar::from_string(s);
-            for (_, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
+            for (_, bit) in value.to_le_bits().into_iter().enumerate() {
+                match bit {
+                    true => result.push(bls12_381::Scalar::one()),
+                    false => result.push(bls12_381::Scalar::zero()),
+                }
+            }
+            Ok(list!(result
+                .iter()
+                .map(|a| Str(std::string::ToString::to_string(&a)[2..].to_string()))
+                .collect::<Vec<MalVal>>()))
+        }
+        ZKScalar(ref s) => {
+            for (_, bit) in s.to_le_bits().into_iter().enumerate() {
                 match bit {
                     true => result.push(bls12_381::Scalar::one()),
                     false => result.push(bls12_381::Scalar::zero()),
@@ -189,10 +203,20 @@ fn last(a: MalArgs) -> MalRet {
         _ => error("invalid args to first"),
     }
 }
+
 fn first(a: MalArgs) -> MalRet {
     match a[0].clone() {
         List(ref seq, _) | Vector(ref seq, _) if seq.len() == 0 => Ok(Nil),
         List(ref seq, _) | Vector(ref seq, _) => Ok(seq[0].clone()),
+        Nil => Ok(Nil),
+        _ => error("invalid args to first"),
+    }
+}
+
+fn second(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        List(ref seq, _) | Vector(ref seq, _) if seq.len() < 2 => Ok(Nil),
+        List(ref seq, _) | Vector(ref seq, _) => Ok(seq[1].clone()),
         Nil => Ok(Nil),
         _ => error("invalid args to first"),
     }
@@ -266,9 +290,32 @@ fn sub_scalar(a: MalArgs) -> MalRet {
                 error("scalar sub expect (zkscalar, zkscalar)")
             }
         }
+        (Func(_, _), Str(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                let s1 = bls12_381::Scalar::from_string(&a1);
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.sub_assign(s1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar sub expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar sub expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(mut a0), ZKScalar(a1)) => {
             a0.sub_assign(a1);
             Ok(ZKScalar(a0))
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.sub_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        (ZKScalar(a0), Str(a1)) => {
+            let (mut s0, s1) = (a0, bls12_381::Scalar::from_string(&a1));
+            s0.sub_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
         (Str(a0), Str(a1)) => {
             let (mut s0, s1) = (
@@ -278,7 +325,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
             s0.sub_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error("scalar sub expected (zkscalar, zkscalar)"),
+        _ => error(&format!("scalar sub expect (zkscalar, zkscalar) found \n {:?}", a).to_string()),
     }
 }
 
@@ -296,17 +343,61 @@ fn mul_scalar(a: MalArgs) -> MalRet {
                 error("scalar mul expect (zkscalar, zkscalar)")
             }
         }
+        (ZKScalar(a1), Func(_, _)) => {
+            if let Vector(ref values, _) = a[1].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    a0.mul_assign(a1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar mul expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar mul expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(mut a0), ZKScalar(a1)) => {
             a0.mul_assign(a1);
             Ok(ZKScalar(a0))
         }
-        _ => error("scalar mul expect (zkscalar, zkscalar)"),
+        (Str(a0), Str(a1)) => {
+            let (mut s0, s1) = (
+                bls12_381::Scalar::from_string(&a0),
+                bls12_381::Scalar::from_string(&a1),
+            );
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        (ZKScalar(a0), Str(a1)) => {
+            let (mut s0, s1) = (a0,
+                bls12_381::Scalar::from_string(&a1),
+            );
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.mul_assign(s1);
+            Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
+        }
+        _ => error( 
+            &format!("scalar mul expect (zkscalar, zkscalar) \n {:?}", a).to_string())
     }
 }
 
 fn div_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (ZKScalar(s0), ZKScalar(s1)) => {
+            let ret = s1.invert().map(|other| *&s0 * other);
+            if bool::from(ret.is_some()) {
+                Ok(Str(
+                    std::string::ToString::to_string(&ret.unwrap())[2..].to_string()
+                ))
+            } else {
+                error("DivisionByZero")
+            }
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
             let ret = s1.invert().map(|other| *&s0 * other);
             if bool::from(ret.is_some()) {
                 Ok(Str(
@@ -330,7 +421,8 @@ fn div_scalar(a: MalArgs) -> MalRet {
                 error("DivisionByZero")
             }
         }
-        _ => error("scalar div expected (scalar, scalar)"),
+        _ => error( 
+            &format!("scalar div expect (zkscalar, zkscalar) \n {:?}", a).to_string())
     }
 }
 
@@ -348,10 +440,13 @@ fn range(a: MalArgs) -> MalRet {
 }
 
 fn scalar_zero(a: MalArgs) -> MalRet {
-    Ok(vector![vec![
-        ZKScalar(bls12_381::Scalar::zero()),
-        a[0].clone()
-    ]])
+    match a.len() {
+        0 => Ok(vector![vec![ZKScalar(bls12_381::Scalar::zero())]]),
+        _ => Ok(vector![vec![
+            ZKScalar(bls12_381::Scalar::zero()),
+            a[0].clone()
+        ]]),
+    }
 }
 
 fn scalar_one(a: MalArgs) -> MalRet {
@@ -396,6 +491,101 @@ fn scalar_from(a: MalArgs) -> MalRet {
     }
 }
 
+fn scalar_square(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(ZKScalar(z0.square()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.square()))
+        }
+        _ => error(
+            &format!("scalar square expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
+fn scalar_double(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(ZKScalar(z0.double()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.double()))
+        }
+        _ => error(
+            &format!("scalar double expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
+fn scalar_invert(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        Func(_, _) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(a0) = values[0] {
+                    if a0.is_zero() {
+                        error(
+                            &format!("scalar invert divizion by zero \n {:?}", a0).to_string())
+                    } else {
+                        Ok(ZKScalar(a0.invert().unwrap()))        
+                    }
+                } else {
+                    error(
+                        &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+                }
+            } else {
+                error(
+                    &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+            }
+        }
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(ZKScalar(z0.invert().unwrap()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(ZKScalar(s0.invert().unwrap()))
+        }
+        _ => error(
+            &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
+fn scalar_is_zero(a: MalArgs) -> MalRet {
+    match a[0].clone() {
+        Func(_, _) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(a0) = values[0] {
+                    Ok(Bool(a0.is_zero()))        
+                } else {
+                    error(
+                        &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+                }
+            } else {
+                error(
+                    &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+            }
+        }
+        ZKScalar(a0) => {
+            let z0 = a0.clone();
+            Ok(Bool(z0.is_zero()))
+        }
+        Str(a0) => {
+            let s0 = bls12_381::Scalar::from_string(&a0);
+            Ok(Bool(s0.is_zero()))
+        }
+        _ => error(
+            &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string(),
+        ),
+    }
+}
+
 fn add_scalar(a: MalArgs) -> MalRet {
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
@@ -410,9 +600,22 @@ fn add_scalar(a: MalArgs) -> MalRet {
                 error("scalar add expect (zkscalar, zkscalar)")
             }
         }
+        (Func(_, _), Str(a1)) => {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
+                if let ZKScalar(mut a0) = values[0] {
+                    let s1 = bls12_381::Scalar::from_string(&a1);
+                    a0.add_assign(s1);
+                    Ok(ZKScalar(a0))
+                } else {
+                    error("scalar add expect (zkscalar, zkscalar) found (func, zkscalar)")
+                }
+            } else {
+                error("scalar add expect (zkscalar, zkscalar)")
+            }
+        }
         (ZKScalar(a0), ZKScalar(a1)) => {
             let (mut z0, z1) = (a0.clone(), a1.clone());
-            z0.add_assign(z1);
+            z0.add_assign(z1);        
             Ok(ZKScalar(z0))
         }
         (Str(a0), Str(a1)) => {
@@ -420,6 +623,11 @@ fn add_scalar(a: MalArgs) -> MalRet {
                 bls12_381::Scalar::from_string(&a0),
                 bls12_381::Scalar::from_string(&a1),
             );
+            s0.add_assign(s1);
+            Ok(ZKScalar(s0))
+        }
+        (Str(a0), ZKScalar(a1)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
             s0.add_assign(s1);
             Ok(ZKScalar(s0))
         }
@@ -438,6 +646,17 @@ fn seq(a: MalArgs) -> MalRet {
         Nil => Ok(Nil),
         _ => error("seq: called with non-seq"),
     }
+}
+
+fn gen_rand(a: MalArgs) -> MalRet {
+    let mut rng = rand::thread_rng();
+    Ok(MalVal::Int(rng.gen::<i64>()))
+}
+
+fn scalar_rnd(a: MalArgs) -> MalRet {
+    let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    let value = bls12_381::Scalar::from_bytes(&randomness_value.to_bytes());
+    Ok(MalVal::ZKScalar(value.unwrap()))
 }
 
 pub fn ns() -> Vec<(&'static str, MalVal)> {
@@ -542,6 +761,13 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),
+        ("square", func(scalar_square)),
         ("cs::one", func(cs_one)),
+        ("second", func(second)),
+        ("genrand", func(gen_rand)),
+        ("double", func(scalar_double)),
+        ("invert", func(scalar_invert)),
+        ("zero?", func(scalar_is_zero)),
+        ("rnd-scalar", func(scalar_rnd)),
     ]
 }
