@@ -9,6 +9,8 @@ use winit::{
 
 use sapvi::gui::texture;
 
+const FONT_BYTES: &[u8] = include_bytes!("../../res/fonts/PressStart2P-Regular.ttf");
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -93,6 +95,35 @@ const VERTICES: &[Vertex] = &[
 //const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
+pub const UNBOUNDED_F32: f32 = std::f32::INFINITY;
+
+#[derive(Debug)]
+pub struct Text {
+    pub position: cgmath::Vector2<f32>,
+    pub bounds: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
+    pub text: String,
+    pub size: f32,
+    pub visible: bool,
+    pub focused: bool,
+    pub centered: bool,
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            position: (0.0, 0.0).into(),
+            bounds: (UNBOUNDED_F32, UNBOUNDED_F32).into(),
+            color: (1.0, 1.0, 1.0, 1.0).into(),
+            text: String::new(),
+            size: 16.0,
+            visible: false,
+            focused: false,
+            centered: false,
+        }
+    }
+}
+
 struct State {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -103,6 +134,8 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    glyph_brush: wgpu_glyph::GlyphBrush<()>,
+    staging_belt: wgpu::util::StagingBelt,
     num_indices: u32,
     #[allow(dead_code)]
     diffuse_texture: texture::Texture,
@@ -270,6 +303,11 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
+        let font = wgpu_glyph::ab_glyph::FontArc::try_from_slice(FONT_BYTES).unwrap();
+        let glyph_brush =
+            wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, sc_desc.format);
+        let staging_belt = wgpu::util::StagingBelt::new(1024);
+
         Self {
             surface,
             device,
@@ -279,6 +317,8 @@ impl State {
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            glyph_brush,
+            staging_belt,
             num_indices,
             diffuse_texture,
             diffuse_bind_group,
@@ -361,10 +401,58 @@ impl State {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
+        let play_text = Text {
+            position: (40.0, 40.0).into(),
+            color: (1.0, 1.0, 1.0, 1.0).into(),
+            text: String::from("Absolutely Proprietary"),
+            size: 32.0,
+            centered: false,
+            ..Default::default()
+        };
+        draw_text(&play_text, &mut self.glyph_brush);
+
+                self.glyph_brush
+                    .draw_queued(
+                        &self.device,
+                        &mut self.staging_belt,
+                        &mut encoder,
+                        &frame.view,
+                        self.sc_desc.width,
+                        self.sc_desc.height,
+                    )
+                    .unwrap();
+
+                self.staging_belt.finish();
+
         self.queue.submit(iter::once(encoder.finish()));
 
         Ok(())
     }
+}
+
+fn draw_text(text: &Text, glyph_brush: &mut wgpu_glyph::GlyphBrush<()>) {
+    let layout = wgpu_glyph::Layout::default().h_align(if text.centered {
+        wgpu_glyph::HorizontalAlign::Center
+    } else {
+        wgpu_glyph::HorizontalAlign::Left
+    });
+
+    let section =
+        wgpu_glyph::Section {
+            screen_position: text.position.into(),
+            bounds: text.bounds.into(),
+            layout,
+            ..Default::default()
+        }
+        .add_text(wgpu_glyph::Text::new(&text.text).with_color(text.color).with_scale(
+            if text.focused {
+                text.size + 8.0
+            } else {
+                text.size
+            },
+        ));
+
+    glyph_brush.queue(section);
 }
 
 fn main() {
