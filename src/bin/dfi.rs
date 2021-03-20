@@ -320,13 +320,10 @@ impl ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
                 outbound_connections: connection_slots,
-                seed_query_timeout_seconds: 8,
-                connect_timeout_seconds: 10,
-                channel_handshake_seconds: 4,
-                channel_heartbeat_seconds: 10,
                 external_addr: accept_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
+                ..Default::default()
             },
             log_path,
             rpc_port,

@@ -19,3 +19,20 @@ pub struct Settings {
     pub peers: Vec<SocketAddr>,
     pub seeds: Vec<SocketAddr>,
 }
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            inbound: None,
+            outbound_connections: 0,
+            seed_query_timeout_seconds: 8,
+            connect_timeout_seconds: 10,
+            channel_handshake_seconds: 4,
+            channel_heartbeat_seconds: 10,
+            external_addr: None,
+            peers: Vec::new(),
+            seeds: Vec::new(),
+        }
+    }
+}
+
