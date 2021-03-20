@@ -186,6 +186,10 @@ impl Channel {
             .await;
     }
     
+    pub fn get_message_subsystem(&self) -> &MessageSubsystem {
+        &self.message_subsystem
+    }
+
     /// Run the receive loop. Start receiving messages or handle network failure.
     async fn main_receive_loop(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net",

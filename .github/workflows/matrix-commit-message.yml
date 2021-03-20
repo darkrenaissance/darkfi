@@ -5,14 +5,27 @@ jobs:
     runs-on: ubuntu-latest
     name: Send message via Matrix
     steps:
-      - uses: zkjanus/matrix-action@main
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - run: |
+          ALL_MSGS=""
+          for i in ${{ join(github.event.commits.*.id, ' ') }}; do
+            MSG=$(git --no-pager show -s --format='%h <b>%an</b>: %s' $i)
+            ALL_MSGS="$ALL_MSGS$MSG<br>"
+          done
+          echo "::set-output name=COMMIT_MESSAGE::$ALL_MSGS"
+        id: commit-message
+      - uses: narodnik/matrix-action@main
         with:
           server: 'matrix.dark.fi'
           room-id: '!MODZOZydPqCRdulXmR:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
-          user: 'narodnik'
+          status: 'OK'
+          user: 'b1-66er'
           password: ${{ secrets.MATRIX_PASSWORD }}
-          message: Bob the builder {{ github.sha }}
+          message: '${{ steps.commit-message.outputs.COMMIT_MESSAGE }}'
           #- name: Send message to test channel
           #  id: matrix-chat-message
           #  uses: fadenb/matrix-chat-message@v0.0.6

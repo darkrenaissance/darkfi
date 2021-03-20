@@ -97,7 +97,6 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
 
         println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
-            println!("k {:?} v {:?}", k, v);
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc_input(|| k, || Ok(*val))?;
@@ -142,7 +141,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-                //                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.right.iter() {
@@ -155,22 +154,35 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     right = right + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     right = right + (coeff.neg(), val_b);
+                } else {
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            right = right + (*val, val_b);
+                        }
+                    }
                 }
-                //println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.output.iter() {
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
+                    println!("{:?}", b);
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
                     output = output + (coeff, val_b);
                 } else if a == "scalar::one::neg" {
                     output = output + (coeff.neg(), val_b);
+                } else {
+                    if let Some(value) = params_const.get(a) {
+                        if let MalVal::ZKScalar(val) = value {
+                            output = output + (*val, val_b);
+                        }
+                    }
                 }
-                //println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             println!("Enforcing ...");

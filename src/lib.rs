@@ -6,6 +6,7 @@ pub mod async_serial;
 pub mod bls_extensions;
 pub mod endian;
 pub mod error;
+pub mod gui;
 pub mod net;
 pub mod serial;
 pub mod system;
