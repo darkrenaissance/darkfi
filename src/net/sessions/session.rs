@@ -25,6 +25,7 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 
 #[async_trait]
 pub trait Session: Sync {
+    /// Register a new channel with the session.
     async fn register_channel(
         self: Arc<Self>,
         channel: ChannelPtr,

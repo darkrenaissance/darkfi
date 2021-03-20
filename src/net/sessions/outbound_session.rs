@@ -10,19 +10,21 @@ use crate::net::sessions::Session;
 use crate::net::{ChannelPtr, Connector, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
+/// Outbound connections session.
 pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
 }
 
 impl OutboundSession {
+    /// Create a new outbound session.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         Arc::new(Self {
             p2p,
             connect_slots: Mutex::new(Vec::new()),
         })
     }
-
+    /// Start the outbound session.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
@@ -45,6 +47,7 @@ impl OutboundSession {
         Ok(())
     }
 
+    /// Stop the inbound session.
     pub async fn stop(&self) {
         let connect_slots = &*self.connect_slots.lock().await;
 
@@ -53,6 +56,7 @@ impl OutboundSession {
         }
     }
 
+    /// Start making outbound connections.
     pub async fn channel_connect_loop(
         self: Arc<Self>,
         slot_number: u32,
@@ -132,7 +136,7 @@ impl OutboundSession {
             return Ok(addr);
         }
     }
-
+    /// Check whether an inbound address is configured.
     fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
         match inbound_addr {
             Some(inbound_addr) => inbound_addr == addr,

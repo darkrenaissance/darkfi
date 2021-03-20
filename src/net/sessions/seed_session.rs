@@ -10,15 +10,18 @@ use crate::net::sessions::Session;
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 
+/// Seed connections session.
 pub struct SeedSession {
     p2p: Weak<P2p>,
 }
 
 impl SeedSession {
+    /// Create a new seed session instance.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         Arc::new(Self { p2p })
     }
 
+    /// Start the seed session.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "SeedSession::start() [START]");
         let settings = self.p2p().settings();

@@ -9,6 +9,7 @@ use crate::net::messages;
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
+/// Version information sent between nodes at the start of a connection.
 pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<messages::VersionMessage>,
@@ -17,6 +18,7 @@ pub struct ProtocolVersion {
 }
 
 impl ProtocolVersion {
+    /// Create a new version instance.
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
         let version_sub = channel
             .clone()
@@ -37,7 +39,7 @@ impl ProtocolVersion {
             settings,
         })
     }
-
+    /// Start version information exchange.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer
@@ -51,7 +53,7 @@ impl ProtocolVersion {
         debug!(target: "net", "ProtocolVersion::run() [END]");
         result
     }
-
+    /// Send and recieve version information.
     async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::exchange_versions() [START]");
 
@@ -62,7 +64,7 @@ impl ProtocolVersion {
         debug!(target: "net", "ProtocolVersion::exchange_versions() [END]");
         Ok(())
     }
-
+    /// Send version info and wait for version acknowledgement.
     async fn send_version(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
         let version = messages::VersionMessage {};
@@ -74,7 +76,7 @@ impl ProtocolVersion {
         debug!(target: "net", "ProtocolVersion::send_version() [END]");
         Ok(())
     }
-
+    /// Recieve version info and send version acknowledgement.
     async fn recv_version(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::recv_version() [START]");
         let _version_msg = self.version_sub.receive().await?;

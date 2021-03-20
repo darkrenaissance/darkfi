@@ -10,11 +10,14 @@ use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
 use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
+/// List of channels that are awaiting connection.
 pub type PendingChannels = Mutex<HashSet<SocketAddr>>;
+/// List of connected channels.
 pub type ConnectedChannels<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
-
+/// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
+/// Top level peer-to-peer networking interface. 
 pub struct P2p {
     pending: PendingChannels,
     channels: ConnectedChannels<Channel>,
@@ -26,6 +29,7 @@ pub struct P2p {
 }
 
 impl P2p {
+    /// Create a new p2p network.
     pub fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
         Arc::new(Self {
@@ -74,7 +78,7 @@ impl P2p {
         debug!(target: "net", "P2p::run() [BEGIN]");
         Ok(())
     }
-
+    /// Add channel address to the list of connected channels.
     pub async fn store(&self, channel: ChannelPtr) {
         self.channels
             .lock()
@@ -82,37 +86,48 @@ impl P2p {
             .insert(channel.address(), channel.clone());
         self.channel_subscriber.notify(Ok(channel)).await;
     }
+
+    /// Remove a channel from the list of connected channels.
     pub async fn remove(&self, channel: ChannelPtr) {
         self.channels.lock().await.remove(&channel.address());
     }
 
+    /// Check whether a channel is stored in the list of channels.
     pub async fn exists(&self, addr: &SocketAddr) -> bool {
         self.channels.lock().await.contains_key(addr)
     }
 
+    /// Add a channel to the list of pending channels.
     pub async fn add_pending(&self, addr: SocketAddr) -> bool {
         self.pending.lock().await.insert(addr)
     }
+
+    /// Remove a channel from the list of pending channels.
     pub async fn remove_pending(&self, addr: &SocketAddr) {
         self.pending.lock().await.remove(addr);
     }
 
+    /// Return the number of connected channels.
     pub async fn connections_count(&self) -> usize {
         self.channels.lock().await.len()
     }
 
+    /// Return an atomic pointer to the default network settings.
     pub fn settings(&self) -> SettingsPtr {
         self.settings.clone()
     }
 
+    /// Return an atomic pointer to the list of hosts.
     pub fn hosts(&self) -> HostsPtr {
         self.hosts.clone()
     }
 
+    /// Subscribe to a channel.
     pub async fn subscribe_channel(&self) -> Subscription<NetResult<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
     }
-
+    
+    /// Stop a subscription.
     pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         self.stop_subscriber.clone().subscribe().await
     }

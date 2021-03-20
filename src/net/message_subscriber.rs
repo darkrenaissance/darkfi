@@ -13,9 +13,12 @@ use crate::net::error::{NetError, NetResult};
 use crate::net::messages::Message;
 use crate::serial::{Decodable, Encodable};
 
+/// 64bit identifier for message subscription.
 pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
+/// Handles message subscriptions through a subscription ID and a receiver channel.
+/// Inherits from Message Dispatcher. 
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
@@ -23,6 +26,7 @@ pub struct MessageSubscription<M: Message> {
 }
 
 impl<M: Message> MessageSubscription<M> {
+    /// Start receiving messages.
     pub async fn receive(&self) -> MessageResult<M> {
         match self.recv_queue.recv().await {
             Ok(message) => message,
@@ -32,13 +36,14 @@ impl<M: Message> MessageSubscription<M> {
         }
     }
 
-    // Must be called manually since async Drop is not possible in Rust
+    /// Unsubscribe from a message subscription. Must be called manually.
     pub async fn unsubscribe(&self) {
         self.parent.clone().unsubscribe(self.id).await
     }
 }
 
 #[async_trait]
+/// Generic interface for message dispatcher. 
 trait MessageDispatcherInterface: Send + Sync {
     async fn trigger(&self, payload: Vec<u8>);
 
@@ -47,22 +52,26 @@ trait MessageDispatcherInterface: Send + Sync {
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
+/// Maintains a list of active subscribers and handles sending messages across subscriptions.
 struct MessageDispatcher<M: Message> {
     subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
+    /// Create a new message dispatcher.
     fn new() -> Self {
         MessageDispatcher {
             subs: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Create a random ID.
     pub fn random_id() -> MessageSubscriptionID {
         let mut rng = rand::thread_rng();
         rng.gen()
     }
 
+    /// Subscribe to a channel. Assigns a new ID and adds it to the list of subscribers.
     pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
         let (sender, recvr) = async_channel::unbounded();
         let sub_id = Self::random_id();
@@ -75,10 +84,12 @@ impl<M: Message> MessageDispatcher<M> {
         }
     }
 
+    /// Unsubcribe from a channel. Removes the associated ID from the subscriber list.
     async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
         self.subs.lock().await.remove(&sub_id);
     }
-
+    
+    /// Send a message to all subscriber channels. Automatically clear inactive channels.
     async fn trigger_all(&self, message: MessageResult<M>) {
         debug!(
             "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
@@ -108,7 +119,8 @@ impl<M: Message> MessageDispatcher<M> {
             self.subs.lock().await.len()
         );
     }
-
+    
+    /// Remove inactive channels.
     async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
         let mut subs = self.subs.lock().await;
         for id in &ids {
@@ -118,7 +130,9 @@ impl<M: Message> MessageDispatcher<M> {
 }
 
 #[async_trait]
+// Local implementation of the Message Dispatcher Interface.
 impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
+    /// Deserialize data into a message type.
     async fn trigger(&self, payload: Vec<u8>) {
         // deserialize data into type
         // send down the pipes
@@ -133,29 +147,34 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             }
         }
     }
-
+    
+    /// Sends a message to all subscriber channels. Clears any inactive channels.
     async fn trigger_error(&self, err: NetError) {
         self.trigger_all(Err(err)).await;
     }
 
+    /// Converts to Any trait. Enables the dynamic modification of static types.
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }
 }
 
-// NOTE: this class is a more general version of system::Subscriber which can dispatch
-// multiple different type of registered types to sub-dispatchers
+/// Generic publish/subscribe class that can dispatch any kind of message
+/// to a subscribed list of dispatchers. Dispatchers subscribe to a single message format of any
+/// type. This is a generalized version of the pub/sub model in system::Subscriber. 
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
 
 impl MessageSubsystem {
+    /// Create a new message subsystem.
     pub fn new() -> Self {
         MessageSubsystem {
             dispatchers: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Add a new message dispatcher.
     pub async fn add_dispatch<M: Message>(&self) {
         self.dispatchers
             .lock()
@@ -163,6 +182,7 @@ impl MessageSubsystem {
             .insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
     }
 
+    /// Add a dispatcher to the list of subscribers.
     pub async fn subscribe<M: Message>(&self) -> NetResult<MessageSubscription<M>> {
         let dispatcher = self.dispatchers.lock().await.get(M::name()).cloned();
 
@@ -185,6 +205,7 @@ impl MessageSubsystem {
         Ok(sub)
     }
 
+    /// Sends a message out to subscribers. Returns an error if the message doesn't send.
     pub async fn notify(&self, command: &str, payload: Vec<u8>) {
         let dispatcher = self.dispatchers.lock().await.get(command).cloned();
 
@@ -201,6 +222,7 @@ impl MessageSubsystem {
         }
     }
 
+    /// Send a message to all subscriber channels. Clear any inactive channels.
     pub async fn trigger_error(&self, err: NetError) {
         // TODO: this could be parallelized
         for dispatcher in self.dispatchers.lock().await.values() {
@@ -209,6 +231,7 @@ impl MessageSubsystem {
     }
 }
 
+/// Test functions for message subsystem.
 // This is a test function for the message subsystem code above
 // Normall we would use the #[test] macro but cannot since it is async code
 // Instead we call it using smol::block_on() in the unit test code after this func

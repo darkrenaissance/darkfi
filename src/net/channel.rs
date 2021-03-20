@@ -15,8 +15,10 @@ use crate::net::message_subscriber::{MessageSubscription, MessageSubsystem};
 use crate::net::messages;
 use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
 
+/// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
+/// Async TCP channel that handles the sending of messages across the network.
 pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
     writer: Mutex<WriteHalf<Async<TcpStream>>>,
@@ -28,6 +30,7 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// Create a new channel.
     pub async fn new(
         stream: Async<TcpStream>,
         address: SocketAddr,
@@ -49,7 +52,8 @@ impl Channel {
             stopped: AtomicBool::new(false),
         })
     }
-
+    
+    /// Start the channel.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "Channel::start() [START, address={}]", self.address());
         let self2 = self.clone();
@@ -62,7 +66,8 @@ impl Channel {
         );
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());
     }
-
+    
+    /// Stop the channel.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
         assert_eq!(self.stopped.load(Ordering::Relaxed), false);
@@ -73,6 +78,7 @@ impl Channel {
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 
+    /// Stop the channel and create a new sub.
     pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         debug!(target: "net",
             "Channel::subscribe_stop() [START, address={}]",
@@ -87,7 +93,8 @@ impl Channel {
         );
         sub
     }
-
+    
+    /// Send a message across a channel. 
     pub async fn send<M: messages::Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
             "Channel::send() [START, command={:?}, address={}]",
@@ -114,7 +121,8 @@ impl Channel {
         );
         result
     }
-
+    
+    /// Implements send message functionality.
     async fn send_message<M: messages::Message>(&self, message: M) -> error::Result<()> {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
@@ -127,6 +135,7 @@ impl Channel {
         messages::send_packet(stream, packet).await
     }
 
+    /// Subscribe to a message type.
     pub async fn subscribe_msg<M: messages::Message>(&self) -> NetResult<MessageSubscription<M>> {
         debug!(target: "net",
             "Channel::subscribe_msg() [START, command={:?}, address={}]",
@@ -141,11 +150,13 @@ impl Channel {
         );
         sub
     }
-
+    
+    /// Return the local socket address.
     pub fn address(&self) -> SocketAddr {
         self.address
     }
-
+    
+    /// End of file error. Triggered when unexpected end of file occurs.
     fn is_eof_error(err: &error::Error) -> bool {
         match err {
             error::Error::Io(io_err) => io_err.kind() == std::io::ErrorKind::UnexpectedEof,
@@ -153,6 +164,7 @@ impl Channel {
         }
     }
 
+    /// Perform network handshake for message subsystem dispatchers.
     async fn setup_dispatchers(message_subsystem: &MessageSubsystem) {
         message_subsystem
             .add_dispatch::<messages::VersionMessage>()
@@ -173,7 +185,8 @@ impl Channel {
             .add_dispatch::<messages::AddrsMessage>()
             .await;
     }
-
+    
+    /// Run the receive loop. Start receiving messages or handle network failure.
     async fn main_receive_loop(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net",
             "Channel::receive_loop() [START, address={}]",
@@ -207,6 +220,7 @@ impl Channel {
         }
     }
 
+    /// Handle network errors. Panic if error passes silently, otherwise broadcast the error.
     async fn handle_stop(self: Arc<Self>, result: NetResult<()>) {
         debug!(target: "net", "Channel::handle_stop() [START, address={}]", self.address());
         match result {

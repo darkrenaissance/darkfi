@@ -1,7 +1,9 @@
 use std::fmt;
 
+/// Returns the relevant network error if a program fails.
 pub type NetResult<T> = std::result::Result<T, NetError>;
 
+/// Defines a set of common network errors. Used for error handling.
 #[derive(Debug, Copy, Clone)]
 pub enum NetError {
     OperationFailed,

@@ -8,26 +8,33 @@ use crate::serial::{Decodable, Encodable, VarInt};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 
+/// Generic message template.
 pub trait Message: 'static + Encodable + Decodable + Send + Sync {
     fn name() -> &'static str;
 }
 
+/// Outbound keep-alive message.
 pub struct PingMessage {
     pub nonce: u32,
 }
 
+/// Inbound keep-alive message.
 pub struct PongMessage {
     pub nonce: u32,
 }
 
+/// Requests address of outbound connection. 
 pub struct GetAddrsMessage {}
 
+/// Sends address information to inbound connection. Response to GetAddrs message.
 pub struct AddrsMessage {
     pub addrs: Vec<SocketAddr>,
 }
 
+/// Requests version information of outbound connection.
 pub struct VersionMessage {}
 
+/// Sends version information to inbound connection. Response to VersionMessage.
 pub struct VerackMessage {}
 
 impl Message for PingMessage {
@@ -151,13 +158,14 @@ impl Decodable for VerackMessage {
     }
 }
 
-// Packets are the base type read from the network
-// These are converted to messages and passed to event loop
+/// Packets are the base type read from the network. Converted to messages and passed to event
+/// loop.
 pub struct Packet {
     pub command: String,
     pub payload: Vec<u8>,
 }
 
+/// Reads and decodes an inbound payload.
 pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet> {
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
@@ -193,6 +201,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     })
 }
 
+/// Sends an outbound packet by writing data to TCP stream.
 pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
     debug!(target: "net", "sending magic...");
     stream.write_all(&MAGIC_BYTES).await?;

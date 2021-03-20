@@ -10,6 +10,7 @@ use crate::net::{Acceptor, AcceptorPtr};
 use crate::net::{ChannelPtr, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
+/// Inbound connections session.
 pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,
@@ -17,6 +18,7 @@ pub struct InboundSession {
 }
 
 impl InboundSession {
+    /// Create a new inbound session.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         let acceptor = Acceptor::new();
 
@@ -26,7 +28,7 @@ impl InboundSession {
             accept_task: StoppableTask::new(),
         })
     }
-
+    /// Start the inbound session.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         match self.p2p().settings().inbound {
             Some(accept_addr) => {
@@ -49,12 +51,12 @@ impl InboundSession {
 
         Ok(())
     }
-
+    /// Stop the inbound session.
     pub async fn stop(&self) {
         self.acceptor.stop().await;
         self.accept_task.stop().await;
     }
-
+    /// Start accepting connections for inbound session.
     fn start_accept_session(
         self: Arc<Self>,
         accept_addr: SocketAddr,
