@@ -232,8 +232,11 @@
 
 (load-file "mimc-constants.lisp")
 (defmacro! mimc-macro (fn* [left-value right-value acc] (
-    (let* [tmp-xl (gensym2 'tmp_xl) xl-new-value (gensym2 'xl_new_value) cur-mimc-const (gensym2 'cur_mimc_const)
-        xl (gensym2 'xl) xr (gensym2 'xr)] (
+    (let* [tmp-xl (gensym2 'tmp_xl) 
+        xl-new-value (gensym2 'xl_new_value) 
+        cur-mimc-const (gensym2 'cur_mimc_const)
+        xl (gensym2 'xl) 
+        xr (gensym2 'xr)] (
     `(def! ~xl (alloc ~xl ~left-value))
     `(def! ~xr (alloc ~xr ~right-value))
     `(def! ~cur-mimc-const (alloc-const ~cur-mimc-const (nth mimc-constants ~acc)))
