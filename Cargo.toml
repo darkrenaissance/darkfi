@@ -84,6 +84,10 @@ name = "dfi"
 path = "src/bin/dfi.rs"
 
 [[bin]]
+name = "mimc"
+path = "src/old/mimc.rs"
+
+[[bin]]
 name = "dfg"
 path = "src/bin/dfg.rs"
 
