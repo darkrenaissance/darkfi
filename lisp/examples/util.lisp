@@ -8,7 +8,6 @@
   (let* [counter (atom 0)]
     (fn* [name]
       (symbol (str name "__" (swap! counter inc))))))
-
 ;; Like load-file, but will never load the same path twice.
 
 ;; This file is normally loaded with `load-file`, so it needs a
