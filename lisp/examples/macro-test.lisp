@@ -186,12 +186,6 @@
 )
 ))
 
-;; cs.enforce(
-;;     || "boolean constraint",
-;;     |lc| lc + CS::one() - var,
-;;     |lc| lc + var,
-;;     |lc| lc,
-;; );
 (defmacro! zk-boolean (fn* [val] (
         (let* [var (gensym)] (
             `(alloc ~var ~val)
@@ -219,15 +213,10 @@
         (def! u-add (get add-result "u3"))
         (def! v-add (get add-result "v3"))        
         (def! val (last (last (zk-double u-add v-add))))             
-        ;; debug
-        (println 'first-double val)
-        (println 'r r)
-        (println 'cond cond-result)
-        (println 'add add-result)
-        (println 'double acc val)        
         (def! acc (i+ acc 1))        
     ))
-    (println 'out val)
+    (val)
+    ;; { "u3" (get val "u3"), "v3" (get val "v3") }    
 )))
 
 (load-file "mimc-constants.lisp")
@@ -276,20 +265,42 @@
     ))
 )))
 
+(def! mint-contract (fn* [public-u public-v] (
+    (def! randomness (rnd-scalar))    
+    (def! witness-result (zk-witness public-u public-v))    
+    (def! not-small-order (zk-not-small-order? public-u public-v))    
+    (def! g-vcr-u (alloc "g-vcr-u" public-u))
+    (def! g-vcr-v (alloc "g-vcr-v" public-v))
+    (def! mul-result (last (last (jj-mul g-vcr-u g-vcr-v randomness))))
+    (println 'mul-result mul-result)
+    (def! rcvu (alloc-input "rcvu" (get mul-result "u3")))
+    (def! rcvr (alloc-input "rcvr" (get mul-result "v3")))
+    (enforce
+        (scalar::one rcvu)
+        (scalar::one cs::one)
+        (scalar::one rcvu)
+    )
+    (enforce
+        (scalar::one rcvr)
+        (scalar::one cs::one)
+        (scalar::one rcvr)
+    )    
+)))
 
 (prove 
-  (        
-    ;; (def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
-    ;; (def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
-    ;; (mimc left right)    
-    (def! param3 (rnd-scalar))
+  (            
     (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
     (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-    (jj-mul param-u param-v param3)
+    (mint-contract param-u param-v)    
   )
 )
 
 ;; following some examples 
+;; (def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
+;; (def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
+;; (mimc left right)    
+;; (def! param3 (rnd-scalar))
+;; (jj-mul param-u param-v param3)    
 ;; (def! param3 (rnd-scalar))
 ;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
 ;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))

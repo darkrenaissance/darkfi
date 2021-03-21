@@ -37,7 +37,6 @@ pub struct LispCircuit {
     pub params: HashMap<String, MalVal>,
     pub allocs: HashMap<String, MalVal>,
     pub alloc_inputs: HashMap<String, MalVal>,
-    //    todo change this for a ordered data structure so enforce
     pub constraints: Vec<EnforceAllocation>,
 }
 

@@ -346,7 +346,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
-                        let start = Instant::now();
+                        // let start = Instant::now();
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
@@ -370,11 +370,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Alloc(allocs),
                             )?;
                         }
-                        println!("Alloc Const: {:?}", start.elapsed());
+                        // println!("Alloc Const: {:?}", start.elapsed());
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
-                        let start = Instant::now();
+                        // let start = Instant::now();
                         let a1 = l[1].clone();
                         let value = eval(l[2].clone(), env.clone())?;
                         let result = eval(value.clone(), env.clone())?;
@@ -398,11 +398,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Alloc(allocs),
                             )?;
                         }
-                        println!("Alloc Input: {:?}", start.elapsed());
+                        // println!("Alloc Input: {:?}", start.elapsed());
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
-                        let start = Instant::now();
+                        // let start = Instant::now();
                         let a1 = l[1].clone();
                         let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
@@ -429,7 +429,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Alloc(allocs),
                             )?;
                         }
-                        println!("Alloc: {:?}", start.elapsed());
+                        // println!("Alloc: {:?}", start.elapsed());
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -494,29 +494,29 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             }
                             _ => {}
                         };
-                        let enforce_vec = get_enforce_allocs(&env);
+                        let mut enforce_vec = get_enforce_allocs(&env).clone();
                         let enforce = EnforceAllocation {
                             idx: enforce_vec.len() + 1,
                             left: left_vec,
                             right: right_vec,
                             output: out_vec,
                         };
-                        let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
-                        for value in enforce_vec.iter() {
-                            new_vec.push(value.clone());
-                        }
-                        // TODO change it
+                        enforce_vec.push(enforce);
+                        // let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
+                        // for value in enforce_vec.iter() {
+                        //     new_vec.push(value.clone());
+                        // }
                         if let Some(e) = &env.outer {
                             env_set(
                                 &e,
                                 Sym("AllocationsEnforce".to_string()),
-                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                                vector![vec![Enforce(Rc::new(enforce_vec))]],
                             )?;
                         } else {
                             env_set(
                                 &env,
                                 Sym("AllocationsEnforce".to_string()),
-                                vector![vec![Enforce(Rc::new(new_vec.clone()))]],
+                                vector![vec![Enforce(Rc::new(enforce_vec))]],
                             )?;
                         }
 
@@ -639,7 +639,7 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
 }
 
 pub fn prove(_ast: MalVal, env: Env) -> MalRet {
-    // let start = Instant::now();
+    let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
     let enforce_allocs = get_enforce_allocs(&env);
@@ -679,7 +679,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let result = groth16::verify_proof(verifying_key.as_ref().unwrap(), &proof, &vec_input);
     println!("vec public {:?}", vec_input);
     println!("result {:?}", result);
-
+    println!("Elapsed time: {:?}", start.elapsed());
     Ok(MalVal::Nil)
 }
 
