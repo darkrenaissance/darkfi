@@ -1,10 +1,9 @@
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::rc::Rc;
-//use std::collections::HashMap;
-use fnv::FnvHashMap;
+// use fnv::FnvHashMap;
 use itertools::Itertools;
 
 use crate::env::{env_bind, Env};
@@ -35,9 +34,9 @@ pub struct VerifyKeyParams {
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: FnvHashMap<String, MalVal>,
-    pub allocs: FnvHashMap<String, MalVal>,
-    pub alloc_inputs: FnvHashMap<String, MalVal>,
+    pub params: HashMap<String, MalVal>,
+    pub allocs: HashMap<String, MalVal>,
+    pub alloc_inputs: HashMap<String, MalVal>,
     //    todo change this for a ordered data structure so enforce
     pub constraints: Vec<EnforceAllocation>,
 }
@@ -51,7 +50,7 @@ pub enum MalVal {
     Sym(String),
     List(Rc<Vec<MalVal>>, Rc<MalVal>),
     Vector(Rc<Vec<MalVal>>, Rc<MalVal>),
-    Hash(Rc<FnvHashMap<String, MalVal>>, Rc<MalVal>),
+    Hash(Rc<HashMap<String, MalVal>>, Rc<MalVal>),
     Func(fn(MalArgs) -> MalRet, Rc<MalVal>),
     MalFunc {
         eval: fn(ast: MalVal, env: Env) -> MalRet,
@@ -62,7 +61,7 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(Rc<LispCircuit>), // TODO remote it
+    Alloc(RefCell<HashMap<String, MalVal>>),
     Enforce(Rc<Vec<EnforceAllocation>>),
     ZKScalar(bls12_381::Scalar),
 }
@@ -72,7 +71,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+        let mut variables: HashMap<String, Variable> = HashMap::default();
         let mut params_const = self.params;
 
         // println!("Allocations\n");
@@ -401,7 +400,7 @@ pub fn func(f: fn(MalArgs) -> MalRet) -> MalVal {
     Func(f, Rc::new(Nil))
 }
 
-pub fn _assoc(mut hm: FnvHashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
+pub fn _assoc(mut hm: HashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
     if kvs.len() % 2 != 0 {
         return error("odd number of elements");
     }
@@ -416,7 +415,7 @@ pub fn _assoc(mut hm: FnvHashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
     Ok(Hash(Rc::new(hm), Rc::new(Nil)))
 }
 
-pub fn _dissoc(mut hm: FnvHashMap<String, MalVal>, ks: MalArgs) -> MalRet {
+pub fn _dissoc(mut hm: HashMap<String, MalVal>, ks: MalArgs) -> MalRet {
     for k in ks.iter() {
         match k {
             Str(ref s) => {
@@ -429,6 +428,6 @@ pub fn _dissoc(mut hm: FnvHashMap<String, MalVal>, ks: MalArgs) -> MalRet {
 }
 
 pub fn hash_map(kvs: MalArgs) -> MalRet {
-    let hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+    let hm: HashMap<String, MalVal> = HashMap::default();
     _assoc(hm, kvs)
 }
