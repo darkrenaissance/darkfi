@@ -1,10 +1,9 @@
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 use std::ops::{Add, AddAssign, MulAssign, SubAssign};
 use std::rc::Rc;
-//use std::collections::HashMap;
-use fnv::FnvHashMap;
+// use fnv::FnvHashMap;
 use itertools::Itertools;
 
 use crate::env::{env_bind, Env};
@@ -35,10 +34,9 @@ pub struct VerifyKeyParams {
 
 #[derive(Debug, Clone)]
 pub struct LispCircuit {
-    pub params: FnvHashMap<String, MalVal>,
-    pub allocs: FnvHashMap<String, MalVal>,
-    pub alloc_inputs: FnvHashMap<String, MalVal>,
-    //    todo change this for a ordered data structure so enforce
+    pub params: HashMap<String, MalVal>,
+    pub allocs: HashMap<String, MalVal>,
+    pub alloc_inputs: HashMap<String, MalVal>,
     pub constraints: Vec<EnforceAllocation>,
 }
 
@@ -51,7 +49,7 @@ pub enum MalVal {
     Sym(String),
     List(Rc<Vec<MalVal>>, Rc<MalVal>),
     Vector(Rc<Vec<MalVal>>, Rc<MalVal>),
-    Hash(Rc<FnvHashMap<String, MalVal>>, Rc<MalVal>),
+    Hash(Rc<HashMap<String, MalVal>>, Rc<MalVal>),
     Func(fn(MalArgs) -> MalRet, Rc<MalVal>),
     MalFunc {
         eval: fn(ast: MalVal, env: Env) -> MalRet,
@@ -62,7 +60,7 @@ pub enum MalVal {
         meta: Rc<MalVal>,
     },
     Atom(Rc<RefCell<MalVal>>),
-    Zk(Rc<LispCircuit>), // TODO remote it
+    Alloc(RefCell<HashMap<String, MalVal>>),
     Enforce(Rc<Vec<EnforceAllocation>>),
     ZKScalar(bls12_381::Scalar),
 }
@@ -72,22 +70,22 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        let mut variables: FnvHashMap<String, Variable> = FnvHashMap::default();
+        let mut variables: HashMap<String, Variable> = HashMap::default();
         let mut params_const = self.params;
 
-        println!("Allocations\n");
+        // println!("Allocations\n");
         for (k, v) in &self.allocs {
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
                     println!("not allocated k {:?} v {:?}", k, v);
@@ -95,19 +93,19 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             }
         }
 
-        println!("Allocations Input\n");
+        // println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
             match v {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc_input(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc_input(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
-                    println!("k {:?} v {:?} var {:?}", k, v, var);
+                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 _ => {
                     println!("not allocated k {:?} v {:?}", k, v);
@@ -119,7 +117,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         let mut enforce_sorted = self.constraints.clone();
         enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
-            println!("Enforce -> {:?}", alloc_value);
+            // println!("Enforce -> {:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();
             let mut left = bellman::LinearCombination::<Scalar>::zero();
             let mut right = bellman::LinearCombination::<Scalar>::zero();
@@ -136,8 +134,15 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     left = left + (coeff.neg(), val_b);
                 } else {
                     if let Some(value) = params_const.get(a) {
-                        if let MalVal::ZKScalar(val) = value {
-                            left = left + (*val, val_b);
+                        match value {
+                            MalVal::ZKScalar(val) => {
+                                left = left + (*val, val_b);
+                            }
+                            MalVal::Str(s) => {
+                                let val = bls12_381::Scalar::from_string(&s.to_string());
+                                left = left + (val, val_b);
+                            }
+                            _ => { println!("not a valid param {:?}", value) }
                         }
                     }
                 }
@@ -156,8 +161,15 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     right = right + (coeff.neg(), val_b);
                 } else {
                     if let Some(value) = params_const.get(a) {
-                        if let MalVal::ZKScalar(val) = value {
-                            right = right + (*val, val_b);
+                        match value {
+                            MalVal::ZKScalar(val) => {
+                                right = right + (*val, val_b);
+                            }
+                            MalVal::Str(s) => {
+                                let val = bls12_381::Scalar::from_string(&s.to_string());
+                                right = right + (val, val_b);
+                            }
+                            _ => { println!("not a valid param {:?}", value) }
                         }
                     }
                 }
@@ -177,8 +189,15 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                     output = output + (coeff.neg(), val_b);
                 } else {
                     if let Some(value) = params_const.get(a) {
-                        if let MalVal::ZKScalar(val) = value {
-                            output = output + (*val, val_b);
+                        match value {
+                            MalVal::ZKScalar(val) => {
+                                output = output + (*val, val_b);
+                            }
+                            MalVal::Str(s) => {
+                                let val = bls12_381::Scalar::from_string(&s.to_string());
+                                output = output + (val, val_b);
+                            }
+                            _ => { println!("not a valid param {:?}", value) }
                         }
                     }
                 }
@@ -380,7 +399,7 @@ pub fn func(f: fn(MalArgs) -> MalRet) -> MalVal {
     Func(f, Rc::new(Nil))
 }
 
-pub fn _assoc(mut hm: FnvHashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
+pub fn _assoc(mut hm: HashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
     if kvs.len() % 2 != 0 {
         return error("odd number of elements");
     }
@@ -395,7 +414,7 @@ pub fn _assoc(mut hm: FnvHashMap<String, MalVal>, kvs: MalArgs) -> MalRet {
     Ok(Hash(Rc::new(hm), Rc::new(Nil)))
 }
 
-pub fn _dissoc(mut hm: FnvHashMap<String, MalVal>, ks: MalArgs) -> MalRet {
+pub fn _dissoc(mut hm: HashMap<String, MalVal>, ks: MalArgs) -> MalRet {
     for k in ks.iter() {
         match k {
             Str(ref s) => {
@@ -408,6 +427,6 @@ pub fn _dissoc(mut hm: FnvHashMap<String, MalVal>, ks: MalArgs) -> MalRet {
 }
 
 pub fn hash_map(kvs: MalArgs) -> MalRet {
-    let hm: FnvHashMap<String, MalVal> = FnvHashMap::default();
+    let hm: HashMap<String, MalVal> = HashMap::default();
     _assoc(hm, kvs)
 }

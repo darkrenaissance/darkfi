@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-//use std::collections::HashMap;
-use fnv::FnvHashMap;
+use std::collections::HashMap;
+// use fnv::FnvHashMap;
 
 use crate::types::MalErr::ErrString;
 use crate::types::MalVal::{List, Nil, Sym, Vector};
@@ -9,7 +9,7 @@ use crate::types::{error, MalErr, MalRet, MalVal};
 
 #[derive(Debug)]
 pub struct EnvStruct {
-    data: RefCell<FnvHashMap<String, MalVal>>,
+    data: RefCell<HashMap<String, MalVal>>,
     pub outer: Option<Env>,
 }
 
@@ -20,7 +20,7 @@ pub type Env = Rc<EnvStruct>;
 
 pub fn env_new(outer: Option<Env>) -> Env {
     Rc::new(EnvStruct {
-        data: RefCell::new(FnvHashMap::default()),
+        data: RefCell::new(HashMap::default()),
         outer: outer,
     })
 }

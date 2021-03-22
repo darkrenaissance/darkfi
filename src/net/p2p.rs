@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::net::error::{NetError, NetResult};
 use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
+use crate::net::messages::Message;
 use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
 /// List of channels that are awaiting connection.
@@ -17,7 +18,7 @@ pub type ConnectedChannels<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
-/// Top level peer-to-peer networking interface. 
+/// Top level peer-to-peer networking interface.
 pub struct P2p {
     pending: PendingChannels,
     channels: ConnectedChannels<Channel>,
@@ -78,6 +79,14 @@ impl P2p {
         debug!(target: "net", "P2p::run() [BEGIN]");
         Ok(())
     }
+
+    pub async fn broadcast<M: Message + Clone>(&self, message: M) -> NetResult<()> {
+        for channel in self.channels.lock().await.values() {
+            channel.send(message.clone()).await?;
+        }
+        Ok(())
+    }
+
     /// Add channel address to the list of connected channels.
     pub async fn store(&self, channel: ChannelPtr) {
         self.channels
@@ -126,7 +135,7 @@ impl P2p {
     pub async fn subscribe_channel(&self) -> Subscription<NetResult<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
     }
-    
+
     /// Stop a subscription.
     pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         self.stop_subscriber.clone().subscribe().await
