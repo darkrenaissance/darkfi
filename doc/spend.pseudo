@@ -1,0 +1,34 @@
+param secret
+param serial
+param coin_merkle_branch[4]
+param coin_merkle_is_right[4]
+constant generator_coin
+constant generator_value_commit_value
+constant generator_value_commit_random
+
+public nullifier = mimc_hash(secret, serial)
+
+private (public_u, public_v) = jj_mul(secret, generator_coin)
+public coin = mimc_hash(public_u, public_v, value, serial, randomness_coin)
+
+let current = coin
+for i in range(4):
+    branch = coin_merkle_branch[i]
+    is_right = coin_merkle_is_right[i]
+
+    # reverse(a, b, condition) = if condition (b, a) else (a, b)
+    private left, right = conditionally_reverse(current, branch, is_right)
+
+    # Only the last one is public
+    if i == 3:
+        current = public mimc_hash(left, right)
+    else:
+        current = private mimc_hash(left, right)
+
+private value_digits = unpack(value)
+rangeproof_assert(value, value_digits)
+public value_commit = jj_add(
+    jj_mul(value, generator_value_commit_value),
+    jj_mul(randomness_value, generator_value_commit_random)
+)
+
