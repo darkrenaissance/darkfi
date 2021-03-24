@@ -1,0 +1,15 @@
+param value
+
+private value_bits[] = unpack(value)
+
+digit = 1
+linear_combo = []
+for bit in value_bits:
+    enforce (bit) * (1 - bit) == 0
+
+    linear_combo.append((digit bit))
+
+    digit = digit.double()
+
+enforce (linear_combo) * (~one) == value
+
