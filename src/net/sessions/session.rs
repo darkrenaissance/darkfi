@@ -8,6 +8,7 @@ use crate::net::p2p::P2pPtr;
 use crate::net::protocols::ProtocolVersion;
 use crate::net::ChannelPtr;
 
+/// Removes channel from the list of connected channels when a stop signal is received.
 async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     debug!(target: "net", "remove_sub_on_stop() [START]");
     // Subscribe to stop events
@@ -46,6 +47,8 @@ pub trait Session: Sync {
         Ok(())
     }
 
+    /// Perform network handshake to initialize channel. Add the channel to the list of connected
+    /// channels, and prepare to remove the channel when a stop signal is received.
     async fn perform_handshake_protocols(
         &self,
         protocol_version: Arc<ProtocolVersion>,
@@ -69,5 +72,6 @@ pub trait Session: Sync {
         Ok(())
     }
 
+    /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
 }
