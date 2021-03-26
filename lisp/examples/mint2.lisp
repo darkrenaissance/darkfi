@@ -279,13 +279,12 @@
     (def! value-alloc (alloc "value-alloc" value))
     (def! values-bit (unpack-bits value))
     (def! acc 0)
-    (def! digit (scalar::one))    
+    (def! digit scalar::one)    
     (def! value-result (scalar::zero))
-    (println (count values-bit))
     (dotimes 64 (
         (rangeproof-alloc (nth values-bit acc))
         (def! digit (double digit))
-        (def! value-result (add bit))
+        (println digit)
         (def! acc (i+ acc 1))
     ))
     ;; todo add last enforce

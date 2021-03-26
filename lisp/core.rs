@@ -505,6 +505,16 @@ fn scalar_square(a: MalArgs) -> MalRet {
 
 fn scalar_double(a: MalArgs) -> MalRet {
     match a[0].clone() {
+        Func(_, _) => {
+            if let Vector(ref values, _) = r oua[0].apply(vec![]).unwrap() {
+                if let ZKScalar(a0) = values[0] {
+                    a0.double();
+                    Ok(ZKScalar(a0))
+                } else {
+                    error(&format!("scalar double expect (zkscalar or string) found \n {:?}", a).to_string())
+                }
+            } 
+        }
         ZKScalar(a0) => {
             let z0 = a0.clone();
             Ok(ZKScalar(z0.double()))
