@@ -35,4 +35,3 @@ impl Default for Settings {
         }
     }
 }
-

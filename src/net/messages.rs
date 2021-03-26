@@ -23,7 +23,7 @@ pub struct PongMessage {
     pub nonce: u32,
 }
 
-/// Requests address of outbound connection. 
+/// Requests address of outbound connection.
 pub struct GetAddrsMessage {}
 
 /// Sends address information to inbound connection. Response to GetAddrs message.

@@ -38,18 +38,18 @@ impl Acceptor {
 
         Ok(())
     }
-    
+
     /// Stop accepting inbound socket connections.
     pub async fn stop(&self) {
         // Send stop signal
         self.task.stop().await;
     }
-    
+
     /// Start receiving network messages.
     pub async fn subscribe(self: Arc<Self>) -> Subscription<NetResult<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
     }
-    
+
     /// Start listening on a local socket address.
     fn setup(accept_addr: SocketAddr) -> NetResult<Async<TcpListener>> {
         let listener = match Async::<TcpListener>::bind(accept_addr) {
@@ -100,7 +100,7 @@ impl Acceptor {
             }
         }
     }
-    
+
     /// Single attempt to accept an incoming connection. Stops after one attempt.
     async fn tick_accept(&self, listener: &Async<TcpListener>) -> NetResult<ChannelPtr> {
         let (stream, peer_addr) = match listener.accept().await {

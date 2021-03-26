@@ -11,13 +11,13 @@ use bls12_381::Bls12;
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::{collections::HashMap, cell::RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 use std::{
     borrow::{Borrow, BorrowMut},
     fs,
 };
+use std::{cell::RefCell, collections::HashMap};
 use types::EnforceAllocation;
 
 #[macro_use]
@@ -31,7 +31,9 @@ extern crate regex;
 #[macro_use]
 mod types;
 use crate::types::MalErr::{ErrMalVal, ErrString};
-use crate::types::MalVal::{Bool, Enforce, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector, Alloc};
+use crate::types::MalVal::{
+    Alloc, Bool, Enforce, Func, Hash, List, MalFunc, Nil, Str, Sym, Vector,
+};
 use crate::types::VerifyKeyParams;
 use crate::types::{error, format_error, MalArgs, MalErr, MalRet, MalVal};
 mod env;
@@ -108,7 +110,7 @@ fn macroexpand(mut ast: MalVal, env: &Env) -> (bool, MalRet) {
             Err(e) => return (false, Err(e)),
             Ok(a) => a,
         };
-        // println!("macroexpand 2: {:?}", ast); 
+        // println!("macroexpand 2: {:?}", ast);
         was_expanded = true;
     }
     (was_expanded, Ok(ast))
@@ -297,7 +299,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 Ok(Nil)
                             }
                             _ => error("invalid args for dotimes"),
-                        }                        
+                        }
                     }
                     Sym(ref a0sym) if a0sym == "if" => {
                         let cond = eval(l[1].clone(), env.clone())?;
@@ -352,23 +354,15 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let result = eval(value.clone(), env.clone())?;
                         let allocs = get_allocations(&env, "AllocationsConst");
                         allocs.borrow_mut().insert(a1.pr_str(false), result.clone());
-                        // let mut new_hm: HashMap<String, MalVal> = HashMap::default();                        
+                        // let mut new_hm: HashMap<String, MalVal> = HashMap::default();
                         // for (k, v) in allocs.borrow_mut().iter() {
                         //     new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
                         // }
-                        // new_hm.insert(a1.pr_str(false), result.clone());      
+                        // new_hm.insert(a1.pr_str(false), result.clone());
                         if let Some(e) = &env.outer {
-                            env_set(
-                                &e,
-                                Sym("AllocationsConst".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&e, Sym("AllocationsConst".to_string()), Alloc(allocs))?;
                         } else {
-                            env_set(
-                                &env,
-                                Sym("AllocationsConst".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&env, Sym("AllocationsConst".to_string()), Alloc(allocs))?;
                         }
                         // println!("Alloc Const: {:?}", start.elapsed());
                         Ok(result.clone())
@@ -386,17 +380,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         // }
                         // new_hm.insert(a1.pr_str(false), result.clone());
                         if let Some(e) = &env.outer {
-                            env_set(
-                                &e,
-                                Sym("AllocationsInput".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&e, Sym("AllocationsInput".to_string()), Alloc(allocs))?;
                         } else {
-                            env_set(
-                                &env,
-                                Sym("AllocationsInput".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&env, Sym("AllocationsInput".to_string()), Alloc(allocs))?;
                         }
                         // println!("Alloc Input: {:?}", start.elapsed());
                         Ok(result.clone())
@@ -407,27 +393,19 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
                             value = value.apply(vec![]).unwrap();
-                        } 
+                        }
                         let result = eval(value.clone(), env.clone())?;
                         let allocs = get_allocations(&env, "Allocations");
                         allocs.borrow_mut().insert(a1.pr_str(false), result.clone());
                         // let mut new_hm: HashMap<String, MalVal> = HashMap::default();
                         // for (k, v) in allocs.borrow_mut().iter() {
                         //     new_hm.insert(k.to_string(), eval(v.clone(), env.clone())?);
-                        // }                                        
+                        // }
                         // new_hm.insert(a1.pr_str(false), result.clone());
                         if let Some(e) = &env.outer {
-                            env_set(
-                                &e,
-                                Sym("Allocations".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&e, Sym("Allocations".to_string()), Alloc(allocs))?;
                         } else {
-                            env_set(
-                                &env,
-                                Sym("Allocations".to_string()),
-                                Alloc(allocs),
-                            )?;
+                            env_set(&env, Sym("Allocations".to_string()), Alloc(allocs))?;
                         }
                         // println!("Alloc: {:?}", start.elapsed());
                         Ok(result.clone())
