@@ -191,7 +191,7 @@ fn unpack_bits(a: MalArgs) -> MalRet {
                 .map(|a| Str(std::string::ToString::to_string(&a)[2..].to_string()))
                 .collect::<Vec<MalVal>>()))
         }
-        _ => error("invalid args to unpack-bits"),
+        _ => error(&format!("invalid args to unpack-bits found \n {:?}", a).to_string()),
     }
 }
 
@@ -368,9 +368,7 @@ fn mul_scalar(a: MalArgs) -> MalRet {
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
         (ZKScalar(a0), Str(a1)) => {
-            let (mut s0, s1) = (a0,
-                bls12_381::Scalar::from_string(&a1),
-            );
+            let (mut s0, s1) = (a0, bls12_381::Scalar::from_string(&a1));
             s0.mul_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
@@ -379,8 +377,7 @@ fn mul_scalar(a: MalArgs) -> MalRet {
             s0.mul_assign(s1);
             Ok(Str(std::string::ToString::to_string(&s0)[2..].to_string()))
         }
-        _ => error( 
-            &format!("scalar mul expect (zkscalar, zkscalar) \n {:?}", a).to_string())
+        _ => error(&format!("scalar mul expect (zkscalar, zkscalar) \n {:?}", a).to_string()),
     }
 }
 
@@ -421,8 +418,7 @@ fn div_scalar(a: MalArgs) -> MalRet {
                 error("DivisionByZero")
             }
         }
-        _ => error( 
-            &format!("scalar div expect (zkscalar, zkscalar) \n {:?}", a).to_string())
+        _ => error(&format!("scalar div expect (zkscalar, zkscalar) \n {:?}", a).to_string()),
     }
 }
 
@@ -529,18 +525,21 @@ fn scalar_invert(a: MalArgs) -> MalRet {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
                 if let ZKScalar(a0) = values[0] {
                     if a0.is_zero() {
-                        error(
-                            &format!("scalar invert divizion by zero \n {:?}", a0).to_string())
+                        error(&format!("scalar invert divizion by zero \n {:?}", a0).to_string())
                     } else {
-                        Ok(ZKScalar(a0.invert().unwrap()))        
+                        Ok(ZKScalar(a0.invert().unwrap()))
                     }
                 } else {
                     error(
-                        &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+                        &format!("scalar invert expect (zkscalar or string) found \n {:?}", a)
+                            .to_string(),
+                    )
                 }
             } else {
                 error(
-                    &format!("scalar invert expect (zkscalar or string) found \n {:?}", a).to_string())
+                    &format!("scalar invert expect (zkscalar or string) found \n {:?}", a)
+                        .to_string(),
+                )
             }
         }
         ZKScalar(a0) => {
@@ -562,14 +561,24 @@ fn scalar_is_zero(a: MalArgs) -> MalRet {
         Func(_, _) => {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
                 if let ZKScalar(a0) = values[0] {
-                    Ok(Bool(a0.is_zero()))        
+                    Ok(Bool(a0.is_zero()))
                 } else {
                     error(
-                        &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+                        &format!(
+                            "scalar is zero expect (zkscalar or string) found \n {:?}",
+                            a
+                        )
+                        .to_string(),
+                    )
                 }
             } else {
                 error(
-                    &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string())
+                    &format!(
+                        "scalar is zero expect (zkscalar or string) found \n {:?}",
+                        a
+                    )
+                    .to_string(),
+                )
             }
         }
         ZKScalar(a0) => {
@@ -581,7 +590,11 @@ fn scalar_is_zero(a: MalArgs) -> MalRet {
             Ok(Bool(s0.is_zero()))
         }
         _ => error(
-            &format!("scalar is zero expect (zkscalar or string) found \n {:?}", a).to_string(),
+            &format!(
+                "scalar is zero expect (zkscalar or string) found \n {:?}",
+                a
+            )
+            .to_string(),
         ),
     }
 }
@@ -615,7 +628,7 @@ fn add_scalar(a: MalArgs) -> MalRet {
         }
         (ZKScalar(a0), ZKScalar(a1)) => {
             let (mut z0, z1) = (a0.clone(), a1.clone());
-            z0.add_assign(z1);        
+            z0.add_assign(z1);
             Ok(ZKScalar(z0))
         }
         (Str(a0), Str(a1)) => {

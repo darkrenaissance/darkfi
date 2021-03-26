@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::HashMap;
+use std::rc::Rc;
 // use fnv::FnvHashMap;
 
 use crate::types::MalErr::ErrString;

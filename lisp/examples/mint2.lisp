@@ -190,7 +190,7 @@
         (let* [var (gensym)] (
             `(alloc ~var ~val)
             `(enforce
-                (scalar::one cs::one) (scalar::one ~var)
+                ((scalar::one cs::one) (scalar::one::neg ~var))
                 (scalar::one ~var)
                 ()
              )
@@ -265,6 +265,34 @@
     ))
 )))
 
+(defmacro! rangeproof-alloc (fn* [value] (
+    (let* [bit (gensym2 'bit)] (
+    `(alloc ~bit ~value)
+    `(enforce 
+        (scalar::one ~bit) 
+        (scalar::one::neg ~bit) 
+        () 
+    )
+)))))
+
+(def! rangeproof (fn* [value] (
+    (def! value-alloc (alloc "value-alloc" value))
+    (def! values-bit (unpack-bits value))
+    (def! acc 0)
+    (def! digit (scalar::one))    
+    (def! value-result (scalar::zero))
+    (println (count values-bit))
+    (dotimes 64 (
+        (rangeproof-alloc (nth values-bit acc))
+        (def! digit (double digit))
+        (def! value-result (add bit))
+        (def! acc (i+ acc 1))
+    ))
+    ;; todo add last enforce
+    (println 'value-result value-result)
+    (println 'bit bit)
+)))
+
 (def! mint-contract (fn* [public-u public-v] (
     (def! randomness (rnd-scalar))    
     (def! witness-result (zk-witness public-u public-v))    
@@ -290,10 +318,15 @@
   (            
     (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
     (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-    (mint-contract param-u param-v)    
+    (rangeproof param-u)
   )
 )
 
+;; (mint-contract param-u param-v)    
+;; (def! param3 (rnd-scalar))
+;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (jj-mul param-u param-v param3)
 ;; following some examples 
 ;; (def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
 ;; (def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
