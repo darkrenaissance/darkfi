@@ -11,8 +11,8 @@ use sapvi::bls_extensions::BlsStringConversion;
 use ff::{Field, PrimeField};
 
 // mimc constants
-mod mimc_constants;
-use mimc_constants::mimc_constants;
+//mod mimc_constants;
+//use mimc_constants::mimc_constants;
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.
 use bls12_381::{Bls12, Scalar};
@@ -181,6 +181,7 @@ fn main() {
     //     .collect::<Vec<_>>();
 
     let mut constants = Vec::new();
+    /*
     for const_str in mimc_constants() {
         let bytes = from_slice!(&hex::decode(const_str).unwrap(), 32);
         assert_eq!(bytes.len(), 32);
@@ -188,6 +189,7 @@ fn main() {
 
         constants.push(constant);
     }
+    */
 
     println!("Creating parameters...");
 

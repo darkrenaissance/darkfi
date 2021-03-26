@@ -70,6 +70,11 @@ cgmath = "0.17"
 env_logger = "0.7"
 wgpu = "0.7"
 wgpu_glyph = "0.11"
+tobj = "2.0.4"
+
+# used by compile-shaders
+fs_extra = "1.2"
+glob = "0.3"
 
 [[bin]]
 name = "lisp"
@@ -90,4 +95,8 @@ path = "src/old/mimc.rs"
 [[bin]]
 name = "dfg"
 path = "src/bin/dfg.rs"
+
+[[bin]]
+name = "compile-shaders"
+path = "src/bin/compile-shaders.rs"
 
