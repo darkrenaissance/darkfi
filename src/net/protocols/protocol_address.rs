@@ -8,6 +8,7 @@ use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::{ChannelPtr, HostsPtr};
 
+/// Address protocol.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
 
