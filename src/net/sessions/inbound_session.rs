@@ -96,7 +96,8 @@ impl InboundSession {
 
         self.attach_protocols(channel, executor).await
     }
-
+    
+    /// Network handshake.
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,

@@ -21,7 +21,8 @@ impl SeedSession {
         Arc::new(Self { p2p })
     }
 
-    /// Start the seed session.
+    /// Start the seed session. Creates a new task for every seed connection and runs private
+    /// function start_seed() on each task.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "SeedSession::start() [START]");
         let settings = self.p2p().settings();
@@ -69,6 +70,8 @@ impl SeedSession {
         Ok(())
     }
 
+    /// Connects to a seed socket address. Registers a new channel with a network
+    /// handshake, then starts the keep-alive messages and seed protocol.
     async fn start_seed(
         self: Arc<Self>,
         seed_index: usize,
@@ -107,7 +110,8 @@ impl SeedSession {
             }
         }
     }
-
+    
+    /// Starts keep-alive messages and seed protocol.
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
