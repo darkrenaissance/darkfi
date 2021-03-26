@@ -166,21 +166,25 @@ const VERTICES: &[model::ModelVertex] = &[
     model::ModelVertex {
         position: [-1.0, 1.0, VERTEX_Z],
         tex_coords: [0.0, 0.0],
+        normal: [0.0, 0.0, -1.0],
     },
     // bottom left
     model::ModelVertex {
         position: [-1.0, 0.5, VERTEX_Z],
         tex_coords: [0.0, 1.0],
+        normal: [0.0, 0.0, -1.0],
     },
     // bottom right
     model::ModelVertex {
         position: [-0.5, 0.5, VERTEX_Z],
         tex_coords: [1.0, 1.0],
+        normal: [0.0, 0.0, -1.0],
     },
     // top right
     model::ModelVertex {
         position: [-0.5, 1.0, VERTEX_Z],
         tex_coords: [1.0, 0.0],
+        normal: [0.0, 0.0, -1.0],
     },
 ];
 
