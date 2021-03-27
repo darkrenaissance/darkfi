@@ -14,6 +14,7 @@ pub trait Vertex {
 pub struct ModelVertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub normal: [f32; 3],
 }
 
 impl Vertex for ModelVertex {
@@ -113,6 +114,11 @@ impl Model {
                         m.mesh.positions[i * 3 + 2],
                     ],
                     tex_coords: [1.0 - m.mesh.texcoords[i * 2], m.mesh.texcoords[i * 2 + 1]],
+                    normal: [
+                        m.mesh.normals[i * 3],
+                        m.mesh.normals[i * 3 + 1],
+                        m.mesh.normals[i * 3 + 2],
+                    ],
                 });
             }
 

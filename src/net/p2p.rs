@@ -6,9 +6,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::net::error::{NetError, NetResult};
+use crate::net::messages::Message;
 use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
-use crate::net::messages::Message;
 use crate::system::{Subscriber, SubscriberPtr, Subscription};
 
 /// List of channels that are awaiting connection.

@@ -16,7 +16,7 @@ impl Connector {
     pub fn new(settings: SettingsPtr) -> Self {
         Self { settings }
     }
-    
+
     /// Establish an outbound connection.
     pub async fn connect(&self, hostaddr: SocketAddr) -> NetResult<ChannelPtr> {
         futures::select! {

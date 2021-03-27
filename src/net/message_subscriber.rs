@@ -18,7 +18,7 @@ pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
 /// Handles message subscriptions through a subscription ID and a receiver channel.
-/// Inherits from Message Dispatcher. 
+/// Inherits from Message Dispatcher.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
@@ -43,7 +43,7 @@ impl<M: Message> MessageSubscription<M> {
 }
 
 #[async_trait]
-/// Generic interface for message dispatcher. 
+/// Generic interface for message dispatcher.
 trait MessageDispatcherInterface: Send + Sync {
     async fn trigger(&self, payload: Vec<u8>);
 
@@ -88,7 +88,7 @@ impl<M: Message> MessageDispatcher<M> {
     async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
         self.subs.lock().await.remove(&sub_id);
     }
-    
+
     /// Send a message to all subscriber channels. Automatically clear inactive channels.
     async fn trigger_all(&self, message: MessageResult<M>) {
         debug!(
@@ -119,7 +119,7 @@ impl<M: Message> MessageDispatcher<M> {
             self.subs.lock().await.len()
         );
     }
-    
+
     /// Remove inactive channels.
     async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
         let mut subs = self.subs.lock().await;
@@ -147,7 +147,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             }
         }
     }
-    
+
     /// Sends a message to all subscriber channels. Clears any inactive channels.
     async fn trigger_error(&self, err: NetError) {
         self.trigger_all(Err(err)).await;
@@ -161,7 +161,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
 /// Generic publish/subscribe class that can dispatch any kind of message
 /// to a subscribed list of dispatchers. Dispatchers subscribe to a single message format of any
-/// type. This is a generalized version of the pub/sub model in system::Subscriber. 
+/// type. This is a generalized version of the pub/sub model in system::Subscriber.
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
@@ -304,4 +304,3 @@ mod tests {
         smol::block_on(_do_message_subscriber_test());
     }
 }
-

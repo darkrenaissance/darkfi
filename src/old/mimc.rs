@@ -109,7 +109,7 @@ impl<'a, Scalar: PrimeField> Circuit<Scalar> for MiMCDemo<'a, Scalar> {
                 e.add_assign(&self.constants[i]);
                 e.square()
             });
-            
+
             // println!("tmp_value {:?} {:?}", self.constants[i], tmp_value);
 
             let tmp = cs.alloc(
@@ -222,8 +222,12 @@ fn main() {
         // Generate a random preimage and compute the image
         // let xl = Scalar::random(&mut OsRng);
         // let xr = Scalar::random(&mut OsRng);
-        let xl = bls12_381::Scalar::from_string("15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e");
-        let xr = bls12_381::Scalar::from_string("015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891");
+        let xl = bls12_381::Scalar::from_string(
+            "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e",
+        );
+        let xr = bls12_381::Scalar::from_string(
+            "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891",
+        );
         let image = mimc(xl, xr, &constants);
 
         proof_vec.truncate(0);
