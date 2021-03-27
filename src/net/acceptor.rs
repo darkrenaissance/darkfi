@@ -25,7 +25,9 @@ impl Acceptor {
             task: StoppableTask::new(),
         })
     }
-    /// Start accepting inbound socket connections.
+    /// Start accepting inbound socket connections. Creates a listener to start listening on  
+    /// a local socket address. Then runs an accept loop in a new thread, erroring if a
+    /// connection problem occurs.
     pub fn start(
         self: Arc<Self>,
         accept_addr: SocketAddr,
