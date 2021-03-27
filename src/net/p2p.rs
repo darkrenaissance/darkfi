@@ -101,7 +101,7 @@ impl P2p {
         self.channels.lock().await.remove(&channel.address());
     }
 
-    /// Check whether a channel is stored in the list of channels.
+    /// Check whether a channel is stored in the list of connected channels.
     pub async fn exists(&self, addr: &SocketAddr) -> bool {
         self.channels.lock().await.contains_key(addr)
     }
