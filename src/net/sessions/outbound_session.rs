@@ -24,7 +24,7 @@ impl OutboundSession {
             connect_slots: Mutex::new(Vec::new()),
         })
     }
-    /// Start the outbound session.
+    /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
@@ -57,6 +57,9 @@ impl OutboundSession {
     }
 
     /// Start making outbound connections.
+    /// Creates a connector object, then starts a connect loop. Loads a valid address then tries to
+    /// connect. Once connected, registers the channel, removes it from the list of pending
+    /// channels, and starts sending messages across the channel. Otherwise returns a network error.
     pub async fn channel_connect_loop(
         self: Arc<Self>,
         slot_number: u32,
@@ -136,7 +139,8 @@ impl OutboundSession {
             return Ok(addr);
         }
     }
-    /// Address is self inbound
+
+    /// Checks whether an address is our own inbound address to avoid connecting to ourselves.
     fn is_self_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
         match inbound_addr {
             Some(inbound_addr) => inbound_addr == addr,
@@ -145,6 +149,7 @@ impl OutboundSession {
         }
     }
 
+    /// Starts sending keep-alive and address messages across the channels.
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
