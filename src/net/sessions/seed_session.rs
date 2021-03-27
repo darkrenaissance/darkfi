@@ -21,8 +21,8 @@ impl SeedSession {
         Arc::new(Self { p2p })
     }
 
-    /// Start the seed session. Creates a new task for every seed connection and runs private
-    /// function start_seed() on each task.
+    /// Start the seed session. Creates a new task for every seed connection and 
+    /// starts the seed on each task.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "SeedSession::start() [START]");
         let settings = self.p2p().settings();
