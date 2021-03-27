@@ -47,7 +47,7 @@ impl OutboundSession {
         Ok(())
     }
 
-    /// Stop the inbound session.
+    /// Stop the outbound session.
     pub async fn stop(&self) {
         let connect_slots = &*self.connect_slots.lock().await;
 
@@ -99,10 +99,10 @@ impl OutboundSession {
         }
     }
 
-    /// Load a valid address that we can connect to.
-    /// Valid means we aren't connecting (pending state) or connected (open channel)
-    /// in another slot, and it isn't our own inbound address.
-    /// Retry otherwise.
+    /// Loops through host addresses to find a outbound address that we can connect to.
+    /// Checks whether address is valid by making sure it isn't our own inbound address,
+    /// then checks whether it is already connected (exists) or connecting (pending).
+    /// Keeps looping until address is found that passes all checks.
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
         let p2p = self.p2p();
         let hosts = p2p.hosts();
@@ -120,7 +120,7 @@ impl OutboundSession {
             }
             let addr = addr.unwrap();
 
-            if Self::addr_is_inbound(&addr, &inbound_addr) {
+            if Self::is_self_inbound(&addr, &inbound_addr) {
                 continue;
             }
 
@@ -136,8 +136,8 @@ impl OutboundSession {
             return Ok(addr);
         }
     }
-    /// Check whether an inbound address is configured.
-    fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
+    /// Address is self inbound
+    fn is_self_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
         match inbound_addr {
             Some(inbound_addr) => inbound_addr == addr,
             // No inbound listening address configured
