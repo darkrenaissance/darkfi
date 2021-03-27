@@ -142,9 +142,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 left = left + (val, val_b);
                             }
-                            _ => {
-                                println!("not a valid param {:?}", value)
-                            }
+                            _ => println!("not a valid param {:?}", value),
                         }
                     }
                 }
@@ -171,9 +169,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 right = right + (val, val_b);
                             }
-                            _ => {
-                                println!("not a valid param {:?}", value)
-                            }
+                            _ => println!("not a valid param {:?}", value),
                         }
                     }
                 }
@@ -201,9 +197,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 output = output + (val, val_b);
                             }
-                            _ => {
-                                println!("not a valid param {:?}", value)
-                            }
+                            _ => println!("not a valid param {:?}", value),
                         }
                     }
                 }

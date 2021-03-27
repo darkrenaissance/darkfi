@@ -86,7 +86,7 @@ impl ProtocolAddress {
         }
     }
 
-    /// Handles receiving the get-address message. Continually recieves get-address messages on the 
+    /// Handles receiving the get-address message. Continually recieves get-address messages on the
     /// get-address subsciption. Then replies with an address message.
     async fn handle_receive_get_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() [START]");

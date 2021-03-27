@@ -43,7 +43,7 @@ impl ProtocolVersion {
         })
     }
     /// Start version information exchange. Start the timer. Send version info and wait for version
-    /// acknowledgement. Wait for version info and send version acknowledgement. 
+    /// acknowledgement. Wait for version info and send version acknowledgement.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer

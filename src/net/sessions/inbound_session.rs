@@ -83,10 +83,9 @@ impl InboundSession {
                 .detach();
         }
     }
-    
-    /// Registers the channel.
-    /// Performs a network handshake and starts the channel. Then starts sending keep-alive and
-    /// address messages across the channel.
+
+    /// Registers the channel. First performs a network handshake and starts the channel. Then starts
+    /// sending keep-alive and address messages across the channel.
     async fn setup_channel(
         self: Arc<Self>,
         channel: ChannelPtr,
@@ -100,7 +99,7 @@ impl InboundSession {
 
         self.attach_protocols(channel, executor).await
     }
-    
+
     /// Starts sending keep-alive and address messages across the channels.
     async fn attach_protocols(
         self: Arc<Self>,
