@@ -1,6 +1,6 @@
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
-use std::ops::{Add, AddAssign, MulAssign, SubAssign};
+use std::{ops::{Add, AddAssign, MulAssign, SubAssign}, time::Instant};
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 // use fnv::FnvHashMap;
@@ -71,8 +71,10 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut variables: HashMap<String, Variable> = HashMap::default();
-        let mut params_const = self.params;
-
+        let params_const = self.params;
+        
+        let circuitTime = Instant::now();
+        let start = Instant::now();
         // println!("Allocations\n");
         for (k, v) in &self.allocs {
             match v {
@@ -96,7 +98,8 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 }
             }
         }
-
+        println!("circuit alloc \t {:?}", start.elapsed());
+        let start = Instant::now();        
         // println!("Allocations Input\n");
         for (k, v) in &self.alloc_inputs {
             match v {
@@ -116,8 +119,8 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 }
             }
         }
-
-        println!("Enforce Allocations\n");
+        println!("circuit alloc input \t {:?}", start.elapsed());        
+        let start = Instant::now();
         let mut enforce_sorted = self.constraints.clone();
         enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
@@ -130,7 +133,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
-                    println!("{:?}", b);
+                    // println!("{:?}", b);
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
@@ -160,7 +163,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-                println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                // println!("left: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.right.iter() {
@@ -196,14 +199,14 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-                println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                // println!("right: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
             for values in alloc_value.output.iter() {
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
-                    println!("{:?}", b);
+                    // println!("{:?}", b);
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
@@ -233,18 +236,19 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                         }
                     }
                 }
-                println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
+                // println!("output: a {:?} b {:?} val_b: {:?}", a, b, val_b);
             }
 
-            println!("Enforcing ...");
+            // println!("Enforcing ...");
             cs.enforce(
                 || "constraint",
                 |_| left.clone(),
                 |_| right.clone(),
                 |_| output.clone(),
             );
-        }
-
+        }     
+        println!("circuit enforce \t {:?}", start.elapsed());        
+        println!("end circuit \t {:?}", circuitTime.elapsed());        
         Ok(())
     }
 }
