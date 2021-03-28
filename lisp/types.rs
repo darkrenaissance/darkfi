@@ -147,6 +147,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 left = left + (val, val_b);
                             }
+                            MalVal::Func(_, _) => {
+                                if let MalVal::Vector(val, _) = value.apply(vec![]).unwrap() {
+                                    if let MalVal::ZKScalar(res) = val.to_vec()[0] {
+                                        left = left + (res, val_b);
+                                    }
+                                }
+                            }
                             _ => {
                                 println!("not a valid param {:?}", value)
                             }
@@ -175,6 +182,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                             MalVal::Str(s) => {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 right = right + (val, val_b);
+                            }
+                            MalVal::Func(_, _) => {
+                                if let MalVal::Vector(val, _) = value.apply(vec![]).unwrap() {
+                                    if let MalVal::ZKScalar(res) = val.to_vec()[0] {
+                                        right = right + (res, val_b);
+                                    }
+                                }
                             }
                             _ => {
                                 println!("not a valid param {:?}", value)
@@ -205,6 +219,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                             MalVal::Str(s) => {
                                 let val = bls12_381::Scalar::from_string(&s.to_string());
                                 output = output + (val, val_b);
+                            }
+                            MalVal::Func(_, _) => {
+                                if let MalVal::Vector(val, _) = value.apply(vec![]).unwrap() {
+                                    if let MalVal::ZKScalar(res) = val.to_vec()[0] {
+                                        output = output + (res, val_b);
+                                    }
+                                }
                             }
                             _ => {
                                 println!("not a valid param {:?}", value)
