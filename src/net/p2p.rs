@@ -80,6 +80,7 @@ impl P2p {
         Ok(())
     }
 
+    /// Broadcasts a message across all channels.
     pub async fn broadcast<M: Message + Clone>(&self, message: M) -> NetResult<()> {
         for channel in self.channels.lock().await.values() {
             channel.send(message.clone()).await?;
