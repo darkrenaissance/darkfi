@@ -25,10 +25,12 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 }
 
 #[async_trait]
-/// Session trait. Defines methods that are used across sessions. Implements registering the channel
-/// and initializing the channel by performing a network handshake.
+/// Session trait. Defines methods that are used across sessions. Implements
+/// registering the channel and initializing the channel by performing a network
+/// handshake.
 pub trait Session: Sync {
-    /// Registers a new channel with the session. Performs a network handshake and starts the channel.
+    /// Registers a new channel with the session. Performs a network handshake and
+    /// starts the channel.
     async fn register_channel(
         self: Arc<Self>,
         channel: ChannelPtr,
@@ -49,8 +51,9 @@ pub trait Session: Sync {
         Ok(())
     }
 
-    /// Performs network handshake to initialize channel. Adds the channel to the list of connected
-    /// channels, and prepares to remove the channel when a stop signal is received.
+    /// Performs network handshake to initialize channel. Adds the channel to the
+    /// list of connected channels, and prepares to remove the channel when a stop
+    /// signal is received.
     async fn perform_handshake_protocols(
         &self,
         protocol_version: Arc<ProtocolVersion>,
