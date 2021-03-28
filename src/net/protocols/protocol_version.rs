@@ -18,8 +18,8 @@ pub struct ProtocolVersion {
 }
 
 impl ProtocolVersion {
-    /// Create a new version protocol. Makes a version and version acknowledgement subscription,
-    /// then adds them to a version protocol instance.
+    /// Create a new version protocol. Makes a version and version acknowledgement
+    /// subscription, then adds them to a version protocol instance.
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
         // Creates a version subscription.
         let version_sub = channel
@@ -42,8 +42,8 @@ impl ProtocolVersion {
             settings,
         })
     }
-    /// Start version information exchange. Start the timer. Send version info and wait for version
-    /// acknowledgement. Wait for version info and send version acknowledgement.
+    /// Start version information exchange. Start the timer. Send version info and
+    /// wait for version acknowledgement. Wait for version info and send version acknowledgement.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer

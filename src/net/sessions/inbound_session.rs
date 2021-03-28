@@ -28,8 +28,8 @@ impl InboundSession {
             accept_task: StoppableTask::new(),
         })
     }
-    /// Starts the inbound session. Begins by accepting connections and fails if the address is not
-    /// configured. Then runs the channel subscription loop.
+    /// Starts the inbound session. Begins by accepting connections and fails if the
+    /// address is not configured. Then runs the channel subscription loop.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         match self.p2p().settings().inbound {
             Some(accept_addr) => {
@@ -84,8 +84,8 @@ impl InboundSession {
         }
     }
 
-    /// Registers the channel. First performs a network handshake and starts the channel. Then starts
-    /// sending keep-alive and address messages across the channel.
+    /// Registers the channel. First performs a network handshake and starts the
+    /// channel. Then starts sending keep-alive and address messages across the channel.
     async fn setup_channel(
         self: Arc<Self>,
         channel: ChannelPtr,

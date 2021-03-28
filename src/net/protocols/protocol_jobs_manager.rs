@@ -41,8 +41,8 @@ impl ProtocolJobsManager {
         self.tasks.lock().await.push(executor.spawn(future))
     }
 
-    /// Waits for a stop signal, then closes all tasks. Insures that all tasks are stopped when a
-    /// channel closes. Called in start().
+    /// Waits for a stop signal, then closes all tasks. Insures that all tasks are
+    /// stopped when a channel closes. Called in start().
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.clone().subscribe_stop().await;
 
