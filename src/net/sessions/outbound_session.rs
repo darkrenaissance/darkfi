@@ -24,7 +24,7 @@ impl OutboundSession {
             connect_slots: Mutex::new(Vec::new()),
         })
     }
-    /// Start the outbound session.
+    /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
@@ -47,7 +47,7 @@ impl OutboundSession {
         Ok(())
     }
 
-    /// Stop the inbound session.
+    /// Stop the outbound session.
     pub async fn stop(&self) {
         let connect_slots = &*self.connect_slots.lock().await;
 
@@ -57,6 +57,9 @@ impl OutboundSession {
     }
 
     /// Start making outbound connections.
+    /// Creates a connector object, then starts a connect loop. Loads a valid address then tries to
+    /// connect. Once connected, registers the channel, removes it from the list of pending
+    /// channels, and starts sending messages across the channel. Otherwise returns a network error.
     pub async fn channel_connect_loop(
         self: Arc<Self>,
         slot_number: u32,
@@ -99,10 +102,10 @@ impl OutboundSession {
         }
     }
 
-    /// Load a valid address that we can connect to.
-    /// Valid means we aren't connecting (pending state) or connected (open channel)
-    /// in another slot, and it isn't our own inbound address.
-    /// Retry otherwise.
+    /// Loops through host addresses to find a outbound address that we can connect to.
+    /// Checks whether address is valid by making sure it isn't our own inbound address,
+    /// then checks whether it is already connected (exists) or connecting (pending).
+    /// Keeps looping until address is found that passes all checks.
     async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
         let p2p = self.p2p();
         let hosts = p2p.hosts();
@@ -120,7 +123,7 @@ impl OutboundSession {
             }
             let addr = addr.unwrap();
 
-            if Self::addr_is_inbound(&addr, &inbound_addr) {
+            if Self::is_self_inbound(&addr, &inbound_addr) {
                 continue;
             }
 
@@ -136,8 +139,9 @@ impl OutboundSession {
             return Ok(addr);
         }
     }
-    /// Check whether an inbound address is configured.
-    fn addr_is_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
+
+    /// Checks whether an address is our own inbound address to avoid connecting to ourselves.
+    fn is_self_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
         match inbound_addr {
             Some(inbound_addr) => inbound_addr == addr,
             // No inbound listening address configured
@@ -145,6 +149,7 @@ impl OutboundSession {
         }
     }
 
+    /// Starts sending keep-alive and address messages across the channels.
     async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,

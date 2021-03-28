@@ -31,10 +31,7 @@ pub struct Channel {
 
 impl Channel {
     /// Create a new channel.
-    pub async fn new(
-        stream: Async<TcpStream>,
-        address: SocketAddr,
-    ) -> Arc<Self> {
+    pub async fn new(stream: Async<TcpStream>, address: SocketAddr) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -52,7 +49,7 @@ impl Channel {
             stopped: AtomicBool::new(false),
         })
     }
-    
+
     /// Start the channel.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "Channel::start() [START, address={}]", self.address());
@@ -66,7 +63,7 @@ impl Channel {
         );
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());
     }
-    
+
     /// Stop the channel.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
@@ -74,7 +71,9 @@ impl Channel {
         self.stopped.store(false, Ordering::Relaxed);
         self.stop_subscriber.notify(NetError::ChannelStopped).await;
         self.receive_task.stop().await;
-        self.message_subsystem.trigger_error(NetError::ChannelStopped).await;
+        self.message_subsystem
+            .trigger_error(NetError::ChannelStopped)
+            .await;
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 
@@ -93,8 +92,8 @@ impl Channel {
         );
         sub
     }
-    
-    /// Send a message across a channel. 
+
+    /// Send a message across a channel.
     pub async fn send<M: messages::Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
             "Channel::send() [START, command={:?}, address={}]",
@@ -121,7 +120,7 @@ impl Channel {
         );
         result
     }
-    
+
     /// Implements send message functionality.
     async fn send_message<M: messages::Message>(&self, message: M) -> error::Result<()> {
         let mut payload = Vec::new();
@@ -150,12 +149,12 @@ impl Channel {
         );
         sub
     }
-    
+
     /// Return the local socket address.
     pub fn address(&self) -> SocketAddr {
         self.address
     }
-    
+
     /// End of file error. Triggered when unexpected end of file occurs.
     fn is_eof_error(err: &error::Error) -> bool {
         match err {
@@ -185,7 +184,7 @@ impl Channel {
             .add_dispatch::<messages::AddrsMessage>()
             .await;
     }
-    
+
     pub fn get_message_subsystem(&self) -> &MessageSubsystem {
         &self.message_subsystem
     }

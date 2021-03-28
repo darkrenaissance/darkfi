@@ -8,8 +8,10 @@ use crate::net::error::NetResult;
 use crate::net::ChannelPtr;
 use crate::system::ExecutorPtr;
 
+/// Pointer to protocol jobs manager.
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 
+/// Manages the tasks for the network protocol.
 pub struct ProtocolJobsManager {
     name: &'static str,
     channel: ChannelPtr,
@@ -17,6 +19,7 @@ pub struct ProtocolJobsManager {
 }
 
 impl ProtocolJobsManager {
+    /// Create a new protocol jobs manager.
     pub fn new(name: &'static str, channel: ChannelPtr) -> Arc<Self> {
         Arc::new(Self {
             name,
@@ -25,11 +28,12 @@ impl ProtocolJobsManager {
         })
     }
 
+    /// Runs the task on an executor. Prepares to stop all tasks when the channel is closed.
     pub fn start(self: Arc<Self>, executor: ExecutorPtr<'_>) {
         executor.spawn(self.handle_stop()).detach()
     }
 
-    /// Spawns a new task adding it to the internal queue
+    /// Spawns a new task and adds it to the internal queue.
     pub async fn spawn<'a, F>(&self, future: F, executor: ExecutorPtr<'a>)
     where
         F: Future<Output = NetResult<()>> + Send + 'a,
@@ -37,7 +41,8 @@ impl ProtocolJobsManager {
         self.tasks.lock().await.push(executor.spawn(future))
     }
 
-    /// This is run in start(). When the channel closes, we also stop all the tasks
+    /// Waits for a stop signal, then closes all tasks. Insures that all tasks are stopped when a
+    /// channel closes. Called in start().
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.clone().subscribe_stop().await;
 
@@ -48,6 +53,7 @@ impl ProtocolJobsManager {
         self.close_all_tasks().await
     }
 
+    /// Closes all open tasks. Takes all the tasks from the internal queue and closes them.
     async fn close_all_tasks(self: Arc<Self>) {
         debug!(target: "net",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",

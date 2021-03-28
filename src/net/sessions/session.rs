@@ -8,6 +8,7 @@ use crate::net::p2p::P2pPtr;
 use crate::net::protocols::ProtocolVersion;
 use crate::net::ChannelPtr;
 
+/// Removes channel from the list of connected channels when a stop signal is received.
 async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     debug!(target: "net", "remove_sub_on_stop() [START]");
     // Subscribe to stop events
@@ -24,8 +25,10 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 }
 
 #[async_trait]
+/// Session trait. Defines methods that are used across sessions. Implements registering the channel
+/// and initializing the channel by performing a network handshake.
 pub trait Session: Sync {
-    /// Register a new channel with the session.
+    /// Registers a new channel with the session. Performs a network handshake and starts the channel.
     async fn register_channel(
         self: Arc<Self>,
         channel: ChannelPtr,
@@ -46,6 +49,8 @@ pub trait Session: Sync {
         Ok(())
     }
 
+    /// Performs network handshake to initialize channel. Adds the channel to the list of connected
+    /// channels, and prepares to remove the channel when a stop signal is received.
     async fn perform_handshake_protocols(
         &self,
         protocol_version: Arc<ProtocolVersion>,
@@ -69,5 +74,6 @@ pub trait Session: Sync {
         Ok(())
     }
 
+    /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
 }

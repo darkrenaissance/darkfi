@@ -6,6 +6,8 @@ use crate::net::error::NetResult;
 use crate::net::messages;
 use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 
+/// Seed server protocol. Seed server is used when connecting to the network for the first time.
+/// Returns a list of IP addresses that nodes can connect to.
 pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
@@ -13,6 +15,7 @@ pub struct ProtocolSeed {
 }
 
 impl ProtocolSeed {
+    /// Create a new seed protocol.
     pub fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
         Arc::new(Self {
             channel,
@@ -21,8 +24,11 @@ impl ProtocolSeed {
         })
     }
 
+    /// Starts the seed protocol. Creates a subscription to the address message, then sends our
+    /// address to the seed server. Sends a get-address message and receives an address message.
     pub async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolSeed::start() [START]");
+        // Create a subscription to address message.
         let addr_sub = self
             .channel
             .clone()
@@ -30,14 +36,14 @@ impl ProtocolSeed {
             .await
             .expect("Missing addrs dispatcher!");
 
-        // Send own address to the seed server
+        // Send own address to the seed server.
         self.send_self_address().await?;
 
-        // Send get address message
+        // Send get address message.
         let get_addr = messages::GetAddrsMessage {};
         self.channel.clone().send(get_addr).await?;
 
-        // Receive addresses
+        // Receive addresses.
         let addrs_msg = addr_sub.receive().await?;
         debug!(target: "net", "ProtocolSeed::start() received {} addrs", addrs_msg.addrs.len());
         self.hosts.store(addrs_msg.addrs.clone()).await;
@@ -46,6 +52,8 @@ impl ProtocolSeed {
         Ok(())
     }
 
+    /// Sends own external address over a channel. Imports own external address from settings, then
+    /// adds that address to an address message and sends it out over the channel.
     pub async fn send_self_address(&self) -> NetResult<()> {
         match self.settings.external_addr {
             Some(addr) => {

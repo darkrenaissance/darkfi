@@ -9,7 +9,7 @@ use crate::net::messages;
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
-/// Version information sent between nodes at the start of a connection.
+/// Protocol for version information handshake between nodes at the start of a connection.
 pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<messages::VersionMessage>,
@@ -18,14 +18,17 @@ pub struct ProtocolVersion {
 }
 
 impl ProtocolVersion {
-    /// Create a new version instance.
+    /// Create a new version protocol. Makes a version and version acknowledgement subscription,
+    /// then adds them to a version protocol instance.
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+        // Creates a version subscription.
         let version_sub = channel
             .clone()
             .subscribe_msg::<messages::VersionMessage>()
             .await
             .expect("Missing version dispatcher!");
 
+        // Creates a version acknowledgement subscription.
         let verack_sub = channel
             .clone()
             .subscribe_msg::<messages::VerackMessage>()
@@ -39,7 +42,8 @@ impl ProtocolVersion {
             settings,
         })
     }
-    /// Start version information exchange.
+    /// Start version information exchange. Start the timer. Send version info and wait for version
+    /// acknowledgement. Wait for version info and send version acknowledgement.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer
@@ -76,9 +80,10 @@ impl ProtocolVersion {
         debug!(target: "net", "ProtocolVersion::send_version() [END]");
         Ok(())
     }
-    /// Recieve version info and send version acknowledgement.
+    /// Recieve version info, check the message is okay and send version acknowledgement.
     async fn recv_version(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolVersion::recv_version() [START]");
+        // Rec
         let _version_msg = self.version_sub.receive().await?;
 
         // Check the message is OK

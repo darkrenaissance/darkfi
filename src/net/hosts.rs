@@ -1,8 +1,8 @@
 use async_std::sync::Mutex;
 use rand::seq::SliceRandom;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::collections::HashSet;
 
 /// Pointer to hosts class.
 pub type HostsPtr = Arc<Hosts>;
@@ -19,11 +19,15 @@ impl Hosts {
             addrs: Mutex::new(Vec::new()),
         })
     }
-    
+
     /// Checks if a host address is in the host list.
     async fn contains(&self, addrs: &Vec<SocketAddr>) -> bool {
         let a_set: HashSet<_> = addrs.iter().copied().collect();
-        self.addrs.lock().await.iter().any(|item| a_set.contains(item))
+        self.addrs
+            .lock()
+            .await
+            .iter()
+            .any(|item| a_set.contains(item))
     }
 
     /// Add a new host to the host list.
@@ -32,7 +36,7 @@ impl Hosts {
             self.addrs.lock().await.extend(addrs)
         }
     }
-    
+
     /// Return a single host address.
     pub async fn load_single(&self) -> Option<SocketAddr> {
         self.addrs
