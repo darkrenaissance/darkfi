@@ -72,7 +72,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
     ) -> Result<(), SynthesisError> {
         let mut variables: HashMap<String, Variable> = HashMap::default();
         let params_const = self.params;
-        
+
         let circuitTime = Instant::now();
         let start = Instant::now();
         // println!("Allocations\n");
@@ -122,7 +122,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         println!("circuit alloc input \t {:?}", start.elapsed());        
         let start = Instant::now();
         let mut enforce_sorted = self.constraints.clone();
-        enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
+        // enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
             // println!("Enforce -> {:?}", alloc_value);
             let coeff = bls12_381::Scalar::one();

@@ -128,8 +128,8 @@
             `(def! ~u (alloc ~u ~val1))
             `(def! ~v (alloc ~v ~val2))
             `(def! ~condition (alloc ~condition ~val3))
-            `(def! ~u-prime (alloc-input ~u-prime (* ~u ~condition)))
-            `(def! ~v-prime (alloc-input ~v-prime (* ~v ~condition)))
+            `(def! ~u-prime (alloc ~u-prime (* ~u ~condition)))
+            `(def! ~v-prime (alloc ~v-prime (* ~v ~condition)))
             `(enforce
                 (scalar::one ~u)
                 (scalar::one ~condition)
