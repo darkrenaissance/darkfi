@@ -455,6 +455,16 @@ fn scalar_one(a: MalArgs) -> MalRet {
     }
 }
 
+fn scalar_one_neg(a: MalArgs) -> MalRet {
+    match a.len() {
+        0 => Ok(vector![vec![ZKScalar(bls12_381::Scalar::one().neg())]]),
+        _ => Ok(vector![vec![
+            ZKScalar(bls12_381::Scalar::one().neg()),
+            a[0].clone()
+        ]]),
+    }
+}
+
 fn cs_one(_a: MalArgs) -> MalRet {
     Ok(vector![vec![Sym("cs::one".to_string())]])
 }
@@ -506,14 +516,22 @@ fn scalar_square(a: MalArgs) -> MalRet {
 fn scalar_double(a: MalArgs) -> MalRet {
     match a[0].clone() {
         Func(_, _) => {
-            if let Vector(ref values, _) = r oua[0].apply(vec![]).unwrap() {
+            if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
                 if let ZKScalar(a0) = values[0] {
                     a0.double();
                     Ok(ZKScalar(a0))
                 } else {
-                    error(&format!("scalar double expect (zkscalar or string) found \n {:?}", a).to_string())
+                    error(
+                        &format!("scalar double expect (zkscalar or string) found \n {:?}", a)
+                            .to_string(),
+                    )
                 }
-            } 
+            } else {
+                error(
+                    &format!("scalar double expect (zkscalar or string) found \n {:?}", a)
+                        .to_string(),
+                )
+            }
         }
         ZKScalar(a0) => {
             let z0 = a0.clone();
@@ -781,6 +799,7 @@ pub fn ns() -> Vec<(&'static str, MalVal)> {
         ("unpack-bits", func(unpack_bits)),
         ("range", func(range)),
         ("scalar::one", func(scalar_one)),
+        ("scalar::one::neg", func(scalar_one_neg)),
         ("neg", func(negate_from)),
         ("scalar::zero", func(scalar_zero)),
         ("scalar", func(scalar_from)),

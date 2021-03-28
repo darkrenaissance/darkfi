@@ -265,52 +265,37 @@
     ))
 )))
 
-(defmacro! rangeproof-alloc (fn* [value] (
-    (let* [bit (gensym2 'bit)] (
-    `(alloc ~bit ~value)
+(defmacro! rangeproof-alloc (fn* [value value-digit] (
+ (let* [bit (gensym2 'bit)
+        digit (gensym2 'digit)] (
+    `(def! ~bit (alloc ~bit ~value))
+    `(def! ~digit (alloc-const ~digit ~value-digit))
     `(enforce 
         (scalar::one ~bit) 
         (scalar::one::neg ~bit) 
         () 
-    )
+    )    
+    { "lc" ((str digit) (str bit)) }
 )))))
 
-(def! rangeproof (fn* [value] (
-    (def! value-alloc (alloc "value-alloc" value))
+(def! rangeproof (fn* [value] (    
     (def! values-bit (unpack-bits value))
     (def! acc 0)
     (def! digit scalar::one)    
-    (def! value-result (scalar::zero))
+    (def! value-result ())
     (dotimes 64 (
-        (rangeproof-alloc (nth values-bit acc))
+        (def! bit (nth values-bit acc))    
+        (def! value-result 
+            (conj value-result (get (last (last (rangeproof-alloc bit digit))) "lc")))
         (def! digit (double digit))
-        (println digit)
         (def! acc (i+ acc 1))
     ))
-    ;; todo add last enforce
-    (println 'value-result value-result)
-    (println 'bit bit)
-)))
-
-(def! mint-contract (fn* [public-u public-v] (
-    (def! randomness (rnd-scalar))    
-    (def! witness-result (zk-witness public-u public-v))    
-    (def! not-small-order (zk-not-small-order? public-u public-v))    
-    (def! g-vcr-u (alloc-input "g-vcr-u" public-u))
-    (def! g-vcr-v (alloc-input "g-vcr-v" public-v))
-    (def! mul-result (last (last (jj-mul g-vcr-u g-vcr-v randomness))))
-    (def! rcvu (alloc "rcvu" (get mul-result "u3")))
-    (def! rcvr (alloc "rcvr" (get mul-result "v3")))
-    (enforce
-        (scalar::one rcvu)
+    (def! value-alloc (alloc-input "value-alloc" value))
+    (enforce 
+        (value-result)
         (scalar::one cs::one)
-        (scalar::one rcvu)
-    )
-    (enforce
-        (scalar::one rcvr)
-        (scalar::one cs::one)
-        (scalar::one rcvr)
-    )    
+        (scalar::one value-alloc)
+    )  
 )))
 
 (prove 
@@ -318,8 +303,21 @@
     (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
     (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
     (rangeproof param-u)
+    ;; (def! param3 (rnd-scalar))
+    ;; (jj-mul param-u param-v param3)
   )
 )
+
+;; (defmacro! test (fn* [value value-digit] (
+;;  (let* [bit (gensym2 'bit)
+;;         digit (gensym2 'digit)] (
+;;     `(def! ~bit (alloc ~bit ~value))
+;;     `(def! ~digit (alloc ~digit ~value-digit))
+;;     (println (str digit))
+;; )))))
+;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
+;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
+;; (println (test param-u param-v))
 
 ;; (mint-contract param-u param-v)    
 ;; (def! param3 (rnd-scalar))

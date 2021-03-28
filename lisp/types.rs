@@ -79,13 +79,17 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 MalVal::ZKScalar(val) => {
                     let var = cs.alloc(|| k, || Ok(*val))?;
                     variables.insert(k.to_string(), var);
-                    // println!("k {:?} v {:?} var {:?}", k, v, var);
                 }
                 MalVal::Str(val) => {
                     let val_scalar = bls12_381::Scalar::from_string(&*val);
                     let var = cs.alloc(|| k, || Ok(val_scalar))?;
                     variables.insert(k.to_string(), var);
-                    // println!("k {:?} v {:?} var {:?}", k, v, var);
+                }
+                MalVal::Vector(val, _) => {
+                    if let MalVal::ZKScalar(v) = &val.to_vec()[0] {
+                        let var = cs.alloc(|| k, || Ok(*v))?;
+                        variables.insert(k.to_string(), var);
+                    }
                 }
                 _ => {
                     println!("not allocated k {:?} v {:?}", k, v);
@@ -126,6 +130,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 let (a, b) = values;
                 let mut val_b = CS::one();
                 if b != "cs::one" {
+                    println!("{:?}", b);
                     val_b = *variables.get(b).unwrap();
                 }
                 if a == "scalar::one" {
