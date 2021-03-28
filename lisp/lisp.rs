@@ -448,7 +448,23 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                             }
                                         }
                                     } else {
-                                        right_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                        if v.to_vec().len() == 1 {
+                                            let result = eval(v.to_vec()[0].clone(), env.clone())?;
+                                            if let List(val, _) = result {
+                                                for ele in val.iter() {
+                                                    // println!("{:?}", ele);
+                                                    if let Vector(ele_vec, _) = ele {
+                                                        right_vec.push((
+                                                            ele_vec[0].pr_str(false),
+                                                            ele_vec[1].pr_str(false),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            right_vec
+                                                .push((v[0].pr_str(false), v[1].pr_str(false)));
+                                        }
                                     }
                                 }
                             }
@@ -467,7 +483,22 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                             }
                                         }
                                     } else {
-                                        out_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                        if v.to_vec().len() == 1 {
+                                            let result = eval(v.to_vec()[0].clone(), env.clone())?;
+                                            if let List(val, _) = result {
+                                                for ele in val.iter() {
+                                                    // println!("{:?}", ele);
+                                                    if let Vector(ele_vec, _) = ele {
+                                                        out_vec.push((
+                                                            ele_vec[0].pr_str(false),
+                                                            ele_vec[1].pr_str(false),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            out_vec.push((v[0].pr_str(false), v[1].pr_str(false)));
+                                        }
                                     }
                                 }
                             }
