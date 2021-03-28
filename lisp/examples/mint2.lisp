@@ -91,8 +91,8 @@
         `(def! ~T (alloc ~T (* (+ ~val1 ~val2) (+ ~val1 ~val2))))
         `(def! ~A (alloc ~A (* ~u ~v)))
         `(def! ~C (alloc ~C (* (square ~A) ~EDWARDS_D)))
-        `(def! ~u3 (alloc-input ~u3 (/ (double ~A) (+ scalar::one ~C))))
-        `(def! ~v3 (alloc-input ~v3 (/ (- ~T (double ~A)) (- scalar::one ~C))))
+        `(def! ~u3 (alloc ~u3 (/ (double ~A) (+ scalar::one ~C))))
+        `(def! ~v3 (alloc ~v3 (/ (- ~T (double ~A)) (- scalar::one ~C))))
         `(enforce  
             ((scalar::one ~u) (scalar::one ~v))
             ((scalar::one ~u) (scalar::one ~v))
@@ -159,8 +159,8 @@
         `(def! ~A (alloc ~A (* ~v2 ~u1)))
         `(def! ~B (alloc ~B (* ~u2 ~v1)))
         `(def! ~C (alloc ~C (* ~EDWARDS_D (* ~A ~B))))
-        `(def! ~u3 (alloc-input ~u3 (/ (+ ~A ~B) (+ scalar::one ~C))))
-        `(def! ~v3 (alloc-input ~v3 (/ (- (- ~U ~A) ~B) (- scalar::one ~C))))        
+        `(def! ~u3 (alloc ~u3 (/ (+ ~A ~B) (+ scalar::one ~C))))
+        `(def! ~v3 (alloc ~v3 (/ (- (- ~U ~A) ~B) (- scalar::one ~C))))        
   `(enforce  
     ((scalar::one ~u1) (scalar::one ~v1))
     ((scalar::one ~u2) (scalar::one ~v2))
