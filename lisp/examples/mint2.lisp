@@ -302,14 +302,29 @@
     )  
 )))
 
+;; (def! generator-coin )
+;; (def! generator-value-commit )
+;; (def! generator-value-random )
+;; (def! mint-contract (fn* [secret-u secret-v value serial rnd-coin rnd-value] (
+;;     (def! result-mul (last (last (jj-mul bit secret-u secret-v generator-coin))) "lc")
+;;     (def! public-u (alloc "public-u" (get result-mul "u")))
+;;     (def! public-v (alloc "public-v" (get result-mul "v")))
+;;     ;; check return ?
+;;     (rangeproof value)
+;;     (def! add-result (last (jj-add 
+;;         (jj-mul-1-u) (jj-mul-1-v) (jj-mul-2-u) (jj-mul-2-v) )))               
+;;     (def! value-commit add-result)
+;;     (alloc "value-commit" value-commit)
+;; )))
+
 (prove 
   (            
     (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
     (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
     ;; (def! param-a (scalar 110))
     ;; (rangeproof param-a)
-    (def! param3 (rnd-scalar))
-    (jj-mul param-u param-v param3)
+    ;; (def! param3 (rnd-scalar))
+    ;; (jj-mul param-u param-v param3)
   )
 )
 
