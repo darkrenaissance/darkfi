@@ -256,13 +256,11 @@
     (dotimes 322 (        
         (def! result (mimc-macro xl xr acc))
         (def! result-value (get (last (last result)) "left"))
-        (println acc)
-        (println xl xr)
-        (println result-value)
         (def! xr xl)
         (def! xl result-value)
         (def! acc (i+ acc 1))        
     ))
+    { "result" result-value }
 )))
 
 (defmacro! rangeproof-alloc (fn* [value value-digit] (
@@ -313,7 +311,10 @@
     (def! result-mul (last (last (jj-mul generator-coin-u generator-coin-v secret))) "lc")
     (def! public-u (alloc "public-u" (get result-mul "u")))
     (def! public-v (alloc "public-v" (get result-mul "v")))
-    (def! coin (mimc (mimc (mimc (mimc public-u public-v) value) serial) rnd-coin))
+    (def! mimc-round-1 (get (last (mimc public-u public-v)) "result"))
+    (def! mimc-round-2 (get (last (mimc mimc-round-1 value)) "result"))
+    (def! mimc-round-3 (get (last (mimc mimc-round-2 serial)) "result"))
+    (def! coin (get (last (mimc mimc-round-3 rnd-coin)) "result"))
     (rangeproof value)
     (def! result-mul-value 
         (last (last (jj-mul generator-value-commit-u generator-value-commit-v value))))

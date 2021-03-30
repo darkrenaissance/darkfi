@@ -347,6 +347,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[1].clone();
                         eval(a1.clone(), env.clone())?;
+                        // TODO add debug param
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
@@ -575,7 +576,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
         break;
     } // end 'tco loop
 
-    println!("eval end \t {:?} \t {:?}", ast, start.elapsed());
+    // println!("eval end \t {:?} \t {:?}", ast, start.elapsed());
 
     ret
 }
