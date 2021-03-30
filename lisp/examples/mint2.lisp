@@ -302,29 +302,45 @@
     )  
 )))
 
-;; (def! generator-coin )
-;; (def! generator-value-commit )
-;; (def! generator-value-random )
-;; (def! mint-contract (fn* [secret-u secret-v value serial rnd-coin rnd-value] (
-;;     (def! result-mul (last (last (jj-mul bit secret-u secret-v generator-coin))) "lc")
-;;     (def! public-u (alloc "public-u" (get result-mul "u")))
-;;     (def! public-v (alloc "public-v" (get result-mul "v")))
-;;     ;; check return ?
-;;     (rangeproof value)
-;;     (def! add-result (last (jj-add 
-;;         (jj-mul-1-u) (jj-mul-1-v) (jj-mul-2-u) (jj-mul-2-v) )))               
-;;     (def! value-commit add-result)
-;;     (alloc "value-commit" value-commit)
+;; mint contract
+(def! generator-coin-u (scalar "0d7b70a0c82cbabf8f59ee61a63b8e0adcff42e9f2da7bda84f9308b3531dd18"))
+(def! generator-coin-v (scalar "0d89cafb242b9e892153ac70335956e6f5c042997da77cf5e164233a9bbfb7b4"))
+(def! generator-value-commit-u (scalar "01ae4ea270f5c6a1c0cd1dd4e067a82110fa27409dfc0aa4edd18883897a4c6b"))
+(def! generator-value-commit-v (scalar "09d2a25018194750e9adacf78531ee3bfddbadd767671d517aa788c352641ff1"))
+(def! generator-value-random-u (scalar "002924d15ccf8014ce724a41753d17dce3a9f7382a3db18fba3c8e286bb77382"))
+(def! generator-value-random-v (scalar "0cb825b790b0601c4999e52d9added7d10d013b33fd95ca7d2ddd51691a09075"))
+(def! mint-contract (fn* [secret value serial rnd-coin rnd-value] (
+    (def! result-mul (last (last (jj-mul generator-coin-u generator-coin-v secret))) "lc")
+    (def! public-u (alloc "public-u" (get result-mul "u")))
+    (def! public-v (alloc "public-v" (get result-mul "v")))
+    (def! coin (mimc (mimc (mimc (mimc public-u public-v) value) serial) rnd-coin))
+    (rangeproof value)
+    (def! result-mul-value 
+        (last (last (jj-mul generator-value-commit-u generator-value-commit-v value))))
+    (def! result-mul-rnd-value 
+        (last (last (jj-mul generator-value-random-u generator-value-random-v rnd-value))))
+    (def! add-result (last 
+        (jj-add (get result-mul-value "u") (get result-mul-value "u") 
+            (get result-mul-rnd-value "u") (get result-mul-rnd-value "u"))))
+    (def! value-commit add-result)
+    (println 'value-commit value-commit)
+    (alloc-input "value-commit" value-commit)
+)))
+
+;; (def! spend-contract (fn* 
+;;     [secret-u secret-v serial coin-merkle-branch coin-merkle-is-right] (
+;; (def! nullifier (mimc secret serial))
+
 ;; )))
 
 (prove 
   (            
-    (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-    (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-    ;; (def! param-a (scalar 110))
-    ;; (rangeproof param-a)
-    ;; (def! param3 (rnd-scalar))
-    ;; (jj-mul param-u param-v param3)
+    (def! secret (scalar 1))
+    (def! value (scalar 2))
+    (def! serial (scalar 3))
+    (def! rnd-coin (rnd-scalar))
+    (def! rnd-value (rnd-scalar))
+    (mint-contract secret value serial rnd-coin rnd-value)
   )
 )
 
