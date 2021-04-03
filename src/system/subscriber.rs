@@ -43,7 +43,7 @@ impl<T: Clone> Subscriber<T> {
         })
     }
 
-    pub fn random_id() -> SubscriptionID {
+    fn random_id() -> SubscriptionID {
         let mut rng = rand::thread_rng();
         rng.gen()
     }
