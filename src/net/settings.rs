@@ -4,7 +4,7 @@ use std::sync::Arc;
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
-/// Default network configuration settings.
+/// Network configuration settings.
 #[derive(Clone)]
 pub struct Settings {
     pub inbound: Option<SocketAddr>,

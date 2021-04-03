@@ -28,9 +28,9 @@ impl ProtocolPing {
         })
     }
 
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the protocol task manager,
-    /// then queues the reply. run_ping_pong() sends out a ping and waits for pong reply.
-    /// reply_to_ping() waits for ping and replies with a pong.
+    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the protocol
+    /// task manager, then queues the reply. Sends out a ping and waits for pong
+    /// reply. Waits for ping and replies with a pong.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "ProtocolPing::start() [START]");
         self.jobsman.clone().start(executor.clone());
@@ -45,9 +45,10 @@ impl ProtocolPing {
         debug!(target: "net", "ProtocolPing::start() [END]");
     }
 
-    /// Runs ping-pong protocol. Creates a subscription to pong, then starts a loop. Loop sleeps
-    /// for the duration of the channel heartbeat, then sends a ping message with a random nonce.
-    /// Loop starts a timer, waits for the pong reply and insures the nonce is the same.
+    /// Runs ping-pong protocol. Creates a subscription to pong, then starts a loop.
+    /// Loop sleeps for the duration of the channel heartbeat, then sends a ping
+    /// message with a random nonce. Loop starts a timer, waits for the pong reply
+    /// and insures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
         // Creates a subscription to pong message.

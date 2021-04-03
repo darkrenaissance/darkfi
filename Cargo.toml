@@ -100,3 +100,5 @@ path = "src/bin/dfg.rs"
 name = "compile-shaders"
 path = "src/bin/compile-shaders.rs"
 
+[profile.release]
+debug = 1

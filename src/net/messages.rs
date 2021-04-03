@@ -158,8 +158,8 @@ impl Decodable for VerackMessage {
     }
 }
 
-/// Packets are the base type read from the network. Converted to messages and passed to event
-/// loop.
+/// Packets are the base type read from the network. Converted to messages and
+/// passed to event loop.
 pub struct Packet {
     pub command: String,
     pub payload: Vec<u8>,

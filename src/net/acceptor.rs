@@ -10,8 +10,8 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
 
-/// Handles the acceptance of inbound socket connections. Used to start listening on a local socket
-/// address, to accept incoming connections and to handle network errors.
+/// Handles the acceptance of inbound socket connections. Used to start listening
+/// on a local socket address, to accept incoming connections and to handle network errors.
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
     task: StoppableTaskPtr,
@@ -25,9 +25,9 @@ impl Acceptor {
             task: StoppableTask::new(),
         })
     }
-    /// Start accepting inbound socket connections. Creates a listener to start listening on a
-    /// local socket address. Then runs an accept loop in a new thread, erroring if a connection
-    /// problem occurs.
+    /// Start accepting inbound socket connections. Creates a listener to start
+    /// listening on a local socket address. Then runs an accept loop in a new
+    /// thread, erroring if a connection problem occurs.
     pub fn start(
         self: Arc<Self>,
         accept_addr: SocketAddr,

@@ -17,8 +17,8 @@ use crate::serial::{Decodable, Encodable};
 pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
-/// Handles message subscriptions through a subscription ID and a receiver channel.
-/// Inherits from Message Dispatcher.
+/// Handles message subscriptions through a subscription ID and a receiver
+/// channel. Inherits from Message Dispatcher.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
@@ -160,8 +160,9 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 }
 
 /// Generic publish/subscribe class that can dispatch any kind of message
-/// to a subscribed list of dispatchers. Dispatchers subscribe to a single message format of any
-/// type. This is a generalized version of the pub/sub model in system::Subscriber.
+/// to a subscribed list of dispatchers. Dispatchers subscribe to a single
+/// message format of any type. This is a generalized version of the pub/sub
+/// model in system::Subscriber.
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }

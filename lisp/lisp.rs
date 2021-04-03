@@ -147,6 +147,8 @@ fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
 fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     let ret: MalRet;
 
+    let start = Instant::now();
+
     'tco: loop {
         ret = match ast.clone() {
             List(l, _) => {
@@ -345,6 +347,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "prove" => {
                         let a1 = l[1].clone();
                         eval(a1.clone(), env.clone())?;
+                        // TODO add debug param
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
@@ -573,6 +576,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
         break;
     } // end 'tco loop
 
+    // println!("eval end \t {:?} \t {:?}", ast, start.elapsed());
+
     ret
 }
 
@@ -648,7 +653,7 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     })
 }
 
-pub fn prove(_ast: MalVal, env: Env) -> MalRet {
+pub fn prove(_ast: MalVal, env: Env) -> MalRet {    
     let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
@@ -664,6 +669,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         };
         groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
     });
+
     let verifying_key = Some(groth16::prepare_verifying_key(&params.as_ref().unwrap().vk));
     // prove
     let circuit = LispCircuit {
@@ -672,7 +678,6 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         alloc_inputs: allocs_input.borrow().clone(),
         constraints: enforce_allocs.clone(),
     };
-
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
     let mut vec_input = vec![];
     for (k, val) in allocs_input.borrow_mut().iter() {
@@ -686,10 +691,13 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
             _ => {}
         };
     }
+    println!("groth16::create_random_proof: {:?}", start.elapsed());
+    // verification process 
+    let start = Instant::now();
     let result = groth16::verify_proof(verifying_key.as_ref().unwrap(), &proof, &vec_input);
+    println!("groth16::verify_proof: {:?}", start.elapsed());
     println!("vec public {:?}", vec_input);
-    println!("result {:?}", result);
-    println!("Elapsed time: {:?}", start.elapsed());
+    println!("result {:?}", result);    
     Ok(MalVal::Nil)
 }
 
@@ -746,6 +754,7 @@ fn main() -> Result<(), ()> {
 }
 
 fn repl_load(file: String) -> Result<(), ()> {
+    let start = Instant::now();
     let repl_env = env_new(None);
     for (k, v) in core::ns() {
         env_sets(&repl_env, k, v);
@@ -756,10 +765,21 @@ fn repl_load(file: String) -> Result<(), ()> {
         &repl_env,
     );
     match rep(&format!("(load-file \"{}\")", file), &repl_env) {
-        Ok(_) => std::process::exit(0),
+        Ok(_) => {
+            println!("lisp end \t {:?}", start.elapsed());
+            std::process::exit(0) 
+        },
         Err(e) => {
             println!("Error: {}", format_error(e));
             std::process::exit(1);
         }
+    }    
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
     }
 }
