@@ -1,4 +1,5 @@
-param secret
+param public_u
+param public_v
 param value
 param serial
 param randomness_coin
@@ -7,7 +8,6 @@ constant generator_coin
 constant generator_value_commit_value
 constant generator_value_commit_random
 
-private (public_u, public_v) = jj_mul(secret, generator_coin)
 public coin = mimc_hash(public_u, public_v, value, serial, randomness_coin)
 
 private value_digits = unpack(value)
