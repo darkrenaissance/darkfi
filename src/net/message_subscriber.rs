@@ -18,7 +18,8 @@ pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
 /// Handles message subscriptions through a subscription ID and a receiver
-/// channel. Inherits from Message Dispatcher.
+/// channel. Inherits from Message Dispatcher: a class that maintains a list of
+/// active subscribers and handles sending messages across subscriptions.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
@@ -66,7 +67,7 @@ impl<M: Message> MessageDispatcher<M> {
     }
 
     /// Create a random ID.
-    pub fn random_id() -> MessageSubscriptionID {
+    fn random_id() -> MessageSubscriptionID {
         let mut rng = rand::thread_rng();
         rng.gen()
     }
