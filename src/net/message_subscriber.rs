@@ -53,7 +53,8 @@ trait MessageDispatcherInterface: Send + Sync {
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
-/// Maintains a list of active subscribers and handles sending messages across subscriptions.
+/// Maintains a list of active subscribers and handles sending messages across
+/// subscriptions.
 struct MessageDispatcher<M: Message> {
     subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult<M>>>>,
 }
@@ -72,7 +73,8 @@ impl<M: Message> MessageDispatcher<M> {
         rng.gen()
     }
 
-    /// Subscribe to a channel. Assigns a new ID and adds it to the list of subscribers.
+    /// Subscribe to a channel. Assigns a new ID and adds it to the list of
+    /// subscribers.
     pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
         let (sender, recvr) = async_channel::unbounded();
         let sub_id = Self::random_id();
@@ -85,12 +87,14 @@ impl<M: Message> MessageDispatcher<M> {
         }
     }
 
-    /// Unsubcribe from a channel. Removes the associated ID from the subscriber list.
+    /// Unsubcribe from a channel. Removes the associated ID from the subscriber
+    /// list.
     async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    /// Send a message to all subscriber channels. Automatically clear inactive channels.
+    /// Send a message to all subscriber channels. Automatically clear inactive
+    /// channels.
     async fn trigger_all(&self, message: MessageResult<M>) {
         debug!(
             "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
@@ -106,7 +110,8 @@ impl<M: Message> MessageDispatcher<M> {
                 Err(_err) => {
                     // Automatically clean out closed channels
                     garbage_ids.push(*sub_id);
-                    //panic!("Error returned sending message in notify() call! {}", err);
+                    // panic!("Error returned sending message in notify() call!
+                    // {}", err);
                 }
             }
         }
@@ -149,7 +154,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         }
     }
 
-    /// Sends a message to all subscriber channels. Clears any inactive channels.
+    /// Sends a message to all subscriber channels. Clears any inactive
+    /// channels.
     async fn trigger_error(&self, err: NetError) {
         self.trigger_all(Err(err)).await;
     }
@@ -160,10 +166,22 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     }
 }
 
-/// Generic publish/subscribe class that can dispatch any kind of message
-/// to a subscribed list of dispatchers. Dispatchers subscribe to a single
-/// message format of any type. This is a generalized version of the pub/sub
-/// model in system::Subscriber.
+/// Generic publish/subscribe class that can dispatch any kind of message to a
+/// subscribed list of dispatchers. Dispatchers subscribe to a single
+/// message format of any type. This is a generalized version of the simple
+/// publish-subscribe class in system::Subscriber.
+///
+/// Message Subsystem maintains a list of dispatchers. Dispatchers belong to
+/// a class of subscribers called Message Dispatcher. Message Dispatcher
+/// implements a generic trait called Message Dispatcher Interface.
+///
+/// Pub-sub is called on dispatchers through the functions 'subscribe' and
+/// 'notify'. Whereas system::Subscriber only allows messages of a single type,
+/// dispatchers can handle any kind of message. This generic message is called a
+/// a payload and is processed and decoded by the Message Dispatcher.
+///
+/// Message Subsystem also enables the creation of new message subsystems,
+/// adding new dispatchers and clearing inactive channels.
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
@@ -207,7 +225,8 @@ impl MessageSubsystem {
         Ok(sub)
     }
 
-    /// Sends a message out to subscribers. Returns an error if the message doesn't send.
+    /// Sends a message out to subscribers. Returns an error if the message
+    /// doesn't send.
     pub async fn notify(&self, command: &str, payload: Vec<u8>) {
         let dispatcher = self.dispatchers.lock().await.get(command).cloned();
 
@@ -236,7 +255,8 @@ impl MessageSubsystem {
 /// Test functions for message subsystem.
 // This is a test function for the message subsystem code above
 // Normall we would use the #[test] macro but cannot since it is async code
-// Instead we call it using smol::block_on() in the unit test code after this func
+// Instead we call it using smol::block_on() in the unit test code after this
+// func
 async fn _do_message_subscriber_test() {
     struct MyVersionMessage {
         x: u32,

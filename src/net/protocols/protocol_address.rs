@@ -21,8 +21,8 @@ pub struct ProtocolAddress {
 }
 
 impl ProtocolAddress {
-    /// Create a new address protocol. Makes an address and get-address subscription
-    /// and adds them to the address protocol instance.
+    /// Create a new address protocol. Makes an address and get-address
+    /// subscription and adds them to the address protocol instance.
     pub async fn new(channel: ChannelPtr, hosts: HostsPtr) -> Arc<Self> {
         // Creates a subscription to address message.
         let addrs_sub = channel
@@ -47,8 +47,9 @@ impl ProtocolAddress {
         })
     }
 
-    /// Starts the address protocol. Runs receive address and get address protocols
-    /// on the protocol task manager. Then sends get-address message.
+    /// Starts the address protocol. Runs receive address and get address
+    /// protocols on the protocol task manager. Then sends get-address
+    /// message.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
@@ -67,8 +68,9 @@ impl ProtocolAddress {
         debug!(target: "net", "ProtocolAddress::start() [END]");
     }
 
-    /// Handles receiving the address message. Loops to continually recieve address
-    /// messages on the address subsciption. Adds the recieved addresses to the list of hosts.
+    /// Handles receiving the address message. Loops to continually recieve
+    /// address messages on the address subsciption. Adds the recieved
+    /// addresses to the list of hosts.
     async fn handle_receive_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
@@ -86,8 +88,9 @@ impl ProtocolAddress {
         }
     }
 
-    /// Handles receiving the get-address message. Continually recieves get-address
-    /// messages on the get-address subsciption. Then replies with an address message.
+    /// Handles receiving the get-address message. Continually recieves
+    /// get-address messages on the get-address subsciption. Then replies
+    /// with an address message.
     async fn handle_receive_get_addrs(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() [START]");
         loop {

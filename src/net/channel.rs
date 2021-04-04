@@ -18,7 +18,10 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
-/// Async TCP channel that handles the sending of messages across the network.
+/// Async channel interface that handles the sending of messages across the
+/// network. Public interface is used to create new channels, to stop and start
+/// a channel, send messages. Also implements message functionality. Implements
+/// the message subscriber subsystem.
 pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
     writer: Mutex<WriteHalf<Async<TcpStream>>>,
@@ -185,11 +188,13 @@ impl Channel {
             .await;
     }
 
+    /// Convenience function that returns the Message Subsystem.
     pub fn get_message_subsystem(&self) -> &MessageSubsystem {
         &self.message_subsystem
     }
 
-    /// Run the receive loop. Start receiving messages or handle network failure.
+    /// Run the receive loop. Start receiving messages or handle network
+    /// failure.
     async fn main_receive_loop(self: Arc<Self>) -> NetResult<()> {
         debug!(target: "net",
             "Channel::receive_loop() [START, address={}]",
@@ -223,7 +228,8 @@ impl Channel {
         }
     }
 
-    /// Handle network errors. Panic if error passes silently, otherwise broadcast the error.
+    /// Handle network errors. Panic if error passes silently, otherwise
+    /// broadcast the error.
     async fn handle_stop(self: Arc<Self>, result: NetResult<()>) {
         debug!(target: "net", "Channel::handle_stop() [START, address={}]", self.address());
         match result {

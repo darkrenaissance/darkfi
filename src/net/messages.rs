@@ -26,7 +26,8 @@ pub struct PongMessage {
 /// Requests address of outbound connection.
 pub struct GetAddrsMessage {}
 
-/// Sends address information to inbound connection. Response to GetAddrs message.
+/// Sends address information to inbound connection. Response to GetAddrs
+/// message.
 pub struct AddrsMessage {
     pub addrs: Vec<SocketAddr>,
 }

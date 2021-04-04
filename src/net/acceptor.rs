@@ -10,8 +10,9 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
 
-/// Handles the acceptance of inbound socket connections. Used to start listening
-/// on a local socket address, to accept incoming connections and to handle network errors.
+/// Handles the acceptance of inbound socket connections. Used to start
+/// listening on a local socket address, to accept incoming connections and to
+/// handle network errors.
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
     task: StoppableTaskPtr,
@@ -73,7 +74,8 @@ impl Acceptor {
         Ok(listener)
     }
 
-    /// Run the accept loop in a new thread and error if a connection problem occurs.
+    /// Run the accept loop in a new thread and error if a connection problem
+    /// occurs.
     fn accept(self: Arc<Self>, listener: Async<TcpListener>, executor: Arc<Executor<'_>>) {
         self.task.clone().start(
             self.clone().run_accept_loop(listener),
@@ -91,7 +93,8 @@ impl Acceptor {
         }
     }
 
-    /// Handles network errors. Panics if error passes silently, otherwise broadcasts the error.
+    /// Handles network errors. Panics if error passes silently, otherwise
+    /// broadcasts the error.
     async fn handle_stop(self: Arc<Self>, result: NetResult<()>) {
         match result {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
@@ -103,7 +106,8 @@ impl Acceptor {
         }
     }
 
-    /// Single attempt to accept an incoming connection. Stops after one attempt.
+    /// Single attempt to accept an incoming connection. Stops after one
+    /// attempt.
     async fn tick_accept(&self, listener: &Async<TcpListener>) -> NetResult<ChannelPtr> {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),

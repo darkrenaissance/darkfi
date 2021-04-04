@@ -28,7 +28,8 @@ impl ProtocolJobsManager {
         })
     }
 
-    /// Runs the task on an executor. Prepares to stop all tasks when the channel is closed.
+    /// Runs the task on an executor. Prepares to stop all tasks when the
+    /// channel is closed.
     pub fn start(self: Arc<Self>, executor: ExecutorPtr<'_>) {
         executor.spawn(self.handle_stop()).detach()
     }
@@ -41,8 +42,8 @@ impl ProtocolJobsManager {
         self.tasks.lock().await.push(executor.spawn(future))
     }
 
-    /// Waits for a stop signal, then closes all tasks. Insures that all tasks are
-    /// stopped when a channel closes. Called in start().
+    /// Waits for a stop signal, then closes all tasks. Insures that all tasks
+    /// are stopped when a channel closes. Called in start().
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.clone().subscribe_stop().await;
 
@@ -53,7 +54,8 @@ impl ProtocolJobsManager {
         self.close_all_tasks().await
     }
 
-    /// Closes all open tasks. Takes all the tasks from the internal queue and closes them.
+    /// Closes all open tasks. Takes all the tasks from the internal queue and
+    /// closes them.
     async fn close_all_tasks(self: Arc<Self>) {
         debug!(target: "net",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",

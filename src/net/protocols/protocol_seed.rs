@@ -24,9 +24,9 @@ impl ProtocolSeed {
         })
     }
 
-    /// Starts the seed protocol. Creates a subscription to the address message, then
-    /// sends our address to the seed server. Sends a get-address message and receives
-    /// an address message.
+    /// Starts the seed protocol. Creates a subscription to the address message,
+    /// then sends our address to the seed server. Sends a get-address
+    /// message and receives an address message.
     pub async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> NetResult<()> {
         debug!(target: "net", "ProtocolSeed::start() [START]");
         // Create a subscription to address message.
@@ -53,8 +53,9 @@ impl ProtocolSeed {
         Ok(())
     }
 
-    /// Sends own external address over a channel. Imports own external address from
-    /// settings, then adds that address to an address message and sends it out over the channel.
+    /// Sends own external address over a channel. Imports own external address
+    /// from settings, then adds that address to an address message and
+    /// sends it out over the channel.
     pub async fn send_self_address(&self) -> NetResult<()> {
         match self.settings.external_addr {
             Some(addr) => {
