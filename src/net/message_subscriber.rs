@@ -171,17 +171,19 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 /// message format of any type. This is a generalized version of the simple
 /// publish-subscribe class in system::Subscriber.
 ///
-/// Message Subsystem maintains a list of dispatchers. Dispatchers belong to
-/// a class of subscribers called Message Dispatcher. Message Dispatcher
-/// implements a generic trait called Message Dispatcher Interface.
-///
-/// Pub-sub is called on dispatchers through the functions 'subscribe' and
-/// 'notify'. Whereas system::Subscriber only allows messages of a single type,
-/// dispatchers can handle any kind of message. This generic message is called a
-/// a payload and is processed and decoded by the Message Dispatcher.
-///
 /// Message Subsystem also enables the creation of new message subsystems,
 /// adding new dispatchers and clearing inactive channels.
+///
+/// Message Subsystem maintains a list of dispatchers, which is a generalized
+/// version of a subscriber. Pub-sub is called on dispatchers through the
+/// functions 'subscribe' and 'notify'. Whereas system::Subscriber only allows
+/// messages of a single type, dispatchers can handle any kind of message. This
+/// generic message is called a payload and is processed and decoded by the
+/// Message Dispatcher.
+///
+/// The Message Dispatcher is a private class of subscribers that implements a
+/// generic trait called Message Dispatcher Interface. This allows us to process
+/// any kind of payload as a message.
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
