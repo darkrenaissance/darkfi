@@ -10,7 +10,14 @@ use crate::net::sessions::Session;
 use crate::net::{ChannelPtr, Connector, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
-/// Outbound connections session.
+/// Outbound connections session. Manages the creation of outbound sessions.
+/// Used to create an outbound session and stop and start the session.
+///
+/// Class consists of a weak pointer to the peer-to-peer interface and a vector
+/// of outbound connection slots. Using a weak pointer to p2p allows us to avoid
+/// circular dependencies. The vector of slots is wrapped in a mutex lock. This
+/// is switched on everytime we instantiate a connection slot and insures that
+/// no other part of the program uses the slots at the same time.
 pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
@@ -28,6 +35,7 @@ impl OutboundSession {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
+        // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
         for i in 0..slots_count {

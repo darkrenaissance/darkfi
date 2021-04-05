@@ -10,7 +10,9 @@ use crate::net::sessions::Session;
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
 
-/// Seed connections session.
+/// Seed connections session. Manages the creation of seed sessions. Used on
+/// first time connecting to the network. The seed node stores a list of other
+/// nodes in the network.
 pub struct SeedSession {
     p2p: Weak<P2p>,
 }
