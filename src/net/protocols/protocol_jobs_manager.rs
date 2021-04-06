@@ -11,7 +11,9 @@ use crate::system::ExecutorPtr;
 /// Pointer to protocol jobs manager.
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 
-/// Manages the tasks for the network protocol.
+/// Manages the tasks for the network protocol. Used by other connection
+/// protocols to handle asynchronous task execution across the network. Runs all
+/// tasks that are handed to it on an executor that has stopping functionality.
 pub struct ProtocolJobsManager {
     name: &'static str,
     channel: ChannelPtr,

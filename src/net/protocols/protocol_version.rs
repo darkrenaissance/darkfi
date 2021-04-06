@@ -10,7 +10,14 @@ use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
 /// Protocol for version information handshake between nodes at the start of a
-/// connection.
+/// connection. Implements the process for exchanging version information
+/// between nodes. This is the first step when establishing a p2p connection.
+///
+/// The version protocol starts of by instantiating the protocol and creating a
+/// new subscription to version and version acknowledgement messages. Then we
+/// run the protocol. Nodes send a version message and wait for a version
+/// acknowledgement, while asynchronously waiting for version info from the
+/// other node and sending the version acknowledgement.
 pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<messages::VersionMessage>,
