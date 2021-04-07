@@ -18,11 +18,7 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
-/// Async channel interface that handles the sending of messages across the
-/// network. Public interface is used to create new channels, to stop and start
-/// a channel, and to send messages.
-///
-/// Implements message functionality and the message subscriber subsystem.
+/// Async channel for communication between nodes.
 pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
     writer: Mutex<WriteHalf<Async<TcpStream>>>,

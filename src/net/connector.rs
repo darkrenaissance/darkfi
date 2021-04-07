@@ -6,7 +6,7 @@ use crate::net::error::{NetError, NetResult};
 use crate::net::utility::sleep;
 use crate::net::{Channel, ChannelPtr, SettingsPtr};
 
-/// Handles the creation of outbound connections.
+/// Create outbound socket connections.
 pub struct Connector {
     settings: SettingsPtr,
 }

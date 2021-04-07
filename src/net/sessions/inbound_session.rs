@@ -10,12 +10,7 @@ use crate::net::{Acceptor, AcceptorPtr};
 use crate::net::{ChannelPtr, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
-/// Inbound connections session. Manages the creation of inbound sessions. Used
-/// to create an inbound session and start and stop the session.
-///
-/// Class consists of 3 pointers: a weak pointer to the peer-to-peer class, an
-/// acceptor pointer, and a stoppable task pointer. Using a weak pointer to P2P
-/// allows us to avoid circular dependencies.
+/// Defines inbound connections session.
 pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,

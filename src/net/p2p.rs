@@ -18,12 +18,7 @@ pub type ConnectedChannels<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
-/// Top level peer-to-peer networking interface. Provides all core functionality
-/// to interact with the peer-to-peer network. Used to create a network, to
-/// start and run it, to broadcast messages across all channels, and to manage
-/// the channel store. The channel store is a hashmap of channel address that we
-/// can use to add and remove channels or check whether a channel is already is
-/// in the store.
+/// Top level peer-to-peer networking interface.
 pub struct P2p {
     pending: PendingChannels,
     channels: ConnectedChannels<Channel>,

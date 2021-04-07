@@ -6,13 +6,7 @@ use crate::net::error::NetResult;
 use crate::net::messages;
 use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
 
-/// Seed server protocol. Seed server is used when connecting to the network for
-/// the first time. Returns a list of IP addresses that nodes can connect to.
-///
-/// To start the seed protocol, we create a subscription to the address message,
-/// and send our address to the seed server. Then we send a get-address message
-/// and receive an address message. We add these addresses to our internal
-/// store.
+/// Implements the seed protocol.
 pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,

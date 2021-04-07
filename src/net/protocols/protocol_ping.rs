@@ -10,16 +10,7 @@ use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
-/// Protocol for ping-pong keep-alive messages. Implements ping message and pong
-/// response. These messages are like the network heartbeat- they are sent
-/// continually between nodes, to ensure each node is still alive and active.
-/// Ping-pong messages ensure that the network doesn't
-/// time out.
-///
-/// Protocol starts by creating a subscription to ping and pong messages. Then
-/// it starts a loop with a timer and runs ping-pong in the task manager. It
-/// sends out a ping and waits for pong reply. Then waits for ping and replies
-/// with a pong.
+/// Defines ping and pong messages.
 pub struct ProtocolPing {
     channel: ChannelPtr,
     settings: SettingsPtr,

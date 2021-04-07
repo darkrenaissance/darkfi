@@ -8,15 +8,7 @@ use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::{ChannelPtr, HostsPtr};
 
-/// Protocol for address and get-address messages. Implements how nodes exchange
-/// connection information about other nodes on the network. Address and
-/// get-address messages are exchanged continually alongside ping-pong messages
-/// as part of a network connection.
-///
-/// Protocol starts by creating a subscription to address and get address
-/// messages. Then the protocol sends out a get address message and waits for an
-/// address message. Upon receiving an address messages, nodes add the
-/// address information to their local store.
+/// Defines address and get-address messages.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<messages::AddrsMessage>,
