@@ -181,7 +181,7 @@
     (scalar::one ~v3)
     ((scalar::one ~U) (scalar::one::neg ~A) (scalar::one::neg ~B))
    ) 
-   `{ "u3" u3, "v3" v3 }
+   { "u3" u3, "v3" v3 }
   )  
 )
 ))
