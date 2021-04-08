@@ -307,9 +307,6 @@
 (def! generator-value-random-u (scalar "002924d15ccf8014ce724a41753d17dce3a9f7382a3db18fba3c8e286bb77382"))
 (def! generator-value-random-v (scalar "0cb825b790b0601c4999e52d9added7d10d013b33fd95ca7d2ddd51691a09075"))
 (def! mint-contract (fn* [public-u public-v value serial rnd-coin rnd-value] (
-    ;; (def! result-mul (last (last (jj-mul generator-coin-u generator-coin-v secret))) "lc")    
-    ;; (def! public-u (alloc "public-u" (get result-mul "u3")))
-    ;; (def! public-v (alloc "public-v" (get result-mul "v3")))
     (def! mimc-round-1 (get (last (mimc public-u public-v)) "result"))
     (def! mimc-round-2 (get (last (mimc mimc-round-1 value)) "result"))
     (def! mimc-round-3 (get (last (mimc mimc-round-2 serial)) "result"))
@@ -317,15 +314,12 @@
     (rangeproof value)
     (def! result-mul-value 
         (last (last (jj-mul generator-value-commit-u generator-value-commit-v value))))
-    (println result-mul-value)
     (def! result-mul-rnd-value 
         (last (last (jj-mul generator-value-random-u generator-value-random-v rnd-value))))
-    (println result-mul-rnd-value)
-    (def! add-result (last 
-        (jj-add (get result-mul-value "u3") (get result-mul-value "v3") 
-            (get result-mul-rnd-value "u3") (get result-mul-rnd-value "v3"))))
+    (def! add-result (jj-add (get result-mul-value "u3") (get result-mul-value "v3") 
+            (get result-mul-rnd-value "u3") (get result-mul-rnd-value "v3")))
     (println 'add-result add-result)
-    (alloc-input "value-commit" add-result)
+    ;;(alloc-input "value-commit" add-result)
 )))
 
 ;; (def! spend-contract (fn* 
@@ -336,8 +330,8 @@
 
 (prove 
   (            
-    (def! public-u (scalar "0000000000000000000000000000000000000000000000001000000000000000"))
-    (def! public-v (scalar "0000000000000000000000000000000000000000000000002000000000000000"))
+    (def! public-u (scalar "0d7b70a0c82cbabf8f59ee61a63b8e0adcff42e9f2da7bda84f9308b3531dd18"))
+    (def! public-v (scalar "0cb825b790b0601c4999e52d9added7d10d013b33fd95ca7d2ddd51691a09075"))
     (def! value (scalar 3))
     (def! serial (scalar 4))
     (def! rnd-coin (rnd-scalar))
@@ -345,45 +339,3 @@
     (mint-contract public-u public-v value serial rnd-coin rnd-value)
   )
 )
-
-;; (defmacro! test (fn* [value value-digit] (
-;;  (let* [bit (gensym2 'bit)
-;;         digit (gensym2 'digit)] (
-;;     `(def! ~bit (alloc ~bit ~value))
-;;     `(def! ~digit (alloc ~digit ~value-digit))
-;;     (println (str digit))
-;; )))))
-;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-;; (println (test param-u param-v))
-
-;; (mint-contract param-u param-v)    
-;; (def! param3 (rnd-scalar))
-;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-;; (jj-mul param-u param-v param3)
-;; following some examples 
-;; (def! left (scalar "15a36d1f0f390d8852a35a8c1908dd87a361ee3fd48fdf77b9819dc82d90607e"))
-;; (def! right (scalar "015d8c7f5b43fe33f7891142c001d9251f3abeeb98fad3e87b0dc53c4ebf1891"))
-;; (mimc left right)    
-;; (def! param3 (rnd-scalar))
-;; (jj-mul param-u param-v param3)    
-;; (def! param3 (rnd-scalar))
-;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-;; (jj-mul param-u param-v param3)
-;; (def! param3 (rnd-scalar))
-;; (println 'rnd-scalar param3)
-;; (def! param-u (scalar "6800f4fa0f001cfc7ff6826ad58004b4d1d8da41af03744e3bce3b7793664337"))
-;; (def! param-v (scalar "6d81d3a9cb45dedbe6fb2a6e1e22ab50ad46f1b0473b803b3caefab9380b6a8b"))
-;; (println (zk-mul param1 param2))
-;; (jj-mul param-u param-v param3)
-;; (println (zk-mul param1 param2))
-;; (def! param1 (scalar 3))
-;; (def! param2 (scalar 9))
-;; (println (zk-square param1))
-;; (println (zk-mul param1 param2))
-;; (println 'witness (zk-witness param-u param-v))
-;; (println 'double (last (last (zk-double param-u param-v))))
-;; (println 'nonzero (zk-nonzero? param3))    
-;; (println 'not-small-order? (zk-not-small-order? param-u param-v))

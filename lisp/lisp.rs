@@ -357,7 +357,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
                         let start = Instant::now();
                         let a1 = l[1].clone();
-                        let mut value = eval_ast(&l[2], &env)?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
                             value = value.apply(vec![]).unwrap();
                         }
@@ -375,7 +375,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
                         let start = Instant::now();
                         let a1 = l[1].clone();
-                        let mut value = eval_ast(&l[2], &env)?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
                             value = value.apply(vec![]).unwrap();
                         }
@@ -393,7 +393,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "alloc" => {
                         let start = Instant::now();
                         let a1 = l[1].clone();
-                        let mut value = eval_ast(&l[2], &env)?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
                             value = value.apply(vec![]).unwrap();
                         }
