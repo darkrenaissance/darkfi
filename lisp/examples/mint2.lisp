@@ -213,6 +213,7 @@
         (def! u-add (get add-result "u3"))
         (def! v-add (get add-result "v3"))        
         (def! val (last (last (zk-double u-add v-add))))             
+        (println acc val)    
         (def! acc (i+ acc 1))        
     ))
     (val)
@@ -287,11 +288,9 @@
             (conj value-result 
             (get (last (last 
                 (rangeproof-alloc bit digit))) "lc")))
-        (println 'digit digit 'bit bit)
         (def! digit (double digit))
         (def! idx (i+ idx 1))
     ))
-    (println 'value-result value-result)
     (def! value-alloc (alloc-input "value-alloc" value))
     (enforce 
         (value-result)
@@ -307,10 +306,10 @@
 (def! generator-value-commit-v (scalar "09d2a25018194750e9adacf78531ee3bfddbadd767671d517aa788c352641ff1"))
 (def! generator-value-random-u (scalar "002924d15ccf8014ce724a41753d17dce3a9f7382a3db18fba3c8e286bb77382"))
 (def! generator-value-random-v (scalar "0cb825b790b0601c4999e52d9added7d10d013b33fd95ca7d2ddd51691a09075"))
-(def! mint-contract (fn* [secret value serial rnd-coin rnd-value] (
-    (def! result-mul (last (last (jj-mul generator-coin-u generator-coin-v secret))) "lc")
-    (def! public-u (alloc "public-u" (get result-mul "u")))
-    (def! public-v (alloc "public-v" (get result-mul "v")))
+(def! mint-contract (fn* [public-u public-v value serial rnd-coin rnd-value] (
+    ;; (def! result-mul (last (last (jj-mul generator-coin-u generator-coin-v secret))) "lc")    
+    ;; (def! public-u (alloc "public-u" (get result-mul "u3")))
+    ;; (def! public-v (alloc "public-v" (get result-mul "v3")))
     (def! mimc-round-1 (get (last (mimc public-u public-v)) "result"))
     (def! mimc-round-2 (get (last (mimc mimc-round-1 value)) "result"))
     (def! mimc-round-3 (get (last (mimc mimc-round-2 serial)) "result"))
@@ -318,14 +317,15 @@
     (rangeproof value)
     (def! result-mul-value 
         (last (last (jj-mul generator-value-commit-u generator-value-commit-v value))))
+    (println result-mul-value)
     (def! result-mul-rnd-value 
         (last (last (jj-mul generator-value-random-u generator-value-random-v rnd-value))))
+    (println result-mul-rnd-value)
     (def! add-result (last 
-        (jj-add (get result-mul-value "u") (get result-mul-value "u") 
-            (get result-mul-rnd-value "u") (get result-mul-rnd-value "u"))))
-    (def! value-commit add-result)
-    (println 'value-commit value-commit)
-    (alloc-input "value-commit" value-commit)
+        (jj-add (get result-mul-value "u3") (get result-mul-value "v3") 
+            (get result-mul-rnd-value "u3") (get result-mul-rnd-value "v3"))))
+    (println 'add-result add-result)
+    (alloc-input "value-commit" add-result)
 )))
 
 ;; (def! spend-contract (fn* 
@@ -336,12 +336,13 @@
 
 (prove 
   (            
-    (def! secret (scalar 1))
-    (def! value (scalar 2))
-    (def! serial (scalar 3))
+    (def! public-u (scalar "0000000000000000000000000000000000000000000000001000000000000000"))
+    (def! public-v (scalar "0000000000000000000000000000000000000000000000002000000000000000"))
+    (def! value (scalar 3))
+    (def! serial (scalar 4))
     (def! rnd-coin (rnd-scalar))
     (def! rnd-value (rnd-scalar))
-    (mint-contract secret value serial rnd-coin rnd-value)
+    (mint-contract public-u public-v value serial rnd-coin rnd-value)
   )
 )
 

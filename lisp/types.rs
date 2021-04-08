@@ -71,11 +71,13 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut variables: HashMap<String, Variable> = HashMap::default();
+        // TODO change the name from alloc-const to constant
         let params_const = self.params;
 
         let circuitTime = Instant::now();
         let start = Instant::now();
         // println!("Allocations\n");
+        // TODO is the private and params 
         for (k, v) in &self.allocs {
             match v {
                 MalVal::ZKScalar(val) => {
@@ -101,6 +103,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         println!("circuit alloc \t {:?}", start.elapsed());
         let start = Instant::now();        
         // println!("Allocations Input\n");
+        // TODO alloc-input is the public value
         for (k, v) in &self.alloc_inputs {
             match v {
                 MalVal::ZKScalar(val) => {
