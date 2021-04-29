@@ -6,8 +6,7 @@ use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
-mod spend_contract;
-use spend_contract::SpendContract;
+use sapvi::circuit::spend_contract::SpendContract;
 
 // This thing is nasty lol
 pub fn merkle_hash(

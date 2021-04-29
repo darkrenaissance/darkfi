@@ -97,6 +97,10 @@ name = "mint-classic"
 path = "src/bin/mint-classic.rs"
 
 [[bin]]
+name = "spend-classic"
+path = "src/bin/spend-classic.rs"
+
+[[bin]]
 name = "dfg"
 path = "src/bin/dfg.rs"
 
