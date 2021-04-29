@@ -74,19 +74,6 @@ impl MintRevealedValues {
     }
 }
 
-pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Result<()> {
-    let buffer = std::fs::File::create(filename)?;
-    params.write(buffer)?;
-    Ok(())
-}
-
-pub fn load_params(filename: &str) -> Result<(groth16::Parameters<Bls12>, groth16::PreparedVerifyingKey<Bls12>)> {
-    let buffer = std::fs::File::open(filename)?;
-    let params = groth16::Parameters::<Bls12>::read(buffer, false)?;
-    let pvk = groth16::prepare_verifying_key(&params.vk);
-    Ok((params, pvk))
-}
-
 pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
     println!("Making random params...");
     let start = Instant::now();
