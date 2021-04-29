@@ -10,11 +10,10 @@ use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
-/// Protocol for ping-pong keep-alive messages.
+/// Defines ping and pong messages.
 pub struct ProtocolPing {
     channel: ChannelPtr,
     settings: SettingsPtr,
-
     jobsman: ProtocolJobsManagerPtr,
 }
 

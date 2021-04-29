@@ -330,6 +330,7 @@ fn sub_scalar(a: MalArgs) -> MalRet {
 }
 
 fn mul_scalar(a: MalArgs) -> MalRet {
+    println!("mul {:?}", a[0]);
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
@@ -627,7 +628,8 @@ fn scalar_is_zero(a: MalArgs) -> MalRet {
     }
 }
 
-fn add_scalar(a: MalArgs) -> MalRet {
+fn add_scalar(a: MalArgs) -> MalRet {  
+    println!("add_scalar {:?}", a);  
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {
@@ -672,6 +674,20 @@ fn add_scalar(a: MalArgs) -> MalRet {
             s0.add_assign(s1);
             Ok(ZKScalar(s0))
         }
+        (ZKScalar(a1), Str(a0)) => {
+            let (mut s0, s1) = (bls12_381::Scalar::from_string(&a0), a1);
+            s0.add_assign(s1);
+            Ok(ZKScalar(s0))
+        }
+        // (List(a0, _), ZKScalar(mut a1)) => {
+        //     let first_slice = a0.to_vec();
+        //     let result = first_slice[0].apply(first_slice[1..].to_vec());
+        //     println!("result {:?}", result);
+        //     if let ZKScalar(value) = result.unwrap() {
+        //         a1.add_assign(value);
+        //     }
+        //     Ok(ZKScalar(a1))
+        // }
         _ => error(&format!("scalar add expect (zkscalar, zkscalar) found \n {:?}", a).to_string()),
     }
 }

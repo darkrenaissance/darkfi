@@ -14,8 +14,7 @@ use rand::rngs::OsRng;
 use std::rc::Rc;
 use std::time::Instant;
 use std::{
-    borrow::{Borrow, BorrowMut},
-    fs,
+    borrow::{Borrow, BorrowMut},    
 };
 use std::{cell::RefCell, collections::HashMap};
 use types::EnforceAllocation;
@@ -150,6 +149,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
     let start = Instant::now();
 
     'tco: loop {
+        // TODO check DEBUG symbol on env
+        println!("debug eval \t {:?} \t {:?}", ast, start.elapsed());
         ret = match ast.clone() {
             List(l, _) => {
                 if l.len() == 0 {
@@ -296,7 +297,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         match eval(l[1].clone(), env.clone())? {
                             MalVal::Int(v) => {
                                 for _i in 0..v {
-                                    eval(l[2].clone(), env.clone())?;
+                                    ast = eval_ast(&l[2], &env)?;
                                 }
                                 Ok(Nil)
                             }
@@ -350,10 +351,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         // TODO add debug param
                         prove(a1.clone(), env.clone())
                     }
+                    Sym(ref a0sym) if a0sym == "kill" => {
+                        error(&format!("KILL at: {:?}", ast).to_string())
+                    }                
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
-                        // let start = Instant::now();
+                        let start = Instant::now();
                         let a1 = l[1].clone();
-                        let value = eval(l[2].clone(), env.clone())?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
+                        if let Func(_, _) = value {
+                            value = value.apply(vec![]).unwrap();
+                        }
                         let result = eval(value.clone(), env.clone())?;
                         let allocs = get_allocations(&env, "AllocationsConst");
                         allocs.borrow_mut().insert(a1.pr_str(false), result.clone());
@@ -362,13 +369,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         } else {
                             env_set(&env, Sym("AllocationsConst".to_string()), Alloc(allocs))?;
                         }
-                        // println!("Alloc Const: {:?}", start.elapsed());
+                        println!("Alloc Const: {:?}", start.elapsed());
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-input" => {
-                        // let start = Instant::now();
+                        let start = Instant::now();
                         let a1 = l[1].clone();
-                        let value = eval(l[2].clone(), env.clone())?;
+                        let mut value = eval(l[2].clone(), env.clone())?;
+                        if let Func(_, _) = value {
+                            value = value.apply(vec![]).unwrap();
+                        }
                         let result = eval(value.clone(), env.clone())?;
                         let allocs = get_allocations(&env, "AllocationsInput");
                         allocs.borrow_mut().insert(a1.pr_str(false), result.clone());
@@ -377,11 +387,11 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         } else {
                             env_set(&env, Sym("AllocationsInput".to_string()), Alloc(allocs))?;
                         }
-                        // println!("Alloc Input: {:?}", start.elapsed());
+                        println!("Alloc Input: {:?}", start.elapsed());
                         Ok(result.clone())
                     }
                     Sym(ref a0sym) if a0sym == "alloc" => {
-                        // let start = Instant::now();
+                        let start = Instant::now();
                         let a1 = l[1].clone();
                         let mut value = eval(l[2].clone(), env.clone())?;
                         if let Func(_, _) = value {
@@ -395,7 +405,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         } else {
                             env_set(&env, Sym("Allocations".to_string()), Alloc(allocs))?;
                         }
-                        // println!("Alloc: {:?}", start.elapsed());
+                        println!("Alloc:\t{:?}\t{:?}\t{:?}", value, result, start.elapsed());
                         Ok(result.clone())
                     }
                     //Sym(ref a0sym) if a0sym == "verify" => {
@@ -515,10 +525,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             output: out_vec,
                         };
                         enforce_vec.push(enforce);
-                        // let mut new_vec: Vec<EnforceAllocation> = vec![enforce];
-                        // for value in enforce_vec.iter() {
-                        //     new_vec.push(value.clone());
-                        // }
                         if let Some(e) = &env.outer {
                             env_set(
                                 &e,
@@ -532,12 +538,6 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 vector![vec![Enforce(Rc::new(enforce_vec))]],
                             )?;
                         }
-
-                        // println!(
-                        //     "allocs here {:?}",
-                        //     get_allocations_nested(&env, "Allocations")
-                        // );
-                        // println!("enforce here {:?}", get_enforce_allocs_nested(&env));
 
                         Ok(MalVal::Str("enforce-eof".to_string()))
                     }
@@ -576,8 +576,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
         break;
     } // end 'tco loop
 
-    // println!("eval end \t {:?} \t {:?}", ast, start.elapsed());
-
+    // println!("debug eval \t {:?} \t {:?}", ast, start.elapsed());
     ret
 }
 

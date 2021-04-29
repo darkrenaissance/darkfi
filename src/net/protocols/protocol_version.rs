@@ -9,8 +9,8 @@ use crate::net::messages;
 use crate::net::utility::sleep;
 use crate::net::{ChannelPtr, SettingsPtr};
 
-/// Protocol for version information handshake between nodes at the start of a
-/// connection.
+/// Implements the protocol version handshake sent out by nodes at the beginning
+/// of a connection.
 pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<messages::VersionMessage>,

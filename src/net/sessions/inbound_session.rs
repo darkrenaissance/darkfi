@@ -10,7 +10,7 @@ use crate::net::{Acceptor, AcceptorPtr};
 use crate::net::{ChannelPtr, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
-/// Inbound connections session.
+/// Defines inbound connections session.
 pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,

@@ -18,8 +18,7 @@ pub type MessageSubscriptionID = u64;
 type MessageResult<M> = NetResult<Arc<M>>;
 
 /// Handles message subscriptions through a subscription ID and a receiver
-/// channel. Inherits from Message Dispatcher: a class that maintains a list of
-/// active subscribers and handles sending messages across subscriptions.
+/// channel.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionID,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
@@ -166,22 +165,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     }
 }
 
-/// Generic publish/subscribe class that can dispatch any kind of message to a
-/// subscribed list of dispatchers. Dispatchers subscribe to a single
-/// message format of any type. This is a generalized version of the simple
-/// publish-subscribe class in system::Subscriber.
-///
-/// Message Subsystem maintains a list of dispatchers. Dispatchers belong to
-/// a class of subscribers called Message Dispatcher. Message Dispatcher
-/// implements a generic trait called Message Dispatcher Interface.
-///
-/// Pub-sub is called on dispatchers through the functions 'subscribe' and
-/// 'notify'. Whereas system::Subscriber only allows messages of a single type,
-/// dispatchers can handle any kind of message. This generic message is called a
-/// a payload and is processed and decoded by the Message Dispatcher.
-///
-/// Message Subsystem also enables the creation of new message subsystems,
-/// adding new dispatchers and clearing inactive channels.
+/// Publish/subscribe class that can dispatch any kind of message to a
+/// list of dispatchers.
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }

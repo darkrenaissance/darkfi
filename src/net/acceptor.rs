@@ -10,9 +10,7 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
 
-/// Handles the acceptance of inbound socket connections. Used to start
-/// listening on a local socket address, to accept incoming connections and to
-/// handle network errors.
+/// Create inbound socket connections.
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
     task: StoppableTaskPtr,

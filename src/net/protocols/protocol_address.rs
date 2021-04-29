@@ -8,15 +8,12 @@ use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::{ChannelPtr, HostsPtr};
 
-/// Protocol for address and get-address messages.
+/// Defines address and get-address messages.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
-
     addrs_sub: MessageSubscription<messages::AddrsMessage>,
     get_addrs_sub: MessageSubscription<messages::GetAddrsMessage>,
-
     hosts: HostsPtr,
-
     jobsman: ProtocolJobsManagerPtr,
 }
 

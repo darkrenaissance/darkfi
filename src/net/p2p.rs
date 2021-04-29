@@ -137,7 +137,7 @@ impl P2p {
         self.channel_subscriber.clone().subscribe().await
     }
 
-    /// Stop a subscription.
+    /// Subscribe to a stop signal.
     pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         self.stop_subscriber.clone().subscribe().await
     }

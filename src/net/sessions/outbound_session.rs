@@ -10,7 +10,7 @@ use crate::net::sessions::Session;
 use crate::net::{ChannelPtr, Connector, P2p};
 use crate::system::{StoppableTask, StoppableTaskPtr};
 
-/// Outbound connections session.
+/// Defines outbound connections session.
 pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
@@ -28,6 +28,7 @@ impl OutboundSession {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
+        // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
         for i in 0..slots_count {

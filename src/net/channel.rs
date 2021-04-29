@@ -18,10 +18,7 @@ use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, 
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
-/// Async channel interface that handles the sending of messages across the
-/// network. Public interface is used to create new channels, to stop and start
-/// a channel, send messages. Also implements message functionality. Implements
-/// the message subscriber subsystem.
+/// Async channel for communication between nodes.
 pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
     writer: Mutex<WriteHalf<Async<TcpStream>>>,
@@ -33,7 +30,9 @@ pub struct Channel {
 }
 
 impl Channel {
-    /// Create a new channel.
+    /// Sets up a new channel. Creates a reader and writer TCP stream and
+    /// summons the message subscriber subsystem. Performs a network
+    /// handshake on the subsystem dispatchers.
     pub async fn new(stream: Async<TcpStream>, address: SocketAddr) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
@@ -53,7 +52,8 @@ impl Channel {
         })
     }
 
-    /// Start the channel.
+    /// Starts the channel. Runs a receive loop to start receiving messages or
+    /// handles a network failure.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "Channel::start() [START, address={}]", self.address());
         let self2 = self.clone();
@@ -67,10 +67,13 @@ impl Channel {
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());
     }
 
-    /// Stop the channel.
+    /// Stops the channel. Steps through each component of the channel
+    /// connection and sends a stop signal. Notifies all subscribers that
+    /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
         assert_eq!(self.stopped.load(Ordering::Relaxed), false);
+        // Changes memory ordering to relaxed. We don't need strict thread locking here.
         self.stopped.store(false, Ordering::Relaxed);
         self.stop_subscriber.notify(NetError::ChannelStopped).await;
         self.receive_task.stop().await;
@@ -80,7 +83,7 @@ impl Channel {
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 
-    /// Stop the channel and create a new sub.
+    /// Creates a subscription to a stopped signal.
     pub async fn subscribe_stop(&self) -> Subscription<NetError> {
         debug!(target: "net",
             "Channel::subscribe_stop() [START, address={}]",
@@ -96,7 +99,9 @@ impl Channel {
         sub
     }
 
-    /// Send a message across a channel.
+    /// Sends a message across a channel. Calls function 'send_message' that
+    /// creates a new payload and sends it over the TCP connection as a
+    /// packet. Returns an error if something goes wrong.
     pub async fn send<M: messages::Message>(&self, message: M) -> NetResult<()> {
         debug!(target: "net",
             "Channel::send() [START, command={:?}, address={}]",
@@ -124,7 +129,10 @@ impl Channel {
         result
     }
 
-    /// Implements send message functionality.
+    /// Implements send message functionality. Creates a new payload and encodes
+    /// it. Then creates a message packet- the base type of the network- and
+    /// copies the payload into it. Then we send the packet over the TCP
+    /// stream.
     async fn send_message<M: messages::Message>(&self, message: M) -> error::Result<()> {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
@@ -137,7 +145,7 @@ impl Channel {
         messages::send_packet(stream, packet).await
     }
 
-    /// Subscribe to a message type.
+    /// Subscribe to a messages on the message subsystem.
     pub async fn subscribe_msg<M: messages::Message>(&self) -> NetResult<MessageSubscription<M>> {
         debug!(target: "net",
             "Channel::subscribe_msg() [START, command={:?}, address={}]",

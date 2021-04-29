@@ -26,9 +26,7 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 }
 
 #[async_trait]
-/// Session trait. Defines methods that are used across sessions. Implements
-/// registering the channel and initializing the channel by performing a network
-/// handshake.
+/// Session trait.
 pub trait Session: Sync {
     /// Registers a new channel with the session. Performs a network handshake
     /// and starts the channel.
