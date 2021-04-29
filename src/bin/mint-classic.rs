@@ -5,7 +5,7 @@ use bls12_381::Bls12;
 use ff::Field;
 use group::{Curve, Group, GroupEncoding};
 
-use sapvi::crypto::{setup_mint_prover, create_mint_proof, verify_mint_proof};
+use sapvi::crypto::{save_params, load_params, setup_mint_prover, create_mint_proof, verify_mint_proof};
 
 fn main() {
     use rand::rngs::OsRng;
@@ -19,7 +19,11 @@ fn main() {
     let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let randomness_coin: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
-    let (params, pvk) = setup_mint_prover();
+    {
+        let params = setup_mint_prover();
+        save_params("mint.params", &params);
+    }
+    let (params, pvk) = load_params("mint.params").expect("params should load");
 
     let (proof, revealed) = create_mint_proof(&params, value, randomness_value, serial, randomness_coin,
                                               public);
