@@ -1,3 +1,5 @@
+use rand::rngs::OsRng;
+use std::time::Instant;
 use bellman::gadgets::multipack;
 use bellman::groth16;
 use bitvec::{order::Lsb0, view::AsBits};
@@ -6,8 +8,8 @@ use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
-use sapvi::circuit::spend_contract::SpendContract;
-use sapvi::crypto::{save_params, load_params, setup_spend_prover, create_spend_proof, verify_spend_proof};
+use crate::error::Result;
+use crate::circuit::spend_contract::SpendContract;
 
 // This thing is nasty lol
 pub fn merkle_hash(
@@ -46,12 +48,12 @@ pub fn merkle_hash(
     .get_u()
 }
 
-struct SpendRevealedValues {
-    value_commit: jubjub::SubgroupPoint,
-    nullifier: [u8; 32],
+pub struct SpendRevealedValues {
+    pub value_commit: jubjub::SubgroupPoint,
+    pub nullifier: [u8; 32],
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
-    merkle_root: bls12_381::Scalar,
+    pub merkle_root: bls12_381::Scalar,
 }
 
 impl SpendRevealedValues {
@@ -166,32 +168,84 @@ impl SpendRevealedValues {
     }
 }
 
-fn main() {
-    use rand::rngs::OsRng;
-    use std::time::Instant;
+pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
+    println!("Making random params...");
+    let start = Instant::now();
+    let params = {
+        let c = SpendContract {
+            value: None,
+            randomness_value: None,
+            serial: None,
+            randomness_coin: None,
+            secret: None,
 
-    let value = 110;
-    let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-
-    let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-    let randomness_coin: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-    let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-
-    let merkle_path = [
-        (bls12_381::Scalar::random(&mut OsRng), true),
-        (bls12_381::Scalar::random(&mut OsRng), false),
-        (bls12_381::Scalar::random(&mut OsRng), true),
-        (bls12_381::Scalar::random(&mut OsRng), true),
-    ];
-
-    {
-        let params = setup_spend_prover();
-        save_params("spend.params", &params);
-    }
-    let (params, pvk) = load_params("spend.params").expect("params should load");
-
-    let (proof, revealed) = create_spend_proof(&params, value, randomness_value, serial, randomness_coin,
-                                              secret, merkle_path);
-
-    assert!(verify_spend_proof(&pvk, &proof, &revealed));
+            branch_0: None,
+            is_right_0: None,
+            branch_1: None,
+            is_right_1: None,
+            branch_2: None,
+            is_right_2: None,
+            branch_3: None,
+            is_right_3: None,
+        };
+        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
+    };
+    println!("Setup: [{:?}]", start.elapsed());
+    params
 }
+
+pub fn create_spend_proof(
+    params: &groth16::Parameters<Bls12>,
+    value: u64,
+    randomness_value: jubjub::Fr,
+    serial: jubjub::Fr,
+    randomness_coin: jubjub::Fr,
+    secret: jubjub::Fr,
+    merkle_path: [(bls12_381::Scalar, bool); 4]
+    ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
+    let c = SpendContract {
+        value: Some(value),
+        randomness_value: Some(randomness_value),
+        serial: Some(serial),
+        randomness_coin: Some(randomness_coin),
+        secret: Some(secret),
+
+        branch_0: Some(merkle_path[0].0),
+        is_right_0: Some(merkle_path[0].1),
+        branch_1: Some(merkle_path[1].0),
+        is_right_1: Some(merkle_path[1].1),
+        branch_2: Some(merkle_path[2].0),
+        is_right_2: Some(merkle_path[2].1),
+        branch_3: Some(merkle_path[3].0),
+        is_right_3: Some(merkle_path[3].1),
+    };
+
+    let start = Instant::now();
+    let proof = groth16::create_random_proof(c, params, &mut OsRng).unwrap();
+    println!("Prove: [{:?}]", start.elapsed());
+
+    let revealed = SpendRevealedValues::compute(
+        value,
+        &randomness_value,
+        &serial,
+        &randomness_coin,
+        &secret,
+        &merkle_path,
+    );
+
+    (proof, revealed)
+}
+
+pub fn verify_spend_proof(
+    pvk: &groth16::PreparedVerifyingKey<Bls12>,
+    proof: &groth16::Proof<Bls12>,
+    revealed: &SpendRevealedValues
+    ) -> bool {
+    let public_input = revealed.make_outputs();
+
+    let start = Instant::now();
+    let result = groth16::verify_proof(pvk, proof, &public_input).is_ok();
+    println!("Verify: [{:?}]", start.elapsed());
+    result
+}
+
