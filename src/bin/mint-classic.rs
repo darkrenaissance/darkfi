@@ -5,8 +5,7 @@ use bls12_381::Bls12;
 use ff::Field;
 use group::{Curve, Group, GroupEncoding};
 
-mod mint_contract;
-use mint_contract::MintContract;
+use sapvi::circuit::mint_contract::MintContract;
 
 struct MintRevealedValues {
     value_commit: jubjub::SubgroupPoint,
@@ -87,6 +86,7 @@ fn main() {
     let revealed =
         MintRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &public);
 
+    println!("Making random params...");
     let start = Instant::now();
     let params = {
         let c = MintContract {

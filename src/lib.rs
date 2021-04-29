@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 pub mod async_serial;
 pub mod bls_extensions;
+pub mod circuit;
 pub mod endian;
 pub mod error;
 pub mod gfx;

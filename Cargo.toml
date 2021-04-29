@@ -93,6 +93,10 @@ name = "mimc"
 path = "src/old/mimc.rs"
 
 [[bin]]
+name = "mint-classic"
+path = "src/bin/mint-classic.rs"
+
+[[bin]]
 name = "dfg"
 path = "src/bin/dfg.rs"
 
@@ -102,3 +106,4 @@ path = "src/bin/compile-shaders.rs"
 
 [profile.release]
 debug = 1
+
