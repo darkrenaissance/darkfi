@@ -16,8 +16,10 @@ bellman = { version = "0.8", default-features = false, features = ["groth16"] }
 bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 
-zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+zcash_primitives = "0.5.0"
+zcash_proofs = "0.5.0" 
+# zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
+#zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
