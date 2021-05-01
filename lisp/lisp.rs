@@ -11,11 +11,9 @@ use bls12_381::Bls12;
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
+use std::borrow::{Borrow, BorrowMut};
 use std::rc::Rc;
 use std::time::Instant;
-use std::{
-    borrow::{Borrow, BorrowMut},    
-};
 use std::{cell::RefCell, collections::HashMap};
 use types::EnforceAllocation;
 
@@ -353,7 +351,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     }
                     Sym(ref a0sym) if a0sym == "kill" => {
                         error(&format!("KILL at: {:?}", ast).to_string())
-                    }                
+                    }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
                         let start = Instant::now();
                         let a1 = l[1].clone();
@@ -652,7 +650,7 @@ pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
     })
 }
 
-pub fn prove(_ast: MalVal, env: Env) -> MalRet {    
+pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     let start = Instant::now();
     let allocs_input = get_allocations(&env, "AllocationsInput");
     let allocs = get_allocations(&env, "Allocations");
@@ -691,12 +689,12 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
         };
     }
     println!("groth16::create_random_proof: {:?}", start.elapsed());
-    // verification process 
+    // verification process
     let start = Instant::now();
     let result = groth16::verify_proof(verifying_key.as_ref().unwrap(), &proof, &vec_input);
     println!("groth16::verify_proof: {:?}", start.elapsed());
     println!("vec public {:?}", vec_input);
-    println!("result {:?}", result);    
+    println!("result {:?}", result);
     Ok(MalVal::Nil)
 }
 
@@ -766,13 +764,13 @@ fn repl_load(file: String) -> Result<(), ()> {
     match rep(&format!("(load-file \"{}\")", file), &repl_env) {
         Ok(_) => {
             println!("lisp end \t {:?}", start.elapsed());
-            std::process::exit(0) 
-        },
+            std::process::exit(0)
+        }
         Err(e) => {
             println!("Error: {}", format_error(e));
             std::process::exit(1);
         }
-    }    
+    }
 }
 
 #[cfg(test)]
