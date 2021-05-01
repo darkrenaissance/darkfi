@@ -103,6 +103,10 @@ name = "spend-classic"
 path = "src/bin/spend-classic.rs"
 
 [[bin]]
+name = "tx"
+path = "src/bin/tx.rs"
+
+[[bin]]
 name = "dfg"
 path = "src/bin/dfg.rs"
 
