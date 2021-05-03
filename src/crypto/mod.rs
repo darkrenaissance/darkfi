@@ -1,6 +1,8 @@
 pub mod diffie_hellman;
 pub mod mint_proof;
+pub mod schnorr;
 pub mod spend_proof;
+pub mod util;
 
 use bellman::groth16;
 use bls12_381::Bls12;
