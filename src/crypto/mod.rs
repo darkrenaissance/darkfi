@@ -1,3 +1,4 @@
+pub mod diffie_hellman;
 pub mod mint_proof;
 pub mod spend_proof;
 
