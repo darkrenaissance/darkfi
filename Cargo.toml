@@ -16,8 +16,10 @@ bellman = { version = "0.8", default-features = false, features = ["groth16"] }
 bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 
-zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
+zcash_primitives = "0.5.0"
+zcash_proofs = "0.5.0" 
+# zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
+#zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
 #bench-utils = { git = "https://github.com/scipr-lab/zexe", features = ["print-trace"]}
 rand = "0.7.3"
@@ -25,6 +27,7 @@ rand_core = "0.5.1"
 sha2 = "0.9.1"
 rand_xorshift = "0.2"
 blake2s_simd = "0.5"
+blake2b_simd = "0.5.11"
 bitvec = "0.18"
 bimap = "0.5.2"
 async-trait = "0.1.42"
@@ -99,6 +102,10 @@ path = "src/bin/mint-classic.rs"
 [[bin]]
 name = "spend-classic"
 path = "src/bin/spend-classic.rs"
+
+[[bin]]
+name = "tx"
+path = "src/bin/tx.rs"
 
 [[bin]]
 name = "dfg"

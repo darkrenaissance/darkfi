@@ -1,14 +1,14 @@
-use rand::rngs::OsRng;
-use std::time::Instant;
 use bellman::gadgets::multipack;
 use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::Field;
 use group::{Curve, Group, GroupEncoding};
+use rand::rngs::OsRng;
+use std::time::Instant;
 
-use crate::error::Result;
 use crate::circuit::mint_contract::MintContract;
+use crate::error::Result;
 
 pub struct MintRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -97,8 +97,8 @@ pub fn create_mint_proof(
     randomness_value: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
-    public: jubjub::SubgroupPoint
-    ) -> (groth16::Proof<Bls12>, MintRevealedValues) {
+    public: jubjub::SubgroupPoint,
+) -> (groth16::Proof<Bls12>, MintRevealedValues) {
     let revealed =
         MintRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &public);
 
@@ -120,8 +120,8 @@ pub fn create_mint_proof(
 pub fn verify_mint_proof(
     pvk: &groth16::PreparedVerifyingKey<Bls12>,
     proof: &groth16::Proof<Bls12>,
-    revealed: &MintRevealedValues
-    ) -> bool {
+    revealed: &MintRevealedValues,
+) -> bool {
     let public_input = revealed.make_outputs();
 
     let start = Instant::now();
@@ -129,4 +129,3 @@ pub fn verify_mint_proof(
     println!("Verify: [{:?}]", start.elapsed());
     result
 }
-

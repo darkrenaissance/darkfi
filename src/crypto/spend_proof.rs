@@ -1,5 +1,3 @@
-use rand::rngs::OsRng;
-use std::time::Instant;
 use bellman::gadgets::multipack;
 use bellman::groth16;
 use bitvec::{order::Lsb0, view::AsBits};
@@ -7,9 +5,11 @@ use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
+use rand::rngs::OsRng;
+use std::time::Instant;
 
-use crate::error::Result;
 use crate::circuit::spend_contract::SpendContract;
+use crate::error::Result;
 
 // This thing is nasty lol
 pub fn merkle_hash(
@@ -201,8 +201,8 @@ pub fn create_spend_proof(
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
-    merkle_path: [(bls12_381::Scalar, bool); 4]
-    ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
+    merkle_path: [(bls12_381::Scalar, bool); 4],
+) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
     let c = SpendContract {
         value: Some(value),
         randomness_value: Some(randomness_value),
@@ -239,8 +239,8 @@ pub fn create_spend_proof(
 pub fn verify_spend_proof(
     pvk: &groth16::PreparedVerifyingKey<Bls12>,
     proof: &groth16::Proof<Bls12>,
-    revealed: &SpendRevealedValues
-    ) -> bool {
+    revealed: &SpendRevealedValues,
+) -> bool {
     let public_input = revealed.make_outputs();
 
     let start = Instant::now();
@@ -248,4 +248,3 @@ pub fn verify_spend_proof(
     println!("Verify: [{:?}]", start.elapsed());
     result
 }
-
