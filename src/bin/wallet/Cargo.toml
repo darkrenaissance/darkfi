@@ -1,0 +1,15 @@
+[package]
+name = "dbtest"
+version = "0.1.0"
+authors = ["rachel-rose <ihateface@autistici.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocksdb = "0.16.0"
+
+[dependencies.rusqlite]
+version = "0.25.1"
+features = ["bundled", "sqlcipher"]
+
