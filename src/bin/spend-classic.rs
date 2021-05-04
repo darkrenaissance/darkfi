@@ -178,6 +178,7 @@ fn main() {
     let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let randomness_coin: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
     let merkle_path = [
         (bls12_381::Scalar::random(&mut OsRng), true),
@@ -192,6 +193,8 @@ fn main() {
     }
     let (params, pvk) = load_params("spend.params").expect("params should load");
 
+    let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
+
     let (proof, revealed) = create_spend_proof(
         &params,
         value,
@@ -200,7 +203,9 @@ fn main() {
         randomness_coin,
         secret,
         merkle_path,
+        signature_secret
     );
 
     assert!(verify_spend_proof(&pvk, &proof, &revealed));
+    assert_eq!(revealed.signature_public, signature_public);
 }

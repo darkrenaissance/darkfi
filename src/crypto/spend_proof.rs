@@ -54,6 +54,7 @@ pub struct SpendRevealedValues {
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
     pub merkle_root: bls12_381::Scalar,
+    pub signature_public: jubjub::SubgroupPoint
 }
 
 impl SpendRevealedValues {
@@ -64,6 +65,7 @@ impl SpendRevealedValues {
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
         merkle_path: &[(bls12_381::Scalar, bool)],
+        signature_secret: &jubjub::Fr,
     ) -> Self {
         let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * jubjub::Fr::from(value))
@@ -83,6 +85,7 @@ impl SpendRevealedValues {
         );
 
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
 
         let mut coin = [0; 32];
         coin.copy_from_slice(
@@ -118,11 +121,12 @@ impl SpendRevealedValues {
             value_commit,
             nullifier,
             merkle_root,
+            signature_public
         }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 5] {
-        let mut public_input = [bls12_381::Scalar::zero(); 5];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 7] {
+        let mut public_input = [bls12_381::Scalar::zero(); 7];
 
         // CV
         {
@@ -164,6 +168,16 @@ impl SpendRevealedValues {
 
         public_input[4] = self.merkle_root;
 
+        {
+            let result = jubjub::ExtendedPoint::from(self.signature_public);
+            let affine = result.to_affine();
+            //let (u, v) = (affine.get_u(), affine.get_v());
+            let u = affine.get_u();
+            let v = affine.get_v();
+            public_input[5] = u;
+            public_input[6] = v;
+        }
+
         public_input
     }
 }
@@ -187,6 +201,8 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
             is_right_2: None,
             branch_3: None,
             is_right_3: None,
+
+            signature_secret: None,
         };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
@@ -202,6 +218,7 @@ pub fn create_spend_proof(
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
     merkle_path: [(bls12_381::Scalar, bool); 4],
+    signature_secret: jubjub::Fr,
 ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
     let c = SpendContract {
         value: Some(value),
@@ -218,6 +235,7 @@ pub fn create_spend_proof(
         is_right_2: Some(merkle_path[2].1),
         branch_3: Some(merkle_path[3].0),
         is_right_3: Some(merkle_path[3].1),
+        signature_secret: Some(signature_secret),
     };
 
     let start = Instant::now();
@@ -231,6 +249,7 @@ pub fn create_spend_proof(
         &randomness_coin,
         &secret,
         &merkle_path,
+        &signature_secret
     );
 
     (proof, revealed)

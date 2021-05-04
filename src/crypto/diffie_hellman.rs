@@ -13,6 +13,10 @@ pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubju
     // <ExtendedPoint as CofactorGroup>::clear_cofactor is implemented using
     // ExtendedPoint::mul_by_cofactor in the jubjub crate.
 
+    // ExtendedPoint::multiply currently just implements double-and-add,
+    // so using wNAF is a concrete speed improvement (as it operates over a window of bits
+    // instead of individual bits).
+    // We want that to be fast because it's in the hot path for trial decryption of notes on chain.
     let mut wnaf = group::Wnaf::new();
     wnaf.scalar(esk).base(*pk_d).clear_cofactor()
 }
@@ -20,7 +24,7 @@ pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubju
 /// Sapling KDF for note encryption.
 ///
 /// Implements section 5.4.4.4 of the Zcash Protocol Specification.
-fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::ExtendedPoint) -> Blake2bHash {
+pub fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::ExtendedPoint) -> Blake2bHash {
     Blake2bParams::new()
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)
