@@ -2,8 +2,9 @@
 // it is a key value store
 // sqlite is the encrypted wallet
 
-use rusqlite::{Connection, Result};
 use rocksdb::DB;
+use rusqlite::{Connection, Result};
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
     wallet()?;
@@ -22,9 +23,11 @@ fn wallet() -> Result<()> {
 
 fn connect() -> Result<Connection> {
     println!("Attempting to establish a connection...");
-    let path = "/home/x/src/sapvi/src/bin/wallet/wallet.db";
+    let path = dirs::home_dir()
+        .expect("Cannot find home directory!")
+        .as_path()
+        .join(".config/darkfi/wallet.db");
     let connector = Connection::open(&path);
-    println!("Path created at {}", path);
     println!("Connection established");
     connector
 }
@@ -56,7 +59,10 @@ fn blockchain() -> Result<()> {
 
 fn create_db() -> DB {
     println!("Creating a blockchain database...");
-    let path = "/home/x/src/sapvi/src/bin/wallet/blockchain.db";
+    let path = dirs::home_dir()
+        .expect("Cannot find home directory!")
+        .as_path()
+        .join(".config/darkfi/chain");
     let db = DB::open_default(path).unwrap();
     db
 }
@@ -76,8 +82,6 @@ fn test_db(db: &DB) {
     }
 }
 
-//fn configure_blockchain() {
-//    let mut opts = Options::default();
-//    let mut block_opts = BlockBasedOptions::default();
-//    block_opts.set_index_type(BlockBasedIndexType::HashSearch);
-//}
+// TODO: macro to load file as a string. load wallet tables in sqlite at run
+// Table includes: maintain a list of coins and whether they are spent
+
