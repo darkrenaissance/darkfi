@@ -29,4 +29,3 @@ fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::ExtendedPoint) -> 
         .update(&epk.to_bytes())
         .finalize()
 }
-

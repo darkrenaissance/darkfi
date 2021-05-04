@@ -7,4 +7,3 @@ pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> jubjub::Fr {
     let ret = hasher.finalize();
     jubjub::Fr::from_bytes_wide(ret.as_array())
 }
-
