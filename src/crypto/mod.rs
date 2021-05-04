@@ -1,5 +1,7 @@
 pub mod diffie_hellman;
+pub mod fr_serial;
 pub mod mint_proof;
+pub mod note;
 pub mod schnorr;
 pub mod spend_proof;
 pub mod util;

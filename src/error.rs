@@ -40,6 +40,7 @@ pub enum Error {
     ChannelTimeout,
     ServiceStopped,
     Utf8Error,
+    NoteDecryptionFailed,
 }
 
 impl std::error::Error for Error {}
@@ -82,6 +83,7 @@ impl fmt::Display for Error {
             Error::ChannelTimeout => f.write_str("Channel timed out"),
             Error::ServiceStopped => f.write_str("Service stopped"),
             Error::Utf8Error => f.write_str("Malformed UTF8"),
+            Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
         }
     }
 }

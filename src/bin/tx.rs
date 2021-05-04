@@ -7,6 +7,7 @@ use rand::rngs::OsRng;
 use sapvi::crypto::{
     create_mint_proof, load_params, save_params, setup_mint_prover, verify_mint_proof,
     MintRevealedValues,
+    note::Note
 };
 
 struct TransactionBuilder {
@@ -126,7 +127,7 @@ struct TransactionOutput {
     revealed: MintRevealedValues,
 }
 
-fn main() {
+fn txbuilding() {
     {
         let params = setup_mint_prover();
         save_params("mint.params", &params);
@@ -142,4 +143,21 @@ fn main() {
 
     let tx = builder.build(&mint_params);
     assert!(tx.verify(&mint_pvk));
+}
+
+fn main() {
+    // txbuilding()
+    let note = Note {
+        serial: jubjub::Fr::random(&mut OsRng),
+        value: 110,
+        coin_blind: jubjub::Fr::random(&mut OsRng),
+        valcom_blind: jubjub::Fr::random(&mut OsRng),
+    };
+
+    let secret = jubjub::Fr::random(&mut OsRng);
+    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+
+    let encrypted_note = note.encrypt(&public).unwrap();
+    let note2 = encrypted_note.decrypt(&secret).unwrap();
+    assert_eq!(note.value, note2.value);
 }
