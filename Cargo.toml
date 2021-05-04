@@ -108,6 +108,9 @@ path = "src/bin/dfg.rs"
 name = "compile-shaders"
 path = "src/bin/compile-shaders.rs"
 
+name = "wallet"
+path = "src/bin/wallet.rs"
+
 [profile.release]
 debug = 1
 
