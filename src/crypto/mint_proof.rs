@@ -3,12 +3,14 @@ use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::Field;
+use std::io;
 use group::{Curve, Group, GroupEncoding};
 use rand::rngs::OsRng;
 use std::time::Instant;
 
 use crate::circuit::mint_contract::MintContract;
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::serial::{Decodable, Encodable};
 
 pub struct MintRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -71,6 +73,24 @@ impl MintRevealedValues {
         }
 
         public_input
+    }
+}
+
+impl Encodable for MintRevealedValues {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.value_commit.encode(&mut s)?;
+        len += self.coin.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for MintRevealedValues {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            value_commit: Decodable::decode(&mut d)?,
+            coin: Decodable::decode(d)?
+        })
     }
 }
 
