@@ -3,6 +3,8 @@ use std::fmt;
 use crate::net::error::NetError;
 use crate::vm::ZKVMError;
 
+use async_zmq::zmq;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -33,6 +35,7 @@ pub enum Error {
     VMError(ZKVMError),
     BadContract,
     Groth16Error(bellman::SynthesisError),
+    ZMQError(zmq::Error),
     OperationFailed,
     ConnectFailed,
     ConnectTimeout,
@@ -75,6 +78,7 @@ impl fmt::Display for Error {
             Error::VMError(_) => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
+            Error::ZMQError(ref err) => write!(f, "ZMQ error: {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
             Error::ConnectFailed => f.write_str("Connection failed"),
             Error::ConnectTimeout => f.write_str("Connection timed out"),
@@ -89,6 +93,12 @@ impl fmt::Display for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::Io(err)
+    }
+}
+
+impl From<zmq::Error> for Error {
+    fn from(err: zmq::Error) -> Error {
+        Error::ZMQError(err)
     }
 }
 
