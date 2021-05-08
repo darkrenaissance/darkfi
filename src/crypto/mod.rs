@@ -1,5 +1,7 @@
+pub mod coin;
 pub mod diffie_hellman;
 pub mod fr_serial;
+pub mod merkle;
 pub mod mint_proof;
 pub mod note;
 pub mod schnorr;

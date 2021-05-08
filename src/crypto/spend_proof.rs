@@ -9,44 +9,8 @@ use rand::rngs::OsRng;
 use std::time::Instant;
 
 use crate::circuit::spend_contract::SpendContract;
+use super::coin::merkle_hash;
 use crate::error::Result;
-
-// This thing is nasty lol
-pub fn merkle_hash(
-    depth: usize,
-    lhs: &bls12_381::Scalar,
-    rhs: &bls12_381::Scalar,
-) -> bls12_381::Scalar {
-    let lhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(lhs.to_repr().as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
-
-    let rhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(rhs.to_repr().as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
-
-    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-        zcash_primitives::pedersen_hash::Personalization::MerkleTree(depth),
-        lhs.iter()
-            .copied()
-            .take(bls12_381::Scalar::NUM_BITS as usize)
-            .chain(
-                rhs.iter()
-                    .copied()
-                    .take(bls12_381::Scalar::NUM_BITS as usize),
-            ),
-    ))
-    .to_affine()
-    .get_u()
-}
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -111,9 +75,9 @@ impl SpendRevealedValues {
 
         for (i, (right, is_right)) in merkle_path.iter().enumerate() {
             if *is_right {
-                merkle_root = merkle_hash(i, &right, &merkle_root);
+                merkle_root = merkle_hash(i, &right.to_repr(), &merkle_root.to_repr());
             } else {
-                merkle_root = merkle_hash(i, &merkle_root, &right);
+                merkle_root = merkle_hash(i, &merkle_root.to_repr(), &right.to_repr());
             }
         }
 
