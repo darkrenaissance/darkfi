@@ -44,21 +44,21 @@ pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::S
 
 /// A node within the Sapling commitment tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Node {
+pub struct Coin {
     repr: [u8; 32],
 }
 
-impl Node {
+impl Coin {
     pub fn new(repr: [u8; 32]) -> Self {
-        Node { repr }
+        Coin { repr }
     }
 }
 
-impl Hashable for Node {
+impl Hashable for Coin {
     fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
         let mut repr = [0u8; 32];
         reader.read_exact(&mut repr)?;
-        Ok(Node::new(repr))
+        Ok(Coin::new(repr))
     }
 
     fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
@@ -66,7 +66,7 @@ impl Hashable for Node {
     }
 
     fn combine(depth: usize, lhs: &Self, rhs: &Self) -> Self {
-        Node {
+        Coin {
             repr: merkle_hash(depth, &lhs.repr, &rhs.repr).to_repr(),
         }
     }
@@ -75,7 +75,7 @@ impl Hashable for Node {
         // The smallest u-coordinate that is not on the curve
         // is one.
         let uncommitted_note = bls12_381::Scalar::one();
-        Node {
+        Coin {
             repr: uncommitted_note.to_repr(),
         }
     }
@@ -86,10 +86,10 @@ impl Hashable for Node {
 }
 
 lazy_static! {
-    static ref EMPTY_ROOTS: Vec<Node> = {
-        let mut v = vec![Node::blank()];
+    static ref EMPTY_ROOTS: Vec<Coin> = {
+        let mut v = vec![Coin::blank()];
         for d in 0..SAPLING_COMMITMENT_TREE_DEPTH {
-            let next = Node::combine(d, &v[d], &v[d]);
+            let next = Coin::combine(d, &v[d], &v[d]);
             v.push(next);
         }
         v

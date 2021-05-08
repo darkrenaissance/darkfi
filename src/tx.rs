@@ -87,6 +87,11 @@ pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
 }
 
+pub struct TransactionBuilderInputInfo {
+    pub value: u64,
+    pub serial: jubjub::Fr,
+}
+
 pub struct TransactionBuilderOutputInfo {
     pub value: u64,
     pub public: jubjub::SubgroupPoint,

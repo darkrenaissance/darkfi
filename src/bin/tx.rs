@@ -1,14 +1,16 @@
 use std::io;
 use bellman::groth16;
 use bls12_381::Bls12;
-use ff::Field;
+use ff::{Field, PrimeField};
 use group::Group;
 use rand::rngs::OsRng;
 
 use sapvi::crypto::{
     create_mint_proof, load_params, save_params, setup_mint_prover, verify_mint_proof,
     MintRevealedValues,
-    note::Note
+    note::Note,
+    merkle::{IncrementalWitness, CommitmentTree},
+    coin::Coin,
 };
 use sapvi::serial::{Decodable, Encodable, VarInt};
 use sapvi::error::{Error, Result};
@@ -33,9 +35,26 @@ fn txbuilding() {
         let tx = builder.build(&mint_params);
         tx.encode(&mut tx_data).expect("encode tx");
     }
+    let mut tree = CommitmentTree::empty();
+    for i in 0..5 {
+        let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+        tree.append(cmu);
+    }
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
         assert!(tx.verify(&mint_pvk));
+        tree.append(Coin::new(tx.outputs[0].revealed.coin)).expect("append merkle");
+    }
+    let mut witness = IncrementalWitness::from_tree(&tree);
+    assert_eq!(witness.position(), 5);
+    assert_eq!(tree.root(), witness.root());
+
+    // Add some random coins in
+    for i in 0..10 {
+        let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+        tree.append(cmu);
+        witness.append(cmu);
+        assert_eq!(tree.root(), witness.root());
     }
 }
 
