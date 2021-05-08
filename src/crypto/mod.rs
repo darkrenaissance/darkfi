@@ -1,12 +1,21 @@
+pub mod coin;
+pub mod diffie_hellman;
+pub mod fr_serial;
+pub mod merkle;
 pub mod mint_proof;
+pub mod note;
+pub mod schnorr;
 pub mod spend_proof;
+pub mod util;
 
 use bellman::groth16;
 use bls12_381::Bls12;
 
 use crate::error::Result;
-pub use mint_proof::{setup_mint_prover, create_mint_proof, verify_mint_proof};
-pub use spend_proof::{setup_spend_prover, create_spend_proof, verify_spend_proof};
+pub use mint_proof::{create_mint_proof, setup_mint_prover, verify_mint_proof, MintRevealedValues};
+pub use spend_proof::{
+    create_spend_proof, setup_spend_prover, verify_spend_proof, SpendRevealedValues,
+};
 
 pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Result<()> {
     let buffer = std::fs::File::create(filename)?;
@@ -14,10 +23,14 @@ pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Resul
     Ok(())
 }
 
-pub fn load_params(filename: &str) -> Result<(groth16::Parameters<Bls12>, groth16::PreparedVerifyingKey<Bls12>)> {
+pub fn load_params(
+    filename: &str,
+) -> Result<(
+    groth16::Parameters<Bls12>,
+    groth16::PreparedVerifyingKey<Bls12>,
+)> {
     let buffer = std::fs::File::open(filename)?;
     let params = groth16::Parameters::<Bls12>::read(buffer, false)?;
     let pvk = groth16::prepare_verifying_key(&params.vk);
     Ok((params, pvk))
 }
-

@@ -1,5 +1,3 @@
-use rand::rngs::OsRng;
-use std::time::Instant;
 use bellman::gadgets::multipack;
 use bellman::groth16;
 use bitvec::{order::Lsb0, view::AsBits};
@@ -7,46 +5,12 @@ use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
+use rand::rngs::OsRng;
+use std::time::Instant;
 
-use crate::error::Result;
 use crate::circuit::spend_contract::SpendContract;
-
-// This thing is nasty lol
-pub fn merkle_hash(
-    depth: usize,
-    lhs: &bls12_381::Scalar,
-    rhs: &bls12_381::Scalar,
-) -> bls12_381::Scalar {
-    let lhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(lhs.to_repr().as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
-
-    let rhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(rhs.to_repr().as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
-
-    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-        zcash_primitives::pedersen_hash::Personalization::MerkleTree(depth),
-        lhs.iter()
-            .copied()
-            .take(bls12_381::Scalar::NUM_BITS as usize)
-            .chain(
-                rhs.iter()
-                    .copied()
-                    .take(bls12_381::Scalar::NUM_BITS as usize),
-            ),
-    ))
-    .to_affine()
-    .get_u()
-}
+use super::coin::merkle_hash;
+use crate::error::Result;
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -54,6 +18,7 @@ pub struct SpendRevealedValues {
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
     pub merkle_root: bls12_381::Scalar,
+    pub signature_public: jubjub::SubgroupPoint
 }
 
 impl SpendRevealedValues {
@@ -64,6 +29,7 @@ impl SpendRevealedValues {
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
         merkle_path: &[(bls12_381::Scalar, bool)],
+        signature_secret: &jubjub::Fr,
     ) -> Self {
         let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * jubjub::Fr::from(value))
@@ -83,6 +49,7 @@ impl SpendRevealedValues {
         );
 
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
 
         let mut coin = [0; 32];
         coin.copy_from_slice(
@@ -108,9 +75,9 @@ impl SpendRevealedValues {
 
         for (i, (right, is_right)) in merkle_path.iter().enumerate() {
             if *is_right {
-                merkle_root = merkle_hash(i, &right, &merkle_root);
+                merkle_root = merkle_hash(i, &right.to_repr(), &merkle_root.to_repr());
             } else {
-                merkle_root = merkle_hash(i, &merkle_root, &right);
+                merkle_root = merkle_hash(i, &merkle_root.to_repr(), &right.to_repr());
             }
         }
 
@@ -118,11 +85,12 @@ impl SpendRevealedValues {
             value_commit,
             nullifier,
             merkle_root,
+            signature_public
         }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 5] {
-        let mut public_input = [bls12_381::Scalar::zero(); 5];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 7] {
+        let mut public_input = [bls12_381::Scalar::zero(); 7];
 
         // CV
         {
@@ -164,6 +132,16 @@ impl SpendRevealedValues {
 
         public_input[4] = self.merkle_root;
 
+        {
+            let result = jubjub::ExtendedPoint::from(self.signature_public);
+            let affine = result.to_affine();
+            //let (u, v) = (affine.get_u(), affine.get_v());
+            let u = affine.get_u();
+            let v = affine.get_v();
+            public_input[5] = u;
+            public_input[6] = v;
+        }
+
         public_input
     }
 }
@@ -187,6 +165,8 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
             is_right_2: None,
             branch_3: None,
             is_right_3: None,
+
+            signature_secret: None,
         };
         groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
     };
@@ -201,8 +181,9 @@ pub fn create_spend_proof(
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
-    merkle_path: [(bls12_381::Scalar, bool); 4]
-    ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
+    merkle_path: [(bls12_381::Scalar, bool); 4],
+    signature_secret: jubjub::Fr,
+) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
     let c = SpendContract {
         value: Some(value),
         randomness_value: Some(randomness_value),
@@ -218,6 +199,7 @@ pub fn create_spend_proof(
         is_right_2: Some(merkle_path[2].1),
         branch_3: Some(merkle_path[3].0),
         is_right_3: Some(merkle_path[3].1),
+        signature_secret: Some(signature_secret),
     };
 
     let start = Instant::now();
@@ -231,6 +213,7 @@ pub fn create_spend_proof(
         &randomness_coin,
         &secret,
         &merkle_path,
+        &signature_secret
     );
 
     (proof, revealed)
@@ -239,8 +222,8 @@ pub fn create_spend_proof(
 pub fn verify_spend_proof(
     pvk: &groth16::PreparedVerifyingKey<Bls12>,
     proof: &groth16::Proof<Bls12>,
-    revealed: &SpendRevealedValues
-    ) -> bool {
+    revealed: &SpendRevealedValues,
+) -> bool {
     let public_input = revealed.make_outputs();
 
     let start = Instant::now();
@@ -248,4 +231,3 @@ pub fn verify_spend_proof(
     println!("Verify: [{:?}]", start.elapsed());
     result
 }
-

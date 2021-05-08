@@ -1,8 +1,11 @@
 use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
-use std::{ops::{Add, AddAssign, MulAssign, SubAssign}, time::Instant};
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
+use std::{
+    ops::{Add, AddAssign, MulAssign, SubAssign},
+    time::Instant,
+};
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 
@@ -77,7 +80,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         let circuitTime = Instant::now();
         let start = Instant::now();
         // println!("Allocations\n");
-        // TODO is the private and params 
+        // TODO is the private and params
         for (k, v) in &self.allocs {
             match v {
                 MalVal::ZKScalar(val) => {
@@ -101,7 +104,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
             }
         }
         println!("circuit alloc \t {:?}", start.elapsed());
-        let start = Instant::now();        
+        let start = Instant::now();
         // println!("Allocations Input\n");
         // TODO alloc-input is the public value
         for (k, v) in &self.alloc_inputs {
@@ -122,7 +125,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 }
             }
         }
-        println!("circuit alloc input \t {:?}", start.elapsed());        
+        println!("circuit alloc input \t {:?}", start.elapsed());
         let start = Instant::now();
         let mut enforce_sorted = self.constraints.clone();
         // enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
@@ -249,9 +252,9 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
                 |_| right.clone(),
                 |_| output.clone(),
             );
-        }     
-        println!("circuit enforce \t {:?}", start.elapsed());        
-        println!("end circuit \t {:?}", circuitTime.elapsed());        
+        }
+        println!("circuit enforce \t {:?}", start.elapsed());
+        println!("end circuit \t {:?}", circuitTime.elapsed());
         Ok(())
     }
 }

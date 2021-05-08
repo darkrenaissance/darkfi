@@ -628,8 +628,8 @@ fn scalar_is_zero(a: MalArgs) -> MalRet {
     }
 }
 
-fn add_scalar(a: MalArgs) -> MalRet {  
-    println!("add_scalar {:?}", a);  
+fn add_scalar(a: MalArgs) -> MalRet {
+    println!("add_scalar {:?}", a);
     match (a[0].clone(), a[1].clone()) {
         (Func(_, _), ZKScalar(a1)) => {
             if let Vector(ref values, _) = a[0].apply(vec![]).unwrap() {

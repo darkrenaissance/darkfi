@@ -27,6 +27,7 @@ pub struct SpendContract {
     pub is_right_2: Option<bool>,
     pub branch_3: Option<bls12_381::Scalar>,
     pub is_right_3: Option<bool>,
+    pub signature_secret: Option<jubjub::Fr>,
 }
 impl Circuit<bls12_381::Scalar> for SpendContract {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
@@ -434,6 +435,17 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
 
         // Line 253: emit_scalar current
         current.inputize(cs.namespace(|| "Line 253: emit_scalar current"))?;
+
+        let signature_secret = boolean::field_into_boolean_vec_le(
+            cs.namespace(|| "Signature secret"),
+            self.signature_secret,
+        )?;
+        let signature_public = ecc::fixed_base_multiplication(
+            cs.namespace(|| "Signature public"),
+            &zcash_proofs::constants::SPENDING_KEY_GENERATOR,
+            &signature_secret,
+        )?;
+        signature_public.inputize(cs.namespace(|| "Signature public inputize"))?;
 
         Ok(())
     }

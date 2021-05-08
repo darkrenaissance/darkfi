@@ -7,7 +7,9 @@ use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
 use sapvi::circuit::spend_contract::SpendContract;
-use sapvi::crypto::{save_params, load_params, setup_spend_prover, create_spend_proof, verify_spend_proof};
+use sapvi::crypto::{
+    create_spend_proof, load_params, save_params, setup_spend_prover, verify_spend_proof,
+};
 
 // This thing is nasty lol
 pub fn merkle_hash(
@@ -176,6 +178,7 @@ fn main() {
     let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let randomness_coin: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
     let merkle_path = [
         (bls12_381::Scalar::random(&mut OsRng), true),
@@ -190,8 +193,19 @@ fn main() {
     }
     let (params, pvk) = load_params("spend.params").expect("params should load");
 
-    let (proof, revealed) = create_spend_proof(&params, value, randomness_value, serial, randomness_coin,
-                                              secret, merkle_path);
+    let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
+
+    let (proof, revealed) = create_spend_proof(
+        &params,
+        value,
+        randomness_value,
+        serial,
+        randomness_coin,
+        secret,
+        merkle_path,
+        signature_secret
+    );
 
     assert!(verify_spend_proof(&pvk, &proof, &revealed));
+    assert_eq!(revealed.signature_public, signature_public);
 }
