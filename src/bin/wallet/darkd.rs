@@ -11,6 +11,9 @@ use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
+use ff::Field;
+use sapvi::serial;
+use rand::rngs::OsRng;
 
 use sapvi::{net, Result};
 
@@ -119,6 +122,19 @@ impl RpcInterface {
             let stop_send = stop_send.clone();
             async move {
                 let _ = stop_send.send(()).await;
+                Ok(jsonrpc_core::Value::Null)
+            }
+        });
+        io.add_method("key_gen", move |_| {
+            //let stop_send = stop_send.clone();
+            async move {
+                //let _ = stop_send.send(()).await;
+                let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+                let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+                let pubkey = serial::serialize(&public);
+                let privkey = serial::serialize(&secret);
+                //println!("{:?}", pubkey);
+                //println!("{:?}", privkey);
                 Ok(jsonrpc_core::Value::Null)
             }
         });
