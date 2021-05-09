@@ -7,10 +7,12 @@ use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 use rand::rngs::OsRng;
 use std::time::Instant;
+use std::io;
 
 use super::coin::merkle_hash;
 use crate::circuit::spend_contract::SpendContract;
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::serial::{Decodable, Encodable};
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -147,6 +149,28 @@ impl SpendRevealedValues {
     }
 }
 
+impl Encodable for SpendRevealedValues {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.value_commit.encode(&mut s)?;
+        len += self.nullifier.encode(&mut s)?;
+        len += self.merkle_root.encode(&mut s)?;
+        len += self.signature_public.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for SpendRevealedValues {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            value_commit: Decodable::decode(&mut d)?,
+            nullifier: Decodable::decode(&mut d)?,
+            merkle_root: Decodable::decode(&mut d)?,
+            signature_public: Decodable::decode(d)?,
+        })
+    }
+}
+
 pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
     println!("Making random params...");
     let start = Instant::now();
@@ -182,9 +206,11 @@ pub fn create_spend_proof(
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
-    merkle_path: [(bls12_381::Scalar, bool); 4],
+    merkle_path: Vec<(bls12_381::Scalar, bool)>,
     signature_secret: jubjub::Fr,
 ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
+    assert_eq!(merkle_path.len(), 4);
+    assert_eq!(merkle_path.len(), super::coin::SAPLING_COMMITMENT_TREE_DEPTH);
     let c = SpendContract {
         value: Some(value),
         randomness_value: Some(randomness_value),

@@ -1,7 +1,10 @@
 use ff::Field;
 use group::{Group, GroupEncoding};
 use rand::rngs::OsRng;
+use std::io;
 
+use crate::error::{Error, Result};
+use crate::serial::{Decodable, Encodable};
 use super::util::hash_to_scalar;
 
 pub struct SecretKey(pub jubjub::Fr);
@@ -33,6 +36,24 @@ pub struct PublicKey(pub jubjub::SubgroupPoint);
 pub struct Signature {
     commit: jubjub::SubgroupPoint,
     response: jubjub::Fr,
+}
+
+impl Encodable for Signature {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.commit.encode(&mut s)?;
+        len += self.response.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Signature {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            commit: Decodable::decode(&mut d)?,
+            response: Decodable::decode(d)?,
+        })
+    }
 }
 
 impl PublicKey {

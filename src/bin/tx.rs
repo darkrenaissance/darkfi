@@ -33,12 +33,15 @@ fn txbuilding() {
 
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo { value: 110 }],
+        inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
     };
 
+    let mut coin_look = tx::CoinHashMap::new();
+
     let mut tx_data = vec![];
     {
-        let tx = builder.build(&mint_params, &spend_params);
+        let tx = builder.build(&mut coin_look, &mint_params, &spend_params);
         tx.encode(&mut tx_data).expect("encode tx");
     }
     let mut tree = CommitmentTree::empty();
@@ -65,11 +68,23 @@ fn txbuilding() {
     }
 
     let merkle_path = witness.path().unwrap();
-    let auth_path: Vec<Option<(bls12_381::Scalar, bool)>> = merkle_path
+    let auth_path: Vec<(bls12_381::Scalar, bool)> = merkle_path
         .auth_path
         .iter()
-        .map(|(node, b)| Some(((*node).into(), *b)))
+        .map(|(node, b)| ((*node).into(), *b))
         .collect();
+
+    // Make a spend tx
+
+    let coin = {
+        let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
+        tx.outputs[0].revealed.coin
+    };
+    let builder = tx::TransactionBuilder {
+        clear_inputs: vec![],
+        inputs: vec![tx::TransactionBuilderInputInfo { coin, merkle_path: auth_path }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }]
+    };
 
     /*let note = Note {
         serial: jubjub::Fr::random(&mut OsRng),

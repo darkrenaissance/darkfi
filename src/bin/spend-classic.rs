@@ -180,7 +180,7 @@ fn main() {
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
-    let merkle_path = [
+    let merkle_path = vec![
         (bls12_381::Scalar::random(&mut OsRng), true),
         (bls12_381::Scalar::random(&mut OsRng), false),
         (bls12_381::Scalar::random(&mut OsRng), true),

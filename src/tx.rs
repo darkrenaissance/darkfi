@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
@@ -7,14 +8,51 @@ use std::io;
 
 use crate::crypto::{
     create_mint_proof, load_params, note::Note, save_params, setup_mint_prover, verify_mint_proof,
-    MintRevealedValues,
+    MintRevealedValues, SpendRevealedValues,
+    schnorr
 };
 use crate::error::{Error, Result};
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
 
+pub trait CoinLookup {
+    fn lookup(&self, coin: &[u8; 32]) -> CoinAttributes;
+    fn add(&mut self, coin: [u8; 32], attrs: CoinAttributes);
+}
+
+#[derive(Clone)]
+pub struct CoinAttributes {
+    serial: jubjub::Fr,
+    coin_blind: jubjub::Fr,
+    valcom_blind: jubjub::Fr,
+    value: u64
+}
+
+pub struct CoinHashMap {
+    map: HashMap<[u8; 32], CoinAttributes>
+}
+
+impl CoinHashMap {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new()
+        }
+    }
+}
+
+impl CoinLookup for CoinHashMap {
+    fn lookup(&self, coin: &[u8; 32]) -> CoinAttributes {
+        self.map[coin].clone()
+    }
+
+    fn add(&mut self, coin: [u8; 32], attrs: CoinAttributes) {
+        self.map.insert(coin, attrs);
+    }
+}
+
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
+    pub inputs: Vec<TransactionBuilderInputInfo>,
     pub outputs: Vec<TransactionBuilderOutputInfo>,
 }
 
@@ -36,8 +74,9 @@ impl TransactionBuilder {
         lhs_total - rhs_total
     }
 
-    pub fn build(
+    pub fn build<C: CoinLookup>(
         self,
+        coin_look: &mut C,
         mint_params: &groth16::Parameters<Bls12>,
         spend_params: &groth16::Parameters<Bls12>,
     ) -> Transaction {
@@ -49,6 +88,11 @@ impl TransactionBuilder {
                 valcom_blind,
             };
             clear_inputs.push(clear_input);
+        }
+
+        let mut inputs = vec![];
+        for input in &self.inputs {
+            let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         }
 
         let mut outputs = vec![];
@@ -64,6 +108,13 @@ impl TransactionBuilder {
             let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let coin_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
+            let coin_attrs = CoinAttributes {
+                serial: serial.clone(),
+                coin_blind: coin_blind.clone(),
+                valcom_blind: valcom_blind.clone(),
+                value: output.value
+            };
+
             let (mint_proof, revealed) = create_mint_proof(
                 mint_params,
                 output.value,
@@ -72,6 +123,9 @@ impl TransactionBuilder {
                 coin_blind,
                 output.public,
             );
+
+            coin_look.add(revealed.coin.clone(), coin_attrs);
+
             let output = TransactionOutput {
                 mint_proof,
                 revealed,
@@ -81,6 +135,7 @@ impl TransactionBuilder {
 
         Transaction {
             clear_inputs,
+            inputs,
             outputs,
         }
     }
@@ -91,8 +146,8 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub value: u64,
-    pub serial: jubjub::Fr,
+    pub coin: [u8; 32],
+    pub merkle_path: Vec<(bls12_381::Scalar, bool)>,
 }
 
 pub struct TransactionBuilderOutputInfo {
@@ -102,6 +157,7 @@ pub struct TransactionBuilderOutputInfo {
 
 pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
+    pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
 }
 
@@ -109,7 +165,8 @@ impl Encodable for Transaction {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode(&mut s)?;
-        len += self.outputs.encode(&mut s)?;
+        len += self.inputs.encode(&mut s)?;
+        len += self.outputs.encode(s)?;
         Ok(len)
     }
 }
@@ -118,6 +175,7 @@ impl Decodable for Transaction {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             clear_inputs: Decodable::decode(&mut d)?,
+            inputs: Decodable::decode(&mut d)?,
             outputs: Decodable::decode(d)?,
         })
     }
@@ -171,6 +229,34 @@ impl Decodable for TransactionClearInput {
         })
     }
 }
+
+pub struct TransactionInput {
+    pub spend_proof: groth16::Proof<Bls12>,
+    pub revealed: SpendRevealedValues,
+    pub signature: schnorr::Signature,
+}
+
+impl Encodable for TransactionInput {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.spend_proof.encode(&mut s)?;
+        len += self.revealed.encode(&mut s)?;
+        len += self.signature.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for TransactionInput {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            spend_proof: Decodable::decode(&mut d)?,
+            revealed: Decodable::decode(&mut d)?,
+            signature: Decodable::decode(d)?,
+        })
+    }
+}
+
+impl_vec!(TransactionInput);
 
 pub struct TransactionOutput {
     pub mint_proof: groth16::Proof<Bls12>,
