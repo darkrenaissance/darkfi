@@ -52,4 +52,3 @@ fn test_schnorr() {
     let public = secret.public_key();
     assert!(public.verify(&message[..], &signature));
 }
-

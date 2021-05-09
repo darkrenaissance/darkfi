@@ -1,8 +1,8 @@
-use std::io;
-use group::Curve;
 use bitvec::{order::Lsb0, view::AsBits};
-use lazy_static::lazy_static;
 use ff::PrimeField;
+use group::Curve;
+use lazy_static::lazy_static;
+use std::io;
 
 use super::merkle::Hashable;
 
@@ -85,6 +85,12 @@ impl Hashable for Coin {
     }
 }
 
+impl From<Coin> for bls12_381::Scalar {
+    fn from(coin: Coin) -> Self {
+        bls12_381::Scalar::from_repr(coin.repr).expect("Tree nodes should be in the prime field")
+    }
+}
+
 lazy_static! {
     static ref EMPTY_ROOTS: Vec<Coin> = {
         let mut v = vec![Coin::blank()];
@@ -95,4 +101,3 @@ lazy_static! {
         v
     };
 }
-

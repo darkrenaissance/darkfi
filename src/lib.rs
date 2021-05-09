@@ -12,11 +12,11 @@ pub mod gfx;
 pub mod gui;
 pub mod net;
 pub mod serial;
+pub mod service;
 pub mod system;
 pub mod tx;
 pub mod vm;
 pub mod vm_serial;
-pub mod service;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};

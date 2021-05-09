@@ -498,4 +498,3 @@ impl<Node: Hashable> MerklePath<Node> {
             )
     }
 }
-

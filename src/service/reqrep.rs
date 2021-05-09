@@ -7,20 +7,18 @@ use rand::Rng;
 
 pub struct ReqRepAPI;
 
-
-
 impl ReqRepAPI {
-    pub async fn start()  {
-
+    pub async fn start() {
         let context = zmq::Context::new();
         let frontend = context.socket(zmq::ROUTER).unwrap();
         let backend = context.socket(zmq::DEALER).unwrap();
 
-
         frontend
-            .bind("tcp://127.0.0.1:3333") .expect("failed binding frontend");
+            .bind("tcp://127.0.0.1:3333")
+            .expect("failed binding frontend");
         backend
-            .bind("tcp://127.0.0.1:4444") .expect("failed binding backend");
+            .bind("tcp://127.0.0.1:4444")
+            .expect("failed binding backend");
 
         loop {
             let mut items = [
@@ -35,9 +33,10 @@ impl ReqRepAPI {
                     let message = frontend.recv_msg(0).unwrap();
                     let more = message.get_more();
                     backend
-                        .send(message, if more { zmq::SNDMORE } else { 0 }).unwrap();
+                        .send(message, if more { zmq::SNDMORE } else { 0 })
+                        .unwrap();
                     if !more {
-                        break
+                        break;
                     }
                 }
             }
@@ -46,16 +45,16 @@ impl ReqRepAPI {
                     let message = backend.recv_msg(0).unwrap();
                     let more = message.get_more();
                     frontend
-                        .send(message, if more { zmq::SNDMORE } else { 0 }).unwrap();
+                        .send(message, if more { zmq::SNDMORE } else { 0 })
+                        .unwrap();
                     if !more {
-                        break
+                        break;
                     }
                 }
             }
         }
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub struct Request {
@@ -95,12 +94,10 @@ impl Reply {
         Reply {
             id: request.get_id(),
             error,
-            payload
+            payload,
         }
     }
 }
-
-
 
 impl Encodable for Request {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -142,17 +139,14 @@ impl Decodable for Reply {
     }
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
+    use super::{Reply, Request, Result};
     use crate::serial::{deserialize, serialize};
-    use super::{Request, Reply, Result};
 
     #[test]
-    fn serialize_and_deserialize_request_test(){
-        let request = Request::new(2, vec![2,3,4,6,4]);
+    fn serialize_and_deserialize_request_test() {
+        let request = Request::new(2, vec![2, 3, 4, 6, 4]);
         let serialized_request = serialize(&request);
         assert!((deserialize(&serialized_request) as Result<bool>).is_err());
         let deserialized_request = deserialize(&serialized_request).ok();
@@ -160,13 +154,12 @@ mod tests {
     }
 
     #[test]
-    fn serialize_and_deserialize_reply_test(){
-        let request = Request::new(2, vec![2,3,4,6,4]);
-        let reply = Reply::from(&request, 0, vec![2,3,4,6,4]);
+    fn serialize_and_deserialize_reply_test() {
+        let request = Request::new(2, vec![2, 3, 4, 6, 4]);
+        let reply = Reply::from(&request, 0, vec![2, 3, 4, 6, 4]);
         let serialized_reply = serialize(&reply);
         assert!((deserialize(&serialized_reply) as Result<bool>).is_err());
         let deserialized_reply = deserialize(&serialized_reply).ok();
         assert_eq!(deserialized_reply, Some(reply));
     }
-
 }

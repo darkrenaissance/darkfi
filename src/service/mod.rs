@@ -1,4 +1,2 @@
-
-pub mod reqrep;
 pub mod gateway;
-
+pub mod reqrep;

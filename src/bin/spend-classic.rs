@@ -203,7 +203,7 @@ fn main() {
         randomness_coin,
         secret,
         merkle_path,
-        signature_secret
+        signature_secret,
     );
 
     assert!(verify_spend_proof(&pvk, &proof, &revealed));

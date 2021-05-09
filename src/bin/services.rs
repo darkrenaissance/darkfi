@@ -7,14 +7,11 @@ use sapvi::Result;
 use sapvi::service::{gateway, reqrep};
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    
     executor.clone().spawn(reqrep::ReqRepAPI::start()).detach();
 
-    gateway::GatewayService::start(executor.clone()).await; 
+    gateway::GatewayService::start(executor.clone()).await;
     Ok(())
 }
-
-
 
 fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
@@ -35,6 +32,3 @@ fn main() -> Result<()> {
 
     result
 }
-
-
-

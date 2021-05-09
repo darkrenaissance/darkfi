@@ -3,9 +3,9 @@ use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use ff::Field;
-use std::io;
 use group::{Curve, Group, GroupEncoding};
 use rand::rngs::OsRng;
+use std::io;
 use std::time::Instant;
 
 use crate::circuit::mint_contract::MintContract;
@@ -89,7 +89,7 @@ impl Decodable for MintRevealedValues {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value_commit: Decodable::decode(&mut d)?,
-            coin: Decodable::decode(d)?
+            coin: Decodable::decode(d)?,
         })
     }
 }

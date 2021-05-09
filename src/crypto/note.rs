@@ -1,14 +1,13 @@
 use crypto_api_chachapoly::ChachaPolyIetf;
 use ff::Field;
-use std::io;
 use rand::rngs::OsRng;
+use std::io;
 
-use crate::serial::{Encodable, Decodable, ReadExt, WriteExt};
+use super::diffie_hellman::{kdf_sapling, sapling_ka_agree};
 use crate::error::{Error, Result};
-use super::diffie_hellman::{sapling_ka_agree, kdf_sapling};
+use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
-pub const NOTE_PLAINTEXT_SIZE: usize =
-    32 + // serial
+pub const NOTE_PLAINTEXT_SIZE: usize = 32 + // serial
     8 + // value
     32 + // coin_blind
     32; // valcom_blind
@@ -39,7 +38,7 @@ impl Decodable for Note {
             serial: Decodable::decode(&mut d)?,
             value: Decodable::decode(&mut d)?,
             coin_blind: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(d)?
+            valcom_blind: Decodable::decode(d)?,
         })
     }
 }
@@ -64,14 +63,14 @@ impl Note {
 
         Ok(EncryptedNote {
             ciphertext,
-            ephem_public
+            ephem_public,
         })
     }
 }
 
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
-    ephem_public: jubjub::SubgroupPoint
+    ephem_public: jubjub::SubgroupPoint,
 }
 
 impl EncryptedNote {
@@ -113,4 +112,3 @@ fn test_note_encdec() {
     let note2 = encrypted_note.decrypt(&secret).unwrap();
     assert_eq!(note.value, note2.value);
 }
-

@@ -1,8 +1,8 @@
-use std::io;
 use group::GroupEncoding;
+use std::io;
 
-use crate::serial::{Encodable, Decodable, ReadExt, WriteExt};
 use crate::error::{Error, Result};
+use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
 impl Encodable for jubjub::Fr {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -43,4 +43,3 @@ impl Decodable for jubjub::SubgroupPoint {
         }
     }
 }
-

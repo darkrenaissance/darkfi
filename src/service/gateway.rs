@@ -1,31 +1,27 @@
 use image::EncodableLayout;
 
+use super::reqrep::{Reply, Request};
+use crate::serial::{deserialize, serialize};
 use crate::Result;
-use crate::serial::{serialize, deserialize};
-use super::reqrep::{Request, Reply};
 
-use async_zmq;
-use async_std::sync::Arc;
 use async_executor::Executor;
+use async_std::sync::Arc;
+use async_zmq;
 use futures::FutureExt;
-
-
 
 pub struct GatewayService;
 
-
-enum NetEvent{
+enum NetEvent {
     RECEIVE(async_zmq::Multipart),
-    SEND(async_zmq::Multipart)
+    SEND(async_zmq::Multipart),
 }
 
-
 impl GatewayService {
-
-    pub async fn start(
-        executor: Arc<Executor<'_>>,
-    ) {
-        let mut worker = async_zmq::reply("tcp://127.0.0.1:4444").unwrap().connect().unwrap();
+    pub async fn start(executor: Arc<Executor<'_>>) {
+        let mut worker = async_zmq::reply("tcp://127.0.0.1:4444")
+            .unwrap()
+            .connect()
+            .unwrap();
 
         let (send_queue_s, send_queue_r) = async_channel::unbounded::<async_zmq::Multipart>();
 
@@ -38,17 +34,20 @@ impl GatewayService {
 
             match event {
                 NetEvent::RECEIVE(request) => {
-                    ex2.spawn(Self::handle_request(send_queue_s.clone(), request)).detach();
-                },
+                    ex2.spawn(Self::handle_request(send_queue_s.clone(), request))
+                        .detach();
+                }
                 NetEvent::SEND(reply) => {
                     worker.send(reply).await.unwrap();
-                },
+                }
             }
         }
-
     }
 
-    async fn handle_request(send_queue: async_channel::Sender<async_zmq::Multipart>, request: async_zmq::Multipart) -> Result<()> {
+    async fn handle_request(
+        send_queue: async_channel::Sender<async_zmq::Multipart>,
+        request: async_zmq::Multipart,
+    ) -> Result<()> {
         let mut messages = vec![];
         for req in request.iter() {
             let req = req.as_bytes();
@@ -69,14 +68,11 @@ impl GatewayService {
     }
 }
 
-
 struct GatewayClient;
 
-
 #[repr(u8)]
-enum GatewayCommand{
+enum GatewayCommand {
     PUTSLAB,
     GETSLAB,
     GETLASTINDEX,
 }
-

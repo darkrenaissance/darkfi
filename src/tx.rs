@@ -1,18 +1,17 @@
-use std::io;
 use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
 use group::Group;
 use rand::rngs::OsRng;
+use std::io;
 
 use crate::crypto::{
-    create_mint_proof, load_params, save_params, setup_mint_prover, verify_mint_proof,
+    create_mint_proof, load_params, note::Note, save_params, setup_mint_prover, verify_mint_proof,
     MintRevealedValues,
-    note::Note
 };
-use crate::serial::{Decodable, Encodable, VarInt};
 use crate::error::{Error, Result};
 use crate::impl_vec;
+use crate::serial::{Decodable, Encodable, VarInt};
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -37,7 +36,11 @@ impl TransactionBuilder {
         lhs_total - rhs_total
     }
 
-    pub fn build(self, mint_params: &groth16::Parameters<Bls12>) -> Transaction {
+    pub fn build(
+        self,
+        mint_params: &groth16::Parameters<Bls12>,
+        spend_params: &groth16::Parameters<Bls12>,
+    ) -> Transaction {
         let mut clear_inputs = vec![];
         for input in &self.clear_inputs {
             let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
@@ -115,7 +118,7 @@ impl Decodable for Transaction {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             clear_inputs: Decodable::decode(&mut d)?,
-            outputs: Decodable::decode(d)?
+            outputs: Decodable::decode(d)?,
         })
     }
 }
@@ -164,7 +167,7 @@ impl Decodable for TransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(d)?
+            valcom_blind: Decodable::decode(d)?,
         })
     }
 }
@@ -189,8 +192,7 @@ impl Decodable for TransactionOutput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             mint_proof: Decodable::decode(&mut d)?,
-            revealed: Decodable::decode(d)?
+            revealed: Decodable::decode(d)?,
         })
     }
 }
-

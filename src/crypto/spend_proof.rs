@@ -8,8 +8,8 @@ use group::{Curve, GroupEncoding};
 use rand::rngs::OsRng;
 use std::time::Instant;
 
-use crate::circuit::spend_contract::SpendContract;
 use super::coin::merkle_hash;
+use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
 
 pub struct SpendRevealedValues {
@@ -18,7 +18,7 @@ pub struct SpendRevealedValues {
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
     pub merkle_root: bls12_381::Scalar,
-    pub signature_public: jubjub::SubgroupPoint
+    pub signature_public: jubjub::SubgroupPoint,
 }
 
 impl SpendRevealedValues {
@@ -49,7 +49,8 @@ impl SpendRevealedValues {
         );
 
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
+        let signature_public =
+            zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
 
         let mut coin = [0; 32];
         coin.copy_from_slice(
@@ -85,7 +86,7 @@ impl SpendRevealedValues {
             value_commit,
             nullifier,
             merkle_root,
-            signature_public
+            signature_public,
         }
     }
 
@@ -213,7 +214,7 @@ pub fn create_spend_proof(
         &randomness_coin,
         &secret,
         &merkle_path,
-        &signature_secret
+        &signature_secret,
     );
 
     (proof, revealed)

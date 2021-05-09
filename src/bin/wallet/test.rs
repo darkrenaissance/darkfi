@@ -84,4 +84,3 @@ fn test_db(db: &DB) {
 
 // TODO: macro to load file as a string. load wallet tables in sqlite at run
 // Table includes: maintain a list of coins and whether they are spent
-

@@ -1,12 +1,10 @@
-
 //! cargo run --example request --features="rt-tokio" --no-default-features
 
 use async_zmq::zmq;
-use sapvi::service::reqrep::{Request, Reply};
 use sapvi::serial;
+use sapvi::service::reqrep::{Reply, Request};
 
-
-fn connect () {
+fn connect() {
     let context = zmq::Context::new();
     let requester = context.socket(zmq::REQ).unwrap();
     requester
@@ -19,16 +17,10 @@ fn connect () {
         requester.send(req, 0).unwrap();
         let message = requester.recv_msg(0).unwrap();
         let rep: Reply = serial::deserialize(&message).unwrap();
-        println!(
-            "Received reply {:?} {:?}",
-            request_nbr,
-            rep
-        );
+        println!("Received reply {:?} {:?}", request_nbr, rep);
     }
 }
 fn main() {
-
-
     let mut thread_pools = vec![];
     for _ in 0..20 {
         let t = std::thread::spawn(connect);
@@ -38,5 +30,4 @@ fn main() {
     for t in thread_pools {
         t.join().unwrap();
     }
-
 }
