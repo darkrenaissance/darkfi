@@ -11,11 +11,15 @@ use rand::rngs::OsRng;
 use sapvi::serial;
 use serde_json::json;
 use smol::Async;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
+use rusqlite::Connection;
 
-use sapvi::{net, Result};
+use sapvi::{net, Result, Error};
 
 /// Listens for incoming connections and serves them.
 async fn listen(
@@ -95,6 +99,31 @@ impl RpcInterface {
         })
     }
 
+    async fn db_connect() -> Connection {
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/wallet.db");
+        let connector = Connection::open(&path);
+        connector.expect("Failed to connect to database.")
+    }
+
+    async fn generate_key() -> (Vec<u8>, Vec<u8>) {
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        (privkey, pubkey)
+    }
+
+    // TODO: fix this
+    async fn store_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+        let mut db_file = File::open("wallet.sql")?;
+        let mut contents = String::new();
+        db_file.read_to_string(&mut contents)?;
+        Ok(conn.execute_batch(&mut contents)?)
+    }
+
     // add new methods to handle wallet commands
     async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
         info!("RPC serving {}", req.url());
@@ -125,18 +154,11 @@ impl RpcInterface {
                 Ok(jsonrpc_core::Value::Null)
             }
         });
-        io.add_method("key_gen", move |_| {
-            //let stop_send = stop_send.clone();
-            async move {
-                //let _ = stop_send.send(()).await;
-                let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-                let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-                let pubkey = serial::serialize(&public);
-                let privkey = serial::serialize(&secret);
-                //println!("{:?}", pubkey);
-                //println!("{:?}", privkey);
-                Ok(jsonrpc_core::Value::Null)
-            }
+        io.add_method("key_gen", move |_| async move {
+            RpcInterface::db_connect().await;
+            let (pubkey, privkey) = RpcInterface::generate_key().await;
+            //println!("{}", pubkey, "{}", privkey);
+            Ok(jsonrpc_core::Value::Null)
         });
 
         let response = io
