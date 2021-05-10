@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::net::error::NetError;
 use crate::vm::ZKVMError;
+use rusqlite;
 
 use async_zmq::zmq;
 
@@ -36,6 +37,7 @@ pub enum Error {
     BadContract,
     Groth16Error(bellman::SynthesisError),
     ZMQError(zmq::Error),
+    RusqliteError(rusqlite::Error),
     OperationFailed,
     ConnectFailed,
     ConnectTimeout,
@@ -80,6 +82,7 @@ impl fmt::Display for Error {
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
             Error::ZMQError(ref err) => write!(f, "ZMQ error: {}", err),
+            Error::RusqliteError(ref err) => write!(f, "Rusqlite error: {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
             Error::ConnectFailed => f.write_str("Connection failed"),
             Error::ConnectTimeout => f.write_str("Connection timed out"),
@@ -101,6 +104,12 @@ impl From<std::io::Error> for Error {
 impl From<zmq::Error> for Error {
     fn from(err: zmq::Error) -> Error {
         Error::ZMQError(err)
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Error {
+        Error::RusqliteError(err)
     }
 }
 
