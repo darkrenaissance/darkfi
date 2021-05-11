@@ -1,0 +1,2 @@
+// Adapter class goes here
+//
