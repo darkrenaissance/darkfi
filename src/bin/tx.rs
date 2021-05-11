@@ -38,11 +38,9 @@ fn txbuilding() {
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
     };
 
-    let mut coin_look = tx::CoinHashMap::new();
-
     let mut tx_data = vec![];
     {
-        let tx = builder.build(&mut coin_look, &mint_params, &spend_params);
+        let tx = builder.build(&mint_params, &spend_params);
         tx.encode(&mut tx_data).expect("encode tx");
     }
     let mut tree = CommitmentTree::empty();
@@ -53,7 +51,7 @@ fn txbuilding() {
     let note =
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        assert!(tx.verify(&mint_pvk));
+        assert!(tx.verify(&mint_pvk, &spend_pvk));
         tree.append(Coin::new(tx.outputs[0].revealed.coin))
             .expect("append merkle");
 
@@ -91,9 +89,21 @@ fn txbuilding() {
         inputs: vec![tx::TransactionBuilderInputInfo {
             coin,
             merkle_path: auth_path,
+            merkle_root: tree,
+            secret,
+            note
         }],
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
     };
+    let mut tx_data = vec![];
+    {
+        let tx = builder.build(&mint_params, &spend_params);
+        tx.encode(&mut tx_data).expect("encode tx");
+    }
+    {
+        let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
+        assert!(tx.verify(&mint_pvk, &spend_pvk));
+    }
 
     /*let note = Note {
         serial: jubjub::Fr::random(&mut OsRng),

@@ -10,44 +10,12 @@ use crate::crypto::{
     create_mint_proof, create_spend_proof, load_params, note::{Note, EncryptedNote}, save_params, schnorr,
     setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
+    merkle::CommitmentTree,
+    coin::Coin
 };
 use crate::error::{Error, Result};
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
-
-pub trait CoinLookup {
-    fn lookup(&self, coin: &[u8; 32]) -> CoinAttributes;
-    fn add(&mut self, coin: [u8; 32], attrs: CoinAttributes);
-}
-
-#[derive(Clone)]
-pub struct CoinAttributes {
-    serial: jubjub::Fr,
-    coin_blind: jubjub::Fr,
-    value: u64,
-}
-
-pub struct CoinHashMap {
-    map: HashMap<[u8; 32], CoinAttributes>,
-}
-
-impl CoinHashMap {
-    pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
-}
-
-impl CoinLookup for CoinHashMap {
-    fn lookup(&self, coin: &[u8; 32]) -> CoinAttributes {
-        self.map[coin].clone()
-    }
-
-    fn add(&mut self, coin: [u8; 32], attrs: CoinAttributes) {
-        self.map.insert(coin, attrs);
-    }
-}
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -58,24 +26,28 @@ pub struct TransactionBuilder {
 impl TransactionBuilder {
     fn compute_remainder_blind(
         clear_inputs: &Vec<TransactionClearInput>,
+        input_blinds: &Vec<jubjub::Fr>,
         output_blinds: &Vec<jubjub::Fr>,
     ) -> jubjub::Fr {
-        let mut lhs_total = jubjub::Fr::zero();
+        let mut total = jubjub::Fr::zero();
+
         for input in clear_inputs {
-            lhs_total += input.valcom_blind;
+            total += input.valcom_blind;
         }
 
-        let mut rhs_total = jubjub::Fr::zero();
+        for input_blind in input_blinds {
+            total += input_blind;
+        }
+
         for output_blind in output_blinds {
-            rhs_total += output_blind;
+            total -= output_blind;
         }
 
-        lhs_total - rhs_total
+        total
     }
 
-    pub fn build<C: CoinLookup>(
+    pub fn build(
         self,
-        coin_look: &mut C,
         mint_params: &groth16::Parameters<Bls12>,
         spend_params: &groth16::Parameters<Bls12>,
     ) -> Transaction {
@@ -90,36 +62,44 @@ impl TransactionBuilder {
         }
 
         let mut inputs = vec![];
+        let mut input_blinds = vec![];
         for input in &self.inputs {
-            let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+            input_blinds.push(input.note.valcom_blind.clone());
 
             let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
 
             // make proof
-            let attrs = coin_look.lookup(&input.coin);
 
-            /*
             let (proof, revealed) = create_spend_proof(
                 &spend_params,
-                attrs.value,
-                valcom_blind.clone(),
-                attrs.serial,
-                attrs.coin_blind,
-                secret,
-                merkle_path,
-                signature_secret,
+                input.note.value,
+                input.note.valcom_blind,
+                input.note.serial,
+                input.note.coin_blind,
+                input.secret,
+                input.merkle_path.clone(),
+                signature_secret.clone(),
             );
-            */
 
             // make signature
+            // TODO...
+            let signature_secret = schnorr::SecretKey(signature_secret);
+            let signature = signature_secret.sign(b"XYZ");
+
+            let input = TransactionInput {
+                spend_proof: proof,
+                revealed,
+                signature
+            };
+            inputs.push(input);
         }
 
         let mut outputs = vec![];
         let mut output_blinds = vec![];
         for (i, output) in self.outputs.iter().enumerate() {
             let valcom_blind = if i == self.outputs.len() - 1 {
-                Self::compute_remainder_blind(&clear_inputs, &output_blinds)
+                Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds)
             } else {
                 jubjub::Fr::random(&mut OsRng)
             };
@@ -127,12 +107,6 @@ impl TransactionBuilder {
 
             let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let coin_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-
-            let coin_attrs = CoinAttributes {
-                serial: serial.clone(),
-                coin_blind: coin_blind.clone(),
-                value: output.value,
-            };
 
             let (mint_proof, revealed) = create_mint_proof(
                 mint_params,
@@ -142,8 +116,6 @@ impl TransactionBuilder {
                 coin_blind.clone(),
                 output.public.clone(),
             );
-
-            coin_look.add(revealed.coin.clone(), coin_attrs);
 
             // Encrypted note
 
@@ -179,6 +151,9 @@ pub struct TransactionBuilderClearInputInfo {
 pub struct TransactionBuilderInputInfo {
     pub coin: [u8; 32],
     pub merkle_path: Vec<(bls12_381::Scalar, bool)>,
+    pub merkle_root: CommitmentTree<Coin>,
+    pub secret: jubjub::Fr,
+    pub note: Note,
 }
 
 pub struct TransactionBuilderOutputInfo {
@@ -220,17 +195,29 @@ impl Transaction {
         value_commit
     }
 
-    pub fn verify(&self, pvk: &groth16::PreparedVerifyingKey<Bls12>) -> bool {
+    pub fn verify(&self,
+                  mint_pvk: &groth16::PreparedVerifyingKey<Bls12>,
+                  spend_pvk: &groth16::PreparedVerifyingKey<Bls12>,
+
+                  ) -> bool {
         let mut valcom_total = jubjub::SubgroupPoint::identity();
         for input in &self.clear_inputs {
             valcom_total += Self::compute_value_commit(input.value, &input.valcom_blind);
         }
+        for input in &self.inputs {
+            if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {
+                return false;
+            }
+            valcom_total += &input.revealed.value_commit;
+        }
         for output in &self.outputs {
-            if !verify_mint_proof(pvk, &output.mint_proof, &output.revealed) {
+            if !verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed) {
+                println!("mint fail");
                 return false;
             }
             valcom_total -= &output.revealed.value_commit;
         }
+        // TODO: Verify signatures
 
         valcom_total == jubjub::SubgroupPoint::identity()
     }
