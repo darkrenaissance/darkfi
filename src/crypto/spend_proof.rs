@@ -6,8 +6,8 @@ use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 use rand::rngs::OsRng;
-use std::time::Instant;
 use std::io;
+use std::time::Instant;
 
 use super::coin::merkle_hash;
 use crate::circuit::spend_contract::SpendContract;
@@ -210,7 +210,10 @@ pub fn create_spend_proof(
     signature_secret: jubjub::Fr,
 ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
     assert_eq!(merkle_path.len(), 4);
-    assert_eq!(merkle_path.len(), super::coin::SAPLING_COMMITMENT_TREE_DEPTH);
+    assert_eq!(
+        merkle_path.len(),
+        super::coin::SAPLING_COMMITMENT_TREE_DEPTH
+    );
     let c = SpendContract {
         value: Some(value),
         randomness_value: Some(randomness_value),

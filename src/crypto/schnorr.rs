@@ -3,9 +3,9 @@ use group::{Group, GroupEncoding};
 use rand::rngs::OsRng;
 use std::io;
 
+use super::util::hash_to_scalar;
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable};
-use super::util::hash_to_scalar;
 
 pub struct SecretKey(pub jubjub::Fr);
 

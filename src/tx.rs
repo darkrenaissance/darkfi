@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
 use group::Group;
 use rand::rngs::OsRng;
+use std::collections::HashMap;
 use std::io;
 
 use crate::crypto::{
-    create_mint_proof, load_params, note::Note, save_params, setup_mint_prover, verify_mint_proof,
+    create_mint_proof, create_spend_proof, load_params, note::{Note, EncryptedNote}, save_params, schnorr,
+    setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
-    schnorr
 };
 use crate::error::{Error, Result};
 use crate::impl_vec;
@@ -24,18 +24,17 @@ pub trait CoinLookup {
 pub struct CoinAttributes {
     serial: jubjub::Fr,
     coin_blind: jubjub::Fr,
-    valcom_blind: jubjub::Fr,
-    value: u64
+    value: u64,
 }
 
 pub struct CoinHashMap {
-    map: HashMap<[u8; 32], CoinAttributes>
+    map: HashMap<[u8; 32], CoinAttributes>,
 }
 
 impl CoinHashMap {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new()
+            map: HashMap::new(),
         }
     }
 }
@@ -93,6 +92,27 @@ impl TransactionBuilder {
         let mut inputs = vec![];
         for input in &self.inputs {
             let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+
+            let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+            let signature_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
+
+            // make proof
+            let attrs = coin_look.lookup(&input.coin);
+
+            /*
+            let (proof, revealed) = create_spend_proof(
+                &spend_params,
+                attrs.value,
+                valcom_blind.clone(),
+                attrs.serial,
+                attrs.coin_blind,
+                secret,
+                merkle_path,
+                signature_secret,
+            );
+            */
+
+            // make signature
         }
 
         let mut outputs = vec![];
@@ -111,24 +131,35 @@ impl TransactionBuilder {
             let coin_attrs = CoinAttributes {
                 serial: serial.clone(),
                 coin_blind: coin_blind.clone(),
-                valcom_blind: valcom_blind.clone(),
-                value: output.value
+                value: output.value,
             };
 
             let (mint_proof, revealed) = create_mint_proof(
                 mint_params,
                 output.value,
-                valcom_blind,
-                serial,
-                coin_blind,
-                output.public,
+                valcom_blind.clone(),
+                serial.clone(),
+                coin_blind.clone(),
+                output.public.clone(),
             );
 
             coin_look.add(revealed.coin.clone(), coin_attrs);
 
+            // Encrypted note
+
+            let note = Note {
+                serial,
+                value: output.value,
+                coin_blind,
+                valcom_blind,
+            };
+
+            let encrypted_note = note.encrypt(&output.public).unwrap();
+
             let output = TransactionOutput {
                 mint_proof,
                 revealed,
+                enc_note: encrypted_note
             };
             outputs.push(output);
         }
@@ -261,6 +292,7 @@ impl_vec!(TransactionInput);
 pub struct TransactionOutput {
     pub mint_proof: groth16::Proof<Bls12>,
     pub revealed: MintRevealedValues,
+    pub enc_note: EncryptedNote,
 }
 
 impl_vec!(TransactionOutput);
@@ -270,6 +302,7 @@ impl Encodable for TransactionOutput {
         let mut len = 0;
         len += self.mint_proof.encode(&mut s)?;
         len += self.revealed.encode(&mut s)?;
+        len += self.enc_note.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -278,7 +311,8 @@ impl Decodable for TransactionOutput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             mint_proof: Decodable::decode(&mut d)?,
-            revealed: Decodable::decode(d)?,
+            revealed: Decodable::decode(&mut d)?,
+            enc_note: Decodable::decode(&mut d)?,
         })
     }
 }

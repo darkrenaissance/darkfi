@@ -73,6 +73,27 @@ pub struct EncryptedNote {
     ephem_public: jubjub::SubgroupPoint,
 }
 
+impl Encodable for EncryptedNote {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        s.write_slice(&self.ciphertext)?;
+        len += ENC_CIPHERTEXT_SIZE;
+        len += self.ephem_public.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for EncryptedNote {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let mut ciphertext = [0u8; ENC_CIPHERTEXT_SIZE];
+        d.read_slice(&mut ciphertext[..])?;
+        Ok(Self {
+            ciphertext,
+            ephem_public: Decodable::decode(d)?
+        })
+    }
+}
+
 impl EncryptedNote {
     pub fn decrypt(&self, secret: &jubjub::Fr) -> Result<Note> {
         let shared_secret = sapling_ka_agree(&secret, &self.ephem_public.into());

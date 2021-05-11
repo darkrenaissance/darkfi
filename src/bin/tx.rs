@@ -18,18 +18,19 @@ use sapvi::serial::{Decodable, Encodable, VarInt};
 use sapvi::tx;
 
 fn txbuilding() {
-    {
-        let params = setup_mint_prover();
-        save_params("mint.params", &params);
-    }
-    {
-        let params = setup_spend_prover();
-        save_params("spend.params", &params);
-    }
+    //{
+    //    let params = setup_mint_prover();
+    //    save_params("mint.params", &params);
+    //}
+    //{
+    //    let params = setup_spend_prover();
+    //    save_params("spend.params", &params);
+    //}
     let (mint_params, mint_pvk) = load_params("mint.params").expect("params should load");
     let (spend_params, spend_pvk) = load_params("spend.params").expect("params should load");
 
-    let public = jubjub::SubgroupPoint::random(&mut OsRng);
+    let secret = jubjub::Fr::random(&mut OsRng);
+    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo { value: 110 }],
@@ -49,12 +50,17 @@ fn txbuilding() {
         let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
         tree.append(cmu);
     }
+    let note =
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
         assert!(tx.verify(&mint_pvk));
         tree.append(Coin::new(tx.outputs[0].revealed.coin))
             .expect("append merkle");
-    }
+
+        // Try to decrypt output note
+        let note = tx.outputs[0].enc_note.decrypt(&secret).expect("note should be destined for us");
+        note
+    };
     let mut witness = IncrementalWitness::from_tree(&tree);
     assert_eq!(witness.position(), 5);
     assert_eq!(tree.root(), witness.root());
@@ -82,8 +88,11 @@ fn txbuilding() {
     };
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
-        inputs: vec![tx::TransactionBuilderInputInfo { coin, merkle_path: auth_path }],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }]
+        inputs: vec![tx::TransactionBuilderInputInfo {
+            coin,
+            merkle_path: auth_path,
+        }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
     };
 
     /*let note = Note {
