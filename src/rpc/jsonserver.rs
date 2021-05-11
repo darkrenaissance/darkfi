@@ -1,4 +1,3 @@
-#[macro_use] extern crate clap;
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
@@ -7,7 +6,6 @@ use ff::Field;
 use http_types::{Request, Response, StatusCode};
 use log::*;
 use rand::rngs::OsRng;
-use sapvi::serial;
 use serde_json::json;
 use smol::Async;
 use std::fs::File;
@@ -17,18 +15,18 @@ use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
 use rusqlite::Connection;
+use crate::{net, serial, Result, Error};
 
-use sapvi::{net, Result, Error};
 // json RPC server goes here
-struct RpcInterface {
+pub struct RpcInterface {
     p2p: Arc<net::P2p>,
-    started: Mutex<bool>,
+    pub started: Mutex<bool>,
     stop_send: async_channel::Sender<()>,
     stop_recv: async_channel::Receiver<()>,
 }
 
 impl RpcInterface {
-    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
+    pub fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
         let (stop_send, stop_recv) = async_channel::unbounded::<()>();
 
         Arc::new(Self {
@@ -65,7 +63,7 @@ impl RpcInterface {
     }
 
     // add new methods to handle wallet commands
-    async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
+    pub async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
         info!("RPC serving {}", req.url());
 
         let request = req.body_string().await?;
@@ -103,7 +101,7 @@ impl RpcInterface {
 
         let response = io
             .handle_request_sync(&request)
-            .ok_or(sapvi::Error::BadOperationType)?;
+            .ok_or(Error::BadOperationType)?;
 
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");
@@ -111,7 +109,7 @@ impl RpcInterface {
         Ok(res)
     }
 
-    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
+    pub async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
         Ok(self.stop_recv.recv().await?)
     }
 }
