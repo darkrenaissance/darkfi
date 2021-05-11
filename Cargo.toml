@@ -133,14 +133,6 @@ path = "src/bin/services.rs"
 name = "demowallet"
 path = "src/bin/demowallet.rs"
 
-[[bin]]
-name = "wallet"
-path = "src/bin/wallet/test.rs"
-
-[[bin]]
-name = "darkd"
-path = "src/bin/wallet/darkd.rs"
-
 [profile.release]
 debug = 1
 
