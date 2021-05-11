@@ -1,3 +1,4 @@
+#[macro_use] extern crate clap;
 use bellman::groth16;
 use bls12_381::{Bls12, Scalar};
 use std::collections::{HashMap, HashSet};
@@ -11,6 +12,7 @@ pub mod error;
 pub mod gfx;
 pub mod gui;
 pub mod net;
+pub mod rpc;
 pub mod serial;
 pub mod service;
 pub mod system;
