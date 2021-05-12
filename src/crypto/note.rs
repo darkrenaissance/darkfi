@@ -89,7 +89,7 @@ impl Decodable for EncryptedNote {
         d.read_slice(&mut ciphertext[..])?;
         Ok(Self {
             ciphertext,
-            ephem_public: Decodable::decode(d)?
+            ephem_public: Decodable::decode(d)?,
         })
     }
 }

@@ -8,6 +8,7 @@ use ff::Field;
 use http_types::{Request, Response, StatusCode};
 use log::*;
 use rand::rngs::OsRng;
+use rusqlite::Connection;
 use sapvi::serial;
 use serde_json::json;
 use smol::Async;
@@ -17,9 +18,8 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
-use rusqlite::Connection;
 
-use sapvi::{net, Result, Error};
+use sapvi::{net, Error, Result};
 
 /// Listens for incoming connections and serves them.
 async fn listen(

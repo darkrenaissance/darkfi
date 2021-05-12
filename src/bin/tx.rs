@@ -48,15 +48,17 @@ fn txbuilding() {
         let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
         tree.append(cmu);
     }
-    let note =
-    {
+    let note = {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
         assert!(tx.verify(&mint_pvk, &spend_pvk));
         tree.append(Coin::new(tx.outputs[0].revealed.coin))
             .expect("append merkle");
 
         // Try to decrypt output note
-        let note = tx.outputs[0].enc_note.decrypt(&secret).expect("note should be destined for us");
+        let note = tx.outputs[0]
+            .enc_note
+            .decrypt(&secret)
+            .expect("note should be destined for us");
         note
     };
     let mut witness = IncrementalWitness::from_tree(&tree);
@@ -91,7 +93,7 @@ fn txbuilding() {
             merkle_path: auth_path,
             merkle_root: tree,
             secret,
-            note
+            note,
         }],
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
     };
