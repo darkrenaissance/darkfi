@@ -26,7 +26,7 @@ pub struct TransactionBuilder {
 
 impl TransactionBuilder {
     fn compute_remainder_blind(
-        clear_inputs: &Vec<TransactionClearInput>,
+        clear_inputs: &Vec<PartialTransactionClearInput>,
         input_blinds: &Vec<jubjub::Fr>,
         output_blinds: &Vec<jubjub::Fr>,
     ) -> jubjub::Fr {
@@ -54,10 +54,14 @@ impl TransactionBuilder {
     ) -> Transaction {
         let mut clear_inputs = vec![];
         for input in &self.clear_inputs {
+            let signature_public =
+                zcash_primitives::constants::SPENDING_KEY_GENERATOR * input.signature_secret;
+
             let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-            let clear_input = TransactionClearInput {
+            let clear_input = PartialTransactionClearInput {
                 value: input.value,
                 valcom_blind,
+                signature_public
             };
             clear_inputs.push(clear_input);
         }
@@ -69,8 +73,6 @@ impl TransactionBuilder {
             input_blinds.push(input.note.valcom_blind.clone());
 
             let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-            let signature_public =
-                zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
 
             // make proof
 
@@ -148,6 +150,14 @@ impl TransactionBuilder {
             .encode(&mut unsigned_tx_data)
             .expect("TODO handle this");
 
+        let mut clear_inputs = vec![];
+        for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
+            let secret = schnorr::SecretKey(info.signature_secret.clone());
+            let signature = secret.sign(&unsigned_tx_data[..]);
+            let input = TransactionClearInput::from_partial(input, signature);
+            clear_inputs.push(input);
+        }
+
         let mut inputs = vec![];
         for (input, signature_secret) in partial_tx
             .inputs
@@ -160,7 +170,7 @@ impl TransactionBuilder {
         }
 
         Transaction {
-            clear_inputs: partial_tx.clear_inputs,
+            clear_inputs,
             inputs,
             outputs: partial_tx.outputs,
         }
@@ -169,6 +179,7 @@ impl TransactionBuilder {
 
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
+    pub signature_secret: jubjub::Fr,
 }
 
 pub struct TransactionBuilderInputInfo {
@@ -185,7 +196,7 @@ pub struct TransactionBuilderOutputInfo {
 }
 
 pub struct PartialTransaction {
-    pub clear_inputs: Vec<TransactionClearInput>,
+    pub clear_inputs: Vec<PartialTransactionClearInput>,
     pub inputs: Vec<PartialTransactionInput>,
     pub outputs: Vec<TransactionOutput>,
 }
@@ -239,7 +250,7 @@ impl Decodable for Transaction {
 impl Transaction {
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        len += self.clear_inputs.encode(&mut s)?;
+        len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
         len += self.outputs.encode(s)?;
         Ok(len)
@@ -280,6 +291,12 @@ impl Transaction {
         self
             .encode_without_signature(&mut unsigned_tx_data)
             .expect("TODO handle this");
+        for input in &self.clear_inputs {
+            let public = schnorr::PublicKey(input.signature_public.clone());
+            if !public.verify(&unsigned_tx_data[..], &input.signature) {
+                return false;
+            }
+        }
         for input in &self.inputs {
             let public = schnorr::PublicKey(input.revealed.signature_public.clone());
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
@@ -294,7 +311,46 @@ impl Transaction {
 pub struct TransactionClearInput {
     pub value: u64,
     pub valcom_blind: jubjub::Fr,
+    pub signature_public: jubjub::SubgroupPoint,
+    pub signature: schnorr::Signature,
 }
+
+impl TransactionClearInput {
+    fn from_partial(partial: PartialTransactionClearInput, signature: schnorr::Signature) -> Self {
+        Self {
+            value: partial.value,
+            valcom_blind: partial.valcom_blind,
+            signature_public: partial.signature_public,
+            signature
+        }
+    }
+
+    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.value.encode(&mut s)?;
+        len += self.valcom_blind.encode(&mut s)?;
+        len += self.signature_public.encode(s)?;
+        Ok(len)
+    }
+}
+
+macro_rules! impl_vec_without_signature {
+    ($type: ty) => {
+        impl EncodableWithoutSignature for Vec<$type> {
+            #[inline]
+            fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+                let mut len = 0;
+                len += VarInt(self.len() as u64).encode(&mut s)?;
+                for c in self.iter() {
+                    len += c.encode_without_signature(&mut s)?;
+                }
+                Ok(len)
+            }
+        }
+    };
+}
+
+impl_vec_without_signature!(TransactionClearInput);
 
 impl_vec!(TransactionClearInput);
 
@@ -303,6 +359,8 @@ impl Encodable for TransactionClearInput {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
+        len += self.signature_public.encode(&mut s)?;
+        len += self.signature.encode(s)?;
         Ok(len)
     }
 }
@@ -311,7 +369,37 @@ impl Decodable for TransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(d)?,
+            valcom_blind: Decodable::decode(&mut d)?,
+            signature_public: Decodable::decode(&mut d)?,
+            signature: Decodable::decode(d)?,
+        })
+    }
+}
+
+pub struct PartialTransactionClearInput {
+    pub value: u64,
+    pub valcom_blind: jubjub::Fr,
+    pub signature_public: jubjub::SubgroupPoint,
+}
+
+impl_vec!(PartialTransactionClearInput);
+
+impl Encodable for PartialTransactionClearInput {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.value.encode(&mut s)?;
+        len += self.valcom_blind.encode(&mut s)?;
+        len += self.signature_public.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for PartialTransactionClearInput {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            value: Decodable::decode(&mut d)?,
+            valcom_blind: Decodable::decode(&mut d)?,
+            signature_public: Decodable::decode(&mut d)?,
         })
     }
 }
@@ -368,16 +456,7 @@ trait EncodableWithoutSignature {
     fn encode_without_signature<S: io::Write>(&self, s: S) -> Result<usize>;
 }
 
-impl EncodableWithoutSignature for Vec<TransactionInput> {
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += VarInt(self.len() as u64).encode(&mut s)?;
-        for c in self.iter() {
-            len += c.encode_without_signature(&mut s)?;
-        }
-        Ok(len)
-    }
-}
+impl_vec_without_signature!(TransactionInput);
 
 impl Encodable for TransactionInput {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
