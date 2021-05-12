@@ -11,7 +11,7 @@ use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
-
+use sapvi::rpc::jsonserver::RpcInterface;
 use sapvi::{net, Result};
 
 /// Listens for incoming connections and serves them.
@@ -73,69 +73,69 @@ async fn listen(
     }
 }
 
-struct RpcInterface {
-    p2p: Arc<net::P2p>,
-    started: Mutex<bool>,
-    stop_send: async_channel::Sender<()>,
-    stop_recv: async_channel::Receiver<()>,
-}
-
-impl RpcInterface {
-    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
-        let (stop_send, stop_recv) = async_channel::unbounded::<()>();
-
-        Arc::new(Self {
-            p2p,
-            started: Mutex::new(false),
-            stop_send,
-            stop_recv,
-        })
-    }
-
-    async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
-        info!("RPC serving {}", req.url());
-
-        let request = req.body_string().await?;
-
-        let mut io = jsonrpc_core::IoHandler::new();
-        io.add_sync_method("say_hello", |_| {
-            Ok(jsonrpc_core::Value::String("Hello World!".into()))
-        });
-
-        let self2 = self.clone();
-        io.add_method("get_info", move |_| {
-            let self2 = self2.clone();
-            async move {
-                Ok(json!({
-                    "started": *self2.started.lock().await,
-                    "connections": self2.p2p.connections_count().await
-                }))
-            }
-        });
-
-        let stop_send = self.stop_send.clone();
-        io.add_method("stop", move |_| {
-            let stop_send = stop_send.clone();
-            async move {
-                let _ = stop_send.send(()).await;
-                Ok(jsonrpc_core::Value::Null)
-            }
-        });
-
-        let response = io
-            .handle_request_sync(&request)
-            .ok_or(sapvi::Error::BadOperationType)?;
-
-        let mut res = Response::new(StatusCode::Ok);
-        res.insert_header("Content-Type", "text/plain");
-        res.set_body(response);
-        Ok(res)
-    }
-
-    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
-        Ok(self.stop_recv.recv().await?)
-    }
-}
+//struct RpcInterface {
+//    p2p: Arc<net::P2p>,
+//    started: Mutex<bool>,
+//    stop_send: async_channel::Sender<()>,
+//    stop_recv: async_channel::Receiver<()>,
+//}
+//
+//impl RpcInterface {
+//    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
+//        let (stop_send, stop_recv) = async_channel::unbounded::<()>();
+//
+//        Arc::new(Self {
+//            p2p,
+//            started: Mutex::new(false),
+//            stop_send,
+//            stop_recv,
+//        })
+//    }
+//
+//    async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
+//        info!("RPC serving {}", req.url());
+//
+//        let request = req.body_string().await?;
+//
+//        let mut io = jsonrpc_core::IoHandler::new();
+//        io.add_sync_method("say_hello", |_| {
+//            Ok(jsonrpc_core::Value::String("Hello World!".into()))
+//        });
+//
+//        let self2 = self.clone();
+//        io.add_method("get_info", move |_| {
+//            let self2 = self2.clone();
+//            async move {
+//                Ok(json!({
+//                    "started": *self2.started.lock().await,
+//                    "connections": self2.p2p.connections_count().await
+//                }))
+//            }
+//        });
+//
+//        let stop_send = self.stop_send.clone();
+//        io.add_method("stop", move |_| {
+//            let stop_send = stop_send.clone();
+//            async move {
+//                let _ = stop_send.send(()).await;
+//                Ok(jsonrpc_core::Value::Null)
+//            }
+//        });
+//
+//        let response = io
+//            .handle_request_sync(&request)
+//            .ok_or(sapvi::Error::BadOperationType)?;
+//
+//        let mut res = Response::new(StatusCode::Ok);
+//        res.insert_header("Content-Type", "text/plain");
+//        res.set_body(response);
+//        Ok(res)
+//    }
+//
+//    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
+//        Ok(self.stop_recv.recv().await?)
+//    }
+//}
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings);
