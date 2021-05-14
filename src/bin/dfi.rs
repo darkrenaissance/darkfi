@@ -6,13 +6,13 @@ use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use http_types::{Request, Response, StatusCode};
 use log::*;
+use sapvi::rpc::jsonserver::RpcInterface;
+use sapvi::{net, Result};
 use serde_json::json;
 use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
-use sapvi::rpc::jsonserver::RpcInterface;
-use sapvi::{net, Result};
 
 /// Listens for incoming connections and serves them.
 async fn listen(
