@@ -1,4 +1,7 @@
+use std::convert::TryInto;
+
 use super::reqrep::{Reply, Request};
+use super::ServicesError;
 use crate::serial::{deserialize, serialize};
 use crate::Result;
 
@@ -10,7 +13,9 @@ use zeromq::*;
 
 pub type Slabs = Vec<Vec<u8>>;
 
-pub struct GatewayService;
+pub struct GatewayService{
+    slabs: Slabs,
+}
 
 enum NetEvent {
     RECEIVE(zeromq::ZmqMessage),
@@ -35,7 +40,7 @@ impl GatewayService {
                 NetEvent::RECEIVE(request) => {
                     ex2.spawn(Self::handle_request(send_queue_s.clone(), request))
                         .detach();
-                }
+                    }
                 NetEvent::SEND(reply) => {
                     worker.send(reply).await?;
                 }
@@ -66,20 +71,54 @@ impl GatewayService {
 
 struct GatewayClient {
     slabs: Slabs,
+    sender: zeromq::ReqSocket,
 }
 
 impl GatewayClient {
     pub fn new() -> GatewayClient {
-        GatewayClient { slabs: vec![] }
+        let sender = zeromq::ReqSocket::new();
+        GatewayClient { slabs: vec![], sender}
     }
-    pub async fn start() {}
+    pub async fn start(&mut self) -> Result<()> {
 
-    pub async fn get_slab(index: u32) -> Vec<u8> {
-        vec![]
+        self.sender.connect("tcp://127.0.0.1:3333").await?;
+        Ok(())
+
+    }
+    async fn request(&mut self, command: GatewayCommand, data: Vec<u8>) ->  Result<Vec<u8>> {
+        let request = Request::new(command as u8, data);
+        let req = serialize(&request);
+        let req = bytes::Bytes::from(req);
+        
+        self.sender.send(req.into()).await?;
+
+        let rep: zeromq::ZmqMessage = self.sender.recv().await?;
+        let rep: &Bytes = rep.get(0).unwrap();
+        let rep: Vec<u8> = rep.to_vec();
+
+        let reply: Reply = deserialize(&rep)?;
+        
+        if reply.has_error() {
+            return Err(ServicesError::ResonseError("response has an error").into()); 
+        }
+
+        assert!(reply.get_id() == request.get_id());
+
+        Ok(reply.get_payload())
     }
 
-    pub async fn put_slab(&mut self, data: Vec<u8>) {
-        self.slabs.push(data);
+    pub async fn get_slab(&mut self, index: u32) -> Result<Vec<u8>> {
+        self.request(GatewayCommand::GETSLAB, index.to_be_bytes().to_vec()).await
+    }
+
+    pub async fn put_slab(&mut self, data: Vec<u8>) -> Result<()>{
+        self.request(GatewayCommand::GETSLAB, data).await?;
+        Ok(())
+    }
+    pub async fn get_last_index(&mut self) -> Result<u32>{
+        let rep = self.request(GatewayCommand::GETLASTINDEX, vec![]).await?;
+        let rep: [u8; 4] = rep.try_into().unwrap();
+        Ok(u32::from_be_bytes(rep))
     }
 }
 

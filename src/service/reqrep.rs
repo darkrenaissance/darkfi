@@ -86,6 +86,18 @@ impl Reply {
             payload,
         }
     }
+    
+    pub fn has_error(&self) -> bool {
+        if self.error == 0 { false } else { true } 
+    } 
+
+    pub fn get_payload(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.id
+    }
 }
 
 impl Encodable for Request {
