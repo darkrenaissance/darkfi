@@ -80,7 +80,9 @@ tobj = "2.0.4"
 fs_extra = "1.2"
 glob = "0.3"
 
-async_zmq = "0.3.2"
+# zmq
+zeromq = { git="https://github.com/zeromq/zmq.rs", default-features = false, features = ["async-std-runtime", "all-transport"] }
+bytes = "1.0.1"
 
 # wallet deps
 rocksdb = "0.16.0"

@@ -4,7 +4,7 @@ use crate::net::error::NetError;
 use crate::vm::ZKVMError;
 use rusqlite;
 
-use async_zmq::zmq;
+use zeromq;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -36,7 +36,7 @@ pub enum Error {
     VMError(ZKVMError),
     BadContract,
     Groth16Error(bellman::SynthesisError),
-    ZMQError(zmq::Error),
+    ZMQError(zeromq::ZmqError),
     RusqliteError(rusqlite::Error),
     OperationFailed,
     ConnectFailed,
@@ -101,8 +101,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<zmq::Error> for Error {
-    fn from(err: zmq::Error) -> Error {
+impl From<zeromq::ZmqError> for Error {
+    fn from(err: zeromq::ZmqError) -> Error {
         Error::ZMQError(err)
     }
 }
