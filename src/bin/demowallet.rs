@@ -7,8 +7,8 @@ use zeromq::*;
 async fn connect() -> Result<()> {
     let mut requester = zeromq::ReqSocket::new();
     requester.connect("tcp://127.0.0.1:3333").await?;
-    
-    println!("connected") ;
+
+    println!("connected");
 
     for request_nbr in 0..10 {
         println!("start sending");

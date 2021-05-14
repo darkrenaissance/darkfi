@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::net::error::NetError;
-use crate::vm::ZKVMError;
 use crate::service::ServicesError;
+use crate::vm::ZKVMError;
 use rusqlite;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -45,7 +45,7 @@ pub enum Error {
     Utf8Error,
     NoteDecryptionFailed,
     ServicesError(ServicesError),
-    ZMQError(zeromq::ZmqError)
+    ZMQError(zeromq::ZmqError),
 }
 
 impl std::error::Error for Error {}
@@ -96,7 +96,6 @@ impl fmt::Display for Error {
     }
 }
 
-
 impl From<ServicesError> for Error {
     fn from(err: ServicesError) -> Error {
         Error::ServicesError(err)
@@ -114,7 +113,6 @@ impl From<std::io::Error> for Error {
         Error::Io(err)
     }
 }
-
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Error {
