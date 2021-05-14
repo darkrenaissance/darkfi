@@ -128,8 +128,8 @@ name = "compile-shaders"
 path = "src/bin/compile-shaders.rs"
 
 [[bin]]
-name = "services"
-path = "src/bin/services.rs"
+name = "demoservices"
+path = "src/bin/demoservices.rs"
 
 [[bin]]
 name = "demowallet"
