@@ -69,6 +69,10 @@ impl Request {
     pub fn get_id(&self) -> u32 {
         self.id
     }
+
+    pub fn get_command(&self) -> u8 {
+        self.command
+    }
 }
 
 #[derive(Debug, PartialEq)]

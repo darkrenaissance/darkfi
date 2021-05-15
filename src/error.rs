@@ -1,7 +1,6 @@
 use std::fmt;
 
 use crate::net::error::NetError;
-use crate::service::ServicesError;
 use crate::vm::ZKVMError;
 use rusqlite;
 
@@ -44,7 +43,7 @@ pub enum Error {
     ServiceStopped,
     Utf8Error,
     NoteDecryptionFailed,
-    ServicesError(ServicesError),
+    ServicesError(&'static str),
     ZMQError(zeromq::ZmqError),
 }
 
@@ -93,12 +92,6 @@ impl fmt::Display for Error {
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
             Error::ZMQError(ref err) => write!(f, "zmq error: {}", err),
         }
-    }
-}
-
-impl From<ServicesError> for Error {
-    fn from(err: ServicesError) -> Error {
-        Error::ServicesError(err)
     }
 }
 

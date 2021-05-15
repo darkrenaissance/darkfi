@@ -151,7 +151,12 @@ impl TransactionBuilder {
 
         for (i, output) in self.clear_outputs.into_iter().enumerate() {
             let valcom_blind = if self.outputs.len() + i == last_output_index {
-                Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds, &clear_outputs)
+                Self::compute_remainder_blind(
+                    &clear_inputs,
+                    &input_blinds,
+                    &output_blinds,
+                    &clear_outputs,
+                )
             } else {
                 jubjub::Fr::random(&mut OsRng)
             };
@@ -159,7 +164,7 @@ impl TransactionBuilder {
             let output = TransactionClearOutput {
                 value: output.value,
                 valcom_blind,
-                instructions: output.instructions
+                instructions: output.instructions,
             };
             clear_outputs.push(output);
         }
@@ -168,7 +173,7 @@ impl TransactionBuilder {
             clear_inputs,
             inputs,
             outputs,
-            clear_outputs
+            clear_outputs,
         };
 
         let mut unsigned_tx_data = vec![];
@@ -199,14 +204,14 @@ impl TransactionBuilder {
             clear_inputs,
             inputs,
             outputs: partial_tx.outputs,
-            clear_outputs: partial_tx.clear_outputs
+            clear_outputs: partial_tx.clear_outputs,
         }
     }
 }
 
 pub struct TransactionBuilderClearOutputInfo {
     pub value: u64,
-    pub instructions: String
+    pub instructions: String,
 }
 
 pub struct TransactionBuilderClearInputInfo {
@@ -260,7 +265,7 @@ pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
-    pub clear_outputs: Vec<TransactionClearOutput>
+    pub clear_outputs: Vec<TransactionClearOutput>,
 }
 
 impl Encodable for Transaction {
@@ -553,7 +558,7 @@ impl Decodable for TransactionOutput {
 pub struct TransactionClearOutput {
     pub value: u64,
     pub valcom_blind: jubjub::Fr,
-    pub instructions: String
+    pub instructions: String,
 }
 
 impl_vec!(TransactionClearOutput);
@@ -577,4 +582,3 @@ impl Decodable for TransactionClearOutput {
         })
     }
 }
-
