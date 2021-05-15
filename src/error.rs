@@ -23,7 +23,7 @@ pub enum Error {
     /// Parsing error
     ParseFailed(&'static str),
     ParseIntError,
-    AsyncChannelError,
+    AsyncChannelError(String),
     MalformedPacket,
     AddrParseError,
     BadVariableRefType,
@@ -69,7 +69,7 @@ impl fmt::Display for Error {
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
-            Error::AsyncChannelError => f.write_str("async_channel error"),
+            Error::AsyncChannelError(ref err) => write!(f, "async_channel error: {}", err),
             Error::MalformedPacket => f.write_str("Malformed packet"),
             Error::AddrParseError => f.write_str("Unable to parse address"),
             Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
@@ -126,14 +126,14 @@ impl From<bellman::SynthesisError> for Error {
 }
 
 impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(_err: async_channel::SendError<T>) -> Error {
-        Error::AsyncChannelError
+    fn from(err: async_channel::SendError<T>) -> Error {
+        Error::AsyncChannelError(err.to_string())
     }
 }
 
 impl From<async_channel::RecvError> for Error {
-    fn from(_err: async_channel::RecvError) -> Error {
-        Error::AsyncChannelError
+    fn from(err: async_channel::RecvError) -> Error {
+        Error::AsyncChannelError(err.to_string())
     }
 }
 
