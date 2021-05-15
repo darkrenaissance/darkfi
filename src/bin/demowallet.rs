@@ -1,41 +1,37 @@
 use async_executor::Executor;
-use easy_parallel::Parallel;
 use async_std::sync::{Arc, Mutex};
+use easy_parallel::Parallel;
 
-use sapvi::Result;
 use sapvi::service::gateway::GatewayClient;
+use sapvi::Result;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-
-    let mut client =
-        GatewayClient::new(
-            String::from("tcp://127.0.0.1:3333"),
-        );
+    let mut client = GatewayClient::new(String::from("tcp://127.0.0.1:3333"));
 
     client.start().await?;
     println!("connected to a server");
 
     let slabs = Arc::new(Mutex::new(vec![]));
 
-    let subscriber = client.subscribe(
-        String::from("tcp://127.0.0.1:4444")
-    ).await?;
+    let subscriber = client
+        .subscribe(String::from("tcp://127.0.0.1:4444"))
+        .await?;
 
     println!("subscription ready");
 
+    let fetch_loop_task = executor.spawn(GatewayClient::fetch_slabs_loop(
+        subscriber.clone(),
+        slabs.clone(),
+    ));
 
-    let fetch_loop_task = executor.spawn(GatewayClient::fetch_slabs_loop(subscriber.clone(), slabs.clone()));
-
-    client.put_slab(vec![0,0,0,0]).await?;
-    client.put_slab(vec![0,0,0,0]).await?;
-    client.put_slab(vec![0,0,0,0]).await?;
+    client.put_slab(vec![0, 0, 0, 0]).await?;
+    client.put_slab(vec![0, 0, 0, 0]).await?;
+    client.put_slab(vec![0, 0, 0, 0]).await?;
 
     fetch_loop_task.cancel().await;
 
     Ok(())
 }
-
-
 
 fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());

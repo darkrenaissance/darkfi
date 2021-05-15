@@ -1,7 +1,7 @@
-use std::convert::TryInto;
 use async_std::sync::{Arc, Mutex};
+use std::convert::TryInto;
 
-use super::reqrep::{Reply, Request, RepProtocol, ReqProtocol, Publisher, Subscriber};
+use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{Error, Result};
 
 use async_executor::Executor;
@@ -11,28 +11,29 @@ pub type Slabs = Vec<Vec<u8>>;
 pub struct GatewayService {
     slabs: Mutex<Slabs>,
     addr: String,
-    publisher: Mutex<Publisher>
+    publisher: Mutex<Publisher>,
 }
 
 impl GatewayService {
-    pub fn new(addr: String, pub_addr: String) -> Arc<GatewayService>{
+    pub fn new(addr: String, pub_addr: String) -> Arc<GatewayService> {
         let slabs = Mutex::new(vec![]);
         let publisher = Mutex::new(Publisher::new(pub_addr));
         Arc::new(GatewayService {
             slabs,
             addr,
-            publisher
+            publisher,
         })
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-
         let (send_queue_s, send_queue_r) = async_channel::unbounded::<Reply>();
         let (recv_queue_s, recv_queue_r) = async_channel::unbounded::<Request>();
 
-
-        let mut reqrep = RepProtocol::new(self.addr.clone(), send_queue_r.clone(), recv_queue_s.clone(),);
-
+        let mut reqrep = RepProtocol::new(
+            self.addr.clone(),
+            send_queue_r.clone(),
+            recv_queue_s.clone(),
+        );
 
         reqrep.start().await?;
         println!("server started");
@@ -41,7 +42,8 @@ impl GatewayService {
 
         println!("publisher started");
 
-        let handle_request_task = executor.spawn(self.handle_request(send_queue_s.clone(), recv_queue_r.clone()));
+        let handle_request_task =
+            executor.spawn(self.handle_request(send_queue_s.clone(), recv_queue_r.clone()));
 
         reqrep.run().await?;
 
@@ -54,11 +56,10 @@ impl GatewayService {
         send_queue: async_channel::Sender<Reply>,
         recv_queue: async_channel::Receiver<Request>,
     ) -> Result<()> {
-
         let data = vec![];
 
         loop {
-            match recv_queue.recv().await{
+            match recv_queue.recv().await {
                 Ok(request) => {
                     match request.get_command() {
                         0 => {
@@ -85,7 +86,6 @@ impl GatewayService {
                     }
                     let rep = Reply::from(&request, 0, data.clone());
                     send_queue.send(rep.into()).await?;
-
                 }
                 Err(_) => {}
             }
@@ -100,9 +100,7 @@ pub struct GatewayClient {
 impl GatewayClient {
     pub fn new(addr: String) -> GatewayClient {
         let protocol = ReqProtocol::new(addr);
-        GatewayClient {
-            protocol,
-        }
+        GatewayClient { protocol }
     }
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
@@ -116,26 +114,35 @@ impl GatewayClient {
     }
 
     pub async fn get_slab(&mut self, index: u32) -> Result<Vec<u8>> {
-        self.protocol.request(GatewayCommand::GetSlab as u8, index.to_be_bytes().to_vec())
+        self.protocol
+            .request(GatewayCommand::GetSlab as u8, index.to_be_bytes().to_vec())
             .await
     }
 
     pub async fn put_slab(&mut self, data: Vec<u8>) -> Result<()> {
-        self.protocol.request(GatewayCommand::PutSlab as u8, data.clone()).await?;
+        self.protocol
+            .request(GatewayCommand::PutSlab as u8, data.clone())
+            .await?;
         Ok(())
     }
     pub async fn get_last_index(&mut self) -> Result<u32> {
-        let rep = self.protocol.request(GatewayCommand::GetLastIndex as u8, vec![]).await?;
+        let rep = self
+            .protocol
+            .request(GatewayCommand::GetLastIndex as u8, vec![])
+            .await?;
         let rep: [u8; 4] = rep.try_into().unwrap();
         Ok(u32::from_be_bytes(rep))
     }
 
-    pub async fn fetch_slabs_loop(subscriber: Arc<Mutex<Subscriber>>, slabs: Arc<Mutex<Slabs>>) -> Result<()>{
+    pub async fn fetch_slabs_loop(
+        subscriber: Arc<Mutex<Subscriber>>,
+        slabs: Arc<Mutex<Slabs>>,
+    ) -> Result<()> {
         loop {
             let mut subscriber = subscriber.lock().await;
             let slab = subscriber.fetch().await?;
 
-            println!("received new slab from subscriber"); 
+            println!("received new slab from subscriber");
             slabs.lock().await.push(slab);
         }
     }

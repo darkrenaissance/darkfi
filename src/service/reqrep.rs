@@ -1,7 +1,7 @@
 use std::io;
 
-use crate::{Decodable, Encodable, Result};
 use crate::serial::{deserialize, serialize};
+use crate::{Decodable, Encodable, Result};
 
 use bytes::Bytes;
 use futures::FutureExt;
@@ -13,8 +13,7 @@ enum NetEvent {
     Send(Reply),
 }
 
-
-pub struct RepProtocol{
+pub struct RepProtocol {
     addr: String,
     socket: zeromq::RepSocket,
     recv_queue: async_channel::Receiver<Reply>,
@@ -22,18 +21,18 @@ pub struct RepProtocol{
 }
 
 impl RepProtocol {
-    pub fn new(addr: String,
+    pub fn new(
+        addr: String,
         recv_queue: async_channel::Receiver<Reply>,
-        send_queue: async_channel::Sender<Request>
+        send_queue: async_channel::Sender<Request>,
     ) -> RepProtocol {
         let socket = zeromq::RepSocket::new();
-        RepProtocol{
+        RepProtocol {
             addr,
             socket,
             recv_queue,
             send_queue,
         }
-
     }
     pub async fn start(&mut self) -> Result<()> {
         self.socket.bind(self.addr.as_str()).await?;
@@ -61,10 +60,8 @@ impl RepProtocol {
                 }
             }
         }
-
     }
 }
-
 
 pub struct ReqProtocol {
     addr: String,
@@ -72,12 +69,9 @@ pub struct ReqProtocol {
 }
 
 impl ReqProtocol {
-    pub fn new(addr: String) -> ReqProtocol{
+    pub fn new(addr: String) -> ReqProtocol {
         let socket = zeromq::ReqSocket::new();
-        ReqProtocol {
-            addr,
-            socket
-        }
+        ReqProtocol { addr, socket }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -106,8 +100,6 @@ impl ReqProtocol {
 
         Ok(reply.get_payload())
     }
-
-
 }
 
 pub struct Publisher {
@@ -115,60 +107,49 @@ pub struct Publisher {
     socket: zeromq::PubSocket,
 }
 
-
-
 impl Publisher {
     pub fn new(addr: String) -> Publisher {
         let socket = zeromq::PubSocket::new();
-        Publisher{
-            addr,
-            socket
-        }
+        Publisher { addr, socket }
     }
     pub async fn start(&mut self) -> Result<()> {
         self.socket.bind(self.addr.as_str()).await?;
         Ok(())
     }
 
-    pub async fn publish(&mut self, data: Vec<u8>) -> Result<()>{
+    pub async fn publish(&mut self, data: Vec<u8>) -> Result<()> {
         let data = Bytes::from(data);
         self.socket.send(data.into()).await?;
         Ok(())
     }
 }
 
-pub struct Subscriber{
+pub struct Subscriber {
     addr: String,
-    socket: zeromq::SubSocket
+    socket: zeromq::SubSocket,
 }
 
 impl Subscriber {
     pub fn new(addr: String) -> Subscriber {
         let socket = zeromq::SubSocket::new();
-        Subscriber{
-            addr,
-            socket
-        }
+        Subscriber { addr, socket }
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        self.socket
-            .connect(self.addr.as_str())
-            .await?;
+        self.socket.connect(self.addr.as_str()).await?;
 
         self.socket.subscribe("").await?;
 
         Ok(())
     }
 
-    pub async fn fetch(&mut self) -> Result<Vec<u8>>{
+    pub async fn fetch(&mut self) -> Result<Vec<u8>> {
         let data = self.socket.recv().await?;
         let data: &Bytes = data.get(0).unwrap();
         let data = data.to_vec();
         Ok(data)
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub struct Request {
@@ -301,6 +282,3 @@ mod tests {
         assert_eq!(deserialized_reply, Some(reply));
     }
 }
-
-
-
