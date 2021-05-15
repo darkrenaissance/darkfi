@@ -54,7 +54,6 @@ fn main() {
         }],
         inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
-        clear_outputs: vec![]
     };
 
     // We will 'compile' the tx, and then serialize it to this Vec<u8>
@@ -163,7 +162,6 @@ fn main() {
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public: public2 }],
-        clear_outputs: vec![]
     };
     // Build the tx
     let mut tx_data = vec![];
@@ -176,6 +174,4 @@ fn main() {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
         assert!(tx.verify(&mint_pvk, &spend_pvk));
     }
-
-    // Step 4 withdraw the funds
 }
