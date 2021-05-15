@@ -4,11 +4,17 @@ use std::sync::Arc;
 
 use sapvi::Result;
 
-use sapvi::service::{gateway, reqrep};
+use sapvi::service::gateway;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    executor.clone().spawn(reqrep::ReqRepAPI::start()).detach();
-    gateway::GatewayService::start(executor.clone()).await?;
+
+    let gateway =
+        gateway::GatewayService::new(
+            String::from("tcp://127.0.0.1:3333"),
+            String::from("tcp://127.0.0.1:4444")
+        );
+
+    gateway.start(executor.clone()).await?;
     Ok(())
 }
 
