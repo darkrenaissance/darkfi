@@ -22,6 +22,7 @@ pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
     pub inputs: Vec<TransactionBuilderInputInfo>,
     pub outputs: Vec<TransactionBuilderOutputInfo>,
+    pub clear_outputs: Vec<TransactionBuilderClearOutputInfo>,
 }
 
 impl TransactionBuilder {
@@ -29,6 +30,7 @@ impl TransactionBuilder {
         clear_inputs: &Vec<PartialTransactionClearInput>,
         input_blinds: &Vec<jubjub::Fr>,
         output_blinds: &Vec<jubjub::Fr>,
+        clear_outputs: &Vec<TransactionClearOutput>,
     ) -> jubjub::Fr {
         let mut total = jubjub::Fr::zero();
 
@@ -42,6 +44,10 @@ impl TransactionBuilder {
 
         for output_blind in output_blinds {
             total -= output_blind;
+        }
+
+        for output in clear_outputs {
+            total -= output.valcom_blind;
         }
 
         total
@@ -98,11 +104,13 @@ impl TransactionBuilder {
             inputs.push(input);
         }
 
+        let last_output_index = self.outputs.len() + self.clear_outputs.len() - 1;
+
         let mut outputs = vec![];
         let mut output_blinds = vec![];
         for (i, output) in self.outputs.iter().enumerate() {
-            let valcom_blind = if i == self.outputs.len() - 1 {
-                Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds)
+            let valcom_blind = if i == last_output_index {
+                Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds, &vec![])
             } else {
                 jubjub::Fr::random(&mut OsRng)
             };
@@ -139,10 +147,28 @@ impl TransactionBuilder {
             outputs.push(output);
         }
 
+        let mut clear_outputs = vec![];
+
+        for (i, output) in self.clear_outputs.into_iter().enumerate() {
+            let valcom_blind = if self.outputs.len() + i == last_output_index {
+                Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds, &clear_outputs)
+            } else {
+                jubjub::Fr::random(&mut OsRng)
+            };
+
+            let output = TransactionClearOutput {
+                value: output.value,
+                valcom_blind,
+                instructions: output.instructions
+            };
+            clear_outputs.push(output);
+        }
+
         let partial_tx = PartialTransaction {
             clear_inputs,
             inputs,
             outputs,
+            clear_outputs
         };
 
         let mut unsigned_tx_data = vec![];
@@ -173,8 +199,14 @@ impl TransactionBuilder {
             clear_inputs,
             inputs,
             outputs: partial_tx.outputs,
+            clear_outputs: partial_tx.clear_outputs
         }
     }
+}
+
+pub struct TransactionBuilderClearOutputInfo {
+    pub value: u64,
+    pub instructions: String
 }
 
 pub struct TransactionBuilderClearInputInfo {
@@ -199,6 +231,7 @@ pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
     pub inputs: Vec<PartialTransactionInput>,
     pub outputs: Vec<TransactionOutput>,
+    pub clear_outputs: Vec<TransactionClearOutput>,
 }
 
 impl Encodable for PartialTransaction {
@@ -206,7 +239,8 @@ impl Encodable for PartialTransaction {
         let mut len = 0;
         len += self.clear_inputs.encode(&mut s)?;
         len += self.inputs.encode(&mut s)?;
-        len += self.outputs.encode(s)?;
+        len += self.outputs.encode(&mut s)?;
+        len += self.clear_outputs.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -216,7 +250,8 @@ impl Decodable for PartialTransaction {
         Ok(Self {
             clear_inputs: Decodable::decode(&mut d)?,
             inputs: Decodable::decode(&mut d)?,
-            outputs: Decodable::decode(d)?,
+            outputs: Decodable::decode(&mut d)?,
+            clear_outputs: Decodable::decode(&mut d)?,
         })
     }
 }
@@ -225,6 +260,7 @@ pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
+    pub clear_outputs: Vec<TransactionClearOutput>
 }
 
 impl Encodable for Transaction {
@@ -232,7 +268,8 @@ impl Encodable for Transaction {
         let mut len = 0;
         len += self.clear_inputs.encode(&mut s)?;
         len += self.inputs.encode(&mut s)?;
-        len += self.outputs.encode(s)?;
+        len += self.outputs.encode(&mut s)?;
+        len += self.clear_outputs.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -242,7 +279,8 @@ impl Decodable for Transaction {
         Ok(Self {
             clear_inputs: Decodable::decode(&mut d)?,
             inputs: Decodable::decode(&mut d)?,
-            outputs: Decodable::decode(d)?,
+            outputs: Decodable::decode(&mut d)?,
+            clear_outputs: Decodable::decode(&mut d)?,
         })
     }
 }
@@ -252,7 +290,8 @@ impl Transaction {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
-        len += self.outputs.encode(s)?;
+        len += self.outputs.encode(&mut s)?;
+        len += self.clear_outputs.encode(&mut s)?;
         Ok(len)
     }
 
@@ -274,6 +313,7 @@ impl Transaction {
         }
         for input in &self.inputs {
             if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {
+                println!("spend fail");
                 return false;
             }
             valcom_total += &input.revealed.value_commit;
@@ -284,6 +324,9 @@ impl Transaction {
                 return false;
             }
             valcom_total -= &output.revealed.value_commit;
+        }
+        for output in &self.clear_outputs {
+            valcom_total -= Self::compute_value_commit(output.value, &output.valcom_blind);
         }
 
         // Verify signatures
@@ -507,3 +550,32 @@ impl Decodable for TransactionOutput {
         })
     }
 }
+
+pub struct TransactionClearOutput {
+    pub value: u64,
+    pub valcom_blind: jubjub::Fr,
+    pub instructions: String
+}
+
+impl_vec!(TransactionClearOutput);
+
+impl Encodable for TransactionClearOutput {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.value.encode(&mut s)?;
+        len += self.valcom_blind.encode(&mut s)?;
+        len += self.instructions.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for TransactionClearOutput {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            value: Decodable::decode(&mut d)?,
+            valcom_blind: Decodable::decode(&mut d)?,
+            instructions: Decodable::decode(&mut d)?,
+        })
+    }
+}
+
