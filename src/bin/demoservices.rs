@@ -8,8 +8,7 @@ use sapvi::service::{gateway, reqrep};
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     executor.clone().spawn(reqrep::ReqRepAPI::start()).detach();
-
-    gateway::GatewayService::start(executor.clone()).await;
+    gateway::GatewayService::start(executor.clone()).await?;
     Ok(())
 }
 

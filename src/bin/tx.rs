@@ -48,7 +48,10 @@ fn main() {
     // Create the deposit for 110 BTC
     // Clear inputs are visible to everyone on the network
     let builder = tx::TransactionBuilder {
-        clear_inputs: vec![tx::TransactionBuilderClearInputInfo { value: 110, signature_secret: cashier_secret }],
+        clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
+            value: 110,
+            signature_secret: cashier_secret,
+        }],
         inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
         clear_outputs: vec![]
@@ -176,4 +179,3 @@ fn main() {
 
     // Step 4 withdraw the funds
 }
-

@@ -67,7 +67,7 @@ impl TransactionBuilder {
             let clear_input = PartialTransactionClearInput {
                 value: input.value,
                 valcom_blind,
-                signature_public
+                signature_public,
             };
             clear_inputs.push(clear_input);
         }
@@ -331,8 +331,7 @@ impl Transaction {
 
         // Verify signatures
         let mut unsigned_tx_data = vec![];
-        self
-            .encode_without_signature(&mut unsigned_tx_data)
+        self.encode_without_signature(&mut unsigned_tx_data)
             .expect("TODO handle this");
         for input in &self.clear_inputs {
             let public = schnorr::PublicKey(input.signature_public.clone());
@@ -364,7 +363,7 @@ impl TransactionClearInput {
             value: partial.value,
             valcom_blind: partial.valcom_blind,
             signature_public: partial.signature_public,
-            signature
+            signature,
         }
     }
 

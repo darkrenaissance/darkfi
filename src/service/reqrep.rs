@@ -2,56 +2,45 @@ use std::io;
 
 use crate::{Decodable, Encodable, Result};
 
-use async_zmq::zmq;
+use futures::FutureExt;
 use rand::Rng;
+use zeromq::*;
 
 pub struct ReqRepAPI;
 
 impl ReqRepAPI {
-    pub async fn start() {
-        let context = zmq::Context::new();
-        let frontend = context.socket(zmq::ROUTER).unwrap();
-        let backend = context.socket(zmq::DEALER).unwrap();
+    pub async fn start() -> Result<()> {
+        println!("start reqrep");
 
-        frontend
-            .bind("tcp://127.0.0.1:3333")
-            .expect("failed binding frontend");
-        backend
-            .bind("tcp://127.0.0.1:4444")
-            .expect("failed binding backend");
+        let mut frontend = zeromq::RouterSocket::new();
+        frontend.bind("tcp://127.0.0.1:3333").await?;
 
+        let mut backend = zeromq::DealerSocket::new();
+        backend.bind("tcp://127.0.0.1:4444").await?;
         loop {
-            let mut items = [
-                frontend.as_poll_item(zmq::POLLIN),
-                backend.as_poll_item(zmq::POLLIN),
-            ];
-
-            zmq::poll(&mut items, -1).unwrap();
-
-            if items[0].is_readable() {
-                loop {
-                    let message = frontend.recv_msg(0).unwrap();
-                    let more = message.get_more();
-                    backend
-                        .send(message, if more { zmq::SNDMORE } else { 0 })
-                        .unwrap();
-                    if !more {
-                        break;
+            println!("start reqrep loop");
+            futures::select! {
+                frontend_mess = frontend.recv().fuse() => {
+                    match frontend_mess {
+                        Ok(message) => {
+                            backend.send(message).await?;
+                        }
+                        Err(_) => {
+                            // TODO
+                        }
+                    }
+                },
+                backend_mess = backend.recv().fuse() => {
+                    match backend_mess {
+                        Ok(message) => {
+                            frontend.send(message).await?;
+                        }
+                        Err(_) => {
+                            // TODO
+                        }
                     }
                 }
-            }
-            if items[1].is_readable() {
-                loop {
-                    let message = backend.recv_msg(0).unwrap();
-                    let more = message.get_more();
-                    frontend
-                        .send(message, if more { zmq::SNDMORE } else { 0 })
-                        .unwrap();
-                    if !more {
-                        break;
-                    }
-                }
-            }
+            };
         }
     }
 }
@@ -96,6 +85,22 @@ impl Reply {
             error,
             payload,
         }
+    }
+
+    pub fn has_error(&self) -> bool {
+        if self.error == 0 {
+            false
+        } else {
+            true
+        }
+    }
+
+    pub fn get_payload(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.id
     }
 }
 

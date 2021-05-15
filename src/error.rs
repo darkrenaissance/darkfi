@@ -1,10 +1,9 @@
 use std::fmt;
 
 use crate::net::error::NetError;
+use crate::service::ServicesError;
 use crate::vm::ZKVMError;
 use rusqlite;
-
-use async_zmq::zmq;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -36,7 +35,6 @@ pub enum Error {
     VMError(ZKVMError),
     BadContract,
     Groth16Error(bellman::SynthesisError),
-    ZMQError(zmq::Error),
     RusqliteError(rusqlite::Error),
     OperationFailed,
     ConnectFailed,
@@ -46,6 +44,8 @@ pub enum Error {
     ServiceStopped,
     Utf8Error,
     NoteDecryptionFailed,
+    ServicesError(ServicesError),
+    ZMQError(zeromq::ZmqError),
 }
 
 impl std::error::Error for Error {}
@@ -81,7 +81,6 @@ impl fmt::Display for Error {
             Error::VMError(_) => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
-            Error::ZMQError(ref err) => write!(f, "ZMQ error: {}", err),
             Error::RusqliteError(ref err) => write!(f, "Rusqlite error: {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
             Error::ConnectFailed => f.write_str("Connection failed"),
@@ -91,19 +90,27 @@ impl fmt::Display for Error {
             Error::ServiceStopped => f.write_str("Service stopped"),
             Error::Utf8Error => f.write_str("Malformed UTF8"),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
+            Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
+            Error::ZMQError(ref err) => write!(f, "zmq error: {}", err),
         }
+    }
+}
+
+impl From<ServicesError> for Error {
+    fn from(err: ServicesError) -> Error {
+        Error::ServicesError(err)
+    }
+}
+
+impl From<zeromq::ZmqError> for Error {
+    fn from(err: zeromq::ZmqError) -> Error {
+        Error::ZMQError(err)
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::Io(err)
-    }
-}
-
-impl From<zmq::Error> for Error {
-    fn from(err: zmq::Error) -> Error {
-        Error::ZMQError(err)
     }
 }
 
