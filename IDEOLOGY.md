@@ -1,7 +1,6 @@
-% The Sociology of Freedom
-% Abdullah Ocalan
-
 # Definition of Democratic Civilization
+
+From "The Sociology of Freedom" by Abdullah Ocalan.
 
 The school of social science that postulates the examination of the
 existence and development of social nature on the basis of moral and
