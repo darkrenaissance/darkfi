@@ -1,30 +1,54 @@
-use sapvi::service::reqrep::{Reply, Request};
-use sapvi::{serial, Result};
+use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
+use easy_parallel::Parallel;
 
-use bytes::Bytes;
-use zeromq::*;
+use sapvi::service::gateway::GatewayClient;
+use sapvi::Result;
 
-async fn connect() -> Result<()> {
-    let mut requester = zeromq::ReqSocket::new();
-    requester.connect("tcp://127.0.0.1:3333").await?;
+async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
+    let mut client = GatewayClient::new(String::from("tcp://127.0.0.1:3333"));
 
-    println!("connected");
+    client.start().await?;
+    println!("connected to a server");
 
-    for request_nbr in 0..10 {
-        println!("start sending");
-        let req = Request::new(0, "test".as_bytes().to_vec());
-        let req = serial::serialize(&req);
-        let req = bytes::Bytes::from(req);
-        requester.send(req.into()).await?;
-        let message: zeromq::ZmqMessage = requester.recv().await?;
-        let message: &Bytes = message.get(0).unwrap();
-        let message: Vec<u8> = message.to_vec();
-        let rep: Reply = serial::deserialize(&message).unwrap();
-        println!("Received reply {:?} {:?}", request_nbr, rep);
-    }
+    let slabs = Arc::new(Mutex::new(vec![]));
+
+    let subscriber = client
+        .subscribe(String::from("tcp://127.0.0.1:4444"))
+        .await?;
+
+    println!("subscription ready");
+
+    let fetch_loop_task = executor.spawn(GatewayClient::fetch_slabs_loop(
+        subscriber.clone(),
+        slabs.clone(),
+    ));
+
+    client.put_slab(vec![0, 0, 0, 0]).await?;
+    client.put_slab(vec![0, 0, 0, 0]).await?;
+    client.put_slab(vec![0, 0, 0, 0]).await?;
+
+    fetch_loop_task.cancel().await;
+
     Ok(())
 }
 
-fn main() {
-    futures::executor::block_on(connect()).unwrap();
+fn main() -> Result<()> {
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+    let ex2 = ex.clone();
+
+    let (_, result) = Parallel::new()
+        // Run four executor threads.
+        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2).await?;
+                drop(signal);
+                Ok::<(), sapvi::Error>(())
+            })
+        });
+
+    result
 }

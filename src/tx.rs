@@ -178,6 +178,11 @@ impl TransactionBuilder {
     }
 }
 
+pub struct TransactionBuilderClearOutputInfo {
+    pub value: u64,
+    pub instructions: String,
+}
+
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
     pub signature_secret: jubjub::Fr,
@@ -307,7 +312,7 @@ impl Transaction {
             }
         }
 
-            Ok(())
+        Ok(())
     }
 }
 

@@ -1,8 +1,7 @@
-use std::fmt;
 use rusqlite;
+use std::fmt;
 
 use crate::net::error::NetError;
-use crate::service::ServicesError;
 use crate::state;
 use crate::vm::ZKVMError;
 
@@ -25,7 +24,7 @@ pub enum Error {
     /// Parsing error
     ParseFailed(&'static str),
     ParseIntError,
-    AsyncChannelError,
+    AsyncChannelError(String),
     MalformedPacket,
     AddrParseError,
     BadVariableRefType,
@@ -45,7 +44,7 @@ pub enum Error {
     ServiceStopped,
     Utf8Error,
     NoteDecryptionFailed,
-    ServicesError(ServicesError),
+    ServicesError(&'static str),
     ZMQError(zeromq::ZmqError),
     VerifyFailed(state::VerifyFailed),
 }
@@ -72,7 +71,7 @@ impl fmt::Display for Error {
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
-            Error::AsyncChannelError => f.write_str("async_channel error"),
+            Error::AsyncChannelError(ref err) => write!(f, "async_channel error: {}", err),
             Error::MalformedPacket => f.write_str("Malformed packet"),
             Error::AddrParseError => f.write_str("Unable to parse address"),
             Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
@@ -96,12 +95,6 @@ impl fmt::Display for Error {
             Error::ZMQError(ref err) => write!(f, "zmq error: {}", err),
             Error::VerifyFailed(ref err) => write!(f, "Verify failed: {}", err),
         }
-    }
-}
-
-impl From<ServicesError> for Error {
-    fn from(err: ServicesError) -> Error {
-        Error::ServicesError(err)
     }
 }
 
@@ -136,14 +129,14 @@ impl From<bellman::SynthesisError> for Error {
 }
 
 impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(_err: async_channel::SendError<T>) -> Error {
-        Error::AsyncChannelError
+    fn from(err: async_channel::SendError<T>) -> Error {
+        Error::AsyncChannelError(err.to_string())
     }
 }
 
 impl From<async_channel::RecvError> for Error {
-    fn from(_err: async_channel::RecvError) -> Error {
-        Error::AsyncChannelError
+    fn from(err: async_channel::RecvError) -> Error {
+        Error::AsyncChannelError(err.to_string())
     }
 }
 
@@ -183,4 +176,3 @@ impl From<state::VerifyFailed> for Error {
         Error::VerifyFailed(err)
     }
 }
-

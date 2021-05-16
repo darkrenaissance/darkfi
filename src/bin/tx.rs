@@ -22,7 +22,7 @@ use sapvi::tx;
 struct MemoryState {
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    cashier_public: jubjub::SubgroupPoint
+    cashier_public: jubjub::SubgroupPoint,
 }
 
 impl ProgramState for MemoryState {
@@ -39,8 +39,7 @@ impl ProgramState for MemoryState {
 }
 
 impl MemoryState {
-    fn apply(updates: StateUpdates) {
-    }
+    fn apply(updates: StateUpdates) {}
 }
 
 fn main() {
@@ -66,7 +65,7 @@ fn main() {
     let state = MemoryState {
         mint_pvk,
         spend_pvk,
-        cashier_public
+        cashier_public,
     };
 
     // Wallet 1 creates a secret key
@@ -193,7 +192,10 @@ fn main() {
         }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public: public2 }],
+        outputs: vec![tx::TransactionBuilderOutputInfo {
+            value: 110,
+            public: public2,
+        }],
     };
     // Build the tx
     let mut tx_data = vec![];

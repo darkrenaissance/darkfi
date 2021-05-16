@@ -1,47 +1,153 @@
 use std::io;
 
+use crate::serial::{deserialize, serialize};
 use crate::{Decodable, Encodable, Result};
 
+use bytes::Bytes;
 use futures::FutureExt;
 use rand::Rng;
 use zeromq::*;
 
-pub struct ReqRepAPI;
+enum NetEvent {
+    Receive(zeromq::ZmqMessage),
+    Send(Reply),
+}
 
-impl ReqRepAPI {
-    pub async fn start() -> Result<()> {
-        println!("start reqrep");
+pub struct RepProtocol {
+    addr: String,
+    socket: zeromq::RepSocket,
+    recv_queue: async_channel::Receiver<Reply>,
+    send_queue: async_channel::Sender<Request>,
+}
 
-        let mut frontend = zeromq::RouterSocket::new();
-        frontend.bind("tcp://127.0.0.1:3333").await?;
-
-        let mut backend = zeromq::DealerSocket::new();
-        backend.bind("tcp://127.0.0.1:4444").await?;
-        loop {
-            println!("start reqrep loop");
-            futures::select! {
-                frontend_mess = frontend.recv().fuse() => {
-                    match frontend_mess {
-                        Ok(message) => {
-                            backend.send(message).await?;
-                        }
-                        Err(_) => {
-                            // TODO
-                        }
-                    }
-                },
-                backend_mess = backend.recv().fuse() => {
-                    match backend_mess {
-                        Ok(message) => {
-                            frontend.send(message).await?;
-                        }
-                        Err(_) => {
-                            // TODO
-                        }
-                    }
-                }
-            };
+impl RepProtocol {
+    pub fn new(
+        addr: String,
+        recv_queue: async_channel::Receiver<Reply>,
+        send_queue: async_channel::Sender<Request>,
+    ) -> RepProtocol {
+        let socket = zeromq::RepSocket::new();
+        RepProtocol {
+            addr,
+            socket,
+            recv_queue,
+            send_queue,
         }
+    }
+    pub async fn start(&mut self) -> Result<()> {
+        self.socket.bind(self.addr.as_str()).await?;
+        Ok(())
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        loop {
+            let event = futures::select! {
+                request = self.socket.recv().fuse() => NetEvent::Receive(request?),
+                reply = self.recv_queue.recv().fuse() => NetEvent::Send(reply?)
+            };
+
+            match event {
+                NetEvent::Receive(request) => {
+                    let request: &Bytes = request.get(0).unwrap();
+                    let request: Vec<u8> = request.to_vec();
+                    let req: Request = deserialize(&request)?;
+                    self.send_queue.send(req).await?;
+                }
+                NetEvent::Send(reply) => {
+                    let reply: Vec<u8> = serialize(&reply);
+                    let reply = Bytes::from(reply);
+                    self.socket.send(reply.into()).await?;
+                }
+            }
+        }
+    }
+}
+
+pub struct ReqProtocol {
+    addr: String,
+    socket: zeromq::ReqSocket,
+}
+
+impl ReqProtocol {
+    pub fn new(addr: String) -> ReqProtocol {
+        let socket = zeromq::ReqSocket::new();
+        ReqProtocol { addr, socket }
+    }
+
+    pub async fn start(&mut self) -> Result<()> {
+        self.socket.connect(self.addr.as_str()).await?;
+        Ok(())
+    }
+
+    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Vec<u8>> {
+        let request = Request::new(command, data);
+        let req = serialize(&request);
+        let req = bytes::Bytes::from(req);
+
+        self.socket.send(req.into()).await?;
+
+        let rep: zeromq::ZmqMessage = self.socket.recv().await?;
+        let rep: &Bytes = rep.get(0).unwrap();
+        let rep: Vec<u8> = rep.to_vec();
+
+        let reply: Reply = deserialize(&rep)?;
+
+        if reply.has_error() {
+            return Err(crate::Error::ServicesError("response has an error"));
+        }
+
+        assert!(reply.get_id() == request.get_id());
+
+        Ok(reply.get_payload())
+    }
+}
+
+pub struct Publisher {
+    addr: String,
+    socket: zeromq::PubSocket,
+}
+
+impl Publisher {
+    pub fn new(addr: String) -> Publisher {
+        let socket = zeromq::PubSocket::new();
+        Publisher { addr, socket }
+    }
+    pub async fn start(&mut self) -> Result<()> {
+        self.socket.bind(self.addr.as_str()).await?;
+        Ok(())
+    }
+
+    pub async fn publish(&mut self, data: Vec<u8>) -> Result<()> {
+        let data = Bytes::from(data);
+        self.socket.send(data.into()).await?;
+        Ok(())
+    }
+}
+
+pub struct Subscriber {
+    addr: String,
+    socket: zeromq::SubSocket,
+}
+
+impl Subscriber {
+    pub fn new(addr: String) -> Subscriber {
+        let socket = zeromq::SubSocket::new();
+        Subscriber { addr, socket }
+    }
+
+    pub async fn start(&mut self) -> Result<()> {
+        self.socket.connect(self.addr.as_str()).await?;
+
+        self.socket.subscribe("").await?;
+
+        Ok(())
+    }
+
+    pub async fn fetch(&mut self) -> Result<Vec<u8>> {
+        let data = self.socket.recv().await?;
+        let data: &Bytes = data.get(0).unwrap();
+        let data = data.to_vec();
+        Ok(data)
     }
 }
 
@@ -68,6 +174,14 @@ impl Request {
 
     pub fn get_id(&self) -> u32 {
         self.id
+    }
+
+    pub fn get_command(&self) -> u8 {
+        self.command
+    }
+
+    pub fn get_payload(&self) -> Vec<u8> {
+        self.payload.clone()
     }
 }
 
