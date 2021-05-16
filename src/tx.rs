@@ -17,6 +17,7 @@ use crate::crypto::{
 use crate::error::{Error, Result};
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
+use crate::state;
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -267,43 +268,46 @@ impl Transaction {
         &self,
         mint_pvk: &groth16::PreparedVerifyingKey<Bls12>,
         spend_pvk: &groth16::PreparedVerifyingKey<Bls12>,
-    ) -> bool {
+    ) -> std::result::Result<(), state::VerifyFailed> {
         let mut valcom_total = jubjub::SubgroupPoint::identity();
         for input in &self.clear_inputs {
             valcom_total += Self::compute_value_commit(input.value, &input.valcom_blind);
         }
-        for input in &self.inputs {
+        for (i, input) in self.inputs.iter().enumerate() {
             if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {
-                return false;
+                return Err(state::VerifyFailed::SpendProof(i));
             }
             valcom_total += &input.revealed.value_commit;
         }
-        for output in &self.outputs {
+        for (i, output) in self.outputs.iter().enumerate() {
             if !verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed) {
-                println!("mint fail");
-                return false;
+                return Err(state::VerifyFailed::SpendProof(i));
             }
             valcom_total -= &output.revealed.value_commit;
+        }
+
+        if valcom_total != jubjub::SubgroupPoint::identity() {
+            return Err(state::VerifyFailed::MissingFunds);
         }
 
         // Verify signatures
         let mut unsigned_tx_data = vec![];
         self.encode_without_signature(&mut unsigned_tx_data)
             .expect("TODO handle this");
-        for input in &self.clear_inputs {
+        for (i, input) in self.clear_inputs.iter().enumerate() {
             let public = schnorr::PublicKey(input.signature_public.clone());
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                return false;
+                return Err(state::VerifyFailed::ClearInputSignature(i));
             }
         }
-        for input in &self.inputs {
+        for (i, input) in self.inputs.iter().enumerate() {
             let public = schnorr::PublicKey(input.revealed.signature_public.clone());
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                return false;
+                return Err(state::VerifyFailed::InputSignature(i));
             }
         }
 
-        valcom_total == jubjub::SubgroupPoint::identity()
+            Ok(())
     }
 }
 

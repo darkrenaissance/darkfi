@@ -1,9 +1,10 @@
 use std::fmt;
+use rusqlite;
 
 use crate::net::error::NetError;
 use crate::service::ServicesError;
+use crate::state;
 use crate::vm::ZKVMError;
-use rusqlite;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -46,6 +47,7 @@ pub enum Error {
     NoteDecryptionFailed,
     ServicesError(ServicesError),
     ZMQError(zeromq::ZmqError),
+    VerifyFailed(state::VerifyFailed),
 }
 
 impl std::error::Error for Error {}
@@ -92,6 +94,7 @@ impl fmt::Display for Error {
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
             Error::ZMQError(ref err) => write!(f, "zmq error: {}", err),
+            Error::VerifyFailed(ref err) => write!(f, "Verify failed: {}", err),
         }
     }
 }
@@ -174,3 +177,10 @@ impl From<std::string::FromUtf8Error> for Error {
         Error::Utf8Error
     }
 }
+
+impl From<state::VerifyFailed> for Error {
+    fn from(err: state::VerifyFailed) -> Error {
+        Error::VerifyFailed(err)
+    }
+}
+

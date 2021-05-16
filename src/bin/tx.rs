@@ -16,7 +16,32 @@ use sapvi::crypto::{
 };
 use sapvi::error::{Error, Result};
 use sapvi::serial::{Decodable, Encodable, VarInt};
+use sapvi::state::{state_transition, ProgramState, StateUpdates};
 use sapvi::tx;
+
+struct MemoryState {
+    mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    cashier_public: jubjub::SubgroupPoint
+}
+
+impl ProgramState for MemoryState {
+    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
+        public == &self.cashier_public
+    }
+
+    fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
+        &self.mint_pvk
+    }
+    fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
+        &self.spend_pvk
+    }
+}
+
+impl MemoryState {
+    fn apply(updates: StateUpdates) {
+    }
+}
 
 fn main() {
     // Auto create trusted ceremony parameters if they don't exist
@@ -37,6 +62,12 @@ fn main() {
     let cashier_secret = jubjub::Fr::random(&mut OsRng);
     // This is their public key
     let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+
+    let state = MemoryState {
+        mint_pvk,
+        spend_pvk,
+        cashier_public
+    };
 
     // Wallet 1 creates a secret key
     let secret = jubjub::Fr::random(&mut OsRng);
@@ -79,12 +110,13 @@ fn main() {
     }
     // Now we receive the tx data
     let note = {
+        let txx = tx::Transaction::decode(&tx_data[..]).unwrap();
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        // Check the public key in the clear inputs
-        // It should be a valid public key for the cashier
-        assert_eq!(tx.clear_inputs[0].signature_public, cashier_public);
+
+        let update = state_transition(&state, txx).expect("step 2 state transition failed");
+
         // Check the tx verifies correctly
-        assert!(tx.verify(&mint_pvk, &spend_pvk));
+        //assert!(tx.verify(&mint_pvk, &spend_pvk));
         // Add the new coins to the merkle tree
         tree.append(Coin::new(tx.outputs[0].revealed.coin))
             .expect("append merkle");
@@ -172,6 +204,6 @@ fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        assert!(tx.verify(&mint_pvk, &spend_pvk));
+        //assert!(tx.verify(&mint_pvk, &spend_pvk));
     }
 }
