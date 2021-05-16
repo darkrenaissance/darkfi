@@ -14,6 +14,7 @@ pub const NOTE_PLAINTEXT_SIZE: usize = 32 + // serial
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
+#[derive(Clone)]
 pub struct Note {
     pub serial: jubjub::Fr,
     pub value: u64,

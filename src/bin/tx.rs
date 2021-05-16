@@ -10,7 +10,7 @@ use sapvi::crypto::{
     coin::Coin,
     create_mint_proof, create_spend_proof, load_params,
     merkle::{CommitmentTree, IncrementalWitness},
-    note::Note,
+    note::{EncryptedNote, Note},
     save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
 };
@@ -23,11 +23,18 @@ struct MemoryState {
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     cashier_public: jubjub::SubgroupPoint,
+    secrets: Vec<jubjub::Fr>,
 }
 
 impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
         public == &self.cashier_public
+    }
+    fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool {
+        true
+    }
+    fn nullifier_exists(&self, nullifier: &[u8; 32]) -> bool {
+        true
     }
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
@@ -35,6 +42,22 @@ impl ProgramState for MemoryState {
     }
     fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
         &self.spend_pvk
+    }
+
+    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<Note> {
+        // Loop through all our secret keys...
+        for secret in &self.secrets {
+            // ... attempt to decrypt the note ...
+            match ciphertext.decrypt(secret) {
+                Ok(note) => {
+                    // ... and return the decrypted note for this coin.
+                    return Some(note);
+                }
+                Err(_) => {}
+            }
+        }
+        // We weren't able to decrypt the note with any of our keys.
+        None
     }
 }
 
@@ -62,16 +85,17 @@ fn main() {
     // This is their public key
     let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
 
-    let state = MemoryState {
-        mint_pvk,
-        spend_pvk,
-        cashier_public,
-    };
-
     // Wallet 1 creates a secret key
     let secret = jubjub::Fr::random(&mut OsRng);
     // This is their public key
     let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+
+    let state = MemoryState {
+        mint_pvk,
+        spend_pvk,
+        cashier_public,
+        secrets: vec![secret.clone()],
+    };
 
     // Step 1: Cashier deposits to wallet1's address
 
@@ -107,42 +131,38 @@ fn main() {
         let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
         tree.append(cmu);
     }
+
+    // This contains the secret attributes so we can spend the coin
+    let mut notes = vec![];
     // Now we receive the tx data
-    let note = {
-        let txx = tx::Transaction::decode(&tx_data[..]).unwrap();
+    {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
 
-        let update = state_transition(&state, txx).expect("step 2 state transition failed");
+        let update = state_transition(&state, tx).expect("step 2 state transition failed");
 
-        // Check the tx verifies correctly
-        //assert!(tx.verify(&mint_pvk, &spend_pvk));
-        // Add the new coins to the merkle tree
-        tree.append(Coin::new(tx.outputs[0].revealed.coin))
-            .expect("append merkle");
+        for (coin, note) in update.coins {
+            // Add the new coins to the merkle tree
+            tree.append(Coin::new(coin)).expect("append merkle");
 
-        // Now for every new tx we receive, the wallets should iterate over all outputs
-        // and try to decrypt the coin's note.
-        // If they can successfully decrypt it, then it's a coin destined for us.
+            if let Some(note) = note {
+                // We need to keep track of the witness for this coin.
+                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+                // Just as we update the merkle tree with every new coin, so we do the same with the witness.
 
-        // Try to decrypt output note
-        let note = tx.outputs[0]
-            .enc_note
-            .decrypt(&secret)
-            .expect("note should be destined for us");
-        // This contains the secret attributes so we can spend the coin
-        note
-    };
+                // Derive the current witness from the current tree.
+                // This is done right after we add our coin to the tree (but before any other coins are added)
+                let witness = IncrementalWitness::from_tree(&tree);
+
+                notes.push((note, witness));
+            }
+        }
+    }
 
     // Wallet1 has received payment from the cashier.
     // Step 2 is complete.
+    assert_eq!(notes.len(), 1);
+    let (note, witness) = &mut notes[0];
 
-    // We need to keep track of the witness for this coin.
-    // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-    // Just as we update the merkle tree with every new coin, so we do the same with the witness.
-
-    // Derive the current witness from the current tree.
-    // This is done right after we add our coin to the tree (but before any other coins are added)
-    let mut witness = IncrementalWitness::from_tree(&tree);
     // Check this is the 6th coin we added
     assert_eq!(witness.position(), 5);
     assert_eq!(tree.root(), witness.root());
@@ -188,7 +208,7 @@ fn main() {
             merkle_path: auth_path,
             merkle_root: tree,
             secret,
-            note,
+            note: note.clone(),
         }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
@@ -206,6 +226,6 @@ fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        //assert!(tx.verify(&mint_pvk, &spend_pvk));
+        let update = state_transition(&state, tx).expect("step 3 state transition failed");
     }
 }
