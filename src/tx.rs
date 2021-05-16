@@ -273,7 +273,7 @@ impl Transaction {
         &self,
         mint_pvk: &groth16::PreparedVerifyingKey<Bls12>,
         spend_pvk: &groth16::PreparedVerifyingKey<Bls12>,
-    ) -> std::result::Result<(), state::VerifyFailed> {
+    ) -> state::VerifyResult<()> {
         let mut valcom_total = jubjub::SubgroupPoint::identity();
         for input in &self.clear_inputs {
             valcom_total += Self::compute_value_commit(input.value, &input.valcom_blind);

@@ -14,8 +14,11 @@ pub trait ProgramState {
 
 pub struct StateUpdates {}
 
+pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
+
 #[derive(Debug)]
 pub enum VerifyFailed {
+    InvalidCashierKey(usize),
     SpendProof(usize),
     MintProof(usize),
     ClearInputSignature(usize),
@@ -28,6 +31,9 @@ impl std::error::Error for VerifyFailed {}
 impl fmt::Display for VerifyFailed {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match *self {
+            VerifyFailed::InvalidCashierKey(i) => {
+                write!(f, "Invalid cashier public key for clear input {}", i)
+            }
             VerifyFailed::SpendProof(i) => write!(f, "Spend proof for input {}", i),
             VerifyFailed::MintProof(i) => write!(f, "Mint proof for input {}", i),
             VerifyFailed::ClearInputSignature(i) => {
@@ -41,7 +47,16 @@ impl fmt::Display for VerifyFailed {
     }
 }
 
-pub fn state_transition<S: ProgramState>(state: &S, tx: tx::Transaction) -> Result<StateUpdates> {
+pub fn state_transition<S: ProgramState>(
+    state: &S,
+    tx: tx::Transaction,
+) -> VerifyResult<StateUpdates> {
+    for (i, input) in tx.clear_inputs.iter().enumerate() {
+        if !state.is_valid_cashier_public_key(&input.signature_public) {
+            return Err(VerifyFailed::InvalidCashierKey(i));
+        }
+    }
+
     tx.verify(state.mint_pvk(), state.spend_pvk())?;
 
     /*
