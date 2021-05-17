@@ -26,26 +26,23 @@ impl GatewayService {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        let (send_queue_s, send_queue_r) = async_channel::unbounded::<Reply>();
-        let (recv_queue_s, recv_queue_r) = async_channel::unbounded::<Request>();
 
-        let mut reqrep = RepProtocol::new(
+        let mut socket = RepProtocol::new(
             self.addr.clone(),
-            send_queue_r.clone(),
-            recv_queue_s.clone(),
         );
 
-        reqrep.start().await?;
+        let (send, recv) = socket.start().await?;
         println!("server started");
 
         self.publisher.lock().await.start().await?;
 
         println!("publisher started");
 
-        let handle_request_task =
-            executor.spawn(self.handle_request(send_queue_s.clone(), recv_queue_r.clone()));
 
-        reqrep.run().await?;
+        let handle_request_task =
+            executor.spawn(self.handle_request(send.clone(), recv.clone()));
+
+        socket.run().await?;
 
         handle_request_task.cancel().await;
         Ok(())

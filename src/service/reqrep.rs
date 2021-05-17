@@ -18,25 +18,39 @@ pub struct RepProtocol {
     socket: zeromq::RepSocket,
     recv_queue: async_channel::Receiver<Reply>,
     send_queue: async_channel::Sender<Request>,
+    channels:
+        (async_channel::Sender<Reply>,
+         async_channel::Receiver<Request>)
+
 }
 
 impl RepProtocol {
     pub fn new(
         addr: String,
-        recv_queue: async_channel::Receiver<Reply>,
-        send_queue: async_channel::Sender<Request>,
     ) -> RepProtocol {
         let socket = zeromq::RepSocket::new();
+        let (send_queue, recv_channel) = async_channel::unbounded::<Request>();
+        let (send_channel, recv_queue) = async_channel::unbounded::<Reply>();
+
+        let channels = (send_channel.clone(), recv_channel.clone());
+
         RepProtocol {
             addr,
             socket,
             recv_queue,
             send_queue,
+            channels
         }
     }
-    pub async fn start(&mut self) -> Result<()> {
-        self.socket.bind(self.addr.as_str()).await?;
-        Ok(())
+
+
+    pub async fn start(&mut self) ->
+        Result<
+        (async_channel::Sender<Reply>,
+         async_channel::Receiver<Request>)
+        > {
+            self.socket.bind(self.addr.as_str()).await?;
+            Ok(self.channels.clone())
     }
 
     pub async fn run(&mut self) -> Result<()> {
