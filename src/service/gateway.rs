@@ -26,10 +26,7 @@ impl GatewayService {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-
-        let mut socket = RepProtocol::new(
-            self.addr.clone(),
-        );
+        let mut socket = RepProtocol::new(self.addr.clone());
 
         let (send, recv) = socket.start().await?;
         println!("server started");
@@ -38,9 +35,7 @@ impl GatewayService {
 
         println!("publisher started");
 
-
-        let handle_request_task =
-            executor.spawn(self.handle_request(send.clone(), recv.clone()));
+        let handle_request_task = executor.spawn(self.handle_request(send.clone(), recv.clone()));
 
         socket.run().await?;
 
@@ -136,9 +131,11 @@ impl GatewayClient {
         slabs: Arc<Mutex<Slabs>>,
     ) -> Result<()> {
         loop {
-            let mut subscriber = subscriber.lock().await;
-            let slab = subscriber.fetch().await?;
-
+            let slab: Vec<u8>;
+            {
+                let mut subscriber = subscriber.lock().await;
+                slab = subscriber.fetch().await?;
+            }
             println!("received new slab from subscriber");
             slabs.lock().await.push(slab);
         }
