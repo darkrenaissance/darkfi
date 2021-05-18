@@ -8,6 +8,13 @@ use async_executor::Executor;
 
 pub type Slabs = Vec<Vec<u8>>;
 
+#[repr(u8)]
+enum GatewayCommand {
+    PutSlab,
+    GetSlab,
+    GetLastIndex,
+}
+
 pub struct GatewayService {
     slabs: Mutex<Slabs>,
     addr: String,
@@ -125,26 +132,19 @@ impl GatewayClient {
         let rep: [u8; 4] = rep.try_into().unwrap();
         Ok(u32::from_be_bytes(rep))
     }
-
-    pub async fn fetch_slabs_loop(
-        subscriber: Arc<Mutex<Subscriber>>,
-        slabs: Arc<Mutex<Slabs>>,
-    ) -> Result<()> {
-        loop {
-            let slab: Vec<u8>;
-            {
-                let mut subscriber = subscriber.lock().await;
-                slab = subscriber.fetch().await?;
-            }
-            println!("received new slab from subscriber");
-            slabs.lock().await.push(slab);
-        }
-    }
 }
 
-#[repr(u8)]
-enum GatewayCommand {
-    PutSlab,
-    GetSlab,
-    GetLastIndex,
+pub async fn fetch_slabs_loop(
+    subscriber: Arc<Mutex<Subscriber>>,
+    slabs: Arc<Mutex<Slabs>>,
+) -> Result<()> {
+    loop {
+        let slab: Vec<u8>;
+        {
+            let mut subscriber = subscriber.lock().await;
+            slab = subscriber.fetch().await?;
+        }
+        println!("received new slab from subscriber");
+        slabs.lock().await.push(slab);
+    }
 }

@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use sapvi::Result;
 
-use sapvi::service::gateway;
+use sapvi::service::GatewayService;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let gateway = gateway::GatewayService::new(
+    let gateway = GatewayService::new(
         String::from("tcp://127.0.0.1:3333"),
         String::from("tcp://127.0.0.1:4444"),
     );

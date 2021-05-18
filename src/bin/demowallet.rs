@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 
-use sapvi::service::gateway::GatewayClient;
+use sapvi::service::{fetch_slabs_loop, GatewayClient};
 use sapvi::Result;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
@@ -19,10 +19,7 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
 
     println!("subscription ready");
 
-    let fetch_loop_task = executor.spawn(GatewayClient::fetch_slabs_loop(
-        subscriber.clone(),
-        slabs.clone(),
-    ));
+    let fetch_loop_task = executor.spawn(fetch_slabs_loop(subscriber.clone(), slabs.clone()));
 
     client.put_slab(vec![0, 0, 0, 0]).await?;
     client.put_slab(vec![0, 0, 0, 0]).await?;
