@@ -1,4 +1,6 @@
 use crate::{net, serial, Error, Result};
+use crate::rpc::options::ProgramOptions;
+use crate::rpc::adapter::RpcAdapter;
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
@@ -17,6 +19,92 @@ use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
 
+/// Listens for incoming connections and serves them.
+pub async fn listen(
+    executor: Arc<Executor<'_>>,
+    rpc: Arc<RpcInterface>,
+    listener: Async<TcpListener>,
+    tls: Option<TlsAcceptor>,
+) -> Result<()> {
+    // Format the full host address.
+    let host = match &tls {
+        None => format!("http://{}", listener.get_ref().local_addr()?),
+        Some(_) => format!("https://{}", listener.get_ref().local_addr()?),
+    };
+    println!("Listening on {}", host);
+
+    loop {
+        // Accept the next connection.
+        debug!(target: "rpc", "waiting for stream accept [START]");
+        let (stream, _) = listener.accept().await?;
+
+        debug!(target: "rpc", "stream accepted [END]");
+        // Spawn a background task serving this connection.
+        let task = match &tls {
+            None => {
+                let stream = async_dup::Arc::new(stream);
+                let rpc = rpc.clone();
+                executor.spawn(async move {
+                    if let Err(err) = async_h1::accept(stream, move |req| {
+                        let rpc = rpc.clone();
+                        rpc.serve(req)
+                    })
+                    .await
+                    {
+                        println!("Connection error: {:#?}", err);
+                    }
+                })
+            }
+            Some(tls) => {
+                // In case of HTTPS, establish a secure TLS connection first.
+                match tls.accept(stream).await {
+                    Ok(stream) => {
+                        let _stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
+                        executor.spawn(async move {
+                            /*if let Err(err) = async_h1::accept(stream, serve).await {
+                                println!("Connection error: {:#?}", err);
+                            }*/
+                            unimplemented!();
+                        })
+                    }
+                    Err(err) => {
+                        println!("Failed to establish secure TLS connection: {:#?}", err);
+                        continue;
+                    }
+                }
+            }
+        };
+
+        // Detach the task to let it run in the background.
+        task.detach();
+    }
+}
+
+pub async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions, adapter: Arc<RpcAdapter>) -> Result<()> {
+    let p2p = net::P2p::new(options.network_settings);
+
+    let rpc = RpcInterface::new(p2p.clone());
+    let http = listen(
+        executor.clone(),
+        rpc.clone(),
+        Async::<TcpListener>::bind(([127, 0, 0, 1], options.rpc_port))?,
+        None,
+    );
+
+    let http_task = executor.spawn(http);
+
+    *rpc.started.lock().await = true;
+
+    p2p.clone().start(executor.clone()).await?;
+
+    p2p.run(executor).await?;
+
+    rpc.wait_for_quit().await?;
+
+    http_task.cancel().await;
+
+    Ok(())
+}
 // json RPC server goes here
 pub struct RpcInterface {
     p2p: Arc<net::P2p>,
@@ -37,67 +125,12 @@ impl RpcInterface {
         })
     }
 
-    async fn db_connect() -> Connection {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        let connector = Connection::open(&path);
-        connector.expect("Failed to connect to database.")
-    }
-
-    async fn generate_key() -> (Vec<u8>, Vec<u8>) {
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        (privkey, pubkey)
-    }
-
-    // TODO: fix this
-    async fn store_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
-        let mut db_file = File::open("wallet.sql")?;
-        let mut contents = String::new();
-        db_file.read_to_string(&mut contents)?;
-        Ok(conn.execute_batch(&mut contents)?)
-    }
-
-    // add new methods to handle wallet commands
     pub async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
         info!("RPC serving {}", req.url());
 
         let request = req.body_string().await?;
 
-        let mut io = jsonrpc_core::IoHandler::new();
-        io.add_sync_method("say_hello", |_| {
-            Ok(jsonrpc_core::Value::String("Hello World!".into()))
-        });
-
-        let self2 = self.clone();
-        io.add_method("get_info", move |_| {
-            let self2 = self2.clone();
-            async move {
-                Ok(json!({
-                    "started": *self2.started.lock().await,
-                    "connections": self2.p2p.connections_count().await
-                }))
-            }
-        });
-
-        let stop_send = self.stop_send.clone();
-        io.add_method("stop", move |_| {
-            let stop_send = stop_send.clone();
-            async move {
-                let _ = stop_send.send(()).await;
-                Ok(jsonrpc_core::Value::Null)
-            }
-        });
-        io.add_method("key_gen", move |_| async move {
-            RpcInterface::db_connect().await;
-            let (pubkey, privkey) = RpcInterface::generate_key().await;
-            //println!("{}", pubkey, "{}", privkey);
-            Ok(jsonrpc_core::Value::Null)
-        });
+        let io = self.handle_input().await?;
 
         let response = io
             .handle_request_sync(&request)
@@ -107,6 +140,31 @@ impl RpcInterface {
         res.insert_header("Content-Type", "text/plain");
         res.set_body(response);
         Ok(res)
+    }
+
+    pub async fn handle_input(&self) -> Result<jsonrpc_core::IoHandler> {
+        debug!(target: "rpc", "JsonRpcInterface::handle_input() [START]");
+        let mut io = jsonrpc_core::IoHandler::new();
+
+        io.add_sync_method("say_hello", |_| {
+            Ok(jsonrpc_core::Value::String("Hello World!".into()))
+        });
+
+        io.add_method("get_info", move |_| async move {
+            RpcAdapter::get_info().await;
+            Ok(jsonrpc_core::Value::Null)
+        });
+
+        io.add_method("stop", move |_| async move {
+            RpcAdapter::stop().await;
+            Ok(jsonrpc_core::Value::Null)
+        });
+        io.add_method("key_gen", move |_| async move {
+            RpcAdapter::key_gen().await;
+            Ok(jsonrpc_core::Value::Null)
+        });
+        debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
+        Ok(io)
     }
 
     pub async fn wait_for_quit(self: Arc<Self>) -> Result<()> {

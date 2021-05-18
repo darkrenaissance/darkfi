@@ -1,167 +1,22 @@
 #[macro_use]
 extern crate clap;
 use async_executor::Executor;
+use sapvi::rpc::options::ProgramOptions;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use easy_parallel::Parallel;
 use http_types::{Request, Response, StatusCode};
 use log::*;
+use sapvi::rpc::jsonserver;
 use sapvi::rpc::jsonserver::RpcInterface;
 use sapvi::{net, Result};
+use sapvi::rpc::adapter::RpcAdapter;
 use serde_json::json;
 use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
 
-/// Listens for incoming connections and serves them.
-async fn listen(
-    executor: Arc<Executor<'_>>,
-    rpc: Arc<RpcInterface>,
-    listener: Async<TcpListener>,
-    tls: Option<TlsAcceptor>,
-) -> Result<()> {
-    // Format the full host address.
-    let host = match &tls {
-        None => format!("http://{}", listener.get_ref().local_addr()?),
-        Some(_) => format!("https://{}", listener.get_ref().local_addr()?),
-    };
-    println!("Listening on {}", host);
-
-    loop {
-        // Accept the next connection.
-        let (stream, _) = listener.accept().await?;
-
-        // Spawn a background task serving this connection.
-        let task = match &tls {
-            None => {
-                let stream = async_dup::Arc::new(stream);
-                let rpc = rpc.clone();
-                executor.spawn(async move {
-                    if let Err(err) = async_h1::accept(stream, move |req| {
-                        let rpc = rpc.clone();
-                        rpc.serve(req)
-                    })
-                    .await
-                    {
-                        println!("Connection error: {:#?}", err);
-                    }
-                })
-            }
-            Some(tls) => {
-                // In case of HTTPS, establish a secure TLS connection first.
-                match tls.accept(stream).await {
-                    Ok(stream) => {
-                        let _stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
-                        executor.spawn(async move {
-                            /*if let Err(err) = async_h1::accept(stream, serve).await {
-                                println!("Connection error: {:#?}", err);
-                            }*/
-                            unimplemented!();
-                        })
-                    }
-                    Err(err) => {
-                        println!("Failed to establish secure TLS connection: {:#?}", err);
-                        continue;
-                    }
-                }
-            }
-        };
-
-        // Detach the task to let it run in the background.
-        task.detach();
-    }
-}
-
-//struct RpcInterface {
-//    p2p: Arc<net::P2p>,
-//    started: Mutex<bool>,
-//    stop_send: async_channel::Sender<()>,
-//    stop_recv: async_channel::Receiver<()>,
-//}
-//
-//impl RpcInterface {
-//    fn new(p2p: Arc<net::P2p>) -> Arc<Self> {
-//        let (stop_send, stop_recv) = async_channel::unbounded::<()>();
-//
-//        Arc::new(Self {
-//            p2p,
-//            started: Mutex::new(false),
-//            stop_send,
-//            stop_recv,
-//        })
-//    }
-//
-//    async fn serve(self: Arc<Self>, mut req: Request) -> http_types::Result<Response> {
-//        info!("RPC serving {}", req.url());
-//
-//        let request = req.body_string().await?;
-//
-//        let mut io = jsonrpc_core::IoHandler::new();
-//        io.add_sync_method("say_hello", |_| {
-//            Ok(jsonrpc_core::Value::String("Hello World!".into()))
-//        });
-//
-//        let self2 = self.clone();
-//        io.add_method("get_info", move |_| {
-//            let self2 = self2.clone();
-//            async move {
-//                Ok(json!({
-//                    "started": *self2.started.lock().await,
-//                    "connections": self2.p2p.connections_count().await
-//                }))
-//            }
-//        });
-//
-//        let stop_send = self.stop_send.clone();
-//        io.add_method("stop", move |_| {
-//            let stop_send = stop_send.clone();
-//            async move {
-//                let _ = stop_send.send(()).await;
-//                Ok(jsonrpc_core::Value::Null)
-//            }
-//        });
-//
-//        let response = io
-//            .handle_request_sync(&request)
-//            .ok_or(sapvi::Error::BadOperationType)?;
-//
-//        let mut res = Response::new(StatusCode::Ok);
-//        res.insert_header("Content-Type", "text/plain");
-//        res.set_body(response);
-//        Ok(res)
-//    }
-//
-//    async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
-//        Ok(self.stop_recv.recv().await?)
-//    }
-//}
-
-async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let p2p = net::P2p::new(options.network_settings);
-
-    let rpc = RpcInterface::new(p2p.clone());
-    let http = listen(
-        executor.clone(),
-        rpc.clone(),
-        Async::<TcpListener>::bind(([127, 0, 0, 1], options.rpc_port))?,
-        None,
-    );
-
-    let http_task = executor.spawn(http);
-
-    *rpc.started.lock().await = true;
-
-    p2p.clone().start(executor.clone()).await?;
-
-    p2p.run(executor).await?;
-
-    rpc.wait_for_quit().await?;
-
-    http_task.cancel().await;
-
-    Ok(())
-}
 
 /*
 async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
@@ -254,82 +109,82 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
 }
 */
 
-struct ProgramOptions {
-    network_settings: net::Settings,
-    log_path: Box<std::path::PathBuf>,
-    rpc_port: u16,
-}
-
-impl ProgramOptions {
-    fn load() -> Result<ProgramOptions> {
-        let app = clap_app!(dfi =>
-            (version: "0.1.0")
-            (author: "Amir Taaki <amir@dyne.org>")
-            (about: "Dark node")
-            (@arg ACCEPT: -a --accept +takes_value "Accept address")
-            (@arg SEED_NODES: -s --seeds ... "Seed nodes")
-            (@arg CONNECTS: -c --connect ... "Manual connections")
-            (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
-            (@arg LOG_PATH: --log +takes_value "Logfile path")
-            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
-        )
-        .get_matches();
-
-        let accept_addr = if let Some(accept_addr) = app.value_of("ACCEPT") {
-            Some(accept_addr.parse()?)
-        } else {
-            None
-        };
-
-        let mut seed_addrs: Vec<SocketAddr> = vec![];
-        if let Some(seeds) = app.values_of("SEED_NODES") {
-            for seed in seeds {
-                seed_addrs.push(seed.parse()?);
-            }
-        }
-
-        let mut manual_connects: Vec<SocketAddr> = vec![];
-        if let Some(connections) = app.values_of("CONNECTS") {
-            for connect in connections {
-                manual_connects.push(connect.parse()?);
-            }
-        }
-
-        let connection_slots = if let Some(connection_slots) = app.value_of("CONNECT_SLOTS") {
-            connection_slots.parse()?
-        } else {
-            0
-        };
-
-        let log_path = Box::new(
-            if let Some(log_path) = app.value_of("LOG_PATH") {
-                std::path::Path::new(log_path)
-            } else {
-                std::path::Path::new("/tmp/darkfid.log")
-            }
-            .to_path_buf(),
-        );
-
-        let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
-            rpc_port.parse()?
-        } else {
-            8000
-        };
-
-        Ok(ProgramOptions {
-            network_settings: net::Settings {
-                inbound: accept_addr,
-                outbound_connections: connection_slots,
-                external_addr: accept_addr,
-                peers: manual_connects,
-                seeds: seed_addrs,
-                ..Default::default()
-            },
-            log_path,
-            rpc_port,
-        })
-    }
-}
+//struct ProgramOptions {
+//    network_settings: net::Settings,
+//    log_path: Box<std::path::PathBuf>,
+//    rpc_port: u16,
+//}
+//
+//impl ProgramOptions {
+//    fn load() -> Result<ProgramOptions> {
+//        let app = clap_app!(dfi =>
+//            (version: "0.1.0")
+//            (author: "Amir Taaki <amir@dyne.org>")
+//            (about: "Dark node")
+//            (@arg ACCEPT: -a --accept +takes_value "Accept address")
+//            (@arg SEED_NODES: -s --seeds ... "Seed nodes")
+//            (@arg CONNECTS: -c --connect ... "Manual connections")
+//            (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
+//            (@arg LOG_PATH: --log +takes_value "Logfile path")
+//            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
+//        )
+//        .get_matches();
+//
+//        let accept_addr = if let Some(accept_addr) = app.value_of("ACCEPT") {
+//            Some(accept_addr.parse()?)
+//        } else {
+//            None
+//        };
+//
+//        let mut seed_addrs: Vec<SocketAddr> = vec![];
+//        if let Some(seeds) = app.values_of("SEED_NODES") {
+//            for seed in seeds {
+//                seed_addrs.push(seed.parse()?);
+//            }
+//        }
+//
+//        let mut manual_connects: Vec<SocketAddr> = vec![];
+//        if let Some(connections) = app.values_of("CONNECTS") {
+//            for connect in connections {
+//                manual_connects.push(connect.parse()?);
+//            }
+//        }
+//
+//        let connection_slots = if let Some(connection_slots) = app.value_of("CONNECT_SLOTS") {
+//            connection_slots.parse()?
+//        } else {
+//            0
+//        };
+//
+//        let log_path = Box::new(
+//            if let Some(log_path) = app.value_of("LOG_PATH") {
+//                std::path::Path::new(log_path)
+//            } else {
+//                std::path::Path::new("/tmp/darkfid.log")
+//            }
+//            .to_path_buf(),
+//        );
+//
+//        let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
+//            rpc_port.parse()?
+//        } else {
+//            8000
+//        };
+//
+//        Ok(ProgramOptions {
+//            network_settings: net::Settings {
+//                inbound: accept_addr,
+//                outbound_connections: connection_slots,
+//                external_addr: accept_addr,
+//                peers: manual_connects,
+//                seeds: seed_addrs,
+//                ..Default::default()
+//            },
+//            log_path,
+//            rpc_port,
+//        })
+//    }
+//}
 
 fn main() -> Result<()> {
     use simplelog::*;
@@ -348,6 +203,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
+    let adapter = RpcAdapter::new();
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
     let ex2 = ex.clone();
@@ -358,7 +214,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, options).await?;
+                jsonserver::start(ex2, options, adapter).await?;
                 drop(signal);
                 Ok::<(), sapvi::Error>(())
             })
