@@ -1,3 +1,5 @@
+# TODO: refactor into async
+
 import argparse
 import requests
 import json
