@@ -1,6 +1,10 @@
 # Definition of Democratic Civilization
 
-From "The Sociology of Freedom" by Abdullah Ocalan.
+From 'The Sociology of Freedom: Manifesto of the Democratic Civilization, Volume 3' by Abdullah Ocalan.
+
+Annotations are our own. The text is otherwise unchanged.
+
+## What is the subject of moral and political society?
 
 The school of social science that postulates the examination of the
 existence and development of social nature on the basis of moral and
@@ -27,6 +31,8 @@ exist as colonies of other powers, particularly capital and state monopolies,
 and as sources of raw materials. In those cases, however, we are
 talking about the legacy of a society that has ceased to be.
 
+## Individualism is a state of war
+
 There is nothing gained by labeling moral and political society—the
 natural state of society—as slave-owning, feudal, capitalist, or socialist.
 Using such labels to describe society masks reality and reduces society to
@@ -45,6 +51,8 @@ society to the same degree as power and the state is. Liberalism essentially
 prepares society, which is weakened by being deprived of its morals and
 politics, for all kinds of attacks by individualism. Liberalism is the
 ideology and practice that is most anti-society.
+
+## The rise of scientific positivism
 
 In Western sociology (there is still no science called Eastern sociology)
 concepts such as society and civilization system are quite problematic.
@@ -70,6 +78,8 @@ done was to plan and develop specific and sophisticated “social engineering”
 projects. There was no project or plan that could not be achieved by
 the nation-state if it so desired, as long as it embraced the “scientific
 positivism” and was accepted by the nation-state!
+
+## Capitalism as an iron cage
 
 British social scientists (political economists) added economic solutions
 to French sociology, while German ideologists contributed philosophically.
@@ -109,6 +119,8 @@ ony as the 1970s faded also played an important role. The upside of these
 developments was the collapse of the hegemony of Eurocentric thought.
 The downside, however, was the drawbacks of a highly fragmented social
 sciences.
+
+## The problems of Eurocentric sociology
 
 Let’s summarize the criticism of Eurocentric sociology:
 
@@ -156,8 +168,12 @@ these and many other criticisms. Obviously, I am not talking about
 a new divine creation, but I do believe that the greatest feature of
 the human mind is the power to search for and build truth.
 
+## A new social science
+
 In light of these criticisms, I offer the following suggestions in
 relation to the social science system that I want to define:
+
+### A more humane social nature
 
 1. I would not present social nature as a rigid universalist truth
 with mythological, religious, metaphysical, and scientific (positivist)
@@ -187,6 +203,8 @@ not reflect the decisive features of social nature. On the contrary,
 they conceal and fragment its meaning. This, in turn, provides a
 base for faulty theoretical and practical approaches and actions
 related to society.
+
+### Protecting the social fabric
 
 3. Statements about renewing and re-creating society are part of
 operations meant to constitute new capital and power monopolies
@@ -222,6 +240,8 @@ of capital and power throughout the history of civilization, social
 sciences based on a non-destructive dialectic methodology that
 harmonizes analytical and emotional intelligence and overcomes
 the strict subject-object mold should be developed.
+
+## The framework of moral and political society
 
 The paradigmatic and empirical framework of moral and political
 society, the main unit of the democratic civilization system, can be
@@ -319,6 +339,8 @@ individual or force has the authority to decide on behalf of moral
 and political society, and social engineering has no place in these
 societies.
 
+## Liberating democratic civilization from the State
+
 When viewed in the light of the various broad definitions I have presented,
 it is obvious that the democratic civilization system—essentially
 the moral and political totality of social nature—has always existed and
@@ -326,7 +348,7 @@ sustained itself as the flip side of the official history of civilization. Despi
 all the oppression and exploitation at the hands of the official world-system,
 the other face of society could not be destroyed. In fact, it is
 impossible to destroy it. Just as capitalism cannot sustain itself without
-noncapitalist society, civilization—the official world system—also cannot sustain
+noncapitalist society, civilization— the official world system— also cannot sustain
 itself without the democratic civilization system. More concretely the
 civilization with monopolies cannot sustain itself without the existence
 of a civilization without monopolies. The opposite is not true. Democratic
