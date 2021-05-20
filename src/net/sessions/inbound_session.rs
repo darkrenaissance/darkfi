@@ -66,7 +66,7 @@ impl InboundSession {
     ) -> NetResult<()> {
         info!("Starting inbound session on {}", accept_addr);
         let result = self.acceptor.clone().start(accept_addr, executor);
-        if let Err(err) = result {
+        if let Err(err) = result.clone() {
             error!("Error starting listener: {}", err);
         }
         result

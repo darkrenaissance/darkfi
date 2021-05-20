@@ -4,7 +4,7 @@ use std::fmt;
 pub type NetResult<T> = std::result::Result<T, NetError>;
 
 /// An enum representing the main network errors.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum NetError {
     OperationFailed,
     ConnectFailed,

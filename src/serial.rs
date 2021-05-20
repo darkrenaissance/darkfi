@@ -103,7 +103,7 @@ macro_rules! encoder_fn {
     ($name:ident, $val_type:ty, $writefn:ident) => {
         #[inline]
         fn $name(&mut self, v: $val_type) -> Result<()> {
-            self.write_all(&endian::$writefn(v)).map_err(Error::Io)
+            self.write_all(&endian::$writefn(v)).map_err(|e| Error::Io(e.kind()))
         }
     };
 }
@@ -114,7 +114,7 @@ macro_rules! decoder_fn {
         fn $name(&mut self) -> Result<$val_type> {
             assert_eq!(::std::mem::size_of::<$val_type>(), $byte_len); // size_of isn't a constfn in 1.22
             let mut val = [0; $byte_len];
-            self.read_exact(&mut val[..]).map_err(Error::Io)?;
+            self.read_exact(&mut val[..]).map_err(|e| Error::Io(e.kind()))?;
             Ok(endian::$readfn(&val))
         }
     };
@@ -130,19 +130,19 @@ impl<W: Write> WriteExt for W {
 
     #[inline]
     fn write_i8(&mut self, v: i8) -> Result<()> {
-        self.write_all(&[v as u8]).map_err(Error::Io)
+        self.write_all(&[v as u8]).map_err(|e| Error::Io(e.kind()))
     }
     #[inline]
     fn write_u8(&mut self, v: u8) -> Result<()> {
-        self.write_all(&[v]).map_err(Error::Io)
+        self.write_all(&[v]).map_err(|e| Error::Io(e.kind()))
     }
     #[inline]
     fn write_bool(&mut self, v: bool) -> Result<()> {
-        self.write_all(&[v as u8]).map_err(Error::Io)
+        self.write_all(&[v as u8]).map_err(|e| Error::Io(e.kind()))
     }
     #[inline]
     fn write_slice(&mut self, v: &[u8]) -> Result<()> {
-        self.write_all(v).map_err(Error::Io)
+        self.write_all(v).map_err(|e| Error::Io(e.kind()))
     }
 }
 
@@ -172,7 +172,7 @@ impl<R: Read> ReadExt for R {
     }
     #[inline]
     fn read_slice(&mut self, slice: &mut [u8]) -> Result<()> {
-        self.read_exact(slice).map_err(Error::Io)
+        self.read_exact(slice).map_err(|e| Error::Io(e.kind()))
     }
 }
 
