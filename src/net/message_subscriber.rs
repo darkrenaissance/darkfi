@@ -8,14 +8,13 @@ use std::io;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use crate::error::Result;
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
 use crate::net::messages::Message;
 use crate::serial::{Decodable, Encodable};
 
 /// 64bit identifier for message subscription.
 pub type MessageSubscriptionID = u64;
-type MessageResult<M> = NetResult<Arc<M>>;
+type MessageResult<M> = Result<Arc<M>>;
 
 /// Handles message subscriptions through a subscription ID and a receiver
 /// channel.
@@ -47,7 +46,7 @@ impl<M: Message> MessageSubscription<M> {
 trait MessageDispatcherInterface: Send + Sync {
     async fn trigger(&self, payload: Vec<u8>);
 
-    async fn trigger_error(&self, err: NetError);
+    async fn trigger_error(&self, err: Error);
 
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
@@ -155,7 +154,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
     /// Sends a message to all subscriber channels. Clears any inactive
     /// channels.
-    async fn trigger_error(&self, err: NetError) {
+    async fn trigger_error(&self, err: Error) {
         self.trigger_all(Err(err)).await;
     }
 
@@ -188,7 +187,7 @@ impl MessageSubsystem {
     }
 
     /// Add a dispatcher to the list of subscribers.
-    pub async fn subscribe<M: Message>(&self) -> NetResult<MessageSubscription<M>> {
+    pub async fn subscribe<M: Message>(&self) -> Result<MessageSubscription<M>> {
         let dispatcher = self.dispatchers.lock().await.get(M::name()).cloned();
 
         let sub = match dispatcher {
@@ -203,7 +202,7 @@ impl MessageSubsystem {
             None => {
                 // normall return failure here
                 // for now panic
-                return Err(NetError::OperationFailed);
+                return Err(Error::OperationFailed);
             }
         };
 
@@ -229,7 +228,7 @@ impl MessageSubsystem {
     }
 
     /// Send a message to all subscriber channels. Clear any inactive channels.
-    pub async fn trigger_error(&self, err: NetError) {
+    pub async fn trigger_error(&self, err: Error) {
         // TODO: this could be parallelized
         for dispatcher in self.dispatchers.lock().await.values() {
             dispatcher.trigger_error(err.clone()).await;
@@ -294,7 +293,7 @@ async fn _do_message_subscriber_test() {
     assert_eq!(msg2.x, 110);
     println!("{}", msg2.x);
 
-    subsystem.trigger_error(NetError::ChannelStopped).await;
+    subsystem.trigger_error(Error::ChannelStopped).await;
 
     let msg2 = sub.receive().await;
     assert!(msg2.is_err());

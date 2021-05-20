@@ -4,7 +4,7 @@ use log::*;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
 use crate::net::protocols::{ProtocolAddress, ProtocolPing};
 use crate::net::sessions::Session;
 use crate::net::{ChannelPtr, Connector, P2p};
@@ -25,7 +25,7 @@ impl OutboundSession {
         })
     }
     /// Start the outbound session. Runs the channel connect loop.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!("Starting {} outbound connection slots.", slots_count);
         // Activate mutex lock on connection slots.
@@ -38,7 +38,7 @@ impl OutboundSession {
                 self.clone().channel_connect_loop(i, executor.clone()),
                 // Ignore stop handler
                 |_| async {},
-                NetError::ServiceStopped,
+                Error::ServiceStopped,
                 executor.clone(),
             );
 
@@ -66,7 +66,7 @@ impl OutboundSession {
         self: Arc<Self>,
         slot_number: u32,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         let connector = Connector::new(self.p2p().settings().clone());
 
         loop {
@@ -109,7 +109,7 @@ impl OutboundSession {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending). Keeps looping until address is
     /// found that passes all checks.
-    async fn load_address(&self, slot_number: u32) -> NetResult<SocketAddr> {
+    async fn load_address(&self, slot_number: u32) -> Result<SocketAddr> {
         let p2p = self.p2p();
         let hosts = p2p.hosts();
         let inbound_addr = p2p.settings().inbound;
@@ -122,7 +122,7 @@ impl OutboundSession {
                     "Hosts address pool is empty. Closing connect slot #{}",
                     slot_number
                 );
-                return Err(NetError::ServiceStopped);
+                return Err(Error::ServiceStopped);
             }
             let addr = addr.unwrap();
 
@@ -158,7 +158,7 @@ impl OutboundSession {
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         let settings = self.p2p().settings().clone();
         let hosts = self.p2p().hosts().clone();
 

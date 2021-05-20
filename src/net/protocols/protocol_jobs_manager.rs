@@ -4,7 +4,7 @@ use log::*;
 use smol::Task;
 use std::sync::Arc;
 
-use crate::net::error::NetResult;
+use crate::error::Result;
 use crate::net::ChannelPtr;
 use crate::system::ExecutorPtr;
 
@@ -17,7 +17,7 @@ pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 pub struct ProtocolJobsManager {
     name: &'static str,
     channel: ChannelPtr,
-    tasks: Mutex<Vec<Task<NetResult<()>>>>,
+    tasks: Mutex<Vec<Task<Result<()>>>>,
 }
 
 impl ProtocolJobsManager {
@@ -39,7 +39,7 @@ impl ProtocolJobsManager {
     /// Spawns a new task and adds it to the internal queue.
     pub async fn spawn<'a, F>(&self, future: F, executor: ExecutorPtr<'a>)
     where
-        F: Future<Output = NetResult<()>> + Send + 'a,
+        F: Future<Output = Result<()>> + Send + 'a,
     {
         self.tasks.lock().await.push(executor.spawn(future))
     }

@@ -4,7 +4,7 @@ use smol::Executor;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
 use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 use crate::net::utility::sleep;
@@ -48,7 +48,7 @@ impl ProtocolPing {
     /// loop. Loop sleeps for the duration of the channel heartbeat, then
     /// sends a ping message with a random nonce. Loop starts a timer, waits
     /// for the pong reply and insures the nonce is the same.
-    async fn run_ping_pong(self: Arc<Self>) -> NetResult<()> {
+    async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
         // Creates a subscription to pong message.
         let pong_sub = self
@@ -77,7 +77,7 @@ impl ProtocolPing {
             if pong_msg.nonce != nonce {
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
-                return Err(NetError::ChannelStopped);
+                return Err(Error::ChannelStopped);
             }
             let duration = start.elapsed().as_millis();
             debug!(target: "net", "Received Pong message {}ms from [{:?}]", duration, self.channel.address());
@@ -86,7 +86,7 @@ impl ProtocolPing {
 
     /// Waits for ping, then replies with pong. Copies ping's nonce into the
     /// pong reply.
-    async fn reply_to_ping(self: Arc<Self>) -> NetResult<()> {
+    async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolPing::reply_to_ping() [START]");
         // Creates a subscription to ping message.
         let ping_sub = self

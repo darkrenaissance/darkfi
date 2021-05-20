@@ -14,9 +14,6 @@ pub mod channel;
 /// connection.
 pub mod connector;
 
-/// Defines a set of common network errors. Used for error handling.
-pub mod error;
-
 /// Hosts are a list of network addresses used when establishing an outbound
 /// connection. Hosts are shared across the network through the address
 /// protocol. When attempting to connect, a node will loop through addresses in

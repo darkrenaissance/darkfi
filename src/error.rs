@@ -1,19 +1,12 @@
 use rusqlite;
 use std::fmt;
 
-use crate::net::error::NetError;
 use crate::state;
 use crate::vm::ZKVMError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone)]
-//#[derive(Debug, Copy, Clone)]
-
-// need to be able to copy the errors into theads
-// net error has clone and copy attribute 
-// copy vs clone
-//struct Error;
 
 pub enum Error {
     Foo,
@@ -157,19 +150,6 @@ impl From<std::net::AddrParseError> for Error {
 impl From<std::num::ParseIntError> for Error {
     fn from(_err: std::num::ParseIntError) -> Error {
         Error::ParseIntError
-    }
-}
-
-impl From<NetError> for Error {
-    fn from(err: NetError) -> Error {
-        match err {
-            NetError::OperationFailed => Error::OperationFailed,
-            NetError::ConnectFailed => Error::ConnectFailed,
-            NetError::ConnectTimeout => Error::ConnectTimeout,
-            NetError::ChannelStopped => Error::ChannelStopped,
-            NetError::ChannelTimeout => Error::ChannelTimeout,
-            NetError::ServiceStopped => Error::ServiceStopped,
-        }
     }
 }
 

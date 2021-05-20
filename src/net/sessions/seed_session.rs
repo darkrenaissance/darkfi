@@ -4,7 +4,8 @@ use log::*;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
+//use crate::net::error::{Error, Result};
 use crate::net::protocols::{ProtocolPing, ProtocolSeed};
 use crate::net::sessions::Session;
 use crate::net::utility::sleep;
@@ -23,7 +24,7 @@ impl SeedSession {
 
     /// Start the seed session. Creates a new task for every seed connection and
     /// starts the seed on each task.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "SeedSession::start() [START]");
         let settings = self.p2p().settings();
 
@@ -56,14 +57,14 @@ impl SeedSession {
             }
             _ = sleep(settings.seed_query_timeout_seconds).fuse() => {
                 error!("Querying seeds timed out");
-                return Err(NetError::OperationFailed);
+                return Err(Error::OperationFailed);
             }
         }
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
             error!("Hosts pool still empty after seeding");
-            return Err(NetError::OperationFailed);
+            return Err(Error::OperationFailed);
         }
 
         debug!(target: "net", "SeedSession::start() [END]");
@@ -78,7 +79,7 @@ impl SeedSession {
         seed_index: usize,
         seed: SocketAddr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         debug!(target: "net", "SeedSession::start_seed(i={}) [START]", seed_index);
         let (hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
@@ -119,7 +120,7 @@ impl SeedSession {
         hosts: HostsPtr,
         settings: SettingsPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         protocol_ping.start(executor.clone()).await;
 

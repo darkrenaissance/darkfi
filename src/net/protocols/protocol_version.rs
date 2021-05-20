@@ -3,7 +3,7 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
 use crate::net::message_subscriber::MessageSubscription;
 use crate::net::messages;
 use crate::net::utility::sleep;
@@ -47,7 +47,7 @@ impl ProtocolVersion {
     /// Start version information exchange. Start the timer. Send version info
     /// and wait for version acknowledgement. Wait for version info and send
     /// version acknowledgement.
-    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::run() [START]");
         // Start timer
         // Send version, wait for verack
@@ -55,13 +55,13 @@ impl ProtocolVersion {
         // Fin.
         let result = futures::select! {
             _ = self.clone().exchange_versions(executor).fuse() => Ok(()),
-            _ = sleep(self.settings.channel_handshake_seconds).fuse() => Err(NetError::ChannelTimeout)
+            _ = sleep(self.settings.channel_handshake_seconds).fuse() => Err(Error::ChannelTimeout)
         };
         debug!(target: "net", "ProtocolVersion::run() [END]");
         result
     }
     /// Send and recieve version information.
-    async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::exchange_versions() [START]");
 
         let send = executor.spawn(self.clone().send_version());
@@ -72,7 +72,7 @@ impl ProtocolVersion {
         Ok(())
     }
     /// Send version info and wait for version acknowledgement.
-    async fn send_version(self: Arc<Self>) -> NetResult<()> {
+    async fn send_version(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
         let version = messages::VersionMessage {};
         self.channel.clone().send(version).await?;
@@ -85,7 +85,7 @@ impl ProtocolVersion {
     }
     /// Recieve version info, check the message is okay and send version
     /// acknowledgement.
-    async fn recv_version(self: Arc<Self>) -> NetResult<()> {
+    async fn recv_version(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::recv_version() [START]");
         // Rec
         let _version_msg = self.version_sub.receive().await?;
