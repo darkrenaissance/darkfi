@@ -2,7 +2,7 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use std::fmt;
 
-use crate::{crypto::{coin::Coin, note::{EncryptedNote, Note}, nullifier::Nullifier}, error::{Error, Result}, tx};
+use crate::{crypto::{coin::Coin, note::EncryptedNote, nullifier::Nullifier}, tx};
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;

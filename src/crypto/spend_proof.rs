@@ -1,9 +1,8 @@
 use bellman::gadgets::multipack;
 use bellman::groth16;
-use bitvec::{order::Lsb0, view::AsBits};
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
-use ff::{Field, PrimeField};
+use ff::PrimeField;
 use group::{Curve, GroupEncoding};
 use rand::rngs::OsRng;
 use std::io;
@@ -11,7 +10,7 @@ use std::time::Instant;
 
 use super::coin::merkle_hash;
 use crate::circuit::spend_contract::SpendContract;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
 pub struct SpendRevealedValues {

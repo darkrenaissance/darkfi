@@ -1,21 +1,11 @@
 use bellman::groth16;
 use bls12_381::Bls12;
 use rand::rngs::OsRng;
-use std::collections::HashMap;
-use std::io;
 use ff::Field;
 
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, VarInt};
+use crate::serial::Encodable;
 use super::{TransactionClearInput, TransactionInput, TransactionOutput, Transaction, partial::{PartialTransactionClearInput, PartialTransactionInput, PartialTransaction}};
-use crate::crypto::{
-    coin::Coin,
-    create_mint_proof, create_spend_proof, load_params,
-    merkle::CommitmentTree,
-    note::{EncryptedNote, Note},
-    save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
-    verify_spend_proof, MintRevealedValues, SpendRevealedValues,
-};
+use crate::crypto::{create_spend_proof, create_mint_proof, note::Note, schnorr};
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,

@@ -2,14 +2,13 @@ use bellman::gadgets::multipack;
 use bellman::groth16;
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
-use ff::Field;
-use group::{Curve, Group, GroupEncoding};
+use group::{Curve, GroupEncoding};
 use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
 use crate::circuit::mint_contract::MintContract;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
 pub struct MintRevealedValues {

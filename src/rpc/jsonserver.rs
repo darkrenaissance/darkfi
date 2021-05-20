@@ -1,21 +1,12 @@
-use crate::{net, serial, Error, Result};
+use crate::{net, Error, Result};
 use crate::rpc::options::ProgramOptions;
 use crate::rpc::adapter::RpcAdapter;
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
-use easy_parallel::Parallel;
-use ff::Field;
 use http_types::{Request, Response, StatusCode};
 use log::*;
-use rand::rngs::OsRng;
-use rusqlite::Connection;
-use serde_json::json;
 use smol::Async;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
 

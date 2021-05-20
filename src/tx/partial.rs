@@ -1,22 +1,12 @@
 use bellman::groth16;
 use bls12_381::Bls12;
-use rand::rngs::OsRng;
-use std::collections::HashMap;
 use std::io;
-use ff::Field;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
-use super::{TransactionClearInput, TransactionInput, TransactionOutput, Transaction};
-use crate::crypto::{
-    coin::Coin,
-    create_mint_proof, create_spend_proof, load_params,
-    merkle::CommitmentTree,
-    note::{EncryptedNote, Note},
-    save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
-    verify_spend_proof, MintRevealedValues, SpendRevealedValues,
-};
+use super::TransactionOutput;
+use crate::crypto::SpendRevealedValues;
 
 pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
@@ -63,8 +53,7 @@ impl Encodable for PartialTransactionClearInput {
         len += self.signature_public.encode(&mut s)?;
         Ok(len)
     }
-}
-
+} 
 impl Decodable for PartialTransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {

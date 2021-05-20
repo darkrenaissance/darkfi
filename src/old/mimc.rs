@@ -1,5 +1,5 @@
 // For randomness (during paramgen and proof generation)
-use rand::thread_rng;
+//use rand::thread_rng;
 
 // For benchmarking
 use std::time::{Duration, Instant};
@@ -8,14 +8,14 @@ use std::time::{Duration, Instant};
 use sapvi::bls_extensions::BlsStringConversion;
 
 // Bring in some tools for using finite fiels
-use ff::{Field, PrimeField};
+use ff::PrimeField;
 
 // mimc constants
 //mod mimc_constants;
 //use mimc_constants::mimc_constants;
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.
-use bls12_381::{Bls12, Scalar};
+use bls12_381::Bls12;
 
 // We'll use these interfaces to construct our circuit.
 use bellman::{Circuit, ConstraintSystem, SynthesisError};

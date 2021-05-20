@@ -1,11 +1,8 @@
-use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
+use bellman::{groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
-use std::{
-    ops::{Add, AddAssign, MulAssign, SubAssign},
-    time::Instant,
-};
+use std::time::Instant;
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 

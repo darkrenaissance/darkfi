@@ -2,19 +2,10 @@
 extern crate clap;
 use async_executor::Executor;
 use sapvi::rpc::options::ProgramOptions;
-use async_native_tls::TlsAcceptor;
-use async_std::sync::Mutex;
 use easy_parallel::Parallel;
-use http_types::{Request, Response, StatusCode};
-use log::*;
 use sapvi::rpc::jsonserver;
-use sapvi::rpc::jsonserver::RpcInterface;
-use sapvi::{net, Result};
+use sapvi::Result;
 use sapvi::rpc::adapter::RpcAdapter;
-use serde_json::json;
-use smol::Async;
-use std::net::SocketAddr;
-use std::net::TcpListener;
 use std::sync::Arc;
 
 

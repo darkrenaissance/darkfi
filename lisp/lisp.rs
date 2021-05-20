@@ -1,17 +1,14 @@
 #![allow(non_snake_case)]
 
 use crate::types::LispCircuit;
-use bellman::groth16::PreparedVerifyingKey;
 
-use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
-use simplelog::*;
+use sapvi::BlsStringConversion;
 
 use bellman::groth16;
 use bls12_381::Bls12;
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::borrow::{Borrow, BorrowMut};
 use std::rc::Rc;
 use std::time::Instant;
 use std::{cell::RefCell, collections::HashMap};

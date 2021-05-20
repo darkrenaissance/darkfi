@@ -1,22 +1,18 @@
 use bellman::groth16;
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
-use group::Group;
 use rand::rngs::OsRng;
-use std::io;
 use std::path::Path;
 
 use sapvi::crypto::{
     coin::Coin,
-    create_mint_proof, create_spend_proof, load_params,
+    load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     nullifier::Nullifier,
     note::{EncryptedNote, Note},
-    save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
-    MintRevealedValues, SpendRevealedValues,
+    save_params, setup_mint_prover, setup_spend_prover,
 };
-use sapvi::error::{Error, Result};
-use sapvi::serial::{Decodable, Encodable, VarInt};
+use sapvi::serial::{Decodable, Encodable};
 use sapvi::state::{state_transition, ProgramState, StateUpdates};
 use sapvi::tx;
 

@@ -1,15 +1,6 @@
 #[macro_use]
 use std::net::SocketAddr;
-use crate::{net, Error, Result};
-use async_executor::Executor;
-use async_native_tls::TlsAcceptor;
-use async_std::sync::Mutex;
-use easy_parallel::Parallel;
-use http_types::{Request, Response, StatusCode};
-use log::*;
-use smol::Async;
-use std::net::TcpListener;
-use std::sync::Arc;
+use crate::{net, Result};
 
 pub struct ProgramOptions {
     pub network_settings: net::Settings,

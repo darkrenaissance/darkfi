@@ -11,7 +11,7 @@ use winit::{
 
 use sapvi::gfx::{camera, model, texture};
 
-use model::{DrawLight, DrawModel, Vertex};
+use model::{DrawModel, Vertex};
 
 use std::time::Instant;
 #[macro_use]
