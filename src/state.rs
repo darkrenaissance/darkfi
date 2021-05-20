@@ -13,12 +13,12 @@ pub trait ProgramState {
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
     fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
-
-    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<Note>;
 }
 
 pub struct StateUpdates {
-    pub coins: Vec<([u8; 32], Option<Note>)>,
+    pub nullifiers: Vec<[u8; 32]>,
+    pub coins: Vec<[u8; 32]>,
+    pub enc_notes: Vec<EncryptedNote>
 }
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
@@ -79,11 +79,14 @@ pub fn state_transition<S: ProgramState>(
         // Check merkle roots
         let merkle = &input.revealed.merkle_root;
 
+        // Merkle is used to know whether this is a coin that existed
+        // in a previous state.
         if !state.is_valid_merkle(merkle) {
             return Err(VerifyFailed::InvalidMerkle(i));
         }
 
-        // Nullifiers don't already exist
+        // The nullifiers should not already exist
+        // It is double spend protection.
         let nullifier = &input.revealed.nullifier;
 
         if state.nullifier_exists(nullifier) {
@@ -94,18 +97,19 @@ pub fn state_transition<S: ProgramState>(
     // Check the tx verifies correctly
     tx.verify(state.mint_pvk(), state.spend_pvk())?;
 
-    // Newly created coins for this tx
-    let mut coins = vec![];
-    for output in tx.outputs {
-        // Any coins destined for this wallet?
-        // Try to decrypt the ciphertext for this coin.
-        // If successful then it belongs to us.
-        // This contains the secret attributes so we can spend the coin
-        let note = state.try_decrypt_note(output.enc_note);
-
-        // Gather all the coins
-        coins.push((output.revealed.coin, note));
+    let mut nullifiers = vec![];
+    for input in tx.inputs {
+        nullifiers.push(input.revealed.nullifier);
     }
 
-    Ok(StateUpdates { coins })
+    // Newly created coins for this tx
+    let mut coins = vec![];
+    let mut enc_notes = vec![];
+    for output in tx.outputs {
+        // Gather all the coins
+        coins.push(output.revealed.coin);
+        enc_notes.push(output.enc_note);
+    }
+
+    Ok(StateUpdates { nullifiers, coins, enc_notes })
 }

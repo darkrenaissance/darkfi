@@ -20,6 +20,9 @@ use sapvi::state::{state_transition, ProgramState, StateUpdates};
 use sapvi::tx;
 
 struct MemoryState {
+    tree: CommitmentTree<Coin>,
+    nullifiers: Vec<[u8; 32]>,
+    own_coins: Vec<([u8; 32], Note, jubjub::Fr, IncrementalWitness<Coin>)>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     cashier_public: jubjub::SubgroupPoint,
@@ -34,7 +37,7 @@ impl ProgramState for MemoryState {
         true
     }
     fn nullifier_exists(&self, nullifier: &[u8; 32]) -> bool {
-        true
+        false
     }
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
@@ -43,15 +46,42 @@ impl ProgramState for MemoryState {
     fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
         &self.spend_pvk
     }
+}
 
-    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<Note> {
+impl MemoryState {
+    async fn apply(&mut self, mut updates: StateUpdates) {
+        self.nullifiers.append(&mut updates.nullifiers);
+
+        // Update merkle tree and witnesses
+        for (coin, enc_note) in updates.coins.into_iter().zip(updates.enc_notes.into_iter()) {
+            // Add the new coins to the merkle tree
+            self.tree
+                .append(Coin::new(coin.clone()))
+                .expect("Append to merkle tree");
+
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+                // We need to keep track of the witness for this coin.
+                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+                // Just as we update the merkle tree with every new coin, so we do the same with the witness.
+
+                // Derive the current witness from the current tree.
+                // This is done right after we add our coin to the tree (but before any other coins are added)
+
+                // Make a new witness for this coin
+                let witness = IncrementalWitness::from_tree(&self.tree);
+                self.own_coins.push((coin, note, secret, witness));
+            }
+        }
+    }
+
+    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
         // Loop through all our secret keys...
         for secret in &self.secrets {
             // ... attempt to decrypt the note ...
             match ciphertext.decrypt(secret) {
                 Ok(note) => {
                     // ... and return the decrypted note for this coin.
-                    return Some(note);
+                    return Some((note, secret.clone()));
                 }
                 Err(_) => {}
             }
@@ -59,10 +89,6 @@ impl ProgramState for MemoryState {
         // We weren't able to decrypt the note with any of our keys.
         None
     }
-}
-
-impl MemoryState {
-    fn apply(updates: StateUpdates) {}
 }
 
 fn main() {
@@ -90,7 +116,10 @@ fn main() {
     // This is their public key
     let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
-    let state = MemoryState {
+    let mut state = MemoryState {
+        tree: CommitmentTree::empty(),
+        nullifiers: vec![],
+        own_coins: vec![],
         mint_pvk,
         spend_pvk,
         cashier_public,
@@ -125,63 +154,54 @@ fn main() {
     // Step 2: wallet1 receive's payment from the cashier
 
     // Wallet1 is receiving tx, and for every new coin it finds, it adds to its merkle tree
-    let mut tree = CommitmentTree::empty();
-    // Here we simulate 5 fake random coins, adding them to our tree.
-    for i in 0..5 {
-        let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-        tree.append(cmu);
+    {
+        // Here we simulate 5 fake random coins, adding them to our tree.
+        let tree = &mut state.tree;
+        for i in 0..5 {
+            let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            tree.append(cmu);
+        }
     }
 
-    // This contains the secret attributes so we can spend the coin
-    let mut notes = vec![];
     // Now we receive the tx data
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
 
         let update = state_transition(&state, tx).expect("step 2 state transition failed");
 
-        for (coin, note) in update.coins {
-            // Add the new coins to the merkle tree
-            tree.append(Coin::new(coin)).expect("append merkle");
-
-            if let Some(note) = note {
-                // We need to keep track of the witness for this coin.
-                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-                // Just as we update the merkle tree with every new coin, so we do the same with the witness.
-
-                // Derive the current witness from the current tree.
-                // This is done right after we add our coin to the tree (but before any other coins are added)
-                let witness = IncrementalWitness::from_tree(&tree);
-
-                notes.push((note, witness));
-            }
-        }
+        smol::block_on(state.apply(update));
     }
 
     // Wallet1 has received payment from the cashier.
     // Step 2 is complete.
-    assert_eq!(notes.len(), 1);
-    let (note, witness) = &mut notes[0];
+    assert_eq!(state.own_coins.len(), 1);
+    //let (coin, note, secret, witness) = &mut state.own_coins[0];
 
-    // Check this is the 6th coin we added
-    assert_eq!(witness.position(), 5);
-    assert_eq!(tree.root(), witness.root());
-
-    // Add some more random coins in
-    for i in 0..10 {
-        let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-        tree.append(cmu);
-        witness.append(cmu);
+    let auth_path =
+    {
+        let tree = &mut state.tree;
+        let witness = &mut state.own_coins[0].3;
+        // Check this is the 6th coin we added
+        assert_eq!(witness.position(), 5);
         assert_eq!(tree.root(), witness.root());
-    }
 
-    // TODO: Some stupid glue code. Need to put this somewhere else.
-    let merkle_path = witness.path().unwrap();
-    let auth_path: Vec<(bls12_381::Scalar, bool)> = merkle_path
-        .auth_path
-        .iter()
-        .map(|(node, b)| ((*node).into(), *b))
-        .collect();
+        // Add some more random coins in
+        for i in 0..10 {
+            let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            tree.append(cmu);
+            witness.append(cmu);
+            assert_eq!(tree.root(), witness.root());
+        }
+
+        // TODO: Some stupid glue code. Need to put this somewhere else.
+        let merkle_path = witness.path().unwrap();
+        let auth_path: Vec<(bls12_381::Scalar, bool)> = merkle_path
+            .auth_path
+            .iter()
+            .map(|(node, b)| ((*node).into(), *b))
+            .collect();
+        auth_path
+    };
 
     // Step 3: wallet1 sends payment to wallet2
 
@@ -206,9 +226,9 @@ fn main() {
         inputs: vec![tx::TransactionBuilderInputInfo {
             coin,
             merkle_path: auth_path,
-            merkle_root: tree,
-            secret,
-            note: note.clone(),
+            merkle_root: state.tree.clone(),
+            secret: secret.clone(),
+            note: state.own_coins[0].1.clone(),
         }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
