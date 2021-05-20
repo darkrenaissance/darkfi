@@ -2,9 +2,7 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use std::fmt;
 
-use crate::crypto::note::{EncryptedNote, Note};
-use crate::error::{Error, Result};
-use crate::tx;
+use crate::{crypto::{coin::Coin, note::{EncryptedNote, Note}, nullifier::Nullifier}, error::{Error, Result}, tx};
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
@@ -16,8 +14,8 @@ pub trait ProgramState {
 }
 
 pub struct StateUpdates {
-    pub nullifiers: Vec<[u8; 32]>,
-    pub coins: Vec<[u8; 32]>,
+    pub nullifiers: Vec<Nullifier>,
+    pub coins: Vec<Coin>,
     pub enc_notes: Vec<EncryptedNote>
 }
 
@@ -99,7 +97,7 @@ pub fn state_transition<S: ProgramState>(
 
     let mut nullifiers = vec![];
     for input in tx.inputs {
-        nullifiers.push(input.revealed.nullifier);
+        nullifiers.push(Nullifier::new(input.revealed.nullifier));
     }
 
     // Newly created coins for this tx
@@ -107,7 +105,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(output.revealed.coin);
+        coins.push(Coin::new(output.revealed.coin));
         enc_notes.push(output.enc_note);
     }
 

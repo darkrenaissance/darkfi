@@ -189,7 +189,6 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub coin: [u8; 32],
     pub merkle_path: Vec<(bls12_381::Scalar, bool)>,
     pub secret: jubjub::Fr,
     pub note: Note,

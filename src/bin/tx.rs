@@ -10,6 +10,7 @@ use sapvi::crypto::{
     coin::Coin,
     create_mint_proof, create_spend_proof, load_params,
     merkle::{CommitmentTree, IncrementalWitness},
+    nullifier::Nullifier,
     note::{EncryptedNote, Note},
     save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
@@ -21,8 +22,8 @@ use sapvi::tx;
 
 struct MemoryState {
     tree: CommitmentTree<Coin>,
-    nullifiers: Vec<[u8; 32]>,
-    own_coins: Vec<([u8; 32], Note, jubjub::Fr, IncrementalWitness<Coin>)>,
+    nullifiers: Vec<Nullifier>,
+    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Coin>)>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     cashier_public: jubjub::SubgroupPoint,
@@ -56,7 +57,7 @@ impl MemoryState {
         for (coin, enc_note) in updates.coins.into_iter().zip(updates.enc_notes.into_iter()) {
             // Add the new coins to the merkle tree
             self.tree
-                .append(Coin::new(coin.clone()))
+                .append(coin.clone())
                 .expect("Append to merkle tree");
 
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
@@ -224,7 +225,6 @@ fn main() {
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
         inputs: vec![tx::TransactionBuilderInputInfo {
-            coin,
             merkle_path: auth_path,
             secret: secret.clone(),
             note: state.own_coins[0].1.clone(),

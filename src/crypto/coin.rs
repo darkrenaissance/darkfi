@@ -45,7 +45,7 @@ pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::S
 /// A node within the Sapling commitment tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Coin {
-    repr: [u8; 32],
+    pub repr: [u8; 32],
 }
 
 impl Coin {
