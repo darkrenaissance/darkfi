@@ -226,7 +226,6 @@ fn main() {
         inputs: vec![tx::TransactionBuilderInputInfo {
             coin,
             merkle_path: auth_path,
-            merkle_root: state.tree.clone(),
             secret: secret.clone(),
             note: state.own_coins[0].1.clone(),
         }],
