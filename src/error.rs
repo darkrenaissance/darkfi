@@ -7,7 +7,14 @@ use crate::vm::ZKVMError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+//#[derive(Debug, Copy, Clone)]
+
+// need to be able to copy the errors into theads
+// net error has clone and copy attribute 
+// copy vs clone
+//struct Error;
+
 pub enum Error {
     Foo,
     CommitsDontAdd,
@@ -18,13 +25,13 @@ pub enum Error {
     RangeproofPedersenMatchFailed,
     ProofsFailed,
     MissingProofs,
-    Io(std::io::Error),
+    Io(std::io::ErrorKind),
     /// VarInt was encoded in a non-minimal way
     NonMinimalVarInt,
     /// Parsing error
     ParseFailed(&'static str),
     ParseIntError,
-    AsyncChannelError(String),
+    AsyncChannelError,
     MalformedPacket,
     AddrParseError,
     BadVariableRefType,
@@ -32,10 +39,10 @@ pub enum Error {
     BadConstraintType,
     InvalidParamName,
     MissingParams,
-    VMError(ZKVMError),
+    VMError,
     BadContract,
-    Groth16Error(bellman::SynthesisError),
-    RusqliteError(rusqlite::Error),
+    Groth16Error,
+    RusqliteError,
     OperationFailed,
     ConnectFailed,
     ConnectTimeout,
@@ -45,8 +52,8 @@ pub enum Error {
     Utf8Error,
     NoteDecryptionFailed,
     ServicesError(&'static str),
-    ZMQError(zeromq::ZmqError),
-    VerifyFailed(state::VerifyFailed),
+    ZMQError,
+    VerifyFailed,
 }
 
 impl std::error::Error for Error {}
@@ -67,11 +74,11 @@ impl fmt::Display for Error {
             }
             Error::ProofsFailed => f.write_str("Proof validation failed"),
             Error::MissingProofs => f.write_str("Missing proofs"),
-            Error::Io(ref err) => fmt::Display::fmt(err, f),
+            Error::Io(ref err) => write!(f, "io error:{:?}", err),
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
-            Error::AsyncChannelError(ref err) => write!(f, "async_channel error: {}", err),
+            Error::AsyncChannelError => f.write_str("Async_channel error"),
             Error::MalformedPacket => f.write_str("Malformed packet"),
             Error::AddrParseError => f.write_str("Unable to parse address"),
             Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
@@ -79,10 +86,10 @@ impl fmt::Display for Error {
             Error::BadConstraintType => f.write_str("Bad constraint type byte"),
             Error::InvalidParamName => f.write_str("Invalid param name"),
             Error::MissingParams => f.write_str("Missing params"),
-            Error::VMError(_) => f.write_str("VM error"),
+            Error::VMError => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
-            Error::Groth16Error(ref err) => write!(f, "groth16 error: {}", err),
-            Error::RusqliteError(ref err) => write!(f, "Rusqlite error: {}", err),
+            Error::Groth16Error => f.write_str("Groth16 error"),
+            Error::RusqliteError => f.write_str("Rusqlite error"),
             Error::OperationFailed => f.write_str("Operation failed"),
             Error::ConnectFailed => f.write_str("Connection failed"),
             Error::ConnectTimeout => f.write_str("Connection timed out"),
@@ -92,51 +99,52 @@ impl fmt::Display for Error {
             Error::Utf8Error => f.write_str("Malformed UTF8"),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
-            Error::ZMQError(ref err) => write!(f, "zmq error: {}", err),
-            Error::VerifyFailed(ref err) => write!(f, "Verify failed: {}", err),
+            Error::ZMQError => f.write_str("ZMQ error"),
+            Error::VerifyFailed => f.write_str("Verify failed"),
         }
     }
 }
 
+// TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
     fn from(err: zeromq::ZmqError) -> Error {
-        Error::ZMQError(err)
+        Error::ZMQError
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
-        Error::Io(err)
+        Error::Io(err.kind())
     }
 }
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Error {
-        Error::RusqliteError(err)
+        Error::RusqliteError
     }
 }
 
 impl From<ZKVMError> for Error {
     fn from(err: ZKVMError) -> Error {
-        Error::VMError(err)
+        Error::VMError
     }
 }
 
 impl From<bellman::SynthesisError> for Error {
     fn from(err: bellman::SynthesisError) -> Error {
-        Error::Groth16Error(err)
+        Error::Groth16Error
     }
 }
 
 impl<T> From<async_channel::SendError<T>> for Error {
     fn from(err: async_channel::SendError<T>) -> Error {
-        Error::AsyncChannelError(err.to_string())
+        Error::AsyncChannelError
     }
 }
 
 impl From<async_channel::RecvError> for Error {
     fn from(err: async_channel::RecvError) -> Error {
-        Error::AsyncChannelError(err.to_string())
+        Error::AsyncChannelError
     }
 }
 
@@ -173,6 +181,7 @@ impl From<std::string::FromUtf8Error> for Error {
 
 impl From<state::VerifyFailed> for Error {
     fn from(err: state::VerifyFailed) -> Error {
-        Error::VerifyFailed(err)
+        Error::VerifyFailed
     }
 }
+

@@ -232,7 +232,7 @@ impl MessageSubsystem {
     pub async fn trigger_error(&self, err: NetError) {
         // TODO: this could be parallelized
         for dispatcher in self.dispatchers.lock().await.values() {
-            dispatcher.trigger_error(err).await;
+            dispatcher.trigger_error(err.clone()).await;
         }
     }
 }

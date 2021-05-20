@@ -68,7 +68,7 @@ macro_rules! async_encoder_fn {
             stream
                 .write_all(&endian::$writefn(v))
                 .await
-                .map_err(Error::Io)
+                .map_err(|e| Error::Io(e.kind()))
         }
     };
 }
@@ -78,7 +78,7 @@ macro_rules! async_decoder_fn {
         pub async fn $name<R: AsyncRead + Unpin>(stream: &mut R) -> Result<$val_type> {
             assert_eq!(::std::mem::size_of::<$val_type>(), $byte_len); // size_of isn't a constfn in 1.22
             let mut val = [0; $byte_len];
-            stream.read_exact(&mut val[..]).await.map_err(Error::Io)?;
+            stream.read_exact(&mut val[..]).await.map_err(|e| Error::Io(e.kind()))?;
             Ok(endian::$readfn(&val))
         }
     };
@@ -106,6 +106,6 @@ impl AsyncWriteExt {
     async_encoder_fn!(write_u16, u16, u16_to_array_le);
 
     pub async fn write_u8<W: AsyncWrite + Unpin>(stream: &mut W, v: u8) -> Result<()> {
-        stream.write_all(&[v]).await.map_err(Error::Io)
+        stream.write_all(&[v]).await.map_err(|e| Error::Io(e.kind()))
     }
 }
