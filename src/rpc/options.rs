@@ -1,4 +1,3 @@
-#[macro_use]
 use std::net::SocketAddr;
 use crate::{net, Result};
 

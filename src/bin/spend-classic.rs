@@ -167,7 +167,6 @@ impl SpendRevealedValues {
 
 fn main() {
     use rand::rngs::OsRng;
-    use std::time::Instant;
 
     let value = 110;
     let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);

@@ -71,7 +71,7 @@ pub async fn listen(
     }
 }
 
-pub async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions, adapter: Arc<RpcAdapter>) -> Result<()> {
+pub async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions, _adapter: Arc<RpcAdapter>) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings);
 
     let rpc = RpcInterface::new(p2p.clone());

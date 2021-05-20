@@ -107,7 +107,7 @@ impl fmt::Display for Error {
 
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
-    fn from(err: zeromq::ZmqError) -> Error {
+    fn from(_err: zeromq::ZmqError) -> Error {
         Error::ZMQError
     }
 }
@@ -119,31 +119,31 @@ impl From<std::io::Error> for Error {
 }
 
 impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
+    fn from(_err: rusqlite::Error) -> Error {
         Error::RusqliteError
     }
 }
 
 impl From<ZKVMError> for Error {
-    fn from(err: ZKVMError) -> Error {
+    fn from(_err: ZKVMError) -> Error {
         Error::VMError
     }
 }
 
 impl From<bellman::SynthesisError> for Error {
-    fn from(err: bellman::SynthesisError) -> Error {
+    fn from(_err: bellman::SynthesisError) -> Error {
         Error::Groth16Error
     }
 }
 
 impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(err: async_channel::SendError<T>) -> Error {
+    fn from(_err: async_channel::SendError<T>) -> Error {
         Error::AsyncChannelError
     }
 }
 
 impl From<async_channel::RecvError> for Error {
-    fn from(err: async_channel::RecvError) -> Error {
+    fn from(_err: async_channel::RecvError) -> Error {
         Error::AsyncChannelError
     }
 }
@@ -180,7 +180,7 @@ impl From<std::string::FromUtf8Error> for Error {
 }
 
 impl From<state::VerifyFailed> for Error {
-    fn from(err: state::VerifyFailed) -> Error {
+    fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
     }
 }

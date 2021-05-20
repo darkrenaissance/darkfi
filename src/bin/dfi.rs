@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate clap;
 use async_executor::Executor;
 use sapvi::rpc::options::ProgramOptions;
