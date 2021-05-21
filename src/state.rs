@@ -3,12 +3,7 @@ use bls12_381::Bls12;
 use std::fmt;
 
 use crate::{
-    crypto::{
-        node::Node,
-        note::{EncryptedNote, Note},
-        nullifier::Nullifier,
-    },
-    error::{Error, Result},
+    crypto::{node::Node, note::EncryptedNote, nullifier::Nullifier},
     tx,
 };
 

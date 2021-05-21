@@ -2,16 +2,9 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use std::io;
 
-use super::{Transaction, TransactionClearInput, TransactionInput, TransactionOutput};
-use crate::crypto::{
-    node::Node,
-    create_mint_proof, create_spend_proof, load_params,
-    merkle::CommitmentTree,
-    note::{EncryptedNote, Note},
-    save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
-    verify_spend_proof, MintRevealedValues, SpendRevealedValues,
-};
-use crate::error::{Error, Result};
+use super::TransactionOutput;
+use crate::crypto::SpendRevealedValues;
+use crate::error::Result;
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
 

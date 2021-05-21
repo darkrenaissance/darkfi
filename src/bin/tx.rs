@@ -5,13 +5,12 @@ use rand::rngs::OsRng;
 use std::path::Path;
 
 use sapvi::crypto::{
-    node::{hash_coin, Node},
-    create_mint_proof, create_spend_proof, load_params,
+    load_params,
     merkle::{CommitmentTree, IncrementalWitness},
+    node::{hash_coin, Node},
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
-    save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
-    MintRevealedValues, SpendRevealedValues,
+    save_params, setup_mint_prover, setup_spend_prover,
 };
 use sapvi::serial::{Decodable, Encodable};
 use sapvi::state::{state_transition, ProgramState, StateUpdates};

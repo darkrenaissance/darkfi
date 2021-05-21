@@ -7,16 +7,8 @@ use super::{
     partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
-use crate::crypto::{
-    node::Node,
-    create_mint_proof, create_spend_proof, load_params,
-    merkle::CommitmentTree,
-    note::{EncryptedNote, Note},
-    save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
-    verify_spend_proof, MintRevealedValues, SpendRevealedValues,
-};
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, VarInt};
+use crate::crypto::{create_mint_proof, create_spend_proof, note::Note, schnorr};
+use crate::serial::Encodable;
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
