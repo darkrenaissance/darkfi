@@ -1,9 +1,6 @@
 use bellman::groth16;
-use bitvec::{order::Lsb0, view::AsBits};
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
-use group::Curve;
-use group::Group;
 use rand::rngs::OsRng;
 use std::path::Path;
 
@@ -75,10 +72,12 @@ impl MemoryState {
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 // We need to keep track of the witness for this coin.
                 // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-                // Just as we update the merkle tree with every new coin, so we do the same with the witness.
+                // Just as we update the merkle tree with every new coin, so we do the same with
+                // the witness.
 
                 // Derive the current witness from the current tree.
-                // This is done right after we add our coin to the tree (but before any other coins are added)
+                // This is done right after we add our coin to the tree (but before any other
+                // coins are added)
 
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
@@ -167,7 +166,8 @@ fn main() {
 
     // Step 2: wallet1 receive's payment from the cashier
 
-    // Wallet1 is receiving tx, and for every new coin it finds, it adds to its merkle tree
+    // Wallet1 is receiving tx, and for every new coin it finds, it adds to its
+    // merkle tree
     {
         // Here we simulate 5 fake random coins, adding them to our tree.
         let tree = &mut state.tree;

@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use crate::{net, Result};
+use std::net::SocketAddr;
 
 pub struct ProgramOptions {
     pub network_settings: net::Settings,

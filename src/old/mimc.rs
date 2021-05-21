@@ -180,7 +180,7 @@ fn main() {
     //     .map(|_| Scalar::random(&mut OsRng))
     //     .collect::<Vec<_>>();
 
-    let mut constants = Vec::new();
+    let constants = Vec::new();
     /*
     for const_str in mimc_constants() {
         let bytes = from_slice!(&hex::decode(const_str).unwrap(), 32);
@@ -258,11 +258,13 @@ fn main() {
     }
     let proving_avg = total_proving / SAMPLES;
     //let proving_avg =
-    //    proving_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (proving_avg.as_secs() as f64);
+    //    proving_avg.subsec_nanos() as f64 / 1_000_000_000f64 +
+    // (proving_avg.as_secs() as f64);
 
     let verifying_avg = total_verifying / SAMPLES;
     //let verifying_avg =
-    //    verifying_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (verifying_avg.as_secs() as f64);
+    //    verifying_avg.subsec_nanos() as f64 / 1_000_000_000f64 +
+    // (verifying_avg.as_secs() as f64);
 
     println!("Average proving time: {:?} seconds", proving_avg);
     println!("Average verifying time: {:?} seconds", verifying_avg);

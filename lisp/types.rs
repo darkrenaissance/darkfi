@@ -1,8 +1,8 @@
 use bellman::{groth16, Circuit, ConstraintSystem, SynthesisError};
 use sapvi::bls_extensions::BlsStringConversion;
 use std::rc::Rc;
-use std::{cell::RefCell, collections::HashMap};
 use std::time::Instant;
+use std::{cell::RefCell, collections::HashMap};
 // use fnv::FnvHashMap;
 use itertools::Itertools;
 

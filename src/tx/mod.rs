@@ -8,9 +8,8 @@ use std::io;
 
 use self::partial::{PartialTransactionClearInput, PartialTransactionInput};
 use crate::crypto::{
-    note::EncryptedNote,
-    schnorr, verify_mint_proof,
-    verify_spend_proof, MintRevealedValues, SpendRevealedValues,
+    note::EncryptedNote, schnorr, verify_mint_proof, verify_spend_proof, MintRevealedValues,
+    SpendRevealedValues,
 };
 use crate::error::Result;
 use crate::impl_vec;

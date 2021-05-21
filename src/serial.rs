@@ -35,8 +35,8 @@ pub fn deserialize<T: Decodable>(data: &[u8]) -> Result<T> {
     }
 }
 
-/// Deserialize an object from a vector, but will not report an error if said deserialization
-/// doesn't consume the entire vector.
+/// Deserialize an object from a vector, but will not report an error if said
+/// deserialization doesn't consume the entire vector.
 pub fn deserialize_partial<T: Decodable>(data: &[u8]) -> Result<(T, usize)> {
     let mut decoder = Cursor::new(data);
     let rv = Decodable::decode(&mut decoder)?;

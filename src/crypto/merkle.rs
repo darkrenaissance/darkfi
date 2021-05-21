@@ -1,4 +1,5 @@
-//! Implementation of a Merkle tree of commitments used to prove the existence of notes.
+//! Implementation of a Merkle tree of commitments used to prove the existence
+//! of notes.
 
 //use byteorder::{LittleEndian, ReadBytesExt};
 use std::collections::VecDeque;
@@ -45,8 +46,8 @@ impl<Node: Hashable> PathFiller<Node> {
 
 /// A Merkle tree of note commitments.
 ///
-/// The depth of the Merkle tree is fixed at 32, equal to the depth of the Sapling
-/// commitment tree.
+/// The depth of the Merkle tree is fixed at 32, equal to the depth of the
+/// Sapling commitment tree.
 #[derive(Clone)]
 pub struct CommitmentTree<Node: Hashable> {
     left: Option<Node>,
@@ -187,11 +188,12 @@ impl<Node: Hashable> CommitmentTree<Node> {
     }
 }
 
-/// An updatable witness to a path from a position in a particular [`CommitmentTree`].
+/// An updatable witness to a path from a position in a particular
+/// [`CommitmentTree`].
 ///
 /// Appending the same commitments in the same order to both the original
-/// [`CommitmentTree`] and this `IncrementalWitness` will result in a witness to the path
-/// from the target position to the root of the updated tree.
+/// [`CommitmentTree`] and this `IncrementalWitness` will result in a witness to
+/// the path from the target position to the root of the updated tree.
 ///
 /// # Examples
 ///
@@ -227,8 +229,8 @@ pub struct IncrementalWitness<Node: Hashable> {
 }
 
 impl<Node: Hashable> IncrementalWitness<Node> {
-    /// Creates an `IncrementalWitness` for the most recent commitment added to the given
-    /// [`CommitmentTree`].
+    /// Creates an `IncrementalWitness` for the most recent commitment added to
+    /// the given [`CommitmentTree`].
     pub fn from_tree(tree: &CommitmentTree<Node>) -> IncrementalWitness<Node> {
         IncrementalWitness {
             tree: tree.clone(),
@@ -401,7 +403,8 @@ impl<Node: Hashable> IncrementalWitness<Node> {
     }
 }
 
-/// A path from a position in a particular commitment tree to the root of that tree.
+/// A path from a position in a particular commitment tree to the root of that
+/// tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MerklePath<Node: Hashable> {
     pub auth_path: Vec<(Node, bool)>,
@@ -484,7 +487,8 @@ impl<Node: Hashable> MerklePath<Node> {
     }
     */
 
-    /// Returns the root of the tree corresponding to this path applied to `leaf`.
+    /// Returns the root of the tree corresponding to this path applied to
+    /// `leaf`.
     pub fn root(&self, leaf: Node) -> Node {
         self.auth_path
             .iter()

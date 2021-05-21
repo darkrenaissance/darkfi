@@ -14,9 +14,10 @@ pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubju
     // ExtendedPoint::mul_by_cofactor in the jubjub crate.
 
     // ExtendedPoint::multiply currently just implements double-and-add,
-    // so using wNAF is a concrete speed improvement (as it operates over a window of bits
-    // instead of individual bits).
-    // We want that to be fast because it's in the hot path for trial decryption of notes on chain.
+    // so using wNAF is a concrete speed improvement (as it operates over a window
+    // of bits instead of individual bits).
+    // We want that to be fast because it's in the hot path for trial decryption of
+    // notes on chain.
     let mut wnaf = group::Wnaf::new();
     wnaf.scalar(esk).base(*pk_d).clear_cofactor()
 }

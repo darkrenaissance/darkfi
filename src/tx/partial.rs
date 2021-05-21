@@ -1,8 +1,5 @@
 use bellman::groth16;
 use bls12_381::Bls12;
-use ff::Field;
-use rand::rngs::OsRng;
-use std::collections::HashMap;
 use std::io;
 
 use super::{Transaction, TransactionClearInput, TransactionInput, TransactionOutput};
@@ -63,7 +60,7 @@ impl Encodable for PartialTransactionClearInput {
         len += self.signature_public.encode(&mut s)?;
         Ok(len)
     }
-} 
+}
 impl Decodable for PartialTransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {

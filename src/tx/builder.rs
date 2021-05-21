@@ -2,8 +2,6 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
 use rand::rngs::OsRng;
-use std::collections::HashMap;
-use std::io;
 
 use super::{
     partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},

@@ -1,24 +1,10 @@
 extern crate clap;
 use async_executor::Executor;
-use async_native_tls::TlsAcceptor;
-use async_std::sync::Mutex;
 use easy_parallel::Parallel;
-use http_types::{Request, Response, StatusCode};
-use log::*;
 use sapvi::rpc::adapter::RpcAdapter;
 use sapvi::rpc::jsonserver;
-use sapvi::rpc::jsonserver::RpcInterface;
 use sapvi::rpc::options::ProgramOptions;
-use sapvi::{net, Result};
-use serde_json::json;
-use smol::Async;
-use std::net::SocketAddr;
-use std::net::TcpListener;
-use sapvi::rpc::options::ProgramOptions;
-use easy_parallel::Parallel;
-use sapvi::rpc::jsonserver;
 use sapvi::Result;
-use sapvi::rpc::adapter::RpcAdapter;
 use std::sync::Arc;
 
 /*
@@ -153,8 +139,8 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
 //            }
 //        }
 //
-//        let connection_slots = if let Some(connection_slots) = app.value_of("CONNECT_SLOTS") {
-//            connection_slots.parse()?
+//        let connection_slots = if let Some(connection_slots) =
+// app.value_of("CONNECT_SLOTS") {            connection_slots.parse()?
 //        } else {
 //            0
 //        };
