@@ -61,21 +61,21 @@ pub fn hash_coin(coin: [u8; 32]) -> bls12_381::Scalar {
 
 /// A node within the Sapling commitment tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Coin {
+pub struct Node {
     pub repr: [u8; 32],
 }
 
-impl Coin {
+impl Node {
     pub fn new(repr: [u8; 32]) -> Self {
-        Coin { repr }
+        Self { repr }
     }
 }
 
-impl Hashable for Coin {
+impl Hashable for Node {
     fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
         let mut repr = [0u8; 32];
         reader.read_exact(&mut repr)?;
-        Ok(Coin::new(repr))
+        Ok(Self::new(repr))
     }
 
     fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
@@ -83,7 +83,7 @@ impl Hashable for Coin {
     }
 
     fn combine(depth: usize, lhs: &Self, rhs: &Self) -> Self {
-        Coin {
+        Self {
             repr: merkle_hash(depth, &lhs.repr, &rhs.repr).to_repr(),
         }
     }
@@ -92,7 +92,7 @@ impl Hashable for Coin {
         // The smallest u-coordinate that is not on the curve
         // is one.
         let uncommitted_note = bls12_381::Scalar::one();
-        Coin {
+        Self {
             repr: uncommitted_note.to_repr(),
         }
     }
@@ -102,17 +102,17 @@ impl Hashable for Coin {
     }
 }
 
-impl From<Coin> for bls12_381::Scalar {
-    fn from(coin: Coin) -> Self {
-        bls12_381::Scalar::from_repr(coin.repr).expect("Tree nodes should be in the prime field")
+impl From<Node> for bls12_381::Scalar {
+    fn from(node: Node) -> Self {
+        bls12_381::Scalar::from_repr(node.repr).expect("Tree nodes should be in the prime field")
     }
 }
 
 lazy_static! {
-    static ref EMPTY_ROOTS: Vec<Coin> = {
-        let mut v = vec![Coin::blank()];
+    static ref EMPTY_ROOTS: Vec<Node> = {
+        let mut v = vec![Node::blank()];
         for d in 0..SAPLING_COMMITMENT_TREE_DEPTH {
-            let next = Coin::combine(d, &v[d], &v[d]);
+            let next = Node::combine(d, &v[d], &v[d]);
             v.push(next);
         }
         v

@@ -1,4 +1,4 @@
-pub mod coin;
+pub mod node;
 pub mod diffie_hellman;
 pub mod fr_serial;
 pub mod merkle;

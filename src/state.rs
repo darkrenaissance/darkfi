@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::{
     crypto::{
-        coin::Coin,
+        node::Node,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
     },
@@ -23,7 +23,7 @@ pub trait ProgramState {
 
 pub struct StateUpdates {
     pub nullifiers: Vec<Nullifier>,
-    pub coins: Vec<Coin>,
+    pub coins: Vec<Node>,
     pub enc_notes: Vec<EncryptedNote>,
 }
 
@@ -113,7 +113,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin::new(output.revealed.coin));
+        coins.push(Node::new(output.revealed.coin));
         enc_notes.push(output.enc_note);
     }
 

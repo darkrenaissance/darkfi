@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
-use super::coin::merkle_hash;
+use super::node::merkle_hash;
 use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
@@ -211,7 +211,7 @@ pub fn create_spend_proof(
     assert_eq!(merkle_path.len(), 4);
     assert_eq!(
         merkle_path.len(),
-        super::coin::SAPLING_COMMITMENT_TREE_DEPTH
+        super::node::SAPLING_COMMITMENT_TREE_DEPTH
     );
     let c = SpendContract {
         value: Some(value),

@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use std::path::Path;
 
 use sapvi::crypto::{
-    coin::{hash_coin, Coin},
+    node::{hash_coin, Node},
     create_mint_proof, create_spend_proof, load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     note::{EncryptedNote, Note},
@@ -21,10 +21,10 @@ use sapvi::state::{state_transition, ProgramState, StateUpdates};
 use sapvi::tx;
 
 struct MemoryState {
-    tree: CommitmentTree<Coin>,
+    tree: CommitmentTree<Node>,
     merkle_roots: Vec<bls12_381::Scalar>,
     nullifiers: Vec<Nullifier>,
-    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Coin>)>,
+    own_coins: Vec<(Node, Note, jubjub::Fr, IncrementalWitness<Node>)>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     cashier_public: jubjub::SubgroupPoint,
@@ -60,14 +60,14 @@ impl MemoryState {
 
             // Add the new coins to the merkle tree
             self.tree
-                .append(Coin::new(node.to_repr()))
+                .append(Node::new(node.to_repr()))
                 .expect("Append to merkle tree");
 
             let root = self.tree.root();
             self.merkle_roots.push(root.into());
             for (_, _, _, witness) in self.own_coins.iter_mut() {
                 witness
-                    .append(Coin::new(node.to_repr()))
+                    .append(Node::new(node.to_repr()))
                     .expect("append to witness");
             }
             assert_eq!(self.own_coins.len(), 0);
@@ -172,7 +172,7 @@ fn main() {
         // Here we simulate 5 fake random coins, adding them to our tree.
         let tree = &mut state.tree;
         for i in 0..5 {
-            let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
 
             let root = tree.root();
@@ -204,7 +204,7 @@ fn main() {
 
         // Add some more random coins in
         for i in 0..10 {
-            let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
             witness.append(cmu);
             assert_eq!(tree.root(), witness.root());
@@ -228,7 +228,7 @@ fn main() {
         let root = tree.root();
         drop(tree);
         drop(witness);
-        assert_eq!(merkle_path.root(Coin::new(node)), root);
+        assert_eq!(merkle_path.root(Node::new(node)), root);
         let root = root.into();
         assert!(state.is_valid_merkle(&root));
 

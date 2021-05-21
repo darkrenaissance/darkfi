@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 
 //use crate::serialize::{Optional, Vector};
-use super::coin::SAPLING_COMMITMENT_TREE_DEPTH;
+use super::node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 /// A hashable node within a Merkle tree.
 pub trait Hashable: Clone + Copy {

@@ -10,7 +10,7 @@ use super::{
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
 use crate::crypto::{
-    coin::Coin,
+    node::Node,
     create_mint_proof, create_spend_proof, load_params,
     merkle::CommitmentTree,
     note::{EncryptedNote, Note},
