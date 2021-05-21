@@ -103,7 +103,8 @@ macro_rules! encoder_fn {
     ($name:ident, $val_type:ty, $writefn:ident) => {
         #[inline]
         fn $name(&mut self, v: $val_type) -> Result<()> {
-            self.write_all(&endian::$writefn(v)).map_err(|e| Error::Io(e.kind()))
+            self.write_all(&endian::$writefn(v))
+                .map_err(|e| Error::Io(e.kind()))
         }
     };
 }
@@ -114,7 +115,8 @@ macro_rules! decoder_fn {
         fn $name(&mut self) -> Result<$val_type> {
             assert_eq!(::std::mem::size_of::<$val_type>(), $byte_len); // size_of isn't a constfn in 1.22
             let mut val = [0; $byte_len];
-            self.read_exact(&mut val[..]).map_err(|e| Error::Io(e.kind()))?;
+            self.read_exact(&mut val[..])
+                .map_err(|e| Error::Io(e.kind()))?;
             Ok(endian::$readfn(&val))
         }
     };

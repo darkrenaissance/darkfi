@@ -2,7 +2,15 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use std::fmt;
 
-use crate::{crypto::{coin::Coin, note::{EncryptedNote, Note}, nullifier::Nullifier}, error::{Error, Result}, tx};
+use crate::{
+    crypto::{
+        coin::Coin,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
+    },
+    error::{Error, Result},
+    tx,
+};
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
@@ -16,7 +24,7 @@ pub trait ProgramState {
 pub struct StateUpdates {
     pub nullifiers: Vec<Nullifier>,
     pub coins: Vec<Coin>,
-    pub enc_notes: Vec<EncryptedNote>
+    pub enc_notes: Vec<EncryptedNote>,
 }
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
@@ -109,5 +117,9 @@ pub fn state_transition<S: ProgramState>(
         enc_notes.push(output.enc_note);
     }
 
-    Ok(StateUpdates { nullifiers, coins, enc_notes })
+    Ok(StateUpdates {
+        nullifiers,
+        coins,
+        enc_notes,
+    })
 }

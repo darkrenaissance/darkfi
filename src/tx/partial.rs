@@ -1,14 +1,11 @@
 use bellman::groth16;
 use bls12_381::Bls12;
+use ff::Field;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::io;
-use ff::Field;
 
-use crate::error::{Error, Result};
-use crate::impl_vec;
-use crate::serial::{Decodable, Encodable, VarInt};
-use super::{TransactionClearInput, TransactionInput, TransactionOutput, Transaction};
+use super::{Transaction, TransactionClearInput, TransactionInput, TransactionOutput};
 use crate::crypto::{
     coin::Coin,
     create_mint_proof, create_spend_proof, load_params,
@@ -17,6 +14,9 @@ use crate::crypto::{
     save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
     verify_spend_proof, MintRevealedValues, SpendRevealedValues,
 };
+use crate::error::{Error, Result};
+use crate::impl_vec;
+use crate::serial::{Decodable, Encodable, VarInt};
 
 pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
@@ -75,7 +75,6 @@ impl Decodable for PartialTransactionClearInput {
     }
 }
 
-
 impl Encodable for PartialTransactionInput {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
@@ -96,4 +95,3 @@ impl Decodable for PartialTransactionInput {
 
 impl_vec!(PartialTransactionClearInput);
 impl_vec!(PartialTransactionInput);
-

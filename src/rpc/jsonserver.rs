@@ -1,6 +1,6 @@
-use crate::{net, serial, Error, Result};
-use crate::rpc::options::ProgramOptions;
 use crate::rpc::adapter::RpcAdapter;
+use crate::rpc::options::ProgramOptions;
+use crate::{net, serial, Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
@@ -80,7 +80,11 @@ pub async fn listen(
     }
 }
 
-pub async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions, adapter: Arc<RpcAdapter>) -> Result<()> {
+pub async fn start(
+    executor: Arc<Executor<'_>>,
+    options: ProgramOptions,
+    adapter: Arc<RpcAdapter>,
+) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings);
 
     let rpc = RpcInterface::new(p2p.clone());

@@ -1,17 +1,19 @@
 use bellman::groth16;
+use bitvec::{order::Lsb0, view::AsBits};
 use bls12_381::Bls12;
 use ff::{Field, PrimeField};
+use group::Curve;
 use group::Group;
 use rand::rngs::OsRng;
 use std::io;
 use std::path::Path;
 
 use sapvi::crypto::{
-    coin::Coin,
+    coin::{hash_coin, Coin},
     create_mint_proof, create_spend_proof, load_params,
     merkle::{CommitmentTree, IncrementalWitness},
-    nullifier::Nullifier,
     note::{EncryptedNote, Note},
+    nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
 };
@@ -22,6 +24,7 @@ use sapvi::tx;
 
 struct MemoryState {
     tree: CommitmentTree<Coin>,
+    merkle_roots: Vec<bls12_381::Scalar>,
     nullifiers: Vec<Nullifier>,
     own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Coin>)>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
@@ -35,10 +38,10 @@ impl ProgramState for MemoryState {
         public == &self.cashier_public
     }
     fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool {
-        true
+        self.merkle_roots.iter().any(|m| *m == *merkle)
     }
     fn nullifier_exists(&self, nullifier: &[u8; 32]) -> bool {
-        false
+        self.nullifiers.iter().any(|n| n.repr == *nullifier)
     }
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
@@ -55,10 +58,21 @@ impl MemoryState {
 
         // Update merkle tree and witnesses
         for (coin, enc_note) in updates.coins.into_iter().zip(updates.enc_notes.into_iter()) {
+            let node = hash_coin(coin.repr);
+
             // Add the new coins to the merkle tree
             self.tree
-                .append(coin.clone())
+                .append(Coin::new(node.to_repr()))
                 .expect("Append to merkle tree");
+
+            let root = self.tree.root();
+            self.merkle_roots.push(root.into());
+            for (_, _, _, witness) in self.own_coins.iter_mut() {
+                witness
+                    .append(Coin::new(node.to_repr()))
+                    .expect("append to witness");
+            }
+            assert_eq!(self.own_coins.len(), 0);
 
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 // We need to keep track of the witness for this coin.
@@ -119,6 +133,7 @@ fn main() {
 
     let mut state = MemoryState {
         tree: CommitmentTree::empty(),
+        merkle_roots: vec![],
         nullifiers: vec![],
         own_coins: vec![],
         mint_pvk,
@@ -161,6 +176,9 @@ fn main() {
         for i in 0..5 {
             let cmu = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
+
+            let root = tree.root();
+            state.merkle_roots.push(root.into());
         }
     }
 
@@ -178,9 +196,9 @@ fn main() {
     assert_eq!(state.own_coins.len(), 1);
     //let (coin, note, secret, witness) = &mut state.own_coins[0];
 
-    let auth_path =
-    {
+    let auth_path = {
         let tree = &mut state.tree;
+        let coin = state.own_coins[0].0;
         let witness = &mut state.own_coins[0].3;
         // Check this is the 6th coin we added
         assert_eq!(witness.position(), 5);
@@ -192,7 +210,12 @@ fn main() {
             tree.append(cmu);
             witness.append(cmu);
             assert_eq!(tree.root(), witness.root());
+
+            let root = tree.root();
+            state.merkle_roots.push(root.into());
         }
+
+        assert_eq!(state.merkle_roots.len(), 16);
 
         // TODO: Some stupid glue code. Need to put this somewhere else.
         let merkle_path = witness.path().unwrap();
@@ -201,6 +224,16 @@ fn main() {
             .iter()
             .map(|(node, b)| ((*node).into(), *b))
             .collect();
+
+        let node = hash_coin(coin.repr).to_repr();
+
+        let root = tree.root();
+        drop(tree);
+        drop(witness);
+        assert_eq!(merkle_path.root(Coin::new(node)), root);
+        let root = root.into();
+        assert!(state.is_valid_merkle(&root));
+
         auth_path
     };
 
@@ -245,6 +278,8 @@ fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
+        println!("tx {:?}", tx.inputs[0].revealed.merkle_root);
+        assert!(state.is_valid_merkle(&tx.inputs[0].revealed.merkle_root));
         let update = state_transition(&state, tx).expect("step 3 state transition failed");
     }
 }

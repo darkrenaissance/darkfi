@@ -11,7 +11,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 //#[derive(Debug, Copy, Clone)]
 
 // need to be able to copy the errors into theads
-// net error has clone and copy attribute 
+// net error has clone and copy attribute
 // copy vs clone
 //struct Error;
 
@@ -184,4 +184,3 @@ impl From<state::VerifyFailed> for Error {
         Error::VerifyFailed
     }
 }
-

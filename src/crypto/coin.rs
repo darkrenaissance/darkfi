@@ -42,6 +42,23 @@ pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::S
     .get_u()
 }
 
+pub fn hash_coin(coin: [u8; 32]) -> bls12_381::Scalar {
+    let rhs = {
+        let mut tmp = [false; 256];
+        for (a, b) in tmp.iter_mut().zip(coin.as_bits::<Lsb0>()) {
+            *a = *b;
+        }
+        tmp
+    };
+
+    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
+        zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
+        rhs.iter().copied(),
+    ))
+    .to_affine()
+    .get_u()
+}
+
 /// A node within the Sapling commitment tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Coin {

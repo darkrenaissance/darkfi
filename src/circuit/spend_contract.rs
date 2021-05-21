@@ -253,6 +253,13 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 168: ec_get_u current cm
         let mut current = cm.get_u().clone();
 
+        match current.get_value() {
+            Some(v) => {
+                println!("coin hashed {:?}", v);
+            }
+            None => {}
+        }
+
         // Line 174: alloc_scalar branch param:branch_0
         let branch = num::AllocatedNum::alloc(
             cs.namespace(|| "Line 174: alloc_scalar branch param:branch_0"),

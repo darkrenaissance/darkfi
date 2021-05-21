@@ -9,6 +9,7 @@ use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::io;
 
+use self::partial::{PartialTransactionClearInput, PartialTransactionInput};
 use crate::crypto::{
     coin::Coin,
     create_mint_proof, create_spend_proof, load_params,
@@ -21,9 +22,11 @@ use crate::error::{Error, Result};
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
 use crate::state;
-use self::partial::{PartialTransactionClearInput, PartialTransactionInput};
 
-pub use self::builder::{TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo, TransactionBuilderOutputInfo};
+pub use self::builder::{
+    TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+    TransactionBuilderOutputInfo,
+};
 
 pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
@@ -256,4 +259,3 @@ impl_vec_without_signature!(TransactionInput);
 impl_vec!(TransactionClearInput);
 impl_vec!(TransactionInput);
 impl_vec!(TransactionOutput);
-

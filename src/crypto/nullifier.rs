@@ -7,4 +7,3 @@ impl Nullifier {
         Self { repr }
     }
 }
-
