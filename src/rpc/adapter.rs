@@ -1,10 +1,5 @@
 // Adapter class goes here
 //use crate::rpc::jsonserver::JsonRpcInterface;
-use crate::Result;
-use async_executor::Executor;
-use async_native_tls::TlsAcceptor;
-use smol::Async;
-use std::net::TcpListener;
 use std::sync::Arc;
 
 // Dummy adapter for now

@@ -1,30 +1,13 @@
 use rusqlite;
 use std::fmt;
 
-use crate::net::error::NetError;
 use crate::state;
 use crate::vm::ZKVMError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone)]
-//#[derive(Debug, Copy, Clone)]
-
-// need to be able to copy the errors into theads
-// net error has clone and copy attribute
-// copy vs clone
-//struct Error;
-
 pub enum Error {
-    Foo,
-    CommitsDontAdd,
-    InvalidCredential,
-    TransactionPedersenCheckFailed,
-    TokenAlreadySpent,
-    InputTokenVerifyFailed,
-    RangeproofPedersenMatchFailed,
-    ProofsFailed,
-    MissingProofs,
     Io(std::io::ErrorKind),
     /// VarInt was encoded in a non-minimal way
     NonMinimalVarInt,
@@ -61,19 +44,6 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match *self {
-            Error::Foo => f.write_str("foo"),
-            Error::CommitsDontAdd => f.write_str("Commits don't add up properly"),
-            Error::InvalidCredential => f.write_str("Credential is invalid"),
-            Error::TransactionPedersenCheckFailed => {
-                f.write_str("Transaction pedersens for input and output don't sum up")
-            }
-            Error::TokenAlreadySpent => f.write_str("This input token is already spent"),
-            Error::InputTokenVerifyFailed => f.write_str("Input token verify of credential failed"),
-            Error::RangeproofPedersenMatchFailed => {
-                f.write_str("Rangeproof pedersen check for match failed")
-            }
-            Error::ProofsFailed => f.write_str("Proof validation failed"),
-            Error::MissingProofs => f.write_str("Missing proofs"),
             Error::Io(ref err) => write!(f, "io error:{:?}", err),
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
@@ -107,7 +77,7 @@ impl fmt::Display for Error {
 
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
-    fn from(err: zeromq::ZmqError) -> Error {
+    fn from(_err: zeromq::ZmqError) -> Error {
         Error::ZMQError
     }
 }
@@ -119,31 +89,31 @@ impl From<std::io::Error> for Error {
 }
 
 impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
+    fn from(_err: rusqlite::Error) -> Error {
         Error::RusqliteError
     }
 }
 
 impl From<ZKVMError> for Error {
-    fn from(err: ZKVMError) -> Error {
+    fn from(_err: ZKVMError) -> Error {
         Error::VMError
     }
 }
 
 impl From<bellman::SynthesisError> for Error {
-    fn from(err: bellman::SynthesisError) -> Error {
+    fn from(_err: bellman::SynthesisError) -> Error {
         Error::Groth16Error
     }
 }
 
 impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(err: async_channel::SendError<T>) -> Error {
+    fn from(_err: async_channel::SendError<T>) -> Error {
         Error::AsyncChannelError
     }
 }
 
 impl From<async_channel::RecvError> for Error {
-    fn from(err: async_channel::RecvError) -> Error {
+    fn from(_err: async_channel::RecvError) -> Error {
         Error::AsyncChannelError
     }
 }
@@ -160,19 +130,6 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
-impl From<NetError> for Error {
-    fn from(err: NetError) -> Error {
-        match err {
-            NetError::OperationFailed => Error::OperationFailed,
-            NetError::ConnectFailed => Error::ConnectFailed,
-            NetError::ConnectTimeout => Error::ConnectTimeout,
-            NetError::ChannelStopped => Error::ChannelStopped,
-            NetError::ChannelTimeout => Error::ChannelTimeout,
-            NetError::ServiceStopped => Error::ServiceStopped,
-        }
-    }
-}
-
 impl From<std::string::FromUtf8Error> for Error {
     fn from(_err: std::string::FromUtf8Error) -> Error {
         Error::Utf8Error
@@ -180,7 +137,7 @@ impl From<std::string::FromUtf8Error> for Error {
 }
 
 impl From<state::VerifyFailed> for Error {
-    fn from(err: state::VerifyFailed) -> Error {
+    fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
     }
 }

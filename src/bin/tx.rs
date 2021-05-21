@@ -5,7 +5,6 @@ use ff::{Field, PrimeField};
 use group::Curve;
 use group::Group;
 use rand::rngs::OsRng;
-use std::io;
 use std::path::Path;
 
 use sapvi::crypto::{
@@ -17,8 +16,7 @@ use sapvi::crypto::{
     save_params, setup_mint_prover, setup_spend_prover, verify_mint_proof, verify_spend_proof,
     MintRevealedValues, SpendRevealedValues,
 };
-use sapvi::error::{Error, Result};
-use sapvi::serial::{Decodable, Encodable, VarInt};
+use sapvi::serial::{Decodable, Encodable};
 use sapvi::state::{state_transition, ProgramState, StateUpdates};
 use sapvi::tx;
 
@@ -278,7 +276,6 @@ fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        println!("tx {:?}", tx.inputs[0].revealed.merkle_root);
         assert!(state.is_valid_merkle(&tx.inputs[0].revealed.merkle_root));
         let update = state_transition(&state, tx).expect("step 3 state transition failed");
     }

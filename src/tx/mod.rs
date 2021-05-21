@@ -3,22 +3,16 @@ pub mod partial;
 
 use bellman::groth16;
 use bls12_381::Bls12;
-use ff::Field;
 use group::Group;
-use rand::rngs::OsRng;
-use std::collections::HashMap;
 use std::io;
 
 use self::partial::{PartialTransactionClearInput, PartialTransactionInput};
 use crate::crypto::{
-    coin::Coin,
-    create_mint_proof, create_spend_proof, load_params,
-    merkle::CommitmentTree,
-    note::{EncryptedNote, Note},
-    save_params, schnorr, setup_mint_prover, setup_spend_prover, verify_mint_proof,
+    note::EncryptedNote,
+    schnorr, verify_mint_proof,
     verify_spend_proof, MintRevealedValues, SpendRevealedValues,
 };
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
 use crate::state;

@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate clap;
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -15,6 +14,11 @@ use serde_json::json;
 use smol::Async;
 use std::net::SocketAddr;
 use std::net::TcpListener;
+use sapvi::rpc::options::ProgramOptions;
+use easy_parallel::Parallel;
+use sapvi::rpc::jsonserver;
+use sapvi::Result;
+use sapvi::rpc::adapter::RpcAdapter;
 use std::sync::Arc;
 
 /*

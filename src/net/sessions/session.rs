@@ -3,7 +3,7 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::net::error::NetResult;
+use crate::error::Result;
 use crate::net::p2p::P2pPtr;
 use crate::net::protocols::ProtocolVersion;
 use crate::net::ChannelPtr;
@@ -34,7 +34,7 @@ pub trait Session: Sync {
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         debug!(target: "net", "Session::register_channel() [START]");
 
         let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
@@ -58,7 +58,7 @@ pub trait Session: Sync {
         protocol_version: Arc<ProtocolVersion>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 

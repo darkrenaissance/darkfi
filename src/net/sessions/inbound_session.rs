@@ -3,7 +3,8 @@ use log::*;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
+//use crate::net::error::{Error, Result};
 use crate::net::protocols::{ProtocolAddress, ProtocolPing};
 use crate::net::sessions::Session;
 use crate::net::{Acceptor, AcceptorPtr};
@@ -31,7 +32,7 @@ impl InboundSession {
     /// Starts the inbound session. Begins by accepting connections and fails if
     /// the address is not configured. Then runs the channel subscription
     /// loop.
-    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         match self.p2p().settings().inbound {
             Some(accept_addr) => {
                 self.clone()
@@ -47,7 +48,7 @@ impl InboundSession {
             self.clone().channel_sub_loop(executor.clone()),
             // Ignore stop handler
             |_| async {},
-            NetError::ServiceStopped,
+            Error::ServiceStopped,
             executor,
         );
 
@@ -63,7 +64,7 @@ impl InboundSession {
         self: Arc<Self>,
         accept_addr: SocketAddr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         info!("Starting inbound session on {}", accept_addr);
         let result = self.acceptor.clone().start(accept_addr, executor);
         if let Err(err) = result.clone() {
@@ -74,7 +75,7 @@ impl InboundSession {
 
     /// Wait for all new channels created by the acceptor and call
     /// setup_channel() on them.
-    async fn channel_sub_loop(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    async fn channel_sub_loop(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let channel_sub = self.acceptor.clone().subscribe().await;
         loop {
             let channel = channel_sub.receive().await?;
@@ -93,7 +94,7 @@ impl InboundSession {
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         info!("Connected inbound [{}]", channel.address());
 
         self.clone()
@@ -108,7 +109,7 @@ impl InboundSession {
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         let settings = self.p2p().settings().clone();
         let hosts = self.p2p().hosts().clone();
 

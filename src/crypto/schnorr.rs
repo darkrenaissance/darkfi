@@ -1,10 +1,10 @@
 use ff::Field;
-use group::{Group, GroupEncoding};
+use group::GroupEncoding;
 use rand::rngs::OsRng;
 use std::io;
 
 use super::util::hash_to_scalar;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
 pub struct SecretKey(pub jubjub::Fr);

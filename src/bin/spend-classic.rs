@@ -1,12 +1,9 @@
 use bellman::gadgets::multipack;
-use bellman::groth16;
 use bitvec::{order::Lsb0, view::AsBits};
 use blake2s_simd::Params as Blake2sParams;
-use bls12_381::Bls12;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
-use sapvi::circuit::spend_contract::SpendContract;
 use sapvi::crypto::{
     create_spend_proof, load_params, save_params, setup_spend_prover, verify_spend_proof,
 };
@@ -170,7 +167,6 @@ impl SpendRevealedValues {
 
 fn main() {
     use rand::rngs::OsRng;
-    use std::time::Instant;
 
     let value = 110;
     let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);

@@ -63,8 +63,7 @@ impl Encodable for PartialTransactionClearInput {
         len += self.signature_public.encode(&mut s)?;
         Ok(len)
     }
-}
-
+} 
 impl Decodable for PartialTransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {

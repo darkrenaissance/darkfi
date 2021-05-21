@@ -2,7 +2,7 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::net::error::NetResult;
+use crate::error::Result;
 use crate::net::message_subscriber::MessageSubscription;
 use crate::net::messages;
 use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
@@ -68,7 +68,7 @@ impl ProtocolAddress {
     /// Handles receiving the address message. Loops to continually recieve
     /// address messages on the address subsciption. Adds the recieved
     /// addresses to the list of hosts.
-    async fn handle_receive_addrs(self: Arc<Self>) -> NetResult<()> {
+    async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
@@ -88,7 +88,7 @@ impl ProtocolAddress {
     /// Handles receiving the get-address message. Continually recieves
     /// get-address messages on the get-address subsciption. Then replies
     /// with an address message.
-    async fn handle_receive_get_addrs(self: Arc<Self>) -> NetResult<()> {
+    async fn handle_receive_get_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() [START]");
         loop {
             let _get_addrs = self.get_addrs_sub.receive().await?;

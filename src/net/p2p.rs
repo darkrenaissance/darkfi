@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
 use crate::net::messages::Message;
 use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
 use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
@@ -22,9 +22,9 @@ pub type P2pPtr = Arc<P2p>;
 pub struct P2p {
     pending: PendingChannels,
     channels: ConnectedChannels<Channel>,
-    channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
+    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     // Used both internally and externally
-    stop_subscriber: SubscriberPtr<NetError>,
+    stop_subscriber: SubscriberPtr<Error>,
     hosts: HostsPtr,
     settings: SettingsPtr,
 }
@@ -44,7 +44,7 @@ impl P2p {
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::start() [BEGIN]");
         // Start manual connections
 
@@ -59,7 +59,7 @@ impl P2p {
 
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
-    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> NetResult<()> {
+    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
 
         let inbound = InboundSession::new(Arc::downgrade(&self));
@@ -81,7 +81,7 @@ impl P2p {
     }
 
     /// Broadcasts a message across all channels.
-    pub async fn broadcast<M: Message + Clone>(&self, message: M) -> NetResult<()> {
+    pub async fn broadcast<M: Message + Clone>(&self, message: M) -> Result<()> {
         for channel in self.channels.lock().await.values() {
             channel.send(message.clone()).await?;
         }
@@ -133,12 +133,12 @@ impl P2p {
     }
 
     /// Subscribe to a channel.
-    pub async fn subscribe_channel(&self) -> Subscription<NetResult<ChannelPtr>> {
+    pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
     }
 
     /// Subscribe to a stop signal.
-    pub async fn subscribe_stop(&self) -> Subscription<NetError> {
+    pub async fn subscribe_stop(&self) -> Subscription<Error> {
         self.stop_subscriber.clone().subscribe().await
     }
 }

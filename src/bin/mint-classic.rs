@@ -1,9 +1,5 @@
-use bellman::gadgets::multipack;
-use bellman::groth16;
-use blake2s_simd::Params as Blake2sParams;
-use bls12_381::Bls12;
 use ff::Field;
-use group::{Curve, Group, GroupEncoding};
+use group::Group;
 
 use sapvi::crypto::{
     create_mint_proof, load_params, save_params, setup_mint_prover, verify_mint_proof,
@@ -11,7 +7,6 @@ use sapvi::crypto::{
 
 fn main() {
     use rand::rngs::OsRng;
-    use std::time::Instant;
 
     let public = jubjub::SubgroupPoint::random(&mut OsRng);
 

@@ -3,7 +3,8 @@ use smol::{Async, Executor};
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
 
-use crate::net::error::{NetError, NetResult};
+use crate::error::{Error, Result};
+//use crate::net::error::{, Result};
 use crate::net::{Channel, ChannelPtr};
 use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
 
@@ -12,7 +13,7 @@ pub type AcceptorPtr = Arc<Acceptor>;
 
 /// Create inbound socket connections.
 pub struct Acceptor {
-    channel_subscriber: SubscriberPtr<NetResult<ChannelPtr>>,
+    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
 }
 
@@ -31,7 +32,7 @@ impl Acceptor {
         self: Arc<Self>,
         accept_addr: SocketAddr,
         executor: Arc<Executor<'_>>,
-    ) -> NetResult<()> {
+    ) -> Result<()> {
         let listener = Self::setup(accept_addr)?;
 
         // Start detached task and return instantly
@@ -47,24 +48,24 @@ impl Acceptor {
     }
 
     /// Start receiving network messages.
-    pub async fn subscribe(self: Arc<Self>) -> Subscription<NetResult<ChannelPtr>> {
+    pub async fn subscribe(self: Arc<Self>) -> Subscription<Result<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
     }
 
     /// Start listening on a local socket address.
-    fn setup(accept_addr: SocketAddr) -> NetResult<Async<TcpListener>> {
+    fn setup(accept_addr: SocketAddr) -> Result<Async<TcpListener>> {
         let listener = match Async::<TcpListener>::bind(accept_addr) {
             Ok(listener) => listener,
             Err(err) => {
                 error!("Bind listener failed: {}", err);
-                return Err(NetError::OperationFailed);
+                return Err(Error::OperationFailed);
             }
         };
         let local_addr = match listener.get_ref().local_addr() {
             Ok(addr) => addr,
             Err(err) => {
                 error!("Failed to get local address: {}", err);
-                return Err(NetError::OperationFailed);
+                return Err(Error::OperationFailed);
             }
         };
         info!("Listening on {}", local_addr);
@@ -78,13 +79,13 @@ impl Acceptor {
         self.task.clone().start(
             self.clone().run_accept_loop(listener),
             |result| self.handle_stop(result),
-            NetError::ServiceStopped,
+            Error::ServiceStopped,
             executor,
         );
     }
 
     /// Run the accept loop.
-    async fn run_accept_loop(self: Arc<Self>, listener: Async<TcpListener>) -> NetResult<()> {
+    async fn run_accept_loop(self: Arc<Self>, listener: Async<TcpListener>) -> Result<()> {
         loop {
             let channel = self.tick_accept(&listener).await?;
             self.channel_subscriber.notify(Ok(channel)).await;
@@ -93,7 +94,7 @@ impl Acceptor {
 
     /// Handles network errors. Panics if error passes silently, otherwise
     /// broadcasts the error.
-    async fn handle_stop(self: Arc<Self>, result: NetResult<()>) {
+    async fn handle_stop(self: Arc<Self>, result: Result<()>) {
         match result {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
             Err(err) => {
@@ -106,12 +107,12 @@ impl Acceptor {
 
     /// Single attempt to accept an incoming connection. Stops after one
     /// attempt.
-    async fn tick_accept(&self, listener: &Async<TcpListener>) -> NetResult<ChannelPtr> {
+    async fn tick_accept(&self, listener: &Async<TcpListener>) -> Result<ChannelPtr> {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(NetError::ServiceStopped);
+                return Err(Error::ServiceStopped);
             }
         };
         info!("Accepted client: {}", peer_addr);
