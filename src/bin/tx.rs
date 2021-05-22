@@ -67,7 +67,6 @@ impl MemoryState {
                     .append(node)
                     .expect("append to witness");
             }
-            assert_eq!(self.own_coins.len(), 0);
 
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 // We need to keep track of the witness for this coin.
@@ -196,7 +195,7 @@ fn main() {
     assert_eq!(state.own_coins.len(), 1);
     //let (coin, note, secret, witness) = &mut state.own_coins[0];
 
-    let auth_path = {
+    let merkle_path = {
         let tree = &mut state.tree;
         //let coin: &Coin = &state.own_coins[0].0;
         //let witness = &mut state.own_coins[0].3;
@@ -218,16 +217,9 @@ fn main() {
 
         assert_eq!(state.merkle_roots.len(), 16);
 
-        // TODO: Some stupid glue code. Need to put this somewhere else.
+        // Just test the path is good
         let merkle_path = witness.path().unwrap();
-        let auth_path: Vec<(bls12_381::Scalar, bool)> = merkle_path
-            .auth_path
-            .iter()
-            .map(|(node, b)| ((*node).into(), *b))
-            .collect();
-
         let node = Node::from_coin(&coin);
-
         let root = tree.root();
         drop(tree);
         drop(witness);
@@ -235,7 +227,7 @@ fn main() {
         let root = root.into();
         assert!(state.is_valid_merkle(&root));
 
-        auth_path
+        merkle_path
     };
 
     // Step 3: wallet1 sends payment to wallet2
@@ -248,18 +240,12 @@ fn main() {
 
     // Make a spend tx
 
-    // Get the coin we're spending from the previous tx
-    let coin = {
-        let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        tx.outputs[0].revealed.coin
-    };
-
     // Construct a new tx spending the coin
     // We need the decrypted note and our private key
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
         inputs: vec![tx::TransactionBuilderInputInfo {
-            merkle_path: auth_path,
+            merkle_path,
             secret: secret.clone(),
             note: state.own_coins[0].1.clone(),
         }],
@@ -281,5 +267,6 @@ fn main() {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
         assert!(state.is_valid_merkle(&tx.inputs[0].revealed.merkle_root));
         let update = state_transition(&state, tx).expect("step 3 state transition failed");
+        state.apply(update);
     }
 }

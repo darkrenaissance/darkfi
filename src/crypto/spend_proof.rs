@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
-use super::node::merkle_hash;
+use super::node::{SAPLING_COMMITMENT_TREE_DEPTH, merkle_hash};
 use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
@@ -183,14 +183,8 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
             randomness_coin: None,
             secret: None,
 
-            branch_0: None,
-            is_right_0: None,
-            branch_1: None,
-            is_right_1: None,
-            branch_2: None,
-            is_right_2: None,
-            branch_3: None,
-            is_right_3: None,
+            branch: [None; SAPLING_COMMITMENT_TREE_DEPTH],
+            is_right: [None; SAPLING_COMMITMENT_TREE_DEPTH],
 
             signature_secret: None,
         };
@@ -210,11 +204,16 @@ pub fn create_spend_proof(
     merkle_path: Vec<(bls12_381::Scalar, bool)>,
     signature_secret: jubjub::Fr,
 ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
-    assert_eq!(merkle_path.len(), 4);
     assert_eq!(
         merkle_path.len(),
-        super::node::SAPLING_COMMITMENT_TREE_DEPTH
+        SAPLING_COMMITMENT_TREE_DEPTH
     );
+    let mut branch: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
+    let mut is_right: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
+    for (i, (branch_i, is_right_i)) in merkle_path.iter().enumerate() {
+        branch[i] = Some(branch_i.clone());
+        is_right[i] = Some(is_right_i.clone());
+    }
     let c = SpendContract {
         value: Some(value),
         randomness_value: Some(randomness_value),
@@ -222,14 +221,9 @@ pub fn create_spend_proof(
         randomness_coin: Some(randomness_coin),
         secret: Some(secret),
 
-        branch_0: Some(merkle_path[0].0),
-        is_right_0: Some(merkle_path[0].1),
-        branch_1: Some(merkle_path[1].0),
-        is_right_1: Some(merkle_path[1].1),
-        branch_2: Some(merkle_path[2].0),
-        is_right_2: Some(merkle_path[2].1),
-        branch_3: Some(merkle_path[3].0),
-        is_right_3: Some(merkle_path[3].1),
+        branch,
+        is_right,
+
         signature_secret: Some(signature_secret),
     };
 

@@ -7,7 +7,7 @@ use super::{
     partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
-use crate::crypto::{create_mint_proof, create_spend_proof, note::Note, schnorr};
+use crate::crypto::{merkle::MerklePath, node::Node, create_mint_proof, create_spend_proof, note::Note, schnorr};
 use crate::serial::Encodable;
 
 pub struct TransactionBuilder {
@@ -22,7 +22,7 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub merkle_path: Vec<(bls12_381::Scalar, bool)>,
+    pub merkle_path: MerklePath<Node>,
     pub secret: jubjub::Fr,
     pub note: Note,
 }
@@ -84,6 +84,13 @@ impl TransactionBuilder {
 
             // make proof
 
+            // TODO: Some stupid glue code. Need to sort this out
+            let auth_path: Vec<(bls12_381::Scalar, bool)> = input.merkle_path
+                .auth_path
+                .iter()
+                .map(|(node, b)| ((*node).into(), *b))
+                .collect();
+
             let (proof, revealed) = create_spend_proof(
                 &spend_params,
                 input.note.value,
@@ -91,7 +98,7 @@ impl TransactionBuilder {
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
-                input.merkle_path.clone(),
+                auth_path,
                 signature_secret.clone(),
             );
 

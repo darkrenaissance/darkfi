@@ -13,20 +13,16 @@ use ff::{Field, PrimeField};
 use group::Curve;
 use zcash_proofs::circuit::{ecc, pedersen_hash};
 
+use crate::crypto::node::SAPLING_COMMITMENT_TREE_DEPTH;
+
 pub struct SpendContract {
     pub value: Option<u64>,
     pub randomness_value: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
     pub randomness_coin: Option<jubjub::Fr>,
     pub secret: Option<jubjub::Fr>,
-    pub branch_0: Option<bls12_381::Scalar>,
-    pub is_right_0: Option<bool>,
-    pub branch_1: Option<bls12_381::Scalar>,
-    pub is_right_1: Option<bool>,
-    pub branch_2: Option<bls12_381::Scalar>,
-    pub is_right_2: Option<bool>,
-    pub branch_3: Option<bls12_381::Scalar>,
-    pub is_right_3: Option<bool>,
+    pub branch: [Option<bls12_381::Scalar>; SAPLING_COMMITMENT_TREE_DEPTH],
+    pub is_right: [Option<bool>; SAPLING_COMMITMENT_TREE_DEPTH],
     pub signature_secret: Option<jubjub::Fr>,
 }
 impl Circuit<bls12_381::Scalar> for SpendContract {
@@ -253,6 +249,54 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 168: ec_get_u current cm
         let mut current = cm.get_u().clone();
 
+        for i in 0..SAPLING_COMMITMENT_TREE_DEPTH {
+            // Line 174: alloc_scalar branch param:branch_0
+            let branch = num::AllocatedNum::alloc(
+                cs.namespace(|| "Line 174: alloc_scalar branch param:branch_0"),
+                || Ok(*self.branch[i].get()?),
+            )?;
+
+            // Line 177: alloc_bit is_right param:is_right_0
+            let is_right = boolean::Boolean::from(boolean::AllocatedBit::alloc(
+                cs.namespace(|| "Line 177: alloc_bit is_right param:is_right_0"),
+                self.is_right[i],
+            )?);
+
+            // Line 180: conditionally_reverse left right current branch is_right
+            let (left, right) = num::AllocatedNum::conditionally_reverse(
+                cs.namespace(|| "Line 180: conditionally_reverse left right current branch is_right"),
+                &current,
+                &branch,
+                &is_right,
+            )?;
+
+            // Line 183: scalar_as_binary left left
+            let left = left.to_bits_le(cs.namespace(|| "Line 183: scalar_as_binary left left"))?;
+
+            // Line 184: scalar_as_binary right right
+            let right = right.to_bits_le(cs.namespace(|| "Line 184: scalar_as_binary right right"))?;
+
+            // Line 185: alloc_binary preimage
+            let mut preimage = vec![];
+
+            // Line 186: binary_extend preimage left
+            preimage.extend(left);
+
+            // Line 187: binary_extend preimage right
+            preimage.extend(right);
+
+            // Line 188: pedersen_hash cm preimage MERKLE_0
+            let mut cm = pedersen_hash::pedersen_hash(
+                cs.namespace(|| "Line 188: pedersen_hash cm preimage MERKLE_0"),
+                pedersen_hash::Personalization::MerkleTree(i),
+                &preimage,
+            )?;
+
+            // Line 190: ec_get_u current cm
+            current = cm.get_u().clone();
+        }
+
+        /*
         // Line 174: alloc_scalar branch param:branch_0
         let branch = num::AllocatedNum::alloc(
             cs.namespace(|| "Line 174: alloc_scalar branch param:branch_0"),
@@ -432,6 +476,7 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
 
         // Line 250: ec_get_u current cm
         let mut current = cm.get_u().clone();
+        */
 
         // Line 253: emit_scalar current
         current.inputize(cs.namespace(|| "Line 253: emit_scalar current"))?;

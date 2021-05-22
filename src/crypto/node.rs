@@ -6,7 +6,7 @@ use std::io;
 
 use super::{coin::Coin, merkle::Hashable};
 
-pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 4;
+pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 6;
 
 /// Compute a parent node in the Sapling commitment tree given its two children.
 pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::Scalar {
