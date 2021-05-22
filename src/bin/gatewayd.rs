@@ -5,9 +5,9 @@ extern crate clap;
 use async_executor::Executor;
 use easy_parallel::Parallel;
 
-use sapvi::Result;
+use drk::Result;
 
-use sapvi::service::{GatewayService, ProgramOptions};
+use drk::service::{GatewayService, ProgramOptions};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2, options).await?;
                 drop(signal);
-                Ok::<(), sapvi::Error>(())
+                Ok::<(), drk::Error>(())
             })
         });
 
