@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 // from string scalar
-use sapvi::bls_extensions::BlsStringConversion;
+use drk::bls_extensions::BlsStringConversion;
 
 // Bring in some tools for using finite fiels
 use ff::PrimeField;

@@ -17,7 +17,7 @@ use bls12_381;
 use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
 
-use sapvi::bls_extensions::BlsStringConversion;
+use drk::bls_extensions::BlsStringConversion;
 
 use std::ops::{AddAssign, MulAssign, SubAssign};
 

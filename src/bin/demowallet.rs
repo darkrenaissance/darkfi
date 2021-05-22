@@ -2,8 +2,8 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 
-use sapvi::service::{fetch_slabs_loop, GatewayClient};
-use sapvi::Result;
+use drk::service::{fetch_slabs_loop, GatewayClient};
+use drk::Result;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let mut client = GatewayClient::new(String::from("tcp://127.0.0.1:3333"));
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2).await?;
                 drop(signal);
-                Ok::<(), sapvi::Error>(())
+                Ok::<(), drk::Error>(())
             })
         });
 

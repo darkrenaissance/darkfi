@@ -2,7 +2,7 @@
 
 use crate::types::LispCircuit;
 
-use sapvi::BlsStringConversion;
+use drk::BlsStringConversion;
 
 use bellman::groth16;
 use bls12_381::Bls12;

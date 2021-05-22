@@ -2,9 +2,9 @@ use async_executor::Executor;
 use easy_parallel::Parallel;
 use std::sync::Arc;
 
-use sapvi::Result;
+use drk::Result;
 
-use sapvi::service::GatewayService;
+use drk::service::GatewayService;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let gateway = GatewayService::new(
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2).await?;
                 drop(signal);
-                Ok::<(), sapvi::Error>(())
+                Ok::<(), drk::Error>(())
             })
         });
 

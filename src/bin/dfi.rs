@@ -1,10 +1,10 @@
 extern crate clap;
 use async_executor::Executor;
 use easy_parallel::Parallel;
-use sapvi::rpc::adapter::RpcAdapter;
-use sapvi::rpc::jsonserver;
-use sapvi::rpc::options::ProgramOptions;
-use sapvi::Result;
+use drk::rpc::adapter::RpcAdapter;
+use drk::rpc::jsonserver;
+use drk::rpc::options::ProgramOptions;
+use drk::Result;
 use std::sync::Arc;
 
 /*
@@ -23,7 +23,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
         let protocol = ServerProtocol::new(connections.clone(), accept_addr, stored_addrs2);
         server_task = Some(executor.spawn(async move {
             protocol.start(executor2).await?;
-            Ok::<(), sapvi::Error>(())
+            Ok::<(), drk::Error>(())
         }));
     }
 
@@ -205,7 +205,7 @@ fn main() -> Result<()> {
             smol::future::block_on(async move {
                 jsonserver::start(ex2, options, adapter).await?;
                 drop(signal);
-                Ok::<(), sapvi::Error>(())
+                Ok::<(), drk::Error>(())
             })
         });
 
