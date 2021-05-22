@@ -1,6 +1,9 @@
 use std::io;
 
-use crate::{error::Result, serial::{Decodable, Encodable}};
+use crate::{
+    error::Result,
+    serial::{Decodable, Encodable},
+};
 
 pub struct Nullifier {
     pub repr: [u8; 32],

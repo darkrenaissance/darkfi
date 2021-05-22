@@ -264,7 +264,9 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
 
             // Line 180: conditionally_reverse left right current branch is_right
             let (left, right) = num::AllocatedNum::conditionally_reverse(
-                cs.namespace(|| "Line 180: conditionally_reverse left right current branch is_right"),
+                cs.namespace(|| {
+                    "Line 180: conditionally_reverse left right current branch is_right"
+                }),
                 &current,
                 &branch,
                 &is_right,
@@ -274,7 +276,8 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             let left = left.to_bits_le(cs.namespace(|| "Line 183: scalar_as_binary left left"))?;
 
             // Line 184: scalar_as_binary right right
-            let right = right.to_bits_le(cs.namespace(|| "Line 184: scalar_as_binary right right"))?;
+            let right =
+                right.to_bits_le(cs.namespace(|| "Line 184: scalar_as_binary right right"))?;
 
             // Line 185: alloc_binary preimage
             let mut preimage = vec![];

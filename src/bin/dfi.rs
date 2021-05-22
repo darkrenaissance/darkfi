@@ -1,10 +1,10 @@
 extern crate clap;
 use async_executor::Executor;
-use easy_parallel::Parallel;
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
 use drk::rpc::options::ProgramOptions;
 use drk::Result;
+use easy_parallel::Parallel;
 use std::sync::Arc;
 
 /*

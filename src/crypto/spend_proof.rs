@@ -8,11 +8,11 @@ use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
-use super::node::{SAPLING_COMMITMENT_TREE_DEPTH, merkle_hash, Node};
+use super::node::{merkle_hash, Node, SAPLING_COMMITMENT_TREE_DEPTH};
+use super::nullifier::Nullifier;
 use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
-use super::nullifier::Nullifier;
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
@@ -206,10 +206,7 @@ pub fn create_spend_proof(
     merkle_path: Vec<(bls12_381::Scalar, bool)>,
     signature_secret: jubjub::Fr,
 ) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
-    assert_eq!(
-        merkle_path.len(),
-        SAPLING_COMMITMENT_TREE_DEPTH
-    );
+    assert_eq!(merkle_path.len(), SAPLING_COMMITMENT_TREE_DEPTH);
     let mut branch: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
     let mut is_right: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
     for (i, (branch_i, is_right_i)) in merkle_path.iter().enumerate() {
