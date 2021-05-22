@@ -5,6 +5,7 @@ use rand::rngs::OsRng;
 use std::path::Path;
 
 use sapvi::crypto::{
+    coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     node::{hash_coin, Node},
@@ -20,7 +21,7 @@ struct MemoryState {
     tree: CommitmentTree<Node>,
     merkle_roots: Vec<bls12_381::Scalar>,
     nullifiers: Vec<Nullifier>,
-    own_coins: Vec<(Node, Note, jubjub::Fr, IncrementalWitness<Node>)>,
+    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Node>)>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     cashier_public: jubjub::SubgroupPoint,
@@ -52,18 +53,18 @@ impl MemoryState {
 
         // Update merkle tree and witnesses
         for (coin, enc_note) in updates.coins.into_iter().zip(updates.enc_notes.into_iter()) {
-            let node = hash_coin(coin.repr);
+            let node = Node::from_coin(&coin);
 
             // Add the new coins to the merkle tree
             self.tree
-                .append(Node::new(node.to_repr()))
+                .append(node)
                 .expect("Append to merkle tree");
 
             let root = self.tree.root();
             self.merkle_roots.push(root.into());
             for (_, _, _, witness) in self.own_coins.iter_mut() {
                 witness
-                    .append(Node::new(node.to_repr()))
+                    .append(node)
                     .expect("append to witness");
             }
             assert_eq!(self.own_coins.len(), 0);
@@ -197,8 +198,9 @@ fn main() {
 
     let auth_path = {
         let tree = &mut state.tree;
-        let coin = state.own_coins[0].0;
-        let witness = &mut state.own_coins[0].3;
+        //let coin: &Coin = &state.own_coins[0].0;
+        //let witness = &mut state.own_coins[0].3;
+        let (coin, _, _, witness) = &mut state.own_coins[0];
         // Check this is the 6th coin we added
         assert_eq!(witness.position(), 5);
         assert_eq!(tree.root(), witness.root());
@@ -224,12 +226,12 @@ fn main() {
             .map(|(node, b)| ((*node).into(), *b))
             .collect();
 
-        let node = hash_coin(coin.repr).to_repr();
+        let node = Node::from_coin(&coin);
 
         let root = tree.root();
         drop(tree);
         drop(witness);
-        assert_eq!(merkle_path.root(Node::new(node)), root);
+        assert_eq!(merkle_path.root(node), root);
         let root = root.into();
         assert!(state.is_valid_merkle(&root));
 

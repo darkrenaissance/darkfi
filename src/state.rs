@@ -3,7 +3,7 @@ use bls12_381::Bls12;
 use std::fmt;
 
 use crate::{
-    crypto::{node::Node, note::EncryptedNote, nullifier::Nullifier},
+    crypto::{coin::Coin, node::Node, note::EncryptedNote, nullifier::Nullifier},
     tx,
 };
 
@@ -18,7 +18,7 @@ pub trait ProgramState {
 
 pub struct StateUpdates {
     pub nullifiers: Vec<Nullifier>,
-    pub coins: Vec<Node>,
+    pub coins: Vec<Coin>,
     pub enc_notes: Vec<EncryptedNote>,
 }
 
@@ -108,7 +108,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Node::new(output.revealed.coin));
+        coins.push(Coin::new(output.revealed.coin));
         enc_notes.push(output.enc_note);
     }
 

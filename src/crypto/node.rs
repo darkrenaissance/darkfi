@@ -4,7 +4,7 @@ use group::Curve;
 use lazy_static::lazy_static;
 use std::io;
 
-use super::merkle::Hashable;
+use super::{coin::Coin, merkle::Hashable};
 
 pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 4;
 
@@ -42,7 +42,7 @@ pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::S
     .get_u()
 }
 
-pub fn hash_coin(coin: [u8; 32]) -> bls12_381::Scalar {
+pub fn hash_coin(coin: &[u8; 32]) -> bls12_381::Scalar {
     let rhs = {
         let mut tmp = [false; 256];
         for (a, b) in tmp.iter_mut().zip(coin.as_bits::<Lsb0>()) {
@@ -68,6 +68,10 @@ pub struct Node {
 impl Node {
     pub fn new(repr: [u8; 32]) -> Self {
         Self { repr }
+    }
+
+    pub fn from_coin(coin: &Coin) -> Self {
+        Self { repr: hash_coin(&coin.repr).to_repr() }
     }
 }
 
