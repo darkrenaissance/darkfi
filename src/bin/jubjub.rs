@@ -1,5 +1,5 @@
 use bls12_381::Scalar;
-use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
+use drk::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
 use std::fs::File;
 use std::time::Instant;
 

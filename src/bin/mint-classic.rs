@@ -1,7 +1,7 @@
 use ff::Field;
 use group::Group;
 
-use sapvi::crypto::{
+use drk::crypto::{
     create_mint_proof, load_params, save_params, setup_mint_prover, verify_mint_proof,
 };
 

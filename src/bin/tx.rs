@@ -4,7 +4,7 @@ use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
 use std::path::Path;
 
-use sapvi::crypto::{
+use drk::crypto::{
     coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -13,9 +13,9 @@ use sapvi::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use sapvi::serial::{Decodable, Encodable};
-use sapvi::state::{state_transition, ProgramState, StateUpdate};
-use sapvi::tx;
+use drk::serial::{Decodable, Encodable};
+use drk::state::{state_transition, ProgramState, StateUpdate};
+use drk::tx;
 
 struct MemoryState {
     // The entire merkle tree state

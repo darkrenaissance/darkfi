@@ -1,5 +1,5 @@
 use bellman::{groth16, Circuit, ConstraintSystem, SynthesisError};
-use sapvi::bls_extensions::BlsStringConversion;
+use drk::bls_extensions::BlsStringConversion;
 use std::rc::Rc;
 use std::time::Instant;
 use std::{cell::RefCell, collections::HashMap};

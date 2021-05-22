@@ -1,6 +1,6 @@
 use bls12_381::Scalar;
 use ff::Field;
-use sapvi::{Decodable, ZKContract};
+use drk::{Decodable, ZKContract};
 use std::fs::File;
 use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;

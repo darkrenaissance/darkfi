@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
 use bls12_381::Scalar;
-use sapvi::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
+use drk::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
 use simplelog::*;
 use std::fs;
 use std::fs::File;

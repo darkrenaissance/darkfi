@@ -4,7 +4,7 @@ use blake2s_simd::Params as Blake2sParams;
 use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
-use sapvi::crypto::{
+use drk::crypto::{
     create_spend_proof, load_params, save_params, setup_spend_prover, verify_spend_proof,
 };
 

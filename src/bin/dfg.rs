@@ -9,7 +9,7 @@ use winit::{
     window::Window,
 };
 
-use sapvi::gfx::{camera, model, texture};
+use drk::gfx::{camera, model, texture};
 
 use model::{DrawModel, Vertex};
 

@@ -1,4 +1,4 @@
-use sapvi::{Decodable, ZKContract};
+use drk::{Decodable, ZKContract};
 use std::fs::File;
 use std::time::Instant;
 

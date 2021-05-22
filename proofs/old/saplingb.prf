@@ -1,5 +1,5 @@
-# :set syntax=sapvi
-# :source ../scripts/sapvi.vim
+# :set syntax=drk
+# :source ../scripts/drk.vim
 const:
     G_VCV: SubgroupPoint
     G_VCR: SubgroupPoint
