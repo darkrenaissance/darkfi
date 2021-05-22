@@ -34,8 +34,8 @@ impl ProgramState for MemoryState {
     fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool {
         self.merkle_roots.iter().any(|m| *m == *merkle)
     }
-    fn nullifier_exists(&self, nullifier: &[u8; 32]) -> bool {
-        self.nullifiers.iter().any(|n| n.repr == *nullifier)
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+        self.nullifiers.iter().any(|n| n.repr == nullifier.repr)
     }
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
@@ -47,7 +47,7 @@ impl ProgramState for MemoryState {
 }
 
 impl MemoryState {
-    async fn apply(&mut self, mut updates: StateUpdates) {
+    fn apply(&mut self, mut updates: StateUpdates) {
         self.nullifiers.append(&mut updates.nullifiers);
 
         // Update merkle tree and witnesses
@@ -184,8 +184,10 @@ fn main() {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
 
         let update = state_transition(&state, tx).expect("step 2 state transition failed");
-
-        smol::block_on(state.apply(update));
+        // Our state impl is memory online for this demo
+        // but in the real version, this function will be async
+        // and using the databases.
+        state.apply(update);
     }
 
     // Wallet1 has received payment from the cashier.

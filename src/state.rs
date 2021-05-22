@@ -10,7 +10,7 @@ use crate::{
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
     fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool;
-    fn nullifier_exists(&self, nullifier: &[u8; 32]) -> bool;
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
     fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
@@ -100,7 +100,7 @@ pub fn state_transition<S: ProgramState>(
 
     let mut nullifiers = vec![];
     for input in tx.inputs {
-        nullifiers.push(Nullifier::new(input.revealed.nullifier));
+        nullifiers.push(input.revealed.nullifier);
     }
 
     // Newly created coins for this tx

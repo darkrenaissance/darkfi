@@ -12,10 +12,11 @@ use super::node::merkle_hash;
 use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
+use super::nullifier::Nullifier;
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
-    pub nullifier: [u8; 32],
+    pub nullifier: Nullifier,
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
     pub merkle_root: bls12_381::Scalar,
@@ -48,6 +49,7 @@ impl SpendRevealedValues {
                 .finalize()
                 .as_bytes(),
         );
+        let nullifier = Nullifier::new(nullifier);
 
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let signature_public =
@@ -108,7 +110,7 @@ impl SpendRevealedValues {
         // NF
         {
             // Pack the hash as inputs for proof verification.
-            let hash = multipack::bytes_to_bits_le(&self.nullifier);
+            let hash = multipack::bytes_to_bits_le(&self.nullifier.repr);
             let hash = multipack::compute_multipacking(&hash);
 
             // There are 2 chunks for a blake hash
