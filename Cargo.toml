@@ -129,8 +129,8 @@ name = "compile-shaders"
 path = "src/bin/compile-shaders.rs"
 
 [[bin]]
-name = "demoservices"
-path = "src/bin/demoservices.rs"
+name = "gatewayd"
+path = "src/bin/gatewayd.rs"
 
 [[bin]]
 name = "demowallet"
