@@ -5,7 +5,10 @@ use lazy_static::lazy_static;
 use std::io;
 
 use super::{coin::Coin, merkle::Hashable};
-use crate::{error::Result, serial::{Decodable, Encodable}};
+use crate::{
+    error::Result,
+    serial::{Decodable, Encodable},
+};
 
 pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 6;
 
@@ -72,7 +75,9 @@ impl Node {
     }
 
     pub fn from_coin(coin: &Coin) -> Self {
-        Self { repr: hash_coin(&coin.repr).to_repr() }
+        Self {
+            repr: hash_coin(&coin.repr).to_repr(),
+        }
     }
 }
 

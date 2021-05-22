@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 extern crate clap;
 use async_executor::Executor;
@@ -9,24 +9,18 @@ use sapvi::Result;
 
 use sapvi::service::{GatewayService, ProgramOptions};
 
-fn setup_addr(address: Option<SocketAddr>, default: SocketAddr ) -> SocketAddr{
+fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
-        Some(addr) => {
-            addr
-        },
-        None => default 
+        Some(addr) => addr,
+        None => default,
     }
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-
-    let accept_addr: SocketAddr  = setup_addr(options.accept_addr, "127.0.0.1:3333".parse()?);
+    let accept_addr: SocketAddr = setup_addr(options.accept_addr, "127.0.0.1:3333".parse()?);
     let pub_addr: SocketAddr = setup_addr(options.pub_addr, "127.0.0.1:4444".parse()?);
 
-    let gateway = GatewayService::new(
-        accept_addr,
-        pub_addr,
-    );
+    let gateway = GatewayService::new(accept_addr, pub_addr);
 
     gateway.start(executor.clone()).await?;
     Ok(())
@@ -37,7 +31,6 @@ fn main() -> Result<()> {
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
-
 
     let options = ProgramOptions::load()?;
 
@@ -57,13 +50,9 @@ fn main() -> Result<()> {
             std::fs::File::create(options.log_path.as_path()).unwrap(),
         ),
     ])
-        .unwrap();
-
-
+    .unwrap();
 
     let ex2 = ex.clone();
-
-
 
     let (_, result) = Parallel::new()
         // Run four executor threads.

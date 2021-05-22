@@ -13,9 +13,7 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
 
     let slabs = Arc::new(Mutex::new(vec![]));
 
-    let subscriber = client
-        .subscribe("127.0.0.1:4444".parse()?)
-        .await?;
+    let subscriber = client.subscribe("127.0.0.1:4444".parse()?).await?;
 
     println!("subscription ready");
 

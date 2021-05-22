@@ -14,8 +14,7 @@ enum NetEvent {
     Send(Reply),
 }
 
-
-pub fn addr_to_string (addr: SocketAddr) -> String {
+pub fn addr_to_string(addr: SocketAddr) -> String {
     format!("tcp://{}", addr.to_string())
 }
 

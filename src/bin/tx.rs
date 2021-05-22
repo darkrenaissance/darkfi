@@ -71,18 +71,14 @@ impl MemoryState {
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
             // Add the new coins to the merkle tree
             let node = Node::from_coin(&coin);
-            self.tree
-                .append(node)
-                .expect("Append to merkle tree");
+            self.tree.append(node).expect("Append to merkle tree");
 
             // Keep track of all merkle roots that have existed
             self.merkle_roots.push(self.tree.root());
 
             // Also update all the coin witnesses
             for (_, _, _, witness) in self.own_coins.iter_mut() {
-                witness
-                    .append(node)
-                    .expect("append to witness");
+                witness.append(node).expect("append to witness");
             }
 
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
@@ -296,4 +292,3 @@ fn main() {
         state.apply(update);
     }
 }
-

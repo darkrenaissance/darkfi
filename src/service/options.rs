@@ -8,7 +8,6 @@ pub struct ProgramOptions {
     pub log_path: Box<std::path::PathBuf>,
 }
 
-
 impl ProgramOptions {
     pub fn load() -> Result<ProgramOptions> {
         let app = clap_app!(dfi =>
@@ -20,7 +19,7 @@ impl ProgramOptions {
             (@arg VERBOSE: -v --verbose "Increase verbosity")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
         )
-            .get_matches();
+        .get_matches();
 
         let accept_addr = if let Some(accept_addr) = app.value_of("ACCEPT") {
             Some(accept_addr.parse()?)
@@ -49,7 +48,7 @@ impl ProgramOptions {
             accept_addr,
             pub_addr,
             verbose,
-            log_path
+            log_path,
         })
     }
 }

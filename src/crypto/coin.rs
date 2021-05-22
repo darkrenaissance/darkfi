@@ -1,6 +1,9 @@
 use std::io;
 
-use crate::{error::Result, serial::{Decodable, Encodable}};
+use crate::{
+    error::Result,
+    serial::{Decodable, Encodable},
+};
 
 pub struct Coin {
     pub repr: [u8; 32],
@@ -25,4 +28,3 @@ impl Decodable for Coin {
         })
     }
 }
-
