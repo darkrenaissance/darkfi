@@ -6,7 +6,7 @@ use sapvi::service::{fetch_slabs_loop, GatewayClient};
 use sapvi::Result;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let mut client = GatewayClient::new(String::from("tcp://127.0.0.1:3333"));
+    let mut client = GatewayClient::new("127.0.0.1:3333".parse()?);
 
     client.start().await?;
     println!("connected to a server");
@@ -14,7 +14,7 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let slabs = Arc::new(Mutex::new(vec![]));
 
     let subscriber = client
-        .subscribe(String::from("tcp://127.0.0.1:4444"))
+        .subscribe("127.0.0.1:4444".parse()?)
         .await?;
 
     println!("subscription ready");

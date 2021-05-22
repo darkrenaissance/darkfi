@@ -1,5 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use std::convert::TryInto;
+use std::net::SocketAddr; 
 
 use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{Error, Result};
@@ -17,12 +18,12 @@ enum GatewayCommand {
 
 pub struct GatewayService {
     slabs: Mutex<Slabs>,
-    addr: String,
+    addr: SocketAddr,
     publisher: Mutex<Publisher>,
 }
 
 impl GatewayService {
-    pub fn new(addr: String, pub_addr: String) -> Arc<GatewayService> {
+    pub fn new(addr: SocketAddr, pub_addr: SocketAddr) -> Arc<GatewayService> {
         let slabs = Mutex::new(vec![]);
         let publisher = Mutex::new(Publisher::new(pub_addr));
         Arc::new(GatewayService {
@@ -97,7 +98,7 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: String) -> GatewayClient {
+    pub fn new(addr: SocketAddr) -> GatewayClient {
         let protocol = ReqProtocol::new(addr);
         GatewayClient { protocol }
     }
@@ -106,7 +107,7 @@ impl GatewayClient {
         Ok(())
     }
 
-    pub async fn subscribe(&self, sub_addr: String) -> Result<Arc<Mutex<Subscriber>>> {
+    pub async fn subscribe(&self, sub_addr: SocketAddr) -> Result<Arc<Mutex<Subscriber>>> {
         let mut subscriber = Subscriber::new(sub_addr);
         subscriber.start().await?;
         Ok(Arc::new(Mutex::new(subscriber)))
