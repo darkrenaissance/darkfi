@@ -9,14 +9,14 @@ use crate::{
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
-    fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool;
+    fn is_valid_merkle(&self, merkle: &Node) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
     fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
 }
 
-pub struct StateUpdates {
+pub struct StateUpdate {
     pub nullifiers: Vec<Nullifier>,
     pub coins: Vec<Coin>,
     pub enc_notes: Vec<EncryptedNote>,
@@ -66,7 +66,7 @@ impl fmt::Display for VerifyFailed {
 pub fn state_transition<S: ProgramState>(
     state: &S,
     tx: tx::Transaction,
-) -> VerifyResult<StateUpdates> {
+) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
@@ -112,7 +112,7 @@ pub fn state_transition<S: ProgramState>(
         enc_notes.push(output.enc_note);
     }
 
-    Ok(StateUpdates {
+    Ok(StateUpdate {
         nullifiers,
         coins,
         enc_notes,

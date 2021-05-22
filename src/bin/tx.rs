@@ -14,17 +14,32 @@ use sapvi::crypto::{
     save_params, setup_mint_prover, setup_spend_prover,
 };
 use sapvi::serial::{Decodable, Encodable};
-use sapvi::state::{state_transition, ProgramState, StateUpdates};
+use sapvi::state::{state_transition, ProgramState, StateUpdate};
 use sapvi::tx;
 
 struct MemoryState {
+    // The entire merkle tree state
     tree: CommitmentTree<Node>,
-    merkle_roots: Vec<bls12_381::Scalar>,
+    // List of all previous and the current merkle roots
+    // This is the hashed value of all the children.
+    merkle_roots: Vec<Node>,
+    // Nullifiers prevent double spending
     nullifiers: Vec<Nullifier>,
+    // All received coins
+    // NOTE: we need maybe a flag to keep track of which ones are spent
+    // Maybe the spend field links to a tx hash:input index
+    // We should also keep track of the tx hash:output index where this
+    // coin was received
     own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Node>)>,
+
+    // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    // Spend verifying key used by ZK
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
+
+    // Public key of the cashier
     cashier_public: jubjub::SubgroupPoint,
+    // List of all our secret keys
     secrets: Vec<jubjub::Fr>,
 }
 
@@ -32,8 +47,8 @@ impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
         public == &self.cashier_public
     }
-    fn is_valid_merkle(&self, merkle: &bls12_381::Scalar) -> bool {
-        self.merkle_roots.iter().any(|m| *m == *merkle)
+    fn is_valid_merkle(&self, merkle_root: &Node) -> bool {
+        self.merkle_roots.iter().any(|m| *m == *merkle_root)
     }
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
         self.nullifiers.iter().any(|n| n.repr == nullifier.repr)
@@ -48,20 +63,22 @@ impl ProgramState for MemoryState {
 }
 
 impl MemoryState {
-    fn apply(&mut self, mut updates: StateUpdates) {
-        self.nullifiers.append(&mut updates.nullifiers);
+    fn apply(&mut self, mut update: StateUpdate) {
+        // Extend our list of nullifiers with the ones from the update
+        self.nullifiers.append(&mut update.nullifiers);
 
         // Update merkle tree and witnesses
-        for (coin, enc_note) in updates.coins.into_iter().zip(updates.enc_notes.into_iter()) {
-            let node = Node::from_coin(&coin);
-
+        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
             // Add the new coins to the merkle tree
+            let node = Node::from_coin(&coin);
             self.tree
                 .append(node)
                 .expect("Append to merkle tree");
 
-            let root = self.tree.root();
-            self.merkle_roots.push(root.into());
+            // Keep track of all merkle roots that have existed
+            self.merkle_roots.push(self.tree.root());
+
+            // Also update all the coin witnesses
             for (_, _, _, witness) in self.own_coins.iter_mut() {
                 witness
                     .append(node)
@@ -171,6 +188,8 @@ fn main() {
         // Here we simulate 5 fake random coins, adding them to our tree.
         let tree = &mut state.tree;
         for i in 0..5 {
+            // Don't worry about any of the code in this block
+            // We're just filling the tree with fake coins
             let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
 
@@ -197,8 +216,6 @@ fn main() {
 
     let merkle_path = {
         let tree = &mut state.tree;
-        //let coin: &Coin = &state.own_coins[0].0;
-        //let witness = &mut state.own_coins[0].3;
         let (coin, _, _, witness) = &mut state.own_coins[0];
         // Check this is the 6th coin we added
         assert_eq!(witness.position(), 5);
@@ -206,6 +223,8 @@ fn main() {
 
         // Add some more random coins in
         for i in 0..10 {
+            // Don't worry about any of the code in this block
+            // We're just filling the tree with fake coins
             let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
             witness.append(cmu);
@@ -217,8 +236,15 @@ fn main() {
 
         assert_eq!(state.merkle_roots.len(), 16);
 
-        // Just test the path is good
+        // This is the value we need to spend the coin
+        // We use the witness and the merkle root (both in sync with each other)
+        // to prove our coin exists inside the tree.
+        // The coin is not revealed publicly but is proved to exist inside
+        // a merkle tree. Only the root will be revealed, and then the
+        // verifier checks that merkle root actually existed before.
         let merkle_path = witness.path().unwrap();
+
+        // Just test the path is good because we just added a bunch of fake coins
         let node = Node::from_coin(&coin);
         let root = tree.root();
         drop(tree);
@@ -234,8 +260,9 @@ fn main() {
 
     // Wallet1 now wishes to send the coin to wallet2
 
+    // The receiving wallet has a secret key
     let secret2 = jubjub::Fr::random(&mut OsRng);
-    // This is their public key
+    // This is their public key to receive payment
     let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
     // Make a spend tx
@@ -265,8 +292,8 @@ fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        assert!(state.is_valid_merkle(&tx.inputs[0].revealed.merkle_root));
         let update = state_transition(&state, tx).expect("step 3 state transition failed");
         state.apply(update);
     }
 }
+

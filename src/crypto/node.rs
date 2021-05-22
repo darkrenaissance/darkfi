@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 use std::io;
 
 use super::{coin::Coin, merkle::Hashable};
+use crate::{error::Result, serial::{Decodable, Encodable}};
 
 pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 6;
 
@@ -109,6 +110,20 @@ impl Hashable for Node {
 impl From<Node> for bls12_381::Scalar {
     fn from(node: Node) -> Self {
         bls12_381::Scalar::from_repr(node.repr).expect("Tree nodes should be in the prime field")
+    }
+}
+
+impl Encodable for Node {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        Ok(self.repr.encode(s)?)
+    }
+}
+
+impl Decodable for Node {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            repr: Decodable::decode(d)?,
+        })
     }
 }
 
