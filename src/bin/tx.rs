@@ -8,7 +8,7 @@ use drk::crypto::{
     coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
-    node::{hash_coin, Node},
+    merkle_node::{hash_coin, MerkleNode},
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
@@ -19,10 +19,10 @@ use drk::tx;
 
 struct MemoryState {
     // The entire merkle tree state
-    tree: CommitmentTree<Node>,
+    tree: CommitmentTree<MerkleNode>,
     // List of all previous and the current merkle roots
     // This is the hashed value of all the children.
-    merkle_roots: Vec<Node>,
+    merkle_roots: Vec<MerkleNode>,
     // Nullifiers prevent double spending
     nullifiers: Vec<Nullifier>,
     // All received coins
@@ -30,7 +30,7 @@ struct MemoryState {
     // Maybe the spend field links to a tx hash:input index
     // We should also keep track of the tx hash:output index where this
     // coin was received
-    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<Node>)>,
+    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
 
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
@@ -47,7 +47,7 @@ impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
         public == &self.cashier_public
     }
-    fn is_valid_merkle(&self, merkle_root: &Node) -> bool {
+    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         self.merkle_roots.iter().any(|m| *m == *merkle_root)
     }
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
@@ -70,7 +70,7 @@ impl MemoryState {
         // Update merkle tree and witnesses
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
             // Add the new coins to the merkle tree
-            let node = Node::from_coin(&coin);
+            let node = MerkleNode::from_coin(&coin);
             self.tree.append(node).expect("Append to merkle tree");
 
             // Keep track of all merkle roots that have existed
@@ -186,7 +186,7 @@ fn main() {
         for i in 0..5 {
             // Don't worry about any of the code in this block
             // We're just filling the tree with fake coins
-            let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
 
             let root = tree.root();
@@ -221,7 +221,7 @@ fn main() {
         for i in 0..10 {
             // Don't worry about any of the code in this block
             // We're just filling the tree with fake coins
-            let cmu = Node::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
             tree.append(cmu);
             witness.append(cmu);
             assert_eq!(tree.root(), witness.root());
@@ -241,7 +241,7 @@ fn main() {
         let merkle_path = witness.path().unwrap();
 
         // Just test the path is good because we just added a bunch of fake coins
-        let node = Node::from_coin(&coin);
+        let node = MerkleNode::from_coin(&coin);
         let root = tree.root();
         drop(tree);
         drop(witness);

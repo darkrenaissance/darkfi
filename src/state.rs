@@ -3,13 +3,13 @@ use bls12_381::Bls12;
 use std::fmt;
 
 use crate::{
-    crypto::{coin::Coin, node::Node, note::EncryptedNote, nullifier::Nullifier},
+    crypto::{coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier},
     tx,
 };
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
-    fn is_valid_merkle(&self, merkle: &Node) -> bool;
+    fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;

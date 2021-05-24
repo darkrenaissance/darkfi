@@ -8,7 +8,7 @@ use super::{
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
 use crate::crypto::{
-    create_mint_proof, create_spend_proof, merkle::MerklePath, node::Node, note::Note, schnorr,
+    create_mint_proof, create_spend_proof, merkle::MerklePath, merkle_node::MerkleNode, note::Note, schnorr,
 };
 use crate::serial::Encodable;
 
@@ -24,7 +24,7 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub merkle_path: MerklePath<Node>,
+    pub merkle_path: MerklePath<MerkleNode>,
     pub secret: jubjub::Fr,
     pub note: Note,
 }

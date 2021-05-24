@@ -3,7 +3,7 @@ pub mod diffie_hellman;
 pub mod fr_serial;
 pub mod merkle;
 pub mod mint_proof;
-pub mod node;
+pub mod merkle_node;
 pub mod note;
 pub mod nullifier;
 pub mod schnorr;

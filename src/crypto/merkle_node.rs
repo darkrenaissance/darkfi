@@ -65,11 +65,11 @@ pub fn hash_coin(coin: &[u8; 32]) -> bls12_381::Scalar {
 
 /// A node within the Sapling commitment tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Node {
+pub struct MerkleNode {
     pub repr: [u8; 32],
 }
 
-impl Node {
+impl MerkleNode {
     pub fn new(repr: [u8; 32]) -> Self {
         Self { repr }
     }
@@ -81,7 +81,7 @@ impl Node {
     }
 }
 
-impl Hashable for Node {
+impl Hashable for MerkleNode {
     fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
         let mut repr = [0u8; 32];
         reader.read_exact(&mut repr)?;
@@ -112,19 +112,19 @@ impl Hashable for Node {
     }
 }
 
-impl From<Node> for bls12_381::Scalar {
-    fn from(node: Node) -> Self {
+impl From<MerkleNode> for bls12_381::Scalar {
+    fn from(node: MerkleNode) -> Self {
         bls12_381::Scalar::from_repr(node.repr).expect("Tree nodes should be in the prime field")
     }
 }
 
-impl Encodable for Node {
+impl Encodable for MerkleNode {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         Ok(self.repr.encode(s)?)
     }
 }
 
-impl Decodable for Node {
+impl Decodable for MerkleNode {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             repr: Decodable::decode(d)?,
@@ -133,10 +133,10 @@ impl Decodable for Node {
 }
 
 lazy_static! {
-    static ref EMPTY_ROOTS: Vec<Node> = {
-        let mut v = vec![Node::blank()];
+    static ref EMPTY_ROOTS: Vec<MerkleNode> = {
+        let mut v = vec![MerkleNode::blank()];
         for d in 0..SAPLING_COMMITMENT_TREE_DEPTH {
-            let next = Node::combine(d, &v[d], &v[d]);
+            let next = MerkleNode::combine(d, &v[d], &v[d]);
             v.push(next);
         }
         v

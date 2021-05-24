@@ -13,7 +13,7 @@ use ff::{Field, PrimeField};
 use group::Curve;
 use zcash_proofs::circuit::{ecc, pedersen_hash};
 
-use crate::crypto::node::SAPLING_COMMITMENT_TREE_DEPTH;
+use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 pub struct SpendContract {
     pub value: Option<u64>,

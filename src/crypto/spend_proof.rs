@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
-use super::node::{merkle_hash, Node, SAPLING_COMMITMENT_TREE_DEPTH};
+use super::merkle_node::{merkle_hash, MerkleNode, SAPLING_COMMITMENT_TREE_DEPTH};
 use super::nullifier::Nullifier;
 use crate::circuit::spend_contract::SpendContract;
 use crate::error::Result;
@@ -19,7 +19,7 @@ pub struct SpendRevealedValues {
     pub nullifier: Nullifier,
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
-    pub merkle_root: Node,
+    pub merkle_root: MerkleNode,
     pub signature_public: jubjub::SubgroupPoint,
 }
 
@@ -85,7 +85,7 @@ impl SpendRevealedValues {
             }
         }
 
-        let merkle_root = Node::new(merkle_root.to_repr());
+        let merkle_root = MerkleNode::new(merkle_root.to_repr());
 
         SpendRevealedValues {
             value_commit,
