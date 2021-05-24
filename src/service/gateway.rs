@@ -1,10 +1,13 @@
 use async_std::sync::{Arc, Mutex};
 use std::convert::TryInto;
+use std::net::SocketAddr;
 
 use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{Error, Result};
 
 use async_executor::Executor;
+
+use log::*;
 
 pub type Slabs = Vec<Vec<u8>>;
 
@@ -17,12 +20,12 @@ enum GatewayCommand {
 
 pub struct GatewayService {
     slabs: Mutex<Slabs>,
-    addr: String,
+    addr: SocketAddr,
     publisher: Mutex<Publisher>,
 }
 
 impl GatewayService {
-    pub fn new(addr: String, pub_addr: String) -> Arc<GatewayService> {
+    pub fn new(addr: SocketAddr, pub_addr: SocketAddr) -> Arc<GatewayService> {
         let slabs = Mutex::new(vec![]);
         let publisher = Mutex::new(Publisher::new(pub_addr));
         Arc::new(GatewayService {
@@ -36,11 +39,11 @@ impl GatewayService {
         let mut socket = RepProtocol::new(self.addr.clone());
 
         let (send, recv) = socket.start().await?;
-        println!("server started");
+        info!("server started: bind to {}", self.addr.to_string());
 
         self.publisher.lock().await.start().await?;
 
-        println!("publisher started");
+        info!("publisher started");
 
         let handle_request_task = executor.spawn(self.handle_request(send.clone(), recv.clone()));
 
@@ -69,15 +72,15 @@ impl GatewayService {
                             // publish to all subscribes
                             self.publisher.lock().await.publish(slab).await?;
 
-                            println!("received putslab msg");
+                            info!("received putslab msg");
                         }
                         1 => {
                             // GETSLAB
-                            println!("received getslab msg");
+                            info!("received getslab msg");
                         }
                         2 => {
                             // GETLASTINDEX
-                            println!("received getlastindex msg");
+                            info!("received getlastindex msg");
                         }
                         _ => {
                             return Err(Error::ServicesError("wrong command"));
@@ -97,7 +100,7 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: String) -> GatewayClient {
+    pub fn new(addr: SocketAddr) -> GatewayClient {
         let protocol = ReqProtocol::new(addr);
         GatewayClient { protocol }
     }
@@ -106,7 +109,7 @@ impl GatewayClient {
         Ok(())
     }
 
-    pub async fn subscribe(&self, sub_addr: String) -> Result<Arc<Mutex<Subscriber>>> {
+    pub async fn subscribe(&self, sub_addr: SocketAddr) -> Result<Arc<Mutex<Subscriber>>> {
         let mut subscriber = Subscriber::new(sub_addr);
         subscriber.start().await?;
         Ok(Arc::new(Mutex::new(subscriber)))
@@ -144,7 +147,7 @@ pub async fn fetch_slabs_loop(
             let mut subscriber = subscriber.lock().await;
             slab = subscriber.fetch().await?;
         }
-        println!("received new slab from subscriber");
+        info!("received new slab from subscriber");
         slabs.lock().await.push(slab);
     }
 }
