@@ -1,11 +1,11 @@
-# TODO: refactor into async
+#!/usr/bin/env python
 
 import argparse
 import requests
 import json
 
 def arg_parser(client):
-    parser = argparse.ArgumentParser(prog='dark',
+    parser = argparse.ArgumentParser(prog='drk',
                                           usage='%(prog)s [commands]',
                                           description="""DarkFi wallet
                                           command-line tool""")
@@ -46,6 +46,7 @@ def arg_parser(client):
             raise
 
 
+# TODO: refactor into async
 class DarkClient:
     # TODO: generate random ID (4 byte unsigned int) (rand range 0 - max size
     # uint32
