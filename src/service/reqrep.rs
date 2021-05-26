@@ -1,3 +1,4 @@
+use async_std::sync::Arc;
 use std::io;
 use std::net::SocketAddr;
 
@@ -8,10 +9,16 @@ use bytes::Bytes;
 use futures::FutureExt;
 use rand::Rng;
 use zeromq::*;
+use signal_hook::{iterator::Signals, consts::SIGINT};
+use async_executor::Executor;
+use log::*;
+
+
 
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
     Send(Reply),
+    Stop
 }
 
 pub fn addr_to_string(addr: SocketAddr) -> String {
@@ -19,6 +26,7 @@ pub fn addr_to_string(addr: SocketAddr) -> String {
 }
 
 pub struct RepProtocol {
+    service_name: String,
     addr: SocketAddr,
     socket: zeromq::RepSocket,
     recv_queue: async_channel::Receiver<Reply>,
@@ -30,7 +38,7 @@ pub struct RepProtocol {
 }
 
 impl RepProtocol {
-    pub fn new(addr: SocketAddr) -> RepProtocol {
+    pub fn new(service_name: String, addr: SocketAddr) -> RepProtocol {
         let socket = zeromq::RepSocket::new();
         let (send_queue, recv_channel) = async_channel::unbounded::<Request>();
         let (send_channel, recv_queue) = async_channel::unbounded::<Reply>();
@@ -38,6 +46,7 @@ impl RepProtocol {
         let channels = (send_channel.clone(), recv_channel.clone());
 
         RepProtocol {
+            service_name,
             addr,
             socket,
             recv_queue,
@@ -49,35 +58,59 @@ impl RepProtocol {
     pub async fn start(
         &mut self,
     ) -> Result<(
-        async_channel::Sender<Reply>,
-        async_channel::Receiver<Request>,
+    async_channel::Sender<Reply>,
+    async_channel::Receiver<Request>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
+        info!("{} SERVICE: started - bind to {}", self.service_name, addr);
         Ok(self.channels.clone())
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
+
+        info!("{} SERVICE: running", self.service_name);
+
+        let (stop_s, stop_r) = async_channel::unbounded::<()>();
+
+        let mut signals = Signals::new(&[SIGINT])?;
+
+        let stop_task = executor.spawn(async move {
+            for _ in signals.forever() {
+                stop_s.send(()).await?;
+                break;
+            }
+            Ok::<(), crate::Error>(())
+        });
+
         loop {
             let event = futures::select! {
                 request = self.socket.recv().fuse() => NetEvent::Receive(request?),
-                reply = self.recv_queue.recv().fuse() => NetEvent::Send(reply?)
+                reply = self.recv_queue.recv().fuse() => NetEvent::Send(reply?),
+                _ = stop_r.recv().fuse() => NetEvent::Stop
             };
 
             match event {
                 NetEvent::Receive(request) => {
-                    let request: &Bytes = request.get(0).unwrap();
-                    let request: Vec<u8> = request.to_vec();
-                    let req: Request = deserialize(&request)?;
-                    self.send_queue.send(req).await?;
+                    if let Some(req) = request.get(0) {
+                        let request: Vec<u8> = req.to_vec();
+                        let req: Request = deserialize(&request)?;
+                        self.send_queue.send(req).await?;
+                    }
                 }
                 NetEvent::Send(reply) => {
                     let reply: Vec<u8> = serialize(&reply);
                     let reply = Bytes::from(reply);
                     self.socket.send(reply.into()).await?;
                 }
+                NetEvent::Stop => {
+                    break
+                }
             }
         }
+        let _ = stop_task.cancel().await;
+        warn!("{} SERVICE: stopped", self.service_name);
+        Ok(())
     }
 }
 
@@ -106,18 +139,21 @@ impl ReqProtocol {
         self.socket.send(req.into()).await?;
 
         let rep: zeromq::ZmqMessage = self.socket.recv().await?;
-        let rep: &Bytes = rep.get(0).unwrap();
-        let rep: Vec<u8> = rep.to_vec();
+        if let Some(rep) = rep.get(0) {
+            let rep: Vec<u8> = rep.to_vec();
 
-        let reply: Reply = deserialize(&rep)?;
+            let reply: Reply = deserialize(&rep)?;
 
-        if reply.has_error() {
-            return Err(crate::Error::ServicesError("response has an error"));
+            if reply.has_error() {
+                return Err(crate::Error::ServicesError("response has an error"));
+            }
+
+            assert!(reply.get_id() == request.get_id());
+
+            Ok(reply.get_payload())
+        } else {
+            Err(crate::Error::ZMQError("Couldn't parse ZmqMessage".to_string()))
         }
-
-        assert!(reply.get_id() == request.get_id());
-
-        Ok(reply.get_payload())
     }
 }
 
@@ -166,9 +202,16 @@ impl Subscriber {
 
     pub async fn fetch(&mut self) -> Result<Vec<u8>> {
         let data = self.socket.recv().await?;
-        let data: &Bytes = data.get(0).unwrap();
-        let data = data.to_vec();
-        Ok(data)
+        match data.get(0) {
+            Some(d) => {
+                let data = d.to_vec();
+                Ok(data)
+            }
+            None => {
+                Err(crate::Error::ZMQError("Couldn't parse ZmqMessage".to_string()))
+            }
+        }
+
     }
 }
 

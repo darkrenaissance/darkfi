@@ -35,8 +35,9 @@ pub enum Error {
     Utf8Error,
     NoteDecryptionFailed,
     ServicesError(&'static str),
-    ZMQError,
+    ZMQError(String),
     VerifyFailed,
+    TryIntoError,
 }
 
 impl std::error::Error for Error {}
@@ -69,16 +70,17 @@ impl fmt::Display for Error {
             Error::Utf8Error => f.write_str("Malformed UTF8"),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
-            Error::ZMQError => f.write_str("ZMQ error"),
+            Error::ZMQError(ref err) =>  write!(f, "ZMQError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
+            Error::TryIntoError => f.write_str("TryInto get an error"),
         }
     }
 }
 
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
-    fn from(_err: zeromq::ZmqError) -> Error {
-        Error::ZMQError
+    fn from(err: zeromq::ZmqError) -> Error {
+        Error::ZMQError(err.to_string())
     }
 }
 

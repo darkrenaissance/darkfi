@@ -6,7 +6,6 @@ use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscri
 use crate::{Error, Result};
 
 use async_executor::Executor;
-
 use log::*;
 
 pub type Slabs = Vec<Vec<u8>>;
@@ -36,22 +35,21 @@ impl GatewayService {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        let mut socket = RepProtocol::new(self.addr.clone());
 
-        let (send, recv) = socket.start().await?;
-        info!("server started: bind to {}", self.addr.to_string());
+        let mut protocol = RepProtocol::new(String::from("GATEWAY"),self.addr.clone());
+
+        let (send, recv) = protocol.start().await?;
 
         self.publisher.lock().await.start().await?;
 
-        info!("publisher started");
-
         let handle_request_task = executor.spawn(self.handle_request(send.clone(), recv.clone()));
 
-        socket.run().await?;
+        protocol.run(executor.clone()).await?;
 
-        handle_request_task.cancel().await;
+        let _ = handle_request_task.cancel().await;
         Ok(())
     }
+
 
     async fn handle_request(
         self: Arc<Self>,
@@ -59,7 +57,6 @@ impl GatewayService {
         recv_queue: async_channel::Receiver<Request>,
     ) -> Result<()> {
         let data = vec![];
-
         loop {
             match recv_queue.recv().await {
                 Ok(request) => {
@@ -83,15 +80,18 @@ impl GatewayService {
                             info!("received getlastindex msg");
                         }
                         _ => {
-                            return Err(Error::ServicesError("wrong command"));
+                            return Err(Error::ServicesError("received wrong command"));
                         }
                     }
                     let rep = Reply::from(&request, 0, data.clone());
                     send_queue.send(rep.into()).await?;
                 }
-                Err(_) => {}
+                Err(_) => {
+                    break;
+                }
             }
         }
+        Ok(())
     }
 }
 
@@ -132,7 +132,7 @@ impl GatewayClient {
             .protocol
             .request(GatewayCommand::GetLastIndex as u8, vec![])
             .await?;
-        let rep: [u8; 4] = rep.try_into().unwrap();
+        let rep: [u8; 4] = rep.try_into().map_err(|_| crate::Error::TryIntoError)?;
         Ok(u32::from_be_bytes(rep))
     }
 }
