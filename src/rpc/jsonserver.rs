@@ -155,7 +155,10 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::Null)
         });
         io.add_method("key_gen", move |_| async move {
-            RpcAdapter::key_gen().await;
+            //let connection = RpcAdapter::db_connect().await;
+            //let (public, private) = RpcAdapter::key_gen().await;
+            // getting an error on the following:
+            // RpcAdapter::save_key(&connection, private, public).await;
             Ok(jsonrpc_core::Value::Null)
         });
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");

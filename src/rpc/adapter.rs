@@ -1,6 +1,13 @@
-// Adapter class goes here
-//use crate::rpc::jsonserver::JsonRpcInterface;
+#[macro_use]
 use std::sync::Arc;
+use rusqlite::Connection;
+use ff::Field;
+use rand::rngs::OsRng;
+use std::fs::File;
+use std::io::prelude::*;
+use crate::serial;
+use crate::Result;
+use smol::Async;
 
 // Dummy adapter for now
 pub struct RpcAdapter {}
@@ -10,9 +17,32 @@ impl RpcAdapter {
         Arc::new(Self {})
     }
 
-    pub async fn get_info() {}
+    pub async fn db_connect() -> Connection {
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/wallet.db");
+        let connector = Connection::open(&path);
+        connector.expect("Failed to connect to database.")
+    }
 
-    pub async fn key_gen() {}
+    pub async fn key_gen() -> (Vec<u8>, Vec<u8>) {
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        (privkey, pubkey)
+    }
+
+    // TODO: getting an error when i call this function- does not implement send
+    pub async fn save_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+        let mut db_file = File::open("wallet.sql")?;
+        let mut contents = String::new();
+        db_file.read_to_string(&mut contents)?;
+        Ok(conn.execute_batch(&mut contents)?)
+    }
+
+    pub async fn get_info() {}
 
     pub async fn say_hello() {}
 
