@@ -154,6 +154,10 @@ impl RpcInterface {
             RpcAdapter::stop().await;
             Ok(jsonrpc_core::Value::Null)
         });
+        io.add_method("new_wallet", move |_| async move {
+            RpcAdapter::new_wallet().await;
+            Ok(jsonrpc_core::Value::Null)
+        });
         io.add_method("key_gen", move |_| async move {
             //let connection = RpcAdapter::db_connect().await;
             //let (public, private) = RpcAdapter::key_gen().await;

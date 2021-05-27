@@ -12,6 +12,7 @@ def arg_parser(client):
     parser.add_argument("-k", "--key", action='store_true', help="Generate a new keypair")
     parser.add_argument("-i", "--info", action='store_true', help="Request info from daemon")
     parser.add_argument("-s", "--stop", action='store_true', help="Send a stop signal to the daemon")
+    parser.add_argument("-n", "--new", action='store_true', help="Generate a new wallet")
     parser.add_argument("-hi", "--hello", action='store_true', help="Say hello")
     args = parser.parse_args()
 
@@ -19,6 +20,13 @@ def arg_parser(client):
         try:
             print("Attemping to generate a new key pair...")
             client.key_gen(client.payload)
+        except Exception:
+            raise
+
+    if args.new:
+        try:
+            print("Attemping to generate a new wallet...")
+            client.new_wallet(client.payload)
         except Exception:
             raise
 
@@ -86,6 +94,13 @@ class DarkClient:
         payload['id'] = "0"
         hello = self.__request(payload)
         print(hello)
+    
+    def new_wallet(self, payload):
+        payload['method'] = "new_wallet"
+        payload['jsonrpc'] = "2.0"
+        payload['id'] = "0"
+        wallet = self.__request(payload)
+        print(wallet)
 
     def __request(self, payload):
         response = requests.post(self.url, json=payload).json()

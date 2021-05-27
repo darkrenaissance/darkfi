@@ -34,8 +34,24 @@ impl RpcAdapter {
         (privkey, pubkey)
     }
 
+    pub async fn new_wallet() -> Result<()> {
+        println!("Creating a new wallet...");
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/wallet.db");
+        let conn = Connection::open(&path).expect("Failed to connect to database.");
+        let mut db_file = File::open("wallet.sql")?;
+        let mut contents = String::new();
+        db_file.read_to_string(&mut contents)?;
+        println!("New wallet created");
+        Ok(conn.execute_batch(&mut contents)?)
+    }
+    
+    //pub async fn decrypt(conn: &Connection, password: )
     // TODO: getting an error when i call this function- does not implement send
     pub async fn save_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+        // loads the walle
         let mut db_file = File::open("wallet.sql")?;
         let mut contents = String::new();
         db_file.read_to_string(&mut contents)?;
