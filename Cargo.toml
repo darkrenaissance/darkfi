@@ -86,7 +86,7 @@ bytes = "1.0.1"
 
 # wallet deps
 rocksdb = "0.16.0"
-dirs = "2.0.2"
+dirs = "3.0.2"
 
 [dependencies.rusqlite]
 version = "0.25.1"
