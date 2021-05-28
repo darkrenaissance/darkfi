@@ -6,7 +6,7 @@ use drk::service::{fetch_slabs_loop, GatewayClient};
 use drk::Result;
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let mut client = GatewayClient::new("127.0.0.1:3333".parse()?);
+    let mut client = GatewayClient::new("127.0.0.1:3333".parse()?)?;
 
     client.start().await?;
     println!("connected to a server");

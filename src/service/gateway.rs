@@ -119,15 +119,21 @@ impl GatewayService {
 
 pub struct GatewayClient {
     protocol: ReqProtocol,
+    slabstore: SlabStore
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr) -> GatewayClient {
+    pub fn new(addr: SocketAddr) -> Result<GatewayClient> {
         let protocol = ReqProtocol::new(addr);
-        GatewayClient { protocol }
+
+        let slabstore = SlabStore::new(Path::new("slabstore.db"))?;
+
+        Ok(GatewayClient { protocol ,slabstore})
     }
+
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
+        
         Ok(())
     }
 
