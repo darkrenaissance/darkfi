@@ -155,15 +155,17 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::Null)
         });
         io.add_method("new_wallet", move |_| async move {
+            println!("New wallet method called...");
             RpcAdapter::new_wallet().await;
             Ok(jsonrpc_core::Value::Null)
         });
         io.add_method("key_gen", move |_| async move {
+            println!("beep");
             //let connection = RpcAdapter::db_connect().await;
             //let (public, private) = RpcAdapter::key_gen().await;
             // getting an error on the following:
             // RpcAdapter::save_key(&connection, private, public).await;
-            Ok(jsonrpc_core::Value::Null)
+            Ok(jsonrpc_core::Value::String("Attempted key generation".into()))
         });
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)
