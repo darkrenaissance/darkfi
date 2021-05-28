@@ -20,7 +20,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let accept_addr: SocketAddr = setup_addr(options.accept_addr, "127.0.0.1:3333".parse()?);
     let pub_addr: SocketAddr = setup_addr(options.pub_addr, "127.0.0.1:4444".parse()?);
 
-    let gateway = GatewayService::new(accept_addr, pub_addr);
+    let gateway = GatewayService::new(accept_addr, pub_addr)?;
 
     gateway.start(executor.clone()).await?;
     Ok(())

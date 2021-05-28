@@ -8,7 +8,8 @@ use super::{
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
 use crate::crypto::{
-    create_mint_proof, create_spend_proof, merkle::MerklePath, merkle_node::MerkleNode, note::Note, schnorr,
+    create_mint_proof, create_spend_proof, merkle::MerklePath, merkle_node::MerkleNode, note::Note,
+    schnorr,
 };
 use crate::serial::Encodable;
 

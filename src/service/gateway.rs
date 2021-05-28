@@ -1,10 +1,10 @@
 use async_std::sync::{Arc, Mutex};
+use std::convert::From;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::convert::From;
 
 use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
-use crate::{Error, Result, slabstore::SlabStore, serial::serialize, serial::deserialize};
+use crate::{serial::deserialize, serial::serialize, slabstore::SlabStore, Error, Result};
 
 use async_executor::Executor;
 use log::*;
@@ -26,7 +26,6 @@ pub struct GatewayService {
 
 impl GatewayService {
     pub fn new(addr: SocketAddr, pub_addr: SocketAddr) -> Result<Arc<GatewayService>> {
-
         let publisher = Mutex::new(Publisher::new(pub_addr));
 
         let slabstore = SlabStore::new(Path::new("../slabstore.db"))?;
@@ -39,8 +38,7 @@ impl GatewayService {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-
-        let mut protocol = RepProtocol::new(String::from("GATEWAY"),self.addr.clone());
+        let mut protocol = RepProtocol::new(String::from("GATEWAY"), self.addr.clone());
 
         let (send, recv) = protocol.start().await?;
 
@@ -53,7 +51,6 @@ impl GatewayService {
         let _ = handle_request_task.cancel().await;
         Ok(())
     }
-
 
     async fn handle_request(
         self: Arc<Self>,
@@ -83,7 +80,6 @@ impl GatewayService {
                             info!("received putslab msg");
                         }
                         1 => {
-
                             let index = request.get_payload();
                             let slab = self.slabstore.get(index)?;
 
@@ -162,7 +158,6 @@ impl GatewayClient {
     }
 }
 
-
 pub async fn fetch_slabs_loop(
     subscriber: Arc<Mutex<Subscriber>>,
     slabs: Arc<Mutex<Slabs>>,
@@ -177,4 +172,3 @@ pub async fn fetch_slabs_loop(
         slabs.lock().await.push(slab);
     }
 }
-

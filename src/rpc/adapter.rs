@@ -1,13 +1,13 @@
 #[macro_use]
 use std::sync::Arc;
-use rusqlite::Connection;
-use ff::Field;
-use rand::rngs::OsRng;
-use std::fs::File;
-use std::io::prelude::*;
 use crate::serial;
 use crate::Result;
+use ff::Field;
+use rand::rngs::OsRng;
+use rusqlite::Connection;
 use smol::Async;
+use std::fs::File;
+use std::io::prelude::*;
 
 // Dummy adapter for now
 pub struct RpcAdapter {}
@@ -47,7 +47,7 @@ impl RpcAdapter {
         println!("New wallet created");
         Ok(conn.execute_batch(&mut contents)?)
     }
-    
+
     //pub async fn decrypt(conn: &Connection, password: )
     // TODO: getting an error when i call this function- does not implement send
     pub async fn save_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {

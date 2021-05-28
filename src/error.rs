@@ -71,15 +71,13 @@ impl fmt::Display for Error {
             Error::Utf8Error => f.write_str("Malformed UTF8"),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
-            Error::ZMQError(ref err) =>  write!(f, "ZMQError: {}", err),
+            Error::ZMQError(ref err) => write!(f, "ZMQError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
             Error::TryIntoError => f.write_str("TryInto get an error"),
-            Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err)
+            Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
         }
     }
 }
-
-
 
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {

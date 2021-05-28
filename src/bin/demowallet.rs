@@ -15,13 +15,20 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
 
     let subscriber = client.subscribe("127.0.0.1:4444".parse()?).await?;
 
-    println!("subscription ready");
+    println!("subscriber ready");
 
     let fetch_loop_task = executor.spawn(fetch_slabs_loop(subscriber.clone(), slabs.clone()));
 
+    println!("send put slab");
     client.put_slab(vec![0, 0, 0, 0]).await?;
-    client.put_slab(vec![0, 0, 0, 0]).await?;
-    client.put_slab(vec![0, 0, 0, 0]).await?;
+
+    println!("send get last index");
+    let index = client.get_last_index().await?;
+    println!("index: {}", index);
+
+    println!("send get slab");
+    let x = client.get_slab(index).await?;
+    println!("{:?}", x);
 
     fetch_loop_task.cancel().await;
 
