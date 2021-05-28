@@ -4,7 +4,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 
 use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
-use crate::{serial::deserialize, serial::serialize, slabstore::SlabStore, Error, Result, slab::Slab};
+use crate::{
+    serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error, Result,
+};
 
 use async_executor::Executor;
 use log::*;
@@ -141,7 +143,7 @@ impl GatewayClient {
         let last_index = self.get_last_index().await?;
 
         if last_index > 0 {
-            for index in (local_last_index + 1)..(last_index + 1){
+            for index in (local_last_index + 1)..(last_index + 1) {
                 self.get_slab(index).await?;
             }
         }
@@ -156,7 +158,8 @@ impl GatewayClient {
     }
 
     pub async fn get_slab(&mut self, index: u64) -> Result<Vec<u8>> {
-        let slab = self.protocol
+        let slab = self
+            .protocol
             .request(GatewayCommand::GetSlab as u8, serialize(&index))
             .await?;
         self.slabstore.put(slab.clone())?;

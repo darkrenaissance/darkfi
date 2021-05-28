@@ -1,13 +1,9 @@
 use crate::serial;
-use crate::serial;
-use crate::Result;
 use crate::Result;
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
-use rusqlite::Connection;
-use smol::Async;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;

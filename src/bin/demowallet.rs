@@ -20,10 +20,8 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     // TODO sync new slab with slabstore
     let fetch_loop_task = executor.spawn(fetch_slabs_loop(subscriber.clone(), slabs.clone()));
 
-
-
     println!("send put slab");
-    let slab = Slab::new("testcoin".to_string(), vec![0,0,0,0]);
+    let slab = Slab::new("testcoin".to_string(), vec![0, 0, 0, 0]);
     client.put_slab(slab).await?;
 
     // println!("send get slab");

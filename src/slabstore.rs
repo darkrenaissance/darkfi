@@ -14,7 +14,6 @@ pub struct SlabStore {
 
 impl SlabStore {
     pub fn new(path: &Path) -> Result<Self> {
-
         let mut opt = Options::default();
         opt.create_if_missing(true);
 
@@ -37,7 +36,7 @@ impl SlabStore {
         if slab.get_index() == key {
             let key = serialize(&key);
             self.db.put(key, value)?;
-        } 
+        }
         Ok(())
     }
 

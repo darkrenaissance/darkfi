@@ -1,19 +1,16 @@
-
-use crate::Result;
 use crate::serial::{Decodable, Encodable};
+use crate::Result;
 
-pub struct Slab{
+pub struct Slab {
     asset_type: String,
     index: u64,
     payload: Vec<u8>,
 }
 
-
 impl Slab {
-
-    pub fn new(asset_type: String,  payload: Vec<u8>) -> Self{
+    pub fn new(asset_type: String, payload: Vec<u8>) -> Self {
         let index = 0;
-        Slab{
+        Slab {
             asset_type,
             index,
             payload,
@@ -24,7 +21,7 @@ impl Slab {
         self.index = index;
     }
 
-    pub fn get_index(&self) -> u64{
+    pub fn get_index(&self) -> u64 {
         self.index
     }
 
@@ -32,7 +29,6 @@ impl Slab {
         self.payload.clone()
     }
 }
-
 
 impl Encodable for Slab {
     fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
@@ -53,5 +49,3 @@ impl Decodable for Slab {
         })
     }
 }
-
-
