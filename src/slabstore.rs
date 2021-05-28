@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::Result;
+use crate::serial::{deserialize, serialize, Decodable};
+use crate::{slab::Slab, Result};
 
 use rocksdb::{IteratorMode, Options, DB};
 
@@ -14,9 +14,6 @@ pub struct SlabStore {
 
 impl SlabStore {
     pub fn new(path: &Path) -> Result<Self> {
-        // TODO
-        // add index in slab struct and compare slab once received with
-        // current index
 
         let mut opt = Options::default();
         opt.create_if_missing(true);
@@ -34,8 +31,13 @@ impl SlabStore {
     }
 
     pub fn put(&self, value: Vec<u8>) -> Result<()> {
-        let key = self.increase_index()?;
-        self.db.put(key, value)?;
+        let slab: Slab = deserialize(&value)?;
+        let last_index = self.get_last_index()?;
+        let key = last_index + 1;
+        if slab.get_index() == key {
+            let key = serialize(&key);
+            self.db.put(key, value)?;
+        } 
         Ok(())
     }
 
@@ -48,13 +50,6 @@ impl SlabStore {
             }
             None => Ok(None),
         }
-    }
-
-    pub fn set_value<T: Encodable>(&self, value: T) -> Result<()> {
-        let key = self.increase_index()?;
-        let value = serialize(&value);
-        self.db.put(key, value)?;
-        Ok(())
     }
 
     pub fn get_last_index(&self) -> Result<u64> {
@@ -71,13 +66,6 @@ impl SlabStore {
             Some((index, _)) => Ok(index.to_vec()),
             None => Ok(serialize::<u64>(&0)),
         }
-    }
-
-    fn increase_index(&self) -> Result<Vec<u8>> {
-        let mut key = self.get_last_index()?;
-        key += 1;
-        let key = serialize(&key);
-        Ok(key)
     }
 
     pub fn destroy(&self) -> Result<()> {
