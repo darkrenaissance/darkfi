@@ -1,5 +1,5 @@
-#[macro_use]
 use std::sync::Arc;
+use log::*;
 use rusqlite::Connection;
 use ff::Field;
 use rand::rngs::OsRng;
@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use crate::serial;
 use crate::Result;
-use smol::Async;
 
 // Dummy adapter for now
 pub struct RpcAdapter {}
@@ -35,17 +34,17 @@ impl RpcAdapter {
     }
 
     pub async fn new_wallet() -> Result<()> {
-        println!("Creating a new wallet...");
+        debug!(target: "adapter", "new_wallet() [START]");
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
             .join(".config/darkfi/wallet.db");
-        let conn = Connection::open(&path).expect("Failed to connect to database.");
-        let mut db_file = File::open("wallet.sql")?;
-        let mut contents = String::new();
-        db_file.read_to_string(&mut contents)?;
-        println!("New wallet created");
-        Ok(conn.execute_batch(&mut contents)?)
+        debug!(target: "adapter", "new_wallet() [FOUND PATH]");
+        println!("Found path: {:?}", &path);
+        debug!(target: "adapter", "new_wallet() [TRY DB CONNECT]");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let contents = include_str!("../../res/schema.sql");
+        Ok(connect.execute_batch(&contents)?)
     }
     
     //pub async fn decrypt(conn: &Connection, password: )
