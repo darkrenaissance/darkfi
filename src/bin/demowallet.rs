@@ -3,7 +3,7 @@ use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 
 use drk::service::{fetch_slabs_loop, GatewayClient};
-use drk::Result;
+use drk::{slab::Slab, Result};
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let mut client = GatewayClient::new("127.0.0.1:3333".parse()?)?;
@@ -17,18 +17,18 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
 
     println!("subscriber ready");
 
+    // TODO sync new slab with slabstore
     let fetch_loop_task = executor.spawn(fetch_slabs_loop(subscriber.clone(), slabs.clone()));
 
+
+
     println!("send put slab");
-    client.put_slab(vec![0, 0, 0, 0]).await?;
+    let slab = Slab::new("testcoin".to_string(), vec![0,0,0,0]);
+    client.put_slab(slab).await?;
 
-    println!("send get last index");
-    let index = client.get_last_index().await?;
-    println!("index: {}", index);
-
-    println!("send get slab");
-    let x = client.get_slab(index).await?;
-    println!("{:?}", x);
+    // println!("send get slab");
+    // let x = client.get_slab(1).await?;
+    // println!("{:?}", x);
 
     fetch_loop_task.cancel().await;
 
