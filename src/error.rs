@@ -38,6 +38,7 @@ pub enum Error {
     ZMQError(String),
     VerifyFailed,
     TryIntoError,
+    RocksdbError(String),
 }
 
 impl std::error::Error for Error {}
@@ -73,14 +74,23 @@ impl fmt::Display for Error {
             Error::ZMQError(ref err) =>  write!(f, "ZMQError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
             Error::TryIntoError => f.write_str("TryInto get an error"),
+            Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err)
         }
     }
 }
+
+
 
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
     fn from(err: zeromq::ZmqError) -> Error {
         Error::ZMQError(err.to_string())
+    }
+}
+
+impl From<rocksdb::Error> for Error {
+    fn from(err: rocksdb::Error) -> Error {
+        Error::RocksdbError(err.to_string())
     }
 }
 
