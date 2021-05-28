@@ -17,6 +17,7 @@ pub mod rpc;
 pub mod serial;
 pub mod service;
 pub mod slabstore;
+pub mod slab;
 pub mod state;
 pub mod system;
 pub mod tx;
