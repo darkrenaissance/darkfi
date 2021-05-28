@@ -165,7 +165,9 @@ impl RpcInterface {
             //let (public, private) = RpcAdapter::key_gen().await;
             // getting an error on the following:
             // RpcAdapter::save_key(&connection, private, public).await;
-            Ok(jsonrpc_core::Value::String("Attempted key generation".into()))
+            Ok(jsonrpc_core::Value::String(
+                "Attempted key generation".into(),
+            ))
         });
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)

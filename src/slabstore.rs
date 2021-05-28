@@ -14,6 +14,10 @@ pub struct SlabStore {
 
 impl SlabStore {
     pub fn new(path: &Path) -> Result<Self> {
+        // TODO
+        // add index in slab struct and compare slab once received with
+        // current index
+
         let mut opt = Options::default();
         opt.create_if_missing(true);
 
