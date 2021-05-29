@@ -38,6 +38,7 @@ pub enum Error {
     ZMQError(String),
     VerifyFailed,
     TryIntoError,
+    TryFromError,
     RocksdbError(String),
 }
 
@@ -73,7 +74,8 @@ impl fmt::Display for Error {
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
             Error::ZMQError(ref err) => write!(f, "ZMQError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
-            Error::TryIntoError => f.write_str("TryInto get an error"),
+            Error::TryIntoError => f.write_str("TryInto error"),
+            Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
         }
     }
