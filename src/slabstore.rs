@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::serial::{deserialize, serialize, Decodable};
+use crate::serial::{deserialize, serialize};
 use crate::{slab::Slab, Result};
 
 use rocksdb::{IteratorMode, Options, DB};
@@ -36,11 +36,11 @@ impl SlabStore {
         Ok(())
     }
 
-    pub fn get_value_deserialized<T: Decodable>(&self, key: Vec<u8>) -> Result<Option<T>> {
+    pub fn get_value_deserialized(&self, key: Vec<u8>) -> Result<Option<Slab>> {
         let value = self.db.get(key)?;
         match value {
             Some(v) => {
-                let v = deserialize(&v)?;
+                let v: Slab = deserialize(&v)?;
                 Ok(Some(v))
             }
             None => Ok(None),
