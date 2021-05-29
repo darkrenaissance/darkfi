@@ -25,14 +25,15 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
     client.start().await?;
 
     // start subscribe to gateway publisher
+
+    let subscriber = GatewayClient::start_subscriber(sub_addr).await?;
     let slabstore = client.get_slabstore();
-    let subscriber_task = executor.spawn(GatewayClient::subscribe(slabstore, sub_addr));
+    let _ = executor.spawn(GatewayClient::subscribe(subscriber, slabstore));
 
     // TEST
     let _slab = Slab::new("testcoin".to_string(), vec![0, 0, 0, 0]);
-    // client.put_slab(_slab).await?;
+    client.put_slab(_slab).await?;
 
-    subscriber_task.cancel().await;
     Ok(())
 }
 
@@ -52,6 +53,8 @@ fn main() -> Result<()> {
         LevelFilter::Off
     };
 
+
+
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
@@ -60,7 +63,9 @@ fn main() -> Result<()> {
             std::fs::File::create(options.log_path.as_path()).unwrap(),
         ),
     ])
-    .unwrap();
+        .unwrap();
+
+
 
     let ex2 = ex.clone();
 
@@ -77,4 +82,68 @@ fn main() -> Result<()> {
         });
 
     result
+}
+
+// $ cargo test --bin darkfid
+// run 10 clients simultaneously
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_darkfid_client(){
+
+        use std::path::Path;
+
+        use drk::service::GatewayClient;
+        use drk::slab::Slab;
+
+        use rand::Rng;
+        use simplelog::*;
+        use log::*;
+
+
+        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+
+        CombinedLogger::init(vec![
+            TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),
+            WriteLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                std::fs::File::create(Path::new("/tmp/dar.log")).unwrap(),
+            ),
+        ])
+            .unwrap();
+
+        let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
+
+
+
+        for _ in 1..11 {
+            let thread = std::thread::spawn(|| {
+                smol::future::block_on(async move {
+                    let mut rng = rand::thread_rng();
+                    let rnd: u32 = rng.gen();
+
+
+                    let mut client = GatewayClient::new("127.0.0.1:3333".parse().unwrap(), Path::new(&format!("slabstore_{}.db", rnd))).unwrap();
+
+                    client.start().await.unwrap();
+
+
+
+                    let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
+                    client.put_slab(_slab).await.unwrap();
+
+
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    let last_index = client.slabstore.get_last_index().unwrap();
+                    info!("last index: {}", last_index);
+                })
+            });
+            thread_pools.push(thread);
+        }
+        for t in thread_pools {
+            t.join().unwrap();
+        }
+    }
 }
