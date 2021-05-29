@@ -14,9 +14,11 @@ use rand::Rng;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use zeromq::*;
 
+pub type PeerId  = Vec<u8>;
+
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
-    Send((Vec<u8>, Reply)),
+    Send((PeerId, Reply)),
     Stop,
 }
 
@@ -27,11 +29,11 @@ pub fn addr_to_string(addr: SocketAddr) -> String {
 pub struct RepProtocol {
     addr: SocketAddr,
     socket: zeromq::RouterSocket,
-    recv_queue: async_channel::Receiver<(Vec<u8>, Reply)>,
-    send_queue: async_channel::Sender<(Vec<u8>, Request)>,
+    recv_queue: async_channel::Receiver<(PeerId, Reply)>,
+    send_queue: async_channel::Sender<(PeerId, Request)>,
     channels: (
-        async_channel::Sender<(Vec<u8>, Reply)>,
-        async_channel::Receiver<(Vec<u8>, Request)>,
+        async_channel::Sender<(PeerId, Reply)>,
+        async_channel::Receiver<(PeerId, Request)>,
     ),
     service_name: String,
 }
@@ -39,8 +41,8 @@ pub struct RepProtocol {
 impl RepProtocol {
     pub fn new(addr: SocketAddr, service_name: String) -> RepProtocol {
         let socket = zeromq::RouterSocket::new();
-        let (send_queue, recv_channel) = async_channel::unbounded::<(Vec<u8>, Request)>();
-        let (send_channel, recv_queue) = async_channel::unbounded::<(Vec<u8>, Reply)>();
+        let (send_queue, recv_channel) = async_channel::unbounded::<(PeerId, Request)>();
+        let (send_channel, recv_queue) = async_channel::unbounded::<(PeerId, Reply)>();
 
         let channels = (send_channel.clone(), recv_channel.clone());
 
@@ -57,8 +59,8 @@ impl RepProtocol {
     pub async fn start(
         &mut self,
     ) -> Result<(
-        async_channel::Sender<(Vec<u8>, Reply)>,
-        async_channel::Receiver<(Vec<u8>, Request)>,
+    async_channel::Sender<(PeerId, Reply)>,
+    async_channel::Receiver<(PeerId, Request)>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
@@ -90,10 +92,10 @@ impl RepProtocol {
 
             match event {
                 NetEvent::Receive(msg) => {
-                    if let Some(request) = msg.get(1) {
-                        let request: Vec<u8> = request.to_vec();
-                        let request: Request = deserialize(&request)?;
-                        if let Some(peer) = msg.get(0) {
+                    if let Some(peer) = msg.get(0) {
+                        if let Some(request) = msg.get(1) {
+                            let request: Vec<u8> = request.to_vec();
+                            let request: Request = deserialize(&request)?;
                             self.send_queue.send((peer.to_vec(), request)).await?;
                         }
                     }
@@ -175,7 +177,7 @@ impl ReqProtocol {
             Ok(reply.get_payload())
         } else {
             Err(crate::Error::ZMQError(
-                "Couldn't parse ZmqMessage".to_string(),
+                    "Couldn't parse ZmqMessage".to_string(),
             ))
         }
     }
@@ -253,7 +255,7 @@ impl Subscriber {
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(
-                "Couldn't parse ZmqMessage".to_string(),
+                    "Couldn't parse ZmqMessage".to_string(),
             )),
         }
     }

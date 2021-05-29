@@ -3,7 +3,7 @@ use std::convert::From;
 use std::net::SocketAddr;
 use std::path::Path;
 
-use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
+use super::reqrep::{Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber, PeerId};
 use crate::{
     serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error, Result,
 };
@@ -73,8 +73,8 @@ impl GatewayService {
 
     async fn handle_request(
         self: Arc<Self>,
-        send_queue: async_channel::Sender<(Vec<u8>, Reply)>,
-        recv_queue: async_channel::Receiver<(Vec<u8>, Request)>,
+        send_queue: async_channel::Sender<(PeerId, Reply)>,
+        recv_queue: async_channel::Receiver<(PeerId, Request)>,
         publish_queue: async_channel::Sender<Vec<u8>>,
     ) -> Result<()> {
         loop {
@@ -141,7 +141,7 @@ impl GatewayService {
 
 pub struct GatewayClient {
     protocol: ReqProtocol,
-    pub slabstore: Arc<SlabStore>,
+    slabstore: Arc<SlabStore>,
 }
 
 impl GatewayClient {
