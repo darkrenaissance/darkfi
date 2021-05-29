@@ -11,9 +11,11 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     client.start().await?;
     println!("connected to a server");
 
-
     let slabstore = client.get_slabstore();
-    let subscriber_task =  executor.spawn(GatewayClient::subscribe(slabstore,"127.0.0.1:4444".parse()?));
+    let subscriber_task = executor.spawn(GatewayClient::subscribe(
+        slabstore,
+        "127.0.0.1:4444".parse()?,
+    ));
 
     println!("subscriber ready");
 
