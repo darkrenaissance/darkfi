@@ -152,12 +152,6 @@ impl GatewayClient {
         Ok(())
     }
 
-    pub async fn subscribe(&self, sub_addr: SocketAddr) -> Result<Arc<Mutex<Subscriber>>> {
-        let mut subscriber = Subscriber::new(sub_addr);
-        subscriber.start().await?;
-        Ok(Arc::new(Mutex::new(subscriber)))
-    }
-
     pub async fn get_slab(&mut self, index: u64) -> Result<Vec<u8>> {
         let slab = self
             .protocol
@@ -190,20 +184,17 @@ impl GatewayClient {
         self.slabstore.clone()
     }
 
+    pub async fn subscribe(slabstore: Arc<SlabStore>, sub_addr: SocketAddr) -> Result<()> {
+        let mut subscriber = Subscriber::new(sub_addr);
+        subscriber.start().await?;
+        loop {
+            let slab: Vec<u8>;
+            slab = subscriber.fetch().await?;
+            slabstore.put(slab)?;
+        }
+    }
+
 }
 
-pub async fn fetch_slabs_loop(
-    subscriber: Arc<Mutex<Subscriber>>,
-    slabs: Arc<Mutex<Slabs>>,
-) -> Result<()> {
-    loop {
-        let slab: Vec<u8>;
-        {
-            let mut subscriber = subscriber.lock().await;
-            slab = subscriber.fetch().await?;
-        }
-        info!("received new slab from subscriber");
-        slabs.lock().await.push(slab);
-    }
-}
+
 

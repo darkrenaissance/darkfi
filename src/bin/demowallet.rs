@@ -1,35 +1,27 @@
 use async_executor::Executor;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use easy_parallel::Parallel;
 
-use drk::service::{fetch_slabs_loop, GatewayClient};
+use drk::service::GatewayClient;
 use drk::{slab::Slab, Result};
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let mut client = GatewayClient::new("127.0.0.1:3333".parse()?)?;
+    let mut client = GatewayClient::new("127.0.0.1:3333".parse()?, "slabstore_client.db")?;
 
     client.start().await?;
     println!("connected to a server");
 
-    let slabs = Arc::new(Mutex::new(vec![]));
 
-    let subscriber = client.subscribe("127.0.0.1:4444".parse()?).await?;
+    let slabstore = client.get_slabstore();
+    let subscriber_task =  executor.spawn(GatewayClient::subscribe(slabstore,"127.0.0.1:4444".parse()?));
 
     println!("subscriber ready");
-
-    // TODO sync new slab with slabstore
-    let fetch_loop_task = executor.spawn(fetch_slabs_loop(subscriber.clone(), slabs.clone()));
 
     println!("send put slab");
     let slab = Slab::new("testcoin".to_string(), vec![0, 0, 0, 0]);
     client.put_slab(slab).await?;
 
-    // println!("send get slab");
-    // let x = client.get_slab(1).await?;
-    // println!("{:?}", x);
-
-    fetch_loop_task.cancel().await;
-
+    subscriber_task.cancel().await;
     Ok(())
 }
 
