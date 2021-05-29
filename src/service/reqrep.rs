@@ -1,7 +1,7 @@
 use async_std::sync::Arc;
+use std::convert::TryFrom;
 use std::io;
 use std::net::SocketAddr;
-use std::convert::TryFrom;
 
 use crate::serial::{deserialize, serialize};
 use crate::{Decodable, Encodable, Result};
@@ -27,11 +27,11 @@ pub fn addr_to_string(addr: SocketAddr) -> String {
 pub struct RepProtocol {
     addr: SocketAddr,
     socket: zeromq::RouterSocket,
-    recv_queue: async_channel::Receiver<(Vec<u8>,Reply)>,
+    recv_queue: async_channel::Receiver<(Vec<u8>, Reply)>,
     send_queue: async_channel::Sender<(Vec<u8>, Request)>,
     channels: (
         async_channel::Sender<(Vec<u8>, Reply)>,
-        async_channel::Receiver<(Vec<u8>,Request)>,
+        async_channel::Receiver<(Vec<u8>, Request)>,
     ),
     service_name: String,
 }
@@ -57,8 +57,8 @@ impl RepProtocol {
     pub async fn start(
         &mut self,
     ) -> Result<(
-    async_channel::Sender<(Vec<u8>, Reply)>,
-    async_channel::Receiver<(Vec<u8>,Request)>,
+        async_channel::Sender<(Vec<u8>, Reply)>,
+        async_channel::Receiver<(Vec<u8>, Request)>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
@@ -93,14 +93,14 @@ impl RepProtocol {
                     if let Some(request) = msg.get(1) {
                         let request: Vec<u8> = request.to_vec();
                         let request: Request = deserialize(&request)?;
-                        if let Some(peer) = msg.get(0){
+                        if let Some(peer) = msg.get(0) {
                             self.send_queue.send((peer.to_vec(), request)).await?;
                         }
                     }
                 }
                 NetEvent::Send((peer, reply)) => {
                     let peer = Bytes::from(peer);
-                    let mut msg:Vec<Bytes> = vec![peer];
+                    let mut msg: Vec<Bytes> = vec![peer];
                     let reply: Vec<u8> = serialize(&reply);
                     let reply = Bytes::from(reply);
                     msg.push(reply);
@@ -172,11 +172,10 @@ impl ReqProtocol {
 
             assert!(reply.get_id() == request.get_id());
 
-
             Ok(reply.get_payload())
         } else {
             Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             ))
         }
     }
@@ -254,7 +253,7 @@ impl Subscriber {
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             )),
         }
     }

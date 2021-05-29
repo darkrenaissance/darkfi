@@ -46,9 +46,9 @@ impl GatewayService {
 
         let (publish_queue, publish_recv_queue) = async_channel::unbounded::<Vec<u8>>();
         let publisher_task = executor.spawn(Self::start_publisher(
-                self.pub_addr,
-                service_name,
-                publish_recv_queue.clone(),
+            self.pub_addr,
+            service_name,
+            publish_recv_queue.clone(),
         ));
 
         let handle_request_task =
@@ -73,7 +73,7 @@ impl GatewayService {
 
     async fn handle_request(
         self: Arc<Self>,
-        send_queue: async_channel::Sender<(Vec<u8>,Reply)>,
+        send_queue: async_channel::Sender<(Vec<u8>, Reply)>,
         recv_queue: async_channel::Receiver<(Vec<u8>, Request)>,
         publish_queue: async_channel::Sender<Vec<u8>>,
     ) -> Result<()> {
@@ -94,7 +94,7 @@ impl GatewayService {
 
                             // send reply
                             let reply = Reply::from(&request, 0, vec![]);
-                            send_queue.send((peer,reply)).await?;
+                            send_queue.send((peer, reply)).await?;
 
                             // publish to all subscribes
                             publish_queue.send(slab).await?;
@@ -205,7 +205,6 @@ impl GatewayClient {
     pub fn get_slabstore(&self) -> Arc<SlabStore> {
         self.slabstore.clone()
     }
-
 
     pub async fn start_subscriber(sub_addr: SocketAddr) -> Result<Subscriber> {
         let mut subscriber = Subscriber::new(sub_addr, String::from("GATEWAY CLIENT"));

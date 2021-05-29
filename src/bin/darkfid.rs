@@ -53,8 +53,6 @@ fn main() -> Result<()> {
         LevelFilter::Off
     };
 
-
-
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
@@ -63,9 +61,7 @@ fn main() -> Result<()> {
             std::fs::File::create(options.log_path.as_path()).unwrap(),
         ),
     ])
-        .unwrap();
-
-
+    .unwrap();
 
     let ex2 = ex.clone();
 
@@ -90,17 +86,15 @@ fn main() -> Result<()> {
 mod test {
 
     #[test]
-    fn test_darkfid_client(){
-
+    fn test_darkfid_client() {
         use std::path::Path;
 
         use drk::service::GatewayClient;
         use drk::slab::Slab;
 
+        use log::*;
         use rand::Rng;
         use simplelog::*;
-        use log::*;
-
 
         let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -112,11 +106,9 @@ mod test {
                 std::fs::File::create(Path::new("/tmp/dar.log")).unwrap(),
             ),
         ])
-            .unwrap();
+        .unwrap();
 
         let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
-
-
 
         for _ in 1..11 {
             let thread = std::thread::spawn(|| {
@@ -124,16 +116,16 @@ mod test {
                     let mut rng = rand::thread_rng();
                     let rnd: u32 = rng.gen();
 
-
-                    let mut client = GatewayClient::new("127.0.0.1:3333".parse().unwrap(), Path::new(&format!("slabstore_{}.db", rnd))).unwrap();
+                    let mut client = GatewayClient::new(
+                        "127.0.0.1:3333".parse().unwrap(),
+                        Path::new(&format!("slabstore_{}.db", rnd)),
+                    )
+                    .unwrap();
 
                     client.start().await.unwrap();
 
-
-
                     let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
                     client.put_slab(_slab).await.unwrap();
-
 
                     std::thread::sleep(std::time::Duration::from_secs(3));
                     let last_index = client.slabstore.get_last_index().unwrap();
