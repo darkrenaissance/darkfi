@@ -3,7 +3,7 @@ use crate::Result;
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::Connection;
+use rusqlite::{named_params, Connection};
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
@@ -25,12 +25,34 @@ impl RpcAdapter {
         connector.expect("Failed to connect to database.")
     }
 
-    pub async fn key_gen() -> (Vec<u8>, Vec<u8>) {
+    pub async fn key_gen() -> Result<()> {
+        debug!(target: "adapter", "key_gen() [START]");
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/wallet.db");
+        debug!(target: "adapter", "key_gen() [FOUND PATH]");
+        println!("Found path: {:?}", &path);
+        debug!(target: "adapter", "key_gen() [TRY DB CONNECT]");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        // TODO: assign new ID on each run
+        debug!(target: "adapter", "key_gen() [Assigning ID...]");
+        let id = 0;
+        debug!(target: "adapter", "key_gen() [Generating private key...]");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        debug!(target: "adapter", "key_gen() [Generating public key...]");
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
         let privkey = serial::serialize(&secret);
-        (privkey, pubkey)
+        connect.execute(
+            "INSERT INTO keys(key_id, key_private, key_public)
+            VALUES (:id, :privkey, :pubkey)",
+            named_params!{":id": id,
+                           ":privkey": privkey,
+                           ":pubkey": pubkey
+                          }
+        )?;
+        Ok(())
     }
 
     pub async fn new_wallet() -> Result<()> {
