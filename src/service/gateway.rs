@@ -38,9 +38,9 @@ impl GatewayService {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        let service_name = String::from("GATEWAY");
+        let service_name = String::from("GATEWAY DAEMON");
 
-        let mut protocol = RepProtocol::new(service_name.clone(), self.addr.clone());
+        let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
 
         let (send, recv) = protocol.start().await?;
 
@@ -97,7 +97,7 @@ impl GatewayService {
                             // publish to all subscribes
                             publish_queue.send(slab).await?;
 
-                            info!("received putslab msg");
+                            info!("Received putslab msg");
                         }
                         1 => {
                             let index = request.get_payload();
@@ -113,7 +113,7 @@ impl GatewayService {
                             send_queue.send(reply).await?;
 
                             // GETSLAB
-                            info!("received getslab msg");
+                            info!("Received getslab msg");
                         }
                         2 => {
                             let index = self.slabstore.get_last_index_as_bytes()?;
@@ -121,7 +121,7 @@ impl GatewayService {
                             send_queue.send(reply).await?;
 
                             // GETLASTINDEX
-                            info!("received getlastindex msg");
+                            info!("Received getlastindex msg");
                         }
                         _ => {
                             return Err(Error::ServicesError("received wrong command"));
@@ -143,10 +143,10 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr, path: &str) -> Result<Self> {
-        let protocol = ReqProtocol::new(addr);
+    pub fn new(addr: SocketAddr, path: &Path) -> Result<Self> {
+        let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
 
-        let slabstore = SlabStore::new(Path::new(path))?;
+        let slabstore = SlabStore::new(path)?;
 
         Ok(GatewayClient {
             protocol,
@@ -157,7 +157,7 @@ impl GatewayClient {
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
 
-        // start syncing
+        info!("Start Syncing");
         let local_last_index = self.slabstore.get_last_index()?;
         let last_index = self.get_last_index().await?;
 
@@ -203,7 +203,7 @@ impl GatewayClient {
     }
 
     pub async fn subscribe(slabstore: Arc<SlabStore>, sub_addr: SocketAddr) -> Result<()> {
-        let mut subscriber = Subscriber::new(sub_addr);
+        let mut subscriber = Subscriber::new(sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
         loop {
             let slab: Vec<u8>;

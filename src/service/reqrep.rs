@@ -24,7 +24,6 @@ pub fn addr_to_string(addr: SocketAddr) -> String {
 }
 
 pub struct RepProtocol {
-    service_name: String,
     addr: SocketAddr,
     socket: zeromq::RepSocket,
     recv_queue: async_channel::Receiver<Reply>,
@@ -33,10 +32,11 @@ pub struct RepProtocol {
         async_channel::Sender<Reply>,
         async_channel::Receiver<Request>,
     ),
+    service_name: String,
 }
 
 impl RepProtocol {
-    pub fn new(service_name: String, addr: SocketAddr) -> RepProtocol {
+    pub fn new(addr: SocketAddr, service_name: String) -> RepProtocol {
         let socket = zeromq::RepSocket::new();
         let (send_queue, recv_channel) = async_channel::unbounded::<Request>();
         let (send_channel, recv_queue) = async_channel::unbounded::<Reply>();
@@ -44,29 +44,29 @@ impl RepProtocol {
         let channels = (send_channel.clone(), recv_channel.clone());
 
         RepProtocol {
-            service_name,
             addr,
             socket,
             recv_queue,
             send_queue,
             channels,
+            service_name,
         }
     }
 
     pub async fn start(
         &mut self,
     ) -> Result<(
-        async_channel::Sender<Reply>,
-        async_channel::Receiver<Request>,
+    async_channel::Sender<Reply>,
+    async_channel::Receiver<Request>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
-        info!("{} SERVICE: started - bind to {}", self.service_name, addr);
+        info!("{} SERVICE: Bound To {}", self.service_name, addr);
         Ok(self.channels.clone())
     }
 
     pub async fn run(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
-        info!("{} SERVICE: running", self.service_name);
+        info!("{} SERVICE: Running", self.service_name);
 
         let (stop_s, stop_r) = async_channel::unbounded::<()>();
 
@@ -105,7 +105,7 @@ impl RepProtocol {
             }
         }
         let _ = stop_task.cancel().await;
-        warn!("{} SERVICE: stopped", self.service_name);
+        warn!("{} SERVICE: Stopped", self.service_name);
         Ok(())
     }
 }
@@ -113,17 +113,19 @@ impl RepProtocol {
 pub struct ReqProtocol {
     addr: SocketAddr,
     socket: zeromq::ReqSocket,
+    service_name: String,
 }
 
 impl ReqProtocol {
-    pub fn new(addr: SocketAddr) -> ReqProtocol {
+    pub fn new(addr: SocketAddr, service_name: String) -> ReqProtocol {
         let socket = zeromq::ReqSocket::new();
-        ReqProtocol { addr, socket }
+        ReqProtocol { addr, socket, service_name}
     }
 
     pub async fn start(&mut self) -> Result<()> {
         let addr = addr_to_string(self.addr);
         self.socket.connect(addr.as_str()).await?;
+        info!("{} SERVICE: Connected To {}", self.service_name, self.addr);
         Ok(())
     }
 
@@ -134,12 +136,16 @@ impl ReqProtocol {
         let req: zeromq::ZmqMessage = req.into();
 
         self.socket.send(req).await?;
+        info!("{} SERVICE: Sent Request {{ command: {} }}", self.service_name, command);
 
         let rep: zeromq::ZmqMessage = self.socket.recv().await?;
         if let Some(reply) = rep.get(0) {
             let reply: Vec<u8> = reply.to_vec();
 
+
             let reply: Reply = deserialize(&reply)?;
+
+            info!("{} SERVICE: Received Reply {{ error: {} }}", self.service_name, reply.has_error() );
 
             if reply.has_error() {
                 return Err(crate::Error::ServicesError("response has an error"));
@@ -150,7 +156,7 @@ impl ReqProtocol {
             Ok(reply.get_payload())
         } else {
             Err(crate::Error::ZMQError(
-                "Couldn't parse ZmqMessage".to_string(),
+                    "Couldn't parse ZmqMessage".to_string(),
             ))
         }
     }
@@ -176,7 +182,7 @@ impl Publisher {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
         info!(
-            "{} SERVICE PUBLISHER: started - bind to {}",
+            "{} PUBLISHER SERVICE : Bound To {}",
             self.service_name, addr
         );
         loop {
@@ -195,12 +201,13 @@ impl Publisher {
 pub struct Subscriber {
     addr: SocketAddr,
     socket: zeromq::SubSocket,
+    service_name: String,
 }
 
 impl Subscriber {
-    pub fn new(addr: SocketAddr) -> Subscriber {
+    pub fn new(addr: SocketAddr, service_name: String) -> Subscriber {
         let socket = zeromq::SubSocket::new();
-        Subscriber { addr, socket }
+        Subscriber { addr, socket , service_name}
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -208,7 +215,10 @@ impl Subscriber {
         self.socket.connect(addr.as_str()).await?;
 
         self.socket.subscribe("").await?;
-
+        info!(
+            "{} SUBSCRIBER SERVICE : Connected To {}",
+            self.service_name, addr
+        );
         Ok(())
     }
 
@@ -220,7 +230,7 @@ impl Subscriber {
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(
-                "Couldn't parse ZmqMessage".to_string(),
+                    "Couldn't parse ZmqMessage".to_string(),
             )),
         }
     }
