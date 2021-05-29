@@ -46,9 +46,9 @@ impl GatewayService {
 
         let (publish_queue, publish_recv_queue) = async_channel::unbounded::<Vec<u8>>();
         let publisher_task = executor.spawn(Self::start_publisher(
-            self.pub_addr,
-            service_name,
-            publish_recv_queue.clone(),
+                self.pub_addr,
+                service_name,
+                publish_recv_queue.clone(),
         ));
 
         let handle_request_task =
@@ -73,14 +73,16 @@ impl GatewayService {
 
     async fn handle_request(
         self: Arc<Self>,
-        send_queue: async_channel::Sender<Reply>,
-        recv_queue: async_channel::Receiver<Request>,
+        send_queue: async_channel::Sender<(Vec<u8>,Reply)>,
+        recv_queue: async_channel::Receiver<(Vec<u8>, Request)>,
         publish_queue: async_channel::Sender<Vec<u8>>,
     ) -> Result<()> {
         loop {
             match recv_queue.recv().await {
-                Ok(request) => {
+                Ok(msg) => {
                     // TODO spawn new task when receive new msg
+                    let request = msg.1;
+                    let peer = msg.0;
                     match request.get_command() {
                         0 => {
                             // PUTSLAB
@@ -92,7 +94,7 @@ impl GatewayService {
 
                             // send reply
                             let reply = Reply::from(&request, 0, vec![]);
-                            send_queue.send(reply).await?;
+                            send_queue.send((peer,reply)).await?;
 
                             // publish to all subscribes
                             publish_queue.send(slab).await?;
@@ -110,7 +112,7 @@ impl GatewayService {
                             }
 
                             let reply = Reply::from(&request, 0, payload);
-                            send_queue.send(reply).await?;
+                            send_queue.send((peer, reply)).await?;
 
                             // GETSLAB
                             info!("Received getslab msg");
@@ -118,7 +120,7 @@ impl GatewayService {
                         2 => {
                             let index = self.slabstore.get_last_index_as_bytes()?;
                             let reply = Reply::from(&request, 0, index);
-                            send_queue.send(reply).await?;
+                            send_queue.send((peer, reply)).await?;
 
                             // GETLASTINDEX
                             info!("Received getlastindex msg");
@@ -167,6 +169,8 @@ impl GatewayClient {
             }
         }
 
+        info!("End Syncing");
+
         Ok(())
     }
 
@@ -202,9 +206,14 @@ impl GatewayClient {
         self.slabstore.clone()
     }
 
-    pub async fn subscribe(slabstore: Arc<SlabStore>, sub_addr: SocketAddr) -> Result<()> {
+
+    pub async fn start_subscriber(sub_addr: SocketAddr) -> Result<Subscriber> {
         let mut subscriber = Subscriber::new(sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
+        Ok(subscriber)
+    }
+
+    pub async fn subscribe(mut subscriber: Subscriber, slabstore: Arc<SlabStore>) -> Result<()> {
         loop {
             let slab: Vec<u8>;
             slab = subscriber.fetch().await?;
