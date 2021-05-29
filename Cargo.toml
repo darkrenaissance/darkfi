@@ -133,8 +133,8 @@ name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
 [[bin]]
-name = "demowallet"
-path = "src/bin/demowallet.rs"
+name = "darkfid"
+path = "src/bin/darkfid.rs"
 
 [profile.release]
 debug = 1
