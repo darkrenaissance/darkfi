@@ -111,12 +111,11 @@ mod test {
 
         let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
 
-        for _ in 1..11 {
+        for _ in 0..10 {
             let thread = std::thread::spawn(|| {
                 smol::future::block_on(async move {
                     let mut rng = rand::thread_rng();
                     let rnd: u32 = rng.gen();
-
 
                     // create new client and use different slabstore
                     let mut client = GatewayClient::new(
@@ -132,9 +131,6 @@ mod test {
                     let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
                     client.put_slab(_slab).await.unwrap();
 
-
-                    let last_index = client.get_slabstore().get_last_index().unwrap();
-                    info!("last index: {}", last_index);
                 })
             });
             thread_pools.push(thread);

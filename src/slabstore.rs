@@ -25,15 +25,17 @@ impl SlabStore {
         Ok(value)
     }
 
-    pub fn put(&self, value: Vec<u8>) -> Result<()> {
+    pub fn put(&self, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let slab: Slab = deserialize(&value)?;
         let last_index = self.get_last_index()?;
         let key = last_index + 1;
         if slab.get_index() == key {
             let key = serialize(&key);
-            self.db.put(key, value)?;
+            self.db.put(key.clone(), value)?;
+            Ok(Some(key))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     pub fn get_value_deserialized(&self, key: Vec<u8>) -> Result<Option<Slab>> {

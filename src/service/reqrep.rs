@@ -144,7 +144,7 @@ impl ReqProtocol {
         Ok(())
     }
 
-    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let request = Request::new(command, data);
         let req = serialize(&request);
         let req = bytes::Bytes::from(req);
@@ -168,13 +168,15 @@ impl ReqProtocol {
                 reply.has_error()
             );
 
+            // TODO return error status code instead of None
             if reply.has_error() {
-                return Err(crate::Error::ServicesError("response has an error"));
+                warn!("Reply has an error {}", reply.get_error());
+                return Ok(None);
             }
 
             assert!(reply.get_id() == request.get_id());
 
-            Ok(reply.get_payload())
+            Ok(Some(reply.get_payload()))
         } else {
             Err(crate::Error::ZMQError(
                     "Couldn't parse ZmqMessage".to_string(),
@@ -319,8 +321,20 @@ impl Reply {
         }
     }
 
+    pub fn get_error(&self) -> u32 {
+        self.error
+    }
+
     pub fn get_payload(&self) -> Vec<u8> {
         self.payload.clone()
+    }
+
+    pub fn set_payload(&mut self, payload: Vec<u8>) {
+        self.payload = payload;
+    }
+
+    pub fn set_error(&mut self, error: u32) {
+        self.error = error;
     }
 
     pub fn get_id(&self) -> u32 {
