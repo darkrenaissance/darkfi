@@ -56,8 +56,8 @@ impl RepProtocol {
     pub async fn start(
         &mut self,
     ) -> Result<(
-    async_channel::Sender<Reply>,
-    async_channel::Receiver<Request>,
+        async_channel::Sender<Reply>,
+        async_channel::Receiver<Request>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
@@ -119,7 +119,11 @@ pub struct ReqProtocol {
 impl ReqProtocol {
     pub fn new(addr: SocketAddr, service_name: String) -> ReqProtocol {
         let socket = zeromq::ReqSocket::new();
-        ReqProtocol { addr, socket, service_name}
+        ReqProtocol {
+            addr,
+            socket,
+            service_name,
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -136,16 +140,22 @@ impl ReqProtocol {
         let req: zeromq::ZmqMessage = req.into();
 
         self.socket.send(req).await?;
-        info!("{} SERVICE: Sent Request {{ command: {} }}", self.service_name, command);
+        info!(
+            "{} SERVICE: Sent Request {{ command: {} }}",
+            self.service_name, command
+        );
 
         let rep: zeromq::ZmqMessage = self.socket.recv().await?;
         if let Some(reply) = rep.get(0) {
             let reply: Vec<u8> = reply.to_vec();
 
-
             let reply: Reply = deserialize(&reply)?;
 
-            info!("{} SERVICE: Received Reply {{ error: {} }}", self.service_name, reply.has_error() );
+            info!(
+                "{} SERVICE: Received Reply {{ error: {} }}",
+                self.service_name,
+                reply.has_error()
+            );
 
             if reply.has_error() {
                 return Err(crate::Error::ServicesError("response has an error"));
@@ -156,7 +166,7 @@ impl ReqProtocol {
             Ok(reply.get_payload())
         } else {
             Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             ))
         }
     }
@@ -207,7 +217,11 @@ pub struct Subscriber {
 impl Subscriber {
     pub fn new(addr: SocketAddr, service_name: String) -> Subscriber {
         let socket = zeromq::SubSocket::new();
-        Subscriber { addr, socket , service_name}
+        Subscriber {
+            addr,
+            socket,
+            service_name,
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -230,7 +244,7 @@ impl Subscriber {
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             )),
         }
     }

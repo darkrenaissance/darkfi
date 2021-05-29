@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
 use async_executor::Executor;
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
+use std::net::SocketAddr;
 
-use drk::service::{GatewayClient, ClientProgramOptions};
+use drk::service::{ClientProgramOptions, GatewayClient};
 use drk::{slab::Slab, Result};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
@@ -13,12 +13,10 @@ fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     }
 }
 
-
 async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Result<()> {
     let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
     let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
     let slabstore_path = options.slabstore_path.as_path();
-
 
     // create gateway client
     let mut client = GatewayClient::new(connect_addr, slabstore_path)?;
@@ -28,10 +26,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
 
     // start subscribe to gateway publisher
     let slabstore = client.get_slabstore();
-    let subscriber_task = executor.spawn(GatewayClient::subscribe(
-            slabstore,
-            sub_addr,
-    ));
+    let subscriber_task = executor.spawn(GatewayClient::subscribe(slabstore, sub_addr));
 
     // TEST
     let _slab = Slab::new("testcoin".to_string(), vec![0, 0, 0, 0]);
@@ -65,9 +60,7 @@ fn main() -> Result<()> {
             std::fs::File::create(options.log_path.as_path()).unwrap(),
         ),
     ])
-        .unwrap();
-
-
+    .unwrap();
 
     let ex2 = ex.clone();
 
