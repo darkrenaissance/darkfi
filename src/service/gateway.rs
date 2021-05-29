@@ -21,7 +21,7 @@ enum GatewayCommand {
 }
 
 pub struct GatewayService {
-    slabstore: SlabStore,
+    slabstore: Arc<SlabStore>,
     addr: SocketAddr,
     publisher: Mutex<Publisher>,
 }
@@ -76,7 +76,8 @@ impl GatewayService {
                             let reply = Reply::from(&request, 0, vec![]);
                             send_queue.send(reply).await?;
 
-                            // publish to all subscribes self.publisher.lock().await.publish(slab).await?;
+                            // publish to all subscribes
+                            self.publisher.lock().await.publish(slab).await?;
 
                             info!("received putslab msg");
                         }
@@ -120,14 +121,14 @@ impl GatewayService {
 
 pub struct GatewayClient {
     protocol: ReqProtocol,
-    slabstore: SlabStore,
+    pub slabstore: Arc<SlabStore>,
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr) -> Result<GatewayClient> {
+    pub fn new(addr: SocketAddr, path: &str) -> Result<Self> {
         let protocol = ReqProtocol::new(addr);
 
-        let slabstore = SlabStore::new(Path::new("slabstore_client.db"))?;
+        let slabstore = SlabStore::new(Path::new(path))?;
 
         Ok(GatewayClient {
             protocol,
@@ -177,7 +178,6 @@ impl GatewayClient {
 
         Ok(())
     }
-
     pub async fn get_last_index(&mut self) -> Result<u64> {
         let rep = self
             .protocol
@@ -185,6 +185,11 @@ impl GatewayClient {
             .await?;
         Ok(deserialize(&rep)?)
     }
+
+    pub fn get_slabstore(&self) -> Arc<SlabStore> {
+        self.slabstore.clone()
+    }
+
 }
 
 pub async fn fetch_slabs_loop(
@@ -201,3 +206,4 @@ pub async fn fetch_slabs_loop(
         slabs.lock().await.push(slab);
     }
 }
+

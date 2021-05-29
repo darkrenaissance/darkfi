@@ -8,20 +8,16 @@ use rocksdb::{IteratorMode, Options, DB};
 
 pub struct SlabStore {
     db: DB,
-    opt: Options,
-    path: Arc<Path>,
 }
 
 impl SlabStore {
-    pub fn new(path: &Path) -> Result<Self> {
+    pub fn new(path: &Path) -> Result<Arc<Self>> {
         let mut opt = Options::default();
         opt.create_if_missing(true);
 
         let db = DB::open(&opt, path)?;
 
-        let path = Arc::from(path);
-
-        Ok(SlabStore { db, opt, path })
+        Ok(Arc::new(SlabStore { db }))
     }
 
     pub fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
@@ -67,8 +63,8 @@ impl SlabStore {
         }
     }
 
-    pub fn destroy(&self) -> Result<()> {
-        DB::destroy(&self.opt, self.path.clone())?;
+    pub fn destroy(path: &Path) -> Result<()> {
+        DB::destroy(&Options::default(), path)?;
         Ok(())
     }
 }
