@@ -150,17 +150,18 @@ fn main() {
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
         let params = setup_mint_prover();
-        save_params("mint.params", &params);
+        save_params("mint.params", &params).expect("Failed to create mint.params.");
     }
     if !Path::new("spend.params").exists() {
         let params = setup_spend_prover();
-        save_params("spend.params", &params);
+        save_params("spend.params", &params).expect("Failed to create save.params");
     }
 
     // Load trusted setup parameters
     let (mint_params, mint_pvk) = load_params("mint.params").expect("params should load");
     let (spend_params, spend_pvk) = load_params("spend.params").expect("params should load");
 
+    // Where is cashier private key stored? Does node have its own wallet schema
     // Cashier creates a secret key
     let cashier_secret = jubjub::Fr::random(&mut OsRng);
     // This is their public key
