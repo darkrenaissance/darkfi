@@ -35,8 +35,8 @@ pub struct GatewayService {
 }
 
 impl GatewayService {
-    pub fn new(addr: SocketAddr, pub_addr: SocketAddr) -> Result<Arc<GatewayService>> {
-        let slabstore = SlabStore::new(Path::new("slabstore.db"))?;
+    pub fn new(addr: SocketAddr, pub_addr: SocketAddr, slabstore_path: &Path) -> Result<Arc<GatewayService>> {
+        let slabstore = SlabStore::new(slabstore_path)?;
 
         Ok(Arc::new(GatewayService {
             slabstore,
