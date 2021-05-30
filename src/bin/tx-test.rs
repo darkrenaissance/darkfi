@@ -52,7 +52,18 @@ struct MemoryState {
 impl ProgramState for MemoryState {
     // Vec<u8> for keys
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        public == &self.cashier_public
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/cashier.db");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
+        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0)).unwrap();
+        // does not actually check whether the cashier key is valid
+        for key in key_iter {
+            key.unwrap() == self.cashier_public;
+        }
+        true
     }
     // rocksdb
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
