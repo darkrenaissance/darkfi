@@ -14,3 +14,7 @@ CREATE TABLE IF NOT EXISTS coins(
     coin_blind BLOB NOT NULL,
     valcom_blind BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cashier(
+    key_id INT PRIMARY KEY NOT NULL,
+    key_public BLOB NOT NULL
+):

@@ -157,18 +157,20 @@ impl MemoryState {
         None
     }
 
-    pub async fn wallet_key(&self) -> Result<()> {
+    pub async fn key_gen(&self) -> Result<()> {
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
             .join(".config/darkfi/wallet.db");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
+        // Create keys
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         debug!(target: "adapter", "key_gen() [Generating public key...]");
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = drk::serial::serialize(&public);
         let privkey = drk::serial::serialize(&secret);
+        // Write keys to database
         connect.execute(
             "INSERT INTO keys(key_id, key_private, key_public)
             VALUES (:id, :privkey, :pubkey)",
@@ -180,17 +182,19 @@ impl MemoryState {
         Ok(())
     }
 
-    pub async fn cashier_key(&self) -> Result<()> {
+    pub async fn cashier_key_gen(&self) -> Result<()> {
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
             .join(".config/darkfi/cashier.db");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
+        // Create keys
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = drk::serial::serialize(&public);
         let privkey = drk::serial::serialize(&secret);
+        // Write keys to database
         connect.execute(
             "INSERT INTO keys(key_id, key_private, key_public)
             VALUES (:id, :privkey, :pubkey)",
@@ -200,6 +204,21 @@ impl MemoryState {
                           }
         )?;
         Ok(())
+    }
+
+    pub async fn get_cashier_public_key(&self) -> Result<Vec<Vec<u8>>> {
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/wallet.db");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let mut stmt = connect.prepare("SELECT key_public FROM cashier").unwrap();
+        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0)).unwrap();
+        let mut pub_keys = Vec::new();
+        for key in key_iter {
+            pub_keys.push(key.unwrap());
+        }
+        Ok(pub_keys)
     }
 }
 
@@ -220,16 +239,14 @@ fn main() {
 
     // Where is cashier private key stored? Does node have its own wallet schema
     // Cashier creates a secret key
-    let cashier_secret = jubjub::Fr::random(&mut OsRng);
+    //let cashier_secret = jubjub::Fr::random(&mut OsRng);
     //// This is their public key
-    let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-
-    //let cashier_secret = state.cashier_key();
+    //let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
 
     // Wallet 1 creates a secret key
-    let secret = jubjub::Fr::random(&mut OsRng);
+    //let secret = jubjub::Fr::random(&mut OsRng);
     // This is their public key
-    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    //let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
     let mut state = MemoryState {
         tree: CommitmentTree::empty(),
@@ -242,6 +259,7 @@ fn main() {
         secrets: vec![secret.clone()],
     };
 
+    //let cashier_secret = state.cashier_key();
     // Step 1: Cashier deposits to wallet1's address
 
     // Create the deposit for 110 BTC
