@@ -1,17 +1,25 @@
+use async_std::sync::Arc;
+use std::convert::TryFrom;
 use std::io;
 use std::net::SocketAddr;
 
 use crate::serial::{deserialize, serialize};
 use crate::{Decodable, Encodable, Result};
 
+use async_executor::Executor;
 use bytes::Bytes;
 use futures::FutureExt;
+use log::*;
 use rand::Rng;
+use signal_hook::{consts::SIGINT, iterator::Signals};
 use zeromq::*;
+
+pub type PeerId  = Vec<u8>;
 
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
-    Send(Reply),
+    Send((PeerId, Reply)),
+    Stop,
 }
 
 pub fn addr_to_string(addr: SocketAddr) -> String {
@@ -20,20 +28,21 @@ pub fn addr_to_string(addr: SocketAddr) -> String {
 
 pub struct RepProtocol {
     addr: SocketAddr,
-    socket: zeromq::RepSocket,
-    recv_queue: async_channel::Receiver<Reply>,
-    send_queue: async_channel::Sender<Request>,
+    socket: zeromq::RouterSocket,
+    recv_queue: async_channel::Receiver<(PeerId, Reply)>,
+    send_queue: async_channel::Sender<(PeerId, Request)>,
     channels: (
-        async_channel::Sender<Reply>,
-        async_channel::Receiver<Request>,
+        async_channel::Sender<(PeerId, Reply)>,
+        async_channel::Receiver<(PeerId, Request)>,
     ),
+    service_name: String,
 }
 
 impl RepProtocol {
-    pub fn new(addr: SocketAddr) -> RepProtocol {
-        let socket = zeromq::RepSocket::new();
-        let (send_queue, recv_channel) = async_channel::unbounded::<Request>();
-        let (send_channel, recv_queue) = async_channel::unbounded::<Reply>();
+    pub fn new(addr: SocketAddr, service_name: String) -> RepProtocol {
+        let socket = zeromq::RouterSocket::new();
+        let (send_queue, recv_channel) = async_channel::unbounded::<(PeerId, Request)>();
+        let (send_channel, recv_queue) = async_channel::unbounded::<(PeerId, Reply)>();
 
         let channels = (send_channel.clone(), recv_channel.clone());
 
@@ -43,101 +52,169 @@ impl RepProtocol {
             recv_queue,
             send_queue,
             channels,
+            service_name,
         }
     }
 
     pub async fn start(
         &mut self,
     ) -> Result<(
-        async_channel::Sender<Reply>,
-        async_channel::Receiver<Request>,
+    async_channel::Sender<(PeerId, Reply)>,
+    async_channel::Receiver<(PeerId, Request)>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
+        info!("{} SERVICE: Bound To {}", self.service_name, addr);
         Ok(self.channels.clone())
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
+        info!("{} SERVICE: Running", self.service_name);
+
+        let (stop_s, stop_r) = async_channel::unbounded::<()>();
+
+        let mut signals = Signals::new(&[SIGINT])?;
+
+        let stop_task = executor.spawn(async move {
+            for _ in signals.forever() {
+                stop_s.send(()).await?;
+                break;
+            }
+            Ok::<(), crate::Error>(())
+        });
+
         loop {
             let event = futures::select! {
-                request = self.socket.recv().fuse() => NetEvent::Receive(request?),
-                reply = self.recv_queue.recv().fuse() => NetEvent::Send(reply?)
+                msg = self.socket.recv().fuse() => NetEvent::Receive(msg?),
+                msg = self.recv_queue.recv().fuse() => NetEvent::Send(msg?),
+                _ = stop_r.recv().fuse() => NetEvent::Stop
             };
 
             match event {
-                NetEvent::Receive(request) => {
-                    let request: &Bytes = request.get(0).unwrap();
-                    let request: Vec<u8> = request.to_vec();
-                    let req: Request = deserialize(&request)?;
-                    self.send_queue.send(req).await?;
+                NetEvent::Receive(msg) => {
+                    if let Some(peer) = msg.get(0) {
+                        if let Some(request) = msg.get(1) {
+                            let request: Vec<u8> = request.to_vec();
+                            let request: Request = deserialize(&request)?;
+                            self.send_queue.send((peer.to_vec(), request)).await?;
+                        }
+                    }
                 }
-                NetEvent::Send(reply) => {
+                NetEvent::Send((peer, reply)) => {
+                    let peer = Bytes::from(peer);
+                    let mut msg: Vec<Bytes> = vec![peer];
                     let reply: Vec<u8> = serialize(&reply);
                     let reply = Bytes::from(reply);
-                    self.socket.send(reply.into()).await?;
+                    msg.push(reply);
+
+                    let reply = zeromq::ZmqMessage::try_from(msg)
+                        .map_err(|_| crate::Error::TryFromError)?;
+
+                    self.socket.send(reply).await?;
                 }
+                NetEvent::Stop => break,
             }
         }
+        let _ = stop_task.cancel().await;
+        warn!("{} SERVICE: Stopped", self.service_name);
+        Ok(())
     }
 }
 
 pub struct ReqProtocol {
     addr: SocketAddr,
-    socket: zeromq::ReqSocket,
+    socket: zeromq::DealerSocket,
+    service_name: String,
 }
 
 impl ReqProtocol {
-    pub fn new(addr: SocketAddr) -> ReqProtocol {
-        let socket = zeromq::ReqSocket::new();
-        ReqProtocol { addr, socket }
+    pub fn new(addr: SocketAddr, service_name: String) -> ReqProtocol {
+        let socket = zeromq::DealerSocket::new();
+        ReqProtocol {
+            addr,
+            socket,
+            service_name,
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {
         let addr = addr_to_string(self.addr);
         self.socket.connect(addr.as_str()).await?;
+        info!("{} SERVICE: Connected To {}", self.service_name, self.addr);
         Ok(())
     }
 
-    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let request = Request::new(command, data);
         let req = serialize(&request);
         let req = bytes::Bytes::from(req);
+        let req: zeromq::ZmqMessage = req.into();
 
-        self.socket.send(req.into()).await?;
+        self.socket.send(req).await?;
+        info!(
+            "{} SERVICE: Sent Request {{ command: {} }}",
+            self.service_name, command
+        );
 
         let rep: zeromq::ZmqMessage = self.socket.recv().await?;
-        let rep: &Bytes = rep.get(0).unwrap();
-        let rep: Vec<u8> = rep.to_vec();
+        if let Some(reply) = rep.get(0) {
+            let reply: Vec<u8> = reply.to_vec();
 
-        let reply: Reply = deserialize(&rep)?;
+            let reply: Reply = deserialize(&reply)?;
 
-        if reply.has_error() {
-            return Err(crate::Error::ServicesError("response has an error"));
+            info!(
+                "{} SERVICE: Received Reply {{ error: {} }}",
+                self.service_name,
+                reply.has_error()
+            );
+
+            // TODO return error status code instead of None
+            if reply.has_error() {
+                warn!("Reply has an error {}", reply.get_error());
+                return Ok(None);
+            }
+
+            assert!(reply.get_id() == request.get_id());
+
+            Ok(Some(reply.get_payload()))
+        } else {
+            Err(crate::Error::ZMQError(
+                    "Couldn't parse ZmqMessage".to_string(),
+            ))
         }
-
-        assert!(reply.get_id() == request.get_id());
-
-        Ok(reply.get_payload())
     }
 }
 
 pub struct Publisher {
     addr: SocketAddr,
     socket: zeromq::PubSocket,
+    service_name: String,
 }
 
 impl Publisher {
-    pub fn new(addr: SocketAddr) -> Publisher {
+    pub fn new(addr: SocketAddr, service_name: String) -> Publisher {
         let socket = zeromq::PubSocket::new();
-        Publisher { addr, socket }
-    }
-    pub async fn start(&mut self) -> Result<()> {
-        let addr = addr_to_string(self.addr);
-        self.socket.bind(addr.as_str()).await?;
-        Ok(())
+        Publisher {
+            addr,
+            socket,
+            service_name,
+        }
     }
 
-    pub async fn publish(&mut self, data: Vec<u8>) -> Result<()> {
+    pub async fn start(&mut self, recv_queue: async_channel::Receiver<Vec<u8>>) -> Result<()> {
+        let addr = addr_to_string(self.addr);
+        self.socket.bind(addr.as_str()).await?;
+        info!(
+            "{} PUBLISHER SERVICE : Bound To {}",
+            self.service_name, addr
+        );
+        loop {
+            let msg = recv_queue.recv().await?;
+            self.publish(msg).await?;
+        }
+    }
+
+    async fn publish(&mut self, data: Vec<u8>) -> Result<()> {
         let data = Bytes::from(data);
         self.socket.send(data.into()).await?;
         Ok(())
@@ -147,12 +224,17 @@ impl Publisher {
 pub struct Subscriber {
     addr: SocketAddr,
     socket: zeromq::SubSocket,
+    service_name: String,
 }
 
 impl Subscriber {
-    pub fn new(addr: SocketAddr) -> Subscriber {
+    pub fn new(addr: SocketAddr, service_name: String) -> Subscriber {
         let socket = zeromq::SubSocket::new();
-        Subscriber { addr, socket }
+        Subscriber {
+            addr,
+            socket,
+            service_name,
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -160,15 +242,24 @@ impl Subscriber {
         self.socket.connect(addr.as_str()).await?;
 
         self.socket.subscribe("").await?;
-
+        info!(
+            "{} SUBSCRIBER SERVICE : Connected To {}",
+            self.service_name, addr
+        );
         Ok(())
     }
 
     pub async fn fetch(&mut self) -> Result<Vec<u8>> {
         let data = self.socket.recv().await?;
-        let data: &Bytes = data.get(0).unwrap();
-        let data = data.to_vec();
-        Ok(data)
+        match data.get(0) {
+            Some(d) => {
+                let data = d.to_vec();
+                Ok(data)
+            }
+            None => Err(crate::Error::ZMQError(
+                    "Couldn't parse ZmqMessage".to_string(),
+            )),
+        }
     }
 }
 
@@ -230,8 +321,20 @@ impl Reply {
         }
     }
 
+    pub fn get_error(&self) -> u32 {
+        self.error
+    }
+
     pub fn get_payload(&self) -> Vec<u8> {
         self.payload.clone()
+    }
+
+    pub fn set_payload(&mut self, payload: Vec<u8>) {
+        self.payload = payload;
+    }
+
+    pub fn set_error(&mut self, error: u32) {
+        self.error = error;
     }
 
     pub fn get_id(&self) -> u32 {

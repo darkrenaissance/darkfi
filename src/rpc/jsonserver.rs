@@ -154,9 +154,17 @@ impl RpcInterface {
             RpcAdapter::stop().await;
             Ok(jsonrpc_core::Value::Null)
         });
-        io.add_method("key_gen", move |_| async move {
-            RpcAdapter::key_gen().await;
+        io.add_method("new_wallet", move |_| async move {
+            println!("New wallet method called...");
+            RpcAdapter::new_wallet().await;
             Ok(jsonrpc_core::Value::Null)
+        });
+        io.add_method("key_gen", move |_| async move {
+            println!("Key generation method called...");
+            RpcAdapter::key_gen().await.expect("Failed to generate key");
+            Ok(jsonrpc_core::Value::String(
+                "Attempted key generation".into(),
+            ))
         });
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)
