@@ -44,12 +44,13 @@ struct MemoryState {
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
 
     // Public key of the cashier
-    cashier_public: jubjub::SubgroupPoint,
+    cashier_public: Vec<u8>,
     // List of all our secret keys
     secrets: Vec<jubjub::Fr>,
 }
 
 impl ProgramState for MemoryState {
+    // Vec<u8> for keys
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
         public == &self.cashier_public
     }
@@ -163,9 +164,11 @@ fn main() {
 
     // Where is cashier private key stored? Does node have its own wallet schema
     // Cashier creates a secret key
-    let cashier_secret = jubjub::Fr::random(&mut OsRng);
-    // This is their public key
-    let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+    //let cashier_secret = jubjub::Fr::random(&mut OsRng);
+    //// This is their public key
+    //let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+
+    let cashier_secret = state.cashier_key();
 
     // Wallet 1 creates a secret key
     let secret = jubjub::Fr::random(&mut OsRng);
