@@ -1,0 +1,15 @@
+[package]
+name = "pasta"
+version = "0.1.0"
+authors = ["narodnik <x@x.org>"]
+edition = "2018"
+
+[dependencies]
+pasta_curves = { path = "/home/narodnik/src/sw/zectings/pasta_curves" }
+ff = "0.9"
+group = "0.9"
+
+[[bin]]
+name = "pasta"
+path = "main.rs"
+
