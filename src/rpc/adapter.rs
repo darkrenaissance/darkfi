@@ -69,6 +69,20 @@ impl RpcAdapter {
         Ok(connect.execute_batch(&contents)?)
     }
 
+    pub async fn new_cashier_wallet() -> Result<()> {
+        debug!(target: "adapter", "new_wallet() [START]");
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/cashier.db");
+        debug!(target: "adapter", "new_wallet() [FOUND PATH]");
+        println!("Found path: {:?}", &path);
+        debug!(target: "adapter", "new_wallet() [TRY DB CONNECT]");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let contents = include_str!("../../res/schema.sql");
+        Ok(connect.execute_batch(&contents)?)
+    }
+
     //pub async fn decrypt(conn: &Connection, password: )
     // TODO: getting an error when i call this function- does not implement send
     pub async fn save_key(conn: &Connection, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
