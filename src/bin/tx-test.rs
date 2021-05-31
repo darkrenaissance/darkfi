@@ -157,7 +157,7 @@ impl MemoryState {
         None
     }
 
-    pub async fn key_gen(&self) -> Result<()> {
+    pub async fn own_key_gen(&self) -> Result<()> {
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
@@ -182,7 +182,7 @@ impl MemoryState {
         Ok(())
     }
 
-    pub async fn cashier_key_gen(&self) -> Result<()> {
+    pub async fn cash_key_gen(&self) -> Result<()> {
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
@@ -206,19 +206,42 @@ impl MemoryState {
         Ok(())
     }
 
-    pub async fn get_cashier_public_key(&self) -> Result<Vec<Vec<u8>>> {
+    pub async fn get_cash_public(&self) -> Result<()> {
+        let path = dirs::home_dir()
+            .expect("Cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/cashier.db");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let id = 0;
+        let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
+        let key_iter = stmt.query_map::<Vec<u8>,_,_>([], |row| row.get(0)).unwrap();
+        let mut pub_keys = Vec::new();
+        for key in key_iter {
+            pub_keys.push(key.unwrap());
+        }
+        let key = match pub_keys.pop() {
+            Some(key_found) => println!("{:?}", key_found),
+            None => println!("No cashier public key found")
+        };
+        Ok(key)
+    }
+
+    pub async fn save_cash_pubkey(&self, pubkey: Vec<u8>) -> Result<()> {
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
             .join(".config/darkfi/wallet.db");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let mut stmt = connect.prepare("SELECT key_public FROM cashier").unwrap();
-        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0)).unwrap();
-        let mut pub_keys = Vec::new();
-        for key in key_iter {
-            pub_keys.push(key.unwrap());
-        }
-        Ok(pub_keys)
+        let id = 0;
+        // Write keys to database
+        connect.execute(
+            "INSERT INTO cashier(key_id, key_public)
+            VALUES (:id, :pubkey)",
+            named_params!{":id": id,
+                           ":pubkey": pubkey
+                          }
+        )?;
+        Ok(())
     }
 }
 
@@ -241,163 +264,163 @@ fn main() {
     // Cashier creates a secret key
     //let cashier_secret = jubjub::Fr::random(&mut OsRng);
     //// This is their public key
-    //let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+    //let cashier_public = MemoryState::get_cashier_public_key;
 
     // Wallet 1 creates a secret key
     //let secret = jubjub::Fr::random(&mut OsRng);
     // This is their public key
     //let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
-    let mut state = MemoryState {
-        tree: CommitmentTree::empty(),
-        merkle_roots: vec![],
-        nullifiers: vec![],
-        own_coins: vec![],
-        mint_pvk,
-        spend_pvk,
-        cashier_public,
-        secrets: vec![secret.clone()],
-    };
+    //let mut state = MemoryState {
+    //    tree: CommitmentTree::empty(),
+    //    merkle_roots: vec![],
+    //    nullifiers: vec![],
+    //    own_coins: vec![],
+    //    mint_pvk,
+    //    spend_pvk,
+    //    //cashier_public,
+    //    secrets: vec![secret.clone()],
+    //};
 
     //let cashier_secret = state.cashier_key();
     // Step 1: Cashier deposits to wallet1's address
 
     // Create the deposit for 110 BTC
     // Clear inputs are visible to everyone on the network
-    let builder = tx::TransactionBuilder {
-        clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
-            value: 110,
-            signature_secret: cashier_secret,
-        }],
-        inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
-    };
+    //let builder = tx::TransactionBuilder {
+    //    clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
+    //        value: 110,
+    //        signature_secret: cashier_secret,
+    //    }],
+    //    inputs: vec![],
+    //    outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
+    //};
 
-    // We will 'compile' the tx, and then serialize it to this Vec<u8>
-    let mut tx_data = vec![];
-    {
-        // Build the tx
-        let tx = builder.build(&mint_params, &spend_params);
-        // Now serialize it
-        tx.encode(&mut tx_data).expect("encode tx");
-    }
+    //// We will 'compile' the tx, and then serialize it to this Vec<u8>
+    //let mut tx_data = vec![];
+    //{
+    //    // Build the tx
+    //    let tx = builder.build(&mint_params, &spend_params);
+    //    // Now serialize it
+    //    tx.encode(&mut tx_data).expect("encode tx");
+    //}
 
-    // Step 1 is completed.
-    // Tx data is posted to the blockchain
+    //// Step 1 is completed.
+    //// Tx data is posted to the blockchain
 
-    // Step 2: wallet1 receive's payment from the cashier
+    //// Step 2: wallet1 receive's payment from the cashier
 
-    // Wallet1 is receiving tx, and for every new coin it finds, it adds to its
-    // merkle tree
-    {
-        // Here we simulate 5 fake random coins, adding them to our tree.
-        let tree = &mut state.tree;
-        for i in 0..5 {
-            // Don't worry about any of the code in this block
-            // We're just filling the tree with fake coins
-            let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-            tree.append(cmu);
+    //// Wallet1 is receiving tx, and for every new coin it finds, it adds to its
+    //// merkle tree
+    //{
+    //    // Here we simulate 5 fake random coins, adding them to our tree.
+    //    let tree = &mut state.tree;
+    //    for i in 0..5 {
+    //        // Don't worry about any of the code in this block
+    //        // We're just filling the tree with fake coins
+    //        let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+    //        tree.append(cmu);
 
-            let root = tree.root();
-            state.merkle_roots.push(root.into());
-        }
-    }
+    //        let root = tree.root();
+    //        state.merkle_roots.push(root.into());
+    //    }
+    //}
 
-    // Now we receive the tx data
-    {
-        let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
+    //// Now we receive the tx data
+    //{
+    //    let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
 
-        let update = state_transition(&state, tx).expect("step 2 state transition failed");
-        // Our state impl is memory online for this demo
-        // but in the real version, this function will be async
-        // and using the databases.
-        state.apply(update);
-    }
+    //    let update = state_transition(&state, tx).expect("step 2 state transition failed");
+    //    // Our state impl is memory online for this demo
+    //    // but in the real version, this function will be async
+    //    // and using the databases.
+    //    state.apply(update);
+    //}
 
-    // Wallet1 has received payment from the cashier.
-    // Step 2 is complete.
-    assert_eq!(state.own_coins.len(), 1);
-    //let (coin, note, secret, witness) = &mut state.own_coins[0];
+    //// Wallet1 has received payment from the cashier.
+    //// Step 2 is complete.
+    //assert_eq!(state.own_coins.len(), 1);
+    ////let (coin, note, secret, witness) = &mut state.own_coins[0];
 
-    let merkle_path = {
-        let tree = &mut state.tree;
-        let (coin, _, _, witness) = &mut state.own_coins[0];
-        // Check this is the 6th coin we added
-        assert_eq!(witness.position(), 5);
-        assert_eq!(tree.root(), witness.root());
+    //let merkle_path = {
+    //    let tree = &mut state.tree;
+    //    let (coin, _, _, witness) = &mut state.own_coins[0];
+    //    // Check this is the 6th coin we added
+    //    assert_eq!(witness.position(), 5);
+    //    assert_eq!(tree.root(), witness.root());
 
-        // Add some more random coins in
-        for i in 0..10 {
-            // Don't worry about any of the code in this block
-            // We're just filling the tree with fake coins
-            let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-            tree.append(cmu);
-            witness.append(cmu);
-            assert_eq!(tree.root(), witness.root());
+    //    // Add some more random coins in
+    //    for i in 0..10 {
+    //        // Don't worry about any of the code in this block
+    //        // We're just filling the tree with fake coins
+    //        let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+    //        tree.append(cmu);
+    //        witness.append(cmu);
+    //        assert_eq!(tree.root(), witness.root());
 
-            let root = tree.root();
-            state.merkle_roots.push(root.into());
-        }
+    //        let root = tree.root();
+    //        state.merkle_roots.push(root.into());
+    //    }
 
-        assert_eq!(state.merkle_roots.len(), 16);
+    //    assert_eq!(state.merkle_roots.len(), 16);
 
-        // This is the value we need to spend the coin
-        // We use the witness and the merkle root (both in sync with each other)
-        // to prove our coin exists inside the tree.
-        // The coin is not revealed publicly but is proved to exist inside
-        // a merkle tree. Only the root will be revealed, and then the
-        // verifier checks that merkle root actually existed before.
-        let merkle_path = witness.path().unwrap();
+    //    // This is the value we need to spend the coin
+    //    // We use the witness and the merkle root (both in sync with each other)
+    //    // to prove our coin exists inside the tree.
+    //    // The coin is not revealed publicly but is proved to exist inside
+    //    // a merkle tree. Only the root will be revealed, and then the
+    //    // verifier checks that merkle root actually existed before.
+    //    let merkle_path = witness.path().unwrap();
 
-        // Just test the path is good because we just added a bunch of fake coins
-        let node = MerkleNode::from_coin(&coin);
-        let root = tree.root();
-        drop(tree);
-        drop(witness);
-        assert_eq!(merkle_path.root(node), root);
-        let root = root.into();
-        assert!(state.is_valid_merkle(&root));
+    //    // Just test the path is good because we just added a bunch of fake coins
+    //    let node = MerkleNode::from_coin(&coin);
+    //    let root = tree.root();
+    //    drop(tree);
+    //    drop(witness);
+    //    assert_eq!(merkle_path.root(node), root);
+    //    let root = root.into();
+    //    assert!(state.is_valid_merkle(&root));
 
-        merkle_path
-    };
+    //    merkle_path
+    //};
 
-    // Step 3: wallet1 sends payment to wallet2
+    //// Step 3: wallet1 sends payment to wallet2
 
-    // Wallet1 now wishes to send the coin to wallet2
+    //// Wallet1 now wishes to send the coin to wallet2
 
-    // The receiving wallet has a secret key
-    let secret2 = jubjub::Fr::random(&mut OsRng);
-    // This is their public key to receive payment
-    let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+    //// The receiving wallet has a secret key
+    //let secret2 = jubjub::Fr::random(&mut OsRng);
+    //// This is their public key to receive payment
+    //let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
-    // Make a spend tx
+    //// Make a spend tx
 
-    // Construct a new tx spending the coin
-    // We need the decrypted note and our private key
-    let builder = tx::TransactionBuilder {
-        clear_inputs: vec![],
-        inputs: vec![tx::TransactionBuilderInputInfo {
-            merkle_path,
-            secret: secret.clone(),
-            note: state.own_coins[0].1.clone(),
-        }],
-        // We can add more outputs to this list.
-        // The only constraint is that sum(value in) == sum(value out)
-        outputs: vec![tx::TransactionBuilderOutputInfo {
-            value: 110,
-            public: public2,
-        }],
-    };
-    // Build the tx
-    let mut tx_data = vec![];
-    {
-        let tx = builder.build(&mint_params, &spend_params);
-        tx.encode(&mut tx_data).expect("encode tx");
-    }
-    // Verify it's valid
-    {
-        let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        let update = state_transition(&state, tx).expect("step 3 state transition failed");
-        state.apply(update);
-    }
+    //// Construct a new tx spending the coin
+    //// We need the decrypted note and our private key
+    //let builder = tx::TransactionBuilder {
+    //    clear_inputs: vec![],
+    //    inputs: vec![tx::TransactionBuilderInputInfo {
+    //        merkle_path,
+    //        secret: secret.clone(),
+    //        note: state.own_coins[0].1.clone(),
+    //    }],
+    //    // We can add more outputs to this list.
+    //    // The only constraint is that sum(value in) == sum(value out)
+    //    outputs: vec![tx::TransactionBuilderOutputInfo {
+    //        value: 110,
+    //        public: public2,
+    //    }],
+    //};
+    //// Build the tx
+    //let mut tx_data = vec![];
+    //{
+    //    let tx = builder.build(&mint_params, &spend_params);
+    //    tx.encode(&mut tx_data).expect("encode tx");
+    //}
+    //// Verify it's valid
+    //{
+    //    let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
+    //    let update = state_transition(&state, tx).expect("step 3 state transition failed");
+    //    state.apply(update);
+    //}
 }
