@@ -15,7 +15,7 @@ bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 
 zcash_primitives = "0.5.0"
-zcash_proofs = "0.5.0" 
+zcash_proofs = "0.5.0"
 # zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
@@ -81,7 +81,7 @@ fs_extra = "1.2"
 glob = "0.3"
 
 # zmq
-zeromq = { git="https://github.com/zeromq/zmq.rs", default-features = false, features = ["async-std-runtime", "all-transport"] }
+zeromq = { version  = "0.2.0", default-features = false, features = ["async-std-runtime", "all-transport"] }
 bytes = "1.0.1"
 
 # wallet deps
@@ -138,4 +138,3 @@ path = "src/bin/darkfid.rs"
 
 [profile.release]
 debug = 1
-
