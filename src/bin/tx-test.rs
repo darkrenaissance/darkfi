@@ -1,14 +1,14 @@
 use async_std::sync;
-use log::*;
 use bellman::groth16;
-use rocksdb::DB;
-use std::fs::File;
-use rusqlite::{named_params, Connection};
 use bls12_381::Bls12;
+use drk::{Error, Result};
 use ff::{Field, PrimeField};
+use log::*;
 use rand::rngs::OsRng;
+use rocksdb::DB;
+use rusqlite::{named_params, Connection};
+use std::fs::File;
 use std::path::Path;
-use drk::{Result, Error};
 
 use drk::crypto::{
     coin::Coin,
@@ -21,7 +21,7 @@ use drk::crypto::{
 };
 use drk::serial::{Decodable, Encodable};
 use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::tx;
+use drk::wallet::walletdb::DBInterface;
 
 struct MemoryState {
     // The entire merkle tree state
@@ -52,13 +52,12 @@ struct MemoryState {
 impl ProgramState for MemoryState {
     // Vec<u8> for keys
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/cashier.db");
+        let path = DBInterface::wallet_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
-        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0)).unwrap();
+        let key_iter = stmt
+            .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
+            .unwrap();
         // does not actually check whether the cashier key is valid
         for key in key_iter {
             key.unwrap() == self.cashier_public;
@@ -128,10 +127,7 @@ impl MemoryState {
     // sql
     fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
         debug!(target: "adapter", "try_decrypt_note() [START]");
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
+        let path = DBInterface::wallet_path();
         debug!(target: "adapter", "try_decrypt_note() [FOUND PATH]");
         println!("Found path: {:?}", &path);
         debug!(target: "adapter", "try_decrypt_note() [TRY DB CONNECT]");
@@ -142,7 +138,7 @@ impl MemoryState {
             println!("Found key {:?}", key.unwrap());
         }
         // Loop through all our secret keys...
-        
+
         for secret in &self.secrets {
             // ... attempt to decrypt the note ...
             match ciphertext.decrypt(secret) {
@@ -157,92 +153,6 @@ impl MemoryState {
         None
     }
 
-    pub async fn own_key_gen(&self) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
-        // Create keys
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        debug!(target: "adapter", "key_gen() [Generating public key...]");
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = drk::serial::serialize(&public);
-        let privkey = drk::serial::serialize(&secret);
-        // Write keys to database
-        connect.execute(
-            "INSERT INTO keys(key_id, key_private, key_public)
-            VALUES (:id, :privkey, :pubkey)",
-            named_params!{":id": id,
-                           ":privkey": privkey,
-                           ":pubkey": pubkey
-                          }
-        )?;
-        Ok(())
-    }
-
-    pub async fn cash_key_gen(&self) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/cashier.db");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
-        // Create keys
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = drk::serial::serialize(&public);
-        let privkey = drk::serial::serialize(&secret);
-        // Write keys to database
-        connect.execute(
-            "INSERT INTO keys(key_id, key_private, key_public)
-            VALUES (:id, :privkey, :pubkey)",
-            named_params!{":id": id,
-                           ":privkey": privkey,
-                           ":pubkey": pubkey
-                          }
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_cash_public(&self) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/cashier.db");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
-        let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
-        let key_iter = stmt.query_map::<Vec<u8>,_,_>([], |row| row.get(0)).unwrap();
-        let mut pub_keys = Vec::new();
-        for key in key_iter {
-            pub_keys.push(key.unwrap());
-        }
-        let key = match pub_keys.pop() {
-            Some(key_found) => println!("{:?}", key_found),
-            None => println!("No cashier public key found")
-        };
-        Ok(key)
-    }
-
-    pub async fn save_cash_pubkey(&self, pubkey: Vec<u8>) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("Cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
-        // Write keys to database
-        connect.execute(
-            "INSERT INTO cashier(key_id, key_public)
-            VALUES (:id, :pubkey)",
-            named_params!{":id": id,
-                           ":pubkey": pubkey
-                          }
-        )?;
-        Ok(())
-    }
 }
 
 fn main() {
