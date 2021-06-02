@@ -13,7 +13,6 @@ use log::*;
 
 pub type Slabs = Vec<Vec<u8>>;
 
-
 #[repr(u8)]
 enum GatewayError {
     NoError,
@@ -35,7 +34,11 @@ pub struct GatewayService {
 }
 
 impl GatewayService {
-    pub fn new(addr: SocketAddr, pub_addr: SocketAddr, slabstore_path: &Path) -> Result<Arc<GatewayService>> {
+    pub fn new(
+        addr: SocketAddr,
+        pub_addr: SocketAddr,
+        slabstore_path: &Path,
+    ) -> Result<Arc<GatewayService>> {
         let slabstore = SlabStore::new(slabstore_path)?;
 
         Ok(Arc::new(GatewayService {
@@ -54,16 +57,16 @@ impl GatewayService {
 
         let (publish_queue, publish_recv_queue) = async_channel::unbounded::<Vec<u8>>();
         let publisher_task = executor.spawn(Self::start_publisher(
-                self.pub_addr,
-                service_name,
-                publish_recv_queue.clone(),
+            self.pub_addr,
+            service_name,
+            publish_recv_queue.clone(),
         ));
 
         let handle_request_task = executor.spawn(self.handle_request_loop(
-                send.clone(),
-                recv.clone(),
-                publish_queue.clone(),
-                executor.clone(),
+            send.clone(),
+            recv.clone(),
+            publish_queue.clone(),
+            executor.clone(),
         ));
 
         protocol.run(executor.clone()).await?;
@@ -96,13 +99,13 @@ impl GatewayService {
                     let slabstore = self.slabstore.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
-                                msg,
-                                slabstore,
-                                send_queue.clone(),
-                                publish_queue.clone(),
+                            msg,
+                            slabstore,
+                            send_queue.clone(),
+                            publish_queue.clone(),
                         ))
                         .detach();
-                    }
+                }
                 Err(_) => {
                     break;
                 }
@@ -129,7 +132,6 @@ impl GatewayService {
                 let error = slabstore.put(slab.clone())?;
 
                 let mut reply = Reply::from(&request, GatewayError::NoError as u32, vec![]);
-
 
                 if let None = error {
                     reply.set_error(GatewayError::UpdateIndex as u32);
@@ -209,7 +211,7 @@ impl GatewayClient {
 
         assert!(last_index >= local_last_index);
 
-        if last_index > 0  {
+        if last_index > 0 {
             for index in (local_last_index + 1)..(last_index + 1) {
                 if let None = self.get_slab(index).await? {
                     warn!("Index not exist");
@@ -218,11 +220,8 @@ impl GatewayClient {
             }
         }
 
-
-
         info!("End Syncing");
         Ok(last_index)
-
     }
 
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Vec<u8>>> {
@@ -231,7 +230,7 @@ impl GatewayClient {
             .request(GatewayCommand::GetSlab as u8, serialize(&index))
             .await?;
 
-        if let Some(slab) = rep{
+        if let Some(slab) = rep {
             self.slabstore.put(slab.clone())?;
             return Ok(Some(slab));
         }
@@ -239,16 +238,17 @@ impl GatewayClient {
     }
 
     pub async fn put_slab(&mut self, mut slab: Slab) -> Result<()> {
-        loop{
+        loop {
             let last_index = self.sync().await?;
             slab.set_index(last_index + 1);
             let slab = serialize(&slab);
 
-            let rep = self.protocol
+            let rep = self
+                .protocol
                 .request(GatewayCommand::PutSlab as u8, slab.clone())
                 .await?;
 
-            if let Some(_) =  rep{
+            if let Some(_) = rep {
                 break;
             }
         }

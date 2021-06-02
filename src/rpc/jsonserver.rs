@@ -156,7 +156,9 @@ impl RpcInterface {
         });
         io.add_method("new_wallet", move |_| async move {
             println!("New wallet method called...");
-            RpcAdapter::new_wallet().await.expect("Failed to create wallet.");
+            RpcAdapter::new_wallet()
+                .await
+                .expect("Failed to create wallet.");
             Ok(jsonrpc_core::Value::Null)
         });
         io.add_method("key_gen", move |_| async move {
@@ -168,7 +170,9 @@ impl RpcInterface {
         });
         io.add_method("new_cashier_wallet", move |_| async move {
             println!("Key generation method called...");
-            RpcAdapter::new_cashier_wallet().await.expect("Failed to generate key");
+            RpcAdapter::new_cashier_wallet()
+                .await
+                .expect("Failed to generate key");
             Ok(jsonrpc_core::Value::String(
                 "Tried to create new cashier wallet".into(),
             ))

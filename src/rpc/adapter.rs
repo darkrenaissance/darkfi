@@ -47,10 +47,10 @@ impl RpcAdapter {
         connect.execute(
             "INSERT INTO keys(key_id, key_private, key_public)
             VALUES (:id, :privkey, :pubkey)",
-            named_params!{":id": id,
-                           ":privkey": privkey,
-                           ":pubkey": pubkey
-                          }
+            named_params! {":id": id,
+             ":privkey": privkey,
+             ":pubkey": pubkey
+            },
         )?;
         Ok(())
     }

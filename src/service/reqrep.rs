@@ -14,7 +14,7 @@ use rand::Rng;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use zeromq::*;
 
-pub type PeerId  = Vec<u8>;
+pub type PeerId = Vec<u8>;
 
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
@@ -59,8 +59,8 @@ impl RepProtocol {
     pub async fn start(
         &mut self,
     ) -> Result<(
-    async_channel::Sender<(PeerId, Reply)>,
-    async_channel::Receiver<(PeerId, Request)>,
+        async_channel::Sender<(PeerId, Reply)>,
+        async_channel::Receiver<(PeerId, Request)>,
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
@@ -179,7 +179,7 @@ impl ReqProtocol {
             Ok(Some(reply.get_payload()))
         } else {
             Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             ))
         }
     }
@@ -257,7 +257,7 @@ impl Subscriber {
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(
-                    "Couldn't parse ZmqMessage".to_string(),
+                "Couldn't parse ZmqMessage".to_string(),
             )),
         }
     }

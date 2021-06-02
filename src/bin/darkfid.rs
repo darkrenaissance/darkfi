@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             std::fs::File::create(options.log_path.as_path()).unwrap(),
         ),
     ])
-        .unwrap();
+    .unwrap();
 
     let ex2 = ex.clone();
 
@@ -107,7 +107,7 @@ mod test {
                 std::fs::File::create(Path::new("/tmp/dar.log")).unwrap(),
             ),
         ])
-            .unwrap();
+        .unwrap();
 
         let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
 
@@ -122,7 +122,7 @@ mod test {
                         "127.0.0.1:3333".parse().unwrap(),
                         Path::new(&format!("slabstore_{}.db", rnd)),
                     )
-                        .unwrap();
+                    .unwrap();
 
                     // start client
                     client.start().await.unwrap();
@@ -130,7 +130,6 @@ mod test {
                     // sending slab
                     let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
                     client.put_slab(_slab).await.unwrap();
-
                 })
             });
             thread_pools.push(thread);
