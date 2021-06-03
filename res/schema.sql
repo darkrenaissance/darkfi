@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS coins(
 CREATE TABLE IF NOT EXISTS cashier(
     key_id INT PRIMARY KEY NOT NULL,
     key_public BLOB NOT NULL
-):
+);
