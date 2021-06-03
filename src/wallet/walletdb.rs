@@ -1,20 +1,18 @@
-use async_std::sync;
-use bellman::groth16;
-use bls12_381::Bls12;
-use crate::{Error, Result};
+use crate::Result;
 use crate::serial;
-use ff::{Field, PrimeField};
+use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rocksdb::DB;
-use rusqlite::{named_params, Connection};
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use rusqlite::{Connection, named_params};
+use std::path::PathBuf;
 
+// TODO: make this more generic to remove boiler plate. e.g. create_wallet(cashier) instead of
+// create_cashier_wallet
 pub struct DBInterface {}
 
 impl DBInterface {
     pub fn wallet_path() -> PathBuf {
+        debug!(target: "wallet_path", "Finding wallet path...");
         let path = dirs::home_dir()
             .expect("cannot find home directory.")
             .as_path()
@@ -23,6 +21,7 @@ impl DBInterface {
     }
 
     pub fn cashier_path() -> PathBuf {
+        debug!(target: "cashier_path", "Finding cashier path...");
         let path = dirs::home_dir()
             .expect("Cannot find home directory.")
             .as_path()
@@ -31,13 +30,20 @@ impl DBInterface {
     }
 
     pub async fn new_wallet() -> Result<()> {
+        debug!(target: "new_wallet", "Creating new wallet...");
         let path = Self::wallet_path();
+        debug!(target: "new_wallet", "Found path {:?}", path);
         let connect = Connection::open(&path).expect("Failed to connect to database.");
+        debug!(target: "new_wallet", "Connection established");
+        debug!(target: "new_wallet", "Attempting to load schema...");
         let contents = include_str!("../../res/schema.sql");
+        debug!(target: "new_wallet", "Schema loaded");
+        debug!(target: "new_wallet", "Executing schema");
         Ok(connect.execute_batch(&contents)?)
     }
 
     pub async fn new_cashier_wallet() -> Result<()> {
+        debug!(target: "new_cashier_wallet", "Creating new cashier wallet...");
         let path = Self::cashier_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let contents = include_str!("../../res/schema.sql");
@@ -45,6 +51,7 @@ impl DBInterface {
     }
 
     pub async fn own_key_gen() -> Result<()> {
+        debug!(target: "own_key_gen", "Generating keys...");
         let path = Self::wallet_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
@@ -67,6 +74,7 @@ impl DBInterface {
     }
 
     pub async fn cash_key_gen() -> Result<()> {
+        debug!(target: "own_key_gen", "Generating cashier keys...");
         let path = Self::cashier_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
@@ -88,6 +96,7 @@ impl DBInterface {
     }
 
     pub async fn get_cash_public() -> Result<()> {
+        debug!(target: "get_cash_public", "Returning cashier keys...");
         let path = Self::cashier_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
@@ -107,6 +116,7 @@ impl DBInterface {
     }
 
     pub async fn save_cash_key(pubkey: Vec<u8>) -> Result<()> {
+        debug!(target: "save_cash_key", "Save cashier keys...");
         let path = Self::wallet_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
@@ -122,6 +132,7 @@ impl DBInterface {
     }
 
     pub async fn save_key(pubkey: Vec<u8>) -> Result<()> {
+        debug!(target: "save_key", "Save keys...");
         let path = Self::wallet_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let id = 0;
