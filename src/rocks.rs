@@ -83,6 +83,14 @@ impl Rocks {
         Ok(val)
     }
 
+    pub fn key_exist_cf(&self, cf: &ColumnFamily, key: Vec<u8>) -> Result<bool> {
+        let val = self.db.get_cf(cf, key)?;
+        if let None = val {
+            return Ok(false);
+        };
+        Ok(true)
+    }
+
     pub fn iterator(&self, cf: &ColumnFamily, iterator_mode: IteratorMode) -> rocksdb::DBIterator{
         let iterator_mode = match iterator_mode {
             IteratorMode::Start => rocksdb::IteratorMode::Start,
