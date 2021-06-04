@@ -4,7 +4,7 @@ use easy_parallel::Parallel;
 use std::net::SocketAddr;
 
 use drk::service::{ClientProgramOptions, GatewayClient};
-use drk::{slab::Slab, Result, rocks::Rocks};
+use drk::{rocks::Rocks, slab::Slab, Result};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
@@ -92,9 +92,9 @@ mod test {
     fn test_darkfid_client() {
         use std::path::Path;
 
+        use drk::rocks::Rocks;
         use drk::service::GatewayClient;
         use drk::slab::Slab;
-        use drk::rocks::Rocks;
 
         use log::*;
         use rand::Rng;
@@ -120,19 +120,13 @@ mod test {
                     let mut rng = rand::thread_rng();
                     let rnd: u32 = rng.gen();
 
-
-
-
                     let path_str = format!("database_{}.db", rnd);
                     let database_path = Path::new(path_str.as_str());
                     let rocks = Rocks::new(database_path.clone()).unwrap();
 
                     // create new client and use different slabstore
-                    let mut client = GatewayClient::new(
-                        "127.0.0.1:3333".parse().unwrap(),
-                        rocks,
-                    )
-                    .unwrap();
+                    let mut client =
+                        GatewayClient::new("127.0.0.1:3333".parse().unwrap(), rocks).unwrap();
 
                     // start client
                     client.start().await.unwrap();
@@ -140,7 +134,6 @@ mod test {
                     // sending slab
                     let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
                     client.put_slab(_slab).await.unwrap();
-                    
                 })
             });
             thread_pools.push(thread);

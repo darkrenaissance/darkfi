@@ -4,7 +4,8 @@ use std::net::SocketAddr;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{
-    serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error, Result, rocks::Rocks
+    rocks::Rocks, serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error,
+    Result,
 };
 
 use async_executor::Executor;

@@ -5,8 +5,8 @@ extern crate clap;
 use async_executor::Executor;
 use easy_parallel::Parallel;
 
-use drk::{Result, rocks::Rocks};
 use drk::service::{GatewayService, ProgramOptions};
+use drk::{rocks::Rocks, Result};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {

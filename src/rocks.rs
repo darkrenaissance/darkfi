@@ -2,11 +2,11 @@ use std::path::Path;
 
 use crate::{Error, Result};
 
-use rocksdb::{ColumnFamilyDescriptor, Options, DB, ColumnFamily};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 
-pub enum IteratorMode{
+pub enum IteratorMode {
     Start,
-    End
+    End,
 }
 
 pub trait Column {
@@ -91,7 +91,7 @@ impl Rocks {
         Ok(true)
     }
 
-    pub fn iterator(&self, cf: &ColumnFamily, iterator_mode: IteratorMode) -> rocksdb::DBIterator{
+    pub fn iterator(&self, cf: &ColumnFamily, iterator_mode: IteratorMode) -> rocksdb::DBIterator {
         let iterator_mode = match iterator_mode {
             IteratorMode::Start => rocksdb::IteratorMode::Start,
             IteratorMode::End => rocksdb::IteratorMode::End,
