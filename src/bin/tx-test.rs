@@ -21,7 +21,7 @@ use drk::crypto::{
 };
 use drk::serial::{Decodable, Encodable};
 use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::wallet::walletdb::DBInterface;
+use drk::wallet::walletdb::WalletDB;
 
 struct MemoryState {
     // The entire merkle tree state
@@ -52,16 +52,16 @@ struct MemoryState {
 impl ProgramState for MemoryState {
     // Vec<u8> for keys
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        let path = DBInterface::wallet_path();
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
-        let key_iter = stmt
-            .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
-            .unwrap();
-        // does not actually check whether the cashier key is valid
-        for key in key_iter {
-            key.unwrap() == self.cashier_public;
-        }
+        //let path = WalletDB::wallet_path();
+        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+        //let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
+        //let key_iter = stmt
+        //    .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
+        //    .unwrap();
+        //// does not actually check whether the cashier key is valid
+        //for key in key_iter {
+        //    key.unwrap() == self.cashier_public;
+        //}
         true
     }
     // rocksdb
@@ -126,29 +126,29 @@ impl MemoryState {
 
     // sql
     fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        debug!(target: "adapter", "try_decrypt_note() [START]");
-        let path = DBInterface::wallet_path();
-        debug!(target: "adapter", "try_decrypt_note() [FOUND PATH]");
-        println!("Found path: {:?}", &path);
-        debug!(target: "adapter", "try_decrypt_note() [TRY DB CONNECT]");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let mut stmt = connect.prepare("SELECT key_private FROM keys").ok()?;
-        let key_iter = stmt.query_map::<String, _, _>([], |row| row.get(0)).ok()?;
-        for key in key_iter {
-            println!("Found key {:?}", key.unwrap());
-        }
-        // Loop through all our secret keys...
+        //debug!(target: "adapter", "try_decrypt_note() [START]");
+        //let path = WalletDB::wallet_path();
+        //debug!(target: "adapter", "try_decrypt_note() [FOUND PATH]");
+        //println!("Found path: {:?}", &path);
+        //debug!(target: "adapter", "try_decrypt_note() [TRY DB CONNECT]");
+        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+        //let mut stmt = connect.prepare("SELECT key_private FROM keys").ok()?;
+        //let key_iter = stmt.query_map::<String, _, _>([], |row| row.get(0)).ok()?;
+        //for key in key_iter {
+        //    println!("Found key {:?}", key.unwrap());
+        //}
+        //// Loop through all our secret keys...
 
-        for secret in &self.secrets {
-            // ... attempt to decrypt the note ...
-            match ciphertext.decrypt(secret) {
-                Ok(note) => {
-                    // ... and return the decrypted note for this coin.
-                    return Some((note, secret.clone()));
-                }
-                Err(_) => {}
-            }
-        }
+        //for secret in &self.secrets {
+        //    // ... attempt to decrypt the note ...
+        //    match ciphertext.decrypt(secret) {
+        //        Ok(note) => {
+        //            // ... and return the decrypted note for this coin.
+        //            return Some((note, secret.clone()));
+        //        }
+        //        Err(_) => {}
+        //    }
+        //}
         // We weren't able to decrypt the note with any of our keys.
         None
     }
