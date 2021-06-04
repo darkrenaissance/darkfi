@@ -1,11 +1,10 @@
 use async_std::sync::Arc;
 use std::convert::From;
 use std::net::SocketAddr;
-use std::path::Path;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{
-    serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error, Result,
+    serial::deserialize, serial::serialize, slab::Slab, slabstore::SlabStore, Error, Result, rocks::Rocks
 };
 
 use async_executor::Executor;
@@ -37,9 +36,9 @@ impl GatewayService {
     pub fn new(
         addr: SocketAddr,
         pub_addr: SocketAddr,
-        slabstore_path: &Path,
+        rocks: Rocks,
     ) -> Result<Arc<GatewayService>> {
-        let slabstore = SlabStore::new(slabstore_path)?;
+        let slabstore = SlabStore::new(rocks)?;
 
         Ok(Arc::new(GatewayService {
             slabstore,
@@ -185,10 +184,10 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr, path: &Path) -> Result<Self> {
+    pub fn new(addr: SocketAddr, rocks: Rocks) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
 
-        let slabstore = SlabStore::new(path)?;
+        let slabstore = SlabStore::new(rocks)?;
 
         Ok(GatewayClient {
             protocol,

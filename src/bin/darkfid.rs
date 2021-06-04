@@ -4,7 +4,7 @@ use easy_parallel::Parallel;
 use std::net::SocketAddr;
 
 use drk::service::{ClientProgramOptions, GatewayClient};
-use drk::{slab::Slab, Result};
+use drk::{slab::Slab, Result, rocks::Rocks};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
@@ -16,10 +16,12 @@ fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
 async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Result<()> {
     let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
     let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
-    let slabstore_path = options.slabstore_path.as_path();
+    let database_path = options.database_path.as_path();
+
+    let rocks = Rocks::new(database_path)?;
 
     // create gateway client
-    let mut client = GatewayClient::new(connect_addr, slabstore_path)?;
+    let mut client = GatewayClient::new(connect_addr, rocks)?;
 
     // start gateway client
     client.start().await?;
@@ -92,6 +94,7 @@ mod test {
 
         use drk::service::GatewayClient;
         use drk::slab::Slab;
+        use drk::rocks::Rocks;
 
         use log::*;
         use rand::Rng;
@@ -117,10 +120,17 @@ mod test {
                     let mut rng = rand::thread_rng();
                     let rnd: u32 = rng.gen();
 
+
+
+
+                    let path_str = format!("database_{}.db", rnd);
+                    let database_path = Path::new(path_str.as_str());
+                    let rocks = Rocks::new(database_path.clone()).unwrap();
+
                     // create new client and use different slabstore
                     let mut client = GatewayClient::new(
                         "127.0.0.1:3333".parse().unwrap(),
-                        Path::new(&format!("slabstore_{}.db", rnd)),
+                        rocks,
                     )
                     .unwrap();
 
@@ -130,6 +140,7 @@ mod test {
                     // sending slab
                     let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
                     client.put_slab(_slab).await.unwrap();
+                    
                 })
             });
             thread_pools.push(thread);
