@@ -6,8 +6,7 @@ use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request,
 use crate::{serial::deserialize, serial::serialize,  Error,
     Result,
 };
-use crate::blockchain::{Rocks, Slab, SlabStore};
-
+use crate::blockchain::{Slab, SlabStore, RocksColumn, rocks::columns};
 use async_executor::Executor;
 use log::*;
 
@@ -37,7 +36,7 @@ impl GatewayService {
     pub fn new(
         addr: SocketAddr,
         pub_addr: SocketAddr,
-        rocks: Rocks,
+        rocks: RocksColumn<columns::Slabs>,
     ) -> Result<Arc<GatewayService>> {
         let slabstore = SlabStore::new(rocks)?;
 
@@ -185,7 +184,7 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr, rocks: Rocks) -> Result<Self> {
+    pub fn new(addr: SocketAddr, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
 
         let slabstore = SlabStore::new(rocks)?;
@@ -274,13 +273,5 @@ impl GatewayClient {
         let mut subscriber = Subscriber::new(sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
         Ok(subscriber)
-    }
-
-    pub async fn subscribe(mut subscriber: Subscriber, slabstore: Arc<SlabStore>) -> Result<()> {
-        loop {
-            let slab: Vec<u8>;
-            slab = subscriber.fetch().await?;
-            slabstore.put(slab)?;
-        }
     }
 }

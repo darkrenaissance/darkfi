@@ -1,12 +1,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use drk::service::{GatewayService, ProgramOptions};
+use drk::Result;
+use drk::blockchain::{Rocks, RocksColumn, rocks::columns};
+
 extern crate clap;
 use async_executor::Executor;
 use easy_parallel::Parallel;
-
-use drk::service::{GatewayService, ProgramOptions};
-use drk::{blockchain::Rocks, Result};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
@@ -21,8 +22,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let database_path = options.database_path.as_path();
 
     let rocks = Rocks::new(database_path)?;
+    let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks); 
 
-    let gateway = GatewayService::new(accept_addr, pub_addr, rocks)?;
+    let gateway = GatewayService::new(accept_addr, pub_addr, rocks_slabstore_column)?;
 
     gateway.start(executor.clone()).await?;
     Ok(())

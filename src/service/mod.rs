@@ -4,3 +4,4 @@ pub mod reqrep;
 
 pub use gateway::{GatewayClient, GatewayService};
 pub use options::{ClientProgramOptions, ProgramOptions};
+pub use reqrep::Subscriber;

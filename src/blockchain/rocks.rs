@@ -1,5 +1,8 @@
+use std::marker::PhantomData;
 use std::path::Path;
+use async_std::sync::Arc;
 
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
@@ -16,7 +19,7 @@ pub trait Column {
 pub mod columns {
     pub struct Slabs;
     pub struct Nullifiers;
-    pub struct MerkleTree;
+    pub struct MerkleRoots;
 }
 
 impl Column for columns::Slabs {
@@ -27,8 +30,8 @@ impl Column for columns::Nullifiers {
     const NAME: &'static str = "nullifiers";
 }
 
-impl Column for columns::MerkleTree {
-    const NAME: &'static str = "merkletree";
+impl Column for columns::MerkleRoots {
+    const NAME: &'static str = "merkleroots";
 }
 
 pub struct Rocks {
@@ -36,7 +39,7 @@ pub struct Rocks {
 }
 
 impl Rocks {
-    pub fn new(path: &Path) -> Result<Self> {
+    pub fn new(path: &Path) -> Result<Arc<Self>> {
         // column family options
         let cf_opts = Options::default();
 
@@ -47,11 +50,11 @@ impl Rocks {
         let slab_cf = ColumnFamilyDescriptor::new(columns::Slabs::NAME, cf_opts.clone());
         // nullifiers column family
         let nullifiers_cf = ColumnFamilyDescriptor::new(columns::Nullifiers::NAME, cf_opts.clone());
-        // merkletree column family
-        let merkletree_cf = ColumnFamilyDescriptor::new(columns::MerkleTree::NAME, cf_opts);
+        // merkleroots column family
+        let merkleroots_cf = ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts);
 
         // column families
-        let cfs = vec![default_cf, slab_cf, nullifiers_cf, merkletree_cf];
+        let cfs = vec![default_cf, slab_cf, nullifiers_cf, merkleroots_cf];
 
         // database options
         let mut opt = Options::default();
@@ -61,7 +64,7 @@ impl Rocks {
         // open database with following options and cf
         let db = DB::open_cf_descriptors(&opt, path, cfs)?;
 
-        Ok(Self { db })
+        Ok(Arc::new(Self { db }))
     }
 
     pub fn cf_handle<C>(&self) -> Result<&ColumnFamily>
@@ -85,10 +88,7 @@ impl Rocks {
 
     pub fn key_exist_cf(&self, cf: &ColumnFamily, key: Vec<u8>) -> Result<bool> {
         let val = self.db.get_cf(cf, key)?;
-        if let None = val {
-            return Ok(false);
-        };
-        Ok(true)
+        Ok(val.is_some())
     }
 
     pub fn iterator(&self, cf: &ColumnFamily, iterator_mode: IteratorMode) -> rocksdb::DBIterator {
@@ -102,5 +102,61 @@ impl Rocks {
     pub fn destroy(path: &Path) -> Result<()> {
         DB::destroy(&Options::default(), path)?;
         Ok(())
+    }
+}
+
+pub struct RocksColumn<T: Column> {
+    rocks: Arc<Rocks>,
+    column: PhantomData<T>,
+}
+
+impl<T: Column> RocksColumn<T> {
+    pub fn new(rocks: Arc<Rocks>) -> RocksColumn<T> {
+        RocksColumn {
+            rocks,
+            column: PhantomData,
+        }
+    }
+    fn cf_handle(&self) -> Result<&ColumnFamily> {
+        self.rocks.cf_handle::<T>()
+    }
+
+    pub fn put(&self, key: impl Encodable, value: impl Encodable) -> Result<()> {
+        let key = serialize(&key);
+        let value = serialize(&value);
+        let cf = self.cf_handle()?;
+        self.rocks.put_cf(cf, key, value)?;
+        Ok(())
+    }
+
+    pub fn get(&self, key: impl Encodable) -> Result<Option<Vec<u8>>> {
+        let key = serialize(&key);
+        let cf = self.cf_handle()?;
+        let val = self.rocks.get_cf(cf, key)?;
+        Ok(val)
+    }
+
+    pub fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<Option<D>> {
+        let value = self.get(key)?;
+        match value {
+            Some(v) => {
+                let v: D = deserialize(&v)?;
+                Ok(Some(v))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn key_exist(&self, key: impl Encodable) -> Result<bool> {
+        let key = serialize(&key);
+        let cf = self.cf_handle()?;
+        let val = self.rocks.key_exist_cf(cf, key)?;
+        Ok(val)
+    }
+
+    pub fn iterator(&self, iterator_mode: IteratorMode) -> Result<rocksdb::DBIterator> {
+        let cf = self.cf_handle()?;
+        let iter = self.rocks.iterator(cf, iterator_mode);
+        Ok(iter)
     }
 }
