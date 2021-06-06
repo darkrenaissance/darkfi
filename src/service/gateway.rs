@@ -126,7 +126,7 @@ impl GatewayService {
                 let slab = request.get_payload();
 
                 // add to slabstore
-                let error = slabstore.put(slab.clone())?;
+                let error = slabstore.put(deserialize(&slab)?)?;
 
                 let mut reply = Reply::from(&request, GatewayError::NoError as u32, vec![]);
 
@@ -228,7 +228,7 @@ impl GatewayClient {
             .await?;
 
         if let Some(slab) = rep {
-            self.slabstore.put(slab.clone())?;
+            self.slabstore.put(deserialize(&slab)?)?;
             return Ok(Some(slab));
         }
         Ok(None)

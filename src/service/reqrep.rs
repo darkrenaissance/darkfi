@@ -249,11 +249,12 @@ impl Subscriber {
         Ok(())
     }
 
-    pub async fn fetch(&mut self) -> Result<Vec<u8>> {
+    pub async fn fetch<T: Decodable>(&mut self) -> Result<T> {
         let data = self.socket.recv().await?;
         match data.get(0) {
             Some(d) => {
                 let data = d.to_vec();
+                let data: T = deserialize(&data)?;
                 Ok(data)
             }
             None => Err(crate::Error::ZMQError(

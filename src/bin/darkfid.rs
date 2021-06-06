@@ -12,7 +12,7 @@ use drk::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use drk::serial::{deserialize, Decodable};
+use drk::serial::Decodable;
 use drk::service::{ClientProgramOptions, GatewayClient, Subscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::{tx, Result};
@@ -131,16 +131,14 @@ pub async fn subscribe(
     mut state: State,
 ) -> Result<()> {
     loop {
-        let slab_data: Vec<u8>;
-        slab_data = subscriber.fetch().await?;
 
-        let slab: Slab = deserialize(&slab_data)?;
+        let slab = subscriber.fetch::<Slab>().await?;
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
         let update = state_transition(&state, tx)?;
         state.apply(update)?;
 
-        slabstore.put(slab_data)?;
+        slabstore.put(slab)?;
     }
 }
 

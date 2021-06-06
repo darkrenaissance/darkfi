@@ -20,13 +20,12 @@ impl SlabStore {
         Ok(value)
     }
 
-    pub fn put(&self, value: Vec<u8>) -> Result<Option<u64>> {
-        let slab: Slab = deserialize(&value)?;
+    pub fn put(&self, slab: Slab) -> Result<Option<u64>> {
         let last_index = self.get_last_index()?;
         let key = last_index + 1;
 
         if slab.get_index() == key {
-            self.rocks.put(key.clone(), value)?;
+            self.rocks.put(key.clone(), slab)?;
             Ok(Some(key))
         } else {
             Ok(None)
