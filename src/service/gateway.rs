@@ -3,10 +3,8 @@ use std::convert::From;
 use std::net::SocketAddr;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
-use crate::{serial::deserialize, serial::serialize,  Error,
-    Result,
-};
-use crate::blockchain::{Slab, SlabStore, RocksColumn, rocks::columns};
+use crate::blockchain::{rocks::columns, RocksColumn, Slab, SlabStore};
+use crate::{serial::deserialize, serial::serialize, Error, Result};
 use async_executor::Executor;
 use log::*;
 

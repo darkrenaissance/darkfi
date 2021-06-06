@@ -51,11 +51,15 @@ impl ProgramState for State {
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        self.merkle_roots.key_exist(*merkle_root).expect("couldn't check if the merkle_root valid")
+        self.merkle_roots
+            .key_exist(*merkle_root)
+            .expect("couldn't check if the merkle_root valid")
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.nullifiers.key_exist(nullifier.repr).expect("couldn't check if nullifier exists")
+        self.nullifiers
+            .key_exist(nullifier.repr)
+            .expect("couldn't check if nullifier exists")
     }
 
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
