@@ -16,15 +16,13 @@ pub mod net;
 pub mod rpc;
 pub mod serial;
 pub mod service;
-pub mod slab;
-pub mod slabstore;
+pub mod blockchain;
 pub mod state;
 pub mod system;
 pub mod tx;
 pub mod vm;
 pub mod vm_serial;
 pub mod wallet;
-pub mod rocks;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};

@@ -4,7 +4,8 @@ use easy_parallel::Parallel;
 use std::net::SocketAddr;
 
 use drk::service::{ClientProgramOptions, GatewayClient};
-use drk::{rocks::Rocks, slab::Slab, Result};
+use drk::Result;
+use drk::blockchain::{Slab, Rocks};
 
 fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     match address {
@@ -92,9 +93,8 @@ mod test {
     fn test_darkfid_client() {
         use std::path::Path;
 
-        use drk::rocks::Rocks;
+        use drk::blockchain::{Rocks, Slab};
         use drk::service::GatewayClient;
-        use drk::slab::Slab;
 
         use log::*;
         use rand::Rng;
