@@ -24,7 +24,7 @@ impl WalletDB {
     //        let privkey = serial::serialize(&secret);
     //        Ok(pubkey, privkey)
     //    }
-    pub async fn path(wallet: &str) -> Result<PathBuf> {
+    pub fn path(wallet: &str) -> Result<PathBuf> {
         let mut path = dirs::home_dir()
             .expect("cannot find home directory.")
             .as_path()

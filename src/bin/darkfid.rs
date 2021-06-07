@@ -17,6 +17,7 @@ use drk::service::{ClientProgramOptions, GatewayClient, Subscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::WalletDB;
 use drk::{tx, Result};
+use rusqlite::{named_params, Connection};
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -47,14 +48,13 @@ pub struct State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        // TODO
         // Still needs to be tested
-        let path = WalletDB::path("cashier.db");
-        //let connect = Connection::open(&path).expect("Failed to connect to database.");
-        //connect.execute(
-        //    " SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)",
-        //Ok(())
-        true
+        let path = WalletDB::path("cashier.db").expect("Failed to get path");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let mut stmt = connect
+            .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
+            .expect("Cannot generate statement.");
+        stmt.exists([1i32]).unwrap()
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
