@@ -24,12 +24,13 @@ impl WalletDB {
     //        let privkey = serial::serialize(&secret);
     //        Ok(pubkey, privkey)
     //    }
-    pub async fn path() -> Result<PathBuf> {
-        let path = dirs::home_dir()
+    pub async fn path(wallet: &str) -> Result<PathBuf> {
+        let mut path = dirs::home_dir()
             .expect("cannot find home directory.")
             .as_path()
             .join(".config/darkfi/");
         debug!(target: "walletdb", "CREATE PATH {:?}", path);
+        path.push(wallet);
         Ok(path)
     }
 

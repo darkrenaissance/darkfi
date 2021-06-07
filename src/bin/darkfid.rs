@@ -49,7 +49,7 @@ impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
         // TODO
         // Still needs to be tested
-        //let path = WalletDB::wallet_path();
+        let path = WalletDB::path("cashier.db");
         //let connect = Connection::open(&path).expect("Failed to connect to database.");
         //connect.execute(
         //    " SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)",
