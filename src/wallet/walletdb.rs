@@ -18,8 +18,24 @@ impl WalletDB {
         Ok(connect.execute_batch(&contents)?)
     }
 
-    pub async fn key_gen(path: PathBuf) -> Result<()> {
-        debug!(target: "own_key_gen", "Generating keys...");
+//    pub async fn create_keypair() -> Result<String, String> {
+//        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+//        let pubkey = serial::serialize(&public);
+//        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+//        let privkey = serial::serialize(&secret);
+//        Ok(pubkey, privkey)
+//    }
+    pub async fn path() -> Result<PathBuf> {
+        let path = dirs::home_dir()
+            .expect("cannot find home directory.")
+            .as_path()
+            .join(".config/darkfi/");
+        debug!(target: "walletdb", "CREATE PATH {:?}", path);
+        Ok(path)
+    }
+
+    pub async fn key_gen(path: PathBuf, id: i32, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+        debug!(target: "key_gen", "Generating keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         // TODO: ID should not be fixed
         let id = 0;

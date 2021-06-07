@@ -1,8 +1,8 @@
-use crate::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use log::*;
 use std::sync::Arc;
-use crate::wallet::walletdb::WalletDB;
+use crate::wallet::WalletDB;
+use crate::{Error, Result};
 
 // Dummy adapter for now
 pub struct RpcAdapter {}
@@ -12,66 +12,49 @@ impl RpcAdapter {
         Arc::new(Self {})
     }
 
-    pub async fn key_gen() -> Result<()> {
-        debug!(target: "adapter", "key_gen() [START]");
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        WalletDB::key_gen(path).await?;
-        Ok(())
+    pub async fn get_path(wallet: &str) -> Result<PathBuf> {
+        debug!(target: "adapter", "TEST PATH [START]");
+        let mut path = WalletDB::path().await.expect("Failed to get path");
+        debug!(target: "adapter", "TEST PATH {:?}", path);
+        path.push(wallet);
+        Ok(path)
     }
 
-    // user input should define wallet path
+    pub async fn key_gen() -> Result<PathBuf> {
+        debug!(target: "adapter", "key_gen() [START]");
+        let path = Self::get_path("wallet.db").await.expect("Failed to get path");
+        //WalletDB::key_gen(path).await?;
+        Ok(path)
+    }
+
     pub async fn new_wallet() -> Result<()> {
         debug!(target: "adapter", "new_wallet() [START]");
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
+        let path = Self::get_path("wallet.db").await.expect("Failed to get path");
         WalletDB::new(path).await?;
         Ok(())
     }
 
     pub async fn new_cashier_wallet() -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/cashier.db");
-        debug!(target: "adapter", "new_wallet() [START]");
+        debug!(target: "adapter", "new_cashier_wallet() [START]");
+        let path = Self::get_path("cashier.db").await.expect("Failed to get path");
         WalletDB::new(path).await?;
         Ok(())
     }
 
     pub async fn save_cash_key(pubkey: Vec<u8>) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/cashier.db");
-        debug!(target: "adapter", "new_wallet() [START]");
+        debug!(target: "adapter", "save_cash_key() [START]");
+        let path = Self::get_path("cashier.db").await.expect("Failed to get path");
         WalletDB::save(path, pubkey).await?;
         Ok(())
 
     }
 
     pub async fn save_key(pubkey: Vec<u8>) -> Result<()> {
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        debug!(target: "adapter", "new_wallet() [START]");
+        debug!(target: "adapter", "save_key() [START]");
+        let path = Self::get_path("wallet.db").await.expect("Failed to get path");
         WalletDB::save(path, pubkey).await?;
         Ok(())
 
-    }
-
-    pub fn wallet_path() -> PathBuf {
-        debug!(target: "wallet_path", "Finding wallet path...");
-        let path = dirs::home_dir()
-            .expect("cannot find home directory.")
-            .as_path()
-            .join(".config/darkfi/wallet.db");
-        path
     }
 
     pub async fn get_info() {}

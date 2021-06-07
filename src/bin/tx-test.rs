@@ -5,10 +5,11 @@ use drk::{Error, Result};
 use ff::{Field, PrimeField};
 use log::*;
 use rand::rngs::OsRng;
-use rocksdb::DB;
+//use rocksdb::DB;
 use rusqlite::{named_params, Connection};
-use std::fs::File;
+//use std::fs::File;
 use std::path::Path;
+use rocksdb::{IteratorMode, Options, DB};
 
 use drk::crypto::{
     coin::Coin,
@@ -61,7 +62,16 @@ impl ProgramState for MemoryState {
         //// does not actually check whether the cashier key is valid
         //for key in key_iter {
         //    key.unwrap() == self.cashier_public;
-        //}
+        //connect.execute(
+        //    "SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public){
+        //
+        //    INSERT INTO keys(key_id, key_private, key_public)
+        //    VALUES (:id, :privkey, :pubkey)",
+        //    named_params! {":id": id,
+        //     ":privkey": privkey,
+        //     ":pubkey": pubkey
+        //    },
+        ////}
         true
     }
     // rocksdb

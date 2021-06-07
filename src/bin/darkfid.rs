@@ -14,6 +14,7 @@ use drk::crypto::{
 };
 use drk::serial::Decodable;
 use drk::service::{ClientProgramOptions, GatewayClient, Subscriber};
+use drk::wallet::WalletDB;
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::{tx, Result};
 
@@ -47,6 +48,12 @@ pub struct State {
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
         // TODO
+        // Still needs to be tested
+        //let path = WalletDB::wallet_path();
+        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+        //connect.execute(
+        //    " SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)",
+        //Ok(())
         true
     }
 

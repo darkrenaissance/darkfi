@@ -5,6 +5,7 @@ import requests
 import json
 
 def arg_parser(client):
+    #choices = ['wallet', 'cashierwallet', 'keypair', 'pub']
     parser = argparse.ArgumentParser(prog='drk',
                                           usage='%(prog)s [commands]',
                                           description="""DarkFi wallet
@@ -15,7 +16,15 @@ def arg_parser(client):
     parser.add_argument("-n", "--new", action='store_true', help="Generate a new wallet")
     parser.add_argument("-o", "--hello", action='store_true', help="Say hello")
     parser.add_argument("-c", "--cash", action='store_true', help="Create a new cashier wallet")
+    parser.add_argument("-t", "--test", action='store_true', help="Test path")
     args = parser.parse_args()
+
+    if args.test:
+        try:
+            print("Testing path...")
+            client.test_path(client.payload)
+        except Exception:
+            raise
 
     if args.key:
         try:
@@ -61,6 +70,12 @@ def arg_parser(client):
         except Exception:
             raise
 
+    #if args.wallet:
+    #    try:
+    #        print("This worked")
+    #    except Exception:
+    #        raise
+
 
 # TODO: refactor into async
 class DarkClient:
@@ -75,6 +90,13 @@ class DarkClient:
             "id": [],
         }
 
+    def test_path(self, payload):
+        payload['method'] = "test_path"
+        payload['jsonrpc'] = "2.0"
+        payload['id'] = "0"
+        test = self.__request(payload)
+        print(test)
+        
     def key_gen(self, payload):
         payload['method'] = "key_gen"
         payload['jsonrpc'] = "2.0"
