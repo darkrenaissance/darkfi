@@ -1,15 +1,14 @@
-use crate::Result;
 use crate::serial;
+use crate::Result;
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::{Connection, named_params};
+use rusqlite::{named_params, Connection};
 use std::path::PathBuf;
 
 // TODO: make this more generic to remove boiler plate. e.g. create_wallet(cashier) instead of
 // create_cashier_wallet
-pub struct WalletDB {
-}
+pub struct WalletDB {}
 
 impl WalletDB {
     pub async fn new(path: PathBuf) -> Result<()> {
@@ -18,13 +17,13 @@ impl WalletDB {
         Ok(connect.execute_batch(&contents)?)
     }
 
-//    pub async fn create_keypair() -> Result<String, String> {
-//        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-//        let pubkey = serial::serialize(&public);
-//        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-//        let privkey = serial::serialize(&secret);
-//        Ok(pubkey, privkey)
-//    }
+    //    pub async fn create_keypair() -> Result<String, String> {
+    //        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    //        let pubkey = serial::serialize(&public);
+    //        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    //        let privkey = serial::serialize(&secret);
+    //        Ok(pubkey, privkey)
+    //    }
     pub async fn path() -> Result<PathBuf> {
         let path = dirs::home_dir()
             .expect("cannot find home directory.")

@@ -8,8 +8,8 @@ use rand::rngs::OsRng;
 //use rocksdb::DB;
 use rusqlite::{named_params, Connection};
 //use std::fs::File;
-use std::path::Path;
 use rocksdb::{IteratorMode, Options, DB};
+use std::path::Path;
 
 use drk::crypto::{
     coin::Coin,
@@ -162,7 +162,6 @@ impl MemoryState {
         // We weren't able to decrypt the note with any of our keys.
         None
     }
-
 }
 
 fn main() {

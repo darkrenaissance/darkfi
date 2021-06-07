@@ -5,6 +5,7 @@ use bls12_381::{Bls12, Scalar};
 use std::collections::{HashMap, HashSet};
 
 pub mod async_serial;
+pub mod blockchain;
 pub mod bls_extensions;
 pub mod circuit;
 pub mod crypto;
@@ -16,7 +17,6 @@ pub mod net;
 pub mod rpc;
 pub mod serial;
 pub mod service;
-pub mod blockchain;
 pub mod state;
 pub mod system;
 pub mod tx;

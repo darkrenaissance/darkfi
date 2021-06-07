@@ -14,8 +14,8 @@ use drk::crypto::{
 };
 use drk::serial::Decodable;
 use drk::service::{ClientProgramOptions, GatewayClient, Subscriber};
-use drk::wallet::WalletDB;
 use drk::state::{state_transition, ProgramState, StateUpdate};
+use drk::wallet::WalletDB;
 use drk::{tx, Result};
 
 use async_executor::Executor;
@@ -138,7 +138,6 @@ pub async fn subscribe(
     mut state: State,
 ) -> Result<()> {
     loop {
-
         let slab = subscriber.fetch::<Slab>().await?;
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
