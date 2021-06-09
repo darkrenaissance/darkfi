@@ -17,6 +17,8 @@ enum GatewayError {
     IndexNotExist,
 }
 
+
+
 #[repr(u8)]
 enum GatewayCommand {
     PutSlab,
@@ -229,7 +231,7 @@ impl GatewayClient {
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Slab>> {
         let rep = self
             .protocol
-            .request(GatewayCommand::GetSlab as u8, serialize(&index))
+            .request(GatewayCommand::GetSlab as u8, serialize(&index), &handle_error)
             .await?;
 
         if let Some(slab) = rep {
@@ -249,7 +251,7 @@ impl GatewayClient {
 
             let rep = self
                 .protocol
-                .request(GatewayCommand::PutSlab as u8, slab.clone())
+                .request(GatewayCommand::PutSlab as u8, slab.clone(), &handle_error)
                 .await?;
 
             if let Some(_) = rep {
@@ -262,7 +264,7 @@ impl GatewayClient {
     pub async fn get_last_index(&mut self) -> Result<u64> {
         let rep = self
             .protocol
-            .request(GatewayCommand::GetLastIndex as u8, vec![])
+            .request(GatewayCommand::GetLastIndex as u8, vec![], &handle_error)
             .await?;
         if let Some(index) = rep {
             return Ok(deserialize(&index)?);
@@ -301,5 +303,18 @@ impl GatewayClient {
             gateway_slabs_sub_s.send(slab.clone()).await?;
             slabstore.put(slab)?;
         }
+    }
+}
+
+
+fn handle_error(status_code: u32) {
+    match status_code {
+        1 => {
+            warn!("Reply has an Error: Index is not updated");
+        }
+        2 => {
+            warn!("Reply has an Error: Index Not Exist");
+        }
+        _ => {}
     }
 }
