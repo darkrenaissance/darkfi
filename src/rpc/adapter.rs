@@ -12,11 +12,12 @@ impl RpcAdapter {
         Arc::new(Self {})
     }
 
-    pub async fn key_gen() -> Result<PathBuf> {
+    pub async fn key_gen() -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
+        let (public, private) = WalletDB::create_key().await;
         let path = WalletDB::path("wallet.db").expect("Failed to get path");
-        //WalletDB::key_gen(path).await?;
-        Ok(path)
+        WalletDB::save_key(path, public, private).await.expect("Failed to save key");
+        Ok(())
     }
 
     pub async fn new_wallet() -> Result<()> {

@@ -54,6 +54,7 @@ impl ProgramState for State {
         let mut stmt = connect
             .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
             .expect("Cannot generate statement.");
+        // test this
         stmt.exists([1i32]).unwrap()
     }
 
@@ -69,6 +70,7 @@ impl ProgramState for State {
             .expect("couldn't check if nullifier exists")
     }
 
+    // load from disk
     fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
         &self.mint_pvk
     }
@@ -120,7 +122,26 @@ impl State {
 
     // sql
     fn try_decrypt_note(&self, _ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        // TODO
+        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+        //let mut stmt = connect.prepare("SELECT key_private FROM keys").ok()?;
+        //let key_iter = stmt.query_map::<String, _, _>([], |row| row.get(0)).ok()?;
+        //for key in key_iter {
+        //    println!("Found key {:?}", key.unwrap());
+        //}
+        //
+        //// Loop through all our secret keys...
+
+        //for secret in &self.secrets {
+        //    // ... attempt to decrypt the note ...
+        //    match ciphertext.decrypt(secret) {
+        //        Ok(note) => {
+        //            // ... and return the decrypted note for this coin.
+        //            return Some((note, secret.clone()));
+        //        }
+        //        Err(_) => {}
+        //    }
+        //}
+        // We weren't able to decrypt the note with any of our keys.
         None
     }
 }
@@ -189,6 +210,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
     let state = State {
+
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,

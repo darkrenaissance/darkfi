@@ -17,35 +17,25 @@ impl WalletDB {
         Ok(connect.execute_batch(&contents)?)
     }
 
-    //    pub async fn create_keypair() -> Result<String, String> {
-    //        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-    //        let pubkey = serial::serialize(&public);
-    //        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-    //        let privkey = serial::serialize(&secret);
-    //        Ok(pubkey, privkey)
-    //    }
     pub fn path(wallet: &str) -> Result<PathBuf> {
         let mut path = dirs::home_dir()
             .expect("cannot find home directory.")
             .as_path()
             .join(".config/darkfi/");
-        debug!(target: "walletdb", "CREATE PATH {:?}", path);
+        // add wallet specifier
         path.push(wallet);
+        debug!(target: "walletdb", "CREATE PATH {:?}", path);
         Ok(path)
     }
 
-    pub async fn key_gen(path: PathBuf, id: i32, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+    // unique index in sql
+    // unique index attribute will generate new ID every new table
+    pub async fn save_key(path: PathBuf, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
         debug!(target: "key_gen", "Generating keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         // TODO: ID should not be fixed
         let id = 0;
-        // Create keys
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         debug!(target: "adapter", "key_gen() [Generating public key...]");
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        // Write keys to database
         connect.execute(
             "INSERT INTO keys(key_id, key_private, key_public)
             VALUES (:id, :privkey, :pubkey)",
@@ -55,6 +45,16 @@ impl WalletDB {
             },
         )?;
         Ok(())
+    }
+
+    pub async fn create_key() -> (Vec<u8>, Vec<u8>) {
+        debug!(target: "key_gen", "Generating keys...");
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        // Write keys to database
+        (pubkey, privkey)
     }
 
     pub async fn get(path: PathBuf) -> Result<()> {
