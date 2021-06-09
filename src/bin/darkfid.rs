@@ -247,11 +247,11 @@ fn main() -> Result<()> {
 }
 
 //// $ cargo test test_ten_clients_simultaneously --bin darkfid
-        //this will run 10 clients simultaneously
+//this will run 10 clients simultaneously
 
 //// $ cargo test test_subscriber --bin darkfid
-        // Run Client A and send 10 slabs
-        // Client B should receive 10 slabs from subscriber
+// Run Client A and send 10 slabs
+// Client B should receive 10 slabs from subscriber
 #[cfg(test)]
 mod test {
 
@@ -347,7 +347,6 @@ mod test {
         }
     }
 
-
     #[test]
     fn test_subscriber() {
         setup_log();
@@ -386,7 +385,6 @@ mod test {
                 client.put_slab(slab.clone()).await.unwrap();
                 client.put_slab(slab.clone()).await.unwrap();
                 client.put_slab(slab.clone()).await.unwrap();
-
             });
         });
         // Client B
@@ -422,7 +420,8 @@ mod test {
                             client.start_subscriber(sub_addr, ex.clone()).await.unwrap();
 
                         ex.clone()
-                            .spawn(subscribe(gateway_slabs_sub, "B".to_string())).detach();
+                            .spawn(subscribe(gateway_slabs_sub, "B".to_string()))
+                            .detach();
 
                         // start gateway client
                         client.start().await.unwrap();

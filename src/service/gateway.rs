@@ -217,7 +217,6 @@ impl GatewayClient {
         if last_index > 0 {
             for index in (local_last_index + 1)..(last_index + 1) {
                 if let None = self.get_slab(index).await? {
-                    warn!("Index not exist");
                     break;
                 }
             }

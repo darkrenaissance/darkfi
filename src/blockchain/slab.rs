@@ -1,7 +1,6 @@
 use crate::serial::{Decodable, Encodable};
 use crate::Result;
 
-
 #[derive(Clone, Debug)]
 pub struct Slab {
     asset_type: String,
