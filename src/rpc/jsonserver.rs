@@ -151,6 +151,11 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::String("TEST PATH!".into()))
         });
 
+        io.add_method("get_cash_key", move |_| async move {
+            //RpcAdapter::get_path().await;
+            Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
+        });
+
         io.add_method("get_info", move |_| async move {
             RpcAdapter::get_info().await;
             Ok(jsonrpc_core::Value::Null)

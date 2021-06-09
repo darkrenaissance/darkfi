@@ -16,6 +16,7 @@ def arg_parser(client):
     parser.add_argument("-n", "--new", action='store_true', help="Generate a new wallet")
     parser.add_argument("-o", "--hello", action='store_true', help="Say hello")
     parser.add_argument("-c", "--cash", action='store_true', help="Create a new cashier wallet")
+    parser.add_argument("-x", "--cashkey", action='store_true', help="Print cashierkey")
     parser.add_argument("-t", "--test", action='store_true', help="Test path")
     args = parser.parse_args()
 
@@ -23,6 +24,13 @@ def arg_parser(client):
         try:
             print("Testing path...")
             client.test_path(client.payload)
+        except Exception:
+            raise
+
+    if args.cashkey:
+        try:
+            print("Attempting to print cashier key...")
+            client.cashkey(client.payload)
         except Exception:
             raise
 
@@ -90,6 +98,13 @@ class DarkClient:
             "id": [],
         }
 
+    def cashkey(self, payload):
+        payload['method'] = "get_cash_key"
+        payload['jsonrpc'] = "2.0"
+        payload['id'] = "0"
+        cashk = self.__request(payload)
+        print(cashk)
+        
     def test_path(self, payload):
         payload['method'] = "test_path"
         payload['jsonrpc'] = "2.0"

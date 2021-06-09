@@ -55,7 +55,7 @@ impl WalletDB {
     }
 
     pub async fn get(path: PathBuf) -> Result<()> {
-        debug!(target: "get_cash_public", "Returning cashier keys...");
+        debug!(target: "get", "Returning keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
         let key_iter = stmt
@@ -67,7 +67,7 @@ impl WalletDB {
         }
         let key = match pub_keys.pop() {
             Some(key_found) => println!("{:?}", key_found),
-            None => println!("No cashier public key found"),
+            None => println!("No public key found"),
         };
         Ok(key)
     }

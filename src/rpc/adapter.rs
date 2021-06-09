@@ -43,6 +43,19 @@ impl RpcAdapter {
         Ok(())
     }
 
+    pub async fn get_key() -> Result<()> {
+        debug!(target: "adapter", "get_key() [START]");
+        let path = WalletDB::path("wallet.db").expect("Failed to get path");
+        WalletDB::get(path).await?;
+        Ok(())
+    }
+
+    pub async fn get_cash_key() -> Result<()> {
+        debug!(target: "adapter", "get_cash_key() [START]");
+        let path = WalletDB::path("cashier.db").expect("Failed to get path");
+        WalletDB::get(path).await?;
+        Ok(())
+    }
     pub async fn save_key(pubkey: Vec<u8>) -> Result<()> {
         debug!(target: "adapter", "save_key() [START]");
         let path = WalletDB::path("wallet.db").expect("Failed to get path");
