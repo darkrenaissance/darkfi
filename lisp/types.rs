@@ -124,7 +124,7 @@ impl Circuit<bls12_381::Scalar> for LispCircuit {
         }
         println!("circuit alloc input \t {:?}", start.elapsed());
         let start = Instant::now();
-        let mut enforce_sorted = self.constraints.clone();
+        let enforce_sorted = self.constraints.clone();
         // enforce_sorted.sort_by(|a, b| a.idx.cmp(&b.idx));
         for alloc_value in enforce_sorted.iter() {
             // println!("Enforce -> {:?}", alloc_value);

@@ -60,7 +60,7 @@ impl WalletDB {
     pub async fn get(path: PathBuf) -> Result<()> {
         debug!(target: "get_cash_public", "Returning cashier keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
+        let _id = 0;
         let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
         let key_iter = stmt
             .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
@@ -92,5 +92,3 @@ impl WalletDB {
         Ok(())
     }
 }
-
-fn main() {}

@@ -25,7 +25,7 @@ fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {
 }
 
 // Unpack a u64 value in 64 Scalar binary digits
-fn unpack_u64(value: u64) -> Vec<Scalar> {
+fn _unpack_u64(value: u64) -> Vec<Scalar> {
     let mut result = Vec::with_capacity(64);
 
     for i in 0..64 {
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         visor.vm.constraints.len()
     );
 
-    visor.setup("mint.zts");
+    visor.setup("mint.zts")?;
 
     // We use the ExtendedPoint in calculations because it's faster
     let public_point = jubjub::ExtendedPoint::from(jubjub::SubgroupPoint::random(&mut OsRng));

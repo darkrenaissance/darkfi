@@ -8,7 +8,7 @@ use drk::crypto::{
     coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
-    merkle_node::{hash_coin, MerkleNode},
+    merkle_node::MerkleNode,
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
@@ -119,11 +119,11 @@ fn main() {
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
         let params = setup_mint_prover();
-        save_params("mint.params", &params);
+        save_params("mint.params", &params).unwrap();
     }
     if !Path::new("spend.params").exists() {
         let params = setup_spend_prover();
-        save_params("spend.params", &params);
+        save_params("spend.params", &params).unwrap();
     }
 
     // Load trusted setup parameters
@@ -183,11 +183,11 @@ fn main() {
     {
         // Here we simulate 5 fake random coins, adding them to our tree.
         let tree = &mut state.tree;
-        for i in 0..5 {
+        for _i in 0..5 {
             // Don't worry about any of the code in this block
             // We're just filling the tree with fake coins
             let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-            tree.append(cmu);
+            tree.append(cmu).unwrap();
 
             let root = tree.root();
             state.merkle_roots.push(root.into());
@@ -218,12 +218,12 @@ fn main() {
         assert_eq!(tree.root(), witness.root());
 
         // Add some more random coins in
-        for i in 0..10 {
+        for _i in 0..10 {
             // Don't worry about any of the code in this block
             // We're just filling the tree with fake coins
             let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-            tree.append(cmu);
-            witness.append(cmu);
+            tree.append(cmu).unwrap();
+            witness.append(cmu).unwrap();
             assert_eq!(tree.root(), witness.root());
 
             let root = tree.root();

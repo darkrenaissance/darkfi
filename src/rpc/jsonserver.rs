@@ -101,6 +101,7 @@ pub async fn start(
     Ok(())
 }
 // json RPC server goes here
+#[allow(dead_code)]
 pub struct RpcInterface {
     p2p: Arc<net::P2p>,
     pub started: Mutex<bool>,

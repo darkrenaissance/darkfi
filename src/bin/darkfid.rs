@@ -2,7 +2,7 @@ use async_std::sync::Arc;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab, SlabStore};
+use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::crypto::{
     coin::Coin,
     load_params,
@@ -13,11 +13,11 @@ use drk::crypto::{
     save_params, setup_mint_prover, setup_spend_prover,
 };
 use drk::serial::Decodable;
-use drk::service::{ClientProgramOptions, GatewayClient, Subscriber};
+use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::WalletDB;
 use drk::{tx, Result};
-use rusqlite::{named_params, Connection};
+use rusqlite::Connection;
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -26,6 +26,7 @@ use easy_parallel::Parallel;
 use ff::Field;
 use std::path::Path;
 
+#[allow(dead_code)]
 pub struct State {
     // The entire merkle tree state
     tree: CommitmentTree<MerkleNode>,
@@ -153,19 +154,13 @@ fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     }
 }
 
-pub async fn subscribe(
-    mut subscriber: Subscriber,
-    slabstore: Arc<SlabStore>,
-    mut state: State,
-) -> Result<()> {
+pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: State) -> Result<()> {
     loop {
-        let slab = subscriber.fetch::<Slab>().await?;
+        let slab = gateway_slabs_sub.recv().await?;
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
         let update = state_transition(&state, tx)?;
         state.apply(update)?;
-
-        slabstore.put(slab)?;
     }
 }
 
@@ -177,11 +172,6 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
     let rocks = Rocks::new(database_path)?;
 
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
-    // create gateway client
-    let mut client = GatewayClient::new(connect_addr, slabstore)?;
-
-    // start gateway client
-    client.start().await?;
 
     //
     // Auto create trusted ceremony parameters if they don't exist
@@ -221,10 +211,16 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
         secrets: vec![secret.clone()],
     };
 
-    // start subscribe to gateway publisher
-    let subscriber = GatewayClient::start_subscriber(sub_addr).await?;
-    let slabstore = client.get_slabstore();
-    let subscribe_task = executor.spawn(subscribe(subscriber, slabstore, state));
+    // create gateway client
+    let mut client = GatewayClient::new(connect_addr, slabstore)?;
+
+    // start subscribing
+    let gateway_slabs_sub: GatewaySlabsSubscriber =
+        client.start_subscriber(sub_addr, executor.clone()).await?;
+    let subscribe_task = executor.spawn(subscribe(gateway_slabs_sub, state));
+
+    // start gateway client
+    client.start().await?;
 
     subscribe_task.cancel().await;
     Ok(())
@@ -273,63 +269,199 @@ fn main() -> Result<()> {
     result
 }
 
-//
-//// $ cargo test --bin darkfid
-//// run 10 clients simultaneously
-//#[cfg(test)]
-//mod test {
-//
-//    #[test]
-//    fn test_darkfid_client() {
-//        use std::path::Path;
-//
-//        use drk::blockchain::{Rocks, Slab};
-//        use drk::service::GatewayClient;
-//
-//        use log::*;
-//        use rand::Rng;
-//        use simplelog::*;
-//
-//        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-//
-//        CombinedLogger::init(vec![
-//            TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),
-//            WriteLogger::new(
-//                LevelFilter::Debug,
-//                Config::default(),
-//                std::fs::File::create(Path::new("/tmp/dar.log")).unwrap(),
-//            ),
-//        ])
-//        .unwrap();
-//
-//        let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
-//
-//        for _ in 0..10 {
-//            let thread = std::thread::spawn(|| {
-//                smol::future::block_on(async move {
-//                    let mut rng = rand::thread_rng();
-//                    let rnd: u32 = rng.gen();
-//
-//                    let path_str = format!("database_{}.db", rnd);
-//                    let database_path = Path::new(path_str.as_str());
-//                    let rocks = Rocks::new(database_path.clone()).unwrap();
-//
-//                    // create new client and use different slabstore
-//                    let mut client =
-//                        GatewayClient::new("127.0.0.1:3333".parse().unwrap(), rocks).unwrap();
-//
-//                    // start client
-//                    client.start().await.unwrap();
-//
-//                    // sending slab
-//                    let _slab = Slab::new("testcoin".to_string(), rnd.to_le_bytes().to_vec());
-//                    client.put_slab(_slab).await.unwrap();
-//                })
-//            });
-//            thread_pools.push(thread);
-//        }
-//        for t in thread_pools {
-//            t.join().unwrap();
-//        }
-//    }
-//}
+//// $ cargo test test_ten_clients_simultaneously --bin darkfid
+//this will run 10 clients simultaneously
+
+//// $ cargo test test_subscriber --bin darkfid
+// Run Client A and send 10 slabs
+// Client B should receive 10 slabs from subscriber
+#[cfg(test)]
+mod test {
+
+    use std::net::SocketAddr;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
+    use drk::service::{GatewayClient, GatewaySlabsSubscriber};
+
+    use async_executor::Executor;
+    use easy_parallel::Parallel;
+    use log::*;
+    use rand::Rng;
+    use simplelog::*;
+
+    pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, id: String) {
+        loop {
+            gateway_slabs_sub.recv().await.unwrap();
+            info!("Client {}: update state", id);
+        }
+    }
+
+    fn setup_log() {
+        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+
+        CombinedLogger::init(vec![
+            TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed).unwrap(),
+            WriteLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                std::fs::File::create(Path::new("/tmp/dar.log")).unwrap(),
+            ),
+        ])
+        .unwrap();
+    }
+
+    #[test]
+    fn test_ten_clients_simultaneously() {
+        setup_log();
+
+        let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
+
+        for _ in 0..10 {
+            let thread = std::thread::spawn(|| {
+                let ex = Arc::new(Executor::new());
+                let (signal, shutdown) = async_channel::unbounded::<()>();
+
+                let ex2 = ex.clone();
+
+                let (_, _) = Parallel::new()
+                    // Run four executor threads.
+                    .each(0..3, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+                    // Run the main future on the current thread.
+                    .finish(|| {
+                        smol::future::block_on(async move {
+                            let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+                            let sub_addr: SocketAddr = "127.0.0.1:4444".parse().unwrap();
+
+                            let mut rng = rand::thread_rng();
+                            let rnd: u32 = rng.gen();
+                            let path_str = format!("database_{}.db", rnd);
+
+                            let database_path = Path::new(path_str.as_str());
+                            let rocks = Rocks::new(database_path.clone()).unwrap();
+
+                            let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
+                            // create gateway client
+                            let mut client = GatewayClient::new(connect_addr, slabstore).unwrap();
+
+                            // start subscribing
+                            let gateway_slabs_sub: GatewaySlabsSubscriber =
+                                client.start_subscriber(sub_addr, ex.clone()).await.unwrap();
+                            ex.clone()
+                                .spawn(subscribe(gateway_slabs_sub, rnd.clone().to_string()))
+                                .detach();
+
+                            // start gateway client
+                            client.start().await.unwrap();
+
+                            let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+                            client.put_slab(slab).await.unwrap();
+                        });
+                        drop(signal);
+                        Ok::<(), drk::Error>(())
+                    });
+            });
+            thread_pools.push(thread);
+        }
+        for t in thread_pools {
+            t.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_subscriber() {
+        setup_log();
+
+        let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
+
+        // Client A
+        let thread = std::thread::spawn(|| {
+            smol::future::block_on(async move {
+                let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+
+                let mut rng = rand::thread_rng();
+                let rnd: u32 = rng.gen();
+                let path_str = format!("database_{}.db", rnd);
+
+                let database_path = Path::new(path_str.as_str());
+                let rocks = Rocks::new(database_path.clone()).unwrap();
+
+                let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
+                // create gateway client
+                let mut client = GatewayClient::new(connect_addr, slabstore).unwrap();
+
+                // start gateway client
+                client.start().await.unwrap();
+
+                let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+            });
+        });
+        // Client B
+        let thread2 = std::thread::spawn(|| {
+            let ex = Arc::new(Executor::new());
+            let (signal, shutdown) = async_channel::unbounded::<()>();
+
+            let ex2 = ex.clone();
+
+            let (_, _) = Parallel::new()
+                // Run four executor threads.
+                .each(0..3, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+                // Run the main future on the current thread.
+                .finish(|| {
+                    smol::future::block_on(async move {
+                        let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+                        let sub_addr: SocketAddr = "127.0.0.1:4444".parse().unwrap();
+
+                        let mut rng = rand::thread_rng();
+                        let rnd: u32 = rng.gen();
+                        let path_str = format!("database_{}.db", rnd);
+
+                        let database_path = Path::new(path_str.as_str());
+                        let rocks = Rocks::new(database_path.clone()).unwrap();
+
+                        let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
+                        // create gateway client
+                        let mut client = GatewayClient::new(connect_addr, slabstore).unwrap();
+
+                        // start subscribing
+                        let gateway_slabs_sub: GatewaySlabsSubscriber =
+                            client.start_subscriber(sub_addr, ex.clone()).await.unwrap();
+
+                        ex.clone()
+                            .spawn(subscribe(gateway_slabs_sub, "B".to_string()))
+                            .detach();
+
+                        // start gateway client
+                        client.start().await.unwrap();
+
+                        // sleep for 2 seconds
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                    });
+                    drop(signal);
+                    Ok::<(), drk::Error>(())
+                });
+        });
+
+        thread_pools.push(thread);
+        thread_pools.push(thread2);
+
+        for t in thread_pools {
+            t.join().unwrap();
+        }
+    }
+}

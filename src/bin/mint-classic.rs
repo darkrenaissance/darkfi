@@ -18,7 +18,7 @@ fn main() {
 
     {
         let params = setup_mint_prover();
-        save_params("mint.params", &params);
+        save_params("mint.params", &params).unwrap();
     }
     let (params, pvk) = load_params("mint.params").expect("params should load");
 

@@ -138,22 +138,22 @@ fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
     }
 }
 
-fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
+fn eval(mut _ast: MalVal, mut env: Env) -> MalRet {
     let ret: MalRet;
 
     let start = Instant::now();
 
     'tco: loop {
         // TODO check DEBUG symbol on env
-        println!("debug eval \t {:?} \t {:?}", ast, start.elapsed());
-        ret = match ast.clone() {
+        println!("debug eval \t {:?} \t {:?}", _ast, start.elapsed());
+        ret = match _ast.clone() {
             List(l, _) => {
                 if l.len() == 0 {
-                    return Ok(ast);
+                    return Ok(_ast);
                 }
-                match macroexpand(ast.clone(), &env) {
+                match macroexpand(_ast.clone(), &env) {
                     (true, Ok(new_ast)) => {
-                        ast = new_ast;
+                        _ast = new_ast;
                         continue 'tco;
                     }
                     (_, Err(e)) => return Err(e),
@@ -161,7 +161,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                 }
 
                 if l.len() == 0 {
-                    return Ok(ast);
+                    return Ok(_ast);
                 }
                 let a0 = &l[0];
                 match a0 {
@@ -192,7 +192,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 return error("let* with non-List bindings");
                             }
                         };
-                        ast = a2;
+                        _ast = a2;
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "let*" => {
@@ -219,13 +219,13 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 return error("let* with non-List bindings");
                             }
                         };
-                        ast = a2;
+                        _ast = a2;
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "quote" => Ok(l[1].clone()),
                     Sym(ref a0sym) if a0sym == "quasiquoteexpand" => Ok(quasiquote(&l[1])),
                     Sym(ref a0sym) if a0sym == "quasiquote" => {
-                        ast = quasiquote(&l[1]);
+                        _ast = quasiquote(&l[1]);
                         continue 'tco;
                     }
                     Sym(ref a0sym) if a0sym == "defmacro!" => {
@@ -242,7 +242,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                 &env,
                                 a1.clone(),
                                 MalFunc {
-                                    eval: eval,
+                                    eval,
                                     ast: ast.clone(),
                                     env: env.clone(),
                                     params: params.clone(),
@@ -282,7 +282,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "do" => {
                         match eval_ast(&list!(l[1..l.len() - 1].to_vec()), &env)? {
                             List(_, _) => {
-                                ast = l.last().unwrap_or(&Nil).clone();
+                                _ast = l.last().unwrap_or(&Nil).clone();
                                 continue 'tco;
                             }
                             _ => error("invalid do form"),
@@ -292,7 +292,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         match eval(l[1].clone(), env.clone())? {
                             MalVal::Int(v) => {
                                 for _i in 0..v {
-                                    ast = eval_ast(&l[2], &env)?;
+                                    _ast = eval_ast(&l[2], &env)?;
                                 }
                                 Ok(Nil)
                             }
@@ -303,12 +303,12 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let cond = eval(l[1].clone(), env.clone())?;
                         match cond {
                             Bool(false) | Nil if l.len() >= 4 => {
-                                ast = l[3].clone();
+                                _ast = l[3].clone();
                                 continue 'tco;
                             }
                             Bool(false) | Nil => Ok(Nil),
                             _ if l.len() >= 3 => {
-                                ast = l[2].clone();
+                                _ast = l[2].clone();
                                 continue 'tco;
                             }
                             _ => Ok(Nil),
@@ -318,16 +318,16 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "fn*" => {
                         let (a1, a2) = (l[1].clone(), l[2].clone());
                         Ok(MalFunc {
-                            eval: eval,
+                            eval,
                             ast: Rc::new(a2),
-                            env: env,
+                            env,
                             params: Rc::new(a1),
                             is_macro: false,
                             meta: Rc::new(Nil),
                         })
                     }
                     Sym(ref a0sym) if a0sym == "eval" => {
-                        ast = eval(l[1].clone(), env.clone())?;
+                        _ast = eval(l[1].clone(), env.clone())?;
                         while let Some(ref e) = env.clone().outer {
                             env = e.clone();
                         }
@@ -336,7 +336,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(ref a0sym) if a0sym == "setup" => {
                         let a1 = l[1].clone();
                         // todo
-                        ast = eval(a1.clone(), env.clone())?;
+                        _ast = eval(a1.clone(), env.clone())?;
                         //                        let _pvk = setup(a1.clone(), env.clone())?;
                         continue 'tco;
                     }
@@ -347,7 +347,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         prove(a1.clone(), env.clone())
                     }
                     Sym(ref a0sym) if a0sym == "kill" => {
-                        error(&format!("KILL at: {:?}", ast).to_string())
+                        error(&format!("KILL at: {:?}", _ast).to_string())
                     }
                     Sym(ref a0sym) if a0sym == "alloc-const" => {
                         let start = Instant::now();
@@ -536,7 +536,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 
                         Ok(MalVal::Str("enforce-eof".to_string()))
                     }
-                    _ => match eval_ast(&ast, &env)? {
+                    _ => match eval_ast(&_ast, &env)? {
                         List(ref el, _) => {
                             let ref f = el[0].clone();
                             let args = el[1..].to_vec();
@@ -551,7 +551,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     let a = &**mast;
                                     let p = &**params;
                                     env = env_bind(Some(menv.clone()), p.clone(), args)?;
-                                    ast = a.clone();
+                                    _ast = a.clone();
                                     continue 'tco;
                                 }
                                 _ => {
@@ -565,7 +565,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     },
                 }
             }
-            _ => eval_ast(&ast, &env),
+            _ => eval_ast(&_ast, &env),
         };
 
         break;
@@ -628,7 +628,7 @@ pub fn get_allocations_nested(env: &Env, key: &str) -> RefCell<HashMap<String, M
     }
 }
 
-pub fn setup(_ast: MalVal, env: Env) -> Result<VerifyKeyParams, MalErr> {
+pub fn setup(_ast: MalVal, _env: Env) -> Result<VerifyKeyParams, MalErr> {
     let start = Instant::now();
     let c = LispCircuit {
         params: HashMap::default(),
@@ -674,7 +674,7 @@ pub fn prove(_ast: MalVal, env: Env) -> MalRet {
     };
     let proof = groth16::create_random_proof(circuit, params.as_ref().unwrap(), &mut OsRng)?;
     let mut vec_input = vec![];
-    for (k, val) in allocs_input.borrow_mut().iter() {
+    for (_k, val) in allocs_input.borrow_mut().iter() {
         match val {
             MalVal::Str(v) => {
                 vec_input.push(bls12_381::Scalar::from_string(&v.to_string()));

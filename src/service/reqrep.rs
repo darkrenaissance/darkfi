@@ -144,7 +144,12 @@ impl ReqProtocol {
         Ok(())
     }
 
-    pub async fn request(&mut self, command: u8, data: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    pub async fn request(
+        &mut self,
+        command: u8,
+        data: Vec<u8>,
+        handle_error: &dyn Fn(u32),
+    ) -> Result<Option<Vec<u8>>> {
         let request = Request::new(command, data);
         let req = serialize(&request);
         let req = bytes::Bytes::from(req);
@@ -168,9 +173,10 @@ impl ReqProtocol {
                 reply.has_error()
             );
 
-            // TODO return error status code instead of None
             if reply.has_error() {
-                warn!("Reply has an error {}", reply.get_error());
+                // TODO return error status code instead of None
+                // this is temporary
+                handle_error(reply.get_error());
                 return Ok(None);
             }
 
