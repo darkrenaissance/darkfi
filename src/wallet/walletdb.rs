@@ -8,7 +8,8 @@ use std::path::PathBuf;
 
 // TODO: make this more generic to remove boiler plate. e.g. create_wallet(cashier) instead of
 // create_cashier_wallet
-pub struct WalletDB {}
+pub struct WalletDB {
+}
 
 impl WalletDB {
     pub async fn new(path: PathBuf) -> Result<()> {
@@ -31,10 +32,10 @@ impl WalletDB {
     pub async fn save_key(path: PathBuf, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
         debug!(target: "key_gen", "Generating keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        debug!(target: "adapter", "key_gen() [Generating public key...]");
+        debug!(target: "adapter", "key_gen() [Saving public key...]");
         connect.execute(
-            "INSERT INTO keys(key_private, key_public)
-            VALUES (:privkey, :pubkey)",
+            "INSERT INTO keys(key_id, key_private, key_public)
+            VALUES (NULL, :privkey, :pubkey)",
             named_params! {
             ":privkey": privkey,
              ":pubkey": pubkey
@@ -77,8 +78,8 @@ impl WalletDB {
         let connect = Connection::open(&path).expect("Failed to connect to database.");
         // Write keys to database
         connect.execute(
-            "INSERT INTO cashier(key_public)
-            VALUES (:pubkey)",
+            "INSERT INTO cashier(key_id, key_public)
+            VALUES (NULL, :pubkey)",
             named_params! {":pubkey": pubkey},
         )?;
         Ok(())
