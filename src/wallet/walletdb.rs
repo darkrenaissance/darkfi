@@ -8,8 +8,7 @@ use std::path::PathBuf;
 
 // TODO: make this more generic to remove boiler plate. e.g. create_wallet(cashier) instead of
 // create_cashier_wallet
-pub struct WalletDB {
-}
+pub struct WalletDB {}
 
 impl WalletDB {
     pub async fn new(path: PathBuf) -> Result<()> {
