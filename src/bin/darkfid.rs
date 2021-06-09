@@ -200,7 +200,6 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
     let state = State {
-
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,

@@ -16,7 +16,9 @@ impl RpcAdapter {
         debug!(target: "adapter", "key_gen() [START]");
         let (public, private) = WalletDB::create_key().await;
         let path = WalletDB::path("wallet.db").expect("Failed to get path");
-        WalletDB::save_key(path, public, private).await.expect("Failed to save key");
+        WalletDB::save_key(path, public, private)
+            .await
+            .expect("Failed to save key");
         Ok(())
     }
 

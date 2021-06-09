@@ -28,19 +28,15 @@ impl WalletDB {
         Ok(path)
     }
 
-    // unique index in sql
-    // unique index attribute will generate new ID every new table
     pub async fn save_key(path: PathBuf, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
         debug!(target: "key_gen", "Generating keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        // TODO: ID should not be fixed
-        let id = 0;
         debug!(target: "adapter", "key_gen() [Generating public key...]");
         connect.execute(
-            "INSERT INTO keys(key_id, key_private, key_public)
-            VALUES (:id, :privkey, :pubkey)",
-            named_params! {":id": id,
-             ":privkey": privkey,
+            "INSERT INTO keys(key_private, key_public)
+            VALUES (:privkey, :pubkey)",
+            named_params! {
+            ":privkey": privkey,
              ":pubkey": pubkey
             },
         )?;
@@ -60,7 +56,6 @@ impl WalletDB {
     pub async fn get(path: PathBuf) -> Result<()> {
         debug!(target: "get_cash_public", "Returning cashier keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let _id = 0;
         let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
         let key_iter = stmt
             .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
@@ -80,14 +75,11 @@ impl WalletDB {
         debug!(target: "save_cash_key", "Save cashier keys...");
         //let path = Self::wallet_path();
         let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let id = 0;
         // Write keys to database
         connect.execute(
-            "INSERT INTO cashier(key_id, key_public)
-            VALUES (:id, :pubkey)",
-            named_params! {":id": id,
-             ":pubkey": pubkey
-            },
+            "INSERT INTO cashier(key_public)
+            VALUES (:pubkey)",
+            named_params! {":pubkey": pubkey},
         )?;
         Ok(())
     }
