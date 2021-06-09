@@ -1,7 +1,7 @@
 use crate::wallet::WalletDB;
-use crate::{Error, Result};
+use crate::Result;
 use log::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 // Dummy adapter for now

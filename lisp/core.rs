@@ -705,12 +705,12 @@ fn seq(a: MalArgs) -> MalRet {
     }
 }
 
-fn gen_rand(a: MalArgs) -> MalRet {
+fn gen_rand(_a: MalArgs) -> MalRet {
     let mut rng = rand::thread_rng();
     Ok(MalVal::Int(rng.gen::<i64>()))
 }
 
-fn scalar_rnd(a: MalArgs) -> MalRet {
+fn scalar_rnd(_a: MalArgs) -> MalRet {
     let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let value = bls12_381::Scalar::from_bytes(&randomness_value.to_bytes());
     Ok(MalVal::ZKScalar(value.unwrap()))

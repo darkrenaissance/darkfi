@@ -16,13 +16,13 @@ impl Coin {
 }
 
 impl Encodable for Coin {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         Ok(self.repr.encode(s)?)
     }
 }
 
 impl Decodable for Coin {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
         Ok(Self {
             repr: Decodable::decode(d)?,
         })

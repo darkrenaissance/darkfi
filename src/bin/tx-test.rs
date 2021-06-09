@@ -1,29 +1,25 @@
-use async_std::sync;
 use bellman::groth16;
 use bls12_381::Bls12;
-use drk::{Error, Result};
-use ff::{Field, PrimeField};
-use log::*;
-use rand::rngs::OsRng;
+
 //use rocksdb::DB;
-use rusqlite::{named_params, Connection};
+
 //use std::fs::File;
-use rocksdb::{IteratorMode, Options, DB};
+
 use std::path::Path;
 
 use drk::crypto::{
     coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
-    merkle_node::{hash_coin, MerkleNode},
+    merkle_node::MerkleNode,
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use drk::serial::{Decodable, Encodable};
-use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::wallet::walletdb::WalletDB;
 
+use drk::state::{ProgramState, StateUpdate};
+
+#[allow(dead_code)]
 struct MemoryState {
     // The entire merkle tree state
     tree: CommitmentTree<MerkleNode>,
@@ -52,7 +48,7 @@ struct MemoryState {
 
 impl ProgramState for MemoryState {
     // Vec<u8> for keys
-    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
+    fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
         //let path = WalletDB::wallet_path();
         //let connect = Connection::open(&path).expect("Failed to connect to database.");
         //let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
@@ -93,6 +89,7 @@ impl ProgramState for MemoryState {
     }
 }
 
+#[allow(dead_code)]
 impl MemoryState {
     fn apply(&mut self, mut update: StateUpdate) {
         // Extend our list of nullifiers with the ones from the update
@@ -135,7 +132,7 @@ impl MemoryState {
     }
 
     // sql
-    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
+    fn try_decrypt_note(&self, _ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
         //debug!(target: "adapter", "try_decrypt_note() [START]");
         //let path = WalletDB::wallet_path();
         //debug!(target: "adapter", "try_decrypt_note() [FOUND PATH]");
@@ -176,8 +173,8 @@ fn main() {
     }
 
     // Load trusted setup parameters
-    let (mint_params, mint_pvk) = load_params("mint.params").expect("params should load");
-    let (spend_params, spend_pvk) = load_params("spend.params").expect("params should load");
+    let (_mint_params, _mint_pvk) = load_params("mint.params").expect("params should load");
+    let (_spend_params, _spend_pvk) = load_params("spend.params").expect("params should load");
 
     // Where is cashier private key stored? Does node have its own wallet schema
     // Cashier creates a secret key

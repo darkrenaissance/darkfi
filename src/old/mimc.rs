@@ -56,19 +56,19 @@ fn mimc<Scalar: PrimeField>(mut xl: Scalar, mut xr: Scalar, constants: &[Scalar]
     xl
 }
 
-macro_rules! from_slice {
-    ($data:expr, $len:literal) => {{
-        let mut array = [0; $len];
-        // panics if not enough data
-        let bytes = &$data[..array.len()];
-        assert_eq!(bytes.len(), array.len());
-        for (a, b) in array.iter_mut().rev().zip(bytes.iter()) {
-            *a = *b;
-        }
-        //array.copy_from_slice(bytes.iter().rev());
-        array
-    }};
-}
+//macro_rules! from_slice {
+//    ($data:expr, $len:literal) => {{
+//        let mut array = [0; $len];
+//        // panics if not enough data
+//        let bytes = &$data[..array.len()];
+//        assert_eq!(bytes.len(), array.len());
+//        for (a, b) in array.iter_mut().rev().zip(bytes.iter()) {
+//            *a = *b;
+//        }
+//        //array.copy_from_slice(bytes.iter().rev());
+//        array
+//    }};
+//}
 
 /// This is our demo circuit for proving knowledge of the
 /// preimage of a MiMC hash invocation.

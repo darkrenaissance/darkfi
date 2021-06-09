@@ -17,8 +17,6 @@ enum GatewayError {
     IndexNotExist,
 }
 
-
-
 #[repr(u8)]
 enum GatewayCommand {
     PutSlab,
@@ -231,7 +229,11 @@ impl GatewayClient {
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Slab>> {
         let rep = self
             .protocol
-            .request(GatewayCommand::GetSlab as u8, serialize(&index), &handle_error)
+            .request(
+                GatewayCommand::GetSlab as u8,
+                serialize(&index),
+                &handle_error,
+            )
             .await?;
 
         if let Some(slab) = rep {
@@ -305,7 +307,6 @@ impl GatewayClient {
         }
     }
 }
-
 
 fn handle_error(status_code: u32) {
     match status_code {

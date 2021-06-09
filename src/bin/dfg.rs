@@ -192,6 +192,7 @@ const VERTICES: &[model::ModelVertex] = &[
 //const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
+#[allow(dead_code)]
 struct State {
     surface: wgpu::Surface,
     device: wgpu::Device,

@@ -53,6 +53,7 @@ struct SpendRevealedValues {
     merkle_root: bls12_381::Scalar,
 }
 
+#[allow(dead_code)]
 impl SpendRevealedValues {
     fn compute(
         value: u64,
@@ -185,7 +186,7 @@ fn main() {
 
     {
         let params = setup_spend_prover();
-        save_params("spend.params", &params);
+        save_params("spend.params", &params).unwrap();
     }
     let (params, pvk) = load_params("spend.params").expect("params should load");
 

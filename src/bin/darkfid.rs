@@ -26,6 +26,7 @@ use easy_parallel::Parallel;
 use ff::Field;
 use std::path::Path;
 
+#[allow(dead_code)]
 pub struct State {
     // The entire merkle tree state
     tree: CommitmentTree<MerkleNode>,

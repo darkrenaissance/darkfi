@@ -16,13 +16,13 @@ impl Nullifier {
 }
 
 impl Encodable for Nullifier {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         Ok(self.repr.encode(s)?)
     }
 }
 
 impl Decodable for Nullifier {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
         Ok(Self {
             repr: Decodable::decode(d)?,
         })
