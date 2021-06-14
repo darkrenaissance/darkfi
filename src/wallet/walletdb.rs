@@ -1,4 +1,6 @@
 use crate::serial;
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
+use crate::Error;
 use crate::Result;
 use ff::Field;
 use log::*;
@@ -6,8 +8,6 @@ use rand::rngs::OsRng;
 use rusqlite::{named_params, Connection};
 use std::path::PathBuf;
 
-// TODO: make this more generic to remove boiler plate. e.g. create_wallet(cashier) instead of
-// create_cashier_wallet
 pub struct WalletDB {}
 
 impl WalletDB {
@@ -19,10 +19,9 @@ impl WalletDB {
 
     pub fn path(wallet: &str) -> Result<PathBuf> {
         let mut path = dirs::home_dir()
-            .expect("cannot find home directory.")
+            .ok_or(Error::PathNotFound)?
             .as_path()
             .join(".config/darkfi/");
-        // add wallet specifier
         path.push(wallet);
         debug!(target: "walletdb", "CREATE PATH {:?}", path);
         Ok(path)
@@ -53,22 +52,36 @@ impl WalletDB {
         (pubkey, privkey)
     }
 
-    pub async fn get(path: PathBuf) -> Result<()> {
+    // match statement here
+    pub async fn get_public(path: PathBuf) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let connect = Connection::open(&path).expect("Failed to connect to database.");
+        // does use unwrap here
         let mut stmt = connect.prepare("SELECT key_public FROM keys").unwrap();
-        let key_iter = stmt
-            .query_map::<Vec<u8>, _, _>([], |row| row.get(0))
-            .unwrap();
+        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0)).unwrap();
         let mut pub_keys = Vec::new();
         for key in key_iter {
             pub_keys.push(key.unwrap());
         }
-        let key = match pub_keys.pop() {
-            Some(key_found) => println!("{:?}", key_found),
-            None => println!("No public key found"),
-        };
-        Ok(key)
+        Ok(pub_keys)
+    }
+
+    // match statement here
+    pub fn get_private(path: PathBuf) -> Result<Vec<u8>> {
+        debug!(target: "get", "Returning keys...");
+        let connect = Connection::open(&path).expect("Failed to connect to database.");
+        let mut stmt = connect.prepare("SELECT key_private FROM keys").unwrap();
+        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0)).unwrap();
+        let mut keys = Vec::new();
+        for key in key_iter {
+            keys.push(key.unwrap());
+        }
+        Ok(keys)
+    }
+
+    pub async fn get_value_deserialized<D: Decodable>(key: Vec<u8>) -> Result<D> {
+        let v: D = deserialize(&key)?;
+        Ok(v)
     }
 
     pub async fn save(path: PathBuf, pubkey: Vec<u8>) -> Result<()> {

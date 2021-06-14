@@ -10,6 +10,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     Io(std::io::ErrorKind),
     /// VarInt was encoded in a non-minimal way
+    PathNotFound,
     NonMinimalVarInt,
     /// Parsing error
     ParseFailed(&'static str),
@@ -47,6 +48,7 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match *self {
+            Error::PathNotFound => f.write_str("Cannot find home directory"),
             Error::Io(ref err) => write!(f, "io error:{:?}", err),
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
