@@ -25,7 +25,7 @@ async fn start2(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<
             protocol.start(executor2).await?;
             Ok::<(), drk::Error>(())
         }));
-    }
+//    }
 
     let mut seed_protocols = Vec::with_capacity(options.seed_addrs.len());
 
@@ -192,7 +192,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    let adapter = RpcAdapter::new();
+    let adapter = RpcAdapter::new("wallet.db")?;
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
     let ex2 = ex.clone();

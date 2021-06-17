@@ -181,7 +181,9 @@ impl RpcInterface {
         });
         io.add_method("cash_key_gen", move |_| async move {
             println!("Key generation method called...");
-            RpcAdapter::cash_key_gen().await.expect("Failed to generate key");
+            RpcAdapter::cash_key_gen()
+                .await
+                .expect("Failed to generate key");
             Ok(jsonrpc_core::Value::String(
                 "Attempted key generation".into(),
             ))

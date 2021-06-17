@@ -12,11 +12,11 @@ use drk::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use drk::serial::Decodable;
+use drk::serial::{deserialize, Decodable};
 use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::WalletDB;
-use drk::{tx, Result};
+use drk::{tx, Result, Error};
 use rusqlite::Connection;
 
 use async_executor::Executor;
@@ -49,14 +49,13 @@ pub struct State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        // Still needs to be tested
-        let path = WalletDB::path("cashier.db").expect("Failed to get path");
-        let connect = Connection::open(&path).expect("Failed to connect to database.");
-        let mut stmt = connect
-            .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-            .expect("Cannot generate statement.");
-        // test this
-        stmt.exists([1i32]).unwrap()
+        //let path = WalletDB::path("cashier.db").expect("Failed to find path");
+        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+        //let mut stmt = connect
+        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
+        //    .expect("Cannot generate statement.");
+        //stmt.exists([1i32]).unwrap()
+        0
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -97,52 +96,60 @@ impl State {
             // Keep track of all merkle roots that have existed
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
-            // own coins is sql
             // Also update all the coin witnesses
             for (_, _, _, witness) in self.own_coins.iter_mut() {
                 witness.append(node).expect("append to witness");
             }
 
-            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
-                // We need to keep track of the witness for this coin.
-                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-                // Just as we update the merkle tree with every new coin, so we do the same with
-                // the witness.
+           // if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+           //     // We need to keep track of the witness for this coin.
+           //     // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+           //     // Just as we update the merkle tree with every new coin, so we do the same with
+           //     // the witness.
 
-                // Derive the current witness from the current tree.
-                // This is done right after we add our coin to the tree (but before any other
-                // coins are added)
+           //     // Derive the current witness from the current tree.
+           //     // This is done right after we add our coin to the tree (but before any other
+           //     // coins are added)
 
-                // Make a new witness for this coin
-                let witness = IncrementalWitness::from_tree(&self.tree);
-                self.own_coins.push((coin, note, secret, witness));
-            }
+           //     // Make a new witness for this coin
+           //     let witness = IncrementalWitness::from_tree(&self.tree);
+           //     self.own_coins.push((coin, note, secret, witness));
+           // }
         }
         Ok(())
     }
 
     // sql
-    fn try_decrypt_note(&self, _ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        //let connect = Connection::open(&path).expect("Failed to connect to database.");
+    async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
+        //let path = WalletDB::path("wallet.db")?;
+        //let vec = WalletDB::get_private(path)?;
+        //let secret = WalletDB::get_value_deserialized(vec).await?;
         //let mut stmt = connect.prepare("SELECT key_private FROM keys").ok()?;
         //let key_iter = stmt.query_map::<String, _, _>([], |row| row.get(0)).ok()?;
         //for key in key_iter {
-        //    println!("Found key {:?}", key.unwrap());
+        //    println!("Foun//d key {:?}", key.unwrap());
         //}
         //
-        //// Loop through all our secret keys...
-
-        //for secret in &self.secrets {
-        //    // ... attempt to decrypt the note ...
-        //    match ciphertext.decrypt(secret) {
-        //        Ok(note) => {
-        //            // ... and return the decrypted note for this coin.
-        //            return Some((note, secret.clone()));
-        //        }
-        //        Err(_) => {}
+        //match stmt {
+        //let mut stmt = connect
+        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
+            //.expect("Cannot generate statement.");
+        // test this
+        //stmt.exists([1i32]).unwrap()
+        //    Some(v) => {
+        //        Ok(Some(v))
+        //    }
+        //    None => Ok(None),
+        //}
+        //match ciphertext.decrypt(&secret) {
+        //    Ok(note) => {
+        //        // ... and return the decrypted note for this coin.
+        //        return Some((note, secret.clone()));
+        //    }
+        //    Err(_) => {
+        //        println!("Cannot decrypt note! {}", err)
         //    }
         //}
-        // We weren't able to decrypt the note with any of our keys.
         None
     }
 }
