@@ -1,3 +1,4 @@
+// TODO: Add support for rusqlite error
 use rusqlite;
 use std::fmt;
 
@@ -40,6 +41,7 @@ pub enum Error {
     VerifyFailed,
     TryIntoError,
     TryFromError,
+    JsonRpcError(String),
     RocksdbError(String),
 }
 
@@ -66,6 +68,7 @@ impl fmt::Display for Error {
             Error::Groth16Error => f.write_str("Groth16 error"),
             Error::RusqliteError => f.write_str("Rusqlite error"),
             Error::OperationFailed => f.write_str("Operation failed"),
+
             Error::ConnectFailed => f.write_str("Connection failed"),
             Error::ConnectTimeout => f.write_str("Connection timed out"),
             Error::ChannelStopped => f.write_str("Channel stopped"),
@@ -79,6 +82,7 @@ impl fmt::Display for Error {
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
+            Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
         }
     }
 }
@@ -93,6 +97,12 @@ impl From<zeromq::ZmqError> for Error {
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())
+    }
+}
+
+impl From<jsonrpc_core::Error> for Error {
+    fn from(err: jsonrpc_core::Error) -> Error {
+        Error::JsonRpcError(err.to_string())
     }
 }
 

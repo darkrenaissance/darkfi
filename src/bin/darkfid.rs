@@ -16,7 +16,7 @@ use drk::serial::{deserialize, Decodable};
 use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::WalletDB;
-use drk::{tx, Result, Error};
+use drk::{tx, Error, Result};
 use rusqlite::Connection;
 
 use async_executor::Executor;
@@ -44,18 +44,18 @@ pub struct State {
     // Public key of the cashier
     cashier_public: jubjub::SubgroupPoint,
     // List of all our secret keys
+    wallet: Arc<WalletDB>,
     secrets: Vec<jubjub::Fr>,
 }
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        //let path = WalletDB::path("cashier.db").expect("Failed to find path");
-        //let connect = Connection::open(&path).expect("Failed to connect to database.");
-        //let mut stmt = connect
-        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-        //    .expect("Cannot generate statement.");
-        //stmt.exists([1i32]).unwrap()
-        0
+        let conn = Connection::open(&self.wallet.path).expect("Failed to connect to database");
+        let mut stmt = conn
+            .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
+            .expect("Cannot generate statement.");
+        stmt.exists([1i32]).expect("Failed to read database")
+        // do actual validity check
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -101,20 +101,20 @@ impl State {
                 witness.append(node).expect("append to witness");
             }
 
-           // if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
-           //     // We need to keep track of the witness for this coin.
-           //     // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-           //     // Just as we update the merkle tree with every new coin, so we do the same with
-           //     // the witness.
+            // if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+            //     // We need to keep track of the witness for this coin.
+            //     // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+            //     // Just as we update the merkle tree with every new coin, so we do the same with
+            //     // the witness.
 
-           //     // Derive the current witness from the current tree.
-           //     // This is done right after we add our coin to the tree (but before any other
-           //     // coins are added)
+            //     // Derive the current witness from the current tree.
+            //     // This is done right after we add our coin to the tree (but before any other
+            //     // coins are added)
 
-           //     // Make a new witness for this coin
-           //     let witness = IncrementalWitness::from_tree(&self.tree);
-           //     self.own_coins.push((coin, note, secret, witness));
-           // }
+            //     // Make a new witness for this coin
+            //     let witness = IncrementalWitness::from_tree(&self.tree);
+            //     self.own_coins.push((coin, note, secret, witness));
+            // }
         }
         Ok(())
     }
@@ -133,7 +133,7 @@ impl State {
         //match stmt {
         //let mut stmt = connect
         //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-            //.expect("Cannot generate statement.");
+        //.expect("Cannot generate statement.");
         // test this
         //stmt.exists([1i32]).unwrap()
         //    Some(v) => {
@@ -205,6 +205,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
 
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
+    let wallet = WalletDB::new("wallet.db")?;
 
     let state = State {
         tree: CommitmentTree::empty(),
@@ -213,6 +214,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
         own_coins: vec![],
         mint_pvk,
         spend_pvk,
+        wallet,
         cashier_public,
         secrets: vec![secret.clone()],
     };

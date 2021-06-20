@@ -9,44 +9,47 @@ def arg_parser(client):
                                           usage='%(prog)s [commands]',
                                           description="""DarkFi wallet
                                           command-line tool""")
-    subparser = parser.add_subparsers(help='All available commands', title="Commands", dest='cmd')
-    subparser.metavar = 'subcommands';
-    #create = subparser.add_parser('create', help='create a new X')
-    login = subparser.add_parser('login', help='wallet login')
-    test = subparser.add_parser('test', help='test wallet functions')
+    #subparser = parser.add_subparsers(help='All available commands', title="Commands", dest='cmd')
+    #subparser.metavar = 'subcommands';
+    #login = subparser.add_parser('login', help='wallet login')
+    ##test = subparser.add_parser('test', help='test wallet functions')
+    #new = subparser.add_parser('new', help='create something new')
 
-    #create.add_argument('-kp', '--keypair', dest='keypair', action='store_true', help='Create a new keypair')
-    #create.add_argument('-w', '--wallet', dest='wallet', action='store_true', help='Create a new wallet')
-    #create.add_argument('-c', '--cashier', dest='cashier',action='store_true', help='Create a cashier wallet')
+    #new.add_argument('-w', '--wallet', action='store_true', help='Create a new wallet')
+    #new.add_argument('-k', '--key', action='store_true', help='Create a new key')
+    #new.add_argument('-c', '--cashier', action='store_true', help='Create a cashier wallet')
 
-    login.add_argument('-u', '--username', type=str, required=True)
-    login.add_argument('-p', '--password', type=str, required=True)
+    #login.add_argument('-u', '--username', type=str, required=True)
+    #login.add_argument('-p', '--password', type=str, required=True)
 
-    test.add_argument('-k', '--key', dest='key', action='store_true', help='Test key')
-    test.add_argument('-p', '--path', dest='path', action='store_true', help='Test path')
-    test.add_argument('-pk', '--pkey', dest='pkey', action='store_true', help='Print test key')
-    test.add_argument('-ck', '--ckey', dest='ckey', action='store_true', help='Cashier test key')
-    test.add_argument('-i', '--info', dest='info', action='store_true', help='Request info from daemon')
-    test.add_argument('-hi', '--hello', dest='hello', action='store_true', help='Test hello')
-    test.add_argument('-w', '--wallet', dest='wallet', action='store_true', help='Create a new wallet')
-    test.add_argument('-c', '--cashier', dest='cashier',action='store_true', help='Create a cashier wallet')
+    ##test.add_argument('-k', '--key', dest='key', action='store_true', help='Test key')
+    ##test.add_argument('-p', '--path', dest='path', action='store_true', help='Test path')
+    ##test.add_argument('-pk', '--pkey', dest='pkey', action='store_true', help='Print test key')
+    ##test.add_argument('-ck', '--ckey', dest='ckey', action='store_true', help='Cashier test key')
+    ##test.add_argument('-w', '--wallet', dest='wallet', action='store_true', help='Create a new wallet')
+    ##test.add_argument('-c', '--cashier', dest='cashier',action='store_true', help='Create a cashier wallet')
 
+    parser.add_argument('-c', '--cashier', action='store_true', help='Create a cashier wallet')
+    parser.add_argument('-w', '--wallet', action='store_true', help='Create a new wallet')
+    parser.add_argument('-k', '--key', action='store_true', help='Test key')
+    parser.add_argument('-i', '--info', action='store_true', help='Request info from daemon')
+    parser.add_argument('-hi', '--hello', action='store_true', help='Test hello')
     parser.add_argument("-s", "--stop", action='store_true', help="Send a stop signal to the daemon")
     args = parser.parse_args()
 
-    if args.path:
-        try:
-            print("Testing path...")
-            client.test_path(client.payload)
-        except Exception:
-            raise
+    #if args.path:
+    #    try:
+    #        print("Testing path...")
+    #        client.test_path(client.payload)
+    #    except Exception:
+    #        raise
 
-    if args.pkey:
-        try:
-            print("Attempting to print cashier key...")
-            client.cashkey(client.payload)
-        except Exception:
-            raise
+    #if args.pkey:
+    #    try:
+    #        print("Attempting to print cashier key...")
+    #        client.cashkey(client.payload)
+    #    except Exception:
+    #        raise
 
     if args.key:
         try:
@@ -105,26 +108,26 @@ class DarkClient:
             "id": [],
         }
 
-    def ckeygen(self, payload):
-        payload['method'] = "cash_key_gen"
-        payload['jsonrpc'] = "2.0"
-        payload['id'] = "0"
-        ckeygen = self.__request(payload)
-        print(ckeygen)
+    #def ckeygen(self, payload):
+    #    payload['method'] = "cash_key_gen"
+    #    payload['jsonrpc'] = "2.0"
+    #    payload['id'] = "0"
+    #    ckeygen = self.__request(payload)
+    #    print(ckeygen)
 
-    def cashkey(self, payload):
-        payload['method'] = "get_cash_key"
-        payload['jsonrpc'] = "2.0"
-        payload['id'] = "0"
-        cashk = self.__request(payload)
-        print(cashk)
-        
-    def test_path(self, payload):
-        payload['method'] = "test_path"
-        payload['jsonrpc'] = "2.0"
-        payload['id'] = "0"
-        test = self.__request(payload)
-        print(test)
+    #def cashkey(self, payload):
+    #    payload['method'] = "get_cash_key"
+    #    payload['jsonrpc'] = "2.0"
+    #    payload['id'] = "0"
+    #    cashk = self.__request(payload)
+    #    print(cashk)
+    #    
+    #def test_path(self, payload):
+    #    payload['method'] = "test_path"
+    #    payload['jsonrpc'] = "2.0"
+    #    payload['id'] = "0"
+    #    test = self.__request(payload)
+    #    print(test)
         
     def key_gen(self, payload):
         payload['method'] = "key_gen"

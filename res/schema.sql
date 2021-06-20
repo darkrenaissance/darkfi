@@ -1,4 +1,3 @@
-.open wallet.db
 PRAGMA key = 'testkey';
 CREATE TABLE IF NOT EXISTS keys(
     key_id INTEGER PRIMARY KEY NOT NULL,
