@@ -14,13 +14,13 @@ pub struct WalletDB {
     pub path: PathBuf,
     secrets: Vec<jubjub::Fr>,
     cashier_secrets: Vec<jubjub::Fr>,
-    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
+    pub own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     cashier_public: jubjub::SubgroupPoint,
     //conn: Arc<Connection>,
 }
 
 impl WalletDB {
-    pub fn new(wallet: &str) -> Result<Arc<Self>> {
+    pub fn new(wallet: &str) -> Result<Self> {
         let path = Self::create_path(wallet)?;
         let conn = Connection::open(&path)?;
         //let conn = Arc::new(Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_NO_MUTEX)?);
@@ -30,14 +30,14 @@ impl WalletDB {
         let _public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
         conn.execute_batch(&contents)?;
-        Ok(Arc::new(Self {
+        Ok(Self {
             path,
             own_coins: vec![],
             cashier_secrets: vec![cashier_secret.clone()],
             secrets: vec![secret.clone()],
             cashier_public,
             //conn,
-        }))
+        })
     }
 
     fn create_path(wallet: &str) -> Result<PathBuf> {

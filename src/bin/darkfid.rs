@@ -36,16 +36,16 @@ pub struct State {
     // Nullifiers prevent double spending
     nullifiers: RocksColumn<columns::Nullifiers>,
     // All received coins
-    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
+    //own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Public key of the cashier
-    cashier_public: jubjub::SubgroupPoint,
+    //cashier_public: jubjub::SubgroupPoint,
     // List of all our secret keys
-    wallet: Arc<WalletDB>,
-    secrets: Vec<jubjub::Fr>,
+    wallet: WalletDB,
+    //secrets: Vec<jubjub::Fr>,
 }
 
 impl ProgramState for State {
@@ -96,8 +96,9 @@ impl State {
             // Keep track of all merkle roots that have existed
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
+            //let &self.wallet.own_coins = 
             // Also update all the coin witnesses
-            for (_, _, _, witness) in self.own_coins.iter_mut() {
+            for (_, _, _, witness) in self.wallet.own_coins.iter_mut() {
                 witness.append(node).expect("append to witness");
             }
 
@@ -195,8 +196,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
     let (_mint_params, mint_pvk) = load_params("mint.params")?;
     let (_spend_params, spend_pvk) = load_params("spend.params")?;
 
-    let cashier_secret = jubjub::Fr::random(&mut OsRng);
-    let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+    //let cashier_secret = jubjub::Fr::random(&mut OsRng);
+    //let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
 
     // wallet secret key
     let secret = jubjub::Fr::random(&mut OsRng);
@@ -211,12 +212,12 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,
-        own_coins: vec![],
+        //own_coins: vec![],
         mint_pvk,
         spend_pvk,
         wallet,
-        cashier_public,
-        secrets: vec![secret.clone()],
+        //cashier_public,
+        //secrets: vec![secret.clone()],
     };
 
     // create gateway client

@@ -74,7 +74,7 @@ pub async fn listen(
 pub async fn start(
     executor: Arc<Executor<'_>>,
     options: ProgramOptions,
-    _adapter: Arc<RpcAdapter>,
+    _adapter: RpcAdapter,
 ) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings);
 
@@ -107,7 +107,7 @@ pub struct RpcInterface {
     pub started: Mutex<bool>,
     stop_send: async_channel::Sender<()>,
     stop_recv: async_channel::Receiver<()>,
-    adapter: Arc<RpcAdapter>,
+    adapter: RpcAdapter,
 }
 
 impl RpcInterface {

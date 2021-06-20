@@ -1,18 +1,18 @@
 use crate::wallet::WalletDB;
 use crate::Result;
 use log::*;
-use std::sync::Arc;
+//use std::sync::Arc;
 
 // there should
 // Dummy adapter for now
 pub struct RpcAdapter {
-    wallet: Arc<WalletDB>,
+    wallet: WalletDB,
 }
 
 impl RpcAdapter {
-    pub fn new(dbname: &str) -> Result<Arc<Self>> {
+    pub fn new(dbname: &str) -> Result<Self> {
         let wallet = WalletDB::new(dbname)?;
-        Ok(Arc::new(Self { wallet }))
+        Ok(Self { wallet })
     }
 
     //pub async fn get_path(&self) -> Result<PathBuf> {
