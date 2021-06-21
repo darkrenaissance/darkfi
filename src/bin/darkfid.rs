@@ -96,7 +96,6 @@ impl State {
             // Keep track of all merkle roots that have existed
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
-            //let &self.wallet.own_coins = 
             // Also update all the coin witnesses
             for (_, _, _, witness) in self.wallet.own_coins.iter_mut() {
                 witness.append(node).expect("append to witness");
@@ -122,35 +121,16 @@ impl State {
 
     // sql
     async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        //let path = WalletDB::path("wallet.db")?;
-        //let vec = WalletDB::get_private(path)?;
-        //let secret = WalletDB::get_value_deserialized(vec).await?;
-        //let mut stmt = connect.prepare("SELECT key_private FROM keys").ok()?;
-        //let key_iter = stmt.query_map::<String, _, _>([], |row| row.get(0)).ok()?;
-        //for key in key_iter {
-        //    println!("Foun//d key {:?}", key.unwrap());
-        //}
-        //
-        //match stmt {
-        //let mut stmt = connect
-        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-        //.expect("Cannot generate statement.");
-        // test this
-        //stmt.exists([1i32]).unwrap()
-        //    Some(v) => {
-        //        Ok(Some(v))
-        //    }
-        //    None => Ok(None),
-        //}
-        //match ciphertext.decrypt(&secret) {
-        //    Ok(note) => {
-        //        // ... and return the decrypted note for this coin.
-        //        return Some((note, secret.clone()));
-        //    }
-        //    Err(_) => {
-        //        println!("Cannot decrypt note! {}", err)
-        //    }
-        //}
+        let vec = self.wallet.get_private().ok()?;
+        let secret = self.wallet.get_value_deserialized::<jubjub::Fr>(vec).await.expect("Deserialize failed");
+        match ciphertext.decrypt(&secret) {
+            Ok(note) => {
+                // ... and return the decrypted note for this coin.
+                return Some((note, secret.clone()));
+            }
+            Err(_) => {}
+            }
+        // We weren't able to decrypt the note with our key.
         None
     }
 }

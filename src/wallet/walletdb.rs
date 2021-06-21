@@ -12,10 +12,10 @@ use std::path::PathBuf;
 
 pub struct WalletDB {
     pub path: PathBuf,
-    secrets: Vec<jubjub::Fr>,
-    cashier_secrets: Vec<jubjub::Fr>,
+    pub secrets: Vec<jubjub::Fr>,
+    pub cashier_secrets: Vec<jubjub::Fr>,
     pub own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
-    cashier_public: jubjub::SubgroupPoint,
+    pub cashier_public: jubjub::SubgroupPoint,
     //conn: Arc<Connection>,
 }
 
