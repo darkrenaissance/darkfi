@@ -6,7 +6,7 @@ use log::*;
 // there should
 // Dummy adapter for now
 pub struct RpcAdapter {
-    wallet: WalletDB,
+    pub wallet: WalletDB,
 }
 
 impl RpcAdapter {

@@ -39,16 +39,13 @@ pub struct State {
     // Nullifiers prevent double spending
     nullifiers: RocksColumn<columns::Nullifiers>,
     // All received coins
-    //own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Public key of the cashier
-    //cashier_public: jubjub::SubgroupPoint,
     // List of all our secret keys
     wallet: WalletDB,
-    //secrets: Vec<jubjub::Fr>,
 }
 
 impl ProgramState for State {
@@ -194,18 +191,15 @@ async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Re
 
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
-    let wallet = WalletDB::new("wallet.db")?;
+    let wallet = RpcAdapter::new("wallet.db")?.wallet;
 
     let state = State {
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,
-        //own_coins: vec![],
         mint_pvk,
         spend_pvk,
         wallet,
-        //cashier_public,
-        //secrets: vec![secret.clone()],
     };
 
     // create gateway client
