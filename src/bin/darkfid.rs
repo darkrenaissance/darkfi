@@ -1,4 +1,7 @@
 use async_std::sync::Arc;
+use drk::rpc::adapter::RpcAdapter;
+use drk::rpc::options::ProgramOptions;
+use drk::rpc::jsonserver;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 
@@ -226,6 +229,8 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
+    let rpc_options = ProgramOptions::load()?;
+
     let options = ClientProgramOptions::load()?;
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
@@ -246,6 +251,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
+    //let adapter = RpcAdapter::new("wallet.db")?;
     let ex2 = ex.clone();
 
     let (_, result) = Parallel::new()
@@ -254,6 +260,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
+                //jsonserver::start(ex2.clone(), rpc_options, adapter).await?;
                 start(ex2, options).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())

@@ -8,7 +8,7 @@ use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, Connection, OpenFlags};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct WalletDB {
     pub path: PathBuf,
@@ -22,14 +22,16 @@ pub struct WalletDB {
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
         let path = Self::create_path(wallet)?;
-        let conn = Connection::open(&path)?;
-        //let conn = Arc::new(Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_NO_MUTEX)?);
+        let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_CREATE)?;
         let contents = include_str!("../../res/schema.sql");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
         let _public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-        conn.execute_batch(&contents)?;
+        match conn.execute_batch(&contents) {
+            Ok(v) => println!("Database initalized successfully {:?}", v),
+            Err(err) => println!("Error: {}", err),
+        };
         Ok(Self {
             path,
             own_coins: vec![],
@@ -66,13 +68,13 @@ impl WalletDB {
     }
 
     fn create_path(wallet: &str) -> Result<PathBuf> {
-        let mut path = dirs::home_dir()
-            .ok_or(Error::PathNotFound)?
-            .as_path()
-            .join(".config/darkfi/");
-        path.push(wallet);
-        debug!(target: "walletdb", "CREATE PATH {:?}", path);
-        Ok(path)
+       let mut path = dirs::home_dir()
+           .ok_or(Error::PathNotFound)?
+           .as_path()
+           .join(".config/darkfi/");
+       path.push(wallet);
+       debug!(target: "walletdb", "CREATE PATH {:?}", path);
+       Ok(path)
     }
 
     pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
