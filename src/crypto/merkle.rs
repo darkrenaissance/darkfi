@@ -469,11 +469,11 @@ impl<Node: Hashable> MerklePath<Node> {
         // path
         let mut tmp = position;
         for entry in auth_path.iter_mut() {
-            entry.1 = (tmp & 1) == 1;
+            entry.1 =(tmp & 1) == 1;
             tmp >>= 1;
         }
 
-        // The witness should be empty now; if it wasn't, the caller would
+        // The witnesmas should be empty now; if it wasn't, the caller would
         // have provided more information than they should have, indicating
         // a bug downstream
         if witness.is_empty() {

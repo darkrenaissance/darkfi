@@ -21,7 +21,7 @@ impl RpcAdapter {
     pub async fn key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
         let (public, private) = self.wallet.key_gen().await;
-        self.wallet.put_key(public, private).await?;
+        self.wallet.put_keypair(public, private).await?;
         Ok(())
     }
 

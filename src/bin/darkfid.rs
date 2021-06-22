@@ -81,7 +81,7 @@ impl ProgramState for State {
 }
 
 impl State {
-    fn apply(&mut self, update: StateUpdate) -> Result<()> {
+    async fn apply(&mut self, update: StateUpdate) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
@@ -101,35 +101,40 @@ impl State {
                 witness.append(node).expect("append to witness");
             }
 
-            // if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
-            //     // We need to keep track of the witness for this coin.
-            //     // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-            //     // Just as we update the merkle tree with every new coin, so we do the same with
-            //     // the witness.
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
+                // We need to keep track of the witness for this coin.
+                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+                // Just as we update the merkle tree with every new coin, so we do the same with
+                // the witness.
 
-            //     // Derive the current witness from the current tree.
-            //     // This is done right after we add our coin to the tree (but before any other
-            //     // coins are added)
+                // Derive the current witness from the current tree.
+                // This is done right after we add our coin to the tree (but before any other
+                // coins are added)
 
-            //     // Make a new witness for this coin
-            //     let witness = IncrementalWitness::from_tree(&self.tree);
-            //     self.own_coins.push((coin, note, secret, witness));
-            // }
+                // Make a new witness for this coin
+                let witness = IncrementalWitness::from_tree(&self.tree);
+
+                self.wallet.own_coins.push((coin, note, secret, witness));
+                self.wallet.put_own_coins();
+            }
         }
         Ok(())
     }
 
-    // sql
     async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
         let vec = self.wallet.get_private().ok()?;
-        let secret = self.wallet.get_value_deserialized::<jubjub::Fr>(vec).await.expect("Deserialize failed");
+        let secret = self
+            .wallet
+            .get_value_deserialized::<jubjub::Fr>(vec)
+            .await
+            .expect("Deserialize failed");
         match ciphertext.decrypt(&secret) {
             Ok(note) => {
                 // ... and return the decrypted note for this coin.
                 return Some((note, secret.clone()));
             }
             Err(_) => {}
-            }
+        }
         // We weren't able to decrypt the note with our key.
         None
     }
@@ -148,7 +153,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
         let update = state_transition(&state, tx)?;
-        state.apply(update)?;
+        state.apply(update).await?;
     }
 }
 
