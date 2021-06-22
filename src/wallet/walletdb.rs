@@ -22,7 +22,7 @@ pub struct WalletDB {
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
         let path = Self::create_path(wallet)?;
-        let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_CREATE)?;
+        let conn = Connection::open(&path)?;
         let contents = include_str!("../../res/schema.sql");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);

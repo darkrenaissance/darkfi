@@ -251,7 +251,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    //let adapter = RpcAdapter::new("wallet.db")?;
+    let adapter = RpcAdapter::new("wallet.db")?;
     let ex2 = ex.clone();
 
     let (_, result) = Parallel::new()
@@ -260,7 +260,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                //jsonserver::start(ex2.clone(), rpc_options, adapter).await?;
+                jsonserver::start(ex2.clone(), rpc_options, adapter).await?;
                 start(ex2, options).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
