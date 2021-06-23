@@ -4,9 +4,9 @@ from polynomial import *
 from modp import *
 
 def p(L, q):
-   f = IntegersModP(q)
-   Polynomial = polynomialsOver(f).factory
-   return Polynomial(L)
+    f = IntegersModP(q)
+    Polynomial = polynomialsOver(f).factory
+    return Polynomial(L)
 
 test(True, isIrreducible(p([0,1], 2), 2))
 test(False, isIrreducible(p([1,0,1], 2), 2))

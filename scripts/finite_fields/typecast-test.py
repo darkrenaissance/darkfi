@@ -9,4 +9,3 @@ p = Polynomial([1,2])
 
 x+p
 p+x
-
