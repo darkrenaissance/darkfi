@@ -43,14 +43,14 @@ impl WalletDB {
     }
 
     pub async fn put_own_coins(&self) -> Result<()> {
-        let note = &self.own_coins[0].1;
         let coin = self.get_value_serialized(&self.own_coins[0].0.repr).await?;
+        let note = &self.own_coins[0].1;
         let serial = self.get_value_serialized(&note.serial).await?;
         let coin_blind = self.get_value_serialized(&note.coin_blind).await?;
         let valcom_blind = self.get_value_serialized(&note.valcom_blind).await?;
         let value = self.get_value_serialized(&note.value).await?;
         let conn = Connection::open(&self.path)?;
-        // witness deserialization not implemented
+        let witness = self.get_value_serialized(&self.own_coins[0].3).await?;
         conn.execute(
             "INSERT INTO coins(coin, serial, value, coin_blind, valcom_blind, witness, key_id)
             VALUES (NULL, :coin, :serial, :value, :coin_blind, :valcom_blind, :witness, :key_id)",
@@ -60,21 +60,20 @@ impl WalletDB {
             ":value": value,
             ":coin_blind": coin_blind,
             ":valcom_blind": valcom_blind,
-            //":privkey": privkey,
-             //":pubkey": pubkey
+            ":witness": witness,
             },
         )?;
         Ok(())
     }
 
     fn create_path(wallet: &str) -> Result<PathBuf> {
-       let mut path = dirs::home_dir()
-           .ok_or(Error::PathNotFound)?
-           .as_path()
-           .join(".config/darkfi/");
-       path.push(wallet);
-       debug!(target: "walletdb", "CREATE PATH {:?}", path);
-       Ok(path)
+        let mut path = dirs::home_dir()
+            .ok_or(Error::PathNotFound)?
+            .as_path()
+            .join(".config/darkfi/");
+        path.push(wallet);
+        debug!(target: "walletdb", "CREATE PATH {:?}", path);
+        Ok(path)
     }
 
     pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {

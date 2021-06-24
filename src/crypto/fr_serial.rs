@@ -1,6 +1,7 @@
 use group::GroupEncoding;
 use std::io;
 
+use crate::crypto::{merkle::IncrementalWitness, merkle_node::MerkleNode};
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 

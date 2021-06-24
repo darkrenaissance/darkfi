@@ -43,6 +43,7 @@ pub enum Error {
     TryFromError,
     JsonRpcError(String),
     RocksdbError(String),
+    TreeFull,
 }
 
 impl std::error::Error for Error {}
@@ -83,6 +84,7 @@ impl fmt::Display for Error {
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
+            Error::TreeFull => f.write_str("MerkleTree is full"),
         }
     }
 }

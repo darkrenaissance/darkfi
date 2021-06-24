@@ -5,10 +5,9 @@ use lazy_static::lazy_static;
 use std::io;
 
 use super::{coin::Coin, merkle::Hashable};
-use crate::{
-    error::Result,
-    serial::{Decodable, Encodable},
-};
+use crate::impl_vec;
+use crate::serial::{Decodable, Encodable, VarInt};
+use crate::{Error, Result};
 
 pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 6;
 
@@ -82,14 +81,16 @@ impl MerkleNode {
 }
 
 impl Hashable for MerkleNode {
-    fn read<R: io::Read>(mut reader: R) -> io::Result<Self> {
+    fn read<R: io::Read>(mut reader: R) -> Result<Self> {
         let mut repr = [0u8; 32];
         reader.read_exact(&mut repr)?;
         Ok(Self::new(repr))
     }
 
-    fn write<W: io::Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_all(self.repr.as_ref())
+    fn write<W: io::Write>(&self, mut writer: W) -> Result<()> {
+        writer
+            .write_all(self.repr.as_ref())
+            .map_err(|e| Error::Io(e.kind()))
     }
 
     fn combine(depth: usize, lhs: &Self, rhs: &Self) -> Self {
@@ -142,3 +143,5 @@ lazy_static! {
         v
     };
 }
+
+impl_vec!(MerkleNode);

@@ -1,7 +1,7 @@
 use async_std::sync::Arc;
 use drk::rpc::adapter::RpcAdapter;
-use drk::rpc::options::ProgramOptions;
 use drk::rpc::jsonserver;
+use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 
