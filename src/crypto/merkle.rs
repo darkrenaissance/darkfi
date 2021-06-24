@@ -191,13 +191,6 @@ impl<Node: Hashable> Encodable for CommitmentTree<Node> {
                 None => 0,
             };
         }
-        match self.parents[0] {
-            Some(v) => {
-                len += v.encode(&mut s)?;
-                1
-            }
-            None => 0,
-        };
         Ok(len)
     }
 }
