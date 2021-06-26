@@ -71,8 +71,8 @@ start
     # Value:            u64             = 64 bits
     # Serial:           Fr              = 252 + 4 bits padding
     # Randomness coin   Fr              = 252 + 4 bits padding
-    # TOTAL: 832 bits for preimage
-    static_assert_binary_size preimage 832
+    # TOTAL: 896 bits for preimage
+    static_assert_binary_size preimage 896
     blake2s coin preimage CRH_IVK
     emit_binary coin
 end
