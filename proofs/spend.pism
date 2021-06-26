@@ -16,6 +16,7 @@ contract spend_contract
     param serial Fr
     param randomness_coin Fr
     param secret Fr
+    param signature_secret Fr
 
 {% for i in range(4) %}
     param branch_{{ i }} Scalar
@@ -131,5 +132,10 @@ start
 {% endfor %}
     # Reveal the merkle root
     emit_scalar current
+
+    # Emit the signature public key
+    fr_as_binary_le signature_secret param:signature_secret
+    ec_mul_const signature_public signature_secret G_SPEND
+    emit_ec signature_public
 end
 
