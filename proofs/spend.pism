@@ -75,7 +75,7 @@ start
     ec_mul_const public secret G_SPEND
 
     # Make the coin (same as mint contract)
-    # C = Hash(public_key, value, serial, randomness_coin)
+    # C = Hash(public_key, value, asset_id, serial, randomness_coin)
     fr_as_binary_le randomness_coin param:randomness_coin
 
     # Build the preimage to hash

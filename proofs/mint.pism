@@ -36,7 +36,7 @@ start
     emit_ec cv
 
     # Make the coin
-    # C = Hash(public_key, value, serial, randomness_coin)
+    # C = Hash(public_key, value, asset_id, serial, randomness_coin)
 
     # Build the preimage to hash
     alloc_binary preimage
