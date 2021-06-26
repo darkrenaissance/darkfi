@@ -9,7 +9,7 @@ use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, VarInt};
 use crate::{Error, Result};
 
-pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 6;
+pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 32;
 
 /// Compute a parent node in the Sapling commitment tree given its two children.
 pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::Scalar {
