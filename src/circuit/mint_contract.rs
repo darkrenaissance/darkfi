@@ -15,6 +15,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
 
 pub struct MintContract {
     pub value: Option<u64>,
+    pub asset_id: Option<u64>,
     pub randomness_value: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
     pub randomness_coin: Option<jubjub::Fr>,
@@ -29,6 +30,12 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         let value = boolean::u64_into_boolean_vec_le(
             cs.namespace(|| "Line 18: u64_as_binary_le value param:value"),
             self.value,
+        )?;
+
+        // Line 19: u64_as_binary_le value param:asset_id
+        let asset_id = boolean::u64_into_boolean_vec_le(
+            cs.namespace(|| "Line 19: u64_as_binary_le value param:asset_id"),
+            self.asset_id,
         )?;
 
         // Line 19: fr_as_binary_le randomness_value param:randomness_value
@@ -90,6 +97,9 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         // Line 46: binary_extend preimage value
         preimage.extend(value);
 
+        // Line 47: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
         // Line 53: binary_extend preimage serial
         preimage.extend(serial);
 
@@ -112,8 +122,8 @@ impl Circuit<bls12_381::Scalar> for MintContract {
             preimage.push(zero_bit);
         }
 
-        // Line 89: static_assert_binary_size preimage 832
-        assert_eq!(preimage.len(), 832);
+        // Line 89: static_assert_binary_size preimage 896
+        assert_eq!(preimage.len(), 896);
 
         // Line 90: blake2s coin preimage CRH_IVK
         let mut coin = blake2s::blake2s(

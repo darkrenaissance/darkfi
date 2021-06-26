@@ -26,6 +26,7 @@ pub struct SpendRevealedValues {
 impl SpendRevealedValues {
     fn compute(
         value: u64,
+        asset_id: u64,
         randomness_value: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
@@ -63,6 +64,7 @@ impl SpendRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
+                .update(&asset_id.to_le_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -180,6 +182,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
     let params = {
         let c = SpendContract {
             value: None,
+            asset_id: None,
             randomness_value: None,
             serial: None,
             randomness_coin: None,
@@ -199,6 +202,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
 pub fn create_spend_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
+    asset_id: u64,
     randomness_value: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
@@ -215,6 +219,7 @@ pub fn create_spend_proof(
     }
     let c = SpendContract {
         value: Some(value),
+        asset_id: Some(asset_id),
         randomness_value: Some(randomness_value),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
@@ -232,6 +237,7 @@ pub fn create_spend_proof(
 
     let revealed = SpendRevealedValues::compute(
         value,
+        asset_id,
         &randomness_value,
         &serial,
         &randomness_coin,

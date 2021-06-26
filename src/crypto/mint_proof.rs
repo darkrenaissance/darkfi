@@ -19,6 +19,7 @@ pub struct MintRevealedValues {
 impl MintRevealedValues {
     fn compute(
         value: u64,
+        asset_id: u64,
         randomness_value: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
@@ -37,6 +38,7 @@ impl MintRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
+                .update(&asset_id.to_le_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -99,6 +101,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
     let params = {
         let c = MintContract {
             value: None,
+            asset_id: None,
             randomness_value: None,
             serial: None,
             randomness_coin: None,
@@ -113,16 +116,18 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
 pub fn create_mint_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
+    asset_id: u64,
     randomness_value: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     public: jubjub::SubgroupPoint,
 ) -> (groth16::Proof<Bls12>, MintRevealedValues) {
     let revealed =
-        MintRevealedValues::compute(value, &randomness_value, &serial, &randomness_coin, &public);
+        MintRevealedValues::compute(value, asset_id, &randomness_value, &serial, &randomness_coin, &public);
 
     let c = MintContract {
         value: Some(value),
+        asset_id: Some(asset_id),
         randomness_value: Some(randomness_value),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),

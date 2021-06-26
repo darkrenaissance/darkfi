@@ -11,6 +11,7 @@ constant NOTE_COMMIT PedersenPersonalization
 contract spend_contract
     # Value commitment
     param value U64
+    param asset_id U64
     param randomness_value Fr
 
     param serial Fr
@@ -24,6 +25,7 @@ contract spend_contract
 start
     # Witness input values
     u64_as_binary_le value param:value
+    u64_as_binary_le asset_id param:asset_id
     fr_as_binary_le randomness_value param:randomness_value
 
     # Make value commitment
@@ -84,6 +86,9 @@ start
 
     # value
     binary_extend preimage value
+
+    # asset_id
+    binary_extend preimage asset_id
 
     # serial
     {{ binary_put_fr("preimage", "serial") }}

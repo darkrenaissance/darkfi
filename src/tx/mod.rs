@@ -29,6 +29,7 @@ pub struct Transaction {
 
 pub struct TransactionClearInput {
     pub value: u64,
+    pub asset_id: u64,
     pub valcom_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,
     pub signature: schnorr::Signature,
@@ -113,6 +114,7 @@ impl TransactionClearInput {
     fn from_partial(partial: PartialTransactionClearInput, signature: schnorr::Signature) -> Self {
         Self {
             value: partial.value,
+            asset_id: partial.asset_id,
             valcom_blind: partial.valcom_blind,
             signature_public: partial.signature_public,
             signature,
@@ -122,6 +124,7 @@ impl TransactionClearInput {
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
+        len += self.asset_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
         Ok(len)
@@ -169,6 +172,7 @@ impl Encodable for TransactionClearInput {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
+        len += self.asset_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         len += self.signature.encode(s)?;
@@ -180,6 +184,7 @@ impl Decodable for TransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value: Decodable::decode(&mut d)?,
+            asset_id: Decodable::decode(&mut d)?,
             valcom_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
             signature: Decodable::decode(d)?,

@@ -57,6 +57,7 @@ struct SpendRevealedValues {
 impl SpendRevealedValues {
     fn compute(
         value: u64,
+        asset_id: u64,
         randomness_value: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
@@ -90,6 +91,7 @@ impl SpendRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
+                .update(&asset_id.to_le_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -170,6 +172,7 @@ fn main() {
     use rand::rngs::OsRng;
 
     let value = 110;
+    let asset_id = 1;
     let randomness_value: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
     let serial: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
@@ -195,6 +198,7 @@ fn main() {
     let (proof, revealed) = create_spend_proof(
         &params,
         value,
+        asset_id,
         randomness_value,
         serial,
         randomness_coin,

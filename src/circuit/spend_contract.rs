@@ -17,6 +17,7 @@ use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 pub struct SpendContract {
     pub value: Option<u64>,
+    pub asset_id: Option<u64>,
     pub randomness_value: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
     pub randomness_coin: Option<jubjub::Fr>,
@@ -34,6 +35,12 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         let value = boolean::u64_into_boolean_vec_le(
             cs.namespace(|| "Line 40: u64_as_binary_le value param:value"),
             self.value,
+        )?;
+
+        // Line 41: u64_as_binary_le value param:asset_id
+        let asset_id = boolean::u64_into_boolean_vec_le(
+            cs.namespace(|| "Line 41: u64_as_binary_le value param:value"),
+            self.asset_id,
         )?;
 
         // Line 41: fr_as_binary_le randomness_value param:randomness_value
@@ -175,6 +182,9 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 120: binary_extend preimage value
         preimage.extend(value);
 
+        // Line 121: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
         // Line 123: binary_extend preimage serial
         preimage.extend(serial);
 
@@ -229,8 +239,8 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 151: binary_push preimage zero_bit
         preimage.push(zero_bit);
 
-        // Line 159: static_assert_binary_size preimage 832
-        assert_eq!(preimage.len(), 832);
+        // Line 159: static_assert_binary_size preimage 896
+        assert_eq!(preimage.len(), 896);
 
         // Line 160: blake2s coin preimage CRH_IVK
         let mut coin = blake2s::blake2s(

@@ -9,6 +9,7 @@ constant CRH_IVK BlakePersonalization
 contract mint_contract
     # Value commitment
     param value U64
+    param asset_id U64
     param randomness_value Fr
 
     param serial Fr
@@ -17,6 +18,7 @@ contract mint_contract
 start
     # Witness input values
     u64_as_binary_le value param:value
+    u64_as_binary_le asset_id param:asset_id
     fr_as_binary_le randomness_value param:randomness_value
     fr_as_binary_le serial param:serial
     fr_as_binary_le randomness_coin param:randomness_coin
@@ -45,6 +47,9 @@ start
 
     # value
     binary_extend preimage value
+
+    # asset_id
+    binary_extend preimage asset_id
 
 # Fr values are 252 bits so we need to pad it with extra 0s
 # to match the Rust values which are 256 bits
