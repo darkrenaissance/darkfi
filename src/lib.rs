@@ -11,8 +11,6 @@ pub mod circuit;
 pub mod crypto;
 pub mod endian;
 pub mod error;
-pub mod gfx;
-pub mod gui;
 pub mod net;
 pub mod rpc;
 pub mod serial;
