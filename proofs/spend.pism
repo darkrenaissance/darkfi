@@ -124,7 +124,7 @@ start
     # left = coin_commit.u
     ec_get_u current cm
 
-    # Our merkle tree has a height of 4
+    # Our merkle tree has a height of 32
 {% for i in range(32) %}
     # left = current
     # right = branch[{{ i }}]
