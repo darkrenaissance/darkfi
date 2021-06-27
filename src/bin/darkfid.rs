@@ -244,8 +244,9 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    let adapter = RpcAdapter::new("wallet.db")?;
+    debug!(target: "DARKFID", "main() [ADAPTER CREATED]");
     let ex2 = ex.clone();
+    let adapter = RpcAdapter::new("wallet.db")?;
 
     let (_, result) = Parallel::new()
         // Run four executor threads.

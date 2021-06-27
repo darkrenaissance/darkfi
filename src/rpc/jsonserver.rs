@@ -74,9 +74,9 @@ pub async fn listen(
 pub async fn start(
     executor: Arc<Executor<'_>>,
     options: Arc<ClientProgramOptions>,
-    _adapter: RpcAdapter,
+    adapter: RpcAdapter,
 ) -> Result<()> {
-    let rpc = RpcInterface::new()?;
+    let rpc = RpcInterface::new(adapter)?;
     let http = listen(
         executor.clone(),
         rpc.clone(),
@@ -104,9 +104,8 @@ pub struct RpcInterface {
 }
 
 impl RpcInterface {
-    pub fn new() -> Result<Arc<Self>> {
+    pub fn new(adapter: RpcAdapter) -> Result<Arc<Self>> {
         let (stop_send, stop_recv) = async_channel::unbounded::<()>();
-        let adapter = RpcAdapter::new("wallet.db")?;
         Ok(Arc::new(Self {
             //p2p,
             started: Mutex::new(false),
