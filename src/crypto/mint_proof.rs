@@ -13,6 +13,7 @@ use crate::serial::{Decodable, Encodable};
 
 pub struct MintRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
+    pub asset_commit: jubjub::SubgroupPoint,
     pub coin: [u8; 32],
 }
 
@@ -21,6 +22,7 @@ impl MintRevealedValues {
         value: u64,
         asset_id: u64,
         randomness_value: &jubjub::Fr,
+        randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         public: &jubjub::SubgroupPoint,
@@ -29,6 +31,11 @@ impl MintRevealedValues {
             * jubjub::Fr::from(value))
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_value);
+
+        let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
+            * jubjub::Fr::from(asset_id))
+            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
+                * randomness_asset);
 
         let mut coin = [0; 32];
         coin.copy_from_slice(
@@ -45,11 +52,11 @@ impl MintRevealedValues {
                 .as_bytes(),
         );
 
-        MintRevealedValues { value_commit, coin }
+        MintRevealedValues { value_commit, asset_commit, coin }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 4] {
-        let mut public_input = [bls12_381::Scalar::zero(); 4];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 6] {
+        let mut public_input = [bls12_381::Scalar::zero(); 6];
 
         {
             let result = jubjub::ExtendedPoint::from(self.value_commit);
@@ -62,6 +69,15 @@ impl MintRevealedValues {
         }
 
         {
+            let result = jubjub::ExtendedPoint::from(self.asset_commit);
+            let affine = result.to_affine();
+            let u = affine.get_u();
+            let v = affine.get_v();
+            public_input[2] = u;
+            public_input[3] = v;
+        }
+
+        {
             // Pack the hash as inputs for proof verification.
             let hash = multipack::bytes_to_bits_le(&self.coin);
             let hash = multipack::compute_multipacking(&hash);
@@ -69,8 +85,8 @@ impl MintRevealedValues {
             // There are 2 chunks for a blake hash
             assert_eq!(hash.len(), 2);
 
-            public_input[2] = hash[0];
-            public_input[3] = hash[1];
+            public_input[4] = hash[0];
+            public_input[5] = hash[1];
         }
 
         public_input
@@ -81,6 +97,7 @@ impl Encodable for MintRevealedValues {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value_commit.encode(&mut s)?;
+        len += self.asset_commit.encode(&mut s)?;
         len += self.coin.encode(&mut s)?;
         Ok(len)
     }
@@ -90,6 +107,7 @@ impl Decodable for MintRevealedValues {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value_commit: Decodable::decode(&mut d)?,
+            asset_commit: Decodable::decode(&mut d)?,
             coin: Decodable::decode(d)?,
         })
     }
@@ -103,6 +121,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
             value: None,
             asset_id: None,
             randomness_value: None,
+            randomness_asset: None,
             serial: None,
             randomness_coin: None,
             public: None,
@@ -118,17 +137,19 @@ pub fn create_mint_proof(
     value: u64,
     asset_id: u64,
     randomness_value: jubjub::Fr,
+    randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     public: jubjub::SubgroupPoint,
 ) -> (groth16::Proof<Bls12>, MintRevealedValues) {
     let revealed =
-        MintRevealedValues::compute(value, asset_id, &randomness_value, &serial, &randomness_coin, &public);
+        MintRevealedValues::compute(value, asset_id, &randomness_value, &randomness_asset, &serial, &randomness_coin, &public);
 
     let c = MintContract {
         value: Some(value),
         asset_id: Some(asset_id),
         randomness_value: Some(randomness_value),
+        randomness_asset: Some(randomness_asset),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
         public: Some(public),

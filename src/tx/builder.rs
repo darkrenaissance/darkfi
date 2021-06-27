@@ -66,6 +66,7 @@ impl TransactionBuilder {
         spend_params: &groth16::Parameters<Bls12>,
     ) -> Transaction {
         let mut clear_inputs = vec![];
+        let asset_commit_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         for input in &self.clear_inputs {
             let signature_public =
                 zcash_primitives::constants::SPENDING_KEY_GENERATOR * input.signature_secret;
@@ -75,6 +76,7 @@ impl TransactionBuilder {
                 value: input.value,
                 asset_id: input.asset_id,
                 valcom_blind,
+                asset_commit_blind,
                 signature_public,
             };
             clear_inputs.push(clear_input);
@@ -103,6 +105,7 @@ impl TransactionBuilder {
                 input.note.value,
                 input.note.asset_id,
                 input.note.valcom_blind,
+                asset_commit_blind,
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
@@ -123,6 +126,7 @@ impl TransactionBuilder {
 
         let mut outputs = vec![];
         let mut output_blinds = vec![];
+
         for (i, output) in self.outputs.iter().enumerate() {
             let valcom_blind = if i == self.outputs.len() - 1 {
                 Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds)
@@ -139,6 +143,7 @@ impl TransactionBuilder {
                 output.value,
                 output.asset_id,
                 valcom_blind.clone(),
+                asset_commit_blind.clone(),
                 serial.clone(),
                 coin_blind.clone(),
                 output.public.clone(),

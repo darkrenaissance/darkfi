@@ -16,6 +16,7 @@ use crate::serial::{Decodable, Encodable};
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
+    pub asset_commit: jubjub::SubgroupPoint,
     pub nullifier: Nullifier,
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
@@ -28,6 +29,7 @@ impl SpendRevealedValues {
         value: u64,
         asset_id: u64,
         randomness_value: &jubjub::Fr,
+        randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
@@ -38,6 +40,11 @@ impl SpendRevealedValues {
             * jubjub::Fr::from(value))
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_value);
+
+        let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
+            * jubjub::Fr::from(asset_id))
+            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
+                * randomness_asset);
 
         let mut nullifier = [0; 32];
         nullifier.copy_from_slice(
@@ -91,14 +98,15 @@ impl SpendRevealedValues {
 
         SpendRevealedValues {
             value_commit,
+            asset_commit,
             nullifier,
             merkle_root,
             signature_public,
         }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 7] {
-        let mut public_input = [bls12_381::Scalar::zero(); 7];
+    fn make_outputs(&self) -> [bls12_381::Scalar; 9] {
+        let mut public_input = [bls12_381::Scalar::zero(); 9];
 
         // CV
         {
@@ -111,6 +119,17 @@ impl SpendRevealedValues {
             public_input[1] = v;
         }
 
+        // CA
+        {
+            let result = jubjub::ExtendedPoint::from(self.asset_commit);
+            let affine = result.to_affine();
+            //let (u, v) = (affine.get_u(), affine.get_v());
+            let u = affine.get_u();
+            let v = affine.get_v();
+            public_input[2] = u;
+            public_input[3] = v;
+        }
+
         // NF
         {
             // Pack the hash as inputs for proof verification.
@@ -120,8 +139,8 @@ impl SpendRevealedValues {
             // There are 2 chunks for a blake hash
             assert_eq!(hash.len(), 2);
 
-            public_input[2] = hash[0];
-            public_input[3] = hash[1];
+            public_input[4] = hash[0];
+            public_input[5] = hash[1];
         }
 
         // Not revealed. We leave this code here for debug
@@ -138,7 +157,7 @@ impl SpendRevealedValues {
             public_input[5] = hash[1];
         }*/
 
-        public_input[4] = self.merkle_root.into();
+        public_input[6] = self.merkle_root.into();
 
         {
             let result = jubjub::ExtendedPoint::from(self.signature_public);
@@ -146,8 +165,8 @@ impl SpendRevealedValues {
             //let (u, v) = (affine.get_u(), affine.get_v());
             let u = affine.get_u();
             let v = affine.get_v();
-            public_input[5] = u;
-            public_input[6] = v;
+            public_input[7] = u;
+            public_input[8] = v;
         }
 
         public_input
@@ -158,6 +177,7 @@ impl Encodable for SpendRevealedValues {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value_commit.encode(&mut s)?;
+        len += self.asset_commit.encode(&mut s)?;
         len += self.nullifier.encode(&mut s)?;
         len += self.merkle_root.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
@@ -169,6 +189,7 @@ impl Decodable for SpendRevealedValues {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value_commit: Decodable::decode(&mut d)?,
+            asset_commit: Decodable::decode(&mut d)?,
             nullifier: Decodable::decode(&mut d)?,
             merkle_root: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(d)?,
@@ -184,6 +205,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
             value: None,
             asset_id: None,
             randomness_value: None,
+            randomness_asset: None,
             serial: None,
             randomness_coin: None,
             secret: None,
@@ -204,6 +226,7 @@ pub fn create_spend_proof(
     value: u64,
     asset_id: u64,
     randomness_value: jubjub::Fr,
+    randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
@@ -221,6 +244,7 @@ pub fn create_spend_proof(
         value: Some(value),
         asset_id: Some(asset_id),
         randomness_value: Some(randomness_value),
+        randomness_asset: Some(randomness_asset),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
         secret: Some(secret),
@@ -239,6 +263,7 @@ pub fn create_spend_proof(
         value,
         asset_id,
         &randomness_value,
+        &randomness_asset,
         &serial,
         &randomness_coin,
         &secret,

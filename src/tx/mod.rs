@@ -31,6 +31,7 @@ pub struct TransactionClearInput {
     pub value: u64,
     pub asset_id: u64,
     pub valcom_blind: jubjub::Fr,
+    pub asset_commit_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,
     pub signature: schnorr::Signature,
 }
@@ -56,11 +57,21 @@ impl Transaction {
         Ok(len)
     }
 
-    fn compute_value_commit(value: u64, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
+    fn compute_pedersen_commit(value: u64, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
         let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * jubjub::Fr::from(value))
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind);
         value_commit
+    }
+
+    fn verify_asset_commitments(&self) -> bool {
+        assert_ne!(self.outputs.len(), 0);
+        let asset_commit_value = self.outputs[0].revealed.asset_commit;
+
+        let mut failed = self.inputs.iter().any(|input| input.revealed.asset_commit != asset_commit_value);
+        failed = failed || self.outputs.iter().any(|output| output.revealed.asset_commit != asset_commit_value);
+        failed = failed || self.clear_inputs.iter().any(|input| Self::compute_pedersen_commit(input.asset_id, &input.asset_commit_blind) != asset_commit_value);
+        !failed
     }
 
     pub fn verify(
@@ -70,7 +81,7 @@ impl Transaction {
     ) -> state::VerifyResult<()> {
         let mut valcom_total = jubjub::SubgroupPoint::identity();
         for input in &self.clear_inputs {
-            valcom_total += Self::compute_value_commit(input.value, &input.valcom_blind);
+            valcom_total += Self::compute_pedersen_commit(input.value, &input.valcom_blind);
         }
         for (i, input) in self.inputs.iter().enumerate() {
             if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {
@@ -87,6 +98,11 @@ impl Transaction {
 
         if valcom_total != jubjub::SubgroupPoint::identity() {
             return Err(state::VerifyFailed::MissingFunds);
+        }
+
+        // Verify asset commitments match
+        if !self.verify_asset_commitments() {
+            return Err(state::VerifyFailed::AssetMismatch);
         }
 
         // Verify signatures
@@ -116,6 +132,7 @@ impl TransactionClearInput {
             value: partial.value,
             asset_id: partial.asset_id,
             valcom_blind: partial.valcom_blind,
+            asset_commit_blind: partial.asset_commit_blind,
             signature_public: partial.signature_public,
             signature,
         }
@@ -126,6 +143,7 @@ impl TransactionClearInput {
         len += self.value.encode(&mut s)?;
         len += self.asset_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
+        len += self.asset_commit_blind.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
         Ok(len)
     }
@@ -174,6 +192,7 @@ impl Encodable for TransactionClearInput {
         len += self.value.encode(&mut s)?;
         len += self.asset_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
+        len += self.asset_commit_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         len += self.signature.encode(s)?;
         Ok(len)
@@ -186,6 +205,7 @@ impl Decodable for TransactionClearInput {
             value: Decodable::decode(&mut d)?,
             asset_id: Decodable::decode(&mut d)?,
             valcom_blind: Decodable::decode(&mut d)?,
+            asset_commit_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
             signature: Decodable::decode(d)?,
         })

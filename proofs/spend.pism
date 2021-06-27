@@ -13,6 +13,7 @@ contract spend_contract
     param value U64
     param asset_id U64
     param randomness_value Fr
+    param randomness_asset Fr
 
     param serial Fr
     param randomness_coin Fr
@@ -28,6 +29,7 @@ start
     u64_as_binary_le value param:value
     u64_as_binary_le asset_id param:asset_id
     fr_as_binary_le randomness_value param:randomness_value
+    fr_as_binary_le randomness_asset param:randomness_asset
 
     # Make value commitment
     # V = v * G_VCV + r * G_VCR
@@ -37,6 +39,15 @@ start
     ec_add cv vcv rcv
     # emit cv
     emit_ec cv
+
+    # Make asset_id commitment
+    # A = a * G_VCV + r * G_VCR
+
+    ec_mul_const vca asset_id G_VCV
+    ec_mul_const rca randomness_asset G_VCR
+    ec_add ca vca rca
+    # emit ca
+    emit_ec ca
 
     # Make the nullifier
     # N = Hash(secret, serial)
