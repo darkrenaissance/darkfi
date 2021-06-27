@@ -21,8 +21,10 @@ pub struct WalletDB {
 
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
+        debug!(target: "walletdb", "new() Constructor called");
         let path = Self::create_path(wallet)?;
         let conn = Connection::open(&path)?;
+        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", path);
         let contents = include_str!("../../res/schema.sql");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
@@ -32,6 +34,7 @@ impl WalletDB {
             Ok(v) => println!("Database initalized successfully {:?}", v),
             Err(err) => println!("Error: {}", err),
         };
+        debug!(target: "walletdb", "new(): inititalized wallet");
         Ok(Self {
             path,
             own_coins: vec![],

@@ -1,7 +1,7 @@
 use async_std::sync::Arc;
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
-use drk::rpc::options::ProgramOptions;
+//use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 
@@ -27,6 +27,7 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
+use log::*;
 use std::path::Path;
 
 #[allow(dead_code)]
@@ -157,7 +158,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, options: ClientProgramOptions) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) -> Result<()> {
     let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
     let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
     let database_path = options.database_path.as_path();
@@ -223,9 +224,7 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let rpc_options = ProgramOptions::load()?;
-
-    let options = ClientProgramOptions::load()?;
+    let options = Arc::new(ClientProgramOptions::load()?);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -254,7 +253,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                jsonserver::start(ex2.clone(), rpc_options, adapter).await?;
+                jsonserver::start(ex2.clone(), options.clone(), adapter).await?;
                 start(ex2, options).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
