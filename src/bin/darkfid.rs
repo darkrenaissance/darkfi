@@ -7,7 +7,6 @@ use std::net::SocketAddr;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::crypto::{
-    coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     merkle_node::MerkleNode,
@@ -15,11 +14,11 @@ use drk::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use drk::serial::{deserialize, Decodable};
+use drk::serial::Decodable;
 use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::WalletDB;
-use drk::{tx, Error, Result};
+use drk::{tx, Result};
 use rusqlite::Connection;
 
 use async_executor::Executor;
@@ -116,7 +115,7 @@ impl State {
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
                 self.wallet.own_coins.push((coin, note, secret, witness));
-                self.wallet.put_own_coins();
+                self.wallet.put_own_coins().await?;
             }
         }
         Ok(())
