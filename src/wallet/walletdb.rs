@@ -52,15 +52,17 @@ impl WalletDB {
         let coin_blind = self.get_value_serialized(&note.coin_blind).await?;
         let valcom_blind = self.get_value_serialized(&note.valcom_blind).await?;
         let value = self.get_value_serialized(&note.value).await?;
+        let asset_id = self.get_value_serialized(&note.asset_id).await?;
         let conn = Connection::open(&self.path)?;
         let witness = self.get_value_serialized(&self.own_coins[0].3).await?;
         conn.execute(
-            "INSERT INTO coins(coin, serial, value, coin_blind, valcom_blind, witness, key_id)
-            VALUES (NULL, :coin, :serial, :value, :coin_blind, :valcom_blind, :witness, :key_id)",
+            "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
+            VALUES (NULL, :coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
             named_params! {
             ":coin": coin,
             ":serial": serial,
             ":value": value,
+            ":asset_id": asset_id,
             ":coin_blind": coin_blind,
             ":valcom_blind": valcom_blind,
             ":witness": witness,
