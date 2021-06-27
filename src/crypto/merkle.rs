@@ -168,28 +168,16 @@ impl<Node: Hashable> CommitmentTree<Node> {
 impl<Node: Hashable> Encodable for CommitmentTree<Node> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        match self.left {
-            Some(v) => {
+        if let Some(v) = self.left {
+            len += v.encode(&mut s)?;
+        }
+        if let Some(v) = self.right {
+            len += v.encode(&mut s)?;
+        }
+        for parent in self.parents.iter() {
+            if let Some(v) = parent {
                 len += v.encode(&mut s)?;
-                1
             }
-            None => 0,
-        };
-        match self.right {
-            Some(v) => {
-                len += v.encode(&mut s)?;
-                1
-            }
-            None => 0,
-        };
-        for c in self.parents.iter() {
-            match c {
-                Some(v) => {
-                    len += v.encode(&mut s)?;
-                    1
-                }
-                None => 0,
-            };
         }
         Ok(len)
     }
@@ -258,13 +246,9 @@ impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
             len += c.encode(&mut s)?;
         }
         len += self.cursor_depth.encode(&mut s)?;
-        match &self.cursor {
-            Some(v) => {
-                len += v.encode(&mut s)?;
-                1
-            }
-            None => 0,
-        };
+        if let Some(v) = self.cursor {
+            len += v.encode(&mut s)?;
+        }
         Ok(len)
     }
 }
