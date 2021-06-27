@@ -71,6 +71,7 @@ pub struct ClientProgramOptions {
     pub verbose: bool,
     pub database_path: Box<std::path::PathBuf>,
     pub log_path: Box<std::path::PathBuf>,
+    pub rpc_port: u16,
 }
 
 impl ClientProgramOptions {
@@ -84,6 +85,7 @@ impl ClientProgramOptions {
             (@arg VERBOSE: -v --verbose "Increase verbosity")
             (@arg DATABASE_PATH: --database +takes_value "database path")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
+            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
         )
         .get_matches();
 
@@ -119,12 +121,19 @@ impl ClientProgramOptions {
             .to_path_buf(),
         );
 
+        let rpc_port = if let Some(rpc_port) = app.value_of("RPC_PORT") {
+            rpc_port.parse()?
+        } else {
+            8000
+        };
+
         Ok(ClientProgramOptions {
             connect_addr,
             sub_addr,
             verbose,
             database_path,
             log_path,
+            rpc_port,
         })
     }
 }

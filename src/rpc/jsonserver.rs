@@ -1,5 +1,5 @@
 use crate::rpc::adapter::RpcAdapter;
-use crate::rpc::options::ProgramOptions;
+use crate::service::ClientProgramOptions;
 use crate::{net, Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -73,12 +73,10 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    options: ProgramOptions,
-    _adapter: RpcAdapter,
+    options: Arc<ClientProgramOptions>,
+    adapter: RpcAdapter,
 ) -> Result<()> {
-    let p2p = net::P2p::new(options.network_settings);
-
-    let rpc = RpcInterface::new(p2p.clone())?;
+    let rpc = RpcInterface::new(adapter)?;
     let http = listen(
         executor.clone(),
         rpc.clone(),
@@ -90,10 +88,6 @@ pub async fn start(
 
     *rpc.started.lock().await = true;
 
-    p2p.clone().start(executor.clone()).await?;
-
-    p2p.run(executor).await?;
-
     rpc.wait_for_quit().await?;
 
     http_task.cancel().await;
@@ -103,7 +97,6 @@ pub async fn start(
 // json RPC server goes here
 #[allow(dead_code)]
 pub struct RpcInterface {
-    p2p: Arc<net::P2p>,
     pub started: Mutex<bool>,
     stop_send: async_channel::Sender<()>,
     stop_recv: async_channel::Receiver<()>,
@@ -111,11 +104,10 @@ pub struct RpcInterface {
 }
 
 impl RpcInterface {
-    pub fn new(p2p: Arc<net::P2p>) -> Result<Arc<Self>> {
+    pub fn new(adapter: RpcAdapter) -> Result<Arc<Self>> {
         let (stop_send, stop_recv) = async_channel::unbounded::<()>();
-        let adapter = RpcAdapter::new("wallet.db")?;
         Ok(Arc::new(Self {
-            p2p,
+            //p2p,
             started: Mutex::new(false),
             stop_send,
             stop_recv,
@@ -180,7 +172,7 @@ impl RpcInterface {
                 "Attempted wallet generation".into(),
             ))
         });
-        let self3 = self.clone();
+        //let self3 = self.clone();
         //io.add_method("key_gen", move |_| {
         //    let self4 = self3.clone();
         //    async move {
@@ -192,7 +184,7 @@ impl RpcInterface {
         //        ))
         //    }
         //});
-        let self5 = self.clone();
+        //let self5 = self.clone();
         //io.add_method("cash_key_gen", move |_| {
         //    let self6 = self5.clone();
         //    async move {

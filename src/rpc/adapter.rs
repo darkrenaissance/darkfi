@@ -11,6 +11,7 @@ pub struct RpcAdapter {
 
 impl RpcAdapter {
     pub fn new(dbname: &str) -> Result<Self> {
+        debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         let wallet = WalletDB::new(dbname)?;
         Ok(Self { wallet })
     }

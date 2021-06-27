@@ -85,10 +85,6 @@ name = "zkvm"
 path = "src/bin/zkvm.rs"
 
 [[bin]]
-name = "dfi"
-path = "src/bin/dfi.rs"
-
-[[bin]]
 name = "mimc"
 path = "src/old/mimc.rs"
 
@@ -111,6 +107,10 @@ path = "src/bin/gatewayd.rs"
 [[bin]]
 name = "darkfid"
 path = "src/bin/darkfid.rs"
+
+[[bin]]
+name = "cashier"
+path = "src/bin/cashier.rs"
 
 [profile.release]
 debug = 1
