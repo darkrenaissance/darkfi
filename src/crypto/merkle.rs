@@ -246,7 +246,7 @@ impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
             len += c.encode(&mut s)?;
         }
         len += self.cursor_depth.encode(&mut s)?;
-        if let Some(v) = self.cursor {
+        if let Some(v) = &self.cursor {
             len += v.encode(&mut s)?;
         }
         Ok(len)
