@@ -16,6 +16,6 @@ fn main() {
     let c = pasta::vesta::Point::random(&mut OsRng);
     let d = pasta::vesta::Point::random(&mut OsRng);
     println!("C = {:?}", c.to_affine());
-    println!("D = {:?}", c.to_affine());
+    println!("D = {:?}", d.to_affine());
     println!("C + D = {:?}", (c + d).to_affine());
 }
