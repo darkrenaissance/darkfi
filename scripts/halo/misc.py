@@ -1,6 +1,6 @@
 import random
 
-def sample_random(fp, seed):
+def sample_random(fp, seed=None):
     rnd = random.Random(seed)
     # Range of the field is 0 ... p - 1
     return fp(rnd.randint(0, fp.p - 1))
