@@ -19,6 +19,8 @@ types_map = {
     "Bool": "bool"
 }
 
+feature_includes = {"G_SPEND": "use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;\n"}
+
 command_desc = {
     "witness": (
         ("EdwardsPoint",    True),
@@ -456,6 +458,9 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
                     eprint("error: bad aux config '%s', missing maps_to" %
                            const_name)
                     return None
+
+                if const_name in feature_includes:
+                    code += feature_includes[const_name]
 
                 mapped_type = value["maps_to"]
                 self.rename_consts[const_name] = mapped_type
