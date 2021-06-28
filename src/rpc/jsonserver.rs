@@ -76,7 +76,9 @@ pub async fn start(
     options: Arc<ClientProgramOptions>,
     adapter: RpcAdapter,
 ) -> Result<()> {
+    debug!(target: "JSONSERVER", "START FUNCTION CALLED");
     let rpc = RpcInterface::new(adapter)?;
+    debug!(target: "JSONSERVER", "Listening...");
     let http = listen(
         executor.clone(),
         rpc.clone(),
@@ -84,12 +86,16 @@ pub async fn start(
         None,
     );
 
+    debug!(target: "JSONSERVER", "Spawning http task...");
     let http_task = executor.spawn(http);
 
+    debug!(target: "JSONSERVER", "Locking...");
     *rpc.started.lock().await = true;
 
+    debug!(target: "JSONSERVER", "Waiting for quit...");
     rpc.wait_for_quit().await?;
 
+    debug!(target: "JSONSERVER", "Cancel http task...");
     http_task.cancel().await;
 
     Ok(())

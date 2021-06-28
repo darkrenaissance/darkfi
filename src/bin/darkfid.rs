@@ -202,6 +202,14 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
         wallet,
     };
 
+    let ex = executor.clone();
+
+    // create a wallet adapter
+    let adapter = RpcAdapter::new("wallet.db")?;
+
+    // start the rpc server
+    jsonserver::start(ex.clone(), options.clone(), adapter).await?;
+
     // create gateway client
     let mut client = GatewayClient::new(connect_addr, slabstore)?;
 
@@ -245,7 +253,6 @@ fn main() -> Result<()> {
 
     debug!(target: "DARKFID", "main() [ADAPTER CREATED]");
     let ex2 = ex.clone();
-    let adapter = RpcAdapter::new("wallet.db")?;
 
     let (_, result) = Parallel::new()
         // Run four executor threads.
@@ -253,7 +260,6 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                jsonserver::start(ex2.clone(), options.clone(), adapter).await?;
                 start(ex2, options).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
@@ -267,6 +273,10 @@ fn main() -> Result<()> {
 //this will run 10 clients simultaneously
 
 //// $ cargo test test_subscriber --bin darkfid
+// Run Client A and send 10 slabs
+// Client B should receive 10 slabs from subscriber
+
+//// $ cargo test test_deposit --bin darkfid
 // Run Client A and send 10 slabs
 // Client B should receive 10 slabs from subscriber
 #[cfg(test)]
@@ -405,6 +415,101 @@ mod test {
             });
         });
         // Client B
+        let thread2 = std::thread::spawn(|| {
+            let ex = Arc::new(Executor::new());
+            let (signal, shutdown) = async_channel::unbounded::<()>();
+
+            let ex2 = ex.clone();
+
+            let (_, _) = Parallel::new()
+                // Run four executor threads.
+                .each(0..3, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+                // Run the main future on the current thread.
+                .finish(|| {
+                    smol::future::block_on(async move {
+                        let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+                        let sub_addr: SocketAddr = "127.0.0.1:4444".parse().unwrap();
+
+                        let mut rng = rand::thread_rng();
+                        let rnd: u32 = rng.gen();
+                        let path_str = format!("database_{}.db", rnd);
+
+                        let database_path = Path::new(path_str.as_str());
+                        let rocks = Rocks::new(database_path.clone()).unwrap();
+
+                        let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
+                        // create gateway client
+                        let mut client = GatewayClient::new(connect_addr, slabstore).unwrap();
+
+                        // start subscribing
+                        let gateway_slabs_sub: GatewaySlabsSubscriber =
+                            client.start_subscriber(sub_addr, ex.clone()).await.unwrap();
+
+                        ex.clone()
+                            .spawn(subscribe(gateway_slabs_sub, "B".to_string()))
+                            .detach();
+
+                        // start gateway client
+                        client.start().await.unwrap();
+
+                        // sleep for 2 seconds
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                    });
+                    drop(signal);
+                    Ok::<(), drk::Error>(())
+                });
+        });
+
+        thread_pools.push(thread);
+        thread_pools.push(thread2);
+
+        for t in thread_pools {
+            t.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_deposit() {
+        setup_log();
+
+        let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
+
+        // Client A: User 
+        let thread = std::thread::spawn(|| {
+            smol::future::block_on(async move {
+                let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();
+
+                let mut rng = rand::thread_rng();
+                let rnd: u32 = rng.gen();
+                let path_str = format!("database_{}.db", rnd);
+
+                let database_path = Path::new(path_str.as_str());
+                let rocks = Rocks::new(database_path.clone()).unwrap();
+
+                let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
+                // create gateway client
+                let mut client = GatewayClient::new(connect_addr, slabstore).unwrap();
+
+                // start gateway client
+                client.start().await.unwrap();
+
+                let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+                client.put_slab(slab.clone()).await.unwrap();
+            });
+        });
+        // Client B: Cashier
         let thread2 = std::thread::spawn(|| {
             let ex = Arc::new(Executor::new());
             let (signal, shutdown) = async_channel::unbounded::<()>();
