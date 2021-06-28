@@ -14,13 +14,13 @@ To run with verbose:
 $ cargo run --bin darkfi -- -v
 ```
 
-*Run 10 clients simultaneously*
+Run 10 clients simultaneously:
 
 ```console
 $ cargo test test_ten_clients_simultaneously --bin darkfid
 ```
 
-*Run Client A and send 9 slabs. Client B should receive 10 slabs from subscriber*
+Run Client A and send 9 slabs. Client B should receive 10 slabs from subscriber:
 
 ```console
 $ cargo test test_subscriber --bin darkfid
@@ -30,7 +30,7 @@ $ cargo test test_subscriber --bin darkfid
 
 In a seperate terminal, cd to /scripts directory and run the dark-client.
 
-*Show usage manual*:
+Show usage manual:
 
 ```console
 $ /drk -h
