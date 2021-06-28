@@ -6,6 +6,7 @@ use group::{Curve, GroupEncoding};
 
 use drk::crypto::{
     create_spend_proof, load_params, save_params, setup_spend_prover, verify_spend_proof,
+    merkle_node::SAPLING_COMMITMENT_TREE_DEPTH,
 };
 
 // This thing is nasty lol
@@ -181,12 +182,9 @@ fn main() {
     let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
     let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
-    let merkle_path = vec![
-        (bls12_381::Scalar::random(&mut OsRng), true),
-        (bls12_381::Scalar::random(&mut OsRng), false),
-        (bls12_381::Scalar::random(&mut OsRng), true),
-        (bls12_381::Scalar::random(&mut OsRng), true),
-    ];
+    let mut merkle_path = vec![true, false];
+    merkle_path.resize(SAPLING_COMMITMENT_TREE_DEPTH, true);
+    let merkle_path = merkle_path.into_iter().map(|x| (bls12_381::Scalar::random(&mut OsRng), x)).collect();
 
     {
         let params = setup_spend_prover();
