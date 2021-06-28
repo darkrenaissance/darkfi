@@ -34,6 +34,7 @@ pub enum VerifyFailed {
     ClearInputSignature(usize),
     InputSignature(usize),
     MissingFunds,
+    AssetMismatch,
 }
 
 impl std::error::Error for VerifyFailed {}
@@ -58,6 +59,9 @@ impl fmt::Display for VerifyFailed {
             VerifyFailed::InputSignature(i) => write!(f, "Invalid signature for input {}", i),
             VerifyFailed::MissingFunds => {
                 f.write_str("Money in does not match money out (value commits)")
+            }
+            VerifyFailed::AssetMismatch => {
+                f.write_str("Assets don't match some inputs or outputs (asset commits)")
             }
         }
     }

@@ -17,7 +17,9 @@ use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 pub struct SpendContract {
     pub value: Option<u64>,
+    pub asset_id: Option<u64>,
     pub randomness_value: Option<jubjub::Fr>,
+    pub randomness_asset: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
     pub randomness_coin: Option<jubjub::Fr>,
     pub secret: Option<jubjub::Fr>,
@@ -36,10 +38,22 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             self.value,
         )?;
 
+        // Line 41: u64_as_binary_le asset_id param:asset_id
+        let asset_id = boolean::u64_into_boolean_vec_le(
+            cs.namespace(|| "Line 41: u64_as_binary_le value param:value"),
+            self.asset_id,
+        )?;
+
         // Line 41: fr_as_binary_le randomness_value param:randomness_value
         let randomness_value = boolean::field_into_boolean_vec_le(
             cs.namespace(|| "Line 41: fr_as_binary_le randomness_value param:randomness_value"),
             self.randomness_value,
+        )?;
+
+        // Line 41: fr_as_binary_le randomness_asset param:randomness_asset
+        let randomness_asset = boolean::field_into_boolean_vec_le(
+            cs.namespace(|| "Line 41: fr_as_binary_le randomness_asset param:randomness_asset"),
+            self.randomness_asset,
         )?;
 
         // Line 46: ec_mul_const vcv value G_VCV
@@ -61,6 +75,27 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
 
         // Line 50: emit_ec cv
         cv.inputize(cs.namespace(|| "Line 50: emit_ec cv"))?;
+
+        // Line 46: ec_mul_const vca asset_id G_VCV
+        let vca = ecc::fixed_base_multiplication(
+            cs.namespace(|| "Line 46: ec_mul_const vca asset_id G_VCV"),
+            &zcash_proofs::constants::VALUE_COMMITMENT_VALUE_GENERATOR,
+            &asset_id,
+        )?;
+
+        // Line 47: ec_mul_const rca randomness_asset G_VCR
+        let rca = ecc::fixed_base_multiplication(
+            cs.namespace(|| "Line 47: ec_mul_const rca randomness_asset G_VCR"),
+            &zcash_proofs::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR,
+            &randomness_asset,
+        )?;
+
+        // Line 48: ec_add ca vca rca
+        let ca = vca.add(cs.namespace(|| "Line 48: ec_add ca vca rca"), &rca)?;
+
+        // Line 50: emit_ec ca
+        ca.inputize(cs.namespace(|| "Line 50: emit_ec ca"))?;
+
 
         // Line 54: fr_as_binary_le serial param:serial
         let serial = boolean::field_into_boolean_vec_le(
@@ -175,6 +210,9 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 120: binary_extend preimage value
         preimage.extend(value);
 
+        // Line 121: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
         // Line 123: binary_extend preimage serial
         preimage.extend(serial);
 
@@ -229,8 +267,8 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 151: binary_push preimage zero_bit
         preimage.push(zero_bit);
 
-        // Line 159: static_assert_binary_size preimage 832
-        assert_eq!(preimage.len(), 832);
+        // Line 159: static_assert_binary_size preimage 896
+        assert_eq!(preimage.len(), 896);
 
         // Line 160: blake2s coin preimage CRH_IVK
         let mut coin = blake2s::blake2s(

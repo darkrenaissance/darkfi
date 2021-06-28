@@ -158,10 +158,11 @@ fn main() {
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
             value: 110,
+            asset_id: 1,
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, public }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, asset_id: 1, public }],
     };
 
     // We will 'compile' the tx, and then serialize it to this Vec<u8>
@@ -276,6 +277,7 @@ fn main() {
         // The only constraint is that sum(value in) == sum(value out)
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
+            asset_id: 1,
             public: public2,
         }],
     };
