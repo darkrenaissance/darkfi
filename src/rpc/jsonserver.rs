@@ -151,64 +151,76 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::String("TEST PATH!".into()))
         });
 
+        let self1 = self.clone();
         io.add_method("get_cash_key", move |_| {
+            let self2 = self1.clone();
             async move {
-                //RpcAdapter::get_cash_key().await.expect("Failed to get key");
+                self2.adapter.get_cash_key().await.expect("Failed to get key");
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
 
+        let self1 = self.clone();
         io.add_method("get_info", move |_| {
+        let self2 = self1.clone();
             async move {
-                //RpcAdapter::get_info().await;
+                self2.adapter.get_info().await;
                 Ok(jsonrpc_core::Value::Null)
             }
         });
 
+        let self1 = self.clone();
         io.add_method("stop", move |_| {
+        let self2 = self1.clone();
             async move {
-                //self.adapter.stop().await;
+                self2.adapter.stop().await;
                 Ok(jsonrpc_core::Value::Null)
             }
         });
-        io.add_method("new_wallet", move |_| async move {
+        let self1 = self.clone();
+        io.add_method("create_wallet", move |_| {
+            let self2 = self1.clone();
+            async move {
             println!("New wallet method called...");
             RpcAdapter::new("wallet.db").expect("Failed to create wallet");
+            println!("Wallet created at path {:?}", self2.adapter.wallet.path);
             Ok(jsonrpc_core::Value::String(
-                "Attempted wallet generation".into(),
-            ))
+                "Created wallet".into(),))
+            }
         });
-        //let self3 = self.clone();
-        //io.add_method("key_gen", move |_| {
-        //    let self4 = self3.clone();
-        //    async move {
-        //        println!("Key generation method called...");
-        //        self4.adapter.key_gen().await.expect("Failed to generate key");
-        //        //RpcAdapter::key_gen().await.expect("Failed to generate key");
-        //        Ok(jsonrpc_core::Value::String(
-        //            "Attempted key generation".into(),
-        //        ))
-        //    }
-        //});
-        //let self5 = self.clone();
-        //io.add_method("cash_key_gen", move |_| {
-        //    let self6 = self5.clone();
-        //    async move {
-        //        println!("Key generation method called...");
-        //        //RpcAdapter::cash_key_gen()
-        //            //.await
-        //            //.expect("Failed to generate key");
-        //        Ok(jsonrpc_core::Value::String(
-        //            "Attempted key generation".into(),
-        //        ))
-        //    }
-        //});
-        io.add_method("new_cashier_wallet", move |_| async move {
+        let self1 = self.clone();
+        io.add_method("key_gen", move |_| {
+            let self2 = self1.clone();
+            async move {
+                println!("Key generation method called...");
+                self2.adapter.key_gen().await.expect("Failed to generate key");
+                Ok(jsonrpc_core::Value::String(
+                    "Attempted key generation".into(),
+                ))
+            }
+        });
+        let self1 = self.clone();
+        io.add_method("cash_key_gen", move |_| {
+            let self2 = self1.clone();
+            async move {
+                println!("Key generation method called...");
+                self2.adapter.cash_key_gen().await.expect("Failed to generate key");
+                Ok(jsonrpc_core::Value::String(
+                    "Attempted key generation".into(),
+                ))
+            }
+        });
+        let self1 = self.clone();
+        io.add_method("create_cashier_wallet", move |_| {
+            let self2 = self1.clone();
+            async move {
             println!("New wallet method called...");
             RpcAdapter::new("cashier.db").expect("Failed to create wallet");
+            println!("Wallet created at path {:?}", self2.adapter.wallet.path);
             Ok(jsonrpc_core::Value::String(
-                "Attempted wallet generation".into(),
+                "Created cashier wallet".into(),
             ))
+            }
         });
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)

@@ -90,10 +90,17 @@ impl WalletDB {
         (pubkey, privkey)
     }
 
+    pub async fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
+        debug!(target: "cash key_gen", "Generating cashier keys...");
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        (pubkey, privkey)
+    }
+
     pub async fn put_keypair(&self, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
-        //debug!(target: "key_gen", "Generating keys...");
         let conn = Connection::open(&self.path)?;
-        //debug!(target: "adapter", "key_gen() [Saving public key...]");
         conn.execute(
             "INSERT INTO keys(key_id, key_private, key_public)
             VALUES (NULL, :privkey, :pubkey)",
@@ -121,6 +128,18 @@ impl WalletDB {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
+        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
+        let mut pub_keys = Vec::new();
+        for key in key_iter {
+            pub_keys.push(key?);
+        }
+        Ok(pub_keys)
+    }
+
+    pub async fn get_cashier_public(&self) -> Result<Vec<u8>> {
+        debug!(target: "get_cashier_public", "Returning keys...");
+        let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
         for key in key_iter {

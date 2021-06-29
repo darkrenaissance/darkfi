@@ -23,7 +23,7 @@ async def arg_parser(client):
             await client.key_gen(client.payload)
 
         if args.wallet:
-            print("Attemping to generate a create wallet...")
+            print("Attemping to create a wallet...")
             await client.create_wallet(client.payload)
 
         if args.info:
@@ -41,7 +41,7 @@ async def arg_parser(client):
             await client.say_hello(client.payload)
 
         if args.cashier:
-            print("Cash was entered")
+            print("Attempting to generate a cashier wallet...")
             await client.create_cashier_wallet(client.payload)
 
     except Exception:
