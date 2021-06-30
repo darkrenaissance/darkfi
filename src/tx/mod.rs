@@ -68,9 +68,20 @@ impl Transaction {
         assert_ne!(self.outputs.len(), 0);
         let asset_commit_value = self.outputs[0].revealed.asset_commit;
 
-        let mut failed = self.inputs.iter().any(|input| input.revealed.asset_commit != asset_commit_value);
-        failed = failed || self.outputs.iter().any(|output| output.revealed.asset_commit != asset_commit_value);
-        failed = failed || self.clear_inputs.iter().any(|input| Self::compute_pedersen_commit(input.asset_id, &input.asset_commit_blind) != asset_commit_value);
+        let mut failed = self
+            .inputs
+            .iter()
+            .any(|input| input.revealed.asset_commit != asset_commit_value);
+        failed = failed
+            || self
+                .outputs
+                .iter()
+                .any(|output| output.revealed.asset_commit != asset_commit_value);
+        failed = failed
+            || self.clear_inputs.iter().any(|input| {
+                Self::compute_pedersen_commit(input.asset_id, &input.asset_commit_blind)
+                    != asset_commit_value
+            });
         !failed
     }
 

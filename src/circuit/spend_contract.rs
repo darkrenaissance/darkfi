@@ -96,7 +96,6 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 50: emit_ec ca
         ca.inputize(cs.namespace(|| "Line 50: emit_ec ca"))?;
 
-
         // Line 54: fr_as_binary_le serial param:serial
         let serial = boolean::field_into_boolean_vec_le(
             cs.namespace(|| "Line 54: fr_as_binary_le serial param:serial"),

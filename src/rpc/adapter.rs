@@ -1,7 +1,7 @@
 use crate::wallet::{WalletDB, WalletPtr};
 use crate::Result;
-use log::*;
 use async_std::sync::Arc;
+use log::*;
 //use std::sync::Arc;
 
 pub type AdapterPtr = Arc<RpcAdapter>;

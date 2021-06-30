@@ -5,8 +5,8 @@ use ff::{Field, PrimeField};
 use group::{Curve, GroupEncoding};
 
 use drk::crypto::{
-    create_spend_proof, load_params, save_params, setup_spend_prover, verify_spend_proof,
-    merkle_node::SAPLING_COMMITMENT_TREE_DEPTH,
+    create_spend_proof, load_params, merkle_node::SAPLING_COMMITMENT_TREE_DEPTH, save_params,
+    setup_spend_prover, verify_spend_proof,
 };
 
 // This thing is nasty lol
@@ -184,7 +184,10 @@ fn main() {
 
     let mut merkle_path = vec![true, false];
     merkle_path.resize(SAPLING_COMMITMENT_TREE_DEPTH, true);
-    let merkle_path = merkle_path.into_iter().map(|x| (bls12_381::Scalar::random(&mut OsRng), x)).collect();
+    let merkle_path = merkle_path
+        .into_iter()
+        .map(|x| (bls12_381::Scalar::random(&mut OsRng), x))
+        .collect();
 
     {
         let params = setup_spend_prover();

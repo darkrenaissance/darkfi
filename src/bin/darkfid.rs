@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 //use drk::rpc::
-use drk::rpc::adapter::{RpcAdapter, AdapterPtr};
+use drk::rpc::adapter::{AdapterPtr, RpcAdapter};
 use drk::rpc::jsonserver;
 //use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
@@ -98,7 +98,7 @@ impl State {
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
             // Also update all the coin witnesses
-            for (_, _, _, witness) in self.wallet.own_coins.iter_mut() {
+            for witness in self.wallet.witnesses.lock().await.iter_mut() {
                 witness.append(node).expect("append to witness");
             }
 
@@ -115,9 +115,7 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                // own_coins should not be vector
-                self.wallet.own_coins.push((coin, note, secret, witness));
-                self.wallet.put_own_coins().await?;
+                self.wallet.put_own_coins(coin, note, witness).await?;
             }
         }
         Ok(())
@@ -478,7 +476,7 @@ mod test {
 
         let mut thread_pools: Vec<std::thread::JoinHandle<()>> = vec![];
 
-        // Client A: User 
+        // Client A: User
         let thread = std::thread::spawn(|| {
             smol::future::block_on(async move {
                 let connect_addr: SocketAddr = "127.0.0.1:3333".parse().unwrap();

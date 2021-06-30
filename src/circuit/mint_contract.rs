@@ -112,7 +112,6 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         // Line 50: emit_ec ca
         ca.inputize(cs.namespace(|| "Line 50: emit_ec ca"))?;
 
-
         // Line 39: alloc_binary preimage
         let mut preimage = vec![];
 

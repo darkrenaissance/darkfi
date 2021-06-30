@@ -162,7 +162,11 @@ fn main() {
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, asset_id: 1, public }],
+        outputs: vec![tx::TransactionBuilderOutputInfo {
+            value: 110,
+            asset_id: 1,
+            public,
+        }],
     };
 
     // We will 'compile' the tx, and then serialize it to this Vec<u8>

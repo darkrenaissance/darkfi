@@ -52,7 +52,11 @@ impl MintRevealedValues {
                 .as_bytes(),
         );
 
-        MintRevealedValues { value_commit, asset_commit, coin }
+        MintRevealedValues {
+            value_commit,
+            asset_commit,
+            coin,
+        }
     }
 
     fn make_outputs(&self) -> [bls12_381::Scalar; 6] {
@@ -142,8 +146,15 @@ pub fn create_mint_proof(
     randomness_coin: jubjub::Fr,
     public: jubjub::SubgroupPoint,
 ) -> (groth16::Proof<Bls12>, MintRevealedValues) {
-    let revealed =
-        MintRevealedValues::compute(value, asset_id, &randomness_value, &randomness_asset, &serial, &randomness_coin, &public);
+    let revealed = MintRevealedValues::compute(
+        value,
+        asset_id,
+        &randomness_value,
+        &randomness_asset,
+        &serial,
+        &randomness_coin,
+        &public,
+    );
 
     let c = MintContract {
         value: Some(value),
