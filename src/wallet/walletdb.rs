@@ -1,14 +1,15 @@
 use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::Error;
 use crate::Result;
+use crate::util::join_config_path;
+
 use async_std::sync::{Arc, Mutex};
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, Connection};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDB>;
 
@@ -26,7 +27,7 @@ pub struct WalletDB {
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
         debug!(target: "walletdb", "new() Constructor called");
-        let path = Self::create_path(wallet)?;
+        let path = join_config_path(&PathBuf::from(wallet))?;
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -88,15 +89,7 @@ impl WalletDB {
         Ok(())
     }
 
-    fn create_path(wallet: &str) -> Result<PathBuf> {
-        let mut path = dirs::home_dir()
-            .ok_or(Error::PathNotFound)?
-            .as_path()
-            .join(".config/darkfi/");
-        path.push(wallet);
-        debug!(target: "walletdb", "CREATE PATH {:?}", path);
-        Ok(path)
-    }
+
 
     pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "key_gen", "Generating keys...");

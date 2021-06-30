@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 //use drk::rpc::
-use drk::rpc::adapter::{RpcAdapter};
+use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
 //use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
@@ -20,6 +20,7 @@ use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
+use drk::util::join_config_path;
 use rusqlite::Connection;
 
 use async_executor::Executor;
@@ -160,9 +161,10 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
 async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) -> Result<()> {
     let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
     let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
-    let database_path = options.database_path.as_path();
+    let database_path = options.database_path.clone();
 
-    let rocks = Rocks::new(database_path)?;
+    let database_path = join_config_path(&(*database_path))?;
+    let rocks = Rocks::new(&database_path)?;
 
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
@@ -285,10 +287,12 @@ mod test {
 
     use std::net::SocketAddr;
     use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
     use drk::service::{GatewayClient, GatewaySlabsSubscriber};
+    use drk::util::join_config_path;
 
     use async_executor::Executor;
     use easy_parallel::Parallel;
@@ -343,8 +347,9 @@ mod test {
                             let rnd: u32 = rng.gen();
                             let path_str = format!("database_{}.db", rnd);
 
-                            let database_path = Path::new(path_str.as_str());
-                            let rocks = Rocks::new(database_path.clone()).unwrap();
+                            let database_path = PathBuf::from(path_str.as_str());
+                            let database_path = join_config_path(&database_path).unwrap();
+                            let rocks = Rocks::new(&database_path).unwrap();
 
                             let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
@@ -390,8 +395,9 @@ mod test {
                 let rnd: u32 = rng.gen();
                 let path_str = format!("database_{}.db", rnd);
 
-                let database_path = Path::new(path_str.as_str());
-                let rocks = Rocks::new(database_path.clone()).unwrap();
+                let database_path = PathBuf::from(path_str.as_str());
+                let database_path = join_config_path(&database_path).unwrap();
+                let rocks = Rocks::new(&database_path).unwrap();
 
                 let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
@@ -401,7 +407,7 @@ mod test {
                 // start gateway client
                 client.start().await.unwrap();
 
-                let slab = Slab::new( rnd.to_le_bytes().to_vec());
+                let slab = Slab::new(rnd.to_le_bytes().to_vec());
 
                 client.put_slab(slab.clone()).await.unwrap();
                 client.put_slab(slab.clone()).await.unwrap();
@@ -435,8 +441,9 @@ mod test {
                         let rnd: u32 = rng.gen();
                         let path_str = format!("database_{}.db", rnd);
 
-                        let database_path = Path::new(path_str.as_str());
-                        let rocks = Rocks::new(database_path.clone()).unwrap();
+                        let database_path = PathBuf::from(path_str.as_str());
+                        let database_path = join_config_path(&database_path).unwrap();
+                        let rocks = Rocks::new(&database_path).unwrap();
 
                         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
@@ -485,8 +492,9 @@ mod test {
                 let rnd: u32 = rng.gen();
                 let path_str = format!("database_{}.db", rnd);
 
-                let database_path = Path::new(path_str.as_str());
-                let rocks = Rocks::new(database_path.clone()).unwrap();
+                let database_path = PathBuf::from(path_str.as_str());
+                let database_path = join_config_path(&database_path).unwrap();
+                let rocks = Rocks::new(&database_path).unwrap();
 
                 let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
@@ -530,8 +538,9 @@ mod test {
                         let rnd: u32 = rng.gen();
                         let path_str = format!("database_{}.db", rnd);
 
-                        let database_path = Path::new(path_str.as_str());
-                        let rocks = Rocks::new(database_path.clone()).unwrap();
+                        let database_path = PathBuf::from(path_str.as_str());
+                        let database_path = join_config_path(&database_path).unwrap();
+                        let rocks = Rocks::new(&database_path).unwrap();
 
                         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
