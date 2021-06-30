@@ -361,7 +361,7 @@ mod test {
                             // start gateway client
                             client.start().await.unwrap();
 
-                            let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+                            let slab = Slab::new(rnd.to_le_bytes().to_vec());
                             client.put_slab(slab).await.unwrap();
                         });
                         drop(signal);
@@ -401,7 +401,7 @@ mod test {
                 // start gateway client
                 client.start().await.unwrap();
 
-                let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+                let slab = Slab::new( rnd.to_le_bytes().to_vec());
 
                 client.put_slab(slab.clone()).await.unwrap();
                 client.put_slab(slab.clone()).await.unwrap();
@@ -496,7 +496,7 @@ mod test {
                 // start gateway client
                 client.start().await.unwrap();
 
-                let slab = Slab::new("btc".to_string(), rnd.to_le_bytes().to_vec());
+                let slab = Slab::new(rnd.to_le_bytes().to_vec());
 
                 client.put_slab(slab.clone()).await.unwrap();
                 client.put_slab(slab.clone()).await.unwrap();

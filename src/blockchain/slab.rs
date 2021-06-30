@@ -3,16 +3,14 @@ use crate::Result;
 
 #[derive(Clone, Debug)]
 pub struct Slab {
-    asset_type: String,
     index: u64,
     payload: Vec<u8>,
 }
 
 impl Slab {
-    pub fn new(asset_type: String, payload: Vec<u8>) -> Self {
+    pub fn new(payload: Vec<u8>) -> Self {
         let index = 0;
         Slab {
-            asset_type,
             index,
             payload,
         }
@@ -34,7 +32,6 @@ impl Slab {
 impl Encodable for Slab {
     fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        len += self.asset_type.encode(&mut s)?;
         len += self.index.encode(&mut s)?;
         len += self.payload.encode(&mut s)?;
         Ok(len)
@@ -44,7 +41,6 @@ impl Encodable for Slab {
 impl Decodable for Slab {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
-            asset_type: Decodable::decode(&mut d)?,
             index: Decodable::decode(&mut d)?,
             payload: Decodable::decode(&mut d)?,
         })
