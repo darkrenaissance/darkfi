@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 
 pub type WalletPtr = Arc<WalletDB>;
 
-// function: given keyID, get corresponding secret
 pub struct WalletDB {
     pub path: PathBuf,
     pub secrets: Vec<jubjub::Fr>,
@@ -20,20 +19,14 @@ pub struct WalletDB {
     pub coins: Mutex<Vec<Coin>>,
     pub notes: Mutex<Vec<Note>>,
     pub witnesses: Mutex<Vec<IncrementalWitness<MerkleNode>>>,
-    // wrap in mutex or read/write lock
-    //pub own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     pub cashier_public: jubjub::SubgroupPoint,
     pub public: jubjub::SubgroupPoint,
-    //conn: Arc<Connection>,
 }
 
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
         debug!(target: "walletdb", "new() Constructor called");
         let path = Self::create_path(wallet)?;
-        //let conn = Connection::open(&path)?;
-        //debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", path);
-        //let contents = include_str!("../../res/schema.sql");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -41,14 +34,8 @@ impl WalletDB {
         let coins = Mutex::new(Vec::new());
         let notes = Mutex::new(Vec::new());
         let witnesses = Mutex::new(Vec::new());
-        //match conn.execute_batch(&contents) {
-        //    Ok(v) => println!("Database initalized successfully {:?}", v),
-        //    Err(err) => println!("Error: {}", err),
-        //};
-        debug!(target: "walletdb", "new(): wallet constructor called");
         Ok(Self {
             path,
-            //own_coins: vec![],
             cashier_secrets: vec![cashier_secret.clone()],
             secrets: vec![secret.clone()],
             cashier_public,
@@ -60,7 +47,17 @@ impl WalletDB {
         })
     }
 
-    //coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id
+    pub async fn init_db(&self) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
+        let contents = include_str!("../../res/schema.sql");
+        match conn.execute_batch(&contents) {
+            Ok(v) => println!("Database initalized successfully {:?}", v),
+            Err(err) => println!("Error: {}", err),
+        };
+        Ok(())
+    }
+
     pub async fn put_own_coins(
         &self,
         coin: Coin,
@@ -68,8 +65,6 @@ impl WalletDB {
         witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
         let coin = self.get_value_serialized(&coin.repr).await?;
-        //let coin = self.get_value_serialized(&self.own_coins[0].0.repr).await?;
-        //let note = &self.own_coins[0].1;
         let serial = self.get_value_serialized(&note.serial).await?;
         let coin_blind = self.get_value_serialized(&note.coin_blind).await?;
         let valcom_blind = self.get_value_serialized(&note.valcom_blind).await?;
@@ -77,7 +72,6 @@ impl WalletDB {
         let asset_id = self.get_value_serialized(&note.asset_id).await?;
         let conn = Connection::open(&self.path)?;
         let witness = self.get_value_serialized(&witness).await?;
-        //let witness = self.get_value_serialized(&self.own_coins[0].3).await?;
         conn.execute(
             "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
             VALUES (NULL, :coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
