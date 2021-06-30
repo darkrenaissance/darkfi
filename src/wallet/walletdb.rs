@@ -10,41 +10,54 @@ use rand::rngs::OsRng;
 use rusqlite::{named_params, Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 
+pub type WalletPtr = Arc<WalletDB>;
+
+// function: given keyID, get corresponding secret
 pub struct WalletDB {
     pub path: PathBuf,
     pub secrets: Vec<jubjub::Fr>,
     pub cashier_secrets: Vec<jubjub::Fr>,
+    //pub coin: Coin,
+    //pub note: Note,
+    //pub witness: IncrementalWitness<MerkleNode>,
+    // wrap in mutex or read/write lock
     pub own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     pub cashier_public: jubjub::SubgroupPoint,
+    pub public: jubjub::SubgroupPoint,
     //conn: Arc<Connection>,
 }
 
 impl WalletDB {
     pub fn new(wallet: &str) -> Result<Self> {
         debug!(target: "walletdb", "new() Constructor called");
-        let path = Self::create_path(wallet)?;
-        let conn = Connection::open(&path)?;
-        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", path);
-        let contents = include_str!("../../res/schema.sql");
+        //let path = Self::create_path(wallet)?;
+        //let conn = Connection::open(&path)?;
+        //debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", path);
+        //let contents = include_str!("../../res/schema.sql");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
-        let _public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-        match conn.execute_batch(&contents) {
-            Ok(v) => println!("Database initalized successfully {:?}", v),
-            Err(err) => println!("Error: {}", err),
-        };
-        debug!(target: "walletdb", "new(): inititalized wallet");
+        //match conn.execute_batch(&contents) {
+        //    Ok(v) => println!("Database initalized successfully {:?}", v),
+        //    Err(err) => println!("Error: {}", err),
+        //};
+        debug!(target: "walletdb", "new(): wallet constructor called");
         Ok(Self {
-            path,
+            path: Self::create_path(wallet)?,
             own_coins: vec![],
             cashier_secrets: vec![cashier_secret.clone()],
             secrets: vec![secret.clone()],
             cashier_public,
+            public,
+            //coin,
+            //note,
+            //witness,
             //conn,
         })
     }
 
+    //coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id
     pub async fn put_own_coins(&self) -> Result<()> {
         let coin = self.get_value_serialized(&self.own_coins[0].0.repr).await?;
         let note = &self.own_coins[0].1;

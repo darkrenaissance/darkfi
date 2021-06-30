@@ -182,7 +182,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
             println!("New wallet method called...");
-            RpcAdapter::new("wallet.db").expect("Failed to create wallet");
+            //RpcAdapter::new("wallet.db").expect("Failed to create wallet");
             println!("Wallet created at path {:?}", self2.adapter.wallet.path);
             Ok(jsonrpc_core::Value::String(
                 "Created wallet".into(),))
@@ -215,7 +215,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
             println!("New wallet method called...");
-            RpcAdapter::new("cashier.db").expect("Failed to create wallet");
+            //RpcAdapter::new("cashier.db").expect("Failed to create wallet");
             println!("Wallet created at path {:?}", self2.adapter.wallet.path);
             Ok(jsonrpc_core::Value::String(
                 "Created cashier wallet".into(),

@@ -1,3 +1,3 @@
 pub mod walletdb;
 
-pub use walletdb::WalletDB;
+pub use walletdb::{WalletDB, WalletPtr};

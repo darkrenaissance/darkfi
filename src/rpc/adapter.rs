@@ -1,17 +1,18 @@
-use crate::wallet::WalletDB;
+use crate::wallet::{WalletDB, WalletPtr};
 use crate::Result;
 use log::*;
+use async_std::sync::Arc;
 //use std::sync::Arc;
 
+pub type AdapterPtr = Arc<RpcAdapter>;
 // Dummy adapter for now
 pub struct RpcAdapter {
-    pub wallet: WalletDB,
+    pub wallet: Arc<WalletDB>,
 }
 
 impl RpcAdapter {
-    pub fn new(dbname: &str) -> Result<Self> {
+    pub fn new(wallet: Arc<WalletDB>) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
-        let wallet = WalletDB::new(dbname)?;
         Ok(Self { wallet })
     }
 
@@ -42,6 +43,10 @@ impl RpcAdapter {
         println!("{:?}", cashier_public);
         Ok(())
     }
+
+    //pub async fn walletdb(&self) -> WalletPtr {
+    //    self.wallet.clone();
+    //}
 
     //pub async fn create_
     //pub async fn save_key(&self, pubkey: Vec<u8>) -> Result<()> {

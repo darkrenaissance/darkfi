@@ -1,5 +1,6 @@
 use async_std::sync::Arc;
-use drk::rpc::adapter::RpcAdapter;
+//use drk::rpc::
+use drk::rpc::adapter::{RpcAdapter, AdapterPtr};
 use drk::rpc::jsonserver;
 //use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
@@ -17,7 +18,7 @@ use drk::crypto::{
 use drk::serial::Decodable;
 use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::wallet::WalletDB;
+use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
 use rusqlite::Connection;
 
@@ -45,7 +46,7 @@ pub struct State {
     spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Public key of the cashier
     // List of all our secret keys
-    wallet: WalletDB,
+    wallet: WalletPtr,
 }
 
 impl ProgramState for State {
@@ -114,6 +115,7 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
+                // own_coins should not be vector
                 self.wallet.own_coins.push((coin, note, secret, witness));
                 self.wallet.put_own_coins().await?;
             }
@@ -166,6 +168,7 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
 
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
+    //let adapter = RpcAdapter::new("wallet.db")?;
     //
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
@@ -191,7 +194,12 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
 
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
-    let wallet = RpcAdapter::new("wallet.db")?.wallet;
+
+    //let wallet = adapter.wallet;
+    let wallet = Arc::new(WalletDB::new("wallet.db")?);
+
+    //let wallet2 = wallet.clone();
+    let ex = executor.clone();
 
     let state = State {
         tree: CommitmentTree::empty(),
@@ -199,14 +207,10 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
         nullifiers,
         mint_pvk,
         spend_pvk,
-        wallet,
+        wallet: wallet.clone(),
     };
 
-    let ex = executor.clone();
-
-    // create a wallet adapter
-    let adapter = RpcAdapter::new("wallet.db")?;
-
+    let adapter = RpcAdapter::new(wallet.clone())?;
     // start the rpc server
     jsonserver::start(ex.clone(), options.clone(), adapter).await?;
 
@@ -251,7 +255,6 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    debug!(target: "DARKFID", "main() [ADAPTER CREATED]");
     let ex2 = ex.clone();
 
     let (_, result) = Parallel::new()
