@@ -7,8 +7,8 @@ use async_std::sync::{Arc, Mutex};
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::{named_params, Connection, OpenFlags};
-use std::path::{Path, PathBuf};
+use rusqlite::{named_params, Connection};
+use std::path::{PathBuf};
 
 pub type WalletPtr = Arc<WalletDB>;
 

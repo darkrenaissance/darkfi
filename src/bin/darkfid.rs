@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 //use drk::rpc::
-use drk::rpc::adapter::{AdapterPtr, RpcAdapter};
+use drk::rpc::adapter::{RpcAdapter};
 use drk::rpc::jsonserver;
 //use drk::rpc::options::ProgramOptions;
 use rand::rngs::OsRng;
@@ -27,7 +27,7 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
-use log::*;
+
 use std::path::Path;
 
 #[allow(dead_code)]
@@ -102,7 +102,7 @@ impl State {
                 witness.append(node).expect("append to witness");
             }
 
-            if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
+            if let Some((note, _secret)) = self.try_decrypt_note(enc_note).await {
                 // We need to keep track of the witness for this coin.
                 // This allows us to prove inclusion of the coin in the merkle tree with ZK.
                 // Just as we update the merkle tree with every new coin, so we do the same with

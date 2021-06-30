@@ -1,4 +1,4 @@
-use crate::wallet::{WalletDB, WalletPtr};
+use crate::wallet::{WalletDB};
 use crate::Result;
 use async_std::sync::Arc;
 use log::*;
@@ -25,7 +25,7 @@ impl RpcAdapter {
 
     pub async fn cash_key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
-        let (public, private) = self.wallet.key_gen().await;
+        let (_public, _private) = self.wallet.key_gen().await;
         //self.wallet.put_keypair(public, private).await?;
         Ok(())
     }

@@ -2,7 +2,7 @@
 //! of notes.
 
 //use byteorder::{LittleEndian, ReadBytesExt};
-use crate::serial::{Decodable, Encodable, VarInt};
+use crate::serial::{Decodable, Encodable};
 use crate::{Error, Result};
 use std::collections::VecDeque;
 use std::io;

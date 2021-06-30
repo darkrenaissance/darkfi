@@ -1,6 +1,6 @@
 use crate::rpc::adapter::RpcAdapter;
 use crate::service::ClientProgramOptions;
-use crate::{net, Error, Result};
+use crate::{Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
