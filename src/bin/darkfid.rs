@@ -210,10 +210,6 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
         wallet: wallet.clone(),
     };
 
-    let adapter = RpcAdapter::new(wallet.clone())?;
-    // start the rpc server
-    jsonserver::start(ex.clone(), options.clone(), adapter).await?;
-
     // create gateway client
     let mut client = GatewayClient::new(connect_addr, slabstore)?;
 
@@ -224,6 +220,10 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) 
 
     // start gateway client
     client.start().await?;
+
+    let adapter = RpcAdapter::new(wallet.clone())?;
+    // start the rpc server
+    jsonserver::start(ex.clone(), options.clone(), adapter).await?;
 
     subscribe_task.cancel().await;
     Ok(())
