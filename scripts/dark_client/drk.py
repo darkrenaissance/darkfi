@@ -18,27 +18,6 @@ class DarkClient:
                 "id": [],
                 }
 
-    #def ckeygen(self, payload):
-    #    payload['method'] = "cash_key_gen"
-    #    payload['jsonrpc'] = "2.0"
-    #    payload['id'] = "0"
-    #    ckeygen = self.__request(payload)
-    #    print(ckeygen)
-
-    #def cashkey(self, payload):
-    #    payload['method'] = "get_cash_key"
-    #    payload['jsonrpc'] = "2.0"
-    #    payload['id'] = "0"
-    #    cashk = self.__request(payload)
-    #    print(cashk)
-    #
-    #def test_path(self, payload):
-    #    payload['method'] = "test_path"
-    #    payload['jsonrpc'] = "2.0"
-    #    payload['id'] = "0"
-    #    test = self.__request(payload)
-    #    print(test)
-
     async def key_gen(self, payload):
         payload['method'] = "key_gen"
         payload['jsonrpc'] = "2.0"
@@ -81,14 +60,17 @@ class DarkClient:
         wallet = await self.__request(payload)
         print(wallet)
 
+    async def test_wallet(self, payload):
+        payload['method'] = "test_wallet"
+        payload['jsonrpc'] = "2.0"
+        payload['id'] = "0"
+        test = await self.__request(payload)
+        print(test)
 
     async def __request(self, payload):
         async with self.client_session.post(self.url, json=payload) as response:
             resp = await response.text()
             print(resp)
-
-
-
 
 async def main():
     try:

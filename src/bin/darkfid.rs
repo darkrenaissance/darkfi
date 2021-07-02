@@ -169,8 +169,6 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<(
 
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
-    //let adapter = RpcAdapter::new("wallet.db")?;
-    //
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
         let params = setup_mint_prover();
@@ -195,12 +193,6 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<(
 
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
-
-    //let wallet = adapter.wallet;
-    let wallet = Arc::new(WalletDB::new("wallet.db")?);
-
-    //let wallet2 = wallet.clone();
-    let ex = executor.clone();
 
     let state = State {
         tree: CommitmentTree::empty(),

@@ -59,6 +59,18 @@ impl WalletDB {
         Ok(())
     }
 
+    pub async fn init_cashier_db(&self) -> Result<()> {
+        let path = Self::create_path("cashier.db")?;
+        let conn = Connection::open(&self.path)?;
+        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
+        let contents = include_str!("../../res/schema.sql");
+        match conn.execute_batch(&contents) {
+            Ok(v) => println!("Database initalized successfully {:?}", v),
+            Err(err) => println!("Error: {}", err),
+        };
+        Ok(())
+    }
+
     pub async fn put_own_coins(
         &self,
         coin: Coin,
@@ -92,7 +104,7 @@ impl WalletDB {
 
 
     pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
-        debug!(target: "key_gen", "Generating keys...");
+        debug!(target: "key_gen", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
@@ -168,6 +180,13 @@ impl WalletDB {
             keys.push(key?);
         }
         Ok(keys)
+    }
+
+    pub fn test_wallet(&self) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("SELECT * FROM keys")?;
+        stmt.execute(["NULL"])?;
+        Ok(())
     }
 
     pub async fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {

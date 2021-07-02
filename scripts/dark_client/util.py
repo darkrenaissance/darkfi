@@ -14,6 +14,7 @@ async def arg_parser(client):
     parser.add_argument('-i', '--info', action='store_true', help='Request info from daemon')
     parser.add_argument('-hi', '--hello', action='store_true', help='Test hello')
     parser.add_argument("-s", "--stop", action='store_true', help="Send a stop signal to the daemon")
+    parser.add_argument("-t", "--test", action='store_true', help="Test writing to the wallet")
 
     try:
         args = parser.parse_args()
@@ -44,42 +45,9 @@ async def arg_parser(client):
             print("Attempting to generate a cashier wallet...")
             await client.create_cashier_wallet(client.payload)
 
+        if args.test:
+            print("Testing wallet write")
+            await client.test_wallet(client.payload)
+
     except Exception:
         raise
-
-    #subparser = parser.add_subparsers(help='All available commands', title="Commands", dest='cmd')
-    #subparser.metavar = 'subcommands';
-    #login = subparser.add_parser('login', help='wallet login')
-    ##test = subparser.add_parser('test', help='test wallet functions')
-    #new = subparser.add_parser('new', help='create something new')
-
-    #new.add_argument('-w', '--wallet', action='store_true', help='Create a new wallet')
-    #new.add_argument('-k', '--key', action='store_true', help='Create a new key')
-    #new.add_argument('-c', '--cashier', action='store_true', help='Create a cashier wallet')
-
-    #login.add_argument('-u', '--username', type=str, required=True)
-    #login.add_argument('-p', '--password', type=str, required=True)
-
-    ##test.add_argument('-k', '--key', dest='key', action='store_true', help='Test key')
-    ##test.add_argument('-p', '--path', dest='path', action='store_true', help='Test path')
-    ##test.add_argument('-pk', '--pkey', dest='pkey', action='store_true', help='Print test key')
-    ##test.add_argument('-ck', '--ckey', dest='ckey', action='store_true', help='Cashier test key')
-    ##test.add_argument('-w', '--wallet', dest='wallet', action='store_true', help='Create a new wallet')
-    ##test.add_argument('-c', '--cashier', dest='cashier',action='store_true', help='Create a cashier wallet')
-
-    #if args.path:
-    #    try:
-    #        print("Testing path...")
-    #        client.test_path(client.payload)
-    #    except Exception:
-    #        raise
-
-    #if args.pkey:
-    #    try:
-    #        print("Attempting to print cashier key...")
-    #        client.cashkey(client.payload)
-    #    except Exception:
-    #        raise
-
-
-

@@ -1,4 +1,5 @@
 // TODO: Add support for rusqlite error
+use jsonrpc_core::*;
 use rusqlite;
 use std::fmt;
 
@@ -107,6 +108,13 @@ impl From<jsonrpc_core::Error> for Error {
         Error::JsonRpcError(err.to_string())
     }
 }
+
+
+//impl From<Error> for jsonrpc_core::types::error::Error {
+//    fn from(err: Error) -> jsonrpc_core::types::error::Error {
+//        jsonrpc_core::types::error::Error::ErrorCode
+//    }
+//}
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {

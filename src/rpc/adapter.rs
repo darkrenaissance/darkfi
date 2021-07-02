@@ -16,17 +16,31 @@ impl RpcAdapter {
         Ok(Self { wallet })
     }
 
+    pub async fn init_db(&self) -> Result<()> {
+        debug!(target: "adapter", "init_db() [START]");
+        self.wallet.init_db().await?;
+        Ok(())
+    }
+
+    pub async fn init_cashier_db(&self) -> Result<()> {
+        debug!(target: "adapter", "init_cashier_db() [START]");
+        self.wallet.init_cashier_db().await?;
+        Ok(())
+    }
+
     pub async fn key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
         let (public, private) = self.wallet.key_gen().await;
+        debug!(target: "adapter", "Created keypair...");
+        debug!(target: "adapter", "Attempting to write to database...");
         self.wallet.put_keypair(public, private).await?;
         Ok(())
     }
 
     pub async fn cash_key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
-        let (_public, _private) = self.wallet.key_gen().await;
-        //self.wallet.put_keypair(public, private).await?;
+        let (public, private) = self.wallet.key_gen().await;
+        self.wallet.put_keypair(public, private).await?;
         Ok(())
     }
 
@@ -39,8 +53,14 @@ impl RpcAdapter {
 
     pub async fn get_cash_key(&self) -> Result<()> {
         debug!(target: "adapter", "get_cash_key() [START]");
-        let cashier_public = self.wallet.get_public().await?;
+        let cashier_public = self.wallet.get_cashier_public().await?;
         println!("{:?}", cashier_public);
+        Ok(())
+    }
+
+    pub async fn test_wallet(&self) -> Result<()> {
+        self.wallet.test_wallet()?;
+        debug!(target: "adapter", "test wallet: START");
         Ok(())
     }
 
