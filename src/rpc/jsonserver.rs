@@ -1,5 +1,5 @@
 use crate::rpc::adapter::RpcAdapter;
-use crate::service::ClientProgramOptions;
+use crate::cli::WalletCli;
 use crate::{Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -73,7 +73,7 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    options: Arc<ClientProgramOptions>,
+    options: Arc<WalletCli>,
     adapter: RpcAdapter,
 ) -> Result<()> {
     debug!(target: "JSONSERVER", "START FUNCTION CALLED");

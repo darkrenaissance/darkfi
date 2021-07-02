@@ -2,7 +2,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::service::{GatewayService, ProgramOptions};
+use drk::service::GatewayService;
+use drk::cli::ServiceCli;
 use drk::Result;
 use drk::util::join_config_path;
 
@@ -17,7 +18,7 @@ fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
     let accept_addr: SocketAddr = setup_addr(options.accept_addr, "127.0.0.1:3333".parse()?);
     let pub_addr: SocketAddr = setup_addr(options.pub_addr, "127.0.0.1:4444".parse()?);
     let database_path = options.database_path.clone();
@@ -38,7 +39,7 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let options = ProgramOptions::load()?;
+    let options = ServiceCli::load()?;
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 

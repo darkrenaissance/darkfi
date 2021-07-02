@@ -16,7 +16,8 @@ use drk::crypto::{
     save_params, setup_mint_prover, setup_spend_prover,
 };
 use drk::serial::Decodable;
-use drk::service::{ClientProgramOptions, GatewayClient, GatewaySlabsSubscriber};
+use drk::service::{GatewayClient, GatewaySlabsSubscriber};
+use drk::cli::WalletCli;
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
@@ -158,7 +159,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, options: Arc<ClientProgramOptions>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<()> {
     let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
     let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
     let database_path = options.database_path.clone();
@@ -235,7 +236,7 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let options = Arc::new(ClientProgramOptions::load()?);
+    let options = Arc::new(WalletCli::load()?);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 

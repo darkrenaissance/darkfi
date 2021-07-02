@@ -22,6 +22,7 @@ pub mod vm;
 pub mod vm_serial;
 pub mod wallet;
 pub mod util;
+pub mod cli;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};
