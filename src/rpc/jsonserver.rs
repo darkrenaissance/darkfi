@@ -1,6 +1,5 @@
-use jsonrpc_core::types::error::ErrorCode as JsonError;
 use crate::rpc::adapter::RpcAdapter;
-use crate::cli::WalletCli;
+use crate::cli::cli_config;
 use crate::{Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -74,14 +73,15 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    options: Arc<WalletCli>,
+    config: Arc<cli_config::Config>,
     adapter: RpcAdapter,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;
+    let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
     let http = listen(
         executor.clone(),
         rpc.clone(),
-        Async::<TcpListener>::bind(([127, 0, 0, 1], options.rpc_port))?,
+        Async::<TcpListener>::bind(rpc_url)?,
         None,
     );
 

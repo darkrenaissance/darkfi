@@ -9,6 +9,7 @@ use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, Connection};
+
 use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDB>;
@@ -60,7 +61,6 @@ impl WalletDB {
     }
 
     pub async fn init_cashier_db(&self) -> Result<()> {
-        let path = Self::create_path("cashier.db")?;
         let conn = Connection::open(&self.path)?;
         debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
         let contents = include_str!("../../res/schema.sql");

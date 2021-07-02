@@ -1,12 +1,5 @@
-use async_std::sync::Arc;
-//use drk::rpc::
-use drk::rpc::adapter::RpcAdapter;
-use drk::rpc::jsonserver;
-//use drk::rpc::options::ProgramOptions;
-use rand::rngs::OsRng;
-use std::net::SocketAddr;
-
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
+use drk::cli::{cli_config, WalletCli};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -17,20 +10,26 @@ use drk::crypto::{
 };
 use drk::serial::Decodable;
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
-use drk::cli::WalletCli;
 use drk::state::{state_transition, ProgramState, StateUpdate};
+use drk::util::join_config_path;
 use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
-use drk::util::join_config_path;
-use rusqlite::Connection;
+//use drk::rpc::
+use drk::rpc::adapter::RpcAdapter;
+use drk::rpc::jsonserver;
 
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
+use rand::rngs::OsRng;
+use rusqlite::Connection;
 
+use async_std::sync::Arc;
+use std::net::SocketAddr;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[allow(dead_code)]
 pub struct State {
@@ -142,13 +141,6 @@ impl State {
     }
 }
 
-fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
-    match address {
-        Some(addr) => addr,
-        None => default,
-    }
-}
-
 pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: State) -> Result<()> {
     loop {
         let slab = gateway_slabs_sub.recv().await?;
@@ -159,12 +151,16 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<()> {
-    let connect_addr: SocketAddr = setup_addr(options.connect_addr, "127.0.0.1:3333".parse()?);
-    let sub_addr: SocketAddr = setup_addr(options.sub_addr, "127.0.0.1:4444".parse()?);
-    let database_path = options.database_path.clone();
+async fn start(
+    executor: Arc<Executor<'_>>,
+    config: Arc<cli_config::Config>,
+    _options: Arc<WalletCli>,
+) -> Result<()> {
+    let connect_addr: SocketAddr = config.connect_url.parse()?;
+    let sub_addr: SocketAddr = config.subscriber_url.parse()?;
+    let database_path = config.database_path.clone();
 
-    let database_path = join_config_path(&(*database_path))?;
+    let database_path = join_config_path(&PathBuf::from(database_path))?;
     let rocks = Rocks::new(&database_path)?;
 
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
@@ -194,6 +190,12 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<(
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
+    //let wallet = adapter.wallet;
+    let wallet = Arc::new(WalletDB::new("wallet.db")?);
+
+    //let wallet2 = wallet.clone();
+    let ex = executor.clone();
+
     let state = State {
         tree: CommitmentTree::empty(),
         merkle_roots,
@@ -216,7 +218,7 @@ async fn start(executor: Arc<Executor<'_>>, options: Arc<WalletCli>) -> Result<(
 
     let adapter = RpcAdapter::new(wallet.clone())?;
     // start the rpc server
-    jsonserver::start(ex.clone(), options.clone(), adapter).await?;
+    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
     subscribe_task.cancel().await;
     Ok(())
@@ -229,6 +231,7 @@ fn main() -> Result<()> {
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let options = Arc::new(WalletCli::load()?);
+    let config = Arc::new(cli_config::Config::default());
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -238,12 +241,13 @@ fn main() -> Result<()> {
         LevelFilter::Off
     };
 
+    let log_path = config.log_path.clone();
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
             LevelFilter::Debug,
             Config::default(),
-            std::fs::File::create(options.log_path.as_path()).unwrap(),
+            std::fs::File::create(log_path).unwrap(),
         ),
     ])
     .unwrap();
@@ -256,7 +260,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, options).await?;
+                start(ex2, config, options).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

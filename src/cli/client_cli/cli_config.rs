@@ -1,12 +1,12 @@
+use crate::serial::{Encodable, Decodable, serialize, deserialize};
+use crate::Result;
+use crate::util::join_config_path;
+
 use std::{
     fs::{create_dir_all, File},
     io::prelude::*,
     path::PathBuf,
 };
-
-use crate::serial::{Encodable, Decodable, serialize, deserialize};
-use crate::Result;
-
 
 pub struct Config {
     pub connect_url: String,
@@ -35,10 +35,11 @@ impl Default for Config {
 
 impl Config {
     pub fn load(path: PathBuf) -> Result<Config> {
+        let path = join_config_path(&path)?; 
         load_config_file(path)
     }
-
     pub fn save(&self, path: PathBuf) -> Result <()> {
+        let path = join_config_path(&path)?; 
         save_config_file(self, path)
     }
 }
