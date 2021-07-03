@@ -5,13 +5,13 @@ Not even an alpha product. Just a mere prototype(s).
 To run darkfid:
 
 ```console
-$ cargo run --bin darkfi
+$ cargo run --bin darkfi -- -v
 ```
 
-To run with verbose:
+To change darkfid configurations:
 
 ```console
-$ cargo run --bin darkfi -- -v
+$ cargo run --bin darkfi -- config --help
 ```
 
 Run 10 clients simultaneously:
