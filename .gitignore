@@ -1,3 +1,5 @@
 .gitignore
 /target
 scripts/__pycache__/
+mint.params
+spend.params
