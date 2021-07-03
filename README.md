@@ -11,7 +11,7 @@ $ cargo build --release
 Run gateway daemon:
 
 ```console
-$ cargo run --bin gateway -- -v
+$ cargo run --bin gatewayd -- -v
 ```
 
 Run darkfid:
