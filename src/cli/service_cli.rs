@@ -1,7 +1,6 @@
 use crate::Result;
 use std::net::SocketAddr;
 
-
 pub struct ServiceCli {
     pub accept_addr: Option<SocketAddr>,
     pub pub_addr: Option<SocketAddr>,
@@ -65,4 +64,3 @@ impl ServiceCli {
         })
     }
 }
-
