@@ -227,11 +227,18 @@ async fn start(
 fn main() -> Result<()> {
     use simplelog::*;
 
+    let mut config = cli_config::Config::load(PathBuf::from("darkfid_config_file"))?;
+    let options = Arc::new(WalletCli::load(&mut config)?);
+
+    if options.change_config {
+        config.save(PathBuf::from("darkfid_config_file"))?;
+        std::process::exit(-1);
+    }
+
+    let config = Arc::new(config);
+
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
-
-    let options = Arc::new(WalletCli::load()?);
-    let config = Arc::new(cli_config::Config::load(PathBuf::from("darkfid_config_file"))?);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 

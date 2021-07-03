@@ -2,11 +2,7 @@ use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
 use crate::Result;
 
-use std::{
-    fs::OpenOptions,
-    io::prelude::*,
-    path::PathBuf,
-};
+use std::{fs::OpenOptions, io::prelude::*, path::PathBuf};
 
 pub struct Config {
     pub connect_url: String,
@@ -21,7 +17,16 @@ impl Default for Config {
         let connect_url = String::from("127.0.0.1:3333");
         let subscriber_url = String::from("127.0.0.1:4444");
         let rpc_url = String::from("127.0.0.1:8000");
+
         let database_path = String::from("database_client.db");
+        let database_path = join_config_path(&PathBuf::from(database_path))
+            .expect("error during join database_path to config path");
+        let database_path = String::from(
+            database_path
+                .to_str()
+                .expect("error convert Path to String"),
+        );
+
         let log_path = String::from("/tmp/darkfid_service_daemon.log");
         Self {
             connect_url,
@@ -62,7 +67,10 @@ pub fn load_config_file(config_file: PathBuf) -> Result<Config> {
 }
 
 pub fn save_config_file(config: &Config, config_file: PathBuf) -> Result<()> {
-    let mut file = OpenOptions::new().write(true).create(true).open(&config_file)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&config_file)?;
     let serialized = serialize(config);
     file.write_all(&serialized)?;
     Ok(())
