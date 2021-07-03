@@ -231,7 +231,7 @@ fn main() -> Result<()> {
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let options = Arc::new(WalletCli::load()?);
-    let config = Arc::new(cli_config::Config::default());
+    let config = Arc::new(cli_config::Config::load(PathBuf::from("darkfid_config_file"))?);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 

@@ -20,7 +20,7 @@ impl WalletCli {
                     .takes_value(false)
             ).get_matches();
 
-        let verbose = app.is_present("VERBOSE");
+        let verbose = app.is_present("verbose");
 
         Ok(Self {
             verbose,
