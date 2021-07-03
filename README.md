@@ -2,13 +2,19 @@ Not even an alpha product. Just a mere prototype(s).
 
 # darkfid usage
 
-To run darkfid:
+Perform the trusted setup:
+
+```console
+$ cargo build --release
+```
+
+Run darkfid:
 
 ```console
 $ cargo run --bin darkfi -- -v
 ```
 
-To change darkfid configurations:
+Change darkfid configurations:
 
 ```console
 $ cargo run --bin darkfi -- config --help
