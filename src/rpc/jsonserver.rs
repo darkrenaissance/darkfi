@@ -145,7 +145,7 @@ impl RpcInterface {
         io.add_method("get_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_key().await.expect("Failed to get key");
+                self2.adapter.get_key().await?;
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
@@ -156,8 +156,7 @@ impl RpcInterface {
                 self2
                     .adapter
                     .get_cash_key()
-                    .await
-                    .expect("Failed to get key");
+                    .await?;
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
@@ -190,8 +189,7 @@ impl RpcInterface {
                 self2
                     .adapter
                     .init_db()
-                    .await
-                    .expect("Wallet generation failed");
+                    .await?;
                 Ok(jsonrpc_core::Value::String("Created wallet".into()))
             }
         });
@@ -203,8 +201,7 @@ impl RpcInterface {
                 self2
                     .adapter
                     .key_gen()
-                    .await
-                    .expect("Failed to generate key");
+                    .await?;
                 Ok(jsonrpc_core::Value::String(
                     "Attempted key generation".into(),
                 ))
@@ -218,8 +215,7 @@ impl RpcInterface {
                 self2
                     .adapter
                     .cash_key_gen()
-                    .await
-                    .expect("Failed to generate key");
+                    .await?;
                 Ok(jsonrpc_core::Value::String(
                     "Attempted key generation".into(),
                 ))
@@ -230,11 +226,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Test wallet method called...");
-                // use map err to convert from own error to jsonrpc
-                // convert our error to string 
-                // use json to process error string
-
-                self2.adapter.test_wallet().await.expect("Wallet test failed");
+                self2.adapter.test_wallet().await?;
                 Ok(jsonrpc_core::Value::String("Test wallet".into()))
             }
         });
@@ -246,7 +238,7 @@ impl RpcInterface {
                 self2
                     .adapter
                     .init_cashier_db()
-                    .await.expect("Create wallet failed");
+                    .await?;
                 println!("Wallet created at path {:?}", self2.adapter.wallet.path);
                 Ok(jsonrpc_core::Value::String("Created cashier wallet".into()))
             }

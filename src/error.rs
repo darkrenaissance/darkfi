@@ -45,6 +45,7 @@ pub enum Error {
     JsonRpcError(String),
     RocksdbError(String),
     TreeFull,
+    SerdeJsonError(String),
 }
 
 impl std::error::Error for Error {}
@@ -86,6 +87,7 @@ impl fmt::Display for Error {
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
+            Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
         }
     }
 }
@@ -110,11 +112,17 @@ impl From<jsonrpc_core::Error> for Error {
 }
 
 
-//impl From<Error> for jsonrpc_core::types::error::Error {
-//    fn from(err: Error) -> jsonrpc_core::types::error::Error {
-//        jsonrpc_core::types::error::Error::ErrorCode
-//    }
-//}
+impl From<Error> for jsonrpc_core::Error {
+    fn from(_err: Error) -> jsonrpc_core::Error {
+        jsonrpc_core::Error::parse_error()
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Error {
+        Error::SerdeJsonError(err.to_string())
+    }
+}
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
@@ -175,3 +183,4 @@ impl From<state::VerifyFailed> for Error {
         Error::VerifyFailed
     }
 }
+
