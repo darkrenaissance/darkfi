@@ -8,7 +8,7 @@ use async_std::sync::{Arc, Mutex};
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::{named_params, Connection};
+use rusqlite::{params, named_params, Connection};
 
 use std::path::PathBuf;
 
@@ -123,14 +123,14 @@ impl WalletDB {
 
     pub async fn put_keypair(&self, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "INSERT INTO keys(key_id, key_private, key_public)
-            VALUES (NULL, :privkey, :pubkey)",
-            named_params! {
-            ":privkey": privkey,
-             ":pubkey": pubkey
-            },
-        )?;
+        //conn.execute(
+        //    "INSERT INTO keys(key_id, key_private, key_public)
+        //    VALUES (NULL, :privkey, :pubkey)",
+        //    named_params! {
+        //    ":privkey": privkey,
+        //     ":pubkey": pubkey
+        //    },
+        //)?;
         Ok(())
     }
 
@@ -196,5 +196,32 @@ impl WalletDB {
     pub async fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
         let v: D = deserialize(&key)?;
         Ok(v)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+use super::*;
+
+#[test] 
+    pub fn test_keypair() -> Result<()> {
+        let path = join_config_path(&PathBuf::from("wallet.db"))?;
+        let conn = Connection::open(path)?;
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        let mut stmt = conn.prepare("SELECT * FROM keys")?;
+        stmt.execute(rusqlite::params![1i32])?;
+        //conn.execute(
+        //    "INSERT INTO keys(key_private, key_public)
+        //    VALUES (NULL, :privkey, :pubkey)",
+        //    named_params! {
+        //    ":privkey": privkey,
+        //     ":pubkey": pubkey
+        //    },
+        //)?;
+        Ok(())
     }
 }

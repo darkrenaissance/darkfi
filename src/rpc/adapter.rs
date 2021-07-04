@@ -1,4 +1,4 @@
-use crate::wallet::{WalletDB};
+use crate::wallet::WalletDB;
 use crate::Result;
 use async_std::sync::Arc;
 use log::*;
