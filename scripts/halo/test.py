@@ -1,6 +1,3 @@
-import sys
-sys.path.append("..")
-
 import random
 import misc
 import pasta
@@ -110,9 +107,9 @@ def setup(wires, gates_matrix):
     # The copy permuation applied to a, b, c
     # Returns the permuted index value (corresponding root of unity coset)
     # when evaluated on the domain.
-    ssigma_1 = PolyEvalRep(ROOT, permuted_domain_a)
-    ssigma_2 = PolyEvalRep(ROOT, permuted_domain_b)
-    ssigma_3 = PolyEvalRep(ROOT, permuted_domain_c)
+    ssigma_1 = PolyEvalRep(ROOTS, permuted_domain_a)
+    ssigma_2 = PolyEvalRep(ROOTS, permuted_domain_b)
+    ssigma_3 = PolyEvalRep(ROOTS, permuted_domain_c)
     copy_permutes = [ssigma_1, ssigma_2, ssigma_3]
 
 setup(wires, gates_matrix)
