@@ -28,7 +28,7 @@ pub enum Error {
     VMError,
     BadContract,
     Groth16Error,
-    RusqliteError,
+    RusqliteError(String),
     OperationFailed,
     ConnectFailed,
     ConnectTimeout,
@@ -69,7 +69,7 @@ impl fmt::Display for Error {
             Error::VMError => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error => f.write_str("Groth16 error"),
-            Error::RusqliteError => f.write_str("Rusqlite error"),
+            Error::RusqliteError(ref err) => write!(f, "Rusqlite error {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
 
             Error::ConnectFailed => f.write_str("Connection failed"),
@@ -131,8 +131,8 @@ impl From<std::io::Error> for Error {
 }
 
 impl From<rusqlite::Error> for Error {
-    fn from(_err: rusqlite::Error) -> Error {
-        Error::RusqliteError
+    fn from(err: rusqlite::Error) -> Error {
+        Error::RusqliteError(err.to_string())
     }
 }
 
