@@ -203,7 +203,7 @@ impl RpcInterface {
                     .key_gen()
                     .await?;
                 Ok(jsonrpc_core::Value::String(
-                    "Attempted key generation".into(),
+                    "Key generation successful".into(),
                 ))
             }
         });

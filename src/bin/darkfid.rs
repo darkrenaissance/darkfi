@@ -1,4 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
+use log::*;
 use drk::cli::{cli_config, WalletCli};
 use drk::crypto::{
     load_params,
@@ -190,11 +191,13 @@ async fn start(
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    //let wallet = adapter.wallet;
     let wallet = Arc::new(WalletDB::new("wallet.db")?);
 
-    //let wallet2 = wallet.clone();
     let ex = executor.clone();
+
+    let adapter = RpcAdapter::new(wallet.clone())?;
+    // start the rpc server
+    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
     let state = State {
         tree: CommitmentTree::empty(),
@@ -206,19 +209,18 @@ async fn start(
     };
 
     // create gateway client
+    debug!(target: "Client", "Creating client");
     let mut client = GatewayClient::new(connect_addr, slabstore)?;
 
+    debug!(target: "Gateway", "Start subscriber");
     // start subscribing
     let gateway_slabs_sub: GatewaySlabsSubscriber =
         client.start_subscriber(sub_addr, executor.clone()).await?;
     let subscribe_task = executor.spawn(subscribe(gateway_slabs_sub, state));
 
     // start gateway client
+    debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
-
-    let adapter = RpcAdapter::new(wallet.clone())?;
-    // start the rpc server
-    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
     subscribe_task.cancel().await;
     Ok(())

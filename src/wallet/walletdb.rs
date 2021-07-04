@@ -83,8 +83,10 @@ impl WalletDB {
         let valcom_blind = self.get_value_serialized(&note.valcom_blind).await?;
         let value = self.get_value_serialized(&note.value).await?;
         let asset_id = self.get_value_serialized(&note.asset_id).await?;
-        let conn = Connection::open(&self.path)?;
         let witness = self.get_value_serialized(&witness).await?;
+        let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         conn.execute(
             "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
             VALUES (NULL, :coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
@@ -100,8 +102,6 @@ impl WalletDB {
         )?;
         Ok(())
     }
-
-
 
     pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "key_gen", "Attempting to generate keys...");
@@ -121,34 +121,32 @@ impl WalletDB {
         (pubkey, privkey)
     }
 
-    pub async fn put_keypair(&self, pubkey: Vec<u8>, privkey: Vec<u8>) -> Result<()> {
+    pub async fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        //conn.execute(
-        //    "INSERT INTO keys(key_id, key_private, key_public)
-        //    VALUES (NULL, :privkey, :pubkey)",
-        //    named_params! {
-        //    ":privkey": privkey,
-        //     ":pubkey": pubkey
-        //    },
-        //)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private])?;
         Ok(())
     }
 
-    pub async fn put_cashier_pub(&self, pubkey: Vec<u8>) -> Result<()> {
+    pub async fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
         debug!(target: "save_cash_key", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
-        // Write keys to database
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         conn.execute(
-            "INSERT INTO cashier(key_id, key_public)
-            VALUES (NULL, :pubkey)",
-            named_params! {":pubkey": pubkey},
-        )?;
+            "INSERT INTO cashier(key_public) VALUES (?1)",
+            params![key_public])?;
         Ok(())
     }
 
     pub async fn get_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
@@ -161,6 +159,8 @@ impl WalletDB {
     pub async fn get_cashier_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get_cashier_public", "Returning keys...");
         let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
@@ -173,6 +173,8 @@ impl WalletDB {
     pub fn get_private(&self) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut keys = Vec::new();
@@ -184,8 +186,10 @@ impl WalletDB {
 
     pub fn test_wallet(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
         let mut stmt = conn.prepare("SELECT * FROM keys")?;
-        stmt.execute(["NULL"])?;
+        let _rows = stmt.query([])?;
         Ok(())
     }
 
@@ -210,18 +214,13 @@ use super::*;
         let conn = Connection::open(path)?;
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
-        stmt.execute(rusqlite::params![1i32])?;
-        //conn.execute(
-        //    "INSERT INTO keys(key_private, key_public)
-        //    VALUES (NULL, :privkey, :pubkey)",
-        //    named_params! {
-        //    ":privkey": privkey,
-        //     ":pubkey": pubkey
-        //    },
-        //)?;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private])?;
         Ok(())
     }
 }
