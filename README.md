@@ -17,7 +17,7 @@ $ cargo run --bin gatewayd -- -v
 Run darkfid:
 
 ```console
-$ cargo run --bin darkfi -- -v
+$ cargo run --bin darkfid -- -v
 ```
 
 Change darkfid configurations:
@@ -41,4 +41,3 @@ Let's liberate people from the claws of big tech and create the democratic parad
 Self-defense is integral to any organism's survival and growth.
 
 Power to the minuteman.
-
