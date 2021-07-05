@@ -78,6 +78,7 @@ rocksdb = "0.16.0"
 dirs = "3.0.2"
 
 bitcoin = "0.26.2"
+secp256k1 = "0.20.3"
 
 [dependencies.rusqlite]
 version = "0.25.1"
