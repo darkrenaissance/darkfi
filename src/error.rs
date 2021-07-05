@@ -111,7 +111,6 @@ impl From<jsonrpc_core::Error> for Error {
     }
 }
 
-
 impl From<Error> for jsonrpc_core::Error {
     fn from(_err: Error) -> jsonrpc_core::Error {
         jsonrpc_core::Error::parse_error()
@@ -183,4 +182,3 @@ impl From<state::VerifyFailed> for Error {
         Error::VerifyFailed
     }
 }
-

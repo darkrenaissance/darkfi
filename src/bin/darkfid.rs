@@ -1,5 +1,4 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use log::*;
 use drk::cli::{cli_config, WalletCli};
 use drk::crypto::{
     load_params,
@@ -15,6 +14,7 @@ use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util::join_config_path;
 use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
+use log::*;
 //use drk::rpc::
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
@@ -104,7 +104,7 @@ impl State {
                 witness.append(node).expect("append to witness");
             }
 
-            if let Some((note, _secret)) = self.try_decrypt_note(enc_note).await {
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
                 // We need to keep track of the witness for this coin.
                 // This allows us to prove inclusion of the coin in the merkle tree with ZK.
                 // Just as we update the merkle tree with every new coin, so we do the same with
@@ -117,7 +117,9 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                self.wallet.put_own_coins(coin, note, witness).await?;
+                self.wallet
+                    .put_own_coins(coin, note, witness, secret)
+                    .await?;
             }
         }
         Ok(())

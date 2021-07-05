@@ -1,14 +1,14 @@
 use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::Result;
 use crate::util::join_config_path;
+use crate::Result;
 
 use async_std::sync::{Arc, Mutex};
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::{params, named_params, Connection};
+use rusqlite::{named_params, params, Connection};
 
 use std::path::PathBuf;
 
@@ -76,7 +76,9 @@ impl WalletDB {
         coin: Coin,
         note: Note,
         witness: IncrementalWitness<MerkleNode>,
+        secret: jubjub::Fr,
     ) -> Result<()> {
+        // prepare the values
         let coin = self.get_value_serialized(&coin.repr).await?;
         let serial = self.get_value_serialized(&note.serial).await?;
         let coin_blind = self.get_value_serialized(&note.coin_blind).await?;
@@ -84,12 +86,24 @@ impl WalletDB {
         let value = self.get_value_serialized(&note.value).await?;
         let asset_id = self.get_value_serialized(&note.asset_id).await?;
         let witness = self.get_value_serialized(&witness).await?;
+        let secret = self.get_value_serialized(&secret).await?;
+        // open connection
         let conn = Connection::open(&self.path)?;
-        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
-        let _rows = stmt.query([])?;
+        // unlock database
+        let mut unlock = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = unlock.query([])?;
+        // return key_id from key_private
+        let mut get_id =
+            conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
+        let rows = get_id.query_map::<u8, _, _>(&[(":key_private", &secret)], |row| row.get(0))?;
+        let mut key_id = Vec::new();
+        for id in rows {
+            key_id.push(id?)
+        }
+        debug!("FOUND KEY ID: {:?}", key_id.pop());
         conn.execute(
             "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
-            VALUES (NULL, :coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
+            VALUES (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
             named_params! {
             ":coin": coin,
             ":serial": serial,
@@ -98,6 +112,7 @@ impl WalletDB {
             ":coin_blind": coin_blind,
             ":valcom_blind": valcom_blind,
             ":witness": witness,
+            ":key_id": key_id.pop().expect("key_id not found!"),
             },
         )?;
         Ok(())
@@ -127,7 +142,8 @@ impl WalletDB {
         let _rows = stmt.query([])?;
         conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private])?;
+            params![key_public, key_private],
+        )?;
         Ok(())
     }
 
@@ -138,7 +154,8 @@ impl WalletDB {
         let _rows = stmt.query([])?;
         conn.execute(
             "INSERT INTO cashier(key_public) VALUES (?1)",
-            params![key_public])?;
+            params![key_public],
+        )?;
         Ok(())
     }
 
@@ -206,9 +223,9 @@ impl WalletDB {
 #[cfg(test)]
 mod tests {
 
-use super::*;
+    use super::*;
 
-#[test] 
+    #[test]
     pub fn test_keypair() -> Result<()> {
         let path = join_config_path(&PathBuf::from("wallet.db"))?;
         let conn = Connection::open(path)?;
@@ -220,7 +237,78 @@ use super::*;
         let _rows = stmt.query([])?;
         conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private])?;
+            params![key_public, key_private],
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_get_id() -> Result<()> {
+        let path = join_config_path(&PathBuf::from("wallet.db"))?;
+        let conn = Connection::open(path)?;
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let key_private = serial::serialize(&secret);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = stmt.query([])?;
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private],
+        )?;
+        let mut get_id =
+            conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
+        let rows =
+            get_id.query_map::<u8, _, _>(&[(":key_private", &key_private)], |row| row.get(0))?;
+        let mut key_id = Vec::new();
+        for id in rows {
+            key_id.push(id?)
+        }
+        println!("FOUND ID: {:?}", key_id.pop().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_own_coins() -> Result<()> {
+        let key_private = Vec::new();
+        let coin = Vec::new();
+        let serial = Vec::new();
+        let coin_blind = Vec::new();
+        let valcom_blind = Vec::new();
+        let value = Vec::new();
+        let asset_id = Vec::new();
+        let witness = Vec::new();
+        let path = join_config_path(&PathBuf::from("wallet.db"))?;
+        let conn = Connection::open(path)?;
+        let contents = include_str!("../../res/schema.sql");
+        match conn.execute_batch(&contents) {
+            Ok(v) => println!("Database initalized successfully {:?}", v),
+            Err(err) => println!("Error: {}", err),
+        };
+        let mut unlock = conn.prepare("PRAGMA key = 'testkey'")?;
+        let _rows = unlock.query([])?;
+        let mut get_id =
+            conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
+        let rows =
+            get_id.query_map::<u8, _, _>(&[(":key_private", &key_private)], |row| row.get(0))?;
+        let mut key_id = Vec::new();
+        for id in rows {
+            key_id.push(id?)
+        }
+        conn.execute(
+            "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
+            VALUES (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
+            named_params! {
+            ":coin": coin,
+            ":serial": serial,
+            ":value": value,
+            ":asset_id": asset_id,
+            ":coin_blind": coin_blind,
+            ":valcom_blind": valcom_blind,
+            ":witness": witness,
+            ":key_id": key_id.pop().expect("key_id not found!"),
+            },
+        )?;
         Ok(())
     }
 }

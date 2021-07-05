@@ -1,5 +1,5 @@
-use crate::rpc::adapter::RpcAdapter;
 use crate::cli::cli_config;
+use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -153,10 +153,7 @@ impl RpcInterface {
         io.add_method("get_cash_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2
-                    .adapter
-                    .get_cash_key()
-                    .await?;
+                self2.adapter.get_cash_key().await?;
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
@@ -186,10 +183,7 @@ impl RpcInterface {
                     "Attempting wallet generation at path {:?}",
                     self2.adapter.wallet.path
                 );
-                self2
-                    .adapter
-                    .init_db()
-                    .await?;
+                self2.adapter.init_db().await?;
                 Ok(jsonrpc_core::Value::String("Created wallet".into()))
             }
         });
@@ -198,10 +192,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Key generation method called...");
-                self2
-                    .adapter
-                    .key_gen()
-                    .await?;
+                self2.adapter.key_gen().await?;
                 Ok(jsonrpc_core::Value::String(
                     "Key generation successful".into(),
                 ))
@@ -212,10 +203,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Key generation method called...");
-                self2
-                    .adapter
-                    .cash_key_gen()
-                    .await?;
+                self2.adapter.cash_key_gen().await?;
                 Ok(jsonrpc_core::Value::String(
                     "Attempted key generation".into(),
                 ))
@@ -235,10 +223,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("New wallet method called...");
-                self2
-                    .adapter
-                    .init_cashier_db()
-                    .await?;
+                self2.adapter.init_cashier_db().await?;
                 println!("Wallet created at path {:?}", self2.adapter.wallet.path);
                 Ok(jsonrpc_core::Value::String("Created cashier wallet".into()))
             }

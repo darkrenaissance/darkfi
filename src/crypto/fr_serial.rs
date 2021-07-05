@@ -1,7 +1,6 @@
 use group::GroupEncoding;
 use std::io;
 
-
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 

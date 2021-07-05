@@ -10,10 +10,7 @@ pub struct Slab {
 impl Slab {
     pub fn new(payload: Vec<u8>) -> Self {
         let index = 0;
-        Slab {
-            index,
-            payload,
-        }
+        Slab { index, payload }
     }
 
     pub fn set_index(&mut self, index: u64) {

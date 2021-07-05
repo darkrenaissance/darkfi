@@ -2,10 +2,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::service::GatewayService;
 use drk::cli::ServiceCli;
-use drk::Result;
+use drk::service::GatewayService;
 use drk::util::join_config_path;
+use drk::Result;
 
 extern crate clap;
 use async_executor::Executor;
