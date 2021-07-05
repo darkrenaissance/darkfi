@@ -100,7 +100,6 @@ impl WalletDB {
         for id in rows {
             key_id.push(id?)
         }
-        debug!("FOUND KEY ID: {:?}", key_id.pop());
         conn.execute(
             "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
             VALUES (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
