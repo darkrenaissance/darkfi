@@ -20,10 +20,20 @@ Run darkfid:
 $ cargo run --bin darkfid -- -v
 ```
 
-Change darkfid configurations:
+Run drk:
 
 ```console
-$ cargo run --bin darkfi -- config --help
+$ cargo run --bin drk -- -v
+```
+
+# darkfid & drk configurations:
+
+```console
+$ cargo run --bin darkfid -- config --help
+```
+
+```console
+$ cargo run --bin drk -- config --help
 ```
 
 # dark-client usage
