@@ -3,11 +3,53 @@ use drk::Result;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
+use log::*;
 
 use async_std::sync::Arc;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
-async fn start(_executor: Arc<Executor<'_>>, _config: Arc<DarkfiCliConfig>) -> Result<()> {
+type Payload = HashMap<String, String>;
+
+struct Drk {
+    url: String,
+    payload: Payload,
+}
+
+impl Drk {
+    pub fn new(url: String) -> Self {
+        let mut payload = HashMap::new();
+        payload.insert(String::from("jsonrpc"), String::from("2.0"));
+        payload.insert(String::from("id"), String::from("0"));
+        Self { payload, url }
+    }
+
+    pub async fn say_hello(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), String::from("say_hello"));
+
+        self.request().await
+    }
+
+    async fn request(&self) -> Result<()> {
+        let mut res = surf::post(&self.url)
+            .body(http_types::Body::from_json(&self.payload)?)
+            .await?;
+
+        if res.status() == 200 {
+            let response = res.body_json::<Payload>().await?;
+            info!("Response Result: {:?}", response);
+        }
+        Ok(())
+    }
+}
+
+async fn start(_executor: Arc<Executor<'_>>, config: Arc<DarkfiCliConfig>) -> Result<()> {
+    let url = config.rpc_url.clone();
+
+    let mut client = Drk::new(url);
+    client.say_hello().await?;
+
     Ok(())
 }
 
@@ -30,7 +72,7 @@ fn main() -> Result<()> {
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
     let debug_level = if options.verbose {
-        LevelFilter::Debug
+        LevelFilter::Info
     } else {
         LevelFilter::Off
     };

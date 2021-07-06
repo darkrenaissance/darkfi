@@ -49,7 +49,7 @@ pub struct DarkfidCliConfig {
 
 impl Default for DarkfiCliConfig {
     fn default() -> Self {
-        let rpc_url = String::from("127.0.0.1:8000");
+        let rpc_url = String::from("http://127.0.0.1:8000");
         let log_path = String::from("/tmp/darkfi_cli.log");
         Self {
             rpc_url,
