@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{cli_config, DarkfidCli};
+use drk::cli::{DarkfidCliConfig, DarkfidCli, ClientCliConfig};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -153,8 +153,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
 
 async fn start(
     executor: Arc<Executor<'_>>,
-    config: Arc<cli_config::Config>,
-    _options: Arc<DarkfidCli>,
+    config: Arc<DarkfidCliConfig>,
 ) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
@@ -228,12 +227,12 @@ async fn start(
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = cli_config::Config::load(PathBuf::from("darkfid_config_file"))?;
+    let mut config = DarkfidCliConfig::load(PathBuf::from("darkfid_config_file"))?;
     let options = Arc::new(DarkfidCli::load(&mut config)?);
 
     if options.change_config {
         config.save(PathBuf::from("darkfid_config_file"))?;
-        std::process::exit(-1);
+        return Ok(());
     }
 
     let config = Arc::new(config);
@@ -268,7 +267,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config, options).await?;
+                start(ex2, config).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

@@ -1,4 +1,4 @@
-use crate::cli::cli_config;
+use super::cli_config::DarkfidCliConfig;
 use crate::Result;
 
 use clap::{App, AppSettings, Arg};
@@ -9,11 +9,11 @@ pub struct DarkfidCli {
 }
 
 impl DarkfidCli {
-    pub fn load(config: &mut cli_config::Config) -> Result<Self> {
-        let app = App::new("Wallet CLI")
+    pub fn load(config: &mut DarkfidCliConfig) -> Result<Self> {
+        let app = App::new("Darkfi Daemon CLI")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")
-            .about("Run Darkfi daemon")
+            .about("Run Darkfi Daemon")
             .arg(
                 Arg::new("verbose")
                     .short('v')
@@ -80,19 +80,19 @@ impl DarkfidCli {
                         }
                         if let Some(v) = c.value_of("subscriber_url") {
                             config.subscriber_url = v.to_string();
-                            println!("Change Subscriber Url To {}", config.connect_url);
+                            println!("Change Subscriber Url To {}", config.subscriber_url);
                         }
                         if let Some(v) = c.value_of("rpc_url") {
                             config.rpc_url = v.to_string();
-                            println!("Change RPC Url To {}", config.connect_url);
+                            println!("Change RPC Url To {}", config.rpc_url);
                         }
                         if let Some(v) = c.value_of("database_path") {
                             config.database_path = v.to_string();
-                            println!("Change Database Path To {}", config.connect_url);
+                            println!("Change Database Path To {}", config.database_path);
                         }
                         if let Some(v) = c.value_of("log_path") {
                             config.log_path = v.to_string();
-                            println!("Change Log Path To {}", config.connect_url);
+                            println!("Change Log Path To {}", config.log_path);
                         }
                     }
                     _ => {}
