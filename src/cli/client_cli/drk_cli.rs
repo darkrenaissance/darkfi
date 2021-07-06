@@ -1,15 +1,15 @@
-use super::cli_config::DarkfiCliConfig;
+use super::cli_config::DrkCliConfig;
 use crate::Result;
 
 use clap::{App, AppSettings, Arg};
 
-pub struct DarkfiCli {
+pub struct DrkCli {
     pub change_config: bool,
     pub verbose: bool,
 }
 
-impl DarkfiCli {
-    pub fn load(config: &mut DarkfiCliConfig) -> Result<Self> {
+impl DrkCli {
+    pub fn load(config: &mut DrkCliConfig) -> Result<Self> {
         let app = App::new("Darkfi CLI")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")

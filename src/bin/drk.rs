@@ -1,4 +1,4 @@
-use drk::cli::{ClientCliConfig, DarkfiCli, DarkfiCliConfig};
+use drk::cli::{ClientCliConfig, DrkCli, DrkCliConfig};
 use drk::Result;
 
 use async_executor::Executor;
@@ -44,7 +44,7 @@ impl Drk {
     }
 }
 
-async fn start(_executor: Arc<Executor<'_>>, config: Arc<DarkfiCliConfig>) -> Result<()> {
+async fn start(_executor: Arc<Executor<'_>>, config: Arc<DrkCliConfig>) -> Result<()> {
     let url = config.rpc_url.clone();
 
     let mut client = Drk::new(url);
@@ -56,8 +56,8 @@ async fn start(_executor: Arc<Executor<'_>>, config: Arc<DarkfiCliConfig>) -> Re
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DarkfiCliConfig::load(PathBuf::from("darkfi_config_file"))?;
-    let options = Arc::new(DarkfiCli::load(&mut config)?);
+    let mut config = DrkCliConfig::load(PathBuf::from("darkfi_config_file"))?;
+    let options = Arc::new(DrkCli::load(&mut config)?);
 
     if options.change_config {
         config.save(PathBuf::from("darkfi_config_file"))?;

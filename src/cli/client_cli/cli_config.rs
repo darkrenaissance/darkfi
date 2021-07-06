@@ -31,10 +31,10 @@ pub trait ClientCliConfig: Encodable + Decodable + Default {
     }
 }
 
-impl ClientCliConfig for DarkfiCliConfig {} 
+impl ClientCliConfig for DrkCliConfig {} 
 impl ClientCliConfig for DarkfidCliConfig {} 
 
-pub struct DarkfiCliConfig {
+pub struct DrkCliConfig {
     pub rpc_url: String,
     pub log_path: String,
 }
@@ -47,7 +47,7 @@ pub struct DarkfidCliConfig {
     pub log_path: String,
 }
 
-impl Default for DarkfiCliConfig {
+impl Default for DrkCliConfig {
     fn default() -> Self {
         let rpc_url = String::from("http://127.0.0.1:8000");
         let log_path = String::from("/tmp/darkfi_cli.log");
@@ -109,7 +109,7 @@ impl Default for DarkfidCliConfig {
     }
 }
 
-impl Encodable for DarkfiCliConfig {
+impl Encodable for DrkCliConfig {
     fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.rpc_url.encode(&mut s)?;
@@ -118,7 +118,7 @@ impl Encodable for DarkfiCliConfig {
     }
 }
 
-impl Decodable for DarkfiCliConfig {
+impl Decodable for DrkCliConfig {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             rpc_url: Decodable::decode(&mut d)?,
