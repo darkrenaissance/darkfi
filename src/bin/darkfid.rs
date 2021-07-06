@@ -117,9 +117,7 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                self.wallet
-                    .put_own_coins(coin, note, witness, secret)
-                    .await?;
+                self.wallet.put_own_coins(coin, note, witness, secret)?;
             }
         }
         Ok(())
@@ -130,7 +128,6 @@ impl State {
         let secret = self
             .wallet
             .get_value_deserialized::<jubjub::Fr>(vec)
-            .await
             .expect("Deserialize failed");
         match ciphertext.decrypt(&secret) {
             Ok(note) => {
@@ -197,10 +194,6 @@ async fn start(
 
     let ex = executor.clone();
 
-    let adapter = RpcAdapter::new(wallet.clone())?;
-    // start the rpc server
-    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
-
     let state = State {
         tree: CommitmentTree::empty(),
         merkle_roots,
@@ -223,6 +216,10 @@ async fn start(
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
+
+    let adapter = RpcAdapter::new(wallet.clone())?;
+    // start the rpc server
+    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
     subscribe_task.cancel().await;
     Ok(())

@@ -145,7 +145,7 @@ impl RpcInterface {
         io.add_method("get_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_key().await?;
+                self2.adapter.get_key()?;
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
@@ -153,7 +153,7 @@ impl RpcInterface {
         io.add_method("get_cash_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_cash_key().await?;
+                self2.adapter.get_cash_key()?;
                 Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
             }
         });
@@ -162,7 +162,7 @@ impl RpcInterface {
         io.add_method("get_info", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_info().await;
+                self2.adapter.get_info();
                 Ok(jsonrpc_core::Value::Null)
             }
         });
@@ -171,7 +171,7 @@ impl RpcInterface {
         io.add_method("stop", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.stop().await;
+                self2.adapter.stop();
                 Ok(jsonrpc_core::Value::Null)
             }
         });
@@ -183,7 +183,7 @@ impl RpcInterface {
                     "Attempting wallet generation at path {:?}",
                     self2.adapter.wallet.path
                 );
-                self2.adapter.init_db().await?;
+                self2.adapter.init_db()?;
                 Ok(jsonrpc_core::Value::String("Created wallet".into()))
             }
         });
@@ -192,7 +192,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Key generation method called...");
-                self2.adapter.key_gen().await?;
+                self2.adapter.key_gen()?;
                 Ok(jsonrpc_core::Value::String(
                     "Key generation successful".into(),
                 ))
@@ -203,7 +203,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Key generation method called...");
-                self2.adapter.cash_key_gen().await?;
+                self2.adapter.cash_key_gen()?;
                 Ok(jsonrpc_core::Value::String(
                     "Attempted key generation".into(),
                 ))
@@ -214,7 +214,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Test wallet method called...");
-                self2.adapter.test_wallet().await?;
+                self2.adapter.test_wallet()?;
                 Ok(jsonrpc_core::Value::String("Test wallet".into()))
             }
         });
@@ -223,7 +223,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("New wallet method called...");
-                self2.adapter.init_cashier_db().await?;
+                self2.adapter.init_cashier_db()?;
                 println!("Wallet created at path {:?}", self2.adapter.wallet.path);
                 Ok(jsonrpc_core::Value::String("Created cashier wallet".into()))
             }

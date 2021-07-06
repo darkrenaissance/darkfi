@@ -49,7 +49,7 @@ impl WalletDB {
         })
     }
 
-    pub async fn init_db(&self) -> Result<()> {
+    pub fn init_db(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
         let contents = include_str!("../../res/schema.sql");
@@ -60,7 +60,7 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn init_cashier_db(&self) -> Result<()> {
+    pub fn init_cashier_db(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
         let contents = include_str!("../../res/schema.sql");
@@ -71,7 +71,7 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn put_own_coins(
+    pub fn put_own_coins(
         &self,
         coin: Coin,
         note: Note,
@@ -79,14 +79,14 @@ impl WalletDB {
         secret: jubjub::Fr,
     ) -> Result<()> {
         // prepare the values
-        let coin = self.get_value_serialized(&coin.repr).await?;
-        let serial = self.get_value_serialized(&note.serial).await?;
-        let coin_blind = self.get_value_serialized(&note.coin_blind).await?;
-        let valcom_blind = self.get_value_serialized(&note.valcom_blind).await?;
-        let value = self.get_value_serialized(&note.value).await?;
-        let asset_id = self.get_value_serialized(&note.asset_id).await?;
-        let witness = self.get_value_serialized(&witness).await?;
-        let secret = self.get_value_serialized(&secret).await?;
+        let coin = self.get_value_serialized(&coin.repr)?;
+        let serial = self.get_value_serialized(&note.serial)?;
+        let coin_blind = self.get_value_serialized(&note.coin_blind)?;
+        let valcom_blind = self.get_value_serialized(&note.valcom_blind)?;
+        let value = self.get_value_serialized(&note.value)?;
+        let asset_id = self.get_value_serialized(&note.asset_id)?;
+        let witness = self.get_value_serialized(&witness)?;
+        let secret = self.get_value_serialized(&secret)?;
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -117,7 +117,7 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
+    pub fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "key_gen", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -126,7 +126,7 @@ impl WalletDB {
         (pubkey, privkey)
     }
 
-    pub async fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
+    pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "cash key_gen", "Generating cashier keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -135,7 +135,7 @@ impl WalletDB {
         (pubkey, privkey)
     }
 
-    pub async fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
         let _rows = stmt.query([])?;
@@ -146,7 +146,7 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
+    pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
         debug!(target: "save_cash_key", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
@@ -158,7 +158,7 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn get_public(&self) -> Result<Vec<u8>> {
+    pub fn get_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
@@ -172,7 +172,7 @@ impl WalletDB {
         Ok(pub_keys)
     }
 
-    pub async fn get_cashier_public(&self) -> Result<Vec<u8>> {
+    pub fn get_cashier_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get_cashier_public", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("PRAGMA key = 'testkey'")?;
@@ -209,11 +209,11 @@ impl WalletDB {
         Ok(())
     }
 
-    pub async fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {
+    pub fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {
         let v = serialize(data);
         Ok(v)
     }
-    pub async fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
+    pub fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
         let v: D = deserialize(&key)?;
         Ok(v)
     }
