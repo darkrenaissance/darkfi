@@ -25,7 +25,38 @@ impl Drk {
     pub async fn say_hello(&mut self) -> Result<()> {
         self.payload
             .insert(String::from("method"), String::from("say_hello"));
+        self.request().await
+    }
 
+    pub async fn create_cashier_wallet(&mut self) -> Result<()> {
+        self.payload.insert(
+            String::from("method"),
+            String::from("create_cashier_wallet"),
+        );
+        self.request().await
+    }
+
+    pub async fn create_wallet(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), String::from("create_wallet"));
+        self.request().await
+    }
+
+    pub async fn key_gen(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), String::from("key_gen"));
+        self.request().await
+    }
+
+    pub async fn get_info(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), String::from("get_info"));
+        self.request().await
+    }
+
+    pub async fn stop(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), String::from("stop"));
         self.request().await
     }
 
@@ -35,18 +66,42 @@ impl Drk {
             .await?;
 
         if res.status() == 200 {
-            let response = res.body_json::<Payload>().await?;
+            let response = res.take_body();
+            let response = response.into_string().await?;
             info!("Response Result: {:?}", response);
         }
         Ok(())
     }
 }
 
-async fn start(config: Arc<DrkCliConfig>) -> Result<()> {
+async fn start(config: Arc<DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
     let url = config.rpc_url.clone();
 
     let mut client = Drk::new(url);
-    client.say_hello().await?;
+
+    if options.cashier {
+        client.create_cashier_wallet().await?;
+    }
+
+    if options.wallet {
+        client.create_wallet().await?;
+    }
+    
+    if options.key {
+        client.key_gen().await?;
+    }
+
+    if options.info {
+        client.get_info().await?;
+    }
+
+    if options.hello {
+        client.say_hello().await?;
+    }
+
+    if options.stop {
+        client.stop().await?;
+    }
 
     Ok(())
 }
@@ -63,7 +118,6 @@ fn main() -> Result<()> {
     }
 
     let config = Arc::new(config);
-
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -84,7 +138,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    futures::executor::block_on(start(config))?;
+    futures::executor::block_on(start(config, options))?;
 
     Ok(())
 }
