@@ -46,6 +46,7 @@ pub enum Error {
     RocksdbError(String),
     TreeFull,
     SerdeJsonError(String),
+    SurfHttpError(String),
 }
 
 impl std::error::Error for Error {}
@@ -88,6 +89,7 @@ impl fmt::Display for Error {
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
+            Error::SurfHttpError(ref err) => write!(f, "Surf Http error: {}", err),
         }
     }
 }
@@ -180,5 +182,11 @@ impl From<std::string::FromUtf8Error> for Error {
 impl From<state::VerifyFailed> for Error {
     fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
+    }
+}
+
+impl From<surf::Error> for Error {
+    fn from(err: surf::Error) -> Error {
+        Error::SurfHttpError(err.to_string())
     }
 }
