@@ -6,6 +6,12 @@ use clap::{App, AppSettings, Arg};
 pub struct DrkCli {
     pub change_config: bool,
     pub verbose: bool,
+    pub cashier: bool,
+    pub wallet: bool,
+    pub key: bool,
+    pub info: bool,
+    pub hello: bool,
+    pub stop: bool,
 }
 
 impl DrkCli {
@@ -19,6 +25,42 @@ impl DrkCli {
                     .short('v')
                     .help_heading(Some("Increase verbosity"))
                     .long("verbose")
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("hello")
+                    .long("hello")
+                    .help_heading(Some("Test Hello"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("cashier")
+                    .long("cashier")
+                    .help_heading(Some("Create a cashier wallet"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("key")
+                    .long("key")
+                    .help_heading(Some("Test key"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("wallet")
+                    .long("wallet")
+                    .help_heading(Some("Create a new wallet"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("info")
+                    .long("info")
+                    .help_heading(Some("Request info from daemon"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("stop")
+                    .long("stop")
+                    .help_heading(Some("Send a stop signal to the daemon"))
                     .takes_value(false),
             )
             .subcommand(
@@ -48,6 +90,12 @@ impl DrkCli {
         let mut change_config = false;
 
         let verbose = app.is_present("verbose");
+        let cashier = app.is_present("cashier");
+        let wallet = app.is_present("wallet");
+        let key = app.is_present("key");
+        let info = app.is_present("info");
+        let hello = app.is_present("hello");
+        let stop = app.is_present("stop");
 
         match app.subcommand_matches("config") {
             Some(config_sub) => match config_sub.subcommand() {
@@ -78,6 +126,12 @@ impl DrkCli {
         Ok(Self {
             change_config,
             verbose,
+            cashier,
+            wallet,
+            key,
+            info,
+            hello,
+            stop,
         })
     }
 }
