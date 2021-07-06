@@ -1,8 +1,6 @@
 use drk::cli::{ClientCliConfig, DrkCli, DrkCliConfig};
 use drk::Result;
 
-use async_executor::Executor;
-use easy_parallel::Parallel;
 use log::*;
 
 use async_std::sync::Arc;
@@ -44,7 +42,7 @@ impl Drk {
     }
 }
 
-async fn start(_executor: Arc<Executor<'_>>, config: Arc<DrkCliConfig>) -> Result<()> {
+async fn start(config: Arc<DrkCliConfig>) -> Result<()> {
     let url = config.rpc_url.clone();
 
     let mut client = Drk::new(url);
@@ -56,18 +54,16 @@ async fn start(_executor: Arc<Executor<'_>>, config: Arc<DrkCliConfig>) -> Resul
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DrkCliConfig::load(PathBuf::from("darkfi_config_file"))?;
+    let mut config = DrkCliConfig::load(PathBuf::from("drk_config_file"))?;
     let options = Arc::new(DrkCli::load(&mut config)?);
 
     if options.change_config {
-        config.save(PathBuf::from("darkfi_config_file"))?;
+        config.save(PathBuf::from("drk_config_file"))?;
         return Ok(());
     }
 
     let config = Arc::new(config);
 
-    let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -88,19 +84,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    let ex2 = ex.clone();
+    futures::executor::block_on(start(config))?;
 
-    let (_, result) = Parallel::new()
-        // Run four executor threads.
-        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex2, config).await?;
-                drop(signal);
-                Ok::<(), drk::Error>(())
-            })
-        });
-
-    result
+    Ok(())
 }

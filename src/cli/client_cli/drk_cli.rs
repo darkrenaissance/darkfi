@@ -10,10 +10,10 @@ pub struct DrkCli {
 
 impl DrkCli {
     pub fn load(config: &mut DrkCliConfig) -> Result<Self> {
-        let app = App::new("Darkfi CLI")
+        let app = App::new("Drk CLI")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")
-            .about("Run Darkfi Client")
+            .about("Run Drk Client")
             .arg(
                 Arg::new("verbose")
                     .short('v')
