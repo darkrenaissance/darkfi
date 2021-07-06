@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{cli_config, WalletCli};
+use drk::cli::{cli_config, DarkfidCli};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -154,7 +154,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
 async fn start(
     executor: Arc<Executor<'_>>,
     config: Arc<cli_config::Config>,
-    _options: Arc<WalletCli>,
+    _options: Arc<DarkfidCli>,
 ) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
@@ -229,7 +229,7 @@ fn main() -> Result<()> {
     use simplelog::*;
 
     let mut config = cli_config::Config::load(PathBuf::from("darkfid_config_file"))?;
-    let options = Arc::new(WalletCli::load(&mut config)?);
+    let options = Arc::new(DarkfidCli::load(&mut config)?);
 
     if options.change_config {
         config.save(PathBuf::from("darkfid_config_file"))?;

@@ -3,17 +3,17 @@ use crate::Result;
 
 use clap::{App, AppSettings, Arg};
 
-pub struct WalletCli {
+pub struct DarkfidCli {
     pub change_config: bool,
     pub verbose: bool,
 }
 
-impl WalletCli {
+impl DarkfidCli {
     pub fn load(config: &mut cli_config::Config) -> Result<Self> {
         let app = App::new("Wallet CLI")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")
-            .about("Run Wallet CLi")
+            .about("Run Darkfi daemon")
             .arg(
                 Arg::new("verbose")
                     .short('v')
