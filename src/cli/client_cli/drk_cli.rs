@@ -3,6 +3,32 @@ use crate::Result;
 
 use clap::{App, AppSettings, Arg};
 
+pub struct Transfer {
+    pub pub_key: String,
+    pub amount: String,
+}
+
+impl Transfer {
+    pub fn new() -> Self {
+        Self {
+            pub_key: String::new(),
+            amount: String::new(),
+        }
+    }
+
+    pub fn verfiy_amount(amount: &str) -> Result<()> {
+        if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
+            Ok(())
+        } else {
+            let err = format!(
+                "Unable to parse input amount as integer or float: {}",
+                amount
+            );
+            Err(crate::Error::ParseFailed(Box::leak(err.into_boxed_str())))
+        }
+    }
+}
+
 pub struct DrkCli {
     pub change_config: bool,
     pub verbose: bool,
@@ -12,6 +38,7 @@ pub struct DrkCli {
     pub info: bool,
     pub hello: bool,
     pub stop: bool,
+    pub transfer: Option<Transfer>,
 }
 
 impl DrkCli {
@@ -64,6 +91,26 @@ impl DrkCli {
                     .takes_value(false),
             )
             .subcommand(
+                App::new("transfer")
+                    .about("Transfer DBTC between users")
+                    .arg(
+                        Arg::new("address")
+                            .value_name("RECIPIENT_ADDRESS")
+                            .takes_value(true)
+                            .index(1)
+                            .help_heading(Some("Address of recipient"))
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::new("amount")
+                            .value_name("AMOUNT")
+                            .takes_value(true)
+                            .index(2)
+                            .help_heading(Some("Amount to send, in DBTC"))
+                            .required(true),
+                    ),
+            )
+            .subcommand(
                 App::new("config")
                     .about("Configuration settings")
                     .aliases(&["get", "set"])
@@ -96,6 +143,22 @@ impl DrkCli {
         let info = app.is_present("info");
         let hello = app.is_present("hello");
         let stop = app.is_present("stop");
+
+        let mut transfer = None;
+        match app.subcommand_matches("transfer") {
+            Some(transfer_sub) => {
+                let mut trn = Transfer::new();
+                if let Some(address) = transfer_sub.value_of("address") {
+                    trn.pub_key = address.to_string();
+                }
+                if let Some(amount) = transfer_sub.value_of("amount") {
+                    Transfer::verfiy_amount(amount)?;
+                    trn.amount = amount.to_string();
+                }
+                transfer = Some(trn);
+            }
+            None => {}
+        }
 
         match app.subcommand_matches("config") {
             Some(config_sub) => match config_sub.subcommand() {
@@ -132,6 +195,7 @@ impl DrkCli {
             info,
             hello,
             stop,
+            transfer,
         })
     }
 }
