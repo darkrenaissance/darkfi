@@ -45,6 +45,7 @@ pub struct DarkfidCliConfig {
     pub rpc_url: String,
     pub database_path: String,
     pub log_path: String,
+    pub password: String,
 }
 
 impl Default for DrkCliConfig {
@@ -66,6 +67,7 @@ impl Encodable for DarkfidCliConfig {
         len += self.rpc_url.encode(&mut s)?;
         len += self.database_path.encode(&mut s)?;
         len += self.log_path.encode(&mut s)?;
+        len += self.password.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -78,6 +80,7 @@ impl Decodable for DarkfidCliConfig {
             rpc_url: Decodable::decode(&mut d)?,
             database_path: Decodable::decode(&mut d)?,
             log_path: Decodable::decode(&mut d)?,
+            password: Decodable::decode(&mut d)?,
         })
     }
 }
@@ -97,14 +100,16 @@ impl Default for DarkfidCliConfig {
                 .to_str()
                 .expect("error convert Path to String"),
         );
-
         let log_path = String::from("/tmp/darkfid_service_daemon.log");
+        
+        let password = String::new();
         Self {
             connect_url,
             subscriber_url,
             rpc_url,
             database_path,
             log_path,
+            password,
         }
     }
 }
