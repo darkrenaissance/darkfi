@@ -47,6 +47,7 @@ pub enum Error {
     TreeFull,
     SerdeJsonError(String),
     SurfHttpError(String),
+    EmptyPassword,
 }
 
 impl std::error::Error for Error {}
@@ -90,6 +91,7 @@ impl fmt::Display for Error {
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
             Error::SurfHttpError(ref err) => write!(f, "Surf Http error: {}", err),
+            Error::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
         }
     }
 }
@@ -113,9 +115,10 @@ impl From<jsonrpc_core::Error> for Error {
     }
 }
 
+// err.fmt();
 impl From<Error> for jsonrpc_core::Error {
-    fn from(_err: Error) -> jsonrpc_core::Error {
-        jsonrpc_core::Error::parse_error()
+    fn from(err: Error) -> jsonrpc_core::Error {
+        jsonrpc_core::Error::invalid_params(err.to_string())
     }
 }
 

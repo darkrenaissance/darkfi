@@ -2,7 +2,7 @@ use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleN
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
-use crate::Result;
+use crate::{Result, Error};
 
 use async_std::sync::{Arc, Mutex};
 use ff::Field;
@@ -52,22 +52,20 @@ impl WalletDB {
     }
 
     pub fn init_db(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
-        let contents = include_str!("../../res/schema.sql");
         if !self.password.trim().is_empty() {
+            let contents = include_str!("../../res/schema.sql");
+            let conn = Connection::open(&self.path)?;
+            debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
             conn.execute(
                 "PRAGMA key=(?1)",
                 params![self.password],
             )?;
-            match conn.execute_batch(&contents) {
-                Ok(v) => println!("Database initalized successfully {:?}", v),
-                Err(err) => println!("Error: {}", err),
-            };
+            conn.execute_batch(&contents)?
         }
         else {
-            println!("Password is empty. You must set a password to use the wallet.")
-        };
+            println!("Password is empty. You must set a password to use the wallet.");
+            return Err(Error::EmptyPassword);
+        }
         Ok(())
     }
 
@@ -75,10 +73,7 @@ impl WalletDB {
         let conn = Connection::open(&self.path)?;
         debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
         let contents = include_str!("../../res/schema.sql");
-        match conn.execute_batch(&contents) {
-            Ok(v) => println!("Database initalized successfully {:?}", v),
-            Err(err) => println!("Error: {}", err),
-        };
+        conn.execute_batch(&contents)?;
         Ok(())
     }
 
