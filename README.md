@@ -28,6 +28,14 @@ $ cargo run --bin drk -- -v
 
 # darkfid & drk configurations:
 
+Set wallet password:
+
+```console
+$ cargo run --bin darkfid config set --password [password]
+```
+
+Show usage manual:
+
 ```console
 $ cargo run --bin darkfid -- config --help
 ```
@@ -36,14 +44,12 @@ $ cargo run --bin darkfid -- config --help
 $ cargo run --bin drk -- config --help
 ```
 
-# dark-client usage
-
-In a seperate terminal, cd to /scripts directory and run the dark-client.
+# drk
 
 Show usage manual:
 
 ```console
-$ /drk -h
+$ cargo run --bin drk -- -help
 ```
 
 Let's liberate people from the claws of big tech and create the democratic paradigm of technology.
