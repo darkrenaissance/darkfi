@@ -51,6 +51,10 @@ impl DarkfidCli {
                                     .about("Set Log Path")
                                     .long("log-path")
                                     .takes_value(true),
+                                Arg::new("password")
+                                    .about("Set password")
+                                    .long("password")
+                                    .takes_value(true),
                             ])
                             .setting(AppSettings::ArgRequiredElseHelp),
                     ),
@@ -71,6 +75,9 @@ impl DarkfidCli {
                         println!("RPC Url: {}", config.rpc_url);
                         println!("Database path: {}", config.database_path);
                         println!("Log Path: {}", config.log_path);
+                        if config.password.trim().is_empty() {
+                            println!("Password is empty. Please set a password.")
+                        };
                     }
                     ("set", c) => {
                         change_config = true;
@@ -93,6 +100,10 @@ impl DarkfidCli {
                         if let Some(v) = c.value_of("log_path") {
                             config.log_path = v.to_string();
                             println!("Change Log Path To {}", config.log_path);
+                        }
+                        if let Some(v) = c.value_of("passport") {
+                            config.log_path = v.to_string();
+                            println!("Password updated successfully.");
                         }
                     }
                     _ => {}

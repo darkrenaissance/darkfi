@@ -189,7 +189,7 @@ async fn start(
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    let wallet = Arc::new(WalletDB::new("wallet.db")?);
+    let wallet = Arc::new(WalletDB::new("wallet.db", config.password.clone())?);
 
     let ex = executor.clone();
 
