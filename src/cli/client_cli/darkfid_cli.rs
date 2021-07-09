@@ -101,9 +101,9 @@ impl DarkfidCli {
                             config.log_path = v.to_string();
                             println!("Change Log Path To {}", config.log_path);
                         }
-                        if let Some(v) = c.value_of("passport") {
+                        if let Some(v) = c.value_of("password") {
                             config.log_path = v.to_string();
-                            println!("Password updated successfully.");
+                            println!("Updated password.");
                         }
                     }
                     _ => {}
