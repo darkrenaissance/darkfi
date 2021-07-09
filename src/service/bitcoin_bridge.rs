@@ -86,49 +86,14 @@ impl CashierService {
         let peer = msg.0;
         match request.get_command() {
             0 => {
-                // PUTSLAB
 
-                let slab = request.get_payload();
 
-                // add to slabstore
-                let error = slabstore.put(deserialize(&slab)?)?;
-
-                let mut reply = Reply::from(&request, GatewayError::NoError as u32, vec![]);
-
-                if let None = error {
-                    reply.set_error(GatewayError::UpdateIndex as u32);
-                }
-
-                // send reply
-                send_queue.send((peer, reply)).await?;
-
-                info!("Received putslab msg");
             }
             1 => {
-                let index = request.get_payload();
-                let slab = slabstore.get(index)?;
 
-                let mut reply = Reply::from(&request, GatewayError::NoError as u32, vec![]);
-
-                if let Some(payload) = slab {
-                    reply.set_payload(payload);
-                } else {
-                    reply.set_error(GatewayError::IndexNotExist as u32);
-                }
-
-                send_queue.send((peer, reply)).await?;
-
-                // GETSLAB
-                info!("Received getslab msg");
             }
             2 => {
-                let index = slabstore.get_last_index_as_bytes()?;
 
-                let reply = Reply::from(&request, GatewayError::NoError as u32, index);
-                send_queue.send((peer, reply)).await?;
-
-                // GETLASTINDEX
-                info!("Received getlastindex msg");
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));
