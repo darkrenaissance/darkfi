@@ -227,11 +227,11 @@ async fn start(
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DarkfidCliConfig::load(PathBuf::from("darkfid_config_file"))?;
+    let mut config = DarkfidCliConfig::load(PathBuf::from("darkfid_config"))?;
     let options = Arc::new(DarkfidCli::load(&mut config)?);
 
     if options.change_config {
-        config.save(PathBuf::from("darkfid_config_file"))?;
+        config.save(PathBuf::from("darkfid_config"))?;
         return Ok(());
     }
 

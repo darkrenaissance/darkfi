@@ -64,7 +64,7 @@ impl WalletDB {
         }
         else {
             println!("Password is empty. You must set a password to use the wallet.");
-            return Err(Error::EmptyPassword);
+            return Err(Error::EmptyPassword)
         }
         Ok(())
     }

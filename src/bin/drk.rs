@@ -109,11 +109,11 @@ async fn start(config: Arc<DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DrkCliConfig::load(PathBuf::from("drk_config_file"))?;
+    let mut config = DrkCliConfig::load(PathBuf::from("drk_config"))?;
     let options = Arc::new(DrkCli::load(&mut config)?);
 
     if options.change_config {
-        config.save(PathBuf::from("drk_config_file"))?;
+        config.save(PathBuf::from("drk_config"))?;
         return Ok(());
     }
 

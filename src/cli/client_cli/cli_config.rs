@@ -1,6 +1,7 @@
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
 use crate::Result;
+use log::*;
 
 use std::{fs::OpenOptions, io::prelude::*, path::PathBuf};
 
