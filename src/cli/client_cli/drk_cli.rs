@@ -62,30 +62,35 @@ impl DrkCli {
             )
             .arg(
                 Arg::new("cashier")
+                    .short('c')
                     .long("cashier")
                     .help_heading(Some("Create a cashier wallet"))
                     .takes_value(false),
             )
             .arg(
                 Arg::new("key")
+                    .short('k')
                     .long("key")
                     .help_heading(Some("Test key"))
                     .takes_value(false),
             )
             .arg(
                 Arg::new("wallet")
+                    .short('w')
                     .long("wallet")
                     .help_heading(Some("Create a new wallet"))
                     .takes_value(false),
             )
             .arg(
                 Arg::new("info")
+                    .short('i')
                     .long("info")
                     .help_heading(Some("Request info from daemon"))
                     .takes_value(false),
             )
             .arg(
                 Arg::new("stop")
+                    .short('s')
                     .long("stop")
                     .help_heading(Some("Send a stop signal to the daemon"))
                     .takes_value(false),
