@@ -1,7 +1,7 @@
 use secp256k1::key::{SecretKey, PublicKey};
-use bitcoin::util::{ecdsa::PrivateKey, ecdsa::PublicKey, address::Payload, address::Address};
-// Use p2sh for 1st iteration
-use bitcoin::hash_types::ScriptHash;
+use bitcoin::util::{ecdsa::PrivateKey, ecdsa::PublicKey as BitcoinPubKey, address::Payload, address::Address};
+// Use p2pkh for 1st iteration
+use bitcoin::hash_types::PubkeyHash;
 use bitcoin::network::constants::Network;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use std::net::SocketAddr;
@@ -11,7 +11,7 @@ use async_executor::Executor;
 pub struct BitcoinAddress {
     secret_key: SecretKey,
     private_key: ecdsa::PrivateKey,
-    public_key: ecdsa::PublicKey,
+    public_key: BitcoinPubKey,
     pub_address: Address,
 }
 impl BitcoinAddress {
@@ -22,9 +22,9 @@ impl BitcoinAddress {
         // Use mainnet
         let private_key = PrivateKey::new(secret_key, Network::Bitcoin);
 
-        let public_key = PublicKey::new(secret_key);
+        let public_key = BitcoinPubKey::from_private_key(private_key);
 
-        //let pub_address = Address::new();
+        let pub_address = Address::p2sh(&public_key, Network::Bitcoin);
 
         Ok(Arc::new(BitcoinAddress {
             secret_key,
