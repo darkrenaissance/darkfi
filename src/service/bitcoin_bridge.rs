@@ -1,4 +1,5 @@
 use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 use secp256k1::key::{SecretKey, PublicKey};
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
 use bitcoin::util::{address::Payload, address::Address};
@@ -24,11 +25,19 @@ impl BitcoinAddress {
 
         let context = secp256k1::Secp256k1::new();
 
-        //Generate simple byte array
-        let mut data_slice = [0_u8; 64];
-        thread_rng().fill(&mut data_slice[..]);
 
-        let secret_key = SecretKey::from_slice(&hex::decode(&data_slice).unwrap()).unwrap();
+        let rand: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect();
+
+        let rand_hex = hex::encode(rand);
+
+        //Generate simple byte array from rand
+        let data_slice: &[u8] = rand_hex.as_bytes();
+
+        let secret_key = SecretKey::from_slice(&hex::decode(data_slice).unwrap()).unwrap();
 
         //let public_key = PublicKey::from_secret_key(&context, &secret_key);
 
