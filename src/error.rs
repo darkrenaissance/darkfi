@@ -36,6 +36,7 @@ pub enum Error {
     ChannelTimeout,
     ServiceStopped,
     Utf8Error,
+    StrUtf8Error(String),
     NoteDecryptionFailed,
     ServicesError(&'static str),
     ZMQError(String),
@@ -48,6 +49,8 @@ pub enum Error {
     SerdeJsonError(String),
     SurfHttpError(String),
     EmptyPassword,
+    TomlDeserializeError(String),
+    TomlSerializeError(String),
 }
 
 impl std::error::Error for Error {}
@@ -80,6 +83,7 @@ impl fmt::Display for Error {
             Error::ChannelTimeout => f.write_str("Channel timed out"),
             Error::ServiceStopped => f.write_str("Service stopped"),
             Error::Utf8Error => f.write_str("Malformed UTF8"),
+            Error::StrUtf8Error(ref err) => write!(f, "Malformed UTF8: {}", err),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
             Error::ZMQError(ref err) => write!(f, "ZMQError: {}", err),
@@ -92,6 +96,8 @@ impl fmt::Display for Error {
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
             Error::SurfHttpError(ref err) => write!(f, "Surf Http error: {}", err),
             Error::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
+            Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
+            Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
         }
     }
 }
@@ -182,6 +188,12 @@ impl From<std::string::FromUtf8Error> for Error {
     }
 }
 
+impl From<std::str::Utf8Error> for Error {
+    fn from(err: std::str::Utf8Error) -> Error {
+        Error::StrUtf8Error(err.to_string())
+    }
+}
+
 impl From<state::VerifyFailed> for Error {
     fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
@@ -191,5 +203,17 @@ impl From<state::VerifyFailed> for Error {
 impl From<surf::Error> for Error {
     fn from(err: surf::Error) -> Error {
         Error::SurfHttpError(err.to_string())
+    }
+}
+
+impl From<toml::de::Error> for Error {
+    fn from(err: toml::de::Error) -> Error {
+        Error::TomlDeserializeError(err.to_string())
+    }
+}
+
+impl From<toml::ser::Error> for Error {
+    fn from(err: toml::ser::Error) -> Error {
+        Error::TomlSerializeError(err.to_string())
     }
 }

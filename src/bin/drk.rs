@@ -1,11 +1,15 @@
-use drk::cli::{ClientCliConfig, DrkCli, DrkCliConfig};
+use drk::cli::{DrkCli, DrkCliConfig};
+use drk::util;
 use drk::Result;
-
 use log::*;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::str;
+use toml;
 
 use async_std::sync::Arc;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 type Payload = HashMap<String, String>;
 
@@ -74,7 +78,7 @@ impl Drk {
     }
 }
 
-async fn start(config: Arc<DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
+async fn start(config: Arc<&DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
     let url = config.rpc_url.clone();
 
     let mut client = Drk::new(url);
@@ -86,7 +90,7 @@ async fn start(config: Arc<DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
     if options.wallet {
         client.create_wallet().await?;
     }
-    
+
     if options.key {
         client.key_gen().await?;
     }
@@ -106,18 +110,43 @@ async fn start(config: Arc<DrkCliConfig>, options: Arc<DrkCli>) -> Result<()> {
     Ok(())
 }
 
+fn set_default() -> Result<DrkCliConfig> {
+    let config_file = DrkCliConfig {
+        rpc_url: String::from("127.0.0.1:8000"),
+        log_path: String::from("/tmp/drk_cli.log"),
+    };
+    Ok(config_file)
+}
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DrkCliConfig::load(PathBuf::from("drk_config"))?;
-    let options = Arc::new(DrkCli::load(&mut config)?);
+    let options = Arc::new(DrkCli::load()?);
 
-    if options.change_config {
-        config.save(PathBuf::from("drk_config"))?;
-        return Ok(());
+    let config_path = PathBuf::from("drk.toml");
+    let path = util::join_config_path(&config_path).unwrap();
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&path)?;
+
+    let mut buffer: Vec<u8> = vec![];
+    file.read_to_end(&mut buffer)?;
+    if buffer.is_empty() {
+        // set the default setting
+        let config_file = set_default()?;
+        let config_file = toml::to_string(&config_file)?;
+        fs::write(&path, &config_file)?;
     }
 
-    let config = Arc::new(config);
+    // reload the config
+    let toml = fs::read(&path)?;
+    let str_buff = str::from_utf8(&toml)?;
+
+    // read from config file
+    let config: DrkCliConfig = toml::from_str(str_buff)?;
+    let config_pointer = Arc::new(&config);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -138,7 +167,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    futures::executor::block_on(start(config, options))?;
+    futures::executor::block_on(start(config_pointer, options))?;
 
     Ok(())
 }

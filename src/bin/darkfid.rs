@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{DarkfidCliConfig, DarkfidCli, ClientCliConfig};
+use drk::cli::{DarkfidCli, DarkfidCliConfig};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -11,10 +11,16 @@ use drk::crypto::{
 use drk::serial::Decodable;
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
+use drk::util;
 use drk::util::join_config_path;
 use drk::wallet::{WalletDB, WalletPtr};
 use drk::{tx, Result};
 use log::*;
+use std::fs;
+use std::str;
+//use std::fs::File;
+use std::fs::OpenOptions;
+use toml;
 //use drk::rpc::
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
@@ -28,6 +34,7 @@ use rand::rngs::OsRng;
 use rusqlite::Connection;
 
 use async_std::sync::Arc;
+use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
@@ -151,10 +158,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-async fn start(
-    executor: Arc<Executor<'_>>,
-    config: Arc<DarkfidCliConfig>,
-) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidCliConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
     let database_path = config.database_path.clone();
@@ -224,18 +228,48 @@ async fn start(
     Ok(())
 }
 
+fn set_default() -> Result<DarkfidCliConfig> {
+    let config_file = DarkfidCliConfig {
+        connect_url: String::from("127.0.0.1:3333"),
+        subscriber_url: String::from("127.0.0.1:4444"),
+        rpc_url: String::from("127.0.0.1:8000"),
+        database_path: String::from("database_client.db"),
+        log_path: String::from("/tmp/darkfid_service_daemon.log"),
+        password: String::from(""),
+    };
+    Ok(config_file)
+}
+
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let mut config = DarkfidCliConfig::load(PathBuf::from("darkfid_config"))?;
-    let options = Arc::new(DarkfidCli::load(&mut config)?);
+    let options = Arc::new(DarkfidCli::load()?);
+    let config_path = PathBuf::from("darkfid.toml");
+    let path = util::join_config_path(&config_path).unwrap();
 
-    if options.change_config {
-        config.save(PathBuf::from("darkfid_config"))?;
-        return Ok(());
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&path)?;
+
+    let mut buffer: Vec<u8> = vec![];
+    file.read_to_end(&mut buffer)?;
+
+    if buffer.is_empty() {
+        // set the default setting
+        let config_file = set_default()?;
+        let config_file = toml::to_string(&config_file)?;
+        fs::write(&path, &config_file)?;
     }
 
-    let config = Arc::new(config);
+    // reload the config
+    let toml = fs::read(&path)?;
+    let str_buff = str::from_utf8(&toml)?;
+
+    // read from config file
+    let config: DarkfidCliConfig = toml::from_str(str_buff)?;
+    let config_pointer = Arc::new(&config);
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -267,7 +301,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config).await?;
+                start(ex2, config_pointer).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

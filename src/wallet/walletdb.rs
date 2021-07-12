@@ -2,7 +2,7 @@ use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleN
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
-use crate::{Result, Error};
+use crate::{Error, Result};
 
 use async_std::sync::{Arc, Mutex};
 use ff::Field;
@@ -56,15 +56,12 @@ impl WalletDB {
             let contents = include_str!("../../res/schema.sql");
             let conn = Connection::open(&self.path)?;
             debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
-            conn.execute(
-                "PRAGMA key=(?1)",
-                params![self.password],
-            )?;
+            conn.execute("PRAGMA key=(?1)", params![self.password])?;
             conn.execute_batch(&contents)?
-        }
-        else {
+        } else {
             println!("Password is empty. You must set a password to use the wallet.");
-            return Err(Error::EmptyPassword)
+            println!("Current password: {}", self.password);
+            return Err(Error::EmptyPassword);
         }
         Ok(())
     }
@@ -96,10 +93,7 @@ impl WalletDB {
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         // return key_id from key_private
         let mut get_id =
             conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
@@ -145,10 +139,7 @@ impl WalletDB {
 
     pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
             params![key_public, key_private],
@@ -159,10 +150,7 @@ impl WalletDB {
     pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
         debug!(target: "save_cash_key", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         conn.execute(
             "INSERT INTO cashier(key_public) VALUES (?1)",
             params![key_public],
@@ -173,10 +161,7 @@ impl WalletDB {
     pub fn get_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
@@ -189,10 +174,7 @@ impl WalletDB {
     pub fn get_cashier_public(&self) -> Result<Vec<u8>> {
         debug!(target: "get_cashier_public", "Returning keys...");
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
@@ -205,10 +187,7 @@ impl WalletDB {
     pub fn get_private(&self) -> Result<Vec<u8>> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut keys = Vec::new();
@@ -220,10 +199,7 @@ impl WalletDB {
 
     pub fn test_wallet(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        conn.execute(
-            "PRAGMA key=(?1)",
-            params![self.password],
-        )?;
+        conn.execute("PRAGMA key=(?1)", params![self.password])?;
         let mut stmt = conn.prepare("SELECT * FROM keys")?;
         let _rows = stmt.query([])?;
         Ok(())

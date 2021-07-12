@@ -73,7 +73,7 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    config: Arc<DarkfidCliConfig>,
+    config: Arc<&DarkfidCliConfig>,
     adapter: RpcAdapter,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;

@@ -1,7 +1,7 @@
-use super::cli_config::DrkCliConfig;
+//use super::cli_config::DrkCliConfig;
 use crate::Result;
 
-use clap::{App, AppSettings, Arg};
+use clap::{App, Arg};
 
 pub struct Transfer {
     pub pub_key: String,
@@ -30,7 +30,7 @@ impl Transfer {
 }
 
 pub struct DrkCli {
-    pub change_config: bool,
+    //pub change_config: bool,
     pub verbose: bool,
     pub cashier: bool,
     pub wallet: bool,
@@ -42,7 +42,7 @@ pub struct DrkCli {
 }
 
 impl DrkCli {
-    pub fn load(config: &mut DrkCliConfig) -> Result<Self> {
+    pub fn load() -> Result<Self> {
         let app = App::new("Drk CLI")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")
@@ -115,31 +115,31 @@ impl DrkCli {
                             .required(true),
                     ),
             )
-            .subcommand(
-                App::new("config")
-                    .about("Configuration settings")
-                    .aliases(&["get", "set"])
-                    .setting(AppSettings::SubcommandRequiredElseHelp)
-                    .subcommand(App::new("get").about("Get configuration settings"))
-                    .subcommand(
-                        App::new("set")
-                            .about("Set configuration settings")
-                            .args(&[
-                                Arg::new("rpc_url")
-                                    .about("Set RPC Url")
-                                    .long("rpc-url")
-                                    .takes_value(true),
-                                Arg::new("log_path")
-                                    .about("Set Log Path")
-                                    .long("log-path")
-                                    .takes_value(true),
-                            ])
-                            .setting(AppSettings::ArgRequiredElseHelp),
-                    ),
-            )
+            //.subcommand(
+            //    App::new("config")
+            //        .about("Configuration settings")
+            //        .aliases(&["get", "set"])
+            //        .setting(AppSettings::SubcommandRequiredElseHelp)
+            //        .subcommand(App::new("get").about("Get configuration settings"))
+            //        .subcommand(
+            //            App::new("set")
+            //                .about("Set configuration settings")
+            //                .args(&[
+            //                    Arg::new("rpc_url")
+            //                        .about("Set RPC Url")
+            //                        .long("rpc-url")
+            //                        .takes_value(true),
+            //                    Arg::new("log_path")
+            //                        .about("Set Log Path")
+            //                        .long("log-path")
+            //                        .takes_value(true),
+            //                ])
+            //                .setting(AppSettings::ArgRequiredElseHelp),
+            //        ),
+            //)
             .get_matches();
 
-        let mut change_config = false;
+        //let mut change_config = false;
 
         let verbose = app.is_present("verbose");
         let cashier = app.is_present("cashier");
@@ -165,34 +165,34 @@ impl DrkCli {
             None => {}
         }
 
-        match app.subcommand_matches("config") {
-            Some(config_sub) => match config_sub.subcommand() {
-                Some(c) => match c {
-                    ("get", _) => {
-                        change_config = true;
-                        println!("RPC Url: {}", config.rpc_url);
-                        println!("Log Path: {}", config.log_path);
-                    }
-                    ("set", c) => {
-                        change_config = true;
-                        if let Some(v) = c.value_of("rpc_url") {
-                            config.rpc_url = v.to_string();
-                            println!("Change RPC Url To {}", config.rpc_url);
-                        }
-                        if let Some(v) = c.value_of("log_path") {
-                            config.log_path = v.to_string();
-                            println!("Change Log Path To {}", config.log_path);
-                        }
-                    }
-                    _ => {}
-                },
-                None => {}
-            },
-            None => {}
-        }
+        //match app.subcommand_matches("config") {
+        //    Some(config_sub) => match config_sub.subcommand() {
+        //        Some(c) => match c {
+        //            ("get", _) => {
+        //                change_config = true;
+        //                println!("RPC Url: {}", config.rpc_url);
+        //                println!("Log Path: {}", config.log_path);
+        //            }
+        //            ("set", c) => {
+        //                change_config = true;
+        //                if let Some(v) = c.value_of("rpc_url") {
+        //                    config.rpc_url = v.to_string();
+        //                    println!("Change RPC Url To {}", config.rpc_url);
+        //                }
+        //                if let Some(v) = c.value_of("log_path") {
+        //                    config.log_path = v.to_string();
+        //                    println!("Change Log Path To {}", config.log_path);
+        //                }
+        //            }
+        //            _ => {}
+        //        },
+        //        None => {}
+        //    },
+        //    None => {}
+        //}
 
         Ok(Self {
-            change_config,
+            //change_config,
             verbose,
             cashier,
             wallet,
