@@ -46,22 +46,22 @@ impl BitcoinAddress {
             pub_address,
         }))
     }
+    // pub fn get_deposit_address(&self) -> BitcoinAddress::pub_address {
+    //     &Self {pub_address}
+    // }
 }
 
 pub struct CashierService {
     addr: SocketAddr,
-    pub_addr: SocketAddr,
 }
 
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
-        pub_addr: SocketAddr,
     )-> Result<Arc<CashierService>> {
 
         Ok(Arc::new(CashierService {
             addr,
-            pub_addr,
         }))
     }
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
