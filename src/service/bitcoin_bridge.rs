@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
 
-// Struct needs to attach to drk key stored in db
+// Struct still needs to attach to drk key stored in db
 pub struct BitcoinAddress {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
@@ -22,10 +22,11 @@ pub struct BitcoinAddress {
 impl BitcoinAddress {
     pub fn new(
 
-    ) -> Result<Arc<BitcoinAddress>> {
+    ) -> Result<BitcoinAddress> {
 
         let context = secp256k1::Secp256k1::new();
 
+        // Probably not good enough for release
         let rand: String = thread_rng()
             .sample_iter(&Alphanumeric)
             .take(32)
@@ -48,16 +49,16 @@ impl BitcoinAddress {
 
         let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Bitcoin);
 
-        Ok(Arc::new(BitcoinAddress {
+        Ok(BitcoinAddress {
             secret_key,
             bitcoin_private_key,
             bitcoin_public_key,
             pub_address,
-        }))
+        })
     }
-    // pub fn get_deposit_address(&self) -> BitcoinAddress::pub_address {
-    //     &Self {pub_address}
-    // }
+    pub fn get_deposit_address(&self) -> &Address {
+        &self.pub_address
+    }
 }
 
 pub struct CashierService {

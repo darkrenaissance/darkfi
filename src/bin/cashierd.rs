@@ -34,7 +34,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
 
 fn main() -> Result<()> {
 
-    let btc = BitcoinAddress::new();
+    let btc = BitcoinAddress::new().unwrap();
+    let deposit = btc.get_deposit_address();
+    println!("{:?}", deposit);
 
     use simplelog::*;
 
