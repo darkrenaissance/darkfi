@@ -1,35 +1,48 @@
+use rand::{thread_rng, Rng};
 use secp256k1::key::{SecretKey, PublicKey};
-use bitcoin::util::{ecdsa::PrivateKey, ecdsa::PublicKey as BitcoinPubKey, address::Payload, address::Address};
+use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
+use bitcoin::util::{address::Payload, address::Address};
 // Use p2pkh for 1st iteration
 use bitcoin::hash_types::PubkeyHash;
 use bitcoin::network::constants::Network;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
+use crate::{serial::deserialize, serial::serialize, Error, Result};
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
 
 pub struct BitcoinAddress {
     secret_key: SecretKey,
-    private_key: ecdsa::PrivateKey,
-    public_key: BitcoinPubKey,
-    pub_address: Address,
+    bitcoin_private_key: PrivateKey,
+    pub bitcoin_public_key: BitcoinPubKey,
+    pub pub_address: Address,
 }
 impl BitcoinAddress {
     pub fn new(
-        secret_key: SecretKey,
+
     ) -> Result<Arc<BitcoinAddress>> {
 
+        let context = secp256k1::Secp256k1::new();
+
+        //Generate simple byte array
+        let mut data_slice = [0_u8; 64];
+        thread_rng().fill(&mut data_slice[..]);
+
+        let secret_key = SecretKey::from_slice(&hex::decode(&data_slice).unwrap()).unwrap();
+
+        //let public_key = PublicKey::from_secret_key(&context, &secret_key);
+
         // Use mainnet
-        let private_key = PrivateKey::new(secret_key, Network::Bitcoin);
+        let bitcoin_private_key = PrivateKey::new(secret_key, Network::Bitcoin);
 
-        let public_key = BitcoinPubKey::from_private_key(private_key);
+        let bitcoin_public_key = BitcoinPubKey::from_private_key(&context, &bitcoin_private_key);
 
-        let pub_address = Address::p2sh(&public_key, Network::Bitcoin);
+        let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Bitcoin);
 
         Ok(Arc::new(BitcoinAddress {
             secret_key,
-            private_key,
-            public_key,
+            bitcoin_private_key,
+            bitcoin_public_key,
             pub_address,
         }))
     }
