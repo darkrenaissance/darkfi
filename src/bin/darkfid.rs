@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{DarkfidCli, DarkfidCliConfig};
+use drk::cli::{DarkfidCli, DarkfidConfig};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -158,7 +158,7 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidCliConfig>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
     let database_path = config.database_path.clone();
@@ -228,8 +228,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidCliConfig>) -> R
     Ok(())
 }
 
-fn set_default() -> Result<DarkfidCliConfig> {
-    let config_file = DarkfidCliConfig {
+fn set_default() -> Result<DarkfidConfig> {
+    let config_file = DarkfidConfig {
         connect_url: String::from("127.0.0.1:3333"),
         subscriber_url: String::from("127.0.0.1:4444"),
         rpc_url: String::from("127.0.0.1:8000"),
@@ -268,7 +268,7 @@ fn main() -> Result<()> {
     let str_buff = str::from_utf8(&toml)?;
 
     // read from config file
-    let config: DarkfidCliConfig = toml::from_str(str_buff)?;
+    let config: DarkfidConfig = toml::from_str(str_buff)?;
     let config_pointer = Arc::new(&config);
 
     let ex = Arc::new(Executor::new());

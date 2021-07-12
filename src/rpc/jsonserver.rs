@@ -1,4 +1,4 @@
-use crate::cli::DarkfidCliConfig;
+use crate::cli::DarkfidConfig;
 use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
 use async_executor::Executor;
@@ -73,7 +73,7 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    config: Arc<&DarkfidCliConfig>,
+    config: Arc<&DarkfidConfig>,
     adapter: RpcAdapter,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;

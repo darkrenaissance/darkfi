@@ -1,4 +1,4 @@
-use drk::cli::{DrkCli, DrkCliConfig};
+use drk::cli::{DrkCli, DrkConfig};
 use drk::util;
 use drk::Result;
 use log::*;
@@ -145,7 +145,7 @@ fn main() -> Result<()> {
     let str_buff = str::from_utf8(&toml)?;
 
     // read from config file
-    let config: DrkCliConfig = toml::from_str(str_buff)?;
+    let config: DrkConfig = toml::from_str(str_buff)?;
     let config_pointer = Arc::new(&config);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();

@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 //}
 
 #[derive(Serialize, Default, Deserialize, Debug)]
-pub struct DrkCliConfig {
+pub struct DrkConfig {
     #[serde(rename = "RPC URL")]
     pub rpc_url: String,
 
@@ -60,7 +60,7 @@ pub struct DrkCliConfig {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug)]
-pub struct DarkfidCliConfig {
+pub struct DarkfidConfig {
     #[serde(rename = "Connect URL")]
     pub connect_url: String,
 
@@ -89,32 +89,6 @@ pub struct DarkfidCliConfig {
 //            rpc_url,
 //            log_path,
 //        }
-//    }
-//}
-
-//impl Encodable for DarkfidCliConfig {
-//    fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
-//        let mut len = 0;
-//        len += self.connect_url.encode(&mut s)?;
-//        len += self.subscriber_url.encode(&mut s)?;
-//        len += self.rpc_url.encode(&mut s)?;
-//        len += self.database_path.encode(&mut s)?;
-//        len += self.log_path.encode(&mut s)?;
-//        len += self.password.encode(&mut s)?;
-//        Ok(len)
-//    }
-//}
-//
-//impl Decodable for DarkfidCliConfig {
-//    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-//        Ok(Self {
-//            connect_url: Decodable::decode(&mut d)?,
-//            subscriber_url: Decodable::decode(&mut d)?,
-//            rpc_url: Decodable::decode(&mut d)?,
-//            database_path: Decodable::decode(&mut d)?,
-//            log_path: Decodable::decode(&mut d)?,
-//            password: Decodable::decode(&mut d)?,
-//        })
 //    }
 //}
 
@@ -150,20 +124,3 @@ pub struct DarkfidCliConfig {
 //    }
 //}
 
-//impl Encodable for DrkCliConfig {
-//    fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
-//        let mut len = 0;
-//        len += self.rpc_url.encode(&mut s)?;
-//        len += self.log_path.encode(&mut s)?;
-//        Ok(len)
-//    }
-//}
-//
-//impl Decodable for DrkCliConfig {
-//    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-//        Ok(Self {
-//            rpc_url: Decodable::decode(&mut d)?,
-//            log_path: Decodable::decode(&mut d)?,
-//        })
-//    }
-//}
