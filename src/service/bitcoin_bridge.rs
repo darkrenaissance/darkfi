@@ -79,11 +79,9 @@ impl CashierService {
         loop {
             match recv_queue.recv().await {
                 Ok(msg) => {
-                    let slabstore = self.slabstore.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
-                            slabstore,
                             send_queue.clone(),
                         ))
                         .detach();
@@ -97,7 +95,6 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        slabstore: Arc<SlabStore>,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
