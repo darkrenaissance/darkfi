@@ -12,6 +12,7 @@ use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
 
+// Struct needs to attach to drk key stored in db
 pub struct BitcoinAddress {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
@@ -24,7 +25,6 @@ impl BitcoinAddress {
     ) -> Result<Arc<BitcoinAddress>> {
 
         let context = secp256k1::Secp256k1::new();
-
 
         let rand: String = thread_rng()
             .sample_iter(&Alphanumeric)
