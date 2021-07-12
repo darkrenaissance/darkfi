@@ -80,7 +80,6 @@ impl Drk {
 
 async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
     let url = config.rpc_url.clone();
-
     let mut client = Drk::new(url);
 
     if options.cashier {
@@ -112,7 +111,7 @@ async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
 
 fn set_default() -> Result<DrkConfig> {
     let config_file = DrkConfig {
-        rpc_url: String::from("127.0.0.1:8000"),
+        rpc_url: String::from("http://127.0.0.1:8000"),
         log_path: String::from("/tmp/drk_cli.log"),
     };
     Ok(config_file)
