@@ -8,7 +8,7 @@ use async_std::sync::{Arc, Mutex};
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
-use rusqlite::{named_params, params, OptionalExtension, DatabaseName, Connection};
+use rusqlite::{named_params, params, Connection};
 
 use std::path::PathBuf;
 

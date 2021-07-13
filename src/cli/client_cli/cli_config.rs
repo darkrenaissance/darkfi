@@ -44,39 +44,33 @@ use serde::{Deserialize, Serialize};
 //impl ClientCliConfig<'_> for DrkCliConfig {}
 //impl ClientCliConfig<'_> for DarkfidCliConfig {}
 
-//#[derive(Serialize, Default, Deserialize, Debug)]
-//pub struct Configs {
-//    pub drk: DrkCliConfig,
-//    pub darkfid: DarkfidCliConfig,
-//}
-
 #[derive(Serialize, Default, Deserialize, Debug)]
 pub struct DrkConfig {
-    #[serde(rename = "RPC URL")]
+    #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
-    #[serde(rename = "Log path")]
+    #[serde(rename = "log_path")]
     pub log_path: String,
 }
 
 #[derive(Serialize, Default, Deserialize, Debug)]
 pub struct DarkfidConfig {
-    #[serde(rename = "Connect URL")]
+    #[serde(rename = "connect_url")]
     pub connect_url: String,
 
-    #[serde(rename = "Subscriber URL")]
+    #[serde(rename = "subscriber_url")]
     pub subscriber_url: String,
 
-    #[serde(rename = "RPC URL")]
+    #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
-    #[serde(rename = "Database path")]
+    #[serde(rename = "database_path")]
     pub database_path: String,
 
-    #[serde(rename = "Log path")]
+    #[serde(rename = "log_path")]
     pub log_path: String,
 
-    #[serde(rename = "Password")]
+    #[serde(rename = "password")]
     pub password: String,
 }
 
