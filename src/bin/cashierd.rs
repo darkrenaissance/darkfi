@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use drk::cli::ServiceCli;
 use drk::service::CashierService;
-use drk::service::BitcoinAddress;
+// Testing only
+use drk::service::CashierKeys;
 use drk::Result;
 
 use async_executor::Executor;
@@ -24,8 +25,10 @@ async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
     //let database_path = join_config_path(&(*database_path))?;
     //let rocks = Rocks::new(&database_path)?;
     //let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks);
+    // Use pw: PASSWORD for now
+    let cashier_wallet = Arc::new(WalletDB::new("cashier.db", "PASSWORD")?);
 
-    let cashier = CashierService::new(accept_addr)?;
+    let cashier = CashierService::new(accept_addr, cashier_wallet)?;
 
     cashier.start(executor.clone()).await?;
     Ok(())
@@ -34,7 +37,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
 
 fn main() -> Result<()> {
 
-    let btc = BitcoinAddress::new().unwrap();
+    let btc = CashierKeys::new().unwrap();
     let deposit = btc.get_deposit_address();
     println!("{:?}", deposit);
 

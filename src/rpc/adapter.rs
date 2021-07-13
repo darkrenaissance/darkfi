@@ -39,7 +39,7 @@ impl RpcAdapter {
 
     pub fn cash_key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
-        let (public, private) = self.wallet.key_gen();
+        let (public, private) = self.wallet.cash_key_gen();
         self.wallet.put_keypair(public, private)?;
         Ok(())
     }
