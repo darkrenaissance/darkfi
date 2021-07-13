@@ -57,7 +57,7 @@ impl WalletDB {
             let conn = Connection::open(&self.path)?;
             debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;
-            conn.execute_batch(&contents)?
+            conn.execute_batch(&contents)?;
         } else {
             println!("Password is empty. You must set a password to use the wallet.");
             println!("Current password: {}", self.password);
