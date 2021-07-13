@@ -54,7 +54,7 @@ impl Rocks {
         // nullifiers column family
         let nullifiers_cf = ColumnFamilyDescriptor::new(columns::Nullifiers::NAME, cf_opts.clone());
         // merkleroots column family
-        let merkleroots_cf = ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts);
+        let merkleroots_cf = ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts.clone());
         // cashierkeypair column family
         let cashierkeys_cf = ColumnFamilyDescriptor::new(columns::CashierKeys::NAME, cf_opts);
 

@@ -1,10 +1,11 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::ServiceCli;
 use drk::service::CashierService;
 // Testing only
-use drk::service::CashierKeys;
+use drk::util::join_config_path;
 use drk::Result;
 
 use async_executor::Executor;
@@ -20,15 +21,15 @@ fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
 async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
     let accept_addr: SocketAddr = setup_addr(options.accept_addr, "127.0.0.1:7777".parse()?);
     //let pub_addr: SocketAddr = setup_addr(options.pub_addr, "127.0.0.1:8888".parse()?);
-    //let database_path = options.database_path.clone();
+    let database_path = options.database_path.clone();
 
-    //let database_path = join_config_path(&(*database_path))?;
-    //let rocks = Rocks::new(&database_path)?;
-    //let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks);
+    let database_path = join_config_path(&(*database_path))?;
+    let rocks = Rocks::new(&database_path)?;
+    let rocks_cashierstore_column = RocksColumn::<columns::CashierKeys>::new(rocks);
     // Use pw: PASSWORD for now
-    let cashier_wallet = Arc::new(WalletDB::new("cashier.db", "PASSWORD")?);
+    //let cashier_wallet = Arc::new(WalletDB::new("cashier.db", "PASSWORD")?);
 
-    let cashier = CashierService::new(accept_addr, cashier_wallet)?;
+    let cashier = CashierService::new(accept_addr, rocks_cashierstore_column)?;
 
     cashier.start(executor.clone()).await?;
     Ok(())
@@ -36,11 +37,6 @@ async fn start(executor: Arc<Executor<'_>>, options: ServiceCli) -> Result<()> {
 
 
 fn main() -> Result<()> {
-
-    let btc = CashierKeys::new().unwrap();
-    let deposit = btc.get_deposit_address();
-    println!("{:?}", deposit);
-
     use simplelog::*;
 
     let ex = Arc::new(Executor::new());

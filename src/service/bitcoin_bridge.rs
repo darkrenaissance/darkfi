@@ -7,15 +7,14 @@ use bitcoin::util::{address::Payload, address::Address};
 use bitcoin::hash_types::PubkeyHash;
 use bitcoin::network::constants::Network;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
+use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
 
 
-// Struct still needs to attach to drk key stored in db
 pub struct CashierKeys {
-    zk_pubkey: jubjub::SubgroupPoint,
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
     pub bitcoin_public_key: BitcoinPubKey,
@@ -71,9 +70,12 @@ pub struct CashierService {
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
+        rocks: RocksColumn<columns::CashierKeys>,
     )-> Result<Arc<CashierService>> {
+        let cashierstore = CashierStore::new(rocks)?;
 
         Ok(Arc::new(CashierService {
+            cashierstore,
             addr,
         }))
     }
@@ -105,9 +107,11 @@ impl CashierService {
         loop {
             match recv_queue.recv().await {
                 Ok(msg) => {
+                    let cashierstore = self.cashierstore.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
+                            cashierstore,
                             send_queue.clone(),
                         ))
                         .detach();
@@ -121,6 +125,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
+        cashierstore: Arc<CashierStore>,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
