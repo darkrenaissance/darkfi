@@ -98,10 +98,23 @@ k7 = public_v
 
 assert a.dot(u7) + b.dot(v7) + c.dot(w7) == k7
 
+u = np.vstack((u1, u2, u3, u4, u5, u6, u7))
+v = np.vstack((v1, v2, v3, v4, v5, v6, v7))
+w = np.vstack((w1, w2, w3, w4, w5, w6, w7))
+assert u.shape == v.shape
+assert u.shape == w.shape
+
+k = np.array((k1, k2, k3, k4, k5, k6, k7))
+
 y = Variable("Y")
 p = MultivariatePolynomial()
 for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
-    print(a_i, "\t", b_i, "\t", c_i)
+    #print(a_i, "\t", b_i, "\t", c_i)
     p += y**i * (a_i * b_i - c_i)
+print("Polynomial:", p)
+
+p = MultivariatePolynomial()
+for q, (u_q, v_q, w_q, k_q) in enumerate(zip(u, v, w, k)):
+    p += y**q * (a.dot(u_q) + b.dot(v_q) + c.dot(w_q) - k_q)
 print("Polynomial:", p)
 
