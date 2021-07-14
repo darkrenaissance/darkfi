@@ -112,10 +112,11 @@ async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
 fn set_default() -> Result<DrkConfig> {
     let config_file = DrkConfig {
         rpc_url: String::from("http://127.0.0.1:8000"),
-        log_path: String::from("/tmp/drk_cli.log"),
+        log_path: String::from("/tmp/drk.log"),
     };
     Ok(config_file)
 }
+
 fn main() -> Result<()> {
     use simplelog::*;
 

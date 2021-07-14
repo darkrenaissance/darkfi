@@ -233,8 +233,8 @@ fn set_default() -> Result<DarkfidConfig> {
         connect_url: String::from("127.0.0.1:3333"),
         subscriber_url: String::from("127.0.0.1:4444"),
         rpc_url: String::from("127.0.0.1:8000"),
-        database_path: String::from("database_client.db"),
-        log_path: String::from("/tmp/darkfid_service_daemon.log"),
+        database_path: String::from("darkfid.db"),
+        log_path: String::from("/tmp/darkfid.log"),
         password: String::from(""),
     };
     Ok(config_file)

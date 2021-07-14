@@ -1,13 +1,14 @@
 //use crate::serial::{deserialize, serialize, Decodable, Encodable};
 //use toml::{map::Map, Value};
-//use crate::util::join_config_path;
+use crate::util::join_config_path;
 //use crate::Result;
+
 use serde::{Deserialize, Serialize};
 //use log::*;
 
-//use std::{fs::OpenOptions, io::prelude::*, path::PathBuf};
+use std::{fs::OpenOptions, io::prelude::*, path::PathBuf};
 
-//pub trait ClientCliConfig<'a>: Default + Deserialize<'a> {
+//pub trait ClientConfig: Default + Deserialize {
 //    fn load(path: PathBuf) -> Result<Self> {
 //        let path = join_config_path(&path)?;
 //        let mut file = OpenOptions::new()
@@ -33,16 +34,16 @@ use serde::{Deserialize, Serialize};
 //        }
 //    }
 //    fn save(&self, path: PathBuf) -> Result<()> {
-//        let path = join_config_path(&path)?;
-//        let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
+//        //let path = join_config_path(&path)?;
+//        //let mut file = OpenOptions::new().write(true).create(true).open(&path)?;
 //        //let serialized = serialize(self);
 //        //file.write_all(&serialized)?;
 //        Ok(())
 //    }
 //}
-
-//impl ClientCliConfig<'_> for DrkCliConfig {}
-//impl ClientCliConfig<'_> for DarkfidCliConfig {}
+//
+//impl ClientConfig for DrkConfig {}
+//impl ClientConfig for DarkfidConfig {}
 
 #[derive(Serialize, Default, Deserialize, Debug)]
 pub struct DrkConfig {
@@ -72,6 +73,22 @@ pub struct DarkfidConfig {
 
     #[serde(rename = "password")]
     pub password: String,
+}
+
+
+#[derive(Serialize, Default, Deserialize, Debug)]
+pub struct GatewaydConfig {
+    #[serde(rename = "connect_url")]
+    pub accept_url: String,
+
+    #[serde(rename = "subscriber_url")]
+    pub publisher_url: String,
+
+    #[serde(rename = "database_path")]
+    pub database_path: String,
+
+    #[serde(rename = "log_path")]
+    pub log_path: String,
 }
 
 //impl Default for DrkCliConfig {
