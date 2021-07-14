@@ -19,6 +19,11 @@ class MultiplyExpression:
         self.coeff = None
         self.symbols = {}
 
+    def clean(self):
+        for symbol in list(self.symbols.keys()):
+            if self.symbols[symbol] == 0:
+                del self.symbols[symbol]
+
     def set_symbol(self, var_name, power):
         self.symbols[var_name] = power
 
@@ -74,6 +79,12 @@ class MultivariatePolynomial:
     def __add__(self, term):
         if isinstance(term, Variable):
             term = term.termify()
+
+        # Delete ^0 variables
+        term.clean()
+        # Skip zero terms
+        if term.coeff is None or term.coeff == 0:
+            return self
 
         result = MultivariatePolynomial(self.terms[:])
         result.terms.append(term)
