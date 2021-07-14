@@ -68,7 +68,7 @@ class MultiplyExpression:
 
 class MultivariatePolynomial:
 
-    def __init__(self, terms):
+    def __init__(self, terms=[]):
         self.terms = terms
 
     def __add__(self, term):
@@ -90,15 +90,16 @@ class MultivariatePolynomial:
             repr += str(term)
         return repr
 
-from finite_fields import finitefield
+if __name__ == "__main__":
+    from finite_fields import finitefield
 
-p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
-fp = finitefield.IntegersModP(p)
+    p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+    fp = finitefield.IntegersModP(p)
 
-x = Variable("X")
-y = Variable("Y")
-z = Variable("Z")
+    x = Variable("X")
+    y = Variable("Y")
+    z = Variable("Z")
 
-p = x**3 * y**2 * x**2 * fp(5) * fp(2) + x**3 * y + z + fp(6)
-print(p)
+    p = x**3 * y**2 * x**2 * fp(5) * fp(2) + x**3 * y + z + fp(6)
+    print(p)
 
