@@ -91,6 +91,9 @@ class MultivariatePolynomial:
         return result
 
     def __str__(self):
+        if not self.terms:
+            return "0"
+
         repr = ""
         first = True
         for term in self.terms:

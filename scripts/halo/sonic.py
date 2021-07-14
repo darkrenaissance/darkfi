@@ -16,23 +16,34 @@ var_xy = var_x * var_y
 var_sxy = var_s * var_xy
 var_1_neg_s = var_one - var_s
 var_x_y = var_x + var_y
-var_1_s_neg_x_y = var_1_neg_s * var_x_y
+var_1_neg_s_x_y = var_1_neg_s * var_x_y
+var_s_neg_1 = -var_1_neg_s
+var_zero = fp(0)
+
+public_v = var_s * (var_x * var_y) + (1 - var_s) * (var_x + var_y)
 
 a = np.array([
-    var_one, var_x, var_xy, var_1_neg_s, var_1_neg_s
+    var_one, var_x, var_xy, var_1_neg_s, var_s
 ])
 b = np.array([
-    var_one, var_y, var_s, var_x_y, var_s
+    var_one, var_y, var_s, var_x_y, var_s_neg_1
 ])
 c = np.array([
-    var_one, var_xy, var_sxy, var_1_s_neg_x_y, var_s
+    var_one, var_xy, var_sxy, var_1_neg_s_x_y, var_zero
 ])
 assert len(a) == len(b)
 assert len(b) == len(c)
 
-# 1 - s = 1 - s
-u1 = np.array([0, 0, 0, 1, -1])
-v1 = np.array([0, 0, 0, 0, 0])
+for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
+    try:
+        assert a_i * b_i == c_i
+    except AssertionError:
+        print("Error for %i" % i)
+        raise
+
+# 1 - s = -(s - 1)
+u1 = np.array([0, 0, 0, 1, 0])
+v1 = np.array([0, 0, 0, 0, 1])
 w1 = np.array([0, 0, 0, 0, 0])
 k1 = 0
 
@@ -47,17 +58,17 @@ k2 = 0
 assert a.dot(u2) + b.dot(v2) + c.dot(w2) == k2
 
 # s = s
-u3 = np.array([0, 0, 0, 0, 0])
-v3 = np.array([0, 0, 1, 0, -1])
+u3 = np.array([0, 0, 0, 0, -1])
+v3 = np.array([0, 0, 1, 0, 0])
 w3 = np.array([0, 0, 0, 0, 0])
 k3 = 0
 
 assert a.dot(u3) + b.dot(v3) + c.dot(w3) == k3
 
-# s = s
+# zero = 0
 u4 = np.array([0, 0, 0, 0, 0])
-v4 = np.array([0, 0, 1, 0, 0])
-w4 = np.array([0, 0, 0, 0, -1])
+v4 = np.array([0, 0, 0, 0, 0])
+w4 = np.array([0, 0, 0, 0, 1])
 k4 = 0
 
 assert a.dot(u4) + b.dot(v4) + c.dot(w4) == k4
@@ -78,10 +89,19 @@ k6 = 0
 
 assert a.dot(u6) + b.dot(v6) + c.dot(w6) == k6
 
+# Final check:
+# v = s(xy) + (1 - s)(x + y)
+u7 = np.array([0, 0, 0, 0, 0])
+v7 = np.array([0, 0, 0, 0, 0])
+w7 = np.array([0, 0, 1, 1, 0])
+k7 = public_v
+
+assert a.dot(u7) + b.dot(v7) + c.dot(w7) == k7
+
 y = Variable("Y")
 p = MultivariatePolynomial()
-for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c)):
-    print(a_i, b_i, c_i)
+for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
+    print(a_i, "\t", b_i, "\t", c_i)
     p += y**i * (a_i * b_i - c_i)
-print(p)
+print("Polynomial:", p)
 
