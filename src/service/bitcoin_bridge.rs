@@ -132,14 +132,11 @@ impl CashierService {
         let peer = msg.0;
         match request.get_command() {
             0 => {
-
+                // Exchange zk_pubkey for bitcoin address
 
             }
             1 => {
-
-            }
-            2 => {
-
+                // Withdraw
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));
@@ -147,4 +144,82 @@ impl CashierService {
         }
         Ok(())
     }
+}
+
+pub struct CashierClient {
+    protocol: ReqProtocol,
+    cashierstore: Arc<CashierStore>,
+}
+
+impl CashierClient {
+    pub fn new(addr: SocketAddr, rocks: RocksColumn<columns::CashierKeys>) -> Result<Self> {
+        let protocol = ReqProtocol::new(addr, String::from("CASHIER CLIENT"));
+
+        let cashierstore = CashierStore::new(rocks)?;
+
+        Ok(CashierClient {
+            protocol,
+            cashierstore,
+        })
+    }
+
+    pub async fn start(&mut self) -> Result<()> {
+        self.protocol.start().await?;
+        self.sync().await?;
+
+        Ok(())
+    }
+
+    pub async fn get_keys(&mut self, index: u64) -> Result<Option<CashierKeypair>> {
+        let rep = self
+            .protocol
+            .request(
+                //CashierCommand::GetKeys as u8,
+                serialize(&index),
+                &handle_error,
+            )
+            .await?;
+
+        if let Some(keys) = rep {
+            let keys: CashierKeys = deserialize(&keys)?;
+            //self.gateway_slabs_sub_s.send(slab.clone()).await?;
+            self.cashierstore.put(keys.clone())?;
+            return Ok(Some(keys));
+        }
+        Ok(None)
+    }
+
+    pub async fn put_keys(&mut self, mut keys: CashierKeys) -> Result<()> {
+        loop {
+            let last_index = self.sync().await?;
+            //keys.set_index(last_index + 1);
+            let keys = serialize(&keys);
+
+            let rep = self
+                .protocol
+                .request(GatewayCommand::PutSlab as u8, slab.clone(), &handle_error)
+                .await?;
+
+            if let Some(_) = rep {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn get_last_index(&mut self) -> Result<u64> {
+        let rep = self
+            .protocol
+            .request(CashierCommand::GetLastIndex as u8, vec![], &handle_error)
+            .await?;
+        if let Some(index) = rep {
+            return Ok(deserialize(&index)?);
+        }
+        Ok(0)
+    }
+
+    pub fn get_cashierstore(&self) -> Arc<SlabStore> {
+        self.cashierstore.clone()
+    }
+
 }
