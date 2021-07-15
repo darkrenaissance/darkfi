@@ -1,6 +1,10 @@
-pub mod client_cli;
-pub mod service_cli;
+pub mod cli_config;
+pub mod darkfid_cli;
+pub mod drk_cli;
+pub mod gatewayd_cli;
 
-pub use client_cli::cli_config::{DarkfidConfig, GatewaydConfig, DrkConfig};
-pub use client_cli::{darkfid_cli::DarkfidCli, drk_cli::DrkCli, drk_cli::Transfer};
-pub use service_cli::ServiceCli;
+pub use cli_config::{DarkfidConfig, GatewaydConfig, DrkConfig};
+pub use darkfid_cli::DarkfidCli;
+pub use drk_cli::DrkCli;
+pub use drk_cli::Transfer;
+pub use gatewayd_cli::GatewaydCli;

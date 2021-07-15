@@ -7,7 +7,7 @@ use std::io::Read;
 use std::{fs, path::PathBuf};
 use toml;
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{ServiceCli, GatewaydConfig};
+use drk::cli::{GatewaydCli, GatewaydConfig};
 use drk::service::GatewayService;
 use drk::util::join_config_path;
 use drk::Result;
@@ -74,7 +74,7 @@ fn main() -> Result<()> {
     let config: GatewaydConfig = toml::from_str(str_buff)?;
     let config_pointer = Arc::new(&config);
 
-    let options = ServiceCli::load()?;
+    let options = GatewaydCli::load()?;
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
