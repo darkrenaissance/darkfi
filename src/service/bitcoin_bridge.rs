@@ -12,7 +12,19 @@ use crate::{serial::deserialize, serial::serialize, Error, Result};
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
+use log::*;
 
+#[repr(u8)]
+enum CashierError {
+    NoError,
+    UpdateIndex,
+}
+
+#[repr(u8)]
+enum CashierCommand {
+    GetDBTC,
+    GetBTC,
+}
 
 pub struct CashierKeys {
     secret_key: SecretKey,
@@ -133,6 +145,18 @@ impl CashierService {
         match request.get_command() {
             0 => {
                 // Exchange zk_pubkey for bitcoin address
+                let zkpub = request.get_payload();
+
+                // Generate bitcoin Address
+                let btc_keys = CashierKeys::new().unwrap();
+                let deposit_address = btc_keys.get_deposit_address();
+
+                let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
+                //if let None = error {
+                //    reply.set_error(CashierError::UpdateIndex as u32);
+                //}
+                // send reply
+                send_queue.send((peer, reply)).await?;
 
             }
             1 => {
@@ -165,23 +189,23 @@ impl CashierClient {
 
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
-        self.sync().await?;
+        //self.sync().await?;
 
         Ok(())
     }
 
-    pub async fn get_keys(&mut self, index: u64) -> Result<Option<CashierKeypair>> {
+    pub async fn get_keys(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<CashierKeypair>> {
         let rep = self
             .protocol
             .request(
-                //CashierCommand::GetKeys as u8,
+                CashierCommand::GetDBTC as u8,
                 serialize(&index),
                 &handle_error,
             )
             .await?;
 
         if let Some(keys) = rep {
-            let keys: CashierKeys = deserialize(&keys)?;
+            let keys: CashierKeypair = deserialize(&keys)?;
             //self.gateway_slabs_sub_s.send(slab.clone()).await?;
             self.cashierstore.put(keys.clone())?;
             return Ok(Some(keys));
@@ -189,37 +213,38 @@ impl CashierClient {
         Ok(None)
     }
 
-    pub async fn put_keys(&mut self, mut keys: CashierKeys) -> Result<()> {
-        loop {
-            let last_index = self.sync().await?;
-            //keys.set_index(last_index + 1);
-            let keys = serialize(&keys);
+    // pub async fn put_keys(&mut self, mut keys: CashierKeys) -> Result<()> {
+    //     loop {
+    //         let last_index = self.sync().await?;
+    //         //keys.set_index(last_index + 1);
+    //         let keys = serialize(&keys);
 
-            let rep = self
-                .protocol
-                .request(GatewayCommand::PutSlab as u8, slab.clone(), &handle_error)
-                .await?;
+    //         let rep = self
+    //             .protocol
+    //             .request(CashierCommand::PutSlab as u8, slab.clone(), &handle_error)
+    //             .await?;
 
-            if let Some(_) = rep {
-                break;
-            }
-        }
-        Ok(())
-    }
+    //         if let Some(_) = rep {
+    //             break;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
-    pub async fn get_last_index(&mut self) -> Result<u64> {
-        let rep = self
-            .protocol
-            .request(CashierCommand::GetLastIndex as u8, vec![], &handle_error)
-            .await?;
-        if let Some(index) = rep {
-            return Ok(deserialize(&index)?);
-        }
-        Ok(0)
-    }
-
-    pub fn get_cashierstore(&self) -> Arc<SlabStore> {
+    pub fn get_cashierstore(&self) -> Arc<CashierStore> {
         self.cashierstore.clone()
     }
 
+}
+
+fn handle_error(status_code: u32) {
+    match status_code {
+        1 => {
+            warn!("Reply has an Error: Index is not updated");
+        }
+        2 => {
+            warn!("Reply has an Error: Index Not Exist");
+        }
+        _ => {}
+    }
 }
