@@ -80,6 +80,11 @@ class MultivariatePolynomial:
         if isinstance(term, Variable):
             term = term.termify()
 
+        if hasattr(term, "field"):
+            expr = MultiplyExpression()
+            expr.coeff = term
+            term = expr
+
         # Delete ^0 variables
         term.clean()
         # Skip zero terms
