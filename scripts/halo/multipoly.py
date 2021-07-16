@@ -8,6 +8,9 @@ class Variable:
         expr.set_symbol(self.name, n)
         return expr
 
+    def __eq__(self, other):
+        return self.name == other.name
+
     def termify(self):
         expr = MultiplyExpression()
         expr.set_symbol(self.name, 1)
@@ -16,13 +19,16 @@ class Variable:
 class MultiplyExpression:
 
     def __init__(self):
-        self.coeff = None
+        self.coeff = fp(1)
         self.symbols = {}
 
     def clean(self):
         for symbol in list(self.symbols.keys()):
             if self.symbols[symbol] == 0:
                 del self.symbols[symbol]
+
+    def matches(self, other):
+        return self.symbols == other.symbols
 
     def set_symbol(self, var_name, power):
         self.symbols[var_name] = power
@@ -33,10 +39,7 @@ class MultiplyExpression:
         result.symbols = self.symbols.copy()
 
         if hasattr(expr, "field"):
-            if result.coeff is None:
-                result.coeff = expr
-            else:
-                result.coeff *= expr
+            result.coeff *= expr
             return result
 
         if isinstance(expr, Variable):
@@ -50,12 +53,15 @@ class MultiplyExpression:
         return result
 
     def __add__(self, expr):
+        if isinstance(expr, Variable):
+            expr = expr.termify()
+
         return MultivariatePolynomial([self, expr])
 
     def __str__(self):
         repr = ""
         first = True
-        if self.coeff is not None:
+        if self.coeff != fp(1):
             repr += str(self.coeff)
             first = False
         for var_name, power in self.symbols.items():
@@ -76,6 +82,9 @@ class MultivariatePolynomial:
     def __init__(self, terms=[]):
         self.terms = terms
 
+    def copy(self):
+        return MultivariatePolynomial(self.terms[:])
+
     def __add__(self, term):
         if isinstance(term, Variable):
             term = term.termify()
@@ -85,15 +94,39 @@ class MultivariatePolynomial:
             expr.coeff = term
             term = expr
 
-        # Delete ^0 variables
-        term.clean()
-        # Skip zero terms
-        if term.coeff is None or term.coeff == 0:
-            return self
+        if isinstance(term, MultiplyExpression):
+            # Delete ^0 variables
+            term.clean()
+            # Skip zero terms
+            #if term.coeff is None or term.coeff == 0:
+            #    return self
 
-        result = MultivariatePolynomial(self.terms[:])
-        result.terms.append(term)
-        return result
+            result = self.copy()
+            result_term = result.find(term)
+            if result_term is None:
+                result.terms.append(term)
+            else:
+                result_term.coeff += term.coeff
+            return result
+        else:
+            assert isinstance(term, MultivariatePolynomial)
+            result = self.copy()
+            for other_term in term.terms:
+                found = False
+                for self_term in result.terms:
+                    if self_term.matches(other_term):
+                        self_term.coeff += other_term.coeff
+                        found = True
+                        break
+                if not found:
+                    result.terms.append(other_term)
+            return result
+
+    def find(self, other):
+        for term in self.terms:
+            if term.matches(other):
+                return term
+        return None
 
     def __str__(self):
         if not self.terms:
@@ -120,5 +153,8 @@ if __name__ == "__main__":
     z = Variable("Z")
 
     p = x**3 * y**2 * x**2 * fp(5) * fp(2) + x**3 * y + z + fp(6)
+    q = x**3 * y * fp(3) + y
     print(p)
+    print(q)
+    print(p + q)
 
