@@ -22,6 +22,12 @@ class MultiplyExpression:
         self.coeff = fp(1)
         self.symbols = {}
 
+    def copy(self):
+        result = MultiplyExpression()
+        result.coeff = self.coeff
+        result.symbols = self.symbols.copy()
+        return result
+
     def clean(self):
         for symbol in list(self.symbols.keys()):
             if self.symbols[symbol] == 0:
@@ -50,11 +56,19 @@ class MultiplyExpression:
                 result.symbols[var_name] += power
             else:
                 result.symbols[var_name] = power
+
+        # Remember to multiply the coefficients
+        result.coeff *= expr.coeff
         return result
 
     def __add__(self, expr):
         if isinstance(expr, Variable):
             expr = expr.termify()
+
+        if self.matches(expr):
+            result = self.copy()
+            result.coeff += expr.coeff
+            return result
 
         return MultivariatePolynomial([self, expr])
 
@@ -83,9 +97,12 @@ class MultivariatePolynomial:
         self.terms = terms
 
     def copy(self):
-        return MultivariatePolynomial(self.terms[:])
+        terms = [term.copy() for term in self.terms]
+        return MultivariatePolynomial(terms)
 
-    def __add__(self, term):
+    # Operations can accept Variables and constants
+    # so we make sure to convert them to MultiplyExpression types
+    def _convert_term(self, term):
         if isinstance(term, Variable):
             term = term.termify()
 
@@ -94,43 +111,50 @@ class MultivariatePolynomial:
             expr.coeff = term
             term = expr
 
-        if isinstance(term, MultiplyExpression):
-            # Delete ^0 variables
-            term.clean()
-            # Skip zero terms
-            #if term.coeff is None or term.coeff == 0:
-            #    return self
+        return term
 
-            result = self.copy()
-            result_term = result.find(term)
-            if result_term is None:
-                result.terms.append(term)
-            else:
-                result_term.coeff += term.coeff
-            return result
-        else:
-            assert isinstance(term, MultivariatePolynomial)
+    def __add__(self, term):
+        term = self._convert_term(term)
+
+        if isinstance(term, MultivariatePolynomial):
+            # Recursively apply addition operation
             result = self.copy()
             for other_term in term.terms:
                 result += other_term
             return result
 
-    def __mul__(self, other):
-        if isinstance(term, Variable):
-            term = term.termify()
+        assert isinstance(term, MultiplyExpression)
+        # Delete ^0 variables
+        term.clean()
 
-        if hasattr(term, "field"):
-            expr = MultiplyExpression()
-            expr.coeff = term
-            term = expr
+        result = self.copy()
+        result_term = result.find(term)
 
-        if isinstance(term, MultiplyExpression):
-            # Delete ^0 variables
-            term.clean()
-            return None
+        if result_term is None:
+            result.terms.append(term)
         else:
-            assert isinstance(term, MultivariatePolynomial)
-            return None
+            result_term.coeff += term.coeff
+
+        return result
+
+    def __mul__(self, term):
+        term = self._convert_term(term)
+
+        if isinstance(term, MultivariatePolynomial):
+            # Recursively apply addition operation
+            result = MultivariatePolynomial()
+            for other_term in term.terms:
+                result += self * other_term
+            return result
+
+        assert isinstance(term, MultiplyExpression)
+        # Delete ^0 variables
+        term.clean()
+
+        terms = [self_term * term for self_term in self.terms]
+        result = MultivariatePolynomial(terms)
+
+        return result
 
     def find(self, other):
         for term in self.terms:
@@ -162,9 +186,12 @@ if __name__ == "__main__":
     y = Variable("Y")
     z = Variable("Z")
 
+    print(y**2 + y**2)
+
     p = x**3 * y**2 * x**2 * fp(5) * fp(2) + x**3 * y + z + fp(6)
     q = x**3 * y * fp(3) + y
     print(p)
     print(q)
     print(p + q)
+    print(p * q)
 
