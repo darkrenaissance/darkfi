@@ -180,12 +180,12 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
 
     // The type of the message
     let command_len = VarInt::decode_async(stream).await?.0 as usize;
-    let mut command = vec![0u8; command_len];
+    let mut cmd = vec![0u8; command_len];
     if command_len > 0 {
-        stream.read_exact(&mut command).await?;
+        stream.read_exact(&mut cmd).await?;
     }
-    let command = String::from_utf8(command)?;
-    debug!(target: "net", "read command: {}", command);
+    let cmd = String::from_utf8(cmd)?;
+    debug!(target: "net", "read command: {}", cmd);
 
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
 
@@ -197,7 +197,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     debug!(target: "net", "read payload {} bytes", payload_len);
 
     Ok(Packet {
-        command: command,
+        command: cmd,
         payload,
     })
 }
