@@ -112,15 +112,25 @@ class MultivariatePolynomial:
             assert isinstance(term, MultivariatePolynomial)
             result = self.copy()
             for other_term in term.terms:
-                found = False
-                for self_term in result.terms:
-                    if self_term.matches(other_term):
-                        self_term.coeff += other_term.coeff
-                        found = True
-                        break
-                if not found:
-                    result.terms.append(other_term)
+                result += other_term
             return result
+
+    def __mul__(self, other):
+        if isinstance(term, Variable):
+            term = term.termify()
+
+        if hasattr(term, "field"):
+            expr = MultiplyExpression()
+            expr.coeff = term
+            term = expr
+
+        if isinstance(term, MultiplyExpression):
+            # Delete ^0 variables
+            term.clean()
+            return None
+        else:
+            assert isinstance(term, MultivariatePolynomial)
+            return None
 
     def find(self, other):
         for term in self.terms:
