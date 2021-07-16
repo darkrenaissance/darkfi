@@ -39,6 +39,11 @@ class MultiplyExpression:
     def set_symbol(self, var_name, power):
         self.symbols[var_name] = power
 
+    def __neg__(self):
+        result = self.copy()
+        result.coeff *= -1
+        return result
+
     def __mul__(self, expr):
         result = MultiplyExpression()
         result.coeff = self.coeff
@@ -113,6 +118,10 @@ class MultivariatePolynomial:
 
         return term
 
+    def __neg__(self):
+        terms = [-term for term in self.terms]
+        return MultivariatePolynomial(terms)
+
     def __add__(self, term):
         term = self._convert_term(term)
 
@@ -128,7 +137,7 @@ class MultivariatePolynomial:
         term.clean()
 
         result = self.copy()
-        result_term = result.find(term)
+        result_term = result._find(term)
 
         if result_term is None:
             result.terms.append(term)
@@ -136,6 +145,10 @@ class MultivariatePolynomial:
             result_term.coeff += term.coeff
 
         return result
+
+    def __sub__(self, term):
+        term = -term
+        return self + term
 
     def __mul__(self, term):
         term = self._convert_term(term)
@@ -156,7 +169,7 @@ class MultivariatePolynomial:
 
         return result
 
-    def find(self, other):
+    def _find(self, other):
         for term in self.terms:
             if term.matches(other):
                 return term
@@ -194,4 +207,6 @@ if __name__ == "__main__":
     print(q)
     print(p + q)
     print(p * q)
+    print(-q)
+    print(p - q)
 
