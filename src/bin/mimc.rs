@@ -1,6 +1,6 @@
 use bls12_381::Scalar;
 use ff::Field;
-use drk::{Decodable, ZKContract};
+use drk::{Decodable, ZkContract};
 use std::fs::File;
 use std::ops::{Add, AddAssign, MulAssign, Neg, SubAssign};
 use std::time::Instant;
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     let file = File::open("mimc.zcd")?;
-    let mut contract = ZKContract::decode(file)?;
+    let mut contract = ZkContract::decode(file)?;
     println!(
         "Loaded contract '{}': [{:?}]",
         contract.name,

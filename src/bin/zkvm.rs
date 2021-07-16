@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
 use bls12_381::Scalar;
-use drk::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
+use drk::{BlsStringConversion, Decodable, Encodable, ZkContract, ZkProof};
 use simplelog::*;
 use std::fs;
 use std::fs::File;
@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T, failure::Error>;
 fn trusted_setup(contract_data: String, setup_file: String) -> Result<()> {
     let start = Instant::now();
     let file = File::open(contract_data)?;
-    let mut contract = ZKContract::decode(file)?;
+    let mut contract = ZkContract::decode(file)?;
     println!(
         "loaded contract '{}': [{:?}]",
         contract.name,
@@ -41,7 +41,7 @@ fn create_proof(
 ) -> Result<()> {
     let start = Instant::now();
     let file = File::open(contract_data)?;
-    let mut contract = ZKContract::decode(file)?;
+    let mut contract = ZkContract::decode(file)?;
     contract.load_setup(&setup_file)?;
     println!(
         "Loaded contract '{}': [{:?}]",
@@ -66,10 +66,10 @@ fn create_proof(
 //verify the proof
 fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> Result<()> {
     let contract_file = File::open(contract_data)?;
-    let mut contract = ZKContract::decode(contract_file)?;
+    let mut contract = ZkContract::decode(contract_file)?;
     contract.load_setup(&setup_file)?;
     let proof_file = File::open(zk_proof)?;
-    let proof = ZKProof::decode(proof_file)?;
+    let proof = ZkProof::decode(proof_file)?;
     if contract.verify(&proof) {
         println!("Zero-knowledge proof verified correctly.")
     } else {
@@ -81,7 +81,7 @@ fn verify_proof(contract_data: String, setup_file: String, zk_proof: String) -> 
 // show public values in proof
 fn show_public(zk_proof: String) -> Result<()> {
     let file = File::open(zk_proof)?;
-    let proof = ZKProof::decode(file)?;
+    let proof = ZkProof::decode(file)?;
     //assert_eq!(proof.public.len(), 2);
     println!("Public values: {:?}", proof.public);
     Ok(())

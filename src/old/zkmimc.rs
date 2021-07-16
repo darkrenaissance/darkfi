@@ -40,7 +40,7 @@ macro_rules! from_slice {
     }};
 }
 
-fn main() -> std::result::Result<(), vm::ZKVMError> {
+fn main() -> std::result::Result<(), vm::ZkVmError> {
     use rand::rngs::OsRng;
 
     /////////////////////////////////

@@ -1,5 +1,5 @@
 use bls12_381::Scalar;
-use drk::{BlsStringConversion, Decodable, Encodable, ZKContract, ZKProof};
+use drk::{BlsStringConversion, Decodable, Encodable, ZkContract, ZkProof};
 use std::fs::File;
 use std::time::Instant;
 
@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 
         let start = Instant::now();
         let file = File::open("jubjub.zcd")?;
-        let mut contract = ZKContract::decode(file)?;
+        let mut contract = ZkContract::decode(file)?;
         println!(
             "Loaded contract '{}': [{:?}]",
             contract.name,
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     let file = File::open("jubjub.zcd")?;
-    let mut contract = ZKContract::decode(file)?;
+    let mut contract = ZkContract::decode(file)?;
     println!(
         "Loaded contract '{}': [{:?}]",
         contract.name,
@@ -92,7 +92,7 @@ fn main() -> Result<()> {
     // Verify the proof
 
     let file = File::open("jubjub.prf")?;
-    let proof = ZKProof::decode(file)?;
+    let proof = ZkProof::decode(file)?;
     assert!(contract.verify(&proof));
 
     Ok(())

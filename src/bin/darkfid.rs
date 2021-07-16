@@ -13,7 +13,7 @@ use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util;
 use drk::util::join_config_path;
-use drk::wallet::{WalletDB, WalletPtr};
+use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 use log::*;
 use std::fs;
@@ -193,7 +193,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    let wallet = Arc::new(WalletDB::new("wallet.db", config.password.clone())?);
+    let wallet = Arc::new(WalletDb::new("wallet.db", config.password.clone())?);
 
     let ex = executor.clone();
 

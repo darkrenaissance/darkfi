@@ -1,10 +1,10 @@
 // TODO: Add support for rusqlite error
 use jsonrpc_core::*;
-use rusqlite;
+//use rusqlite;
 use std::fmt;
 
 use crate::state;
-use crate::vm::ZKVMError;
+use crate::vm::ZkVmError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -25,7 +25,7 @@ pub enum Error {
     BadConstraintType,
     InvalidParamName,
     MissingParams,
-    VMError,
+    VmError,
     BadContract,
     Groth16Error,
     RusqliteError(String),
@@ -39,7 +39,7 @@ pub enum Error {
     StrUtf8Error(String),
     NoteDecryptionFailed,
     ServicesError(&'static str),
-    ZMQError(String),
+    ZmqError(String),
     VerifyFailed,
     TryIntoError,
     TryFromError,
@@ -71,7 +71,7 @@ impl fmt::Display for Error {
             Error::BadConstraintType => f.write_str("Bad constraint type byte"),
             Error::InvalidParamName => f.write_str("Invalid param name"),
             Error::MissingParams => f.write_str("Missing params"),
-            Error::VMError => f.write_str("VM error"),
+            Error::VmError => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error => f.write_str("Groth16 error"),
             Error::RusqliteError(ref err) => write!(f, "Rusqlite error {}", err),
@@ -86,7 +86,7 @@ impl fmt::Display for Error {
             Error::StrUtf8Error(ref err) => write!(f, "Malformed UTF8: {}", err),
             Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
-            Error::ZMQError(ref err) => write!(f, "ZMQError: {}", err),
+            Error::ZmqError(ref err) => write!(f, "ZmqError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
@@ -105,7 +105,7 @@ impl fmt::Display for Error {
 // TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
     fn from(err: zeromq::ZmqError) -> Error {
-        Error::ZMQError(err.to_string())
+        Error::ZmqError(err.to_string())
     }
 }
 
@@ -146,9 +146,9 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
-impl From<ZKVMError> for Error {
-    fn from(_err: ZKVMError) -> Error {
-        Error::VMError
+impl From<ZkVmError> for Error {
+    fn from(_err: ZkVmError) -> Error {
+        Error::VmError
     }
 }
 

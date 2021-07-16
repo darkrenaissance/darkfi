@@ -4,7 +4,7 @@ mod bits_contract;
 mod vm;
 use bits_contract::load_zkvm;
 
-fn main() -> std::result::Result<(), vm::ZKVMError> {
+fn main() -> std::result::Result<(), vm::ZkVmError> {
     let mut vm = load_zkvm();
 
     vm.setup();

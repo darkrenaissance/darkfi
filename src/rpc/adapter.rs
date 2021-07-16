@@ -1,4 +1,4 @@
-use crate::wallet::WalletDB;
+use crate::wallet::WalletDb;
 use crate::Result;
 use async_std::sync::Arc;
 use log::*;
@@ -7,11 +7,11 @@ use log::*;
 pub type AdapterPtr = Arc<RpcAdapter>;
 // Dummy adapter for now
 pub struct RpcAdapter {
-    pub wallet: Arc<WalletDB>,
+    pub wallet: Arc<WalletDb>,
 }
 
 impl RpcAdapter {
-    pub fn new(wallet: Arc<WalletDB>) -> Result<Self> {
+    pub fn new(wallet: Arc<WalletDb>) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         Ok(Self { wallet })
     }
@@ -71,15 +71,15 @@ impl RpcAdapter {
     //pub async fn create_
     //pub async fn save_key(&self, pubkey: Vec<u8>) -> Result<()> {
     //    debug!(target: "adapter", "save_key() [START]");
-    //    //let path = WalletDB::path("wallet.db")?;
-    //    //WalletDB::save(path, pubkey).await?;
+    //    //let path = WalletDb::path("wallet.db")?;
+    //    //WalletDb::save(path, pubkey).await?;
     //    Ok(())
     //}
 
     //pub async fn save_cash_key(&self, pubkey: Vec<u8>) -> Result<()> {
     //    debug!(target: "adapter", "save_cash_key() [START]");
-    //    //let path = WalletDB::path("cashier.db")?;
-    //    //WalletDB::save(path, pubkey).await?;
+    //    //let path = WalletDb::path("cashier.db")?;
+    //    //WalletDb::save(path, pubkey).await?;
     //    Ok(())
     //}
 
