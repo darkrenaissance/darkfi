@@ -2,6 +2,7 @@
 
 from finite_fields import finitefield
 import numpy as np
+import misc
 
 from multipoly import Variable, MultivariatePolynomial
 
@@ -106,8 +107,8 @@ assert u.shape == w.shape
 
 k = np.array((k1, k2, k3, k4, k5, k6, k7))
 
-x = Variable("X")
-y = Variable("Y")
+x = Variable("X", fp)
+y = Variable("Y", fp)
 p = MultivariatePolynomial()
 for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
     #print(a_i, "\t", b_i, "\t", c_i)
@@ -163,4 +164,32 @@ t_x_y = r_x_1 * r_prime_x_y - k_y
 t_x_y._assert_unique_terms()
 const_t = t_x_y.filter([x])
 print(const_t)
+
+# Section 6, Figure 2
+#
+# zkP1
+# 4 blinding factors since we evaluate r(X, Y) 3 times
+# Blind r(X, Y)
+# Commit to r(X, Y)
+
+# zkV1
+# Send a random y
+y = misc.sample_random(fp)
+
+# zkP2
+# Commit to t(X, y)
+
+# zkV2
+# Send a random z
+z = misc.sample_random(fp)
+
+# zkP3
+# Evaluate a = r(z, 1)
+# Evaluate b = r(z, y)
+# Evaluate t = t(z, y)
+# Evaluate s = s(z, y)
+
+# zkV3
+# Recalculate t from a, b and s
+# Verify polynomial commitments
 

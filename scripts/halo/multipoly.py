@@ -1,15 +1,14 @@
 import numpy as np
 from finite_fields import finitefield
-p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
-fp = finitefield.IntegersModP(p)
 
 class Variable:
 
-    def __init__(self, name):
+    def __init__(self, name, fp):
         self.name = name
+        self.fp = fp
 
     def __pow__(self, n):
-        expr = MultiplyExpression()
+        expr = MultiplyExpression(self.fp)
         expr.set_symbol(self.name, n)
         return expr
 
@@ -20,18 +19,19 @@ class Variable:
         return hash(self.name)
 
     def termify(self):
-        expr = MultiplyExpression()
+        expr = MultiplyExpression(self.fp)
         expr.set_symbol(self.name, 1)
         return expr
 
 class MultiplyExpression:
 
-    def __init__(self):
+    def __init__(self, fp):
         self.coeff = fp(1)
         self.symbols = {}
+        self.fp = fp
 
     def copy(self):
-        result = MultiplyExpression()
+        result = MultiplyExpression(self.fp)
         result.coeff = self.coeff
         result.symbols = self.symbols.copy()
         return result
@@ -57,12 +57,12 @@ class MultiplyExpression:
         return result
 
     def __mul__(self, expr):
-        result = MultiplyExpression()
+        result = MultiplyExpression(self.fp)
         result.coeff = self.coeff
         result.symbols = self.symbols.copy()
 
         if isinstance(expr, np.int64) or isinstance(expr, int):
-            expr = fp(int(expr))
+            expr = self.fp(int(expr))
 
         if hasattr(expr, "field"):
             result.coeff *= expr
@@ -97,19 +97,19 @@ class MultiplyExpression:
         return self + expr
 
     def evaluate(self, symbol_map):
-        result = MultiplyExpression()
+        result = MultiplyExpression(self.fp)
         for symbol, power in self.symbols.items():
             if symbol in symbol_map:
                 value = symbol_map[symbol]
                 result *= value**power
             else:
-                result *= Variable(symbol)**power
+                result *= Variable(symbol, self.fp)**power
         return result
 
     def __str__(self):
         repr = ""
         first = True
-        if self.coeff != fp(1):
+        if self.coeff != 1:
             repr += str(self.coeff)
             first = False
         for var_name, power in self.symbols.items():
@@ -141,7 +141,7 @@ class MultivariatePolynomial:
             term = term.termify()
 
         if hasattr(term, "field"):
-            expr = MultiplyExpression()
+            expr = MultiplyExpression(term.field)
             expr.coeff = term
             term = expr
 
@@ -172,7 +172,7 @@ class MultivariatePolynomial:
         term.clean()
 
         # Skip terms where the coeff is 0
-        if term.coeff == fp(0):
+        if term.coeff == 0:
             return self
 
         result = self.copy()
@@ -204,7 +204,7 @@ class MultivariatePolynomial:
         term.clean()
 
         # Skip terms where the coeff is 0
-        if term.coeff == fp(0):
+        if term.coeff == 0:
             return self
 
         terms = [self_term * term for self_term in self.terms]
