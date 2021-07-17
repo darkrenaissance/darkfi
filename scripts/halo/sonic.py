@@ -170,26 +170,35 @@ print(const_t)
 # zkP1
 # 4 blinding factors since we evaluate r(X, Y) 3 times
 # Blind r(X, Y)
+for i in range(1, 4):
+    blind_c_i = misc.sample_random(fp)
+    r_x_y += x**(-2*n - i) * y**(-2*n - i) * blind_c_i
 # Commit to r(X, Y)
 
 # zkV1
 # Send a random y
-y = misc.sample_random(fp)
+challenge_y = misc.sample_random(fp)
 
 # zkP2
 # Commit to t(X, y)
 
 # zkV2
 # Send a random z
-z = misc.sample_random(fp)
+challenge_z = misc.sample_random(fp)
 
 # zkP3
 # Evaluate a = r(z, 1)
+a = r_x_y.evaluate({x.name: challenge_z, y.name: fp(1)})
 # Evaluate b = r(z, y)
+b = r_x_y.evaluate({x.name: challenge_z, y.name: challenge_y})
 # Evaluate t = t(z, y)
+t = t_x_y.evaluate({x.name: challenge_z, y.name: challenge_y})
 # Evaluate s = s(z, y)
+s = s_x_y.evaluate({x.name: challenge_z, y.name: challenge_y})
 
 # zkV3
 # Recalculate t from a, b and s
+k = k_y.evaluate({y.name: challenge_y})
+t = a * (b + s) - k
 # Verify polynomial commitments
 
