@@ -82,10 +82,6 @@ version = "0.25.1"
 features = ["bundled", "sqlcipher"]
 
 [[bin]]
-name = "example"
-path = "src/bin/example.rs"
-
-[[bin]]
 name = "lisp"
 path = "lisp/lisp.rs"
 
