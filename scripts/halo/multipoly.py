@@ -229,6 +229,28 @@ class MultivariatePolynomial:
             p += term.evaluate(variable_map)
         return p
 
+    def _assert_unique_terms(self):
+        for i, term1 in enumerate(self.terms):
+            for q, term2 in enumerate(self.terms):
+                if i == q:
+                    continue
+                assert not term1.matches(term2)
+
+    def filter(self, variables):
+        p = MultivariatePolynomial()
+        for term in self.terms:
+            assert isinstance(term, MultiplyExpression)
+
+            skip = False
+            for variable in variables:
+                symbol = variable.name
+                if symbol in term.symbols:
+                    skip = True
+
+            if not skip:
+                p += term
+        return p
+
     def __str__(self):
         if not self.terms:
             return "0"

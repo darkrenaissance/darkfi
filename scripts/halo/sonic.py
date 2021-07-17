@@ -160,6 +160,7 @@ for q, k_q in enumerate(k, 1):
 r_prime_x_y = r_x_y + s_x_y
 r_x_1 = r_x_y.evaluate({y.name: fp(1)})
 t_x_y = r_x_1 * r_prime_x_y - k_y
-print()
-print(t_x_y)
+t_x_y._assert_unique_terms()
+const_t = t_x_y.filter([x])
+print(const_t)
 
