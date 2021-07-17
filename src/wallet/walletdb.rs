@@ -12,9 +12,9 @@ use rusqlite::{named_params, params, Connection};
 
 use std::path::PathBuf;
 
-pub type WalletPtr = Arc<WalletDB>;
+pub type WalletPtr = Arc<WalletDb>;
 
-pub struct WalletDB {
+pub struct WalletDb {
     pub path: PathBuf,
     pub secrets: Vec<jubjub::Fr>,
     pub cashier_secrets: Vec<jubjub::Fr>,
@@ -26,7 +26,7 @@ pub struct WalletDB {
     pub password: String,
 }
 
-impl WalletDB {
+impl WalletDb {
     pub fn new(wallet: &str, password: String) -> Result<Self> {
         debug!(target: "walletdb", "new() Constructor called");
         let path = join_config_path(&PathBuf::from(wallet))?;

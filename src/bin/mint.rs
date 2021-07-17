@@ -1,4 +1,4 @@
-use drk::{Decodable, ZKContract};
+use drk::{Decodable, ZkContract};
 use std::fs::File;
 use std::time::Instant;
 
@@ -42,9 +42,9 @@ fn _unpack_u64(value: u64) -> Vec<Scalar> {
 fn main() -> Result<()> {
     let start = Instant::now();
     let file = File::open("mint.zcd")?;
-    let mut visor = ZKContract::decode(file)?;
+    let mut visor = ZkContract::decode(file)?;
     println!("{}", visor.name);
-    //ZKContract::load_contract(bytes);
+    //ZkContract::load_contract(bytes);
     println!("Loaded contract: [{:?}]", start.elapsed());
 
     println!("Stats:");

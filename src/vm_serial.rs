@@ -1,9 +1,9 @@
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, VarInt};
 use crate::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZkVirtualMachine,
 };
-use crate::{impl_vec, ZKContract, ZKProof};
+use crate::{impl_vec, ZkContract, ZkProof};
 use bellman::groth16;
 use bls12_381 as bls;
 use std::collections::HashMap;
@@ -12,18 +12,18 @@ use std::io;
 impl_vec!((String, VariableIndex));
 impl_vec!((String, bls::Scalar));
 
-impl Encodable for ZKContract {
+impl Encodable for ZkContract {
     fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
         unimplemented!();
         //Ok(0)
     }
 }
 
-impl Decodable for ZKContract {
+impl Decodable for ZkContract {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             name: Decodable::decode(&mut d)?,
-            vm: ZKVirtualMachine {
+            vm: ZkVirtualMachine {
                 constants: Decodable::decode(&mut d)?,
                 alloc: Decodable::decode(&mut d)?,
                 ops: Decodable::decode(&mut d)?,
@@ -45,7 +45,7 @@ impl Decodable for ZKContract {
     }
 }
 
-impl Encodable for ZKProof {
+impl Encodable for ZkProof {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = self
             .public
@@ -58,7 +58,7 @@ impl Encodable for ZKProof {
     }
 }
 
-impl Decodable for ZKProof {
+impl Decodable for ZkProof {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             public: Vec::<(String, bls::Scalar)>::decode(&mut d)?

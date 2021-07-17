@@ -1,5 +1,4 @@
-.gitignore
-/target
-scripts/__pycache__/
+target
+*.pyc
 mint.params
 spend.params

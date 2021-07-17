@@ -2,6 +2,6 @@
 
 - Document the language
 - Integrate with zkvm command line
-- Integrate with ZKVMCircuit: allocs and constraints
+- Integrate with ZkVmCircuit: allocs and constraints
 - Added CryptoOperation such double and square to core.rs
-- Adapt ZKContract to use lisp to read contract and execute
+- Adapt ZkContract to use lisp to read contract and execute

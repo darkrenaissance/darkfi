@@ -29,26 +29,26 @@ pub use crate::error::{Error, Result};
 pub use crate::net::p2p::P2p;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZKVMCircuit,
-    ZKVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZkVmCircuit,
+    ZkVirtualMachine,
 };
 
 pub type Bytes = Vec<u8>;
 
-pub struct ZKContract {
+pub struct ZkContract {
     pub name: String,
-    pub vm: ZKVirtualMachine,
+    pub vm: ZkVirtualMachine,
     params_map: HashMap<String, VariableIndex>,
     pub params: HashMap<VariableIndex, Scalar>,
     public_map: bimap::BiMap<String, VariableIndex>,
 }
 
-pub struct ZKProof {
+pub struct ZkProof {
     pub public: HashMap<String, Scalar>,
     pub proof: groth16::Proof<Bls12>,
 }
 
-impl ZKContract {
+impl ZkContract {
     // Just have a load() and save()
     // Load the contract, do the setup, save it...
 
@@ -82,7 +82,7 @@ impl ZKContract {
         }
     }
 
-    pub fn prove(&mut self) -> Result<ZKProof> {
+    pub fn prove(&mut self) -> Result<ZkProof> {
         // Error if params not all set
         let user_params: HashSet<_> = self.params.keys().collect();
         let req_params: HashSet<_> = self.params_map.values().collect();
@@ -108,9 +108,9 @@ impl ZKContract {
         }
 
         // return proof and public values (Hashmap string -> scalars)
-        Ok(ZKProof { public, proof })
+        Ok(ZkProof { public, proof })
     }
-    pub fn verify(&self, proof: &ZKProof) -> bool {
+    pub fn verify(&self, proof: &ZkProof) -> bool {
         let mut public = vec![];
         for (name, value) in &proof.public {
             match self.public_map.get_by_left(name) {

@@ -184,7 +184,7 @@ impl ReqProtocol {
 
             Ok(Some(reply.get_payload()))
         } else {
-            Err(crate::Error::ZMQError(
+            Err(crate::Error::ZmqError(
                 "Couldn't parse ZmqMessage".to_string(),
             ))
         }
@@ -263,7 +263,7 @@ impl Subscriber {
                 let data: T = deserialize(&data)?;
                 Ok(data)
             }
-            None => Err(crate::Error::ZMQError(
+            None => Err(crate::Error::ZmqError(
                 "Couldn't parse ZmqMessage".to_string(),
             )),
         }

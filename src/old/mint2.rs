@@ -57,7 +57,7 @@ fn do_vcr_test(value: &jubjub::Fr) {
     println!("cvr2: {:?}", randomness_commit);
 }
 
-fn main() -> std::result::Result<(), vm::ZKVMError> {
+fn main() -> std::result::Result<(), vm::ZkVmError> {
     use rand::rngs::OsRng;
     let public_point = jubjub::ExtendedPoint::from(jubjub::SubgroupPoint::random(&mut OsRng));
     let public_affine = public_point.to_affine();

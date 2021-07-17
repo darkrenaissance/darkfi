@@ -7,7 +7,7 @@ def to_initial_caps(snake_str):
 def display(contract):
     indent = " " * 4
 
-    print(r"""use super::vm::{ZKVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction, VariableIndex, VariableRef};
+    print(r"""use super::vm::{ZkVirtualMachine, CryptoOperation, AllocType, ConstraintInstruction, VariableIndex, VariableRef};
 use bls12_381::Scalar;
 
 pub fn load_params(params: Vec<Scalar>) -> Vec<(VariableIndex, Scalar)> {""")
@@ -23,8 +23,8 @@ pub fn load_params(params: Vec<Scalar>) -> Vec<(VariableIndex, Scalar)> {""")
     print("%sresult" % indent)
     print("}\n")
 
-    print(r"""pub fn load_zkvm() -> ZKVirtualMachine {
-    ZKVirtualMachine {
+    print(r"""pub fn load_zkvm() -> ZkVirtualMachine {
+    ZkVirtualMachine {
         constants: vec![""")
 
     constants = list(contract.constants.items())

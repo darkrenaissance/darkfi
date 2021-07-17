@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 
-pub type SubscriptionID = u64;
+pub type SubscriptionId = u64;
 
 pub struct Subscription<T> {
-    id: SubscriptionID,
+    id: SubscriptionId,
     recv_queue: async_channel::Receiver<T>,
     parent: Arc<Subscriber<T>>,
 }
@@ -43,7 +43,7 @@ impl<T: Clone> Subscriber<T> {
         })
     }
 
-    fn random_id() -> SubscriptionID {
+    fn random_id() -> SubscriptionId {
         let mut rng = rand::thread_rng();
         rng.gen()
     }
@@ -62,7 +62,7 @@ impl<T: Clone> Subscriber<T> {
         }
     }
 
-    async fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionID) {
+    async fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {
         self.subs.lock().await.remove(&sub_id);
     }
 

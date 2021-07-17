@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use crate::error::Result;
 
-pub struct ZKVirtualMachine {
+pub struct ZkVirtualMachine {
     pub constants: Vec<Scalar>,
     pub alloc: Vec<(AllocType, VariableIndex)>,
     pub ops: Vec<CryptoOperation>,
@@ -76,16 +76,16 @@ pub enum ConstraintInstruction {
 }
 
 #[derive(Debug)]
-pub enum ZKVMError {
+pub enum ZkVmError {
     DivisionByZero,
     MalformedRange,
 }
 
-impl ZKVirtualMachine {
+impl ZkVirtualMachine {
     pub fn initialize(
         &mut self,
         params: &Vec<(VariableIndex, Scalar)>,
-    ) -> std::result::Result<(), ZKVMError> {
+    ) -> std::result::Result<(), ZkVmError> {
         // Resize array
         self.aux = vec![Scalar::zero(); self.alloc.len()];
 
@@ -163,7 +163,7 @@ impl ZKVirtualMachine {
                     if bool::from(ret.is_some()) {
                         *self_ = ret.unwrap();
                     } else {
-                        return Err(ZKVMError::DivisionByZero);
+                        return Err(ZkVmError::DivisionByZero);
                     }
                 }
                 CryptoOperation::Double(self_) => {
@@ -186,7 +186,7 @@ impl ZKVirtualMachine {
                         VariableRef::Local(index) => &mut local_stack[*index],
                     };
                     if self_.is_zero() {
-                        return Err(ZKVMError::DivisionByZero);
+                        return Err(ZkVmError::DivisionByZero);
                     } else {
                         *self_ = self_.invert().unwrap();
                     }
@@ -200,12 +200,12 @@ impl ZKVirtualMachine {
                         VariableRef::Aux(start_index) => match end {
                             VariableRef::Aux(end_index) => (&mut self.aux, start_index, end_index),
                             VariableRef::Local(_) => {
-                                return Err(ZKVMError::MalformedRange);
+                                return Err(ZkVmError::MalformedRange);
                             }
                         },
                         VariableRef::Local(start_index) => match end {
                             VariableRef::Aux(_) => {
-                                return Err(ZKVMError::MalformedRange);
+                                return Err(ZkVmError::MalformedRange);
                             }
                             VariableRef::Local(end_index) => {
                                 (&mut local_stack, start_index, end_index)
@@ -213,13 +213,13 @@ impl ZKVirtualMachine {
                         },
                     };
                     if start_index > end_index {
-                        return Err(ZKVMError::MalformedRange);
+                        return Err(ZkVmError::MalformedRange);
                     }
                     if (end_index + 1) - start_index != 256 {
-                        return Err(ZKVMError::MalformedRange);
+                        return Err(ZkVmError::MalformedRange);
                     }
                     if *end_index >= self_.len() {
-                        return Err(ZKVMError::MalformedRange);
+                        return Err(ZkVmError::MalformedRange);
                     }
 
                     for (i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
@@ -283,7 +283,7 @@ impl ZKVirtualMachine {
         // Create parameters for our circuit. In a production deployment these would
         // be generated securely using a multiparty computation.
         self.params = Some({
-            let circuit = ZKVMCircuit {
+            let circuit = ZkVmCircuit {
                 aux: vec![None; self.aux.len()],
                 alloc: self.alloc.clone(),
                 constraints: self.constraints.clone(),
@@ -303,7 +303,7 @@ impl ZKVirtualMachine {
     pub fn prove(&self) -> groth16::Proof<Bls12> {
         let aux = self.aux.iter().map(|scalar| Some(scalar.clone())).collect();
         // Create an instance of our circuit (with the preimage as a witness).
-        let circuit = ZKVMCircuit {
+        let circuit = ZkVmCircuit {
             aux,
             alloc: self.alloc.clone(),
             constraints: self.constraints.clone(),
@@ -329,14 +329,14 @@ impl ZKVirtualMachine {
     }
 }
 
-pub struct ZKVMCircuit {
+pub struct ZkVmCircuit {
     aux: Vec<Option<bls12_381::Scalar>>,
     alloc: Vec<(AllocType, VariableIndex)>,
     constraints: Vec<ConstraintInstruction>,
     constants: Vec<Scalar>,
 }
 
-impl Circuit<bls12_381::Scalar> for ZKVMCircuit {
+impl Circuit<bls12_381::Scalar> for ZkVmCircuit {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,
         cs: &mut CS,

@@ -13,13 +13,13 @@ use crate::net::messages::Message;
 use crate::serial::{Decodable, Encodable};
 
 /// 64bit identifier for message subscription.
-pub type MessageSubscriptionID = u64;
+pub type MessageSubscriptionId = u64;
 type MessageResult<M> = Result<Arc<M>>;
 
 /// Handles message subscriptions through a subscription ID and a receiver
 /// channel.
 pub struct MessageSubscription<M: Message> {
-    id: MessageSubscriptionID,
+    id: MessageSubscriptionId,
     recv_queue: async_channel::Receiver<MessageResult<M>>,
     parent: Arc<MessageDispatcher<M>>,
 }
@@ -54,7 +54,7 @@ trait MessageDispatcherInterface: Send + Sync {
 /// Maintains a list of active subscribers and handles sending messages across
 /// subscriptions.
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<HashMap<MessageSubscriptionID, async_channel::Sender<MessageResult<M>>>>,
+    subs: Mutex<HashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
@@ -66,7 +66,7 @@ impl<M: Message> MessageDispatcher<M> {
     }
 
     /// Create a random ID.
-    fn random_id() -> MessageSubscriptionID {
+    fn random_id() -> MessageSubscriptionId {
         let mut rng = rand::thread_rng();
         rng.gen()
     }
@@ -87,7 +87,7 @@ impl<M: Message> MessageDispatcher<M> {
 
     /// Unsubcribe from a channel. Removes the associated ID from the subscriber
     /// list.
-    async fn unsubscribe(&self, sub_id: MessageSubscriptionID) {
+    async fn unsubscribe(&self, sub_id: MessageSubscriptionId) {
         self.subs.lock().await.remove(&sub_id);
     }
 
@@ -125,7 +125,7 @@ impl<M: Message> MessageDispatcher<M> {
     }
 
     /// Remove inactive channels.
-    async fn collect_garbage(&self, ids: Vec<MessageSubscriptionID>) {
+    async fn collect_garbage(&self, ids: Vec<MessageSubscriptionId>) {
         let mut subs = self.subs.lock().await;
         for id in &ids {
             subs.remove(id);
