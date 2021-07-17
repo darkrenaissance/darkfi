@@ -1,15 +1,11 @@
 use drk::cli::{DrkCli, DrkConfig};
-use drk::util;
+use drk::util::join_config_path;
 use drk::Result;
 use log::*;
-use std::fs::OpenOptions;
-use std::io::Read;
-use std::str;
-use toml;
 
 use async_std::sync::Arc;
 use std::collections::HashMap;
-use std::{fs, path::PathBuf};
+use std::path::{Path, PathBuf};
 
 type Payload = HashMap<String, String>;
 
@@ -109,44 +105,20 @@ async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
     Ok(())
 }
 
-fn set_default() -> Result<DrkConfig> {
-    let config_file = DrkConfig {
-        rpc_url: String::from("http://127.0.0.1:8000"),
-        log_path: String::from("/tmp/drk.log"),
-    };
-    Ok(config_file)
-}
-
 fn main() -> Result<()> {
     use simplelog::*;
 
     let options = Arc::new(DrkCli::load()?);
 
-    let config_path = PathBuf::from("drk.toml");
-    let path = util::join_config_path(&config_path).unwrap();
+    let path = join_config_path(&PathBuf::from("drk.toml")).unwrap();
 
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&path)?;
+    let config: DrkConfig = if Path::new(&path).exists() {
+        DrkConfig::load(path)?
+    } else {
+        DrkConfig::load_default(path)?
+    };
 
-    let mut buffer: Vec<u8> = vec![];
-    file.read_to_end(&mut buffer)?;
-    if buffer.is_empty() {
-        // set the default setting
-        let config_file = set_default()?;
-        let config_file = toml::to_string(&config_file)?;
-        fs::write(&path, &config_file)?;
-    }
-
-    // reload the config
-    let toml = fs::read(&path)?;
-    let str_buff = str::from_utf8(&toml)?;
-
-    // read from config file
-    let config: DrkConfig = toml::from_str(str_buff)?;
-    let config_pointer = Arc::new(&config);
+    let config_ptr = Arc::new(&config);
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -167,7 +139,7 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    futures::executor::block_on(start(config_pointer, options))?;
+    futures::executor::block_on(start(config_ptr, options))?;
 
     Ok(())
 }

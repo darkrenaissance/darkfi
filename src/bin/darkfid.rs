@@ -11,17 +11,10 @@ use drk::crypto::{
 use drk::serial::Decodable;
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::util;
 use drk::util::join_config_path;
 use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 use log::*;
-use std::fs;
-use std::str;
-//use std::fs::File;
-use std::fs::OpenOptions;
-use toml;
-//use drk::rpc::
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
 
@@ -34,7 +27,6 @@ use rand::rngs::OsRng;
 use rusqlite::Connection;
 
 use async_std::sync::Arc;
-use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
@@ -228,48 +220,20 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     Ok(())
 }
 
-fn set_default() -> Result<DarkfidConfig> {
-    let config_file = DarkfidConfig {
-        connect_url: String::from("127.0.0.1:3333"),
-        subscriber_url: String::from("127.0.0.1:4444"),
-        rpc_url: String::from("127.0.0.1:8000"),
-        database_path: String::from("darkfid.db"),
-        log_path: String::from("/tmp/darkfid.log"),
-        password: String::from(""),
-    };
-    Ok(config_file)
-}
-
 fn main() -> Result<()> {
     use simplelog::*;
 
     let options = Arc::new(DarkfidCli::load()?);
-    let config_path = PathBuf::from("darkfid.toml");
-    let path = util::join_config_path(&config_path).unwrap();
 
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&path)?;
+    let path = join_config_path(&PathBuf::from("darkfid.toml")).unwrap();
 
-    let mut buffer: Vec<u8> = vec![];
-    file.read_to_end(&mut buffer)?;
+    let config: DarkfidConfig = if Path::new(&path).exists() {
+        DarkfidConfig::load(path)?
+    } else {
+        DarkfidConfig::load_default(path)?
+    };
 
-    if buffer.is_empty() {
-        // set the default setting
-        let config_file = set_default()?;
-        let config_file = toml::to_string(&config_file)?;
-        fs::write(&path, &config_file)?;
-    }
-
-    // reload the config
-    let toml = fs::read(&path)?;
-    let str_buff = str::from_utf8(&toml)?;
-
-    // read from config file
-    let config: DarkfidConfig = toml::from_str(str_buff)?;
-    let config_pointer = Arc::new(&config);
+    let config_ptr = Arc::new(&config);
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -301,7 +265,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_pointer).await?;
+                start(ex2, config_ptr).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

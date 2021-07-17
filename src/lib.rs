@@ -29,8 +29,8 @@ pub use crate::error::{Error, Result};
 pub use crate::net::p2p::P2p;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
-    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef, ZkVmCircuit,
-    ZkVirtualMachine,
+    AllocType, ConstraintInstruction, CryptoOperation, VariableIndex, VariableRef,
+    ZkVirtualMachine, ZkVmCircuit,
 };
 
 pub type Bytes = Vec<u8>;

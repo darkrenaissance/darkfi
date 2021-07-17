@@ -11,3 +11,4 @@ pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
     path.push(file);
     Ok(path)
 }
+

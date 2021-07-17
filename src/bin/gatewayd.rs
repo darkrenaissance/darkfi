@@ -1,16 +1,12 @@
 use std::net::SocketAddr;
-use std::str;
 use std::sync::Arc;
 
-use std::fs::OpenOptions;
-use std::io::Read;
-use std::{fs, path::PathBuf};
-use toml;
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{GatewaydCli, GatewaydConfig};
 use drk::service::GatewayService;
 use drk::util::join_config_path;
 use drk::Result;
+use std::path::{Path, PathBuf};
 
 extern crate clap;
 use async_executor::Executor;
@@ -31,48 +27,21 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Res
     Ok(())
 }
 
-fn set_default() -> Result<GatewaydConfig> {
-    let config_file = GatewaydConfig {
-        accept_url: String::from("127.0.0.1:3333"),
-        publisher_url: String::from("127.0.0.1:4444"),
-        database_path: String::from("gatewayd.db"),
-        log_path: String::from("/tmp/gatewayd.log"),
-    };
-    Ok(config_file)
-}
-
 fn main() -> Result<()> {
     use simplelog::*;
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let config_path = PathBuf::from("gatewayd.toml");
-    let path = join_config_path(&config_path).unwrap();
+    let path = join_config_path(&PathBuf::from("gatewayd.toml")).unwrap();
 
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&path)?;
+    let config: GatewaydConfig = if Path::new(&path).exists() {
+        GatewaydConfig::load(path)?
+    } else {
+        GatewaydConfig::load_default(path)?
+    };
 
-    let mut buffer: Vec<u8> = vec![];
-    file.read_to_end(&mut buffer)?;
-
-    if buffer.is_empty() {
-        // set the default setting
-        let config_file = set_default()?;
-        let config_file = toml::to_string(&config_file)?;
-        fs::write(&path, &config_file)?;
-    }
-
-    // reload the config
-    let toml = fs::read(&path)?;
-    let str_buff = str::from_utf8(&toml)?;
-
-    // read from config file
-    let config: GatewaydConfig = toml::from_str(str_buff)?;
-    let config_pointer = Arc::new(&config);
+    let config_ptr = Arc::new(&config);
 
     let options = GatewaydCli::load()?;
 
@@ -103,7 +72,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_pointer).await?;
+                start(ex2, config_ptr).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })
