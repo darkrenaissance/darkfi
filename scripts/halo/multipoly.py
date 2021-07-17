@@ -1,3 +1,8 @@
+import numpy as np
+from finite_fields import finitefield
+p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+fp = finitefield.IntegersModP(p)
+
 class Variable:
 
     def __init__(self, name):
@@ -10,6 +15,9 @@ class Variable:
 
     def __eq__(self, other):
         return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
 
     def termify(self):
         expr = MultiplyExpression()
@@ -39,6 +47,10 @@ class MultiplyExpression:
     def set_symbol(self, var_name, power):
         self.symbols[var_name] = power
 
+    def __eq__(self, other):
+        return (self.coeff == other.coeff and
+                self.symbols == other.symbols)
+
     def __neg__(self):
         result = self.copy()
         result.coeff *= -1
@@ -48,6 +60,9 @@ class MultiplyExpression:
         result = MultiplyExpression()
         result.coeff = self.coeff
         result.symbols = self.symbols.copy()
+
+        if isinstance(expr, np.int64) or isinstance(expr, int):
+            expr = fp(int(expr))
 
         if hasattr(expr, "field"):
             result.coeff *= expr
@@ -76,6 +91,20 @@ class MultiplyExpression:
             return result
 
         return MultivariatePolynomial([self, expr])
+
+    def __sub__(self, expr):
+        expr = -expr
+        return self + expr
+
+    def evaluate(self, symbol_map):
+        result = MultiplyExpression()
+        for symbol, power in self.symbols.items():
+            if symbol in symbol_map:
+                value = symbol_map[symbol]
+                result *= value**power
+            else:
+                result *= Variable(symbol)**power
+        return result
 
     def __str__(self):
         repr = ""
@@ -118,6 +147,12 @@ class MultivariatePolynomial:
 
         return term
 
+    def __bool__(self):
+        return bool(self.terms)
+
+    def __eq__(self, other):
+        return self.terms == other.terms
+
     def __neg__(self):
         terms = [-term for term in self.terms]
         return MultivariatePolynomial(terms)
@@ -135,6 +170,10 @@ class MultivariatePolynomial:
         assert isinstance(term, MultiplyExpression)
         # Delete ^0 variables
         term.clean()
+
+        # Skip terms where the coeff is 0
+        if term.coeff == fp(0):
+            return self
 
         result = self.copy()
         result_term = result._find(term)
@@ -164,16 +203,31 @@ class MultivariatePolynomial:
         # Delete ^0 variables
         term.clean()
 
+        # Skip terms where the coeff is 0
+        if term.coeff == fp(0):
+            return self
+
         terms = [self_term * term for self_term in self.terms]
         result = MultivariatePolynomial(terms)
 
         return result
+
+    def divmod(self, poly):
+        assert isinstance(poly, MultivariatePolynomial)
+        # https://www.win.tue.nl/~aeb/2WF02/groebner.pdf
 
     def _find(self, other):
         for term in self.terms:
             if term.matches(other):
                 return term
         return None
+
+    def evaluate(self, variable_map):
+        p = MultivariatePolynomial()
+        for term in self.terms:
+            assert isinstance(term, MultiplyExpression)
+            p += term.evaluate(variable_map)
+        return p
 
     def __str__(self):
         if not self.terms:

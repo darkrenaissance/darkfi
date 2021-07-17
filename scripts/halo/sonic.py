@@ -106,15 +106,60 @@ assert u.shape == w.shape
 
 k = np.array((k1, k2, k3, k4, k5, k6, k7))
 
+x = Variable("X")
 y = Variable("Y")
 p = MultivariatePolynomial()
 for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
     #print(a_i, "\t", b_i, "\t", c_i)
     p += y**i * (a_i * b_i - c_i)
-print("Polynomial:", p)
+assert not p
 
 p = MultivariatePolynomial()
 for q, (u_q, v_q, w_q, k_q) in enumerate(zip(u, v, w, k)):
     p += y**q * (a.dot(u_q) + b.dot(v_q) + c.dot(w_q) - k_q)
-print("Polynomial:", p)
+assert not p
+
+n = len(a)
+assert len(b) == n
+assert len(c) == n
+
+assert u.shape == (7, n)
+assert v.shape == u.shape
+assert w.shape == u.shape
+assert k.shape == (7,)
+
+r_x_y = MultivariatePolynomial()
+s_x_y = MultivariatePolynomial()
+for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
+    assert 1 <= i <= n
+
+    r_x_y += x**i * y**i * a_i
+    r_x_y += x**-i * y**-i * b_i
+    r_x_y += x**(-i - n) * y**(-i - n) * c_i
+
+    u_i = u.T[i - 1]
+    v_i = v.T[i - 1]
+    w_i = w.T[i - 1]
+    u_i_Y = MultivariatePolynomial()
+    v_i_Y = MultivariatePolynomial()
+    w_i_Y = MultivariatePolynomial()
+    for q, (u_q_i, v_q_i, w_q_i) in enumerate(zip(u_i, v_i, w_i), 1):
+        assert 1 <= q <= 7
+
+        u_i_Y += y**(q + n) * u_q_i
+        v_i_Y += y**(q + n) * v_q_i
+        w_i_Y += -y**i - y**(-i) + y**(q + n) * v_q_i
+
+    s_x_y += u_i_Y * x**-i + v_i_Y * x**i + w_i_Y * x**(i + n)
+
+k_y = MultivariatePolynomial()
+for q, k_q in enumerate(k, 1):
+    assert 1 <= q <= 7
+    k_y += y**(q + n) * k_q
+
+r_prime_x_y = r_x_y + s_x_y
+r_x_1 = r_x_y.evaluate({y.name: fp(1)})
+t_x_y = r_x_1 * r_prime_x_y - k_y
+print()
+print(t_x_y)
 
