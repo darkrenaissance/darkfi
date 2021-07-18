@@ -1,6 +1,4 @@
-// TODO: Add support for rusqlite error
 use jsonrpc_core::*;
-//use rusqlite;
 use std::fmt;
 
 use crate::state;
@@ -102,7 +100,6 @@ impl fmt::Display for Error {
     }
 }
 
-// TODO: Match statement to parse external errors into strings.
 impl From<zeromq::ZmqError> for Error {
     fn from(err: zeromq::ZmqError) -> Error {
         Error::ZmqError(err.to_string())
