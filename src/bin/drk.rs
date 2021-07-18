@@ -3,6 +3,7 @@ use drk::util::join_config_path;
 use drk::Result;
 use log::*;
 
+use rand::Rng;
 use async_std::sync::Arc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -18,8 +19,14 @@ impl Drk {
     pub fn new(url: String) -> Self {
         let mut payload = HashMap::new();
         payload.insert(String::from("jsonrpc"), String::from("2.0"));
-        payload.insert(String::from("id"), String::from("0"));
+        let id = Self::random_id();
+        payload.insert(String::from("id"), id.to_string());
         Self { payload, url }
+    }
+
+    pub fn random_id() -> u32 {
+        let mut rng = rand::thread_rng();
+        rng.gen()
     }
 
     pub async fn say_hello(&mut self) -> Result<()> {
