@@ -151,20 +151,20 @@ for q, k_q in enumerate(k, 1):
     assert 1 <= q <= 7
     k_y += y**(q + n) * k_q
 
-r_prime_x_y = r_x_y + s_x_y
-r_x_1 = r_x_y(y=K(1))
-t_x_y = r_x_1 * r_prime_x_y - k_y
-print(t_x_y.constant_coefficient())
-
 # Section 6, Figure 2
 #
 # zkP1
 # 4 blinding factors since we evaluate r(X, Y) 3 times
 # Blind r(X, Y)
-#for i in range(1, 4):
-#    blind_c_i = K.random_element()
-#    r_x_y += x**(-2*n - i) * y**(-2*n - i) * blind_c_i
+for i in range(1, 4 + 1):
+    blind_c_i = K.random_element()
+    r_x_y += x**(-2*n - i) * y**(-2*n - i) * blind_c_i
 # Commit to r(X, Y)
+
+r_prime_x_y = r_x_y + s_x_y
+r_x_1 = r_x_y(y=K(1))
+t_x_y = r_x_1 * r_prime_x_y - k_y
+print(t_x_y.constant_coefficient())
 
 # zkV1
 # Send a random y
