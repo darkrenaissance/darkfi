@@ -1,14 +1,25 @@
 use crate::cli::DarkfidConfig;
 use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
+
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use http_types::{Request, Response, StatusCode};
 use log::*;
 use smol::Async;
+use serde::Deserialize;
+
 use std::net::TcpListener;
 use std::sync::Arc;
+
+
+#[derive(Deserialize, Debug)]
+pub struct TransferParams {
+    address: String,
+    amount: String,
+}
+
 
 /// Listens for incoming connections and serves them.
 pub async fn listen(
@@ -53,8 +64,8 @@ pub async fn listen(
                         let _stream = async_dup::Arc::new(async_dup::Mutex::new(stream));
                         executor.spawn(async move {
                             /*if let Err(err) = async_h1::accept(stream, serve).await {
-                                println!("Connection error: {:#?}", err);
-                            }*/
+                              println!("Connection error: {:#?}", err);
+                              }*/
                             unimplemented!();
                         })
                     }
@@ -194,7 +205,7 @@ impl RpcInterface {
                 println!("Key generation method called...");
                 self2.adapter.key_gen()?;
                 Ok(jsonrpc_core::Value::String(
-                    "Key generation successful".into(),
+                        "Key generation successful".into(),
                 ))
             }
         });
@@ -205,7 +216,7 @@ impl RpcInterface {
                 println!("Key generation method called...");
                 self2.adapter.cash_key_gen()?;
                 Ok(jsonrpc_core::Value::String(
-                    "Attempted key generation".into(),
+                        "Attempted key generation".into(),
                 ))
             }
         });
@@ -228,11 +239,20 @@ impl RpcInterface {
                 Ok(jsonrpc_core::Value::String("Created cashier wallet".into()))
             }
         });
+
+        io.add_method("transfer", |params: jsonrpc_core::Params| async move {
+            let parsed: TransferParams = params.parse().unwrap();
+            println!("test transfer params:  {:?}", parsed);
+            Ok(jsonrpc_core::Value::String("Transfer To... ".into()))
+
+        });
+
+
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)
-    }
+}
 
-    pub async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
-        Ok(self.stop_recv.recv().await?)
-    }
+pub async fn wait_for_quit(self: Arc<Self>) -> Result<()> {
+    Ok(self.stop_recv.recv().await?)
+}
 }

@@ -4,23 +4,26 @@ use drk::Result;
 use log::*;
 
 use rand::Rng;
-use async_std::sync::Arc;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+extern crate serde_json;
+use serde_json::{Map, Value};
 
-type Payload = HashMap<String, String>;
+use std::path::{Path, PathBuf};
 
 struct Drk {
     url: String,
-    payload: Payload,
+    payload: Map<String, Value>,
 }
 
 impl Drk {
     pub fn new(url: String) -> Self {
-        let mut payload = HashMap::new();
-        payload.insert(String::from("jsonrpc"), String::from("2.0"));
+        let mut payload = Map::new();
+
+        payload.insert("jsonrpc".into(), Value::String("2.0".into()));
+
         let id = Self::random_id();
-        payload.insert(String::from("id"), id.to_string());
+
+        payload.insert("id".into(), Value::String(id.to_string()));
+
         Self { payload, url }
     }
 
@@ -31,45 +34,63 @@ impl Drk {
 
     pub async fn say_hello(&mut self) -> Result<()> {
         self.payload
-            .insert(String::from("method"), String::from("say_hello"));
+            .insert("method".into(), Value::String("say_hello".into()));
         self.request().await
     }
 
     pub async fn create_cashier_wallet(&mut self) -> Result<()> {
         self.payload.insert(
-            String::from("method"),
-            String::from("create_cashier_wallet"),
+            "method".into(),
+            Value::String("create_cashier_wallet".into()),
         );
         self.request().await
     }
 
     pub async fn create_wallet(&mut self) -> Result<()> {
         self.payload
-            .insert(String::from("method"), String::from("create_wallet"));
+            .insert("method".into(), Value::String("create_wallet".into()));
         self.request().await
     }
 
     pub async fn key_gen(&mut self) -> Result<()> {
         self.payload
-            .insert(String::from("method"), String::from("key_gen"));
+            .insert("method".into(), Value::String("key_gen".into()));
         self.request().await
     }
 
     pub async fn get_info(&mut self) -> Result<()> {
         self.payload
-            .insert(String::from("method"), String::from("get_info"));
+            .insert("method".into(), Value::String("get_info".into()));
         self.request().await
     }
 
     pub async fn stop(&mut self) -> Result<()> {
         self.payload
-            .insert(String::from("method"), String::from("stop"));
+            .insert("method".into(), Value::String("stop".into()));
+        self.request().await
+    }
+
+    pub async fn transfer(&mut self, address: String, amount: String) -> Result<()> {
+        let mut params = Map::new();
+        params.insert("amount".into(), Value::String(amount));
+        params.insert("address".into(), Value::String(address));
+
+        self.payload
+            .insert(String::from("method"), Value::String("transfer".into()));
+
+        self.payload
+            .insert(String::from("params"), Value::Object(params));
+
+
         self.request().await
     }
 
     async fn request(&self) -> Result<()> {
+        let payload = surf::Body::from_json(&self.payload)?;
+        let payload = payload.into_string().await?;
+
         let mut res = surf::post(&self.url)
-            .body(http_types::Body::from_json(&self.payload)?)
+            .body(payload)
             .await?;
 
         if res.status() == 200 {
@@ -81,7 +102,7 @@ impl Drk {
     }
 }
 
-async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
+async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
     let url = config.rpc_url.clone();
     let mut client = Drk::new(url);
 
@@ -105,6 +126,10 @@ async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
         client.say_hello().await?;
     }
 
+    if let Some(transfer) = options.transfer {
+        client.transfer(transfer.pub_key, transfer.amount).await?;
+    }
+
     if options.stop {
         client.stop().await?;
     }
@@ -115,7 +140,7 @@ async fn start(config: Arc<&DrkConfig>, options: Arc<DrkCli>) -> Result<()> {
 fn main() -> Result<()> {
     use simplelog::*;
 
-    let options = Arc::new(DrkCli::load()?);
+    let options = DrkCli::load()?;
 
     let path = join_config_path(&PathBuf::from("drk.toml")).unwrap();
 
@@ -125,7 +150,7 @@ fn main() -> Result<()> {
         DrkConfig::load_default(path)?
     };
 
-    let config_ptr = Arc::new(&config);
+    let config_ptr = &config;
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
