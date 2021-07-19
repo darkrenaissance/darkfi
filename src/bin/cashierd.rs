@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use std::fs::OpenOptions;
 use std::io::Read;
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 use toml;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{ServiceCli, CashierdConfig};
+use drk::cli::{CashierdCli, CashierdConfig};
 use drk::service::CashierService;
 
 use drk::util::join_config_path;
@@ -43,49 +43,23 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     Ok(())
 }
 
-fn set_default() -> Result<CashierdConfig> {
-    let config_file = CashierdConfig {
-        accept_url: String::from("127.0.0.1:7777"),
-        database_path: String::from("cashierd.db"),
-        log_path: String::from("/tmp/cashierd.log"),
-    };
-    Ok(config_file)
-}
-
 fn main() -> Result<()> {
     use simplelog::*;
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let config_path = PathBuf::from("cashierd.toml");
-    let path = join_config_path(&config_path).unwrap();
+    let path = join_config_path(&PathBuf::from("cashierd.toml")).unwrap();
 
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&path)?;
+    let config: CashierdConfig = if Path::new(&path).exists() {
+        CashierdConfig::load(path)?
+    } else {
+        CashierdConfig::load_default(path)?
+    };
 
-    let mut buffer: Vec<u8> = vec![];
-    file.read_to_end(&mut buffer)?;
+    let config_ptr = Arc::new(&config);
 
-    if buffer.is_empty() {
-        // set the default setting
-        let config_file = set_default()?;
-        let config_file = toml::to_string(&config_file)?;
-        fs::write(&path, &config_file)?;
-    }
-
-    // reload the config
-    let toml = fs::read(&path)?;
-    let str_buff = str::from_utf8(&toml)?;
-
-    // read from config file
-    let config: CashierdConfig = toml::from_str(str_buff)?;
-    let config_pointer = Arc::new(&config);
-
-    let options = ServiceCli::load()?;
+    let options = CashierdCli::load()?;
 
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
@@ -96,7 +70,6 @@ fn main() -> Result<()> {
     };
 
     let log_path = config.log_path.clone();
-
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
@@ -105,7 +78,8 @@ fn main() -> Result<()> {
             std::fs::File::create(log_path).unwrap(),
         ),
     ])
-        .unwrap();
+    .unwrap();
+
 
     let ex2 = ex.clone();
 
@@ -115,7 +89,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_pointer).await?;
+                start(ex2, config_ptr).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

@@ -26,16 +26,16 @@ enum CashierCommand {
     GetBTC,
 }
 
-pub struct CashierKeys {
+pub struct BitcoinKeys {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
     pub bitcoin_public_key: BitcoinPubKey,
     pub pub_address: Address,
 }
-impl CashierKeys {
+impl BitcoinKeys {
     pub fn new(
 
-    ) -> Result<CashierKeys> {
+    ) -> Result<BitcoinKeys> {
 
         let context = secp256k1::Secp256k1::new();
 
@@ -55,12 +55,12 @@ impl CashierKeys {
 
         //let public_key = PublicKey::from_secret_key(&context, &secret_key);
 
-        // Use mainnet
-        let bitcoin_private_key = PrivateKey::new(secret_key, Network::Bitcoin);
+        // Use Testnet
+        let bitcoin_private_key = PrivateKey::new(secret_key, Network::Testnet);
 
         let bitcoin_public_key = BitcoinPubKey::from_private_key(&context, &bitcoin_private_key);
 
-        let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Bitcoin);
+        let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Testnet);
 
         Ok(Self {
             secret_key,
@@ -148,13 +148,13 @@ impl CashierService {
                 let zkpub = request.get_payload();
 
                 // Generate bitcoin Address
-                let btc_keys = CashierKeys::new().unwrap();
+                let btc_keys = BitcoinKeys::new().unwrap();
                 let deposit_address = btc_keys.get_deposit_address();
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
-                //if let None = error {
-                //    reply.set_error(CashierError::UpdateIndex as u32);
-                //}
+                // if let None = error {
+                //     reply.set_error(CashierError::UpdateIndex as u32);
+                // }
                 // send reply
                 send_queue.send((peer, reply)).await?;
 
