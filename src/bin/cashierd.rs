@@ -9,6 +9,7 @@ use toml;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig};
+use drk::wallet::{WalletDb, WalletPtr};
 use drk::service::CashierService;
 
 use drk::util::join_config_path;
@@ -36,8 +37,9 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     let rocks_cashierstore_column = RocksColumn::<columns::CashierKeys>::new(rocks);
     // Use pw: PASSWORD for now
     //let cashier_wallet = Arc::new(WalletDB::new("cashier.db", "PASSWORD")?);
+    let wallet = Arc::new(WalletDb::new("cashier.db", config.password.clone())?);
 
-    let cashier = CashierService::new(accept_addr, rocks_cashierstore_column)?;
+    let cashier = CashierService::new(accept_addr, rocks_cashierstore_column, wallet)?;
 
     cashier.start(executor.clone()).await?;
     Ok(())

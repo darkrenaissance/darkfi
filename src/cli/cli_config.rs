@@ -174,6 +174,10 @@ pub struct CashierdConfig {
     #[serde(default)]
     #[serde(rename = "log_path")]
     pub log_path: String,
+
+    #[serde(default)]
+    #[serde(rename = "password")]
+    pub password: String,
 }
 
 impl CashierdConfig {
@@ -197,6 +201,7 @@ impl Default for CashierdConfig {
         let accept_url = String::from("127.0.0.1:7777");
         let database_path = String::from("cashierd.db");
         let log_path = String::from("/tmp/cashierd.log");
-        Self { accept_url, database_path, log_path }
+        let password = String::new();
+        Self { accept_url, database_path, log_path, password }
     }
 }

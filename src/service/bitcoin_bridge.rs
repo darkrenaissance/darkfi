@@ -9,6 +9,7 @@ use bitcoin::network::constants::Network;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
+use crate::wallet::{WalletDb, WalletPtr};
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
@@ -77,18 +78,21 @@ impl BitcoinKeys {
 pub struct CashierService {
     addr: SocketAddr,
     cashierstore: Arc<CashierStore>,
+    wallet: Arc<WalletDb>,
 }
 
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
         rocks: RocksColumn<columns::CashierKeys>,
+        wallet: Arc<WalletDb>,
     )-> Result<Arc<CashierService>> {
         let cashierstore = CashierStore::new(rocks)?;
 
         Ok(Arc::new(CashierService {
             cashierstore,
             addr,
+            wallet,
         }))
     }
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
