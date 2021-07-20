@@ -18,6 +18,8 @@ use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 use log::*;
 
+use std::net::TcpStream;
+use futures::AsyncWriteExt;
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -30,6 +32,7 @@ use async_std::sync::Arc;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use smol::Async;
 
 #[allow(dead_code)]
 pub struct State {
@@ -148,6 +151,15 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
         let update = state_transition(&state, tx)?;
         state.apply(update).await?;
     }
+}
+
+// TODO: test function once we merge cashier branch
+pub async fn send_key_to_cashier(pubkey: Vec<u8>) -> Result<()> {
+    // TODO: cashier address should be hardcoded (and public e.g cashier.dark.fi)
+    let mut stream = Async::<TcpStream>::connect(([127, 0, 0, 1], 3333)).await?;
+    println!("Connected to {}", stream.get_ref().peer_addr()?);
+    stream.write_all(&pubkey).await?;
+    Ok(())
 }
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
