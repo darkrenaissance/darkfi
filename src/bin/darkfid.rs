@@ -8,6 +8,8 @@ use drk::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
+use drk::rpc::adapter::RpcAdapter;
+use drk::rpc::jsonserver;
 use drk::serial::Decodable;
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
@@ -15,8 +17,6 @@ use drk::util::join_config_path;
 use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 use log::*;
-use drk::rpc::adapter::RpcAdapter;
-use drk::rpc::jsonserver;
 
 use async_executor::Executor;
 use bellman::groth16;

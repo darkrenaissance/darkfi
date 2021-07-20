@@ -29,6 +29,17 @@ impl Transfer {
     }
 }
 
+pub struct Deposit {
+    pub asset: String,
+}
+
+impl Deposit {
+    pub fn new() -> Self {
+        Self {
+            asset: String::new(),
+        }
+    }
+}
 pub struct DrkCli {
     //pub change_config: bool,
     pub verbose: bool,
@@ -39,6 +50,7 @@ pub struct DrkCli {
     pub hello: bool,
     pub stop: bool,
     pub transfer: Option<Transfer>,
+    pub deposit: Option<Deposit>,
 }
 
 impl DrkCli {
@@ -115,6 +127,7 @@ impl DrkCli {
                             .required(true),
                     ),
             )
+            .subcommand(App::new("deposit").about("Deposit BTC for dBTC"))
             //.subcommand(
             //    App::new("config")
             //        .about("Configuration settings")
@@ -148,6 +161,14 @@ impl DrkCli {
         let info = app.is_present("info");
         let hello = app.is_present("hello");
         let stop = app.is_present("stop");
+
+        let deposit = None;
+        match app.subcommand_matches("deposit") {
+            Some(_) => {
+                //let deposit = Deposit::new();
+            }
+            None => {}
+        }
 
         let mut transfer = None;
         match app.subcommand_matches("transfer") {
@@ -200,6 +221,7 @@ impl DrkCli {
             info,
             hello,
             stop,
+            deposit,
             transfer,
         })
     }

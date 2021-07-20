@@ -70,6 +70,12 @@ impl Drk {
         self.request().await
     }
 
+    pub async fn deposit(&mut self) -> Result<()> {
+        self.payload
+            .insert(String::from("method"), Value::String("deposit".into()));
+        self.request().await
+    }
+
     pub async fn transfer(&mut self, address: String, amount: String) -> Result<()> {
         let mut params = Map::new();
         params.insert("amount".into(), Value::String(amount));
@@ -81,7 +87,6 @@ impl Drk {
         self.payload
             .insert(String::from("params"), Value::Object(params));
 
-
         self.request().await
     }
 
@@ -89,9 +94,7 @@ impl Drk {
         let payload = surf::Body::from_json(&self.payload)?;
         let payload = payload.into_string().await?;
 
-        let mut res = surf::post(&self.url)
-            .body(payload)
-            .await?;
+        let mut res = surf::post(&self.url).body(payload).await?;
 
         if res.status() == 200 {
             let response = res.take_body();
@@ -128,6 +131,10 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 
     if let Some(transfer) = options.transfer {
         client.transfer(transfer.pub_key, transfer.amount).await?;
+    }
+
+    if let Some(_deposit) = options.deposit {
+        client.deposit().await?;
     }
 
     if options.stop {

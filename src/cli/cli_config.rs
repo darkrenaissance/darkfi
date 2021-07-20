@@ -152,6 +152,11 @@ impl Default for GatewaydConfig {
         let publisher_url = String::from("127.0.0.1:4444");
         let database_path = String::from("gatewayd.db");
         let log_path = String::from("/tmp/gatewayd.log");
-        Self { accept_url, publisher_url, database_path, log_path }
+        Self {
+            accept_url,
+            publisher_url,
+            database_path,
+            log_path,
+        }
     }
 }
