@@ -16,7 +16,7 @@ impl Transfer {
         }
     }
 
-    pub fn verfiy_amount(amount: &str) -> Result<()> {
+    pub fn verify_amount(amount: &str) -> Result<()> {
         if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
             Ok(())
         } else {
@@ -178,7 +178,7 @@ impl DrkCli {
                     trn.pub_key = address.to_string();
                 }
                 if let Some(amount) = transfer_sub.value_of("amount") {
-                    Transfer::verfiy_amount(amount)?;
+                    Transfer::verify_amount(amount)?;
                     trn.amount = amount.to_string();
                 }
                 transfer = Some(trn);
