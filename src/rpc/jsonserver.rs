@@ -19,6 +19,12 @@ pub struct TransferParams {
     amount: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct WithdrawParams {
+    address: String,
+    amount: String,
+}
+
 /// Listens for incoming connections and serves them.
 pub async fn listen(
     executor: Arc<Executor<'_>>,
@@ -249,6 +255,12 @@ impl RpcInterface {
         io.add_method("transfer", |params: jsonrpc_core::Params| async move {
             let parsed: TransferParams = params.parse().unwrap();
             println!("test transfer params:  {:?}", parsed);
+            Ok(jsonrpc_core::Value::String("Transfer To... ".into()))
+        });
+
+        io.add_method("withdraw", |params: jsonrpc_core::Params| async move {
+            let parsed: WithdrawParams = params.parse().unwrap();
+            println!("test withdraw params:  {:?}", parsed);
             Ok(jsonrpc_core::Value::String("Transfer To... ".into()))
         });
 

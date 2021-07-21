@@ -90,6 +90,19 @@ impl Drk {
         self.request().await
     }
 
+    pub async fn withdraw(&mut self, address: String, amount: String) -> Result<()> {
+        let mut params = Map::new();
+        params.insert("amount".into(), Value::String(amount));
+        params.insert("address".into(), Value::String(address));
+
+        self.payload
+            .insert(String::from("method"), Value::String("withdraw".into()));
+        self.payload
+            .insert(String::from("params"), Value::Object(params));
+
+        self.request().await
+    }
+
     async fn request(&self) -> Result<()> {
         let payload = surf::Body::from_json(&self.payload)?;
         let payload = payload.into_string().await?;
@@ -135,6 +148,10 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 
     if let Some(_deposit) = options.deposit {
         client.deposit().await?;
+    }
+
+    if let Some(withdraw) = options.withdraw {
+        client.withdraw(withdraw.pub_key, withdraw.amount).await?;
     }
 
     if options.stop {

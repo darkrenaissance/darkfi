@@ -40,6 +40,33 @@ impl Deposit {
         }
     }
 }
+
+pub struct Withdraw {
+    pub pub_key: String,
+    pub amount: String,
+}
+
+impl Withdraw {
+    pub fn new() -> Self {
+        Self {
+            pub_key: String::new(),
+            amount: String::new(),
+        }
+    }
+
+    pub fn verify_amount(amount: &str) -> Result<()> {
+        if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
+            Ok(())
+        } else {
+            let err = format!(
+                "Unable to parse input amount as integer or float: {}",
+                amount
+            );
+            Err(crate::Error::ParseFailed(Box::leak(err.into_boxed_str())))
+        }
+    }
+}
+
 pub struct DrkCli {
     //pub change_config: bool,
     pub verbose: bool,
@@ -51,6 +78,7 @@ pub struct DrkCli {
     pub stop: bool,
     pub transfer: Option<Transfer>,
     pub deposit: Option<Deposit>,
+    pub withdraw: Option<Withdraw>,
 }
 
 impl DrkCli {
@@ -112,7 +140,7 @@ impl DrkCli {
                     .about("Transfer DBTC between users")
                     .arg(
                         Arg::new("address")
-                            .value_name("RECIPIENT_ADDRESS")
+                            .value_name("RECEIVE_ADDRESS")
                             .takes_value(true)
                             .index(1)
                             .help_heading(Some("Address of recipient"))
@@ -124,6 +152,27 @@ impl DrkCli {
                             .takes_value(true)
                             .index(2)
                             .help_heading(Some("Amount to send, in DBTC"))
+                            .required(true),
+                    ),
+            )
+            .subcommand(App::new("deposit").about("Deposit BTC for dBTC"))
+            .subcommand(
+                App::new("withdraw")
+                    .about("Withdraw BTC for dBTC")
+                    .arg(
+                        Arg::new("address")
+                            .value_name("RECEIVE_ADDRESS")
+                            .takes_value(true)
+                            .index(1)
+                            .help_heading(Some("Address of recipient"))
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::new("amount")
+                            .value_name("AMOUNT")
+                            .takes_value(true)
+                            .index(2)
+                            .help_heading(Some("Amount to send, in BTC"))
                             .required(true),
                     ),
             )
@@ -186,6 +235,21 @@ impl DrkCli {
             None => {}
         }
 
+        let mut withdraw = None;
+        match app.subcommand_matches("withdraw") {
+            Some(withdraw_sub) => {
+                let mut wdraw = Withdraw::new();
+                if let Some(address) = withdraw_sub.value_of("address") {
+                    wdraw.pub_key = address.to_string();
+                }
+                if let Some(amount) = withdraw_sub.value_of("amount") {
+                    Transfer::verify_amount(amount)?;
+                    wdraw.amount = amount.to_string();
+                }
+                withdraw = Some(wdraw);
+            }
+            None => {}
+        }
         //match app.subcommand_matches("config") {
         //    Some(config_sub) => match config_sub.subcommand() {
         //        Some(c) => match c {
@@ -223,6 +287,7 @@ impl DrkCli {
             stop,
             deposit,
             transfer,
+            withdraw,
         })
     }
 }
