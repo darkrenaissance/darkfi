@@ -23,7 +23,7 @@ impl CashierStore {
     pub fn put(&self, keypair: CashierKeypair) -> Result<Option<jubjub::SubgroupPoint>> {
 
         let index = keypair.get_index();
-        let check = self.get(index);
+
         match self.get(index) {
             Ok(_v) => Ok(None),
             Err(_e) => {

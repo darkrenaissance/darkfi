@@ -1,11 +1,8 @@
 use std::net::SocketAddr;
-use std::str;
 use std::sync::Arc;
 
-use std::fs::OpenOptions;
-use std::io::Read;
-use std::{fs, path::Path, path::PathBuf};
-use toml;
+use std::{path::Path, path::PathBuf};
+//use toml;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig};
@@ -18,13 +15,6 @@ use drk::Result;
 use async_executor::Executor;
 use easy_parallel::Parallel;
 
-fn setup_addr(address: Option<SocketAddr>, default: SocketAddr) -> SocketAddr {
-    match address {
-        Some(addr) => addr,
-        None => default,
-    }
-}
-
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Result<()> {
     let accept_addr: SocketAddr = config.accept_url.parse()?;
 
@@ -35,8 +25,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     let rocks = Rocks::new(&database_path)?;
 
     let rocks_cashierstore_column = RocksColumn::<columns::CashierKeys>::new(rocks);
-    // Use pw: PASSWORD for now
-    //let cashier_wallet = Arc::new(WalletDB::new("cashier.db", "PASSWORD")?);
+
     let wallet = Arc::new(WalletDb::new("cashier.db", config.password.clone())?);
 
     let cashier = CashierService::new(accept_addr, rocks_cashierstore_column, wallet)?;

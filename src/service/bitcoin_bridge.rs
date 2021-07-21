@@ -1,10 +1,9 @@
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use secp256k1::key::{SecretKey, PublicKey};
+use secp256k1::key::SecretKey;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
-use bitcoin::util::{address::Payload, address::Address};
-// Use p2pkh for 1st iteration
-use bitcoin::hash_types::PubkeyHash;
+use bitcoin::util::address::Address;
+
 use bitcoin::network::constants::Network;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
@@ -154,6 +153,9 @@ impl CashierService {
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new().unwrap();
                 let deposit_address = btc_keys.get_deposit_address();
+
+                // add to slabstore
+                let error = cashierstore.put(deserialize(&zkpub)?)?;
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
                 // if let None = error {
