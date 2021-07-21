@@ -160,3 +160,48 @@ impl Default for GatewaydConfig {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CashierdConfig {
+    #[serde(default)]
+    #[serde(rename = "connect_url")]
+    pub accept_url: String,
+
+    #[serde(default)]
+    #[serde(rename = "database_path")]
+    pub database_path: String,
+
+    #[serde(default)]
+    #[serde(rename = "log_path")]
+    pub log_path: String,
+
+    #[serde(default)]
+    #[serde(rename = "password")]
+    pub password: String,
+}
+
+impl CashierdConfig {
+    pub fn load(path: PathBuf) -> Result<Self> {
+        let toml = fs::read(&path)?;
+        let str_buff = str::from_utf8(&toml)?;
+        let config: Self = toml::from_str(str_buff)?;
+        Ok(config)
+    }
+    pub fn load_default(path: PathBuf) -> Result<Self> {
+        let toml = Self::default();
+        let config_file = toml::to_string(&toml)?;
+        fs::write(&path, &config_file)?;
+        let config = Self::load(path)?;
+        Ok(config)
+    }
+}
+
+impl Default for CashierdConfig {
+    fn default() -> Self {
+        let accept_url = String::from("127.0.0.1:7777");
+        let database_path = String::from("cashierd.db");
+        let log_path = String::from("/tmp/cashierd.log");
+        let password = String::new();
+        Self { accept_url, database_path, log_path, password }
+    }
+}

@@ -68,7 +68,7 @@ impl WalletDb {
 
     pub fn init_cashier_db(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
+        debug!(target: "cashierdb", "OPENED CONNECTION AT PATH {:?}", self.path);
         let contents = include_str!("../../res/schema.sql");
         conn.execute_batch(&contents)?;
         Ok(())

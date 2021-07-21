@@ -15,7 +15,7 @@ bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 
 zcash_primitives = "0.5.0"
-zcash_proofs = "0.5.0" 
+zcash_proofs = "0.5.0"
 # zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
@@ -77,6 +77,9 @@ bytes = "1.0.1"
 rocksdb = "0.16.0"
 dirs = "3.0.2"
 
+bitcoin = "0.26.2"
+secp256k1 = "0.20.3"
+
 [dependencies.rusqlite]
 version = "0.25.1"
 features = ["bundled", "sqlcipher"]
@@ -110,12 +113,16 @@ name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
 [[bin]]
+name = "cashierd"
+path = "src/bin/cashierd.rs"
+
+[[bin]]
 name = "darkfid"
 path = "src/bin/darkfid.rs"
+
 [[bin]]
 name = "drk"
 path = "src/bin/drk.rs"
 
 [profile.release]
 debug = 1
-
