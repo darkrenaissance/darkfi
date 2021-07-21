@@ -1,7 +1,9 @@
 import numpy as np
+from groth_poly_commit import K, create_proof, verify_proof
 
-p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
-K = FiniteField(p)
+# Just use the same finite field we put in the polynomial commitment scheme file
+#p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+#K = FiniteField(p)
 R.<x, y> = LaurentPolynomialRing(K)
 
 var_one = K(1)
