@@ -39,7 +39,9 @@ def dot_product(x, y):
             result += int(x_i) * y_i
     return result
 
-def create_proof(a, x):
+def create_proof(p, x):
+    a = np.array(p.coefficients())
+
     x = np.array([x**i for i in range(len(a))])
     # Evaluate the polynomial
     z = a.dot(x)
@@ -142,10 +144,16 @@ def verify_proof(proof, x):
 
     return True
 
+R.<x> = LaurentPolynomialRing(Scalar)
 a = np.array([
     Scalar(110), Scalar(56), Scalar(89), Scalar(6543), Scalar(2)
 ])
+p = 0
+for i, a_i in enumerate(a):
+    p += a_i * x**i
+print(p)
 xx = Scalar(77)
-proof = create_proof(a, xx)
+proof = create_proof(p, xx)
 assert verify_proof(proof, xx)
+assert proof.value == p(xx)
 
