@@ -5,10 +5,14 @@ use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
 use bitcoin::util::address::Address;
 
 use bitcoin::network::constants::Network;
+
+use bitcoin::hash_types::PubkeyHash;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
+
 use crate::wallet::{WalletDb, WalletPtr};
+use crate::serial::{Decodable, Encodable};
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
@@ -26,12 +30,14 @@ enum CashierCommand {
     GetBTC,
 }
 
+// Move to bitcoin.rs
 pub struct BitcoinKeys {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
     pub bitcoin_public_key: BitcoinPubKey,
     pub pub_address: Address,
 }
+
 impl BitcoinKeys {
     pub fn new(
 
@@ -53,12 +59,11 @@ impl BitcoinKeys {
 
         let secret_key = SecretKey::from_slice(&hex::decode(data_slice).unwrap()).unwrap();
 
-        //let public_key = PublicKey::from_secret_key(&context, &secret_key);
-
         // Use Testnet
         let bitcoin_private_key = PrivateKey::new(secret_key, Network::Testnet);
 
         let bitcoin_public_key = BitcoinPubKey::from_private_key(&context, &bitcoin_private_key);
+        //let pubkey_serialized = bitcoin_public_key.to_bytes();
 
         let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Testnet);
 
@@ -69,8 +74,11 @@ impl BitcoinKeys {
             pub_address,
         })
     }
-    pub fn get_deposit_address(&self) -> &Address {
-        &self.pub_address
+    pub fn get_deposit_address(&self) -> Result<&Address> {
+        Ok(&self.pub_address)
+    }
+    pub fn get_pubkey(&self) -> &BitcoinPubKey {
+        &self.bitcoin_public_key
     }
 }
 
@@ -152,17 +160,20 @@ impl CashierService {
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new().unwrap();
-                let deposit_address = btc_keys.get_deposit_address();
 
-                // add to slabstore
-                let error = cashierstore.put(deserialize(&zkpub)?)?;
+                let btc_pub = btc_keys.get_pubkey();
+
+                // add to cashierstore?
+                //let error = cashierstore.put(deserialize(&zkpub)?)?;
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
-                // if let None = error {
-                //     reply.set_error(CashierError::UpdateIndex as u32);
-                // }
+
+                reply.set_payload(btc_pub.to_bytes());
+
                 // send reply
                 send_queue.send((peer, reply)).await?;
+
+                info!("Received dkey->btc msg");
 
             }
             1 => {
@@ -195,12 +206,11 @@ impl CashierClient {
 
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
-        //self.sync().await?;
 
         Ok(())
     }
 
-    pub async fn get_keys(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<CashierKeypair>> {
+    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<Address>> {
         let rep = self
             .protocol
             .request(
@@ -210,32 +220,14 @@ impl CashierClient {
             )
             .await?;
 
-        if let Some(keys) = rep {
-            let keys: CashierKeypair = deserialize(&keys)?;
-            //self.gateway_slabs_sub_s.send(slab.clone()).await?;
-            self.cashierstore.put(keys.clone())?;
-            return Ok(Some(keys));
+        if let Some(key) = rep {
+            let pubkey = BitcoinPubKey::from_slice(&key).unwrap();
+            let address: Address = Address::p2pkh(&pubkey, Network::Testnet);
+
+            return Ok(Some(address));
         }
         Ok(None)
     }
-
-    // pub async fn put_keys(&mut self, mut keys: CashierKeys) -> Result<()> {
-    //     loop {
-    //         let last_index = self.sync().await?;
-    //         //keys.set_index(last_index + 1);
-    //         let keys = serialize(&keys);
-
-    //         let rep = self
-    //             .protocol
-    //             .request(CashierCommand::PutSlab as u8, slab.clone(), &handle_error)
-    //             .await?;
-
-    //         if let Some(_) = rep {
-    //             break;
-    //         }
-    //     }
-    //     Ok(())
-    // }
 
     pub fn get_cashierstore(&self) -> Arc<CashierStore> {
         self.cashierstore.clone()
