@@ -12,7 +12,7 @@ use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStor
 use crate::{serial::deserialize, serial::serialize, Error, Result};
 
 use crate::wallet::{WalletDb, WalletPtr};
-use crate::serial::{Decodable, Encodable};
+
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
