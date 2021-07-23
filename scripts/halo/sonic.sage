@@ -144,7 +144,7 @@ for i, (a_i, b_i, c_i) in enumerate(zip(a, b, c), 1):
 
         u_i_Y += y**(q + n) * u_q_i
         v_i_Y += y**(q + n) * v_q_i
-        w_i_Y += -y**i - y**(-i) + y**(q + n) * v_q_i
+        w_i_Y += -y**i - y**(-i) + y**(q + n) * w_q_i
 
     s_x_y += u_i_Y * x**-i + v_i_Y * x**i + w_i_Y * x**(i + n)
 
