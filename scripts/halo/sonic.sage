@@ -174,6 +174,9 @@ challenge_y = K.random_element()
 
 # zkP2
 # Commit to t(X, y)
+t_x = t_x_y(y=challenge_y)
+t_x = t_x.univariate_polynomial()
+print(t_x.constant_coefficient())
 
 # zkV2
 # Send a random z
