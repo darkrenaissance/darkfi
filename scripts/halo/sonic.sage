@@ -158,9 +158,9 @@ for q, k_q in enumerate(k, 1):
 # zkP1
 # 4 blinding factors since we evaluate r(X, Y) 3 times
 # Blind r(X, Y)
-for i in range(1, 4 + 1):
-    blind_c_i = K.random_element()
-    r_x_y += x**(-2*n - i) * y**(-2*n - i) * blind_c_i
+#for i in range(1, 4 + 1):
+#    blind_c_i = K.random_element()
+#    r_x_y += x**(-2*n - i) * y**(-2*n - i) * blind_c_i
 # Commit to r(X, Y)
 
 r_prime_x_y = r_x_y + s_x_y

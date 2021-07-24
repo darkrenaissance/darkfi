@@ -39,10 +39,19 @@ def dot_product(x, y):
             result += int(x_i) * y_i
     return result
 
-def create_proof(p, x):
-    a = np.array(p.coefficients())
+def poly_commit(p):
+    # Sage randomly orders terms. No guarantee about ordering.
+    #a = np.array(p.coefficients())
+    a = np.array([p[i] for i in range(p.degree() + 1)])
+    r = Scalar.random_element()
+    C_x = int(r) * H + dot_product(a, G_vec)
+    return (r, C_x)
 
-    x = np.array([x**i for i in range(len(a))])
+def create_proof(p, r, x):
+    a = np.array([p[i] for i in range(p.degree() + 1)])
+    #a = np.array(p.coefficients())
+
+    x = np.array([x**i for i in range(p.degree() + 1)])
     # Evaluate the polynomial
     z = a.dot(x)
 
@@ -53,7 +62,7 @@ def create_proof(p, x):
     # Commitments
 
     t = Scalar.random_element()
-    r = Scalar.random_element()
+    #r = Scalar.random_element()
     s = Scalar.random_element()
 
     C_z = int(t) * H + int(z) * G
@@ -153,7 +162,9 @@ for i, a_i in enumerate(a):
     p += a_i * x**i
 print(p)
 xx = Scalar(77)
-proof = create_proof(p, xx)
+r, commit = poly_commit(p)
+proof = create_proof(p, r, xx)
 assert verify_proof(proof, xx)
+assert proof.poly_commit == commit
 assert proof.value == p(xx)
 

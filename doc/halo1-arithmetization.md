@@ -86,3 +86,29 @@ r(X, 1) s'(X, Y) &= && \; \vec{a_1} X X^{-1} Y^N u_1(Y) + \vec{a_2} X^2 X^{-2} Y
 & && + \cdots \\
 &= && \; \sum_{i = 1}^N \vec{a_i} \cdot Y^N u_i(Y) + \sum_{i = 1}^N \vec{b_i} \cdot Y^N v_i(Y) + \sum_{i = 1}^N \vec{c_i} \cdot (Y^N w_i(Y) - Y^i - Y^{-i})
 \end{alignat*}
+
+# Simplified Example
+
+Let $x = 4, y = 6$ then $xy = 24$, and $\vec{a} = (4), \vec{b} = (6), \vec{c} = (24)$ with no linear constraints (all selectors set to zero).
+
+$$r(X, Y) = 4XY + 6X^{-1}Y^{-1} + 24 X^{-2} Y^{-2}$$
+$$t(X, Y) = r(X, 1) r(X, Y) - X^{N + 1} Y - X^{N + 1} Y^{-1}$$
+$$r(X, 1) = 4X + 6X^{-1} + 24 X^{-2}$$
+\begin{alignat*}{2}
+r(X, 1) r(X, Y) &= && \; 4X (4XY + 6X^{-1}Y^{-1} + 24 X^{-2} Y^{-2}) \\
+& && + 6X^{-1} (4XY + 6X^{-1}Y^{-1} + 24 X^{-2} Y^{-2}) \\
+& && + 24X^{-2} (4XY + 6X^{-1}Y^{-1} + 24 X^{-2} Y^{-2}) \\
+&= && \; 16X^2 Y + 24 Y^{-1} + 96 X^{-1} Y^{-2} \\
+& && + 24Y + 36 X^{-2} Y^{-1} + 144 X^{-3} Y^{-2} \\
+& && + 96 X^{-1} Y + 144 X^{-3} Y^{-1} + 576 X^{-4} Y^{-2} \\
+r(X, 1) (- X^{N + 1} Y - X^{N + 1} Y^{-1}) &= && \; 4X (- X^{N + 1} Y - X^{N + 1} Y^{-1}) \\
+& && + 6X^{-1} (- X^{N + 1} Y - X^{N + 1} Y^{-1}) \\
+& && + 24 X^{-2} (- X^{N + 1} Y - X^{N + 1} Y^{-1}) \\
+&= && \; - 4X^{N + 2} Y - 4X^{N + 2} Y^{-1}) \\
+& && - 6X^N Y - 6X^N Y^{-1} \\
+& && - 24 X^{N - 1} Y - 24 X^{N - 1} Y^{-1}) \\
+&= && \; - 4X^3 Y - 4X^3 Y^{-1}) \\
+& && - 6X Y - 6X Y^{-1} \\
+& && - 24 Y - 24 Y^{-1} \\
+\end{alignat*}
+

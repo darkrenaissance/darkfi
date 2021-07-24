@@ -1,6 +1,7 @@
 import numpy as np
-from groth_poly_commit import K, create_proof, verify_proof
+from groth_poly_commit import Scalar, poly_commit, create_proof, verify_proof
 
+K = Scalar
 # Just use the same finite field we put in the polynomial commitment scheme file
 #p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
 #K = FiniteField(p)
@@ -165,11 +166,15 @@ for i in range(1, 4 + 1):
 # Commit to r(X, Y)
 
 s_prime_x_y = y**n * s_x_y
-for i in range(n, 1):
+for i in range(1, n):
     s_prime_x_y -= (y**i + y**-i) * x**(i + n)
 
 r_x_1 = r_x_y(y=K(1))
 t_x_y = r_x_1 * (r_x_y + s_prime_x_y) - y**n * k_y
+
+# This can be opened to r(X, Y) since r(X, Y) = r(XY, 1)
+r_x_1_scaled = (r_x_1 * x**(3*n - 1)).univariate_polynomial()
+rx1_commit_blind, rx1_commit = poly_commit(r_x_1_scaled)
 
 print("===================")
 print(" t(X, Y)")
@@ -212,6 +217,24 @@ print(t_x.dict())
 print()
 print("Constant coefficient:", t_x.constant_coefficient())
 
+# Split the polynomial into low and hi versions
+t_lo_x = 0
+t_hi_x = 0
+smallest_power = -min(t_x.dict().keys())
+for power, coeff in t_x.dict().items():
+    assert power != 0
+    if power < 0:
+        t_lo_x += x**(smallest_power + power) * coeff
+    else:
+        t_hi_x += x**(power - 1) * coeff
+d = t_lo_x.degree() + 1
+t_lo_x = t_lo_x.univariate_polynomial()
+t_hi_x = t_hi_x.univariate_polynomial()
+assert (t_lo_x * x**-d + t_hi_x * x).univariate_polynomial() == t_x
+
+T_lo_commit_blind, T_lo = poly_commit(t_lo_x)
+T_hi_commit_blind, T_hi = poly_commit(t_hi_x)
+
 # zkV2
 # Send a random z
 challenge_z = K.random_element()
@@ -226,8 +249,32 @@ t = t_x_y(x=challenge_z, y=challenge_y)
 # Evaluate s = s(z, y)
 s = s_prime_x_y(x=challenge_z, y=challenge_y)
 
+# Calculate equivalent openings
+# s'(X, Y) is known by both prover and verifier
+a_proof = create_proof(r_x_1_scaled, rx1_commit_blind, challenge_z)
+assert a_proof.poly_commit == rx1_commit
+b_proof = create_proof(r_x_1_scaled, rx1_commit_blind, challenge_y * challenge_z)
+assert b_proof.poly_commit == rx1_commit
+t_proof_lo = create_proof(t_lo_x, T_lo_commit_blind, challenge_z)
+assert t_proof_lo.poly_commit == T_lo
+t_proof_hi = create_proof(t_hi_x, T_hi_commit_blind, challenge_z)
+assert t_proof_hi.poly_commit == T_hi
+
+# Signature of correct computation not yet implemented
+# So just use s for now as is
+
+# Scaling factor
+verifier_rescale = challenge_z**(-3*n + 1)
+assert a_proof.value * verifier_rescale == a
+verifier_rescale = (challenge_y * challenge_z)**(-3*n + 1)
+assert b_proof.value * verifier_rescale == b
+
 # zkV3
 # Recalculate t from a, b and s
+t_new = t_proof_lo.value * challenge_z**-d + t_proof_hi.value * challenge_z
+assert t_new == t
+t = t_new
+
 k = (y**n * k_y)(y=challenge_y)
 t_new = a * (b + s) - k
 assert t_new == t
