@@ -244,10 +244,14 @@ impl RpcInterface {
             }
         });
 
-        let self1 = self.clone();
+        let mut self1 = self.clone();
         io.add_method("deposit", move |_| {
             let self2 = self1.clone();
-            async move { Ok(jsonrpc_core::Value::String("Initiating deposit... ".into())) }
+            async move {
+                println!("Deposit initiated");
+                //let btckey = self2.adapter.deposit().await?;
+                Ok(jsonrpc_core::Value::String("Initiating deposit... ".into()))
+            }
         });
 
         io.add_method("transfer", |params: jsonrpc_core::Params| async move {

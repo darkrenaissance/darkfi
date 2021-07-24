@@ -23,13 +23,10 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
-use futures::AsyncWriteExt;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
-use std::net::TcpStream;
 
 use async_std::sync::Arc;
-use smol::Async;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
@@ -126,11 +123,7 @@ impl State {
     }
 
     async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        let vec = self.wallet.get_private().ok()?;
-        let secret = self
-            .wallet
-            .get_value_deserialized::<jubjub::Fr>(vec)
-            .expect("Deserialize failed");
+        let secret = self.wallet.get_private().ok()?;
         match ciphertext.decrypt(&secret) {
             Ok(note) => {
                 // ... and return the decrypted note for this coin.
@@ -153,15 +146,6 @@ pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: Sta
     }
 }
 
-// TODO: test function once we merge cashier branch
-pub async fn send_key_to_cashier(pubkey: Vec<u8>) -> Result<()> {
-    // TODO: cashier address should be hardcoded (and public e.g cashier.dark.fi)
-    let mut stream = Async::<TcpStream>::connect(([127, 0, 0, 1], 3333)).await?;
-    println!("Connected to {}", stream.get_ref().peer_addr()?);
-    stream.write_all(&pubkey).await?;
-    Ok(())
-}
-
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
@@ -170,7 +154,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let database_path = join_config_path(&PathBuf::from(database_path))?;
     let rocks = Rocks::new(&database_path)?;
 
-    let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+    let rocks2 = rocks.clone();
+    let slabstore = RocksColumn::<columns::Slabs>::new(rocks2.clone());
+    let rocks3 = rocks2.clone();
+    let cashier_column = RocksColumn::<columns::CashierKeys>::new(rocks3);
 
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
@@ -224,7 +211,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
 
-    let adapter = RpcAdapter::new(wallet.clone())?;
+    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), cashier_column)?;
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 

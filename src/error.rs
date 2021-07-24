@@ -49,6 +49,7 @@ pub enum Error {
     EmptyPassword,
     TomlDeserializeError(String),
     TomlSerializeError(String),
+    CashierNoReply,
 }
 
 impl std::error::Error for Error {}
@@ -96,6 +97,7 @@ impl fmt::Display for Error {
             Error::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
+            Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
         }
     }
 }

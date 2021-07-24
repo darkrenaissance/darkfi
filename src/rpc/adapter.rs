@@ -1,19 +1,35 @@
+use crate::blockchain::{rocks::columns, CashierStore, RocksColumn};
+use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
-use crate::Result;
+use crate::{Error, Result};
 use async_std::sync::Arc;
+use bitcoin::util::address::Address;
 use log::*;
+use std::net::SocketAddr;
 //use std::sync::Arc;
 
 pub type AdapterPtr = Arc<RpcAdapter>;
 // Dummy adapter for now
 pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
+    pub client: CashierClient,
+    pub connect_url: String,
 }
 
 impl RpcAdapter {
-    pub fn new(wallet: Arc<WalletDb>) -> Result<Self> {
+    pub fn new(
+        wallet: Arc<WalletDb>,
+        connect_url: String,
+        rocks: RocksColumn<columns::CashierKeys>,
+    ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
-        Ok(Self { wallet })
+        let connect_addr: SocketAddr = connect_url.parse().unwrap();
+        let mut client = CashierClient::new(connect_addr, rocks)?;
+        Ok(Self {
+            wallet,
+            client,
+            connect_url,
+        })
     }
 
     pub fn init_db(&self) -> Result<()> {
@@ -64,30 +80,16 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub fn deposit(&self) -> Result<()> {
+    pub async fn deposit(&mut self) -> Result<Address> {
         debug!(target: "deposit", "deposit: START");
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
-        Ok(())
+        let dkey = self.wallet.get_public()?;
+        match self.client.get_address(dkey).await? {
+            Some(key) => Ok(key),
+            None => Err(Error::CashierNoReply),
+        }
     }
-    //pub async fn walletdb(&self) -> WalletPtr {
-    //    self.wallet.clone();
-    //}
-
-    //pub async fn create_
-    //pub async fn save_key(&self, pubkey: Vec<u8>) -> Result<()> {
-    //    debug!(target: "adapter", "save_key() [START]");
-    //    //let path = WalletDb::path("wallet.db")?;
-    //    //WalletDb::save(path, pubkey).await?;
-    //    Ok(())
-    //}
-
-    //pub async fn save_cash_key(&self, pubkey: Vec<u8>) -> Result<()> {
-    //    debug!(target: "adapter", "save_cash_key() [START]");
-    //    //let path = WalletDb::path("cashier.db")?;
-    //    //WalletDb::save(path, pubkey).await?;
-    //    Ok(())
-    //}
 
     pub fn get_info(&self) {}
 
