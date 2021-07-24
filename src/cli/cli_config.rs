@@ -202,6 +202,11 @@ impl Default for CashierdConfig {
         let database_path = String::from("cashierd.db");
         let log_path = String::from("/tmp/cashierd.log");
         let password = String::new();
-        Self { accept_url, database_path, log_path, password }
+        Self {
+            accept_url,
+            database_path,
+            log_path,
+            password,
+        }
     }
 }

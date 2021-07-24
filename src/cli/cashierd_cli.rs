@@ -16,8 +16,6 @@ impl CashierdCli {
 
         let verbose = app.is_present("VERBOSE");
 
-        Ok(Self {
-            verbose,
-        })
+        Ok(Self { verbose })
     }
 }

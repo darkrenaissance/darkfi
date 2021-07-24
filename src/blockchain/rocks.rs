@@ -54,12 +54,19 @@ impl Rocks {
         // nullifiers column family
         let nullifiers_cf = ColumnFamilyDescriptor::new(columns::Nullifiers::NAME, cf_opts.clone());
         // merkleroots column family
-        let merkleroots_cf = ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts.clone());
+        let merkleroots_cf =
+            ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts.clone());
         // cashierkeypair column family
         let cashierkeys_cf = ColumnFamilyDescriptor::new(columns::CashierKeys::NAME, cf_opts);
 
         // column families
-        let cfs = vec![default_cf, slab_cf, nullifiers_cf, merkleroots_cf, cashierkeys_cf];
+        let cfs = vec![
+            default_cf,
+            slab_cf,
+            nullifiers_cf,
+            merkleroots_cf,
+            cashierkeys_cf,
+        ];
 
         // database options
         let mut opt = Options::default();

@@ -18,21 +18,21 @@ use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 use log::*;
 
-use std::net::TcpStream;
-use futures::AsyncWriteExt;
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
+use futures::AsyncWriteExt;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
+use std::net::TcpStream;
 
 use async_std::sync::Arc;
+use smol::Async;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use smol::Async;
 
 #[allow(dead_code)]
 pub struct State {

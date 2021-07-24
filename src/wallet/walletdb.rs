@@ -159,20 +159,22 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn get_public(&self) -> Result<Vec<u8>> {
+    pub fn get_public(&self) -> Result<jubjub::SubgroupPoint> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
+        // this just gets the first key. maybe we should randomize this
         let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
         for key in key_iter {
             pub_keys.push(key?);
         }
-        Ok(pub_keys)
+        let public: jubjub::SubgroupPoint = self.get_value_deserialized(pub_keys)?;
+        Ok(public)
     }
 
-    pub fn get_cashier_public(&self) -> Result<Vec<u8>> {
+    pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
         debug!(target: "get_cashier_public", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -182,10 +184,11 @@ impl WalletDb {
         for key in key_iter {
             pub_keys.push(key?);
         }
-        Ok(pub_keys)
+        let public: jubjub::SubgroupPoint = self.get_value_deserialized(pub_keys)?;
+        Ok(public)
     }
 
-    pub fn get_private(&self) -> Result<Vec<u8>> {
+    pub fn get_private(&self) -> Result<jubjub::Fr> {
         debug!(target: "get", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -195,7 +198,8 @@ impl WalletDb {
         for key in key_iter {
             keys.push(key?);
         }
-        Ok(keys)
+        let private: jubjub::Fr = self.get_value_deserialized(keys)?;
+        Ok(private)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
@@ -210,6 +214,7 @@ impl WalletDb {
         let v = serialize(data);
         Ok(v)
     }
+
     pub fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
         let v: D = deserialize(&key)?;
         Ok(v)

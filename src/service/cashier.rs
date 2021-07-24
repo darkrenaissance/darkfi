@@ -1,22 +1,22 @@
-use rand::{thread_rng, Rng};
-use rand::distributions::Alphanumeric;
-use secp256k1::key::SecretKey;
-use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
 use bitcoin::util::address::Address;
+use bitcoin::util::ecdsa::{PrivateKey, PublicKey as BitcoinPubKey};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use secp256k1::key::SecretKey;
 
 use bitcoin::network::constants::Network;
 
-use bitcoin::hash_types::PubkeyHash;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
-use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
+use crate::blockchain::{rocks::columns, CashierKeypair, CashierStore, RocksColumn};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
+use bitcoin::hash_types::PubkeyHash;
 
 use crate::wallet::{WalletDb, WalletPtr};
 
-use std::net::SocketAddr;
-use async_std::sync::Arc;
 use async_executor::Executor;
+use async_std::sync::Arc;
 use log::*;
+use std::net::SocketAddr;
 
 #[repr(u8)]
 enum CashierError {
@@ -39,10 +39,7 @@ pub struct BitcoinKeys {
 }
 
 impl BitcoinKeys {
-    pub fn new(
-
-    ) -> Result<BitcoinKeys> {
-
+    pub fn new() -> Result<BitcoinKeys> {
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -93,7 +90,7 @@ impl CashierService {
         addr: SocketAddr,
         rocks: RocksColumn<columns::CashierKeys>,
         wallet: Arc<WalletDb>,
-    )-> Result<Arc<CashierService>> {
+    ) -> Result<Arc<CashierService>> {
         let cashierstore = CashierStore::new(rocks)?;
 
         Ok(Arc::new(CashierService {
@@ -109,11 +106,8 @@ impl CashierService {
 
         let (send, recv) = protocol.start().await?;
 
-        let handle_request_task = executor.spawn(self.handle_request_loop(
-            send.clone(),
-            recv.clone(),
-            executor.clone(),
-        ));
+        let handle_request_task =
+            executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
 
         protocol.run(executor.clone()).await?;
 
@@ -132,11 +126,7 @@ impl CashierService {
                 Ok(msg) => {
                     let cashierstore = self.cashierstore.clone();
                     let _ = executor
-                        .spawn(Self::handle_request(
-                            msg,
-                            cashierstore,
-                            send_queue.clone(),
-                        ))
+                        .spawn(Self::handle_request(msg, cashierstore, send_queue.clone()))
                         .detach();
                 }
                 Err(_) => {
@@ -174,7 +164,6 @@ impl CashierService {
                 send_queue.send((peer, reply)).await?;
 
                 info!("Received dkey->btc msg");
-
             }
             1 => {
                 // Withdraw
@@ -232,7 +221,6 @@ impl CashierClient {
     pub fn get_cashierstore(&self) -> Arc<CashierStore> {
         self.cashierstore.clone()
     }
-
 }
 
 fn handle_error(status_code: u32) {

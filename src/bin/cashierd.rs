@@ -6,8 +6,8 @@ use std::{path::Path, path::PathBuf};
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig};
-use drk::wallet::{WalletDb, WalletPtr};
 use drk::service::CashierService;
+use drk::wallet::{WalletDb, WalletPtr};
 
 use drk::util::join_config_path;
 use drk::Result;
@@ -70,7 +70,6 @@ fn main() -> Result<()> {
         ),
     ])
     .unwrap();
-
 
     let ex2 = ex.clone();
 

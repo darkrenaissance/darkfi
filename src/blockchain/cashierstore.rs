@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::serial::{deserialize, serialize};
 use crate::Result;
 
-use super::rocks::{columns, IteratorMode, RocksColumn};
 use super::cashier_keypair::CashierKeypair;
+use super::rocks::{columns, IteratorMode, RocksColumn};
 
 pub struct CashierStore {
     rocks: RocksColumn<columns::CashierKeys>,
@@ -21,7 +21,6 @@ impl CashierStore {
     }
 
     pub fn put(&self, keypair: CashierKeypair) -> Result<Option<jubjub::SubgroupPoint>> {
-
         let index = keypair.get_index();
 
         match self.get(index) {
@@ -29,7 +28,7 @@ impl CashierStore {
             Err(_e) => {
                 self.rocks.put(index.clone(), keypair)?;
                 Ok(Some(index))
-            },
+            }
         }
     }
 
