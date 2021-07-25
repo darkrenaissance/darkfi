@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{DarkfidCli, DarkfidConfig};
+use drk::cli::{DarkfidCli, DarkfidConfig, Config};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -220,16 +220,14 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 }
 
 fn main() -> Result<()> {
-    use simplelog::*;
-
     let options = Arc::new(DarkfidCli::load()?);
 
     let path = join_config_path(&PathBuf::from("darkfid.toml")).unwrap();
 
     let config: DarkfidConfig = if Path::new(&path).exists() {
-        DarkfidConfig::load(path)?
+        Config::<DarkfidConfig>::load(path)?
     } else {
-        DarkfidConfig::load_default(path)?
+        Config::<DarkfidConfig>::load_default(path)?
     };
 
     let config_ptr = Arc::new(&config);
@@ -237,24 +235,27 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+    {
+        use simplelog::*;
+        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
-    let debug_level = if options.verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
-    };
+        let debug_level = if options.verbose {
+            LevelFilter::Debug
+        } else {
+            LevelFilter::Off
+        };
 
-    let log_path = config.log_path.clone();
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
+        let log_path = config.log_path.clone();
+        CombinedLogger::init(vec![
+            TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
+            WriteLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                std::fs::File::create(log_path).unwrap(),
+            ),
+        ])
+        .unwrap();
+    }
 
     let ex2 = ex.clone();
 

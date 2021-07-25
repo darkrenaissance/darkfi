@@ -1,35 +1,31 @@
 use crate::util::join_config_path;
 use crate::Result;
-use serde::{Deserialize, Serialize};
-use std::str;
 
+use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+
+use std::marker::PhantomData;
+use std::str;
 use std::{
     fs,
     fs::{create_dir_all, File},
     io::Write,
 };
 
-use std::path::PathBuf;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DrkConfig {
-    #[serde(default)]
-    pub rpc_url: String,
-
-    #[serde(default)]
-    pub log_path: String,
+pub struct Config<T> {
+    config: PhantomData<T>,
 }
 
-impl DrkConfig {
-    pub fn load(path: PathBuf) -> Result<Self> {
+impl<T: Default + Serialize + DeserializeOwned> Config<T> {
+    pub fn load(path: PathBuf) -> Result<T> {
         let toml = fs::read(&path)?;
         let str_buff = str::from_utf8(&toml)?;
-        let config: Self = toml::from_str(str_buff)?;
+        let config: T = toml::from_str(str_buff.clone())?;
         Ok(config)
     }
 
-    pub fn load_default(path: PathBuf) -> Result<Self> {
-        let toml = Self::default();
+    pub fn load_default(path: PathBuf) -> Result<T> {
+        let toml = T::default();
         let config_file = toml::to_string(&toml)?;
 
         if let Some(outdir) = path.parent() {
@@ -43,6 +39,18 @@ impl DrkConfig {
         Ok(config)
     }
 }
+
+use std::path::PathBuf;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DrkConfig {
+    #[serde(default)]
+    pub rpc_url: String,
+
+    #[serde(default)]
+    pub log_path: String,
+}
+
 
 impl Default for DrkConfig {
     fn default() -> Self {
@@ -79,29 +87,6 @@ pub struct DarkfidConfig {
     pub password: String,
 }
 
-impl DarkfidConfig {
-    pub fn load(path: PathBuf) -> Result<Self> {
-        let toml = fs::read(&path)?;
-        let str_buff = str::from_utf8(&toml)?;
-        let config: Self = toml::from_str(str_buff)?;
-        Ok(config)
-    }
-    pub fn load_default(path: PathBuf) -> Result<Self> {
-        let toml = Self::default();
-        let config_file = toml::to_string(&toml)?;
-
-        if let Some(outdir) = path.parent() {
-            create_dir_all(outdir)?;
-        }
-
-        let mut file = File::create(path.clone())?;
-        file.write_all(&config_file.into_bytes())?;
-
-        let config = Self::load(path)?;
-        Ok(config)
-    }
-}
-
 impl Default for DarkfidConfig {
     fn default() -> Self {
         let connect_url = String::from("127.0.0.1:3333");
@@ -113,8 +98,8 @@ impl Default for DarkfidConfig {
             .expect("error during join database_path to config path");
         let database_path = String::from(
             database_path
-                .to_str()
-                .expect("error convert Path to String"),
+            .to_str()
+            .expect("error convert Path to String"),
         );
         let log_path = String::from("/tmp/darkfid_service_daemon.log");
 
@@ -149,29 +134,6 @@ pub struct GatewaydConfig {
     pub log_path: String,
 }
 
-impl GatewaydConfig {
-    pub fn load(path: PathBuf) -> Result<Self> {
-        let toml = fs::read(&path)?;
-        let str_buff = str::from_utf8(&toml)?;
-        let config: Self = toml::from_str(str_buff)?;
-        Ok(config)
-    }
-    pub fn load_default(path: PathBuf) -> Result<Self> {
-        let toml = Self::default();
-        let config_file = toml::to_string(&toml)?;
-
-        if let Some(outdir) = path.parent() {
-            create_dir_all(outdir)?;
-        }
-
-        let mut file = File::create(path.clone())?;
-        file.write_all(&config_file.into_bytes())?;
-
-        let config = Self::load(path)?;
-        Ok(config)
-    }
-}
-
 impl Default for GatewaydConfig {
     fn default() -> Self {
         let accept_url = String::from("127.0.0.1:3333");
@@ -204,29 +166,6 @@ pub struct CashierdConfig {
     #[serde(default)]
     #[serde(rename = "password")]
     pub password: String,
-}
-
-impl CashierdConfig {
-    pub fn load(path: PathBuf) -> Result<Self> {
-        let toml = fs::read(&path)?;
-        let str_buff = str::from_utf8(&toml)?;
-        let config: Self = toml::from_str(str_buff)?;
-        Ok(config)
-    }
-    pub fn load_default(path: PathBuf) -> Result<Self> {
-        let toml = Self::default();
-        let config_file = toml::to_string(&toml)?;
-
-        if let Some(outdir) = path.parent() {
-            create_dir_all(outdir)?;
-        }
-
-        let mut file = File::create(path.clone())?;
-        file.write_all(&config_file.into_bytes())?;
-
-        let config = Self::load(path)?;
-        Ok(config)
-    }
 }
 
 impl Default for CashierdConfig {

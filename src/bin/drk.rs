@@ -1,4 +1,4 @@
-use drk::cli::{DrkCli, DrkConfig};
+use drk::cli::{DrkCli, DrkConfig, Config};
 use drk::util::join_config_path;
 use drk::Result;
 use log::*;
@@ -162,38 +162,39 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    use simplelog::*;
-
     let options = DrkCli::load()?;
 
     let path = join_config_path(&PathBuf::from("drk.toml")).unwrap();
 
     let config: DrkConfig = if Path::new(&path).exists() {
-        DrkConfig::load(path)?
+        Config::<DrkConfig>::load(path)?
     } else {
-        DrkConfig::load_default(path)?
+        Config::<DrkConfig>::load_default(path)?
     };
 
     let config_ptr = &config;
 
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+    {
+        use simplelog::*;
+        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
-    let debug_level = if options.verbose {
-        LevelFilter::Info
-    } else {
-        LevelFilter::Off
-    };
+        let debug_level = if options.verbose {
+            LevelFilter::Debug
+        } else {
+            LevelFilter::Off
+        };
 
-    let log_path = config.log_path.clone();
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
+        let log_path = config.log_path.clone();
+        CombinedLogger::init(vec![
+            TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
+            WriteLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                std::fs::File::create(log_path).unwrap(),
+            ),
+        ])
+        .unwrap();
+    }
 
     futures::executor::block_on(start(config_ptr, options))?;
 

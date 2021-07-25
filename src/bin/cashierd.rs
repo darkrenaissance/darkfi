@@ -5,7 +5,7 @@ use std::{path::Path, path::PathBuf};
 //use toml;
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{CashierdCli, CashierdConfig};
+use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
 use drk::wallet::{WalletDb, WalletPtr};
 
@@ -35,41 +35,44 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
 }
 
 fn main() -> Result<()> {
-    use simplelog::*;
-
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let path = join_config_path(&PathBuf::from("cashierd.toml")).unwrap();
 
     let config: CashierdConfig = if Path::new(&path).exists() {
-        CashierdConfig::load(path)?
+        Config::<CashierdConfig>::load(path)?
     } else {
-        CashierdConfig::load_default(path)?
+        Config::<CashierdConfig>::load_default(path)?
     };
 
     let config_ptr = Arc::new(&config);
 
     let options = CashierdCli::load()?;
 
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+    {
+        use simplelog::*;
+        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
-    let debug_level = if options.verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
-    };
+        let debug_level = if options.verbose {
+            LevelFilter::Debug
+        } else {
+            LevelFilter::Off
+        };
 
-    let log_path = config.log_path.clone();
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
+        let log_path = config.log_path.clone();
+        CombinedLogger::init(vec![
+            TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
+            WriteLogger::new(
+                LevelFilter::Debug,
+                Config::default(),
+                std::fs::File::create(log_path).unwrap(),
+            ),
+        ])
+        .unwrap();
+    }
+
+
 
     let ex2 = ex.clone();
 
