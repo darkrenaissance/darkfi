@@ -227,12 +227,13 @@ impl GatewayClient {
     }
 
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Slab>> {
+        let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
             .request(
                 GatewayCommand::GetSlab as u8,
                 serialize(&index),
-                &handle_error,
+                handle_error,
             )
             .await?;
 
@@ -251,9 +252,11 @@ impl GatewayClient {
             slab.set_index(last_index + 1);
             let slab = serialize(&slab);
 
+            let handle_error = Arc::new(handle_error);
+
             let rep = self
                 .protocol
-                .request(GatewayCommand::PutSlab as u8, slab.clone(), &handle_error)
+                .request(GatewayCommand::PutSlab as u8, slab.clone(), handle_error)
                 .await?;
 
             if let Some(_) = rep {
@@ -264,9 +267,11 @@ impl GatewayClient {
     }
 
     pub async fn get_last_index(&mut self) -> Result<u64> {
+        let handle_error = Arc::new(handle_error);
+
         let rep = self
             .protocol
-            .request(GatewayCommand::GetLastIndex as u8, vec![], &handle_error)
+            .request(GatewayCommand::GetLastIndex as u8, vec![], handle_error)
             .await?;
         if let Some(index) = rep {
             return Ok(deserialize(&index)?);

@@ -148,7 +148,7 @@ impl ReqProtocol {
         &mut self,
         command: u8,
         data: Vec<u8>,
-        handle_error: &dyn Fn(u32),
+        handle_error: Arc<dyn Fn(u32) + Send + Sync>,
     ) -> Result<Option<Vec<u8>>> {
         let request = Request::new(command, data);
         let req = serialize(&request);

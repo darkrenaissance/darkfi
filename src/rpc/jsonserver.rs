@@ -244,9 +244,9 @@ impl RpcInterface {
             }
         });
 
-        let mut self1 = self.clone();
+        //let mut self1 = self.clone();
         io.add_method("deposit", move |_| {
-            let self2 = self1.clone();
+            //let self2 = self1.clone();
             async move {
                 println!("Deposit initiated");
                 //let btckey = self2.adapter.deposit().await?;

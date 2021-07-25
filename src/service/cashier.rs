@@ -211,12 +211,13 @@ impl CashierClient {
     }
 
     pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<Address>> {
+        let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
             .request(
                 CashierCommand::GetDBTC as u8,
                 serialize(&index),
-                &handle_error,
+                handle_error,
             )
             .await?;
 
