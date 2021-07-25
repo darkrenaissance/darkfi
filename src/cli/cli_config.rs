@@ -3,7 +3,12 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::str;
 
-use std::fs;
+use std::{
+    fs,
+    fs::{create_dir_all, File},
+    io::Write,
+};
+
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,7 +31,14 @@ impl DrkConfig {
     pub fn load_default(path: PathBuf) -> Result<Self> {
         let toml = Self::default();
         let config_file = toml::to_string(&toml)?;
-        fs::write(&path, &config_file)?;
+
+        if let Some(outdir) = path.parent() {
+            create_dir_all(outdir)?;
+        }
+
+        let mut file = File::create(path.clone())?;
+        file.write_all(&config_file.into_bytes())?;
+
         let config = Self::load(path)?;
         Ok(config)
     }
@@ -77,7 +89,14 @@ impl DarkfidConfig {
     pub fn load_default(path: PathBuf) -> Result<Self> {
         let toml = Self::default();
         let config_file = toml::to_string(&toml)?;
-        fs::write(&path, &config_file)?;
+
+        if let Some(outdir) = path.parent() {
+            create_dir_all(outdir)?;
+        }
+
+        let mut file = File::create(path.clone())?;
+        file.write_all(&config_file.into_bytes())?;
+
         let config = Self::load(path)?;
         Ok(config)
     }
@@ -140,7 +159,14 @@ impl GatewaydConfig {
     pub fn load_default(path: PathBuf) -> Result<Self> {
         let toml = Self::default();
         let config_file = toml::to_string(&toml)?;
-        fs::write(&path, &config_file)?;
+
+        if let Some(outdir) = path.parent() {
+            create_dir_all(outdir)?;
+        }
+
+        let mut file = File::create(path.clone())?;
+        file.write_all(&config_file.into_bytes())?;
+
         let config = Self::load(path)?;
         Ok(config)
     }
@@ -190,7 +216,14 @@ impl CashierdConfig {
     pub fn load_default(path: PathBuf) -> Result<Self> {
         let toml = Self::default();
         let config_file = toml::to_string(&toml)?;
-        fs::write(&path, &config_file)?;
+
+        if let Some(outdir) = path.parent() {
+            create_dir_all(outdir)?;
+        }
+
+        let mut file = File::create(path.clone())?;
+        file.write_all(&config_file.into_bytes())?;
+
         let config = Self::load(path)?;
         Ok(config)
     }
