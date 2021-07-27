@@ -11,7 +11,7 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
 
-use crate::wallet::{WalletDb, WalletPtr};
+use crate::wallet::{CashierDb, CashierDbPtr};
 
 use std::net::SocketAddr;
 use async_std::sync::Arc;
@@ -85,20 +85,20 @@ impl BitcoinKeys {
 pub struct CashierService {
     addr: SocketAddr,
     cashierstore: Arc<CashierStore>,
-    wallet: Arc<WalletDb>,
+    wallet: Arc<CashierDb>,
 }
 
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
         rocks: RocksColumn<columns::CashierKeys>,
-        wallet: Arc<WalletDb>,
+        wallet: Arc<CashierDb>,
     )-> Result<Arc<CashierService>> {
         let cashierstore = CashierStore::new(rocks)?;
-
+        //let wallet = CashierDb::new();
         Ok(Arc::new(CashierService {
-            cashierstore,
             addr,
+            cashierstore,
             wallet,
         }))
     }

@@ -7,7 +7,7 @@ use std::{path::Path, path::PathBuf};
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
-use drk::wallet::{WalletDb, WalletPtr};
+use drk::wallet::{CashierDb, CashierDbPtr};
 
 use drk::util::join_config_path;
 use drk::Result;
@@ -26,7 +26,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
 
     let rocks_cashierstore_column = RocksColumn::<columns::CashierKeys>::new(rocks);
 
-    let wallet = Arc::new(WalletDb::new("cashier.db", config.password.clone())?);
+    let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
     let cashier = CashierService::new(accept_addr, rocks_cashierstore_column, wallet)?;
 
