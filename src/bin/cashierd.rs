@@ -18,17 +18,9 @@ use easy_parallel::Parallel;
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Result<()> {
     let accept_addr: SocketAddr = config.accept_url.parse()?;
 
-    let database_path = config.database_path.clone();
-
-    let database_path = join_config_path(&PathBuf::from(database_path))?;
-
-    let rocks = Rocks::new(&database_path)?;
-
-    let rocks_cashierstore_column = RocksColumn::<columns::CashierKeys>::new(rocks);
-
     let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
-    let cashier = CashierService::new(accept_addr, rocks_cashierstore_column, wallet)?;
+    let cashier = CashierService::new(accept_addr, wallet)?;
 
     cashier.start(executor.clone()).await?;
     Ok(())

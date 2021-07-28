@@ -20,7 +20,6 @@ pub mod columns {
     pub struct Slabs;
     pub struct Nullifiers;
     pub struct MerkleRoots;
-    pub struct CashierKeys;
 }
 
 impl Column for columns::Slabs {
@@ -34,9 +33,7 @@ impl Column for columns::Nullifiers {
 impl Column for columns::MerkleRoots {
     const NAME: &'static str = "merkleroots";
 }
-impl Column for columns::CashierKeys {
-    const NAME: &'static str = "cashierkeys";
-}
+
 pub struct Rocks {
     db: DB,
 }
@@ -55,9 +52,7 @@ impl Rocks {
         let nullifiers_cf = ColumnFamilyDescriptor::new(columns::Nullifiers::NAME, cf_opts.clone());
         // merkleroots column family
         let merkleroots_cf =
-            ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts.clone());
-        // cashierkeypair column family
-        let cashierkeys_cf = ColumnFamilyDescriptor::new(columns::CashierKeys::NAME, cf_opts);
+            ColumnFamilyDescriptor::new(columns::MerkleRoots::NAME, cf_opts);
 
         // column families
         let cfs = vec![
@@ -65,7 +60,6 @@ impl Rocks {
             slab_cf,
             nullifiers_cf,
             merkleroots_cf,
-            cashierkeys_cf,
         ];
 
         // database options

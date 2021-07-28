@@ -8,7 +8,7 @@ use bitcoin::network::constants::Network;
 
 use bitcoin::hash_types::PubkeyHash;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
-use crate::blockchain::{rocks::columns, RocksColumn, CashierKeypair, CashierStore};
+
 use crate::{serial::deserialize, serial::serialize, Error, Result};
 
 use crate::wallet::{CashierDb, CashierDbPtr};
@@ -84,21 +84,17 @@ impl BitcoinKeys {
 
 pub struct CashierService {
     addr: SocketAddr,
-    cashierstore: Arc<CashierStore>,
     wallet: Arc<CashierDb>,
 }
 
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
-        rocks: RocksColumn<columns::CashierKeys>,
         wallet: Arc<CashierDb>,
     )-> Result<Arc<CashierService>> {
-        let cashierstore = CashierStore::new(rocks)?;
-        //let wallet = CashierDb::new();
+
         Ok(Arc::new(CashierService {
             addr,
-            cashierstore,
             wallet,
         }))
     }
@@ -130,11 +126,11 @@ impl CashierService {
         loop {
             match recv_queue.recv().await {
                 Ok(msg) => {
-                    let cashierstore = self.cashierstore.clone();
+                    let cashier_wallet = self.wallet.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
-                            cashierstore,
+                            cashier_wallet,
                             send_queue.clone(),
                         ))
                         .detach();
@@ -148,7 +144,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        cashierstore: Arc<CashierStore>,
+        cashier_wallet: Arc<CashierDb>,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
@@ -163,8 +159,8 @@ impl CashierService {
 
                 let btc_pub = btc_keys.get_pubkey();
 
-                // add to cashierstore?
-                //let error = cashierstore.put(deserialize(&zkpub)?)?;
+                // add to cashier_wallet
+                //
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
@@ -189,18 +185,14 @@ impl CashierService {
 
 pub struct CashierClient {
     protocol: ReqProtocol,
-    cashierstore: Arc<CashierStore>,
 }
 
 impl CashierClient {
-    pub fn new(addr: SocketAddr, rocks: RocksColumn<columns::CashierKeys>) -> Result<Self> {
+    pub fn new(addr: SocketAddr) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("CASHIER CLIENT"));
 
-        let cashierstore = CashierStore::new(rocks)?;
-
         Ok(CashierClient {
-            protocol,
-            cashierstore,
+            protocol
         })
     }
 
@@ -230,9 +222,6 @@ impl CashierClient {
         Ok(None)
     }
 
-    pub fn get_cashierstore(&self) -> Arc<CashierStore> {
-        self.cashierstore.clone()
-    }
 
 }
 

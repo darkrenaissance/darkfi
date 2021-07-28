@@ -1,4 +1,4 @@
-use crate::blockchain::{rocks::columns, CashierStore, RocksColumn};
+use crate::blockchain::{rocks::columns, RocksColumn};
 use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
@@ -20,11 +20,10 @@ impl RpcAdapter {
     pub fn new(
         wallet: Arc<WalletDb>,
         connect_url: String,
-        rocks: RocksColumn<columns::CashierKeys>,
     ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         let connect_addr: SocketAddr = connect_url.parse().unwrap();
-        let mut client = CashierClient::new(connect_addr, rocks)?;
+        let mut client = CashierClient::new(connect_addr)?;
         Ok(Self {
             wallet,
             client,

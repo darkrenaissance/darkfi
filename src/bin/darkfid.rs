@@ -157,7 +157,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let rocks2 = rocks.clone();
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks2.clone());
     let rocks3 = rocks2.clone();
-    let cashier_column = RocksColumn::<columns::CashierKeys>::new(rocks3);
 
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
@@ -211,7 +210,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
 
-    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), cashier_column)?;
+    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone())?;
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
