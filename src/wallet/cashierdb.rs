@@ -2,10 +2,9 @@ use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
 use crate::{Error, Result};
+use crate::service::btc::{PrivKey, PubKey, PubAddress};
 
 use secp256k1::key::SecretKey;
-use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
-use bitcoin::util::address::Address;
 
 use async_std::sync::{Arc, Mutex};
 use ff::Field;
@@ -56,8 +55,8 @@ impl CashierDb {
     pub fn put_exchange_keys(
         &self,
         dkey_pub: jubjub::SubgroupPoint,
-        btc_private: PrivateKey,
-        btc_public: PublicKey,
+        btc_private: PrivKey,
+        btc_public: PubKey,
         // Successful btc tx id
         txid: String,
     ) -> Result<()> {
