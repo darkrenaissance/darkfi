@@ -1,9 +1,10 @@
 use crate::blockchain::{rocks::columns, RocksColumn};
 use crate::service::cashier::CashierClient;
+use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
 use async_std::sync::Arc;
-use bitcoin::util::address::Address;
+
 use log::*;
 use std::net::SocketAddr;
 //use std::sync::Arc;
@@ -79,7 +80,7 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub async fn deposit(&mut self) -> Result<Address> {
+    pub async fn deposit(&mut self) -> Result<PubAddress> {
         debug!(target: "deposit", "deposit: START");
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;

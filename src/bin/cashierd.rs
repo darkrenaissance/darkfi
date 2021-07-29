@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::{path::Path, path::PathBuf};
 //use toml;
 
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
 use drk::wallet::{CashierDb, CashierDbPtr};
