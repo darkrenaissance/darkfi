@@ -1,33 +1,31 @@
-use crate::blockchain::{rocks::columns, RocksColumn};
-use crate::service::cashier::CashierClient;
 use crate::service::btc::PubAddress;
+use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use async_std::sync::Arc;
+use crate::tx;
 
 use log::*;
+
+use async_std::sync::Arc;
 use std::net::SocketAddr;
-//use std::sync::Arc;
 
 pub type AdapterPtr = Arc<RpcAdapter>;
 // Dummy adapter for now
 pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
-    pub client: CashierClient,
+    pub cashier_client: CashierClient,
     pub connect_url: String,
+
 }
 
 impl RpcAdapter {
-    pub fn new(
-        wallet: Arc<WalletDb>,
-        connect_url: String,
-    ) -> Result<Self> {
+    pub fn new(wallet: Arc<WalletDb>, connect_url: String) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         let connect_addr: SocketAddr = connect_url.parse().unwrap();
-        let mut client = CashierClient::new(connect_addr)?;
+        let cashier_client = CashierClient::new(connect_addr)?;
         Ok(Self {
             wallet,
-            client,
+            cashier_client,
             connect_url,
         })
     }
@@ -85,11 +83,13 @@ impl RpcAdapter {
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
         let dkey = self.wallet.get_public()?;
-        match self.client.get_address(dkey).await? {
+        match self.cashier_client.get_address(dkey).await? {
             Some(key) => Ok(key),
             None => Err(Error::CashierNoReply),
         }
     }
+
+
 
     pub fn get_info(&self) {}
 
