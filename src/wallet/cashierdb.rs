@@ -6,7 +6,7 @@ use crate::service::btc::{PrivKey, PubKey, PubAddress};
 
 use secp256k1::key::SecretKey;
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
@@ -127,6 +127,19 @@ impl CashierDb {
         }
         let public: jubjub::SubgroupPoint = self.get_value_deserialized(pub_keys)?;
         Ok(public)
+    }
+    pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
+        debug!(target: "get", "Returning keys...");
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
+        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
+        let mut keys = Vec::new();
+        for key in key_iter {
+            keys.push(key?);
+        }
+        let private: jubjub::Fr = self.get_value_deserialized(keys)?;
+        Ok(private)
     }
 
     pub fn test_wallet(&self) -> Result<()> {

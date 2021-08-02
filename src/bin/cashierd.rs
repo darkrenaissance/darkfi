@@ -6,7 +6,7 @@ use std::{path::Path, path::PathBuf};
 
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
-use drk::wallet::{CashierDb, CashierDbPtr};
+use drk::wallet::CashierDb;
 
 use drk::util::join_config_path;
 use drk::Result;

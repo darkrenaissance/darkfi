@@ -3,7 +3,10 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use super::btc::{BitcoinKeys, PubAddress};
 
 use crate::{serial::deserialize, serial::serialize, Error, Result};
+use crate::serial::{Decodable, Encodable};
 use crate::wallet::{CashierDb, CashierDbPtr};
+use crate::tx;
+use crate::crypto::load_params;
 
 use std::net::SocketAddr;
 use async_std::sync::Arc;
@@ -24,13 +27,13 @@ enum CashierCommand {
 
 pub struct CashierService {
     addr: SocketAddr,
-    wallet: Arc<CashierDb>,
+    wallet: CashierDbPtr,
 }
 
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
-        wallet: Arc<CashierDb>,
+        wallet: CashierDbPtr,
     )-> Result<Arc<CashierService>> {
 
         Ok(Arc::new(CashierService {
@@ -55,6 +58,39 @@ impl CashierService {
 
         let _ = handle_request_task.cancel().await;
         Ok(())
+    }
+
+    fn mint_dbtc(&self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<Vec<u8>> {
+        // Load trusted setup parameters
+        let (mint_params, _mint_pvk) = load_params("mint.params")?;
+        let (spend_params, _spend_pvk) = load_params("spend.params")?;
+
+
+        let cashier_secret = self.wallet.get_cashier_private().unwrap();
+
+        let builder = tx::TransactionBuilder {
+            clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
+                value: value,
+                asset_id: 1,
+                signature_secret: cashier_secret,
+            }],
+            inputs: vec![],
+            outputs: vec![tx::TransactionBuilderOutputInfo {
+                value: value,
+                asset_id: 1,
+                public: dkey_pub,
+            }],
+        };
+
+        let mut tx_data = vec![];
+        {
+            // Build the tx
+            let tx = builder.build(&mint_params, &spend_params);
+            // Now serialize it
+            tx.encode(&mut tx_data).expect("encode tx");
+        }
+
+        Ok(tx_data)
     }
 
     async fn handle_request_loop(
@@ -84,7 +120,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        cashier_wallet: Arc<CashierDb>,
+        cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
@@ -99,8 +135,8 @@ impl CashierService {
 
                 let btc_pub = btc_keys.get_pubkey();
 
-                // add to cashier_wallet
-                //
+                // add to watchlist
+
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
