@@ -2,7 +2,8 @@ use crate::service::btc::PubAddress;
 use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use crate::tx;
+
+use super::TransferParams;
 
 use log::*;
 
@@ -15,18 +16,23 @@ pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
     pub cashier_client: CashierClient,
     pub connect_url: String,
-
+    publish_tx_send: async_channel::Sender<TransferParams>,
 }
 
 impl RpcAdapter {
-    pub fn new(wallet: Arc<WalletDb>, connect_url: String) -> Result<Self> {
+    pub fn new(
+        wallet: Arc<WalletDb>,
+        connect_url: String,
+        publish_tx_send: async_channel::Sender<TransferParams>,
+    ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
-        let connect_addr: SocketAddr = connect_url.parse().unwrap();
+        let connect_addr: SocketAddr = connect_url.parse()?;
         let cashier_client = CashierClient::new(connect_addr)?;
         Ok(Self {
             wallet,
             cashier_client,
             connect_url,
+            publish_tx_send
         })
     }
 
@@ -89,7 +95,10 @@ impl RpcAdapter {
         }
     }
 
-
+    pub async fn transfer(&self, transfer_params: TransferParams) -> Result<()> {
+        self.publish_tx_send.send(transfer_params).await?;
+        Ok(())
+    }
 
     pub fn get_info(&self) {}
 

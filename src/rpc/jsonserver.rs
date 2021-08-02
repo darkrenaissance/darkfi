@@ -2,28 +2,19 @@ use crate::cli::DarkfidConfig;
 use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
 
+use super::{TransferParams, WithdrawParams};
+
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
 use async_std::sync::Mutex;
 use http_types::{Request, Response, StatusCode};
 use log::*;
-use serde::Deserialize;
 use smol::Async;
 
 use std::net::TcpListener;
 use std::sync::Arc;
 
-#[derive(Deserialize, Debug)]
-pub struct TransferParams {
-    address: String,
-    amount: String,
-}
 
-#[derive(Deserialize, Debug)]
-pub struct WithdrawParams {
-    address: String,
-    amount: String,
-}
 
 /// Listens for incoming connections and serves them.
 pub async fn listen(
@@ -254,10 +245,15 @@ impl RpcInterface {
             }
         });
 
-        io.add_method("transfer", |params: jsonrpc_core::Params| async move {
-            let parsed: TransferParams = params.parse().unwrap();
-            println!("test transfer params:  {:?}", parsed);
-            Ok(jsonrpc_core::Value::String("Transfer To... ".into()))
+        let self1 = self.clone();
+        io.add_method("transfer", move |params: jsonrpc_core::Params| {
+            let self2 = self1.clone();
+            async move {
+                let parsed: TransferParams = params.parse().unwrap();
+                let address = parsed.address.clone();
+                self2.adapter.transfer(parsed).await?;
+                Ok(jsonrpc_core::Value::String(format!("Transfer To: {}", address)))
+            }
         });
 
         io.add_method("withdraw", |params: jsonrpc_core::Params| async move {

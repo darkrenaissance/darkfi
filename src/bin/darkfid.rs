@@ -1,5 +1,5 @@
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{DarkfidCli, DarkfidConfig, Config};
+use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
+use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -31,7 +31,6 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
 pub struct State {
     // The entire merkle tree state
     tree: CommitmentTree<MerkleNode>,
@@ -40,7 +39,6 @@ pub struct State {
     merkle_roots: RocksColumn<columns::MerkleRoots>,
     // Nullifiers prevent double spending
     nullifiers: RocksColumn<columns::Nullifiers>,
-    // All received coins
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
@@ -156,7 +154,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 
     let rocks2 = rocks.clone();
     let slabstore = RocksColumn::<columns::Slabs>::new(rocks2.clone());
-    let rocks3 = rocks2.clone();
 
     // Auto create trusted ceremony parameters if they don't exist
     if !Path::new("mint.params").exists() {
@@ -210,7 +207,26 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
 
-    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone())?;
+    let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<drk::rpc::TransferParams>();
+
+    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), publish_tx_send)?;
+
+    executor
+        .spawn(async move {
+            loop {
+                let _transfer_params = publish_tx_recv
+                    .recv()
+                    .await
+                    .expect("receive transfer params");
+
+                let tx_data = vec![];
+
+                let slab = Slab::new(tx_data);
+                client.put_slab(slab).await.expect("put slab");
+            }
+        })
+        .detach();
+
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
@@ -272,4 +288,3 @@ fn main() -> Result<()> {
 
     result
 }
-
