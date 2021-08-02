@@ -2,9 +2,7 @@ use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::join_config_path;
 use crate::{Error, Result};
-use crate::service::btc::{PrivKey, PubKey, PubAddress};
-
-use secp256k1::key::SecretKey;
+use crate::service::btc::{PrivKey, PubKey};
 
 use async_std::sync::Arc;
 use ff::Field;

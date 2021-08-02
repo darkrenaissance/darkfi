@@ -2,9 +2,9 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
 use super::btc::{BitcoinKeys, PubAddress};
 
-use crate::{serial::deserialize, serial::serialize, Error, Result};
-use crate::serial::{Decodable, Encodable};
-use crate::wallet::{CashierDb, CashierDbPtr};
+use crate::{Error, Result};
+use crate::serial::{Decodable, Encodable, deserialize, serialize};
+use crate::wallet::CashierDbPtr;
 use crate::tx;
 use crate::crypto::load_params;
 
@@ -120,7 +120,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        cashier_wallet: CashierDbPtr,
+        _cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
@@ -128,7 +128,7 @@ impl CashierService {
         match request.get_command() {
             0 => {
                 // Exchange zk_pubkey for bitcoin address
-                let zkpub = request.get_payload();
+                let _zkpub = request.get_payload();
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new().unwrap();

@@ -9,7 +9,6 @@ use bitcoin::util::address::Address;
 
 use bitcoin::network::constants::Network;
 
-use bitcoin::hash_types::PubkeyHash;
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
