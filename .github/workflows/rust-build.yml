@@ -1,0 +1,24 @@
+name: Build and Test
+
+on:
+    push:
+        branches:
+            - master
+        pull_request:
+
+jobs:
+    compile-and-test:
+        runs-on: ubuntu-20.04
+        steps:
+            - uses: actions/checkout@v2
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                toolchain: stable
+                override: true
+                components: rustfmt, clippy
+
+            - name: Compile
+              run: |
+                cargo build --release
+                cargo test
