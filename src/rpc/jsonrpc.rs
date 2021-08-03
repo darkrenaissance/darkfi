@@ -1,42 +1,48 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::str;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum JsonResult {
+    Resp(JsonResponse),
+    Err(JsonError),
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonRequest {
-    jsonrpc: Value,
-    method: Value,
-    //params: Vec<Value>,
-    params: Value,
-    id: Value,
+    pub jsonrpc: Value,
+    pub method: Value,
+    pub params: Value,
+    pub id: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonErrorVal {
-    code: Value,
-    message: Value,
+    pub code: Value,
+    pub message: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonError {
-    jsonrpc: Value,
-    error: JsonErrorVal,
-    id: Value,
+    pub jsonrpc: Value,
+    pub error: JsonErrorVal,
+    pub id: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonResponse {
-    jsonrpc: Value,
-    result: Value,
-    id: Value,
+    pub jsonrpc: Value,
+    pub result: Value,
+    pub id: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonNotification {
-    jsonrpc: Value,
-    method: Value,
-    //params: Vec<Value>,
-    params: Value,
+    pub jsonrpc: Value,
+    pub method: Value,
+    pub params: Value,
 }
 
 pub fn request(m: Value, p: Value) -> JsonRequest {
