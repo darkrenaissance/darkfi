@@ -1,8 +1,7 @@
 use crate::cli::DarkfidConfig;
 use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
-
-use super::{TransferParams, WithdrawParams};
+use crate::cli::{TransferParams, WithdrawParams};
 
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -250,7 +249,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 let parsed: TransferParams = params.parse().unwrap();
-                let address = parsed.address.clone();
+                let address = parsed.pub_key.clone();
                 self2.adapter.transfer(parsed).await?;
                 Ok(jsonrpc_core::Value::String(format!("Transfer To: {}", address)))
             }

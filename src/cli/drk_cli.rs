@@ -2,29 +2,27 @@
 use crate::Result;
 
 use clap::{App, Arg};
+use serde::Deserialize;
 
-pub struct Transfer {
-    pub pub_key: String,
-    pub amount: String,
+fn is_u64<'a>(v: &'a str) -> std::result::Result<(), String> {
+    if v.parse::<u64>().is_ok() {
+        Ok(())
+    } else {
+        Err(String::from("The value is not an integer of type u64"))
+    }
 }
 
-impl Transfer {
+#[derive(Deserialize, Debug)]
+pub struct TransferParams {
+    pub pub_key: String,
+    pub amount: u64,
+}
+
+impl TransferParams {
     pub fn new() -> Self {
         Self {
             pub_key: String::new(),
-            amount: String::new(),
-        }
-    }
-
-    pub fn verify_amount(amount: &str) -> Result<()> {
-        if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
-            Ok(())
-        } else {
-            let err = format!(
-                "Unable to parse input amount as integer or float: {}",
-                amount
-            );
-            Err(crate::Error::ParseFailed(Box::leak(err.into_boxed_str())))
+            amount: 0,
         }
     }
 }
@@ -41,28 +39,17 @@ impl Deposit {
     }
 }
 
-pub struct Withdraw {
+#[derive(Deserialize, Debug)]
+pub struct WithdrawParams {
     pub pub_key: String,
-    pub amount: String,
+    pub amount: u64,
 }
 
-impl Withdraw {
+impl WithdrawParams {
     pub fn new() -> Self {
         Self {
             pub_key: String::new(),
-            amount: String::new(),
-        }
-    }
-
-    pub fn verify_amount(amount: &str) -> Result<()> {
-        if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
-            Ok(())
-        } else {
-            let err = format!(
-                "Unable to parse input amount as integer or float: {}",
-                amount
-            );
-            Err(crate::Error::ParseFailed(Box::leak(err.into_boxed_str())))
+            amount: 0,
         }
     }
 }
@@ -76,9 +63,9 @@ pub struct DrkCli {
     pub info: bool,
     pub hello: bool,
     pub stop: bool,
-    pub transfer: Option<Transfer>,
+    pub transfer: Option<TransferParams>,
     pub deposit: Option<Deposit>,
-    pub withdraw: Option<Withdraw>,
+    pub withdraw: Option<WithdrawParams>,
 }
 
 impl DrkCli {
@@ -151,6 +138,7 @@ impl DrkCli {
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
+                            .validator(is_u64)
                             .help_heading(Some("Amount to send, in DBTC"))
                             .required(true),
                     ),
@@ -172,6 +160,7 @@ impl DrkCli {
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
+                            .validator(is_u64)
                             .help_heading(Some("Amount to send, in BTC"))
                             .required(true),
                     ),
@@ -222,13 +211,12 @@ impl DrkCli {
         let mut transfer = None;
         match app.subcommand_matches("transfer") {
             Some(transfer_sub) => {
-                let mut trn = Transfer::new();
+                let mut trn = TransferParams::new();
                 if let Some(address) = transfer_sub.value_of("address") {
                     trn.pub_key = address.to_string();
                 }
                 if let Some(amount) = transfer_sub.value_of("amount") {
-                    Transfer::verify_amount(amount)?;
-                    trn.amount = amount.to_string();
+                    trn.amount = amount.parse()?;
                 }
                 transfer = Some(trn);
             }
@@ -238,13 +226,12 @@ impl DrkCli {
         let mut withdraw = None;
         match app.subcommand_matches("withdraw") {
             Some(withdraw_sub) => {
-                let mut wdraw = Withdraw::new();
+                let mut wdraw = WithdrawParams::new();
                 if let Some(address) = withdraw_sub.value_of("address") {
                     wdraw.pub_key = address.to_string();
                 }
                 if let Some(amount) = withdraw_sub.value_of("amount") {
-                    Transfer::verify_amount(amount)?;
-                    wdraw.amount = amount.to_string();
+                    wdraw.amount = amount.parse()?;
                 }
                 withdraw = Some(wdraw);
             }

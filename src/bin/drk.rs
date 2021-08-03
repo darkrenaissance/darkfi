@@ -77,15 +77,13 @@ impl Drk {
         Ok(self.request(r).await?)
     }
 
-    // TODO: Should amount be an integer? Also, keep same order in array.
-    pub async fn transfer(&self, address: String, amount: String) -> Result<()> {
-        let r = jsonrpc::request(json!("transfer"), json!([amount, address]));
+    pub async fn transfer(&self, address: String, amount: u64) -> Result<()> {
+        let r = jsonrpc::request(json!("transfer"), json!([address, amount]));
         Ok(self.request(r).await?)
     }
 
-    // TODO: Should amount be an integer? Also, keep same order in array.
-    pub async fn withdraw(&self, address: String, amount: String) -> Result<()> {
-        let r = jsonrpc::request(json!("withdraw"), json!([amount, address]));
+    pub async fn withdraw(&self, address: String, amount: u64) -> Result<()> {
+        let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
         Ok(self.request(r).await?)
     }
 }

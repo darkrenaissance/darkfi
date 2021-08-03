@@ -2,8 +2,7 @@ use crate::service::btc::PubAddress;
 use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-
-use super::TransferParams;
+use crate::cli::TransferParams;
 
 use log::*;
 

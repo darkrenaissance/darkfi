@@ -8,5 +8,5 @@ pub use cashierd_cli::CashierdCli;
 pub use cli_config::{CashierdConfig, DarkfidConfig, DrkConfig, GatewaydConfig, Config};
 pub use darkfid_cli::DarkfidCli;
 pub use drk_cli::DrkCli;
-pub use drk_cli::Transfer;
+pub use drk_cli::{TransferParams, WithdrawParams};
 pub use gatewayd_cli::GatewaydCli;
