@@ -17,7 +17,10 @@ jobs:
                 toolchain: stable
                 override: true
                 components: rustfmt, clippy
-
+            - name: Install sqlcipher
+              run: |
+                sudo apt-get update
+                sudo apt-get install sqlcipher
             - name: Compile
               run: |
                 cargo build --release
