@@ -1,126 +1,98 @@
-use drk::cli::{DrkCli, DrkConfig, Config};
-use drk::util::join_config_path;
-use drk::Result;
-use log::*;
-
-use rand::Rng;
-extern crate serde_json;
-use serde_json::{Map, Value};
-
 use std::path::{Path, PathBuf};
+
+use serde_json::json;
+
+use drk::cli::{Config, DrkCli, DrkConfig};
+use drk::rpc::jsonrpc;
+use drk::rpc::jsonrpc::JsonResult;
+use drk::util::join_config_path;
+use drk::{Error, Result};
+
+use log::info;
 
 struct Drk {
     url: String,
-    payload: Map<String, Value>,
 }
 
 impl Drk {
     pub fn new(url: String) -> Self {
-        let mut payload = Map::new();
-
-        payload.insert("jsonrpc".into(), Value::String("2.0".into()));
-
-        let id = Self::random_id();
-
-        payload.insert("id".into(), Value::String(id.to_string()));
-
-        Self { payload, url }
+        Self { url }
     }
 
-    pub fn random_id() -> u32 {
-        let mut rng = rand::thread_rng();
-        rng.gen()
+    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<()> {
+        // TODO: Return actual JSON result
+        let data = surf::Body::from_json(&r).unwrap();
+        info!("--> {:?}", r);
+        let mut req = surf::post(&self.url).body(data).await?;
+
+        let resp = req.take_body();
+        let json = resp.into_string().await.unwrap();
+
+        let v: JsonResult = serde_json::from_str(&json).unwrap();
+        match v {
+            JsonResult::Resp(r) => {
+                info!("<-- {:?}", r);
+                return Ok(());
+            }
+
+            JsonResult::Err(e) => {
+                info!("<-- {:?}", e);
+                return Err(Error::JsonRpcError(e.error.message.to_string()));
+            }
+        };
     }
 
-    pub async fn say_hello(&mut self) -> Result<()> {
-        self.payload
-            .insert("method".into(), Value::String("say_hello".into()));
-        self.request().await
+    pub async fn say_hello(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("say_hello"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn create_cashier_wallet(&mut self) -> Result<()> {
-        self.payload.insert(
-            "method".into(),
-            Value::String("create_cashier_wallet".into()),
-        );
-        self.request().await
+    pub async fn create_cashier_wallet(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("create_cashier_wallet"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn create_wallet(&mut self) -> Result<()> {
-        self.payload
-            .insert("method".into(), Value::String("create_wallet".into()));
-        self.request().await
+    pub async fn create_wallet(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("create_wallet"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn key_gen(&mut self) -> Result<()> {
-        self.payload
-            .insert("method".into(), Value::String("key_gen".into()));
-        self.request().await
+    pub async fn key_gen(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("key_gen"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn get_info(&mut self) -> Result<()> {
-        self.payload
-            .insert("method".into(), Value::String("get_info".into()));
-        self.request().await
+    pub async fn get_info(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("get_info"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn stop(&mut self) -> Result<()> {
-        self.payload
-            .insert("method".into(), Value::String("stop".into()));
-        self.request().await
+    pub async fn stop(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("stop"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn deposit(&mut self) -> Result<()> {
-        self.payload
-            .insert(String::from("method"), Value::String("deposit".into()));
-        self.request().await
+    pub async fn deposit(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("deposit"), json!([]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn transfer(&mut self, address: String, amount: String) -> Result<()> {
-        let mut params = Map::new();
-        params.insert("amount".into(), Value::String(amount));
-        params.insert("address".into(), Value::String(address));
-
-        self.payload
-            .insert(String::from("method"), Value::String("transfer".into()));
-
-        self.payload
-            .insert(String::from("params"), Value::Object(params));
-
-        self.request().await
+    // TODO: Should amount be an integer? Also, keep same order in array.
+    pub async fn transfer(&self, address: String, amount: String) -> Result<()> {
+        let r = jsonrpc::request(json!("transfer"), json!([amount, address]));
+        Ok(self.request(r).await?)
     }
 
-    pub async fn withdraw(&mut self, address: String, amount: String) -> Result<()> {
-        let mut params = Map::new();
-        params.insert("amount".into(), Value::String(amount));
-        params.insert("address".into(), Value::String(address));
-
-        self.payload
-            .insert(String::from("method"), Value::String("withdraw".into()));
-        self.payload
-            .insert(String::from("params"), Value::Object(params));
-
-        self.request().await
-    }
-
-    async fn request(&self) -> Result<()> {
-        let payload = surf::Body::from_json(&self.payload)?;
-        let payload = payload.into_string().await?;
-
-        let mut res = surf::post(&self.url).body(payload).await?;
-
-        if res.status() == 200 {
-            let response = res.take_body();
-            let response = response.into_string().await?;
-            info!("Response Result: {:?}", response);
-        }
-        Ok(())
+    // TODO: Should amount be an integer? Also, keep same order in array.
+    pub async fn withdraw(&self, address: String, amount: String) -> Result<()> {
+        let r = jsonrpc::request(json!("withdraw"), json!([amount, address]));
+        Ok(self.request(r).await?)
     }
 }
 
 async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
     let url = config.rpc_url.clone();
-    let mut client = Drk::new(url);
+    let client = Drk::new(url);
 
     if options.cashier {
         client.create_cashier_wallet().await?;
@@ -172,8 +144,6 @@ fn main() -> Result<()> {
         Config::<DrkConfig>::load_default(path)?
     };
 
-    let config_ptr = &config;
-
     {
         use simplelog::*;
         let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
@@ -196,7 +166,5 @@ fn main() -> Result<()> {
         .unwrap();
     }
 
-    futures::executor::block_on(start(config_ptr, options))?;
-
-    Ok(())
+    futures::executor::block_on(start(&config, options))
 }
