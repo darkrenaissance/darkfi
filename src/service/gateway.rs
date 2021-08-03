@@ -181,6 +181,7 @@ pub struct GatewayClient {
     slabstore: Arc<SlabStore>,
     gateway_slabs_sub_s: async_channel::Sender<Slab>,
     gateway_slabs_sub_rv: GatewaySlabsSubscriber,
+    is_running: bool,
 }
 
 impl GatewayClient {
@@ -196,13 +197,14 @@ impl GatewayClient {
             slabstore,
             gateway_slabs_sub_s,
             gateway_slabs_sub_rv,
+            is_running: false,
         })
     }
 
     pub async fn start(&mut self) -> Result<()> {
         self.protocol.start().await?;
         self.sync().await?;
-
+        self.is_running = true;
         Ok(())
     }
 
@@ -310,6 +312,10 @@ impl GatewayClient {
             gateway_slabs_sub_s.send(slab.clone()).await?;
             slabstore.put(slab)?;
         }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running
     }
 }
 
