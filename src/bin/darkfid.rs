@@ -1,6 +1,7 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
+    coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     merkle_node::MerkleNode,
@@ -11,22 +12,25 @@ use drk::crypto::{
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
 use drk::serial::Decodable;
+use drk::serial::Encodable;
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util::join_config_path;
 use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
-use log::*;
+use drk::cli::TransferParams;
 
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
 use easy_parallel::Parallel;
 use ff::Field;
+use log::*;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
 
 use async_std::sync::Arc;
+use futures::FutureExt;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
@@ -39,6 +43,8 @@ pub struct State {
     merkle_roots: RocksColumn<columns::MerkleRoots>,
     // Nullifiers prevent double spending
     nullifiers: RocksColumn<columns::Nullifiers>,
+    // All received coins
+    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
@@ -114,7 +120,9 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                self.wallet.put_own_coins(coin, note, witness, secret)?;
+                self.wallet
+                    .put_own_coins(coin.clone(), note.clone(), witness.clone(), secret)?;
+                self.own_coins.push((coin, note, secret, witness));
             }
         }
         Ok(())
@@ -134,15 +142,11 @@ impl State {
     }
 }
 
-pub async fn subscribe(gateway_slabs_sub: GatewaySlabsSubscriber, mut state: State) -> Result<()> {
-    loop {
-        let slab = gateway_slabs_sub.recv().await?;
-        let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
-
-        let update = state_transition(&state, tx)?;
-        state.apply(update).await?;
-    }
-}
+//pub async fn subscribe(
+//    gateway_slabs_sub: GatewaySlabsSubscriber,
+//    mut state: State,
+//) -> Result<()> {
+//}
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
@@ -166,8 +170,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     }
 
     // Load trusted setup parameters
-    let (_mint_params, mint_pvk) = load_params("mint.params")?;
-    let (_spend_params, spend_pvk) = load_params("spend.params")?;
+    let (mint_params, mint_pvk) = load_params("mint.params")?;
+    let (spend_params, spend_pvk) = load_params("spend.params")?;
 
     //let cashier_secret = jubjub::Fr::random(&mut OsRng);
     //let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
@@ -184,10 +188,11 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 
     let ex = executor.clone();
 
-    let state = State {
+    let mut state = State {
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,
+        own_coins: vec![],
         mint_pvk,
         spend_pvk,
         wallet: wallet.clone(),
@@ -201,36 +206,82 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     // start subscribing
     let gateway_slabs_sub: GatewaySlabsSubscriber =
         client.start_subscriber(sub_addr, executor.clone()).await?;
-    let subscribe_task = executor.spawn(subscribe(gateway_slabs_sub, state));
+
+    let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
 
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
 
-    let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<drk::rpc::TransferParams>();
-
-    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), publish_tx_send)?;
-
     executor
         .spawn(async move {
             loop {
-                let _transfer_params = publish_tx_recv
-                    .recv()
-                    .await
-                    .expect("receive transfer params");
+                futures::select! {
+                    slab = gateway_slabs_sub.recv().fuse() => {
+                        let slab = slab.unwrap();
+                        let tx = tx::Transaction::decode(&slab.get_payload()[..]).unwrap();
+                        let update = state_transition(&state, tx).unwrap();
+                        state.apply(update).await.unwrap();
+                    }
+                    transfer_params = publish_tx_recv.recv().fuse() => {
+                        let transfer_params = transfer_params.unwrap();
 
-                let tx_data = vec![];
+                        let merkle_path = {
+                            // TODO: Sould receive own_coins from self.wallet
+                            let (_coin, _, _, witness) = &mut state.own_coins[0];
 
-                let slab = Slab::new(tx_data);
-                client.put_slab(slab).await.expect("put slab");
+                            let merkle_path = witness.path().unwrap();
+
+                            merkle_path
+                        };
+
+                        // TODO: Should use the address value from transfer_params
+                        // The receiving wallet has a secret key
+                        let secret2 = jubjub::Fr::random(&mut OsRng);
+                        // This is their public key to receive payment
+                        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+
+                        // Make a spend tx
+
+                        // Construct a new tx spending the coin
+                        let builder = tx::TransactionBuilder {
+                            clear_inputs: vec![],
+                            inputs: vec![tx::TransactionBuilderInputInfo {
+                                merkle_path,
+                                secret: secret.clone(),
+                                note: state.own_coins[0].1.clone(),
+                            }],
+                            // We can add more outputs to this list.
+                            // The only constraint is that sum(value in) == sum(value out)
+                            outputs: vec![tx::TransactionBuilderOutputInfo {
+                                value: transfer_params.amount,
+                                asset_id: 1,
+                                public: public2,
+                            }],
+                        };
+                        // Build the tx
+                        let mut tx_data = vec![];
+                        {
+                            let tx = builder.build(&mint_params, &spend_params);
+                            tx.encode(&mut tx_data).expect("encode tx");
+                        }
+
+                        let slab = Slab::new(tx_data);
+
+                        client.put_slab(slab).await.expect("put slab");
+                    }
+
+                }
             }
         })
         .detach();
 
+    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), publish_tx_send)?;
+
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
-    subscribe_task.cancel().await;
+    //subscribe_task.cancel().await;
     Ok(())
 }
 
