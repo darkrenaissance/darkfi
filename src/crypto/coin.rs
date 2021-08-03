@@ -5,6 +5,7 @@ use crate::{
     serial::{Decodable, Encodable},
 };
 
+#[derive(Clone, Debug)]
 pub struct Coin {
     pub repr: [u8; 32],
 }
