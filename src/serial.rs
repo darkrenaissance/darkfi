@@ -384,6 +384,53 @@ impl_array!(16);
 impl_array!(32);
 impl_array!(33);
 
+// Options
+impl<T: Encodable> Encodable for Option<T> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        if let Some(v) = self {
+            len += true.encode(&mut s)?;
+            len += v.encode(&mut s)?;
+        } else {
+            len += false.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+impl<T: Decodable> Decodable for Option<T> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let valid: bool = Decodable::decode(&mut d)?;
+        let mut val: Option<T> = None;
+
+        if valid {
+            val = Some(Decodable::decode(&mut d)?);
+        }
+
+        Ok(val)
+    }
+}
+
+impl<T: Encodable> Encodable for Vec<Option<T>> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for val in self {
+            len += val.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+impl<T: Decodable> Decodable for Vec<Option<T>> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            ret.push(Decodable::decode(&mut d)?);
+        }
+        Ok(ret)
+    }
+}
+
 // Vectors
 #[macro_export]
 macro_rules! impl_vec {
