@@ -2,7 +2,7 @@
 //! of notes.
 
 //use byteorder::{LittleEndian, ReadBytesExt};
-use crate::serial::{Decodable, Encodable};
+use crate::serial::{Decodable, Encodable, VarInt};
 use crate::{Error, Result};
 use std::collections::VecDeque;
 use std::io;
@@ -168,31 +168,22 @@ impl<Node: Hashable> CommitmentTree<Node> {
 impl<Node: Hashable> Encodable for CommitmentTree<Node> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        if let Some(v) = self.left {
-            len += v.encode(&mut s)?;
-        }
-        if let Some(v) = self.right {
-            len += v.encode(&mut s)?;
-        }
-        for parent in self.parents.iter() {
-            if let Some(v) = parent {
-                len += v.encode(&mut s)?;
-            }
-        }
+        len += self.left.encode(&mut s)?;
+        len += self.right.encode(&mut s)?;
+        len += self.parents.encode(&mut s)?;
         Ok(len)
     }
 }
 
-// TODO: implement Decodable
-//impl<Node: Hashable> Decodable for CommitmentTree<Node> {
-//    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-//        Ok(Self {
-//            //left: Decodable::decode(&mut d)?,
-//            //right: Decodable::decode(&mut d)?,
-//            //parents: Decodable::decode(&mut d)?,
-//        })
-//    }
-//}
+impl<Node: Hashable> Decodable for CommitmentTree<Node> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            left: Decodable::decode(&mut d)?,
+            right: Decodable::decode(&mut d)?,
+            parents: Decodable::decode(&mut d)?,
+        })
+    }
+}
 
 /*
 /// An updatable witness to a path from a position in a particular
@@ -238,13 +229,17 @@ pub struct IncrementalWitness<Node: Hashable> {
     cursor: Option<CommitmentTree<Node>>,
 }
 
+
 impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.tree.encode(&mut s)?;
+
+        len += VarInt(self.filled.len() as u64).encode(&mut s)?;
         for c in self.filled.iter() {
             len += c.encode(&mut s)?;
         }
+
         len += self.cursor_depth.encode(&mut s)?;
         if let Some(v) = &self.cursor {
             len += v.encode(&mut s)?;
@@ -253,17 +248,31 @@ impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
     }
 }
 
-// TODO: implement Decodable
-//impl<Node: Hashable> Decodable for IncrementalWitness<Node> {
-//    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-//        Ok(Self {
-//            tree: Decodable::decode(&mut d)?,
-//            filled: Decodable::decode(&mut d)?,
-//            cursor_depth: Decodable::decode(&mut d)?,
-//            cursor: Decodable::decode(d)?,
-//        })
-//    }
-//}
+
+
+impl<Node: Hashable> Decodable for IncrementalWitness<Node> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let tree = Decodable::decode(&mut d)?;
+
+        let filled = {
+            let len = VarInt::decode(&mut d)?.0;
+            let mut ret = Vec::with_capacity(len as usize);
+            for _ in 0..len {
+                ret.push(Decodable::decode(&mut d)?);
+            }
+            ret
+        };
+
+        Ok(Self {
+            tree,
+            filled,
+            cursor_depth: Decodable::decode(&mut d)?,
+            cursor: Decodable::decode(d)?,
+        })
+    }
+}
+
+
 
 impl<Node: Hashable> IncrementalWitness<Node> {
     /// Creates an `IncrementalWitness` for the most recent commitment added to
@@ -343,8 +352,8 @@ impl<Node: Hashable> IncrementalWitness<Node> {
             if cursor.is_complete(self.cursor_depth) {
                 self.filled
                     .push(cursor.root_inner(self.cursor_depth, PathFiller::empty()));
-            } else {
-                self.cursor = Some(cursor);
+                } else {
+                    self.cursor = Some(cursor);
             }
         } else {
             self.cursor_depth = self.next_depth();
