@@ -8,6 +8,9 @@ use crate::wallet::CashierDbPtr;
 use crate::tx;
 use crate::crypto::load_params;
 
+use bellman::groth16;
+use bls12_381::Bls12;
+
 use std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_executor::Executor;
@@ -28,6 +31,10 @@ enum CashierCommand {
 pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
+    mint_params: groth16::Parameters<Bls12>,
+    mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    spend_params: groth16::Parameters<Bls12>,
+    spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
 }
 
 impl CashierService {
@@ -35,13 +42,22 @@ impl CashierService {
         addr: SocketAddr,
         wallet: CashierDbPtr,
     )-> Result<Arc<CashierService>> {
+        // Load trusted setup parameters
+        let (mint_params, mint_pvk) = load_params("mint.params")?;
+        let (spend_params, spend_pvk) = load_params("spend.params")?;
 
         Ok(Arc::new(CashierService {
             addr,
             wallet,
+            mint_params,
+            mint_pvk,
+            spend_params,
+            spend_pvk,
         }))
     }
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+
+        debug!(target: "Cashier", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
         let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
@@ -61,10 +77,6 @@ impl CashierService {
     }
 
     fn mint_dbtc(&self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<Vec<u8>> {
-        // Load trusted setup parameters
-        let (mint_params, _mint_pvk) = load_params("mint.params")?;
-        let (spend_params, _spend_pvk) = load_params("spend.params")?;
-
 
         let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
@@ -85,7 +97,7 @@ impl CashierService {
         let mut tx_data = vec![];
         {
             // Build the tx
-            let tx = builder.build(&mint_params, &spend_params);
+            let tx = builder.build(&self.mint_params, &self.spend_params);
             // Now serialize it
             tx.encode(&mut tx_data).expect("encode tx");
         }
