@@ -13,6 +13,7 @@ use rusqlite::{named_params, params, Connection};
 use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDb>;
+pub type OwnCoins = Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>;
 
 pub struct WalletDb {
     pub path: PathBuf,
@@ -74,6 +75,53 @@ impl WalletDb {
         Ok(())
     }
 
+    fn parse_own_coin(
+        &self,
+        row: &rusqlite::Row,
+    ) -> Result<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)> {
+        let coin = self.get_value_deserialized(row.get(0)?)?;
+
+        // note
+        let serial = self.get_value_deserialized(row.get(1)?)?;
+        let coin_blind = self.get_value_deserialized(row.get(2)?)?;
+        let valcom_blind = self.get_value_deserialized(row.get(3)?)?;
+        let value = self.get_value_deserialized(row.get(4)?)?;
+        let asset_id = self.get_value_deserialized(row.get(5)?)?;
+
+        let note = Note {
+            serial,
+            value,
+            asset_id,
+            coin_blind,
+            valcom_blind,
+        };
+
+        let witness = self.get_value_deserialized(row.get(6)?)?;
+        let secret = self.get_value_deserialized(row.get(7)?)?;
+
+        Ok((coin, note, secret, witness))
+    }
+
+    pub fn get_own_coins(&self) -> Result<OwnCoins> {
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+        // return key_id from key_private
+        let mut coins = conn.prepare("SELECT * FROM coins")?;
+        let rows = coins.query_map([], |row| {
+            self.parse_own_coin(row)
+                .map_err(|_| rusqlite::Error::InvalidQuery)
+        })?;
+
+        let mut own_coins = Vec::new();
+        for id in rows {
+            own_coins.push(id?)
+        }
+
+        Ok(own_coins)
+    }
+
     pub fn put_own_coins(
         &self,
         coin: Coin,
@@ -94,10 +142,13 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
+
         // return key_id from key_private
         let mut get_id =
             conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
+
         let rows = get_id.query_map::<u8, _, _>(&[(":key_private", &secret)], |row| row.get(0))?;
+
         let mut key_id = Vec::new();
         for id in rows {
             key_id.push(id?)
