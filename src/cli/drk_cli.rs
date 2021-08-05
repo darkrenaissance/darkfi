@@ -60,6 +60,7 @@ pub struct DrkCli {
     pub cashier: bool,
     pub wallet: bool,
     pub key: bool,
+    pub get_key: bool,
     pub info: bool,
     pub hello: bool,
     pub stop: bool,
@@ -99,6 +100,12 @@ impl DrkCli {
                     .short('k')
                     .long("key")
                     .help_heading(Some("Test key"))
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("getkey")
+                    .long("getkey")
+                    .help_heading(Some("Get public key as base-58 encoded string"))
                     .takes_value(false),
             )
             .arg(
@@ -199,6 +206,7 @@ impl DrkCli {
         let info = app.is_present("info");
         let hello = app.is_present("hello");
         let stop = app.is_present("stop");
+        let get_key = app.is_present("getkey");
 
         let deposit = None;
         match app.subcommand_matches("deposit") {
@@ -269,6 +277,7 @@ impl DrkCli {
             cashier,
             wallet,
             key,
+            get_key,
             info,
             hello,
             stop,

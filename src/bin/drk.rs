@@ -62,6 +62,11 @@ impl Drk {
         Ok(self.request(r).await?)
     }
 
+    pub async fn get_key(&self) -> Result<()> {
+        let r = jsonrpc::request(json!("get_key"), json!([]));
+        Ok(self.request(r).await?)
+    }
+
     pub async fn get_info(&self) -> Result<()> {
         let r = jsonrpc::request(json!("get_info"), json!([]));
         Ok(self.request(r).await?)
@@ -86,6 +91,7 @@ impl Drk {
         let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
         Ok(self.request(r).await?)
     }
+
 }
 
 async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
@@ -102,6 +108,10 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 
     if options.key {
         client.key_gen().await?;
+    }
+
+    if options.get_key {
+        client.get_key().await?;
     }
 
     if options.info {
