@@ -150,16 +150,17 @@ impl RpcInterface {
         io.add_method("get_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_key()?;
-                Ok(jsonrpc_core::Value::String("Getting public key...".into()))
+                let pub_key = self2.adapter.get_key()?;
+                Ok(jsonrpc_core::Value::String(pub_key))
             }
         });
+
         let self1 = self.clone();
         io.add_method("get_cash_key", move |_| {
             let self2 = self1.clone();
             async move {
-                self2.adapter.get_cash_key()?;
-                Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
+                let cash_key = self2.adapter.get_cash_key()?;
+                Ok(jsonrpc_core::Value::String(cash_key))
             }
         });
 
@@ -181,6 +182,7 @@ impl RpcInterface {
             }
         });
         let self1 = self.clone();
+
         io.add_method("create_wallet", move |_| {
             let self2 = self1.clone();
             async move {
@@ -192,6 +194,7 @@ impl RpcInterface {
                 Ok(jsonrpc_core::Value::String("Created wallet".into()))
             }
         });
+
         let self1 = self.clone();
         io.add_method("key_gen", move |_| {
             let self2 = self1.clone();
@@ -203,6 +206,7 @@ impl RpcInterface {
                 ))
             }
         });
+
         let self1 = self.clone();
         io.add_method("cash_key_gen", move |_| {
             let self2 = self1.clone();
@@ -214,6 +218,7 @@ impl RpcInterface {
                 ))
             }
         });
+
         let self1 = self.clone();
         io.add_method("test_wallet", move |_| {
             let self2 = self1.clone();
@@ -223,6 +228,7 @@ impl RpcInterface {
                 Ok(jsonrpc_core::Value::String("Test wallet".into()))
             }
         });
+
         let self1 = self.clone();
         io.add_method("create_cashier_wallet", move |_| {
             let self2 = self1.clone();

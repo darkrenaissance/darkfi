@@ -64,19 +64,18 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub fn get_key(&self) -> Result<()> {
+    pub fn get_key(&self) -> Result<String> {
         debug!(target: "adapter", "get_key() [START]");
         let key_public = self.wallet.get_public()?; 
         let bs58_address = bs58::encode(serialize(&key_public)).into_string();
-        info!("Address: {}", bs58_address);
-        Ok(())
+        Ok(bs58_address)
     }
 
-    pub fn get_cash_key(&self) -> Result<()> {
+    pub fn get_cash_key(&self) -> Result<String> {
         debug!(target: "adapter", "get_cash_key() [START]");
         let cashier_public = self.wallet.get_cashier_public()?;
-        info!("{:?}", cashier_public);
-        Ok(())
+        let bs58_address = bs58::encode(serialize(&cashier_public)).into_string();
+        Ok(bs58_address)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
