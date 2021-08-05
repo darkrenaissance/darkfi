@@ -21,17 +21,17 @@ impl Drk {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<()> {
         // TODO: Return actual JSON result
-        let data = surf::Body::from_json(&r).unwrap();
+        let data = surf::Body::from_json(&r)?;
         info!("--> {:?}", r);
         let mut req = surf::post(&self.url).body(data).await?;
 
         let resp = req.take_body();
-        let json = resp.into_string().await.unwrap();
+        let json = resp.into_string().await?;
 
-        let v: JsonResult = serde_json::from_str(&json).unwrap();
+        let v: JsonResult = serde_json::from_str(&json)?;
         match v {
             JsonResult::Resp(r) => {
-                info!("<-- {:?}", r);
+                info!("<-- {:?}", r.result);
                 return Ok(());
             }
 
@@ -157,7 +157,7 @@ fn main() -> Result<()> {
         let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
         let debug_level = if options.verbose {
-            LevelFilter::Debug
+            LevelFilter::Info
         } else {
             LevelFilter::Off
         };
