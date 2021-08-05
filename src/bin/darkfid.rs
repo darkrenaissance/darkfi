@@ -1,4 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
+use drk::cli::TransferParams;
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
     coin::Coin,
@@ -11,14 +12,12 @@ use drk::crypto::{
 };
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
-use drk::serial::Decodable;
-use drk::serial::Encodable;
+use drk::serial::{deserialize, Decodable, Encodable};
 use drk::service::{GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util::join_config_path;
 use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
-use drk::cli::TransferParams;
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -235,11 +234,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                             merkle_path
                         };
 
-                        // TODO: Should use the address value from transfer_params
-                        // The receiving wallet has a secret key
-                        let secret2 = jubjub::Fr::random(&mut OsRng);
-                        // This is their public key to receive payment
-                        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+                        let address = bs58::decode(transfer_params.pub_key).into_vec().unwrap();
+                        let address: jubjub::SubgroupPoint = deserialize(&address).unwrap();
 
                         // Make a spend tx
 
@@ -256,7 +252,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                             outputs: vec![tx::TransactionBuilderOutputInfo {
                                 value: transfer_params.amount,
                                 asset_id: 1,
-                                public: public2,
+                                public: address,
                             }],
                         };
                         // Build the tx

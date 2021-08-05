@@ -3,6 +3,7 @@ use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
 use crate::cli::TransferParams;
+use crate::serial::serialize;
 
 use log::*;
 
@@ -65,15 +66,16 @@ impl RpcAdapter {
 
     pub fn get_key(&self) -> Result<()> {
         debug!(target: "adapter", "get_key() [START]");
-        let key_public = self.wallet.get_public()?;
-        println!("{:?}", key_public);
+        let key_public = self.wallet.get_public()?; 
+        let bs58_address = bs58::encode(serialize(&key_public)).into_string();
+        info!("Address: {}", bs58_address);
         Ok(())
     }
 
     pub fn get_cash_key(&self) -> Result<()> {
         debug!(target: "adapter", "get_cash_key() [START]");
         let cashier_public = self.wallet.get_cashier_public()?;
-        println!("{:?}", cashier_public);
+        info!("{:?}", cashier_public);
         Ok(())
     }
 
