@@ -20,7 +20,7 @@ jobs:
             - name: Install sqlcipher
               run: |
                 sudo apt-get update
-                sudo apt-get install sqlcipher
+                sudo apt-get install libsqlcipher-dev
             - name: Compile
               run: |
                 cargo build --release
