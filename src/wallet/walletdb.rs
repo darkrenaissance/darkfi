@@ -216,12 +216,17 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
         // this just gets the first key. maybe we should randomize this
-        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
+        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
         for key in key_iter {
             pub_keys.push(key?);
         }
-        let public: jubjub::SubgroupPoint = self.get_value_deserialized(pub_keys)?;
+        let public: jubjub::SubgroupPoint = self.get_value_deserialized(
+            pub_keys
+                .pop()
+                .expect("unable to load public_key from walletdb"),
+        )?;
+
         Ok(public)
     }
 

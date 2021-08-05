@@ -151,7 +151,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 self2.adapter.get_key()?;
-                Ok(jsonrpc_core::Value::String("Getting cashier key...".into()))
+                Ok(jsonrpc_core::Value::String("Getting public key...".into()))
             }
         });
         let self1 = self.clone();
