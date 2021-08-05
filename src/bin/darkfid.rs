@@ -2,7 +2,6 @@ use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
 use drk::cli::TransferParams;
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
-    coin::Coin,
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
     merkle_node::MerkleNode,
@@ -42,8 +41,6 @@ pub struct State {
     merkle_roots: RocksColumn<columns::MerkleRoots>,
     // Nullifiers prevent double spending
     nullifiers: RocksColumn<columns::Nullifiers>,
-    // All received coins
-    own_coins: Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>,
     // Mint verifying key used by ZK
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
@@ -121,7 +118,6 @@ impl State {
 
                 self.wallet
                     .put_own_coins(coin.clone(), note.clone(), witness.clone(), secret)?;
-                self.own_coins.push((coin, note, secret, witness));
             }
         }
         Ok(())
@@ -191,7 +187,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         tree: CommitmentTree::empty(),
         merkle_roots,
         nullifiers,
-        own_coins: vec![],
         mint_pvk,
         spend_pvk,
         wallet: wallet.clone(),
@@ -216,6 +211,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         .spawn(async move {
             loop {
                 futures::select! {
+                    // TODO: using "?" instead of unwrap() 
                     slab = gateway_slabs_sub.recv().fuse() => {
                         let slab = slab.unwrap();
                         let tx = tx::Transaction::decode(&slab.get_payload()[..]).unwrap();
@@ -226,8 +222,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                         let transfer_params = transfer_params.unwrap();
 
                         let merkle_path = {
-                            // TODO: Sould receive own_coins from self.wallet
-                            let (_coin, _, _, witness) = &mut state.own_coins[0];
+                            let (_coin, _, _, witness) = &mut state.wallet.get_own_coins().unwrap()[0];
 
                             let merkle_path = witness.path().unwrap();
 
@@ -245,7 +240,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                             inputs: vec![tx::TransactionBuilderInputInfo {
                                 merkle_path,
                                 secret: secret.clone(),
-                                note: state.own_coins[0].1.clone(),
+                                note: state.wallet.get_own_coins().unwrap()[0].1.clone(),
                             }],
                             // We can add more outputs to this list.
                             // The only constraint is that sum(value in) == sum(value out)
