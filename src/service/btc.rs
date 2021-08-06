@@ -72,5 +72,8 @@ impl BitcoinKeys {
     pub fn get_pubkey(&self) -> &PublicKey {
         &self.bitcoin_public_key
     }
+    pub fn get_privkey(&self) -> &PrivateKey {
+        &self.bitcoin_private_key
+    }
 
 }

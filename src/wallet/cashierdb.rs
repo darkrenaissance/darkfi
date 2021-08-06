@@ -49,20 +49,43 @@ impl CashierDb {
         }
         Ok(())
     }
+
+    pub fn get_keys_by_dkey(&self, dkey_pub: &Vec<u8>) -> Result<()> {
+        println!("get keys...");
+        debug!(target: "CashierDB", "Check for existing dkey");
+        //let dkey_id = self.get_value_deserialized(dkey_pub)?;
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        // let mut keypairs = conn.prepare("SELECT dkey_id FROM keypairs WHERE dkey_id = :dkey_id")?;
+        // let rows = keypairs.query_map::<Vec<u8>, _, _>(&[(":dkey_id", &secret)], |row| row.get(0))?;
+
+        let mut stmt = conn.prepare("SELECT * FROM keypairs where dkey_id = ?")?;
+        let mut rows = stmt.query([dkey_pub])?;
+        if let Some(_row) = rows.next()? {
+            println!("Got something");
+        } else {
+            println!("Did not get something");
+        }
+
+        Ok(())
+    }
+
     // Update to take BitcoinKeys instance instead
     pub fn put_exchange_keys(
         &self,
-        dkey_pub: jubjub::SubgroupPoint,
+        dkey_pub: Vec<u8>,
         btc_private: PrivKey,
         btc_public: PubKey,
-        // Successful btc tx id
-        txid: String,
+        //txid will be updated when exists
     ) -> Result<()> {
+        debug!(target: "CashierDB", "Put exchange keys");
         // prepare the values
-        let dkey_pub = self.get_value_serialized(&dkey_pub)?;
+        //let dkey_pub = self.get_value_serialized(&dkey_pub)?;
         let btc_private = btc_private.to_bytes();
         let btc_public = btc_public.to_bytes();
-        let txid = self.get_value_serialized(&txid)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -70,13 +93,12 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT INTO keypairs(dkey_id, btc_key_private, btc_key_public, txid)
-            VALUES (:dkey_id, :btc_key_private, :btc_key_public, :txid)",
+            "INSERT INTO keypairs(dkey_id, btc_key_private, btc_key_public)
+            VALUES (:dkey_id, :btc_key_private, :btc_key_public)",
             named_params! {
             ":dkey_id": dkey_pub,
             ":btc_key_private": btc_private,
             ":btc_key_private": btc_public,
-            ":txid": txid,
             },
         )?;
         Ok(())

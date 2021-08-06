@@ -132,23 +132,28 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        _cashier_wallet: CashierDbPtr,
+        cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;
         match request.get_command() {
             0 => {
+                debug!(target: "Cashier", "Get command");
                 // Exchange zk_pubkey for bitcoin address
-                let _zkpub = request.get_payload();
+                let zkpub = request.get_payload();
+
+                //check if key has already been issued
+                let _check = cashier_wallet.get_keys_by_dkey(&zkpub);
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new().unwrap();
 
                 let btc_pub = btc_keys.get_pubkey();
+                let btc_priv = btc_keys.get_privkey();
 
-                // add to watchlist
-
+                // add pairings to db
+                let _result = cashier_wallet.put_exchange_keys(zkpub, *btc_priv, *btc_pub);
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
@@ -157,11 +162,15 @@ impl CashierService {
                 // send reply
                 send_queue.send((peer, reply)).await?;
 
+                // add to watchlist
+
+
                 info!("Received dkey->btc msg");
 
             }
             1 => {
                 // Withdraw
+                info!("Received withdraw request");
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));
@@ -185,6 +194,7 @@ impl CashierClient {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        debug!(target: "Cashier", "Start CashierClient");
         self.protocol.start().await?;
 
         Ok(())
