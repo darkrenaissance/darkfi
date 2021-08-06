@@ -1,13 +1,19 @@
-use crate::Error;
+use std::path::{Path, PathBuf};
+
 use crate::Result;
 
-use std::path::PathBuf;
-
 pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or(Error::PathNotFound)?
-        .as_path()
-        .join(".config/darkfi/");
+    let mut path = PathBuf::new();
+    let dfi_path = Path::new("darkfi");
+
+    match dirs::config_dir() {
+        Some(v) => path.push(v),
+        // This should not fail on any modern OS
+        None => {}
+    }
+
+    path.push(dfi_path);
     path.push(file);
+
     Ok(path)
 }
