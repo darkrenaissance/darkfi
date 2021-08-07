@@ -1,8 +1,9 @@
-import numpy as np
+#import numpy as np
 from groth_poly_commit import Scalar, poly_commit, create_proof, verify_proof
 
 K = Scalar
-R.<x> = LaurentPolynomialRing(K)
+#R.<x> = LaurentPolynomialRing(K)
+R.<x> = PolynomialRing(K)
 
 var_one = K(1)
 var_x = K(4)
@@ -100,15 +101,15 @@ Qo7 = 0
 Qc7 = -1
 assert Ql7 * a7 + Qr7 * b7 + Qm7 * a7 * b7 + Qo7 * c7 + Qc7 == 0
 
-a = np.array([a1, a2, a3, a4, a5, a6, a7])
-b = np.array([b1, b2, b3, b4, b5, b6, b7])
-c = np.array([c1, c2, c3, c4, c5, c6, c7])
+a = [a1, a2, a3, a4, a5, a6, a7]
+b = [b1, b2, b3, b4, b5, b6, b7]
+c = [c1, c2, c3, c4, c5, c6, c7]
 
-Ql = np.array([Ql1, Ql2, Ql3, Ql4, Ql5, Ql6])
-Qr = np.array([Qr1, Qr2, Qr3, Qr4, Qr5, Qr6])
-Qm = np.array([Qm1, Qm2, Qm3, Qm4, Qm5, Qm6])
-Qo = np.array([Qo1, Qo2, Qo3, Qo4, Qo5, Qo6])
-Qc = np.array([Qc1, Qc2, Qc3, Qc4, Qc5, Qc6])
+Ql = [Ql1, Ql2, Ql3, Ql4, Ql5, Ql6]
+Qr = [Qr1, Qr2, Qr3, Qr4, Qr5, Qr6]
+Qm = [Qm1, Qm2, Qm3, Qm4, Qm5, Qm6]
+Qo = [Qo1, Qo2, Qo3, Qo4, Qo5, Qo6]
+Qc = [Qc1, Qc2, Qc3, Qc4, Qc5, Qc6]
 
 #    0   1      2      3    4               5               6
 # a: x,  x,     1,     s,   1 - s,          sxy,            1
@@ -126,17 +127,60 @@ permuted_indices = [
 ]
 eval_domain = range(0, len(permuted_indices))
 
-def lagrange(domain, codomain):
-    S.<x> = PolynomialRing(K)
-    p = S.lagrange_polynomial(zip(eval_domain, permuted_indices))
-    # Convert to a Laurent polynomial
-    return R(p)
+witness = a + b + c
+for i, val in enumerate(a + b + c):
+    assert val == witness[permuted_indices[i]]
 
-x_a_prime = lagrange(eval_domain[0:7], permuted_indices[0:7])
-x_b_prime = lagrange(eval_domain[7:14], permuted_indices[7:14])
-x_c_prime = lagrange(eval_domain[14:], permuted_indices[14:])
+#def lagrange(domain, codomain):
+#    S.<x> = PolynomialRing(K)
+#    p = S.lagrange_polynomial(zip(eval_domain, permuted_indices))
+#    # Convert to a Laurent polynomial
+#    return R(p)
 
-assert x_a_prime(2) == permuted_indices[2]
-assert x_b_prime(8) == permuted_indices[8]
-assert x_c_prime(16) == permuted_indices[16]
+witness_y = R.lagrange_polynomial(enumerate(witness))
+assert witness_y(12) == witness[12]
+
+witness_x_a = R.lagrange_polynomial(
+    zip(eval_domain[0:7], eval_domain[0:7]))
+witness_x_b = R.lagrange_polynomial(
+    zip(eval_domain[7:14], eval_domain[7:14]))
+witness_x_c = R.lagrange_polynomial(
+    zip(eval_domain[14:], eval_domain[14:]))
+
+assert witness_x_a(2) == eval_domain[2]
+assert witness_x_b(8) == eval_domain[8]
+assert witness_x_c(16) == eval_domain[16]
+
+witness_x_a_prime = R.lagrange_polynomial(
+    zip(eval_domain[0:7], permuted_indices[0:7]))
+witness_x_b_prime = R.lagrange_polynomial(
+    zip(eval_domain[7:14], permuted_indices[7:14]))
+witness_x_c_prime = R.lagrange_polynomial(
+    zip(eval_domain[14:], permuted_indices[14:]))
+
+assert witness_x_a_prime(2) == permuted_indices[2]
+assert witness_x_b_prime(8) == permuted_indices[8]
+assert witness_x_c_prime(16) == permuted_indices[16]
+
+v1 = K(2)
+v2 = K(3)
+px = 1
+
+for i in range(0, len(a)):
+    px *= v1 + witness_x_a(i) + v2 * witness_y(i)
+for i in range(len(a), 2 * len(a)):
+    px *= v1 + witness_x_b(i) + v2 * witness_y(i)
+for i in range(2 * len(a), 3 * len(a)):
+    px *= v1 + witness_x_c(i) + v2 * witness_y(i)
+
+px_prime = 1
+
+for i in range(0, len(a)):
+    px_prime *= v1 + witness_x_a_prime(i) + v2 * witness_y(i)
+for i in range(len(a), 2 * len(a)):
+    px_prime *= v1 + witness_x_b_prime(i) + v2 * witness_y(i)
+for i in range(2 * len(a), 3 * len(a)):
+    px_prime *= v1 + witness_x_c_prime(i) + v2 * witness_y(i)
+
+assert px == px_prime
 
