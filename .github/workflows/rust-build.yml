@@ -21,6 +21,9 @@ jobs:
               run: |
                 sudo apt-get update
                 sudo apt-get install libsqlcipher-dev
+            - name: Create Config Dir 
+              run: |
+                mkdir -p ~/.config/darkfi
             - name: Compile
               run: |
                 cargo build --release
