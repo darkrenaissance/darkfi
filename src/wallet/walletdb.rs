@@ -284,6 +284,33 @@ impl WalletDb {
         Ok(())
     }
 
+    fn get_tables_name(&self) -> Result<Vec<String>> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
+        let table_iter = stmt.query_map::<String, _, _>([], |row| row.get(0))?;
+
+        let mut tables = Vec::new();
+
+        for table in table_iter {
+            tables.push(table?);
+        }
+
+        Ok(tables)
+    }
+
+    pub fn destory(&self) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+
+        for table in self.get_tables_name()?.iter() {
+            let drop_stmt = format!("DROP TABLE IF EXISTS {}", table);
+            let drop_stmt = drop_stmt.as_str();
+            conn.execute(drop_stmt, [])?;
+        }
+
+        Ok(())
+    }
     pub fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {
         let v = serialize(data);
         Ok(v)
@@ -299,6 +326,7 @@ impl WalletDb {
 mod tests {
 
     use super::*;
+    use ff::PrimeField;
 
     #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
@@ -318,10 +346,11 @@ mod tests {
         assert_eq!(public, public2);
         assert_eq!(secret, secret2);
 
+        wallet.destory()?;
+
         Ok(())
     }
 
-    // This test will fail
     #[test]
     pub fn test_put_and_get_own_coins() -> Result<()> {
         let wallet = WalletDb::new("test_wallet.db", "darkfi".into())?;
@@ -342,21 +371,24 @@ mod tests {
             valcom_blind: jubjub::Fr::random(&mut OsRng),
         };
 
-        let tree = crate::crypto::merkle::CommitmentTree::empty();
+        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+
+        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
+        tree.append(MerkleNode::from_coin(&coin))?;
 
         let witness = IncrementalWitness::from_tree(&tree);
 
-        let coin = Coin::new([0; 32]);
-
-        wallet.put_own_coins(coin.clone(), note.clone(), witness, secret)?;
-
-        println!("put_own_coins done");
+        wallet.put_own_coins(coin.clone(), note.clone(), witness.clone(), secret)?;
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
-        println!("get_own_coins done");
-
+        assert_eq!(&own_coin.1.valcom_blind, &note.valcom_blind);
+        assert_eq!(&own_coin.1.coin_blind, &note.coin_blind);
         assert_eq!(own_coin.2, secret);
+        assert_eq!(own_coin.3.root(), witness.root());
+        assert_eq!(own_coin.3.path(), witness.path());
+
+        wallet.destory()?;
 
         Ok(())
     }
