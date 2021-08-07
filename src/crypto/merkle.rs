@@ -229,21 +229,37 @@ pub struct IncrementalWitness<Node: Hashable> {
     cursor: Option<CommitmentTree<Node>>,
 }
 
+impl<Node: Hashable> Encodable for Vec<Node> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<Node: Hashable> Decodable for Vec<Node> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            ret.push(Decodable::decode(&mut d)?);
+        }
+        Ok(ret)
+    }
+}
 
 impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.tree.encode(&mut s)?;
 
-        len += VarInt(self.filled.len() as u64).encode(&mut s)?;
-        for c in self.filled.iter() {
-            len += c.encode(&mut s)?;
-        }
+        len += self.filled.encode(&mut s)?;
 
         len += self.cursor_depth.encode(&mut s)?;
-        if let Some(v) = &self.cursor {
-            len += v.encode(&mut s)?;
-        }
+        len += self.cursor.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -252,20 +268,9 @@ impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
 
 impl<Node: Hashable> Decodable for IncrementalWitness<Node> {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let tree = Decodable::decode(&mut d)?;
-
-        let filled = {
-            let len = VarInt::decode(&mut d)?.0;
-            let mut ret = Vec::with_capacity(len as usize);
-            for _ in 0..len {
-                ret.push(Decodable::decode(&mut d)?);
-            }
-            ret
-        };
-
         Ok(Self {
-            tree,
-            filled,
+            tree: Decodable::decode(&mut d)?,
+            filled: Decodable::decode(&mut d)?,
             cursor_depth: Decodable::decode(&mut d)?,
             cursor: Decodable::decode(d)?,
         })

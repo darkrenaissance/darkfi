@@ -144,4 +144,3 @@ lazy_static! {
     };
 }
 
-impl_vec!(MerkleNode);
