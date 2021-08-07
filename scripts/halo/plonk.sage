@@ -137,6 +137,7 @@ for i, val in enumerate(a + b + c):
 #    # Convert to a Laurent polynomial
 #    return R(p)
 
+# This is what the prover passes to the verifier
 witness_y = R.lagrange_polynomial(enumerate(witness))
 assert witness_y(12) == witness[12]
 
