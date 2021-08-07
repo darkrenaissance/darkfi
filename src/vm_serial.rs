@@ -108,15 +108,16 @@ impl Decodable for (AllocType, VariableIndex) {
 impl_vec!((AllocType, VariableIndex));
 
 impl Encodable for VariableIndex {
-    fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
-        unimplemented!();
-        //Ok(0)
+    fn encode<S: io::Write>(&self,s: S) -> Result<usize> {
+        let len = Encodable::encode(&((*self) as u64), s)?;
+        Ok(len)
     }
 }
 
 impl Decodable for VariableIndex {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(ReadExt::read_u32(&mut d)? as Self)
+        let val: u64 = Decodable::decode(&mut d)?;
+        Ok(val as Self)
     }
 }
 
