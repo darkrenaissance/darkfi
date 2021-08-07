@@ -2,7 +2,7 @@ import numpy as np
 from groth_poly_commit import Scalar, poly_commit, create_proof, verify_proof
 
 K = Scalar
-R.<x, y> = LaurentPolynomialRing(K)
+R.<x> = LaurentPolynomialRing(K)
 
 var_one = K(1)
 var_x = K(4)
@@ -86,13 +86,57 @@ Qo6 = 0
 Qc6 = -public_value
 assert Ql6 * a6 + Qr6 * b6 + Qm6 * a6 * b6 + Qo6 * c6 + Qc6 == 0
 
-a = np.array([a1, a2, a3, a4, a5, a6])
-b = np.array([b1, b2, b3, b4, b5, b6])
-c = np.array([c1, c2, c3, c4, c5, c6])
+# one == 1
+a7 = var_one
+# Unused
+b7 = var_zero
+# Unused
+c7 = var_zero
+
+Ql7 = 1
+Qr7 = 0
+Qm7 = 0
+Qo7 = 0
+Qc7 = -1
+assert Ql7 * a7 + Qr7 * b7 + Qm7 * a7 * b7 + Qo7 * c7 + Qc7 == 0
+
+a = np.array([a1, a2, a3, a4, a5, a6, a7])
+b = np.array([b1, b2, b3, b4, b5, b6, b7])
+c = np.array([c1, c2, c3, c4, c5, c6, c7])
 
 Ql = np.array([Ql1, Ql2, Ql3, Ql4, Ql5, Ql6])
 Qr = np.array([Qr1, Qr2, Qr3, Qr4, Qr5, Qr6])
 Qm = np.array([Qm1, Qm2, Qm3, Qm4, Qm5, Qm6])
 Qo = np.array([Qo1, Qo2, Qo3, Qo4, Qo5, Qo6])
 Qc = np.array([Qc1, Qc2, Qc3, Qc4, Qc5, Qc6])
+
+#    0   1      2      3    4               5               6
+# a: x,  x,     1,     s,   1 - s,          sxy,            1
+#
+#    7   8      9      10   11              12              13
+# b: y,  y,     s,     xy,  x + y,          (1 - s)(x + y), -
+#
+#    14  15     16     17   18              19              20
+# c: xy, x + y, 1 - s, sxy, (1 - s)(x + y), -,              -
+
+permuted_indices = [
+    1,  0,  6,  9,  16, 17, 2,
+    8,  7,  3,  14, 15, 18, 13,
+    10, 11, 4,  5,  12, 19, 20
+]
+eval_domain = range(0, len(permuted_indices))
+
+def lagrange(domain, codomain):
+    S.<x> = PolynomialRing(K)
+    p = S.lagrange_polynomial(zip(eval_domain, permuted_indices))
+    # Convert to a Laurent polynomial
+    return R(p)
+
+x_a_prime = lagrange(eval_domain[0:7], permuted_indices[0:7])
+x_b_prime = lagrange(eval_domain[7:14], permuted_indices[7:14])
+x_c_prime = lagrange(eval_domain[14:], permuted_indices[14:])
+
+assert x_a_prime(2) == permuted_indices[2]
+assert x_b_prime(8) == permuted_indices[8]
+assert x_c_prime(16) == permuted_indices[16]
 
