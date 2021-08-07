@@ -1,15 +1,16 @@
 use crate::util::join_config_path;
 use crate::Result;
 
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use std::marker::PhantomData;
-use std::str;
 use std::{
-    fs,
+    env, fs,
     fs::{create_dir_all, File},
     io::Write,
+    path::PathBuf,
+    str,
 };
 
 pub struct Config<T> {
@@ -40,8 +41,6 @@ impl<T: Default + Serialize + DeserializeOwned> Config<T> {
     }
 }
 
-use std::path::PathBuf;
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DrkConfig {
     #[serde(default)]
@@ -51,11 +50,15 @@ pub struct DrkConfig {
     pub log_path: String,
 }
 
-
 impl Default for DrkConfig {
     fn default() -> Self {
         let rpc_url = String::from("http://127.0.0.1:8000");
-        let log_path = String::from("/tmp/drk_cli.log");
+
+        let mut lp = PathBuf::new();
+        lp.push(env::temp_dir());
+        lp.push("drk_cli.log");
+        let log_path = String::from(lp.to_str().unwrap());
+
         Self { rpc_url, log_path }
     }
 }
@@ -98,12 +101,17 @@ impl Default for DarkfidConfig {
             .expect("error during join database_path to config path");
         let database_path = String::from(
             database_path
-            .to_str()
-            .expect("error convert Path to String"),
+                .to_str()
+                .expect("error convert Path to String"),
         );
-        let log_path = String::from("/tmp/darkfid_service_daemon.log");
+
+        let mut lp = PathBuf::new();
+        lp.push(env::temp_dir());
+        lp.push("darkfid_service_daemon.log");
+        let log_path = String::from(lp.to_str().unwrap());
 
         let password = String::new();
+
         Self {
             connect_url,
             subscriber_url,
@@ -139,7 +147,12 @@ impl Default for GatewaydConfig {
         let accept_url = String::from("127.0.0.1:3333");
         let publisher_url = String::from("127.0.0.1:4444");
         let database_path = String::from("gatewayd.db");
-        let log_path = String::from("/tmp/gatewayd.log");
+
+        let mut lp = PathBuf::new();
+        lp.push(env::temp_dir());
+        lp.push("gatewayd.log");
+        let log_path = String::from(lp.to_str().unwrap());
+
         Self {
             accept_url,
             publisher_url,
@@ -172,7 +185,12 @@ impl Default for CashierdConfig {
     fn default() -> Self {
         let accept_url = String::from("127.0.0.1:7777");
         let database_path = String::from("cashierd.db");
-        let log_path = String::from("/tmp/cashierd.log");
+
+        let mut lp = PathBuf::new();
+        lp.push(env::temp_dir());
+        lp.push("cashierd.log");
+        let log_path = String::from(lp.to_str().unwrap());
+
         let password = String::new();
         Self {
             accept_url,
