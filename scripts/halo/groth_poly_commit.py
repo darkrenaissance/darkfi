@@ -159,19 +159,19 @@ def verify_proof(proof, x):
 
     return True
 
-R = LaurentPolynomialRing(Scalar, names=('x',)); (x,) = R._first_ngens(1)
-a = np.array([
-    Scalar(_sage_const_110 ), Scalar(_sage_const_56 ), Scalar(_sage_const_89 ), Scalar(_sage_const_6543 ), Scalar(_sage_const_2 )
-])
-p = _sage_const_0 
-for i, a_i in enumerate(a):
-    p += a_i * x**i
-print(p)
-xx = Scalar(_sage_const_77 )
-r, commit = poly_commit(p)
-proof = create_proof(p, r, xx)
-assert verify_proof(proof, xx)
-assert proof.poly_commit == commit
-assert proof.value == p(xx)
+#R = LaurentPolynomialRing(Scalar, names=('x',)); (x,) = R._first_ngens(1)
+#a = np.array([
+#    Scalar(_sage_const_110 ), Scalar(_sage_const_56 ), Scalar(_sage_const_89 ), Scalar(_sage_const_6543 ), Scalar(_sage_const_2 )
+#])
+#p = _sage_const_0 
+#for i, a_i in enumerate(a):
+#    p += a_i * x**i
+#print(p)
+#xx = Scalar(_sage_const_77 )
+#r, commit = poly_commit(p)
+#proof = create_proof(p, r, xx)
+#assert verify_proof(proof, xx)
+#assert proof.poly_commit == commit
+#assert proof.value == p(xx)
 
 
