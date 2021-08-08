@@ -280,7 +280,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 }
 
 fn main() -> Result<()> {
-
     let options = Arc::new(DarkfidCli::load()?);
 
     let config_path: PathBuf;
@@ -294,13 +293,11 @@ fn main() -> Result<()> {
         }
     }
 
-
     let config: DarkfidConfig = if Path::new(&config_path).exists() {
         Config::<DarkfidConfig>::load(config_path)?
     } else {
         Config::<DarkfidConfig>::load_default(config_path)?
     };
-
 
     let config_ptr = Arc::new(&config);
 

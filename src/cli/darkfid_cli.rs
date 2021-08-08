@@ -31,16 +31,14 @@ impl DarkfidCli {
             )
             .get_matches();
 
-        let config = Box::new(
-            if let Some(config_path) = app.value_of("config") {
-                Some(std::path::Path::new(config_path).to_path_buf())
-            } else {
-                None
-            }
-        );
+        let config = Box::new(if let Some(config_path) = app.value_of("config") {
+            Some(std::path::Path::new(config_path).to_path_buf())
+        } else {
+            None
+        });
 
         let verbose = app.is_present("verbose");
 
-        Ok(Self { verbose , config})
+        Ok(Self { verbose, config })
     }
 }

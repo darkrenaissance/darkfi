@@ -63,8 +63,6 @@ fn main() -> Result<()> {
         .unwrap();
     }
 
-
-
     let ex2 = ex.clone();
 
     let (_, result) = Parallel::new()

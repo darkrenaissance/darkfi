@@ -1,7 +1,7 @@
 use crate::cli::DarkfidConfig;
+use crate::cli::{TransferParams, WithdrawParams};
 use crate::rpc::adapter::RpcAdapter;
 use crate::{Error, Result};
-use crate::cli::{TransferParams, WithdrawParams};
 
 use async_executor::Executor;
 use async_native_tls::TlsAcceptor;
@@ -12,8 +12,6 @@ use smol::Async;
 
 use std::net::TcpListener;
 use std::sync::Arc;
-
-
 
 /// Listens for incoming connections and serves them.
 pub async fn listen(
@@ -240,13 +238,17 @@ impl RpcInterface {
             }
         });
 
-        //let mut self1 = self.clone();
+        // put adapter inside of mutex
+        let self1 = self.clone();
         io.add_method("deposit", move |_| {
-            //let self2 = self1.clone();
+            let self2 = self1.clone();
             async move {
                 println!("Deposit initiated");
-                //let btckey = self2.adapter.deposit().await?;
-                Ok(jsonrpc_core::Value::String("Initiating deposit... ".into()))
+                let btckey = self2.adapter.deposit().await?;
+                Ok(jsonrpc_core::Value::String(format!(
+                    "Send testnet BTC to: {}",
+                    btckey
+                )))
             }
         });
 
@@ -257,7 +259,10 @@ impl RpcInterface {
                 let parsed: TransferParams = params.parse().unwrap();
                 let address = parsed.pub_key.clone();
                 self2.adapter.transfer(parsed).await?;
-                Ok(jsonrpc_core::Value::String(format!("Transfer To: {}", address)))
+                Ok(jsonrpc_core::Value::String(format!(
+                    "Transfer To: {}",
+                    address
+                )))
             }
         });
 

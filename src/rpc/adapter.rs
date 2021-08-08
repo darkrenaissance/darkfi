@@ -1,9 +1,10 @@
+use crate::cli::TransferParams;
+use crate::cli::WithdrawParams;
+use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use crate::cli::TransferParams;
-use crate::serial::serialize;
 
 use log::*;
 
@@ -11,7 +12,7 @@ use async_std::sync::Arc;
 use std::net::SocketAddr;
 
 pub type AdapterPtr = Arc<RpcAdapter>;
-// Dummy adapter for now
+
 pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
     pub cashier_client: CashierClient,
@@ -32,7 +33,7 @@ impl RpcAdapter {
             wallet,
             cashier_client,
             connect_url,
-            publish_tx_send
+            publish_tx_send,
         })
     }
 
@@ -66,7 +67,7 @@ impl RpcAdapter {
 
     pub fn get_key(&self) -> Result<String> {
         debug!(target: "adapter", "get_key() [START]");
-        let key_public = self.wallet.get_public()?; 
+        let key_public = self.wallet.get_public()?;
         let bs58_address = bs58::encode(serialize(&key_public)).into_string();
         Ok(bs58_address)
     }
@@ -84,7 +85,7 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub async fn deposit(&mut self) -> Result<PubAddress> {
+    pub async fn deposit(&self) -> Result<PubAddress> {
         debug!(target: "deposit", "deposit: START");
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
@@ -99,6 +100,10 @@ impl RpcAdapter {
         self.publish_tx_send.send(transfer_params).await?;
         Ok(())
     }
+
+    //pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
+    //    Ok(())
+    //}
 
     pub fn get_info(&self) {}
 

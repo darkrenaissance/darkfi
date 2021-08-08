@@ -264,8 +264,6 @@ impl<Node: Hashable> Encodable for IncrementalWitness<Node> {
     }
 }
 
-
-
 impl<Node: Hashable> Decodable for IncrementalWitness<Node> {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
@@ -276,8 +274,6 @@ impl<Node: Hashable> Decodable for IncrementalWitness<Node> {
         })
     }
 }
-
-
 
 impl<Node: Hashable> IncrementalWitness<Node> {
     /// Creates an `IncrementalWitness` for the most recent commitment added to
@@ -357,8 +353,8 @@ impl<Node: Hashable> IncrementalWitness<Node> {
             if cursor.is_complete(self.cursor_depth) {
                 self.filled
                     .push(cursor.root_inner(self.cursor_depth, PathFiller::empty()));
-                } else {
-                    self.cursor = Some(cursor);
+            } else {
+                self.cursor = Some(cursor);
             }
         } else {
             self.cursor_depth = self.next_depth();

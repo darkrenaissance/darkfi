@@ -1,4 +1,4 @@
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use std::convert::TryFrom;
 use std::io;
 use std::net::SocketAddr;
@@ -123,13 +123,13 @@ impl RepProtocol {
 
 pub struct ReqProtocol {
     addr: SocketAddr,
-    socket: zeromq::DealerSocket,
+    socket: Mutex<zeromq::DealerSocket>,
     service_name: String,
 }
 
 impl ReqProtocol {
     pub fn new(addr: SocketAddr, service_name: String) -> ReqProtocol {
-        let socket = zeromq::DealerSocket::new();
+        let socket = Mutex::new(zeromq::DealerSocket::new());
         ReqProtocol {
             addr,
             socket,
@@ -137,15 +137,15 @@ impl ReqProtocol {
         }
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         let addr = addr_to_string(self.addr);
-        self.socket.connect(addr.as_str()).await?;
+        self.socket.lock().await.connect(addr.as_str()).await?;
         info!("{} SERVICE: Connected To {}", self.service_name, self.addr);
         Ok(())
     }
 
     pub async fn request(
-        &mut self,
+        &self,
         command: u8,
         data: Vec<u8>,
         handle_error: Arc<dyn Fn(u32) + Send + Sync>,
@@ -155,13 +155,13 @@ impl ReqProtocol {
         let req = bytes::Bytes::from(req);
         let req: zeromq::ZmqMessage = req.into();
 
-        self.socket.send(req).await?;
+        self.socket.lock().await.send(req).await?;
         info!(
             "{} SERVICE: Sent Request {{ command: {} }}",
             self.service_name, command
         );
 
-        let rep: zeromq::ZmqMessage = self.socket.recv().await?;
+        let rep: zeromq::ZmqMessage = self.socket.lock().await.recv().await?;
         if let Some(reply) = rep.get(0) {
             let reply: Vec<u8> = reply.to_vec();
 

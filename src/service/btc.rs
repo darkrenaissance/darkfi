@@ -1,14 +1,13 @@
 use crate::{serial::deserialize, serial::serialize, Error, Result};
 
-use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
-use secp256k1::key::SecretKey;
-use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use bitcoin::util::address::Address;
+use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
+use secp256k1::key::SecretKey;
 
 use bitcoin::network::constants::Network;
-
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -23,10 +22,7 @@ pub struct BitcoinKeys {
 }
 
 impl BitcoinKeys {
-    pub fn new(
-
-    ) -> Result<BitcoinKeys> {
-
+    pub fn new() -> Result<BitcoinKeys> {
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -75,5 +71,4 @@ impl BitcoinKeys {
     pub fn get_privkey(&self) -> &PrivateKey {
         &self.bitcoin_private_key
     }
-
 }

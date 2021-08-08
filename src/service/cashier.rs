@@ -2,19 +2,19 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
 use super::btc::{BitcoinKeys, PubAddress};
 
-use crate::{Error, Result};
-use crate::serial::{Decodable, Encodable, deserialize, serialize};
-use crate::wallet::CashierDbPtr;
-use crate::tx;
 use crate::crypto::load_params;
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
+use crate::tx;
+use crate::wallet::CashierDbPtr;
+use crate::{Error, Result};
 
 use bellman::groth16;
 use bls12_381::Bls12;
 
-use std::net::SocketAddr;
-use async_std::sync::Arc;
 use async_executor::Executor;
+use async_std::sync::Arc;
 use log::*;
+use std::net::SocketAddr;
 
 #[repr(u8)]
 enum CashierError {
@@ -38,10 +38,7 @@ pub struct CashierService {
 }
 
 impl CashierService {
-    pub fn new(
-        addr: SocketAddr,
-        wallet: CashierDbPtr,
-    )-> Result<Arc<CashierService>> {
+    pub fn new(addr: SocketAddr, wallet: CashierDbPtr) -> Result<Arc<CashierService>> {
         // Load trusted setup parameters
         let (mint_params, mint_pvk) = load_params("mint.params")?;
         let (spend_params, spend_pvk) = load_params("spend.params")?;
@@ -56,7 +53,6 @@ impl CashierService {
         }))
     }
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-
         debug!(target: "Cashier", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
@@ -64,11 +60,8 @@ impl CashierService {
 
         let (send, recv) = protocol.start().await?;
 
-        let handle_request_task = executor.spawn(self.handle_request_loop(
-            send.clone(),
-            recv.clone(),
-            executor.clone(),
-        ));
+        let handle_request_task =
+            executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
 
         protocol.run(executor.clone()).await?;
 
@@ -77,7 +70,6 @@ impl CashierService {
     }
 
     fn mint_dbtc(&self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<Vec<u8>> {
-
         let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
         let builder = tx::TransactionBuilder {
@@ -164,9 +156,7 @@ impl CashierService {
 
                 // add to watchlist
 
-
                 info!("Received dkey->btc msg");
-
             }
             1 => {
                 // Withdraw
@@ -188,9 +178,7 @@ impl CashierClient {
     pub fn new(addr: SocketAddr) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("CASHIER CLIENT"));
 
-        Ok(CashierClient {
-            protocol
-        })
+        Ok(CashierClient { protocol })
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -200,7 +188,7 @@ impl CashierClient {
         Ok(())
     }
 
-    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
+    pub async fn get_address(&self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
@@ -219,8 +207,6 @@ impl CashierClient {
         }
         Ok(None)
     }
-
-
 }
 
 fn handle_error(status_code: u32) {

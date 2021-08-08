@@ -1,5 +1,5 @@
-pub mod walletdb;
 pub mod cashierdb;
+pub mod walletdb;
 
-pub use walletdb::{WalletDb, WalletPtr};
 pub use cashierdb::{CashierDb, CashierDbPtr};
+pub use walletdb::{WalletDb, WalletPtr};

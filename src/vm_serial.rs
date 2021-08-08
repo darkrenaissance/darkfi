@@ -108,7 +108,7 @@ impl Decodable for (AllocType, VariableIndex) {
 impl_vec!((AllocType, VariableIndex));
 
 impl Encodable for VariableIndex {
-    fn encode<S: io::Write>(&self,s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         let len = Encodable::encode(&((*self) as u64), s)?;
         Ok(len)
     }
