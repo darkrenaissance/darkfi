@@ -163,7 +163,196 @@ acc = P(list(Ai * vector(F17, [1, 12, 10, 1])))
 Zx = (14*x^2 + 11*x + 7) * Z + acc
 # Evaluate z(x) at our secret point
 Z_s = ZZ(Zx(s)) * G
-print(Z_s)
 
 # Round 3
 
+alpha = 15
+
+t1Z = a * b * qm + a * ql + b * qr + c * qo + qc
+
+t2Z = ((a + beta * x + gamma)
+    * (b + beta * k1 * x + gamma)
+    * (c + beta * k2 * x + gamma)) * Zx * alpha
+
+# w[1] is our first root of unity
+Zw = Zx(w[1] * x)
+t3Z = -((a + beta * sa + gamma)
+    * (b + beta * sb + gamma)
+    * (c + beta * sc + gamma)) * Zw * alpha
+
+# Lagrangian polynomial which evaluates to 1 at 1
+# L_1(w_1) = 1 and 0 on the other evaluation points
+L = P(list(Ai * vector(F17, [1, 0, 0, 0])))
+assert L(1) == 1
+# w_2 = 4
+assert L(4) == 0
+
+t4Z = (Zx - 1) * L * alpha^2
+
+tZ = t1Z + t2Z + t3Z + t4Z
+# and cancel out the factor Z now
+t = P(tZ / Z)
+
+# Split t into 3 parts
+# t(X) = t_lo(X) + X^n t_mid(X) + X^{2n} t_hi(X)
+t_list = t.list()
+t_lo = t_list[0:6]
+t_mid = t_list[6:12]
+t_hi = t_list[12:18]
+# and create the evaluations
+t_lo_s = ZZ(P(t_lo)(s)) * G
+t_mid_s = ZZ(P(t_mid)(s)) * G
+t_hi_s = ZZ(P(t_hi)(s)) * G
+
+# Round 4
+
+zeta = 5
+
+a_ = a(zeta)
+b_ = b(zeta)
+c_ = c(zeta)
+sa_ = sa(zeta)
+sb_ = sb(zeta)
+t_ = t(zeta)
+zw_ = Zx(zeta * w[1])
+l_ = L(zeta)
+assert a_ == 8
+assert b_ == 12
+assert c_ == 10
+assert sa_ == 0
+assert sb_ == 16
+assert t_ == 3
+assert zw_ == 14
+
+r1 = a_ * b_ * qm + a_ * ql + b_ * qr + c_ * qo + qc
+
+r2 = ((a_ + beta * zeta + gamma)
+    * (b_ + beta * k1 * zeta + gamma)
+    * (c_ + beta * k2 * zeta + gamma)) * Zx * alpha
+
+r3 = -((a_ + beta * sa_ + gamma)
+    * (b_ + beta * sb_ + gamma)
+    * beta * zw_ * sc * alpha)
+
+r4 = Zx * l_ * alpha^2
+
+r = r1 + r2 + r3 + r4
+
+r_ = r(zeta)
+assert r_ == 7
+
+# Round 5
+
+vega = 12
+
+v1 = P(t_lo)
+# Polynomial was in parts consisting of 6 powers
+v2 = zeta^6 * P(t_mid)
+v3 = zeta^12 * P(t_hi)
+v4 = -t_
+assert v4 == 14
+
+v5 = (
+    vega * (r - r_)
+    + vega^2 * (a - a_) + vega^3 * (b - b_) + vega^4 * (c - c_)
+    + vega^5 * (sa - sa_) + vega^6 * (sb - sb_)
+)
+
+W = v1 + v2 + v3 + v4 + v5
+Wz = W / (x - zeta)
+# Calculate the opening proof
+Wzw = (Zx - zw_) / (x - zeta * w[1])
+
+# Compute evaluations of Wz and Wzw
+Wz_s = ZZ(Wz(s)) * G
+Wzw_s = ZZ(Wzw(s)) * G
+
+# Finished the proving algo
+proof = (a_s, b_s, c_s, Z_s, t_lo_s, t_mid_s, t_hi_s, Wz_s, Wzw_s,
+         a_, b_, c_, sa_, sb_, r_, zw_)
+
+# Verification
+
+qm_s = ZZ(qm(s)) * G
+ql_s = ZZ(ql(s)) * G
+qr_s = ZZ(qr(s)) * G
+qo_s = ZZ(qo(s)) * G
+qc_s = ZZ(qc(s)) * G
+sa_s = ZZ(sa(s)) * G
+sb_s = ZZ(sb(s)) * G
+sc_s = ZZ(sc(s)) * G
+
+# Check all the points are on the curve.
+# y^2 = x^3 + 3
+# ...
+
+# Also check the scalar values are in the group for F17
+# ...
+
+# step 4: random upsilon
+upsilon = 4
+
+# step 5
+Z_z = F17(zeta^4 - 1)
+assert Z_z == 12
+
+# step 6
+# Calculate evaluation of L1 at zeta
+L1_z = F17((zeta^4 - 1) / (4 * (zeta - 1)))
+assert L1_z == 5
+
+# step 7
+# no public inputs in this example
+
+# step 8
+t_ = (r_ - (a_ + beta * sa_ + gamma)
+           * (b_ + beta * sb_ + gamma)
+           * (c_ + gamma) * zw_ * alpha
+         - L1_z * alpha^2) / Z_z
+assert t_ == 3
+
+# step 9
+# qx_s are points, and we are multiplying them by scalars
+# so convert the values to integers first
+d1 = (ZZ(a_ * b_ * vega) * qm_s
+      + ZZ(a_ * vega) * ql_s
+      + ZZ(b_ * vega) * qr_s
+      + ZZ(c_ * vega) * qo_s
+      + vega * qc_s)
+d2 = ZZ((a_ + beta * zeta + gamma)
+        * (b_ + beta * k1 * zeta + gamma)
+        * (c_ + beta * k2 * zeta + gamma)
+        * alpha * vega
+        + L1_z * alpha^2 * vega
+        + F17(upsilon)) * Z_s
+d3 = -ZZ((a_ + beta * sa_ + gamma)
+         * (b_ + beta * sb_ + gamma)
+         * alpha * vega * beta * zw_) * sc_s
+d = d1 + d2 + d3
+
+# step 10
+f = (t_lo_s + zeta^6 * t_mid_s + zeta^12 * t_hi_s
+     + d
+     + vega^2 * a_s + vega^3 * b_s + vega^4 * c_s
+     + vega^5 * sa_s + vega^6 * sb_s)
+
+# step 11
+e = ZZ(t_ + vega * r_
+       + vega^2 * a_ + vega^3 * b_ + vega^4 * c_
+       + vega^5 * sa_ + vega^6 * sb_
+       + upsilon * zw_) * G
+
+# step 12
+# construct points for the pairing check
+x1 = Wz_s + upsilon * Wzw_s
+x2 = s * G2
+
+y1 = zeta * Wz_s + ZZ(upsilon * zeta * w[1]) * Wzw_s + f - e
+y2 = G2
+
+# do the pairing check
+x1_ = E2(x1)
+x2_ = E2(x2)
+y1_ = E2(y1)
+y2_ = E2(y2)
+assert x1_.weil_pairing(x2_, 17) == y1_.weil_pairing(y2_, 17)
