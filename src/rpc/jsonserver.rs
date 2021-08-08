@@ -238,7 +238,6 @@ impl RpcInterface {
             }
         });
 
-        // put adapter inside of mutex
         let self1 = self.clone();
         io.add_method("deposit", move |_| {
             let self2 = self1.clone();

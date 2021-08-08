@@ -192,10 +192,14 @@ impl DrkCli {
         let stop = app.is_present("stop");
         let get_key = app.is_present("getkey");
 
-        let deposit = None;
+        let mut deposit = None;
         match app.subcommand_matches("deposit") {
-            Some(_) => {
-                //let deposit = Deposit::new();
+            Some(deposit_sub) => {
+                let mut dep = Deposit::new();
+                if let Some(asset) = deposit_sub.value_of("asset") {
+                    dep.asset = asset.to_string();
+                }
+                deposit = Some(dep);
             }
             None => {}
         }
