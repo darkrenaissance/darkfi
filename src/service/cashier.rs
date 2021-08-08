@@ -15,6 +15,7 @@ use async_executor::Executor;
 use async_std::sync::Arc;
 use log::*;
 use std::net::SocketAddr;
+use async_std::sync::Mutex;
 
 #[repr(u8)]
 enum CashierError {
@@ -171,27 +172,29 @@ impl CashierService {
 }
 
 pub struct CashierClient {
-    protocol: ReqProtocol,
+    protocol: Mutex<ReqProtocol>,
 }
 
 impl CashierClient {
     pub fn new(addr: SocketAddr) -> Result<Self> {
-        let protocol = ReqProtocol::new(addr, String::from("CASHIER CLIENT"));
+        let protocol = Mutex::new(ReqProtocol::new(addr, String::from("CASHIER CLIENT")));
 
         Ok(CashierClient { protocol })
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         debug!(target: "Cashier", "Start CashierClient");
-        self.protocol.start().await?;
+        self.protocol.lock().await.start().await?;
 
         Ok(())
     }
 
-    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
+    pub async fn get_address(&self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
+            .lock()
+            .await
             .request(
                 CashierCommand::GetDBTC as u8,
                 serialize(&index),
