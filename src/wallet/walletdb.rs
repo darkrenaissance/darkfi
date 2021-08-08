@@ -28,9 +28,8 @@ pub struct WalletDb {
 }
 
 impl WalletDb {
-    pub fn new(wallet: &str, password: String) -> Result<Self> {
+    pub fn new(path: &std::path::PathBuf, password: String) -> Result<Self> {
         debug!(target: "walletdb", "new() Constructor called");
-        let path = join_config_path(&PathBuf::from(wallet))?;
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -39,7 +38,7 @@ impl WalletDb {
         let notes = Mutex::new(Vec::new());
         let witnesses = Mutex::new(Vec::new());
         Ok(Self {
-            path,
+            path: path.to_owned(),
             cashier_secrets: vec![cashier_secret.clone()],
             secrets: vec![secret.clone()],
             cashier_public,
@@ -330,7 +329,8 @@ mod tests {
 
     #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
-        let wallet = WalletDb::new("test_wallet.db", "darkfi".into())?;
+        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
@@ -353,7 +353,8 @@ mod tests {
 
     #[test]
     pub fn test_put_and_get_own_coins() -> Result<()> {
-        let wallet = WalletDb::new("test_wallet.db", "darkfi".into())?;
+        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);

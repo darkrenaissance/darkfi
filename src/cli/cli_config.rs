@@ -82,6 +82,10 @@ pub struct DarkfidConfig {
     pub database_path: String,
 
     #[serde(default)]
+    #[serde(rename = "walletdb_path")]
+    pub walletdb_path: String,
+
+    #[serde(default)]
     #[serde(rename = "log_path")]
     pub log_path: String,
 
@@ -105,6 +109,15 @@ impl Default for DarkfidConfig {
                 .expect("error convert Path to String"),
         );
 
+        let walletdb_path = String::from("walletdb.db");
+        let walletdb_path = join_config_path(&PathBuf::from(walletdb_path))
+            .expect("error during join walletdb_path to config path");
+        let walletdb_path = String::from(
+            walletdb_path
+                .to_str()
+                .expect("error convert Path to String"),
+        );
+
         let mut lp = PathBuf::new();
         lp.push(env::temp_dir());
         lp.push("darkfid_service_daemon.log");
@@ -117,6 +130,7 @@ impl Default for DarkfidConfig {
             subscriber_url,
             rpc_url,
             database_path,
+            walletdb_path,
             log_path,
             password,
         }

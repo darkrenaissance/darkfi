@@ -147,8 +147,11 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
     let database_path = config.database_path.clone();
+    let walletdb_path = config.walletdb_path.clone();
 
     let database_path = join_config_path(&PathBuf::from(database_path))?;
+    let walletdb_path = join_config_path(&PathBuf::from(walletdb_path))?;
+
     let rocks = Rocks::new(&database_path)?;
 
     let rocks2 = rocks.clone();
@@ -179,7 +182,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    let wallet = Arc::new(WalletDb::new("wallet.db", config.password.clone())?);
+    let wallet = Arc::new(WalletDb::new(&walletdb_path, config.password.clone())?);
 
     let ex = executor.clone();
 
