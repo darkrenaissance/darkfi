@@ -120,6 +120,7 @@ assert Z(13) == 0
 
 # 9 random blinding values. We will use:
 # 7, 4, 11, 12, 16, 2
+# 14, 11, 7 (used in round 2)
 
 # Blind our witness polynomials
 # The blinding factors will disappear at the evaluation points.
@@ -133,4 +134,36 @@ s = 2
 a_s = ZZ(a(s)) * G
 b_s = ZZ(b(s)) * G
 c_s = ZZ(c(s)) * G
+
+# Round 2
+
+# Random transcript challenges
+beta = 12
+gamma = 13
+# Build accumulation
+acc = 1
+accs = []
+for i in range(4):
+    # w_{n + j} corresponds to b(w[i])
+    # and w_{2n + j} is c(w[i])
+    accs.append(acc)
+    acc = acc * (
+        (a(w[i]) + beta * w[i] + gamma)
+        * (b(w[i]) + beta * k1 * w[i] + gamma)
+        * (c(w[i]) + beta * k2 * w[i] + gamma) /
+        (
+            (a(w[i]) + beta * sa(w[i]) + gamma)
+            * (b(w[i]) + beta * sb(w[i]) + gamma)
+            * (c(w[i]) + beta * sc(w[i]) + gamma)
+        ))
+assert accs == [1, 12, 10, 1]
+del accs
+acc = P(list(Ai * vector(F17, [1, 12, 10, 1])))
+
+Zx = (14*x^2 + 11*x + 7) * Z + acc
+# Evaluate z(x) at our secret point
+Z_s = ZZ(Zx(s)) * G
+print(Z_s)
+
+# Round 3
 
