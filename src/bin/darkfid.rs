@@ -277,15 +277,27 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 }
 
 fn main() -> Result<()> {
+
     let options = Arc::new(DarkfidCli::load()?);
 
-    let path = join_config_path(&PathBuf::from("darkfid.toml")).unwrap();
+    let config_path: PathBuf;
 
-    let config: DarkfidConfig = if Path::new(&path).exists() {
-        Config::<DarkfidConfig>::load(path)?
+    match options.config.as_ref() {
+        Some(path) => {
+            config_path = path.to_owned();
+        }
+        None => {
+            config_path = join_config_path(&PathBuf::from("darkfid.toml"))?;
+        }
+    }
+
+
+    let config: DarkfidConfig = if Path::new(&config_path).exists() {
+        Config::<DarkfidConfig>::load(config_path)?
     } else {
-        Config::<DarkfidConfig>::load_default(path)?
+        Config::<DarkfidConfig>::load_default(config_path)?
     };
+
 
     let config_ptr = Arc::new(&config);
 

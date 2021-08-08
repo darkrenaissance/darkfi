@@ -91,7 +91,6 @@ impl Drk {
         let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
         Ok(self.request(r).await?)
     }
-
 }
 
 async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
@@ -144,12 +143,21 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 fn main() -> Result<()> {
     let options = DrkCli::load()?;
 
-    let path = join_config_path(&PathBuf::from("drk.toml")).unwrap();
+    let config_path: PathBuf;
 
-    let config: DrkConfig = if Path::new(&path).exists() {
-        Config::<DrkConfig>::load(path)?
+    match options.config.as_ref() {
+        Some(path) => {
+            config_path = path.to_owned();
+        }
+        None => {
+            config_path = join_config_path(&PathBuf::from("drk.toml"))?;
+        }
+    }
+
+    let config: DrkConfig = if Path::new(&config_path).exists() {
+        Config::<DrkConfig>::load(config_path)?
     } else {
-        Config::<DrkConfig>::load_default(path)?
+        Config::<DrkConfig>::load_default(config_path)?
     };
 
     {

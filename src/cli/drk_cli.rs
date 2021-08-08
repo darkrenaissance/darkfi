@@ -4,6 +4,8 @@ use crate::Result;
 use clap::{App, Arg};
 use serde::Deserialize;
 
+use std::path::PathBuf;
+
 fn is_u64<'a>(v: &'a str) -> std::result::Result<(), String> {
     if v.parse::<u64>().is_ok() {
         Ok(())
@@ -55,7 +57,6 @@ impl WithdrawParams {
 }
 
 pub struct DrkCli {
-    //pub change_config: bool,
     pub verbose: bool,
     pub cashier: bool,
     pub wallet: bool,
@@ -67,6 +68,7 @@ pub struct DrkCli {
     pub transfer: Option<TransferParams>,
     pub deposit: Option<Deposit>,
     pub withdraw: Option<WithdrawParams>,
+    pub config: Box<Option<PathBuf>>,
 }
 
 impl DrkCli {
@@ -129,6 +131,12 @@ impl DrkCli {
                     .help_heading(Some("Send a stop signal to the daemon"))
                     .takes_value(false),
             )
+            .arg(
+                Arg::new("config")
+                    .help_heading(Some("Path for config file"))
+                    .long("config")
+                    .takes_value(true),
+            )
             .subcommand(
                 App::new("transfer")
                     .about("Transfer DBTC between users")
@@ -173,31 +181,7 @@ impl DrkCli {
                     ),
             )
             .subcommand(App::new("deposit").about("Deposit BTC for dBTC"))
-            //.subcommand(
-            //    App::new("config")
-            //        .about("Configuration settings")
-            //        .aliases(&["get", "set"])
-            //        .setting(AppSettings::SubcommandRequiredElseHelp)
-            //        .subcommand(App::new("get").about("Get configuration settings"))
-            //        .subcommand(
-            //            App::new("set")
-            //                .about("Set configuration settings")
-            //                .args(&[
-            //                    Arg::new("rpc_url")
-            //                        .about("Set RPC Url")
-            //                        .long("rpc-url")
-            //                        .takes_value(true),
-            //                    Arg::new("log_path")
-            //                        .about("Set Log Path")
-            //                        .long("log-path")
-            //                        .takes_value(true),
-            //                ])
-            //                .setting(AppSettings::ArgRequiredElseHelp),
-            //        ),
-            //)
             .get_matches();
-
-        //let mut change_config = false;
 
         let verbose = app.is_present("verbose");
         let cashier = app.is_present("cashier");
@@ -245,34 +229,14 @@ impl DrkCli {
             }
             None => {}
         }
-        //match app.subcommand_matches("config") {
-        //    Some(config_sub) => match config_sub.subcommand() {
-        //        Some(c) => match c {
-        //            ("get", _) => {
-        //                change_config = true;
-        //                println!("RPC Url: {}", config.rpc_url);
-        //                println!("Log Path: {}", config.log_path);
-        //            }
-        //            ("set", c) => {
-        //                change_config = true;
-        //                if let Some(v) = c.value_of("rpc_url") {
-        //                    config.rpc_url = v.to_string();
-        //                    println!("Change RPC Url To {}", config.rpc_url);
-        //                }
-        //                if let Some(v) = c.value_of("log_path") {
-        //                    config.log_path = v.to_string();
-        //                    println!("Change Log Path To {}", config.log_path);
-        //                }
-        //            }
-        //            _ => {}
-        //        },
-        //        None => {}
-        //    },
-        //    None => {}
-        //}
+
+        let config = Box::new(if let Some(config_path) = app.value_of("config") {
+            Some(std::path::Path::new(config_path).to_path_buf())
+        } else {
+            None
+        });
 
         Ok(Self {
-            //change_config,
             verbose,
             cashier,
             wallet,
@@ -284,6 +248,7 @@ impl DrkCli {
             deposit,
             transfer,
             withdraw,
+            config,
         })
     }
 }
