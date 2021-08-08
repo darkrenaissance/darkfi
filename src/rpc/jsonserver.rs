@@ -243,11 +243,8 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 println!("Deposit initiated");
-                let btckey = self2.adapter.deposit().await?;
-                Ok(jsonrpc_core::Value::String(format!(
-                    "Send testnet BTC to: {}",
-                    btckey
-                )))
+                // let btckey = self2.adapter.deposit().await?;
+                Ok(jsonrpc_core::Value::String(format!("Send testnet BTC to")))
             }
         });
 

@@ -188,7 +188,7 @@ impl CashierClient {
         Ok(())
     }
 
-    pub async fn get_address(&self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
+    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<PubAddress>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol

@@ -85,7 +85,7 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub async fn deposit(&self) -> Result<PubAddress> {
+    pub async fn deposit(&mut self) -> Result<PubAddress> {
         debug!(target: "deposit", "deposit: START");
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
