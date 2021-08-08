@@ -105,3 +105,32 @@ sb = P(list(Ai * vector(F17, [1, 15, 8, 9])))
 sc = P(list(Ai * vector(F17, [4, 16, 14, 5])))
 
 # Setup phase complete
+
+# Prove phase
+
+# Round 1
+
+# Create vanishing polynomial which is zero for every root of unity.
+# That is Z(w_1) = Z(w_2) = ... = 0
+Z = x^4 - 1
+assert Z(1) == 0
+assert Z(4) == 0
+assert Z(16) == 0
+assert Z(13) == 0
+
+# 9 random blinding values. We will use:
+# 7, 4, 11, 12, 16, 2
+
+# Blind our witness polynomials
+# The blinding factors will disappear at the evaluation points.
+a = (7*x + 4) * Z + fa
+b = (11*x + 12) * Z + fb
+c = (16*x + 2) * Z + fc
+
+# During the SRS phase we created a random s point and its powers
+s = 2
+# So now we evaluate a, b, c with these powers of G
+a_s = ZZ(a(s)) * G
+b_s = ZZ(b(s)) * G
+c_s = ZZ(c(s)) * G
+
