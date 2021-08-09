@@ -30,7 +30,7 @@ $ cargo run --bin darkfid -- -v
 $ cargo run --bin cashierd -- -v
 ```
 
-6. Initialize the wallet & Generate key pair:
+6. Initialize wallet and generate key pair:
 
 ```console
 $ cargo run --bin drk -- -wk 

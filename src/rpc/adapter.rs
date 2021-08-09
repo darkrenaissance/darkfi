@@ -76,12 +76,6 @@ impl RpcAdapter {
         Ok(bs58_address)
     }
 
-    pub fn test_wallet(&self) -> Result<()> {
-        self.wallet.test_wallet()?;
-        debug!(target: "adapter", "test wallet: START");
-        Ok(())
-    }
-
     pub async fn deposit(&self) -> Result<PubAddress> {
         debug!(target: "deposit", "deposit: START");
         let (public, private) = self.wallet.key_gen();

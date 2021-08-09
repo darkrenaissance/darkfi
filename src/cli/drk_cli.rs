@@ -87,7 +87,7 @@ impl DrkCli {
             .arg(
                 Arg::new("hello")
                     .long("hello")
-                    .help_heading(Some("Test Hello"))
+                    .help_heading(Some("Say hello"))
                     .takes_value(false),
             )
             .arg(

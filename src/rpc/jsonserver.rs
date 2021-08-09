@@ -141,7 +141,7 @@ impl RpcInterface {
         let mut io = jsonrpc_core::IoHandler::new();
 
         io.add_sync_method("say_hello", |_| {
-            Ok(jsonrpc_core::Value::String("Hello World!".into()))
+            Ok(jsonrpc_core::Value::String("hello world!".into()))
         });
 
         let self1 = self.clone();
@@ -184,12 +184,8 @@ impl RpcInterface {
         io.add_method("create_wallet", move |_| {
             let self2 = self1.clone();
             async move {
-                println!(
-                    "Attempting wallet generation at path {:?}",
-                    self2.adapter.wallet.path
-                );
                 self2.adapter.init_db()?;
-                Ok(jsonrpc_core::Value::String("Created wallet".into()))
+                Ok(jsonrpc_core::Value::String("wallet creation successful".into()))
             }
         });
 
@@ -197,10 +193,9 @@ impl RpcInterface {
         io.add_method("key_gen", move |_| {
             let self2 = self1.clone();
             async move {
-                println!("Key generation method called...");
                 self2.adapter.key_gen()?;
                 Ok(jsonrpc_core::Value::String(
-                    "Key generation successful".into(),
+                    "key generation successful".into(),
                 ))
             }
         });
@@ -209,21 +204,10 @@ impl RpcInterface {
         io.add_method("cash_key_gen", move |_| {
             let self2 = self1.clone();
             async move {
-                println!("Key generation method called...");
                 self2.adapter.cash_key_gen()?;
                 Ok(jsonrpc_core::Value::String(
-                    "Attempted key generation".into(),
+                    "key generation successful".into(),
                 ))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("test_wallet", move |_| {
-            let self2 = self1.clone();
-            async move {
-                println!("Test wallet method called...");
-                self2.adapter.test_wallet()?;
-                Ok(jsonrpc_core::Value::String("Test wallet".into()))
             }
         });
 
@@ -231,10 +215,8 @@ impl RpcInterface {
         io.add_method("create_cashier_wallet", move |_| {
             let self2 = self1.clone();
             async move {
-                println!("New wallet method called...");
                 self2.adapter.init_cashier_db()?;
-                println!("Wallet created at path {:?}", self2.adapter.wallet.path);
-                Ok(jsonrpc_core::Value::String("Created cashier wallet".into()))
+                Ok(jsonrpc_core::Value::String("cashier wallet creation successful".into()))
             }
         });
 
@@ -242,10 +224,9 @@ impl RpcInterface {
         io.add_method("deposit", move |_| {
             let self2 = self1.clone();
             async move {
-                println!("Deposit initiated");
                 let btckey = self2.adapter.deposit().await?;
                 Ok(jsonrpc_core::Value::String(format!(
-                    "Send testnet BTC to: {}",
+                    "{}",
                     btckey
                 )))
             }
@@ -256,11 +237,11 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 let parsed: TransferParams = params.parse().unwrap();
+                let amount = parsed.amount.clone();
                 let address = parsed.pub_key.clone();
                 self2.adapter.transfer(parsed).await?;
                 Ok(jsonrpc_core::Value::String(format!(
-                    "Transfer To: {}",
-                    address
+                    "transfered {} DRK to {}", amount, address
                 )))
             }
         });
@@ -268,7 +249,7 @@ impl RpcInterface {
         io.add_method("withdraw", |params: jsonrpc_core::Params| async move {
             let parsed: WithdrawParams = params.parse().unwrap();
             println!("test withdraw params:  {:?}", parsed);
-            Ok(jsonrpc_core::Value::String("Transfer To... ".into()))
+            Ok(jsonrpc_core::Value::String("withdraw BTC to... ".into()))
         });
 
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
