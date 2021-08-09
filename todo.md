@@ -11,6 +11,7 @@
 
 [X] drk: key generation
 [X] drk: deposit cli option
+[ ] darkfid: check addresses are valid
 [X] darkfid: send drk public key to cashierd.rs over tcp, triggered by drk.rs
 [X] cashierd: recieve drk pub key, reply with btc pub key
 [ ] cashierd: receive BTC, mint dBTC (see tx.rs)
@@ -24,7 +25,8 @@
 ## withdraw
 
 [X] drk: withdraw cli option
-[ ] darkfid: send cashout request to cashier with btc pub key
+[ ] darkfid: check address is valid
+[X] darkfid: send cashout request to cashier with btc pub key
 [ ] cashierd: receive cashout request, reply with drk pub key
 [ ] darkfid: send dbtc to the cashier drk pub key 
 [ ] cashierd: burn dbtc, send back btc (see tx.rs)
@@ -33,6 +35,7 @@
 
 [X] drk: transfer cli option
 [ ] darkfid: construct a new spend tx
+[ ] darkfid: check address is valid
 [ ] darkfid: build tx
 [ ] darkfid: verify tx
 [ ] darkfid: state transition function
