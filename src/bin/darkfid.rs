@@ -143,6 +143,79 @@ impl State {
 //) -> Result<()> {
 //}
 
+pub async fn futures_broker(
+    client: &mut GatewayClient,
+    cashier_client: &mut CashierClient,
+    state: &mut State,
+    secret: jubjub::Fr,
+    mint_params: bellman::groth16::Parameters<Bls12>,
+    spend_params: bellman::groth16::Parameters<Bls12>,
+    gateway_slabs_sub: async_channel::Receiver<Slab>,
+    deposit_recv: async_channel::Receiver<jubjub::SubgroupPoint>,
+    cashier_deposit_addr_send: async_channel::Sender<Option<bitcoin::util::address::Address>>,
+    publish_tx_recv: async_channel::Receiver<TransferParams>,
+) -> Result<()> {
+    loop {
+        futures::select! {
+            slab = gateway_slabs_sub.recv().fuse() => {
+                let slab = slab?;
+                let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+                let update = state_transition(state, tx)?;
+                state.apply(update).await?;
+            }
+            deposit_addr = deposit_recv.recv().fuse() => {
+                let cashier_public =  cashier_client.get_address(deposit_addr?).await?;
+                cashier_deposit_addr_send.send(cashier_public).await?;
+            }
+            //TODO: implement withdraw_
+            transfer_params = publish_tx_recv.recv().fuse() => {
+                let transfer_params = transfer_params?;
+
+                let merkle_path = {
+                    let (_coin, _, _, witness) = &mut state.wallet.get_own_coins()?[0];
+
+                    let merkle_path = witness.path().unwrap();
+
+                    merkle_path
+                };
+
+                let address = bs58::decode(transfer_params.pub_key).into_vec()?;
+                let address: jubjub::SubgroupPoint = deserialize(&address)?;
+
+                // Make a spend tx
+
+                // Construct a new tx spending the coin
+                let builder = tx::TransactionBuilder {
+                    clear_inputs: vec![],
+                    inputs: vec![tx::TransactionBuilderInputInfo {
+                        merkle_path,
+                        secret: secret.clone(),
+                        note: state.wallet.get_own_coins()?[0].1.clone(),
+                    }],
+                    // We can add more outputs to this list.
+                    // The only constraint is that sum(value in) == sum(value out)
+                    outputs: vec![tx::TransactionBuilderOutputInfo {
+                        value: transfer_params.amount,
+                        asset_id: 1,
+                        public: address,
+                    }],
+                };
+                // Build the tx
+                let mut tx_data = vec![];
+                {
+                    let tx = builder.build(&mint_params, &spend_params);
+                    tx.encode(&mut tx_data).expect("encode tx");
+                }
+
+                let slab = Slab::new(tx_data);
+
+                client.put_slab(slab).await.expect("put slab");
+            }
+
+        }
+    }
+}
+
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
@@ -218,8 +291,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
     // channel to request withdraw from adapter
-    let (withdraw_send, withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
-    let (cashier_withdraw_send, cashier_withdraw_recv) =
+    let (withdraw_send, _withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
+    let (_cashier_withdraw_send, cashier_withdraw_recv) =
         async_channel::unbounded::<jubjub::SubgroupPoint>();
 
     // start gateway client
@@ -227,70 +300,22 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     client.start().await?;
     cashier_client.start().await?;
 
-    executor
-        .spawn(async move {
-            loop {
-                futures::select! {
-                    // TODO: using "?" instead of unwrap() 
-                    slab = gateway_slabs_sub.recv().fuse() => {
-                        let slab = slab.unwrap();
-                        let tx = tx::Transaction::decode(&slab.get_payload()[..]).unwrap();
-                        let update = state_transition(&state, tx).unwrap();
-                        state.apply(update).await.unwrap();
-                    }
-                    deposit_addr = deposit_recv.recv().fuse() => {
-                        let cashier_public =  cashier_client.get_address(deposit_addr.unwrap()).await.unwrap();
-                        cashier_deposit_addr_send.send(cashier_public).await.unwrap();
-                    }
-                    //TODO: implement withdraw_
-                    transfer_params = publish_tx_recv.recv().fuse() => {
-                        let transfer_params = transfer_params.unwrap();
-
-                        let merkle_path = {
-                            let (_coin, _, _, witness) = &mut state.wallet.get_own_coins().unwrap()[0];
-
-                            let merkle_path = witness.path().unwrap();
-
-                            merkle_path
-                        };
-
-                        let address = bs58::decode(transfer_params.pub_key).into_vec().unwrap();
-                        let address: jubjub::SubgroupPoint = deserialize(&address).unwrap();
-
-                        // Make a spend tx
-
-                        // Construct a new tx spending the coin
-                        let builder = tx::TransactionBuilder {
-                            clear_inputs: vec![],
-                            inputs: vec![tx::TransactionBuilderInputInfo {
-                                merkle_path,
-                                secret: secret.clone(),
-                                note: state.wallet.get_own_coins().unwrap()[0].1.clone(),
-                            }],
-                            // We can add more outputs to this list.
-                            // The only constraint is that sum(value in) == sum(value out)
-                            outputs: vec![tx::TransactionBuilderOutputInfo {
-                                value: transfer_params.amount,
-                                asset_id: 1,
-                                public: address,
-                            }],
-                        };
-                        // Build the tx
-                        let mut tx_data = vec![];
-                        {
-                            let tx = builder.build(&mint_params, &spend_params);
-                            tx.encode(&mut tx_data).expect("encode tx");
-                        }
-
-                        let slab = Slab::new(tx_data);
-
-                        client.put_slab(slab).await.expect("put slab");
-                    }
-
-                }
-            }
-        })
-        .detach();
+    let futures_broker_task = executor.spawn(async move {
+        futures_broker(
+            &mut client,
+            &mut cashier_client,
+            &mut state,
+            secret.clone(),
+            mint_params.clone(),
+            spend_params.clone(),
+            gateway_slabs_sub.clone(),
+            deposit_recv.clone(),
+            cashier_deposit_addr_send.clone(),
+            publish_tx_recv.clone(),
+        )
+        .await?;
+        Ok::<(), drk::Error>(())
+    });
 
     let adapter = RpcAdapter::new(
         wallet.clone(),
@@ -302,7 +327,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
 
-    //subscribe_task.cancel().await;
+    futures_broker_task.cancel().await;
     Ok(())
 }
 
