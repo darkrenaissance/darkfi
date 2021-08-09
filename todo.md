@@ -34,12 +34,12 @@
 ## drk -> drk
 
 [X] drk: transfer cli option
-[ ] darkfid: construct a new spend tx
+[X] darkfid: construct a new spend tx
 [ ] darkfid: check address is valid
-[ ] darkfid: build tx
+[X] darkfid: build tx
 [ ] darkfid: verify tx
-[ ] darkfid: state transition function
-[ ] darkfid: send tx data to rocksdb
+[X] darkfid: state transition function
+[X] darkfid: send tx data to rocksdb
 
 # blockchain 
 
