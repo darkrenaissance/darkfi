@@ -74,6 +74,10 @@ pub struct DarkfidConfig {
     pub subscriber_url: String,
 
     #[serde(default)]
+    #[serde(rename = "cashier_url")]
+    pub cashier_url: String,
+
+    #[serde(default)]
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
@@ -98,6 +102,7 @@ impl Default for DarkfidConfig {
     fn default() -> Self {
         let connect_url = String::from("127.0.0.1:3333");
         let subscriber_url = String::from("127.0.0.1:4444");
+        let cashier_url = String::from("127.0.0.1:7777");
         let rpc_url = String::from("127.0.0.1:8000");
 
         let database_path = String::from("database_client.db");
@@ -128,6 +133,7 @@ impl Default for DarkfidConfig {
         Self {
             connect_url,
             subscriber_url,
+            cashier_url,
             rpc_url,
             database_path,
             walletdb_path,

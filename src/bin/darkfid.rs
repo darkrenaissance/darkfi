@@ -146,6 +146,7 @@ impl State {
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
+    let cashier_addr: SocketAddr = config.cashier_url.parse()?;
     let database_path = config.database_path.clone();
     let walletdb_path = config.walletdb_path.clone();
 
@@ -201,7 +202,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
 
     // create gateway client
     debug!(target: "Cashier Client", "Creating cashier client");
-    let mut cashier_client = CashierClient::new("127.0.0.1:7777".parse()?)?;
+    let mut cashier_client = CashierClient::new(cashier_addr)?;
 
     debug!(target: "Gateway", "Start subscriber");
     // start subscribing
