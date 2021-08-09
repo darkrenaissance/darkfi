@@ -19,7 +19,7 @@ impl Drk {
         Self { url }
     }
 
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<()> {
+    async fn request(&self, method_name: &str, r: jsonrpc::JsonRequest) -> Result<()> {
         // TODO: Return actual JSON result
         let data = surf::Body::from_json(&r)?;
         info!("--> {:?}", r);
@@ -31,7 +31,8 @@ impl Drk {
         let v: JsonResult = serde_json::from_str(&json)?;
         match v {
             JsonResult::Resp(r) => {
-                info!("<-- {:?}", r.result);
+                info!("<-- {:?}", r);
+                println!("{}: {}", method_name, r.result);
                 return Ok(());
             }
 
@@ -44,52 +45,52 @@ impl Drk {
 
     pub async fn say_hello(&self) -> Result<()> {
         let r = jsonrpc::request(json!("say_hello"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Say Hello", r).await?)
     }
 
     pub async fn create_cashier_wallet(&self) -> Result<()> {
         let r = jsonrpc::request(json!("create_cashier_wallet"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Create Cashier Wallet", r).await?)
     }
 
     pub async fn create_wallet(&self) -> Result<()> {
         let r = jsonrpc::request(json!("create_wallet"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Create Wallet", r).await?)
     }
 
     pub async fn key_gen(&self) -> Result<()> {
         let r = jsonrpc::request(json!("key_gen"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Key Gen", r).await?)
     }
 
     pub async fn get_key(&self) -> Result<()> {
         let r = jsonrpc::request(json!("get_key"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Get Key", r).await?)
     }
 
     pub async fn get_info(&self) -> Result<()> {
         let r = jsonrpc::request(json!("get_info"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Get Info", r).await?)
     }
 
     pub async fn stop(&self) -> Result<()> {
         let r = jsonrpc::request(json!("stop"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Stop", r).await?)
     }
 
     pub async fn deposit(&self) -> Result<()> {
         let r = jsonrpc::request(json!("deposit"), json!([]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Deposit Address", r).await?)
     }
 
     pub async fn transfer(&self, address: String, amount: u64) -> Result<()> {
         let r = jsonrpc::request(json!("transfer"), json!([address, amount]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Transfer", r).await?)
     }
 
     pub async fn withdraw(&self, address: String, amount: u64) -> Result<()> {
         let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
-        Ok(self.request(r).await?)
+        Ok(self.request("Withdraw", r).await?)
     }
 }
 
