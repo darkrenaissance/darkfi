@@ -246,10 +246,16 @@ impl RpcInterface {
             }
         });
 
-        io.add_method("withdraw", |params: jsonrpc_core::Params| async move {
-            let parsed: WithdrawParams = params.parse().unwrap();
-            println!("test withdraw params:  {:?}", parsed);
-            Ok(jsonrpc_core::Value::String("withdraw BTC to... ".into()))
+        let self1 = self.clone();
+        io.add_method("withdraw", move |params: jsonrpc_core::Params| {
+            let self2 = self1.clone();
+            async move {
+                let parsed: WithdrawParams = params.parse().unwrap();
+                let amount = parsed.amount.clone();
+                let address = parsed.pub_key.clone();
+                self2.adapter.withdraw(parsed).await?;
+                Ok(jsonrpc_core::Value::String(format!("withdrawing {} BTC to {}...", amount, address)))
+            }
         });
 
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");

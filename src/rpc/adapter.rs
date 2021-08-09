@@ -1,4 +1,4 @@
-use crate::cli::TransferParams;
+use crate::cli::{TransferParams, WithdrawParams};
 use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
@@ -18,19 +18,22 @@ pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
     publish_tx_send: async_channel::Sender<TransferParams>,
     deposit_channel: DepositChannel, 
+    withdraw_channel: async_channel::Sender<WithdrawParams>,
 }
 
 impl RpcAdapter {
     pub fn new(
         wallet: Arc<WalletDb>,
         publish_tx_send: async_channel::Sender<TransferParams>,
-        deposit_channel: DepositChannel 
+        deposit_channel: DepositChannel,
+        withdraw_channel: async_channel::Sender<WithdrawParams>,
     ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         Ok(Self {
             wallet,
             publish_tx_send,
             deposit_channel,
+            withdraw_channel,
         })
     }
 
@@ -93,9 +96,10 @@ impl RpcAdapter {
         Ok(())
     }
 
-    //pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
-    //    Ok(())
-    //}
+    pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
+        self.withdraw_channel.send(withdraw_params).await?;
+        Ok(())
+    }
 
     pub fn get_info(&self) {}
 

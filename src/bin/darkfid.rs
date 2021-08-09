@@ -1,5 +1,5 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use drk::cli::TransferParams;
+use drk::cli::{TransferParams, WithdrawParams};
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
     load_params,
@@ -209,14 +209,17 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let gateway_slabs_sub: GatewaySlabsSubscriber =
         client.start_subscriber(sub_addr, executor.clone()).await?;
 
-    // Channels to handle transfer request from adapter
+    // channels to request transfer from adapter
     let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
 
-    // Channels to handle deposit request from adapter and send cashier public key
+    // channels to request deposit from adapter and send cashier public key
     let (deposit_send, deposit_recv) = async_channel::unbounded::<jubjub::SubgroupPoint>();
     let (cashier_deposit_addr_send, cashier_deposit_addr_recv) =
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
+    // channel to request withdraw from adapter
+    let (withdraw_send, withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
+    
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
@@ -290,6 +293,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         wallet.clone(),
         publish_tx_send,
         (deposit_send, cashier_deposit_addr_recv),
+        withdraw_send,
     )?;
 
     // start the rpc server
