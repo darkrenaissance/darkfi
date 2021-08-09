@@ -24,10 +24,16 @@ $ cargo run --bin gatewayd -- -v
 $ cargo run --bin darkfid -- -v
 ```
 
-5. Initialize the wallet:
+5. Run cashierd:
 
 ```console
-$ cargo run --bin drk -- --wallet
+$ cargo run --bin cashierd -- -v
+```
+
+6. Initialize the wallet & Generate key pair:
+
+```console
+$ cargo run --bin drk -- -wk 
 ```
 
 # Every time running the demo:
@@ -42,6 +48,12 @@ Run darkfid:
 
 ```console
 $ cargo run --bin darkfid -- -v
+```
+
+Run cashierd:
+
+```console
+$ cargo run --bin cashierd -- -v
 ```
 
 Show drk usage manual:
