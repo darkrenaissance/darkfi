@@ -13,12 +13,16 @@ pub type DepositChannel = (
     async_channel::Sender<jubjub::SubgroupPoint>,
     async_channel::Receiver<Option<bitcoin::util::address::Address>>,
 );
+pub type WithdrawChannel = (
+    async_channel::Sender<WithdrawParams>,
+    async_channel::Receiver<jubjub::SubgroupPoint>,
+);
 
 pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
     publish_tx_send: async_channel::Sender<TransferParams>,
-    deposit_channel: DepositChannel, 
-    withdraw_channel: async_channel::Sender<WithdrawParams>,
+    deposit_channel: DepositChannel,
+    withdraw_channel: WithdrawChannel,
 }
 
 impl RpcAdapter {
@@ -26,7 +30,7 @@ impl RpcAdapter {
         wallet: Arc<WalletDb>,
         publish_tx_send: async_channel::Sender<TransferParams>,
         deposit_channel: DepositChannel,
-        withdraw_channel: async_channel::Sender<WithdrawParams>,
+        withdraw_channel: WithdrawChannel,
     ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         Ok(Self {
@@ -97,7 +101,7 @@ impl RpcAdapter {
     }
 
     pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
-        self.withdraw_channel.send(withdraw_params).await?;
+        self.withdraw_channel.0.send(withdraw_params).await?;
         Ok(())
     }
 

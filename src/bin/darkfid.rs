@@ -1,6 +1,6 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use drk::cli::{TransferParams, WithdrawParams};
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
+use drk::cli::{TransferParams, WithdrawParams};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -212,14 +212,16 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     // channels to request transfer from adapter
     let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
 
-    // channels to request deposit from adapter and send cashier public key
+    // channels to request deposit from adapter and receive cashier public key
     let (deposit_send, deposit_recv) = async_channel::unbounded::<jubjub::SubgroupPoint>();
     let (cashier_deposit_addr_send, cashier_deposit_addr_recv) =
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
     // channel to request withdraw from adapter
     let (withdraw_send, withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
-    
+    let (cashier_withdraw_send, cashier_withdraw_recv) =
+        async_channel::unbounded::<jubjub::SubgroupPoint>();
+
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
@@ -240,6 +242,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                         let cashier_public =  cashier_client.get_address(deposit_addr.unwrap()).await.unwrap();
                         cashier_deposit_addr_send.send(cashier_public).await.unwrap();
                     }
+                    //TODO: implement withdraw_
                     transfer_params = publish_tx_recv.recv().fuse() => {
                         let transfer_params = transfer_params.unwrap();
 
@@ -293,7 +296,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         wallet.clone(),
         publish_tx_send,
         (deposit_send, cashier_deposit_addr_recv),
-        withdraw_send,
+        (withdraw_send, cashier_withdraw_recv),
     )?;
 
     // start the rpc server

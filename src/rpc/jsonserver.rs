@@ -185,7 +185,9 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 self2.adapter.init_db()?;
-                Ok(jsonrpc_core::Value::String("wallet creation successful".into()))
+                Ok(jsonrpc_core::Value::String(
+                    "wallet creation successful".into(),
+                ))
             }
         });
 
@@ -216,7 +218,9 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 self2.adapter.init_cashier_db()?;
-                Ok(jsonrpc_core::Value::String("cashier wallet creation successful".into()))
+                Ok(jsonrpc_core::Value::String(
+                    "cashier wallet creation successful".into(),
+                ))
             }
         });
 
@@ -225,10 +229,7 @@ impl RpcInterface {
             let self2 = self1.clone();
             async move {
                 let btckey = self2.adapter.deposit().await?;
-                Ok(jsonrpc_core::Value::String(format!(
-                    "{}",
-                    btckey
-                )))
+                Ok(jsonrpc_core::Value::String(format!("{}", btckey)))
             }
         });
 
@@ -241,7 +242,8 @@ impl RpcInterface {
                 let address = parsed.pub_key.clone();
                 self2.adapter.transfer(parsed).await?;
                 Ok(jsonrpc_core::Value::String(format!(
-                    "transfered {} DRK to {}", amount, address
+                    "transfered {} DRK to {}",
+                    amount, address
                 )))
             }
         });
@@ -254,7 +256,10 @@ impl RpcInterface {
                 let amount = parsed.amount.clone();
                 let address = parsed.pub_key.clone();
                 self2.adapter.withdraw(parsed).await?;
-                Ok(jsonrpc_core::Value::String(format!("withdrawing {} BTC to {}...", amount, address)))
+                Ok(jsonrpc_core::Value::String(format!(
+                    "withdrawing {} BTC to {}...",
+                    amount, address
+                )))
             }
         });
 
