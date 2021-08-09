@@ -1,39 +1,36 @@
 use crate::cli::TransferParams;
-use crate::cli::WithdrawParams;
 use crate::serial::serialize;
 use crate::service::btc::PubAddress;
-use crate::service::cashier::CashierClient;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
 
 use log::*;
 
 use async_std::sync::Arc;
-use std::net::SocketAddr;
 
 pub type AdapterPtr = Arc<RpcAdapter>;
+pub type DepositChannel = (
+    async_channel::Sender<jubjub::SubgroupPoint>,
+    async_channel::Receiver<Option<bitcoin::util::address::Address>>,
+);
 
 pub struct RpcAdapter {
     pub wallet: Arc<WalletDb>,
-    pub cashier_client: CashierClient,
-    pub connect_url: String,
     publish_tx_send: async_channel::Sender<TransferParams>,
+    deposit_channel: DepositChannel, 
 }
 
 impl RpcAdapter {
     pub fn new(
         wallet: Arc<WalletDb>,
-        connect_url: String,
         publish_tx_send: async_channel::Sender<TransferParams>,
+        deposit_channel: DepositChannel 
     ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
-        let connect_addr: SocketAddr = connect_url.parse()?;
-        let cashier_client = CashierClient::new(connect_addr)?;
         Ok(Self {
             wallet,
-            cashier_client,
-            connect_url,
             publish_tx_send,
+            deposit_channel,
         })
     }
 
@@ -90,7 +87,8 @@ impl RpcAdapter {
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
         let dkey = self.wallet.get_public()?;
-        match self.cashier_client.get_address(dkey).await? {
+        self.deposit_channel.0.send(dkey).await?;
+        match self.deposit_channel.1.recv().await? {
             Some(key) => Ok(key),
             None => Err(Error::CashierNoReply),
         }

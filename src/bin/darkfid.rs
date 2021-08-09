@@ -12,7 +12,7 @@ use drk::crypto::{
 use drk::rpc::adapter::RpcAdapter;
 use drk::rpc::jsonserver;
 use drk::serial::{deserialize, Decodable, Encodable};
-use drk::service::{GatewayClient, GatewaySlabsSubscriber};
+use drk::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util::join_config_path;
 use drk::wallet::{WalletDb, WalletPtr};
@@ -199,16 +199,27 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     debug!(target: "Client", "Creating client");
     let mut client = GatewayClient::new(connect_addr, slabstore)?;
 
+    // create gateway client
+    debug!(target: "Cashier Client", "Creating cashier client");
+    let mut cashier_client = CashierClient::new("127.0.0.1:7777".parse()?)?;
+
     debug!(target: "Gateway", "Start subscriber");
     // start subscribing
     let gateway_slabs_sub: GatewaySlabsSubscriber =
         client.start_subscriber(sub_addr, executor.clone()).await?;
 
+    // Channels to handle transfer request from adapter
     let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
+
+    // Channels to handle deposit request from adapter and send cashier public key
+    let (deposit_send, deposit_recv) = async_channel::unbounded::<jubjub::SubgroupPoint>();
+    let (cashier_deposit_addr_send, cashier_deposit_addr_recv) =
+        async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
     client.start().await?;
+    cashier_client.start().await?;
 
     executor
         .spawn(async move {
@@ -220,6 +231,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
                         let tx = tx::Transaction::decode(&slab.get_payload()[..]).unwrap();
                         let update = state_transition(&state, tx).unwrap();
                         state.apply(update).await.unwrap();
+                    }
+                    deposit_addr = deposit_recv.recv().fuse() => {
+                        let cashier_public =  cashier_client.get_address(deposit_addr.unwrap()).await.unwrap();
+                        cashier_deposit_addr_send.send(cashier_public).await.unwrap();
                     }
                     transfer_params = publish_tx_recv.recv().fuse() => {
                         let transfer_params = transfer_params.unwrap();
@@ -270,7 +285,11 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         })
         .detach();
 
-    let adapter = RpcAdapter::new(wallet.clone(), config.connect_url.clone(), publish_tx_send)?;
+    let adapter = RpcAdapter::new(
+        wallet.clone(),
+        publish_tx_send,
+        (deposit_send, cashier_deposit_addr_recv),
+    )?;
 
     // start the rpc server
     jsonserver::start(ex.clone(), config.clone(), adapter).await?;
