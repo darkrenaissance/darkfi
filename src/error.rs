@@ -50,6 +50,8 @@ pub enum Error {
     TomlDeserializeError(String),
     TomlSerializeError(String),
     CashierNoReply,
+    Base58EncodeError(String),
+    Base58DecodeError(String),
 }
 
 impl std::error::Error for Error {}
@@ -97,6 +99,8 @@ impl fmt::Display for Error {
             Error::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
+            Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
+            Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
             Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
         }
     }
@@ -214,5 +218,17 @@ impl From<toml::de::Error> for Error {
 impl From<toml::ser::Error> for Error {
     fn from(err: toml::ser::Error) -> Error {
         Error::TomlSerializeError(err.to_string())
+    }
+}
+
+impl From<bs58::encode::Error> for Error {
+    fn from(err: bs58::encode::Error) -> Error {
+        Error::Base58EncodeError(err.to_string())
+    }
+}
+
+impl From<bs58::decode::Error> for Error {
+    fn from(err: bs58::decode::Error) -> Error {
+        Error::Base58DecodeError(err.to_string())
     }
 }
