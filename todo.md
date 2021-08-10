@@ -47,7 +47,10 @@
 
 # halo2
 
-[ ]
+[] mint circuit
+[] burn circuit
+[] research port from jubjub to pasta
+[] research port from blake2b to sinsemilla and/or poseidon
 
 # org
 
