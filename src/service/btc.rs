@@ -9,12 +9,18 @@ use secp256k1::key::SecretKey;
 
 use bitcoin::network::constants::Network;
 
+use async_executor::Executor;
+use async_std::sync::Arc;
+
+use clokwerk::AsyncScheduler;
+
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
 pub type PubKey = PublicKey;
 pub type PrivKey = PrivateKey;
 
 pub struct BitcoinKeys {
+    scheduler: AsyncScheduler,
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
     pub bitcoin_public_key: PublicKey,
@@ -47,13 +53,28 @@ impl BitcoinKeys {
 
         let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Testnet);
 
+        // Create a scheduler for checking the address balance
+        let scheduler = AsyncScheduler::new();
+
         Ok(Self {
+            scheduler,
             secret_key,
             bitcoin_private_key,
             bitcoin_public_key,
             pub_address,
         })
     }
+    pub fn start_scheduler(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+        //&self.scheduler.every(10.minutes()).run();
+
+        Ok(())
+    }
+
+    async fn _watch_address(&self) -> Result<()> {
+
+        Ok(())
+    }
+
     // This should do a db lookup to return the same obj
     pub fn address_from_slice(key: &[u8]) -> Result<Address> {
         let pub_key = PublicKey::from_slice(key).unwrap();

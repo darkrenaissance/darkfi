@@ -2,11 +2,11 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
 use super::btc::{BitcoinKeys, PubAddress};
 
-use crate::crypto::load_params;
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::tx;
-use crate::wallet::CashierDbPtr;
 use crate::{Error, Result};
+use crate::serial::{Decodable, Encodable, deserialize, serialize};
+use crate::wallet::CashierDbPtr;
+use crate::tx;
+use crate::crypto::load_params;
 
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -70,6 +70,7 @@ impl CashierService {
     }
 
     fn mint_dbtc(&self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<Vec<u8>> {
+        // Change to adapter
         let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
         let builder = tx::TransactionBuilder {
@@ -93,6 +94,10 @@ impl CashierService {
             // Now serialize it
             tx.encode(&mut tx_data).expect("encode tx");
         }
+        //Add to blockchain
+        // let slab = Slab::new(tx_data);
+
+        // client.put_slab(slab).await.expect("put slab");
 
         Ok(tx_data)
     }
@@ -112,6 +117,7 @@ impl CashierService {
                             msg,
                             cashier_wallet,
                             send_queue.clone(),
+                            executor.clone()
                         ))
                         .detach();
                 }
@@ -126,6 +132,7 @@ impl CashierService {
         msg: (PeerId, Request),
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;
@@ -153,10 +160,12 @@ impl CashierService {
 
                 // send reply
                 send_queue.send((peer, reply)).await?;
-
-                // add to watchlist
-
                 info!("Received dkey->btc msg");
+
+                // start scheduler for checking balance
+                let _result = btc_keys.start_scheduler(executor.clone());
+                info!("Waiting for address balance");
+
             }
             1 => {
                 // Withdraw
@@ -203,8 +212,6 @@ impl CashierClient {
             .await?;
 
         if let Some(key) = rep {
-            //let pubkey = BitcoinPubKey::from_slice(&key).unwrap();
-            //let address: Address = Address::p2pkh(&pubkey, Network::Testnet);
             let address = BitcoinKeys::address_from_slice(&key).unwrap();
             return Ok(Some(address));
         }
