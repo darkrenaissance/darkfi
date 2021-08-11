@@ -2,8 +2,11 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
 use super::btc::{BitcoinKeys, PubAddress};
 
+use super::GatewayClient;
+use crate::blockchain::{ Slab };
+
 use crate::{Error, Result};
-use crate::serial::{Decodable, Encodable, deserialize, serialize};
+use crate::serial::{Encodable, serialize};
 use crate::wallet::CashierDbPtr;
 use crate::tx;
 use crate::crypto::load_params;
@@ -31,6 +34,7 @@ enum CashierCommand {
 pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
+    gateway: GatewayClient,
     mint_params: groth16::Parameters<Bls12>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_params: groth16::Parameters<Bls12>,
@@ -38,7 +42,12 @@ pub struct CashierService {
 }
 
 impl CashierService {
-    pub fn new(addr: SocketAddr, wallet: CashierDbPtr) -> Result<Arc<CashierService>> {
+    pub fn new(
+        addr: SocketAddr,
+        wallet: CashierDbPtr,
+        gateway: GatewayClient,
+    ) -> Result<Arc<CashierService>> {
+
         // Load trusted setup parameters
         let (mint_params, mint_pvk) = load_params("mint.params")?;
         let (spend_params, spend_pvk) = load_params("spend.params")?;
@@ -46,6 +55,7 @@ impl CashierService {
         Ok(Arc::new(CashierService {
             addr,
             wallet,
+            gateway,
             mint_params,
             mint_pvk,
             spend_params,
@@ -66,10 +76,11 @@ impl CashierService {
         protocol.run(executor.clone()).await?;
 
         let _ = handle_request_task.cancel().await;
+
         Ok(())
     }
 
-    fn mint_dbtc(&self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<Vec<u8>> {
+    async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
         // Change to adapter
         let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
@@ -94,12 +105,13 @@ impl CashierService {
             // Now serialize it
             tx.encode(&mut tx_data).expect("encode tx");
         }
+
         //Add to blockchain
-        // let slab = Slab::new(tx_data);
+        let slab = Slab::new(tx_data);
+        //let mut gateway = self.gateway.lock().await;
+        self.gateway.put_slab(slab).await.expect("put slab");
 
-        // client.put_slab(slab).await.expect("put slab");
-
-        Ok(tx_data)
+        Ok(())
     }
 
     async fn handle_request_loop(

@@ -193,6 +193,10 @@ pub struct CashierdConfig {
     pub database_path: String,
 
     #[serde(default)]
+    #[serde(rename = "connect_url")]
+    pub gateway_url: String,
+
+    #[serde(default)]
     #[serde(rename = "log_path")]
     pub log_path: String,
 
@@ -204,6 +208,7 @@ pub struct CashierdConfig {
 impl Default for CashierdConfig {
     fn default() -> Self {
         let accept_url = String::from("127.0.0.1:7777");
+        let gateway_url = String::from("127.0.0.1:3333");
         let database_path = String::from("cashierd.db");
 
         let mut lp = PathBuf::new();
@@ -215,6 +220,7 @@ impl Default for CashierdConfig {
         Self {
             accept_url,
             database_path,
+            gateway_url,
             log_path,
             password,
         }

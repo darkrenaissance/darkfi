@@ -1,15 +1,17 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use async_std::sync::Mutex;
 
 use std::{path::Path, path::PathBuf};
 //use toml;
 
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
+use drk::service::GatewayClient;
 use drk::wallet::CashierDb;
-
+use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::util::join_config_path;
-use drk::Result;
+use drk::{Error, Result};
+use log::*;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
@@ -17,9 +19,23 @@ use easy_parallel::Parallel;
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Result<()> {
     let accept_addr: SocketAddr = config.accept_url.parse()?;
 
+    let gateway_addr: SocketAddr = config.gateway_url.parse()?;
+
+    let database_path = config.database_path.clone();
+    let database_path = join_config_path(&PathBuf::from(database_path))?;
+    let rocks = Rocks::new(&database_path)?;
+    let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+
     let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
-    let cashier = CashierService::new(accept_addr, wallet)?;
+    debug!(target: "Client", "Creating gateway client");
+    let mut gateway = GatewayClient::new(gateway_addr, slabstore)?;
+
+    debug!(target: "fn::start gateway client", "start() Gateway Client started");
+    gateway.start().await?;
+
+    // Probably not ideal to create an Arc here
+    let cashier = CashierService::new(accept_addr, wallet, gateway)?;
 
     cashier.start(executor.clone()).await?;
     Ok(())
@@ -73,7 +89,7 @@ fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2, config_ptr).await?;
                 drop(signal);
-                Ok::<(), drk::Error>(())
+                Ok::<(), Error>(())
             })
         });
 

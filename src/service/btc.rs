@@ -64,7 +64,7 @@ impl BitcoinKeys {
             pub_address,
         })
     }
-    pub fn start_scheduler(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub fn start_scheduler(&self, _executor: Arc<Executor<'_>>) -> Result<()> {
         //&self.scheduler.every(10.minutes()).run();
 
         Ok(())

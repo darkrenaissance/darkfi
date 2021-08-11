@@ -273,7 +273,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     debug!(target: "Client", "Creating client");
     let mut client = GatewayClient::new(connect_addr, slabstore)?;
 
-    // create gateway client
+    // create cashier client
     debug!(target: "Cashier Client", "Creating cashier client");
     let mut cashier_client = CashierClient::new(cashier_addr)?;
 
