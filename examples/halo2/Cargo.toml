@@ -1,5 +1,5 @@
 [package]
-name = "halo2-examples"
+name = "halo2_examples"
 version = "0.1.0"
 authors = ["narodnik <x@x.org>"]
 edition = "2018"
@@ -7,16 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ff = "0.10"
 group = "0.10"
+pasta_curves = "0.1.2"
+bitvec = "0.22"
 
 [dependencies.halo2]
 git = "https://github.com/zcash/halo2.git"
-rev = "93aabf26c67fcc7a1d5439c350afcf00f1399aa5"
-
-[[bin]]
-name = "simple3"
-path = "simple3.rs"
-
-[[bin]]
-name = "simple4"
-path = "simple4.rs"
+rev = "27c4187673a9c6ade13fbdbd4f20955530c22d7f"
