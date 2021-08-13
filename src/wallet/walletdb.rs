@@ -1,7 +1,6 @@
 use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::util::join_config_path;
 use crate::{Error, Result};
 
 use async_std::sync::{Arc, Mutex};
@@ -325,6 +324,7 @@ impl WalletDb {
 mod tests {
 
     use super::*;
+    use crate::util::join_config_path;
     use ff::PrimeField;
 
     #[test]

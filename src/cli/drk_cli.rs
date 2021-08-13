@@ -213,7 +213,6 @@ impl DrkCli {
                 }
                 if let Some(amount) = transfer_sub.value_of("amount") {
                     trn.amount = amount.parse().expect("couldn't convert the amount to f64");
-;
                 }
                 transfer = Some(trn);
             }

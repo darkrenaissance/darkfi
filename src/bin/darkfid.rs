@@ -155,7 +155,7 @@ pub async fn futures_broker(
     deposit_recv: async_channel::Receiver<jubjub::SubgroupPoint>,
     cashier_deposit_addr_send: async_channel::Sender<Option<bitcoin::util::address::Address>>,
     withdraw_recv: async_channel::Receiver<WithdrawParams>,
-    cashier_withdraw_send: async_channel::Sender<jubjub::SubgroupPoint>,
+    _cashier_withdraw_send: async_channel::Sender<jubjub::SubgroupPoint>,
     publish_tx_recv: async_channel::Receiver<TransferParams>,
 ) -> Result<()> {
     loop {
@@ -173,8 +173,8 @@ pub async fn futures_broker(
             withdraw_params = withdraw_recv.recv().fuse() => {
                 let withdraw_params = withdraw_params?;
 
-                let btc_address = bitcoin::util::address::Address::from_str(&withdraw_params.pub_key);
-                let amount = withdraw_params.amount;
+                let _btc_address = bitcoin::util::address::Address::from_str(&withdraw_params.pub_key);
+                let _amount = withdraw_params.amount;
 
                 // cashier_withdraw_send.send(address).await?;
 

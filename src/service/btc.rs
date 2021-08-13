@@ -1,4 +1,4 @@
-use crate::{serial::deserialize, serial::serialize, Error, Result};
+use crate::Result;
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -19,6 +19,7 @@ pub type PubAddress = Address;
 pub type PubKey = PublicKey;
 pub type PrivKey = PrivateKey;
 
+#[allow(dead_code)]
 pub struct BitcoinKeys {
     scheduler: AsyncScheduler,
     secret_key: SecretKey,

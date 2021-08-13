@@ -5,8 +5,7 @@ use lazy_static::lazy_static;
 use std::io;
 
 use super::{coin::Coin, merkle::Hashable};
-use crate::impl_vec;
-use crate::serial::{Decodable, Encodable, VarInt};
+use crate::serial::{Decodable, Encodable};
 use crate::{Error, Result};
 
 pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 32;

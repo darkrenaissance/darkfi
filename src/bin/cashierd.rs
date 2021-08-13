@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 
 use std::{path::Path, path::PathBuf};
 //use toml;
