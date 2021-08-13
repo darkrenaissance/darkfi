@@ -6,7 +6,7 @@ use super::GatewayClient;
 use crate::blockchain::{ Slab };
 
 use crate::{Error, Result};
-use crate::serial::{Encodable, serialize};
+use crate::serial::{Encodable, serialize, deserialize};
 use crate::wallet::CashierDbPtr;
 use crate::tx;
 use crate::crypto::load_params;
@@ -27,8 +27,8 @@ enum CashierError {
 
 #[repr(u8)]
 enum CashierCommand {
-    GetDBTC,
-    GetBTC,
+    GetAddress,
+    Withdraw,
 }
 
 pub struct CashierService {
@@ -180,7 +180,17 @@ impl CashierService {
 
             }
             1 => {
-                // Withdraw
+
+                let _btc_address = request.get_payload();
+
+                let address = cashier_wallet.get_cashier_public()?;
+
+                let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
+
+                reply.set_payload(serialize(&address));
+                
+                send_queue.send((peer, reply)).await?;
+
                 info!("Received withdraw request");
             }
             _ => {
@@ -209,6 +219,27 @@ impl CashierClient {
         Ok(())
     }
 
+    pub async fn withdraw(
+        &mut self,
+        _btc_address: bitcoin::Address,
+    ) -> Result<Option<jubjub::SubgroupPoint>> {
+        let handle_error = Arc::new(handle_error);
+        let rep = self
+            .protocol
+            .request(
+                CashierCommand::Withdraw as u8,
+                vec![],  //TODO convert btc_address to bytes,
+                handle_error,
+            )
+            .await?;
+
+        if let Some(key) = rep {
+            let address = deserialize(&key)?;
+            return Ok(Some(address));
+        }
+        Ok(None)
+    }
+
     pub async fn get_address(
         &mut self,
         index: jubjub::SubgroupPoint,
@@ -217,7 +248,7 @@ impl CashierClient {
         let rep = self
             .protocol
             .request(
-                CashierCommand::GetDBTC as u8,
+                CashierCommand::GetAddress as u8,
                 serialize(&index),
                 handle_error,
             )
