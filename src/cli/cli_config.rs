@@ -3,7 +3,6 @@ use crate::Result;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-
 use std::marker::PhantomData;
 use std::{
     env, fs,
@@ -185,7 +184,7 @@ impl Default for GatewaydConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
     #[serde(default)]
-    #[serde(rename = "connect_url")]
+    #[serde(rename = "accept_url")]
     pub accept_url: String,
 
     #[serde(default)]
@@ -193,7 +192,7 @@ pub struct CashierdConfig {
     pub database_path: String,
 
     #[serde(default)]
-    #[serde(rename = "connect_url")]
+    #[serde(rename = "gateway_url")]
     pub gateway_url: String,
 
     #[serde(default)]
