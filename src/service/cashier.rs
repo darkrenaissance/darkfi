@@ -3,7 +3,7 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use super::btc::{BitcoinKeys, PubAddress};
 
 use super::GatewayClient;
-use crate::blockchain::{ Slab };
+use crate::blockchain::Slab;
 
 use crate::{Error, Result};
 use crate::serial::{Encodable, serialize, deserialize};
@@ -22,7 +22,6 @@ use std::net::SocketAddr;
 #[repr(u8)]
 enum CashierError {
     NoError,
-    UpdateIndex,
 }
 
 #[repr(u8)]
@@ -264,12 +263,6 @@ impl CashierClient {
 
 fn handle_error(status_code: u32) {
     match status_code {
-        1 => {
-            warn!("Reply has an Error: Index is not updated");
-        }
-        2 => {
-            warn!("Reply has an Error: Index Not Exist");
-        }
         _ => {}
     }
 }
