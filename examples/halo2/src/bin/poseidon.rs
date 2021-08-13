@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::time::Instant;
 
 use halo2::{
     circuit::{floor_planner, Layouter},
@@ -281,12 +282,20 @@ fn main() {
     let sum = output + c;
 
     // Correct:
-    let public_inputs = vec![sum + Fp::one()];
+    let public_inputs = vec![sum];
     // Incorrect:
     // let public_inputs = vec![sum + Fp::one()];
 
+    let start = Instant::now();
     let vk = VerifyingKey::build();
     let pk = ProvingKey::build();
+    println!("Setup: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
     let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
+    println!("Prove: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
     assert!(proof.verify(&vk, &public_inputs).is_ok());
+    println!("Verify: [{:?}]", start.elapsed());
 }
