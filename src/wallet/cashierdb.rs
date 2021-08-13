@@ -139,13 +139,15 @@ impl CashierDb {
         debug!(target: "get_cashier_public", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
-        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
+        let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
+        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
         for key in key_iter {
             pub_keys.push(key?);
         }
-        let public: jubjub::SubgroupPoint = self.get_value_deserialized(pub_keys)?;
+        let public: jubjub::SubgroupPoint = self.get_value_deserialized(
+            pub_keys.pop().expect("unable to load public_key from cashierdb"),
+            )?;
         Ok(public)
     }
     pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
@@ -153,12 +155,14 @@ impl CashierDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
-        let key_iter = stmt.query_map::<u8, _, _>([], |row| row.get(0))?;
+        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
         let mut keys = Vec::new();
         for key in key_iter {
             keys.push(key?);
         }
-        let private: jubjub::Fr = self.get_value_deserialized(keys)?;
+        let private: jubjub::Fr = self.get_value_deserialized(
+            keys.pop().expect("unable to load private_key from cashierdb"),
+            )?;
         Ok(private)
     }
 
