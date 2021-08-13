@@ -6,8 +6,8 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-fn is_u64<'a>(v: &'a str) -> std::result::Result<(), String> {
-    if v.parse::<u64>().is_ok() {
+fn amount_f64<'a>(v: &'a str) -> std::result::Result<(), String> {
+    if v.parse::<f64>().is_ok() {
         Ok(())
     } else {
         Err(String::from("The value is not an integer of type u64"))
@@ -17,14 +17,14 @@ fn is_u64<'a>(v: &'a str) -> std::result::Result<(), String> {
 #[derive(Deserialize, Debug)]
 pub struct TransferParams {
     pub pub_key: String,
-    pub amount: u64,
+    pub amount: f64,
 }
 
 impl TransferParams {
     pub fn new() -> Self {
         Self {
             pub_key: String::new(),
-            amount: 0,
+            amount: 0.0,
         }
     }
 }
@@ -44,14 +44,14 @@ impl Deposit {
 #[derive(Deserialize, Debug)]
 pub struct WithdrawParams {
     pub pub_key: String,
-    pub amount: u64,
+    pub amount: f64,
 }
 
 impl WithdrawParams {
     pub fn new() -> Self {
         Self {
             pub_key: String::new(),
-            amount: 0,
+            amount: 0.0,
         }
     }
 }
@@ -153,7 +153,7 @@ impl DrkCli {
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
-                            .validator(is_u64)
+                            .validator(amount_f64)
                             .help_heading(Some("Amount to send, in DBTC"))
                             .required(true),
                     ),
@@ -175,7 +175,7 @@ impl DrkCli {
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
-                            .validator(is_u64)
+                            .validator(amount_f64)
                             .help_heading(Some("Amount to send, in BTC"))
                             .required(true),
                     ),
@@ -212,7 +212,8 @@ impl DrkCli {
                     trn.pub_key = address.to_string();
                 }
                 if let Some(amount) = transfer_sub.value_of("amount") {
-                    trn.amount = amount.parse()?;
+                    trn.amount = amount.parse().expect("couldn't convert the amount to f64");
+;
                 }
                 transfer = Some(trn);
             }
@@ -227,7 +228,7 @@ impl DrkCli {
                     wdraw.pub_key = address.to_string();
                 }
                 if let Some(amount) = withdraw_sub.value_of("amount") {
-                    wdraw.amount = amount.parse()?;
+                    wdraw.amount = amount.parse().expect("couldn't convert the amount to f64");
                 }
                 withdraw = Some(wdraw);
             }

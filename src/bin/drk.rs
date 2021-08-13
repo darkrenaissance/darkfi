@@ -83,12 +83,12 @@ impl Drk {
         Ok(self.request("deposit BTC to this address:", r).await?)
     }
 
-    pub async fn transfer(&self, address: String, amount: u64) -> Result<()> {
+    pub async fn transfer(&self, address: String, amount: f64) -> Result<()> {
         let r = jsonrpc::request(json!("transfer"), json!([address, amount]));
         Ok(self.request("transfer", r).await?)
     }
 
-    pub async fn withdraw(&self, address: String, amount: u64) -> Result<()> {
+    pub async fn withdraw(&self, address: String, amount: f64) -> Result<()> {
         let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
         Ok(self.request("withdraw", r).await?)
     }
