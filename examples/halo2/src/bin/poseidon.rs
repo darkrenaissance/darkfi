@@ -3,14 +3,15 @@ use std::convert::TryInto;
 use halo2::{
     circuit::{floor_planner, Layouter},
     dev::MockProver,
-    pasta::Fp,
+    pasta::{vesta, Fp},
+    plonk,
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
     },
-    poly::Rotation,
+    poly::{commitment, Rotation},
+    transcript::{Blake2bRead, Blake2bWrite},
 };
 
-//use crate::poseidon::{ConstantLength, OrchardNullifier};
 use halo2_examples::circuit::gadget::{
     poseidon::{
         Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
@@ -19,6 +20,8 @@ use halo2_examples::circuit::gadget::{
     utilities::{copy, CellValue, UtilitiesInstructions, Var},
 };
 use halo2_examples::primitives::poseidon::{ConstantLength, Hash, OrchardNullifier};
+
+const K: u32 = 6;
 
 #[derive(Clone, Debug)]
 struct Config {
@@ -187,6 +190,80 @@ impl Circuit<Fp> for HashCircuit {
     }
 }
 
+#[derive(Debug)]
+struct VerifyingKey {
+    params: commitment::Params<vesta::Affine>,
+    vk: plonk::VerifyingKey<vesta::Affine>,
+}
+
+impl VerifyingKey {
+    fn build() -> Self {
+        let params = commitment::Params::new(K);
+        let circuit: HashCircuit = Default::default();
+
+        let vk = plonk::keygen_vk(&params, &circuit).unwrap();
+
+        VerifyingKey { params, vk }
+    }
+}
+
+#[derive(Debug)]
+struct ProvingKey {
+    params: commitment::Params<vesta::Affine>,
+    pk: plonk::ProvingKey<vesta::Affine>,
+}
+
+impl ProvingKey {
+    fn build() -> Self {
+        let params = commitment::Params::new(K);
+        let circuit: HashCircuit = Default::default();
+
+        let vk = plonk::keygen_vk(&params, &circuit).unwrap();
+        let pk = plonk::keygen_pk(&params, vk, &circuit).unwrap();
+
+        ProvingKey { params, pk }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Proof(Vec<u8>);
+
+impl AsRef<[u8]> for Proof {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Proof {
+    fn create(pk: &ProvingKey, circuits: &[HashCircuit], pubinputs: &[Fp]) -> Result<Self, Error> {
+        let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
+        plonk::create_proof(
+            &pk.params,
+            &pk.pk,
+            circuits,
+            &[&[pubinputs]],
+            &mut transcript,
+        )?;
+        Ok(Proof(transcript.finalize()))
+    }
+
+    fn verify(&self, vk: &VerifyingKey, pubinputs: &[Fp]) -> Result<(), plonk::Error> {
+        let msm = vk.params.empty_msm();
+        let mut transcript = Blake2bRead::init(&self.0[..]);
+        let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;
+        let msm = guard.clone().use_challenges();
+        if msm.eval() {
+            Ok(())
+        } else {
+            Err(Error::ConstraintSystemFailure)
+        }
+    }
+
+    fn new(bytes: Vec<u8>) -> Self {
+        Proof(bytes)
+    }
+}
+
 fn main() {
     let a = Fp::from(13);
     let b = Fp::from(69);
@@ -194,8 +271,6 @@ fn main() {
 
     let message = [a, b];
     let output = Hash::init(OrchardNullifier, ConstantLength::<2>).hash(message);
-
-    let k = 6;
 
     let circuit = HashCircuit {
         a: Some(a),
@@ -205,10 +280,13 @@ fn main() {
 
     let sum = output + c;
 
-    let prover = MockProver::run(k, &circuit, vec![vec![sum]]).unwrap();
-    assert_eq!(prover.verify(), Ok(()));
+    // Correct:
+    let public_inputs = vec![sum + Fp::one()];
+    // Incorrect:
+    // let public_inputs = vec![sum + Fp::one()];
 
-    let sum = output + Fp::one();
-    let prover = MockProver::run(k, &circuit, vec![vec![sum]]).unwrap();
-    assert!(prover.verify().is_err());
+    let vk = VerifyingKey::build();
+    let pk = ProvingKey::build();
+    let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
+    assert!(proof.verify(&vk, &public_inputs).is_ok());
 }
