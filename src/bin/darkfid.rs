@@ -32,6 +32,7 @@ use futures::FutureExt;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 pub struct State {
     // The entire merkle tree state
@@ -153,6 +154,8 @@ pub async fn futures_broker(
     gateway_slabs_sub: async_channel::Receiver<Slab>,
     deposit_recv: async_channel::Receiver<jubjub::SubgroupPoint>,
     cashier_deposit_addr_send: async_channel::Sender<Option<bitcoin::util::address::Address>>,
+    withdraw_recv: async_channel::Receiver<WithdrawParams>,
+    cashier_withdraw_send: async_channel::Sender<jubjub::SubgroupPoint>,
     publish_tx_recv: async_channel::Receiver<TransferParams>,
 ) -> Result<()> {
     loop {
@@ -167,7 +170,15 @@ pub async fn futures_broker(
                 let cashier_public =  cashier_client.get_address(deposit_addr?).await?;
                 cashier_deposit_addr_send.send(cashier_public).await?;
             }
-            //TODO: implement withdraw_
+            withdraw_params = withdraw_recv.recv().fuse() => {
+                let withdraw_params = withdraw_params?;
+
+                let btc_address = bitcoin::util::address::Address::from_str(&withdraw_params.pub_key);
+                let amount = withdraw_params.amount;
+
+                // cashier_withdraw_send.send(address).await?;
+
+            }
             transfer_params = publish_tx_recv.recv().fuse() => {
                 let transfer_params = transfer_params?;
 
@@ -195,7 +206,7 @@ pub async fn futures_broker(
                     // We can add more outputs to this list.
                     // The only constraint is that sum(value in) == sum(value out)
                     outputs: vec![tx::TransactionBuilderOutputInfo {
-                        value: transfer_params.amount,
+                        value: transfer_params.amount as u64,
                         asset_id: 1,
                         public: address,
                     }],
@@ -291,8 +302,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
     // channel to request withdraw from adapter
-    let (withdraw_send, _withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
-    let (_cashier_withdraw_send, cashier_withdraw_recv) =
+    let (withdraw_send, withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
+    let (cashier_withdraw_send, cashier_withdraw_recv) =
         async_channel::unbounded::<jubjub::SubgroupPoint>();
 
     // start gateway client
@@ -311,6 +322,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
             gateway_slabs_sub.clone(),
             deposit_recv.clone(),
             cashier_deposit_addr_send.clone(),
+            withdraw_recv.clone(),
+            cashier_withdraw_send.clone(),
             publish_tx_recv.clone(),
         )
         .await?;
