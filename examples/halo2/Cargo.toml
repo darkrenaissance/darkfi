@@ -11,6 +11,7 @@ ff = "0.10"
 group = "0.10"
 pasta_curves = "0.1.2"
 bitvec = "0.22"
+rand = "0.8.4"
 
 [dependencies.halo2]
 git = "https://github.com/zcash/halo2.git"

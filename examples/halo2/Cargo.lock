@@ -171,6 +171,7 @@ dependencies = [
  "group",
  "halo2",
  "pasta_curves",
+ "rand",
 ]
 
 [[package]]
