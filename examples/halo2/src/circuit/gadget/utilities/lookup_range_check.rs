@@ -1,7 +1,6 @@
 //! Make use of a K-bit lookup table to decompose a field element into K-bit
 //! words.
 
-use crate::spec::lebs2ip;
 use halo2::{
     circuit::{Layouter, Region},
     plonk::{Advice, Column, ConstraintSystem, Error, Selector, TableColumn},
@@ -10,6 +9,8 @@ use halo2::{
 use std::{convert::TryInto, marker::PhantomData};
 
 use ff::PrimeFieldBits;
+
+use crate::spec::lebs2ip;
 
 use super::*;
 

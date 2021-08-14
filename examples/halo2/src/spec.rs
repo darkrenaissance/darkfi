@@ -5,7 +5,6 @@ use halo2::{
 };
 use subtle::CtOption;
 
-use crate::circuit::gadget::utilities::lookup_range_check::lebs2ip;
 use crate::constants::util::gen_const_array;
 
 /// Coordinate extractor for Pallas.
@@ -34,6 +33,18 @@ pub(crate) fn extract_p_bottom(point: CtOption<pallas::Point>) -> CtOption<palla
 /// an L-bit little-endian bitstring.
 pub fn lebs2ip_field<F: FieldExt, const L: usize>(bits: &[bool; L]) -> F {
     F::from_u64(lebs2ip::<L>(bits))
+}
+
+/// The u64 integer represented by an L-bit little-endian bitstring.
+///
+/// # Panics
+///
+/// Panics if the bitstring is longer than 64 bits.
+pub fn lebs2ip<const L: usize>(bits: &[bool; L]) -> u64 {
+    assert!(L <= 64);
+    bits.iter()
+        .enumerate()
+        .fold(0u64, |acc, (i, b)| acc + if *b { 1 << i } else { 0 })
 }
 
 /// The sequence of bits representing a u64 in little-endian order.
