@@ -12,6 +12,10 @@ group = "0.10"
 pasta_curves = "0.1.2"
 bitvec = "0.22"
 rand = "0.8.4"
+arrayvec = "0.7.0"
+lazy_static = "1"
+bigint = "4"
+subtle = "2.3"
 
 [dependencies.halo2]
 git = "https://github.com/zcash/halo2.git"
