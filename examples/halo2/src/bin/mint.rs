@@ -1,43 +1,35 @@
 use std::{convert::TryInto, time::Instant};
 
-use group::{ff::Field, Curve, Group, GroupEncoding};
-use rand::rngs::OsRng;
-
+use group::{ff::Field, Curve, Group};
 use halo2::{
     arithmetic::{CurveAffine, CurveExt, FieldExt},
-    circuit::{floor_planner, Layouter, SimpleFloorPlanner},
+    circuit::{floor_planner, Layouter},
     dev::MockProver,
-    pasta::{pallas, vesta, Ep, Eq, Fp, Fq},
+    pasta::{vesta, Ep, Fp, Fq},
     plonk,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
-    },
-    poly::{commitment, Rotation},
+    plonk::{Circuit, ConstraintSystem, Error},
+    poly::commitment,
     transcript::{Blake2bRead, Blake2bWrite},
 };
+use rand::rngs::OsRng;
 
-use halo2_examples::circuit::gadget::{
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
+use halo2_examples::circuit::{
+    gadget::{
+        ecc::{chip::EccChip, FixedPoint, FixedPointShort},
+        poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, StateWord, Word},
+        utilities::{
+            lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        },
     },
-    utilities::{copy, CellValue, UtilitiesInstructions, Var},
+    Config,
+};
+use halo2_examples::constants::{
+    load::OrchardFixedBasesFull, ValueCommitV, VALUE_COMMITMENT_PERSONALIZATION,
+    VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
 };
 use halo2_examples::primitives::poseidon::{ConstantLength, Hash, OrchardNullifier};
 
-const K: u32 = 12;
-const VALUE_COMMITMENT_PERSONALIZATION: &str = "darkfi:Orchard-cv";
-const VALUE_COMMITMENT_V_BYTES: [u8; 1] = *b"v";
-const VALUE_COMMITMENT_R_BYTES: [u8; 1] = *b"r";
-
-#[derive(Clone, Debug)]
-struct Config {
-    primary: Column<InstanceColumn>,
-    q_add: Selector,
-    q_mul: Selector,
-    advices: [Column<Advice>; 10],
-    poseidon_config: PoseidonConfig<Fp>,
-}
+const K: u32 = 9;
 
 #[derive(Default, Debug)]
 struct MintCircuit {
@@ -79,7 +71,14 @@ impl Circuit<Fp> for MintCircuit {
         ];
 
         let q_add = meta.selector();
-        let q_mul = meta.selector();
+
+        let table_idx = meta.lookup_table_column();
+
+        // let lookup = (
+        // table_idx,
+        // meta.lookup_table_column(),
+        // meta.lookup_table_column(),
+        // );
 
         let primary = meta.instance_column();
 
@@ -98,15 +97,16 @@ impl Circuit<Fp> for MintCircuit {
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
         ];
 
         let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
         let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
 
         meta.enable_constant(lagrange_coeffs[0]);
+
+        let range_check = LookupRangeCheckConfig::configure(meta, advices[9], table_idx);
+
+        let ecc_config = EccChip::configure(meta, advices, lagrange_coeffs, range_check.clone());
 
         let poseidon_config = PoseidonChip::configure(
             meta,
@@ -120,8 +120,8 @@ impl Circuit<Fp> for MintCircuit {
         Config {
             primary,
             q_add,
-            q_mul,
             advices,
+            ecc_config,
             poseidon_config,
         }
     }
@@ -131,6 +131,9 @@ impl Circuit<Fp> for MintCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), Error> {
+        // Construct the ECC chip.
+        let ecc_chip = EccChip::construct(config.ecc_config.clone());
+
         let pub_x = self.load_private(
             layouter.namespace(|| "load pubkey x"),
             config.advices[0],
@@ -162,26 +165,15 @@ impl Circuit<Fp> for MintCircuit {
             self.coin_blind,
         )?;
 
-        /*
-        let value_blind = self.load_private(
-            layouter.namespace(|| "load value_blind"),
-            config.advices[0],
-            self.value_blind,
-        )?;
-        let asset_blind = self.load_private(
-            layouter.namespace(|| "load asset_blind"),
-            config.advices[0],
-            self.asset_blind,
-        )?;
-        */
+        // =============
+        // = Coin hash =
+        // =============
 
+        // TODO: This is a hack until issue is resolved in poseidon gadget
         let mut coin = Fp::zero();
-
-        // TODO: See if the Poseidon gadget can somehow hash more than H(a,b)
         let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
         //let messages = [[pub_x, pub_y], [value, asset]];
         //let messages = [[pub_x, pub_y]];
-
         for msg in messages.iter() {
             let poseidon_message = layouter.assign_region(
                 || "load message",
@@ -223,13 +215,79 @@ impl Circuit<Fp> for MintCircuit {
             println!("circuit hash: {:?}", coin);
         }
 
-        // Constrain the coin C
         let hash = self.load_private(
             layouter.namespace(|| "load hash"),
             config.advices[0],
             Some(coin),
         )?;
+
+        // Constrain the coin C; index in public values is 0
         layouter.constrain_instance(hash.cell(), config.primary, 0)?;
+
+        // ====================
+        // = Value commitment =
+        // ====================
+
+        // This constant one is used for multiplication
+        let one = self.load_constant(
+            layouter.namespace(|| "constant one"),
+            config.advices[0],
+            Fp::one(),
+        )?;
+
+        // v*G_1
+        let (commitment, _) = {
+            let value_commit_v = ValueCommitV::get();
+            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
+            // TODO: Should we be multiplying here with one so mitigate the
+            // API or is something wrong? Same goes for asset commit below.
+            value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+        };
+
+        // r_V*G_2
+        let (blind, _rcv) = {
+            let rcv = self.value_blind;
+            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
+            let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
+            value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
+        };
+
+        // Constrain the x and y; indexes in public values are 1 and 2
+        let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
+        if !value_commit.inner().x().value().is_none() {
+            println!("vcomX: {:?}", value_commit.inner().x().value().unwrap());
+            println!("vcomY: {:?}", value_commit.inner().y().value().unwrap());
+        }
+        layouter.constrain_instance(value_commit.inner().x().cell(), config.primary, 1)?;
+        layouter.constrain_instance(value_commit.inner().y().cell(), config.primary, 2)?;
+
+        // ====================
+        // = Asset commitment =
+        // ====================
+
+        // a*G_1
+        let (commitment, _) = {
+            let asset_commit_v = ValueCommitV::get();
+            let asset_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), asset_commit_v);
+            asset_commit_v.mul(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+        };
+
+        // r_A*G_2
+        let (blind, _rca) = {
+            let rca = self.asset_blind;
+            let asset_commit_r = OrchardFixedBasesFull::ValueCommitR;
+            let asset_commit_r = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_r);
+            asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
+        };
+
+        // Constrain the x and y; indexes in public values are 3 and 4
+        let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+        if !asset_commit.inner().x().value().is_none() {
+            println!("acomX: {:?}", asset_commit.inner().x().value().unwrap());
+            println!("acomY: {:?}", asset_commit.inner().y().value().unwrap());
+        }
+        layouter.constrain_instance(asset_commit.inner().x().cell(), config.primary, 3)?;
+        layouter.constrain_instance(asset_commit.inner().y().cell(), config.primary, 4)?;
 
         Ok(())
     }
@@ -333,15 +391,17 @@ fn main() {
     let coin_blind = Fp::random(&mut OsRng);
 
     let mut coin = Fp::zero();
+
     let messages = [
         [*coords.x(), *coords.y()],
         [Fp::from(value), Fp::from(asset)],
         [serial, coin_blind],
     ];
+
+    // TODO: This is a hack until issue is fixed in poseidon gadget
     for msg in messages.iter() {
         coin += Hash::init(OrchardNullifier, ConstantLength::<2>).hash(*msg);
     }
-    println!("outer hash:   {:?}", coin);
 
     let value_commit = pedersen_commitment(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -356,6 +416,10 @@ fn main() {
         *asset_coords.x(),
         *asset_coords.y(),
     ];
+    println!(
+        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
+        public_inputs
+    );
 
     let circuit = MintCircuit {
         pub_x: Some(*coords.x()),
@@ -373,19 +437,27 @@ fn main() {
     assert_eq!(prover.verify(), Ok(()));
 
     // Add 1 to break the public inputs
-    public_inputs[0] += Fp::one();
+    public_inputs[0] += Fp::from(0xdeadbeef);
+    println!(
+        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
+        public_inputs
+    );
     // Invalid MockProver
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
     assert!(prover.verify().is_err());
 
     // Remove 1 to make the public inputs valid again
-    public_inputs[0] -= Fp::one();
+    public_inputs[0] -= Fp::from(0xdeadbeef);
+    println!(
+        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
+        public_inputs
+    );
 
     // Actual ZK proof
     let start = Instant::now();
     let vk = VerifyingKey::build();
     let pk = ProvingKey::build();
-    println!("Setup: [{:?}]", start.elapsed());
+    println!("\nSetup: [{:?}]", start.elapsed());
 
     let start = Instant::now();
     let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
