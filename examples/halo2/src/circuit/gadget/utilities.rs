@@ -7,8 +7,8 @@ use pasta_curves::arithmetic::FieldExt;
 use std::{array, convert::TryInto, ops::Range};
 
 // pub(crate) mod cond_swap;
-// pub(crate) mod decompose_running_sum;
-// pub(crate) mod lookup_range_check;
+pub mod decompose_running_sum;
+pub mod lookup_range_check;
 
 /// A variable representing a field element.
 #[derive(Copy, Clone, Debug)]
@@ -56,6 +56,22 @@ pub trait UtilitiesInstructions<F: FieldExt> {
                     || value.ok_or(Error::SynthesisError),
                 )?;
                 Ok(Var::new(cell, value))
+            },
+        )
+    }
+
+    fn load_constant(
+        &self,
+        mut layouter: impl Layouter<F>,
+        column: Column<Advice>,
+        constant: F,
+    ) -> Result<Self::Var, Error> {
+        layouter.assign_region(
+            || "load constant",
+            |mut region| {
+                let cell =
+                    region.assign_advice_from_constant(|| "constant value", column, 0, constant)?;
+                Ok(Var::new(cell, Some(constant)))
             },
         )
     }
