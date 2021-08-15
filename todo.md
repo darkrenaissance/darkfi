@@ -28,7 +28,7 @@
 [X] drk: withdraw cli option
 [ ] darkfid: check address is valid
 [X] darkfid: send cashout request to cashier with btc pub key
-[ ] cashierd: receive cashout request, reply with drk pub key
+[X] cashierd: receive cashout request, reply with drk pub key
 [ ] darkfid: send dbtc to the cashier drk pub key
 [ ] cashierd: burn dbtc, send back btc (see tx.rs)
 

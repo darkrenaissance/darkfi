@@ -48,11 +48,6 @@ impl Drk {
         Ok(self.request("say hello", r).await?)
     }
 
-    pub async fn create_cashier_wallet(&self) -> Result<()> {
-        let r = jsonrpc::request(json!("create_cashier_wallet"), json!([]));
-        Ok(self.request("create cashier wallet", r).await?)
-    }
-
     pub async fn create_wallet(&self) -> Result<()> {
         let r = jsonrpc::request(json!("create_wallet"), json!([]));
         Ok(self.request("create wallet", r).await?)
@@ -97,10 +92,6 @@ impl Drk {
 async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
     let url = config.rpc_url.clone();
     let client = Drk::new(url);
-
-    if options.cashier {
-        client.create_cashier_wallet().await?;
-    }
 
     if options.wallet {
         client.create_wallet().await?;

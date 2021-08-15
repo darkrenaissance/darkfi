@@ -152,10 +152,10 @@ pub async fn futures_broker(
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway_slabs_sub: async_channel::Receiver<Slab>,
-    deposit_recv: async_channel::Receiver<jubjub::SubgroupPoint>,
-    cashier_deposit_addr_send: async_channel::Sender<Option<bitcoin::util::address::Address>>,
-    withdraw_recv: async_channel::Receiver<WithdrawParams>,
-    _cashier_withdraw_send: async_channel::Sender<jubjub::SubgroupPoint>,
+    deposit_req: async_channel::Receiver<jubjub::SubgroupPoint>,
+    deposit_rep: async_channel::Sender<Option<bitcoin::util::address::Address>>,
+    withdraw_req: async_channel::Receiver<bitcoin::util::address::Address>,
+    withdraw_rep: async_channel::Sender<Option<jubjub::SubgroupPoint>>,
     publish_tx_recv: async_channel::Receiver<TransferParams>,
 ) -> Result<()> {
     loop {
@@ -166,18 +166,13 @@ pub async fn futures_broker(
                 let update = state_transition(state, tx)?;
                 state.apply(update).await?;
             }
-            deposit_addr = deposit_recv.recv().fuse() => {
-                let cashier_public =  cashier_client.get_address(deposit_addr?).await?;
-                cashier_deposit_addr_send.send(cashier_public).await?;
+            deposit_addr = deposit_req.recv().fuse() => {
+                let btc_public = cashier_client.get_address(deposit_addr?).await?;
+                deposit_rep.send(btc_public).await?;
             }
-            withdraw_params = withdraw_recv.recv().fuse() => {
-                let withdraw_params = withdraw_params?;
-
-                let _btc_address = bitcoin::util::address::Address::from_str(&withdraw_params.pub_key);
-                let _amount = withdraw_params.amount;
-
-                // cashier_withdraw_send.send(address).await?;
-
+            withdraw_addr = withdraw_req.recv().fuse() => {
+                let drk_public = cashier_client.withdraw(withdraw_addr?).await?;
+                withdraw_rep.send(drk_public).await?;
             }
             transfer_params = publish_tx_recv.recv().fuse() => {
                 let transfer_params = transfer_params?;
@@ -296,15 +291,15 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     // channels to request transfer from adapter
     let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
 
-    // channels to request deposit from adapter and receive cashier public key
-    let (deposit_send, deposit_recv) = async_channel::unbounded::<jubjub::SubgroupPoint>();
-    let (cashier_deposit_addr_send, cashier_deposit_addr_recv) =
+    // channels to request deposit from adapter, send DRK key and receive BTC key
+    let (deposit_req_send, deposit_req_recv) = async_channel::unbounded::<jubjub::SubgroupPoint>();
+    let (deposit_rep_send, deposit_rep_recv) =
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
-    // channel to request withdraw from adapter
-    let (withdraw_send, withdraw_recv) = async_channel::unbounded::<WithdrawParams>();
-    let (cashier_withdraw_send, cashier_withdraw_recv) =
-        async_channel::unbounded::<jubjub::SubgroupPoint>();
+    // channel to request withdraw from adapter, send BTC key and receive DRK key
+    let (withdraw_req_send, withdraw_req_recv) = async_channel::unbounded::<bitcoin::Address>();
+    let (withdraw_rep_send, withdraw_rep_recv) =
+        async_channel::unbounded::<Option<jubjub::SubgroupPoint>>();
 
     // start gateway client
     debug!(target: "fn::start client", "start() Client started");
@@ -320,10 +315,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
             mint_params.clone(),
             spend_params.clone(),
             gateway_slabs_sub.clone(),
-            deposit_recv.clone(),
-            cashier_deposit_addr_send.clone(),
-            withdraw_recv.clone(),
-            cashier_withdraw_send.clone(),
+            deposit_req_recv.clone(),
+            deposit_rep_send.clone(),
+            withdraw_req_recv.clone(),
+            withdraw_rep_send.clone(),
             publish_tx_recv.clone(),
         )
         .await?;
@@ -333,8 +328,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
     let adapter = RpcAdapter::new(
         wallet.clone(),
         publish_tx_send,
-        (deposit_send, cashier_deposit_addr_recv),
-        (withdraw_send, cashier_withdraw_recv),
+        (deposit_req_send, deposit_rep_recv),
+        (withdraw_req_send, withdraw_rep_recv),
     )?;
 
     // start the rpc server
