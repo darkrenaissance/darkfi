@@ -52,6 +52,7 @@ pub enum Error {
     CashierNoReply,
     Base58EncodeError(String),
     Base58DecodeError(String),
+    BadBTCAddress(String),
 }
 
 impl std::error::Error for Error {}
@@ -102,6 +103,7 @@ impl fmt::Display for Error {
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
             Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
+            Error::BadBTCAddress(ref err) => write!(f, "could not parse BTC address: {}", err),
         }
     }
 }
@@ -230,5 +232,11 @@ impl From<bs58::encode::Error> for Error {
 impl From<bs58::decode::Error> for Error {
     fn from(err: bs58::decode::Error) -> Error {
         Error::Base58DecodeError(err.to_string())
+    }
+}
+
+impl From<bitcoin::util::address::Error> for Error {
+    fn from(err: bitcoin::util::address::Error) -> Error {
+        Error::BadBTCAddress(err.to_string())
     }
 }
