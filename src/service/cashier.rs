@@ -80,7 +80,6 @@ impl CashierService {
     }
 
     async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
-        // Change to adapter
         let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
         let builder = tx::TransactionBuilder {

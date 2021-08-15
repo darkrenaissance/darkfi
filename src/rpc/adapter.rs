@@ -47,24 +47,11 @@ impl RpcAdapter {
         Ok(())
     }
 
-    pub fn init_cashier_db(&self) -> Result<()> {
-        debug!(target: "adapter", "init_cashier_db() [START]");
-        self.wallet.init_cashier_db()?;
-        Ok(())
-    }
-
     pub fn key_gen(&self) -> Result<()> {
         debug!(target: "adapter", "key_gen() [START]");
         let (public, private) = self.wallet.key_gen();
         debug!(target: "adapter", "Created keypair...");
         debug!(target: "adapter", "Attempting to write to database...");
-        self.wallet.put_keypair(public, private)?;
-        Ok(())
-    }
-
-    pub fn cash_key_gen(&self) -> Result<()> {
-        debug!(target: "adapter", "key_gen() [START]");
-        let (public, private) = self.wallet.cash_key_gen();
         self.wallet.put_keypair(public, private)?;
         Ok(())
     }
@@ -76,8 +63,8 @@ impl RpcAdapter {
         Ok(bs58_address)
     }
 
-    pub fn get_cash_key(&self) -> Result<String> {
-        debug!(target: "adapter", "get_cash_key() [START]");
+    pub fn get_cash_public(&self) -> Result<String> {
+        debug!(target: "adapter", "get_cash_public() [START]");
         let cashier_public = self.wallet.get_cashier_public()?;
         let bs58_address = bs58::encode(serialize(&cashier_public)).into_string();
         Ok(bs58_address)

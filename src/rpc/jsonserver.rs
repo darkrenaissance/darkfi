@@ -154,10 +154,10 @@ impl RpcInterface {
         });
 
         let self1 = self.clone();
-        io.add_method("get_cash_key", move |_| {
+        io.add_method("get_cash_public", move |_| {
             let self2 = self1.clone();
             async move {
-                let cash_key = self2.adapter.get_cash_key()?;
+                let cash_key = self2.adapter.get_cash_public()?;
                 Ok(jsonrpc_core::Value::String(cash_key))
             }
         });
@@ -198,28 +198,6 @@ impl RpcInterface {
                 self2.adapter.key_gen()?;
                 Ok(jsonrpc_core::Value::String(
                     "key generation successful".into(),
-                ))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("cash_key_gen", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.cash_key_gen()?;
-                Ok(jsonrpc_core::Value::String(
-                    "key generation successful".into(),
-                ))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("create_cashier_wallet", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.init_cashier_db()?;
-                Ok(jsonrpc_core::Value::String(
-                    "cashier wallet creation successful".into(),
                 ))
             }
         });

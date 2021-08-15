@@ -58,7 +58,6 @@ impl WithdrawParams {
 
 pub struct DrkCli {
     pub verbose: bool,
-    pub cashier: bool,
     pub wallet: bool,
     pub key: bool,
     pub get_key: bool,
@@ -88,13 +87,6 @@ impl DrkCli {
                 Arg::new("hello")
                     .long("hello")
                     .help_heading(Some("Say hello"))
-                    .takes_value(false),
-            )
-            .arg(
-                Arg::new("cashier")
-                    .short('c')
-                    .long("cashier")
-                    .help_heading(Some("Create a cashier wallet"))
                     .takes_value(false),
             )
             .arg(
@@ -184,7 +176,6 @@ impl DrkCli {
             .get_matches();
 
         let verbose = app.is_present("verbose");
-        let cashier = app.is_present("cashier");
         let wallet = app.is_present("wallet");
         let key = app.is_present("key");
         let info = app.is_present("info");
@@ -242,7 +233,6 @@ impl DrkCli {
 
         Ok(Self {
             verbose,
-            cashier,
             wallet,
             key,
             get_key,
