@@ -72,7 +72,6 @@ impl BitcoinKeys {
     }
 
     async fn _watch_address(&self) -> Result<()> {
-
         Ok(())
     }
 

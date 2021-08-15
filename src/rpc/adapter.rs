@@ -3,8 +3,8 @@ use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use std::string::ToString;
 use std::str::FromStr;
+use std::string::ToString;
 
 use log::*;
 

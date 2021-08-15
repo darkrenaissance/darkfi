@@ -146,8 +146,10 @@ impl CashierDb {
             pub_keys.push(key?);
         }
         let public: jubjub::SubgroupPoint = self.get_value_deserialized(
-            pub_keys.pop().expect("unable to load public_key from cashierdb"),
-            )?;
+            pub_keys
+                .pop()
+                .expect("unable to load public_key from cashierdb"),
+        )?;
         Ok(public)
     }
     pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
@@ -161,8 +163,9 @@ impl CashierDb {
             keys.push(key?);
         }
         let private: jubjub::Fr = self.get_value_deserialized(
-            keys.pop().expect("unable to load private_key from cashierdb"),
-            )?;
+            keys.pop()
+                .expect("unable to load private_key from cashierdb"),
+        )?;
         Ok(private)
     }
 

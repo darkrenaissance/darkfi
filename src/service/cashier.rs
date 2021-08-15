@@ -5,11 +5,11 @@ use super::btc::{BitcoinKeys, PubAddress};
 use super::GatewayClient;
 use crate::blockchain::Slab;
 
-use crate::{Error, Result};
-use crate::serial::{Encodable, serialize, deserialize};
-use crate::wallet::CashierDbPtr;
-use crate::tx;
 use crate::crypto::load_params;
+use crate::serial::{deserialize, serialize, Encodable};
+use crate::tx;
+use crate::wallet::CashierDbPtr;
+use crate::{Error, Result};
 
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -46,7 +46,6 @@ impl CashierService {
         wallet: CashierDbPtr,
         gateway: GatewayClient,
     ) -> Result<Arc<CashierService>> {
-
         // Load trusted setup parameters
         let (mint_params, mint_pvk) = load_params("mint.params")?;
         let (spend_params, spend_pvk) = load_params("spend.params")?;
@@ -127,7 +126,7 @@ impl CashierService {
                             msg,
                             cashier_wallet,
                             send_queue.clone(),
-                            executor.clone()
+                            executor.clone(),
                         ))
                         .detach();
                 }
@@ -175,10 +174,8 @@ impl CashierService {
                 // start scheduler for checking balance
                 let _result = btc_keys.start_scheduler(executor.clone());
                 info!("Waiting for address balance");
-
             }
             1 => {
-
                 let _btc_address = request.get_payload();
 
                 let address = cashier_wallet.get_cashier_public()?;
@@ -186,7 +183,7 @@ impl CashierService {
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
                 reply.set_payload(serialize(&address));
-                
+
                 send_queue.send((peer, reply)).await?;
 
                 info!("Received withdraw request");
@@ -226,7 +223,7 @@ impl CashierClient {
             .protocol
             .request(
                 CashierCommand::Withdraw as u8,
-                vec![],  //TODO convert btc_address to bytes,
+                vec![], //TODO convert btc_address to bytes,
                 handle_error,
             )
             .await?;

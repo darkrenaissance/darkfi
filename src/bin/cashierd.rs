@@ -1,15 +1,15 @@
-use std::net::SocketAddr;
 use async_std::sync::Arc;
+use std::net::SocketAddr;
 
 use std::{path::Path, path::PathBuf};
 //use toml;
 
+use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
 use drk::service::GatewayClient;
-use drk::wallet::CashierDb;
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::util::join_config_path;
+use drk::wallet::CashierDb;
 use drk::{Error, Result};
 use log::*;
 
