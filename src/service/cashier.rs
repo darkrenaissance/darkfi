@@ -1,6 +1,9 @@
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
-use super::btc::{BitcoinKeys, PubAddress};
+use super::btc::{BitcoinKeys, PubAddress, PubKey};
+//use bitcoin::blockdata::script::Script;
+use electrum_client::{Client, ElectrumApi};
+use electrum_client::bitcoin::Script;
 
 use super::GatewayClient;
 use crate::blockchain::Slab;
@@ -34,6 +37,7 @@ pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
     gateway: GatewayClient,
+    btc_endpoint: String,
     mint_params: groth16::Parameters<Bls12>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_params: groth16::Parameters<Bls12>,
@@ -43,6 +47,7 @@ pub struct CashierService {
 impl CashierService {
     pub fn new(
         addr: SocketAddr,
+        btc_endpoint: String,
         wallet: CashierDbPtr,
         gateway: GatewayClient,
     ) -> Result<Arc<CashierService>> {
@@ -54,6 +59,7 @@ impl CashierService {
             addr,
             wallet,
             gateway,
+            btc_endpoint,
             mint_params,
             mint_pvk,
             spend_params,
@@ -67,6 +73,7 @@ impl CashierService {
         let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
 
         let (send, recv) = protocol.start().await?;
+        let ex2 = executor.clone();
 
         let handle_request_task =
             executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
@@ -74,6 +81,15 @@ impl CashierService {
         protocol.run(executor.clone()).await?;
 
         let _ = handle_request_task.cancel().await;
+
+        Ok(())
+    }
+
+    pub async fn subscribe_to_address(&self, script: Script) -> Result<()> {
+        debug!(target: "BTC", "Subscribe");
+        let mut client = Client::new(&self.btc_endpoint).unwrap();
+
+        let response = client.script_subscribe(&script).unwrap();
 
         Ok(())
     }
@@ -172,7 +188,7 @@ impl CashierService {
                 info!("Received dkey->btc msg");
 
                 // start scheduler for checking balance
-                let _result = btc_keys.start_scheduler(executor.clone());
+                //let _result = btc_keys.start_scheduler(executor.clone());
                 info!("Waiting for address balance");
             }
             1 => {

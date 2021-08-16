@@ -21,6 +21,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
 
     let gateway_addr: SocketAddr = config.gateway_url.parse()?;
 
+    let btc_endpoint: String = config.btc_endpoint.clone();
+
     let database_path = config.database_path.clone();
     let database_path = join_config_path(&PathBuf::from(database_path))?;
     let rocks = Rocks::new(&database_path)?;
@@ -31,12 +33,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     debug!(target: "Client", "Creating gateway client");
     let mut gateway = GatewayClient::new(gateway_addr, slabstore)?;
 
-    debug!(target: "fn::start gateway client", "start() Gateway Client started");
     gateway.start().await?;
 
-    // Probably not ideal to create an Arc here
-    let cashier = CashierService::new(accept_addr, wallet, gateway)?;
-
+    debug!(target: "cashierd", "starting cashier service");
+    let cashier = CashierService::new(accept_addr, btc_endpoint, wallet, gateway)?;
     cashier.start(executor.clone()).await?;
     Ok(())
 }
