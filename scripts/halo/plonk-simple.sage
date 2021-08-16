@@ -15,6 +15,7 @@ assert F17.square_roots_of_one() == (1, 16)
 # 16 == -1
 # so now we have the 4th roots of 1
 w = vector(F17, [1, 4, -1, -4])
+# omega = 4, omega^0 = 1, omega^1 = 4, omega^3 = -1 = 13, omega^3 = 13
 
 # so now we are still defining our reference string
 
@@ -48,7 +49,8 @@ x = P.0
 
 # we have 4 w values so the last column is empty (all set to 0 in this case)
 
-fa = P(list(Ai * vector(F17, [3, 9, 27, 0])))
+fa = P.lagrange_polynomial(zip([1, 4, 16, 13], [3, 9, 27, 0]))
+#fa = P(list(Ai * vector(F17, [3, 9, 27, 0])))
 assert fa(1) == 3
 assert fa(4) == 9
 assert fa(16) == 27

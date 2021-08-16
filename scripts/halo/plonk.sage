@@ -9,17 +9,18 @@ def get_omega():
     #     generator = K.multiplicative_generator()
     # Just hardcode the value here instead
     generator = K(5)
-    assert (q - 1) % 2**32 == 0
+    assert (q - 1) % 2^32 == 0
     # Root of unity
-    t = (q - 1) / 2**32
+    t = (q - 1) / 2^32
     omega = generator**t
 
     assert omega != 1
-    assert omega**(2**16) != 1
-    assert omega**(2**31) != 1
-    assert omega**(2**32) == 1
+    assert omega^(2^16) != 1
+    assert omega^(2^31) != 1
+    assert omega^(2^32) == 1
 
     return omega
 
+# Order of this element is 2^32
 omega = get_omega()
 
