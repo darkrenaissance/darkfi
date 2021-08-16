@@ -1,4 +1,4 @@
-use crate::{ Error, Result };
+use crate::{Error, Result};
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};

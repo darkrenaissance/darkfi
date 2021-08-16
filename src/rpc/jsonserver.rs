@@ -144,6 +144,11 @@ impl RpcInterface {
             Ok(jsonrpc_core::Value::String("hello world!".into()))
         });
 
+        // TODO: adapter creates these
+        // new handle_input in adapter
+        // handle_input (top leve)
+        // cashier_handle_input() -> adapter -> cashier_wallet
+        // user_handle_input() -> adapter -> user_wallet
         let self1 = self.clone();
         io.add_method("get_key", move |_| {
             let self2 = self1.clone();

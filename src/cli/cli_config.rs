@@ -195,7 +195,6 @@ pub struct CashierdConfig {
     #[serde(rename = "btc_endpoint")]
     pub btc_endpoint: String,
 
-
     #[serde(default)]
     #[serde(rename = "gateway_url")]
     pub gateway_url: String,

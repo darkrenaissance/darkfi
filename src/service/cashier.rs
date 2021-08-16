@@ -2,8 +2,8 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 
 use super::btc::{BitcoinKeys, PubAddress, PubKey};
 //use bitcoin::blockdata::script::Script;
-use electrum_client::{Client, ElectrumApi};
 use electrum_client::bitcoin::Script;
+use electrum_client::{Client, ElectrumApi};
 
 use super::GatewayClient;
 use crate::blockchain::Slab;
