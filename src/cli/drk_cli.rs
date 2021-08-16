@@ -74,7 +74,7 @@ impl DrkCli {
     pub fn load() -> Result<Self> {
         let app = App::new("Drk CLI")
             .version("0.1.0")
-            .author("Amir Taaki <amir@dyne.org>")
+            .author("Dark Renaissance Technologies")
             .about("Run Drk Client")
             .arg(
                 Arg::new("verbose")

@@ -8,7 +8,7 @@ impl GatewaydCli {
     pub fn load() -> Result<Self> {
         let app = clap_app!(dfi =>
             (version: "0.1.0")
-            (author: "Amir Taaki <amir@dyne.org>")
+            (author: "Dark Renaissance Technologies")
             (about: "run service daemon")
             (@arg VERBOSE: -v --verbose "Increase verbosity")
         )
