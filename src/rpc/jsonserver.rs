@@ -1,6 +1,6 @@
 use crate::cli::DarkfidConfig;
 use crate::cli::{TransferParams, WithdrawParams};
-use crate::rpc::adapter::RpcAdapter;
+use crate::rpc::adapters::user_adapter::UserAdapter;
 use crate::{Error, Result};
 
 use async_executor::Executor;
@@ -77,7 +77,7 @@ pub async fn listen(
 pub async fn start(
     executor: Arc<Executor<'_>>,
     config: Arc<&DarkfidConfig>,
-    adapter: Arc<RpcAdapter>,
+    adapter: Arc<UserAdapter>,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;
     let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
@@ -104,11 +104,11 @@ pub struct RpcInterface {
     pub started: Mutex<bool>,
     stop_send: async_channel::Sender<()>,
     stop_recv: async_channel::Receiver<()>,
-    adapter: Arc<RpcAdapter>,
+    adapter: Arc<UserAdapter>,
 }
 
 impl RpcInterface {
-    pub fn new(adapter: Arc<RpcAdapter>) -> Result<Arc<Self>> {
+    pub fn new(adapter: Arc<UserAdapter>) -> Result<Arc<Self>> {
         let (stop_send, stop_recv) = async_channel::unbounded::<()>();
         Ok(Arc::new(Self {
             started: Mutex::new(false),

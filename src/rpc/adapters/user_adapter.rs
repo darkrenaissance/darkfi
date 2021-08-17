@@ -10,7 +10,7 @@ use log::*;
 
 use async_std::sync::Arc;
 
-pub type AdapterPtr = Arc<RpcAdapter>;
+pub type UserAdapterPtr = Arc<UserAdapter>;
 pub type DepositChannel = (
     async_channel::Sender<jubjub::SubgroupPoint>,
     async_channel::Receiver<Option<bitcoin::util::address::Address>>,
@@ -20,14 +20,14 @@ pub type WithdrawChannel = (
     async_channel::Receiver<Option<jubjub::SubgroupPoint>>,
 );
 
-pub struct RpcAdapter {
+pub struct UserAdapter {
     pub wallet: Arc<WalletDb>,
     publish_tx_send: async_channel::Sender<TransferParams>,
     deposit_channel: DepositChannel,
     withdraw_channel: WithdrawChannel,
 }
 
-impl RpcAdapter {
+impl UserAdapter {
     pub fn new(
         wallet: Arc<WalletDb>,
         publish_tx_send: async_channel::Sender<TransferParams>,

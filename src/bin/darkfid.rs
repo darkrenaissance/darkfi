@@ -1,6 +1,6 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
-use drk::cli::{TransferParams, WithdrawParams};
+use drk::cli::TransferParams;
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -9,7 +9,7 @@ use drk::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
-use drk::rpc::adapter::RpcAdapter;
+use drk::rpc::adapters::user_adapter::UserAdapter;
 use drk::rpc::jsonserver;
 use drk::serial::{deserialize, Decodable, Encodable};
 use drk::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
@@ -32,7 +32,6 @@ use futures::FutureExt;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 pub struct State {
     // The entire merkle tree state
@@ -325,7 +324,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         Ok::<(), drk::Error>(())
     });
 
-    let adapter = Arc::new(RpcAdapter::new(
+    let adapter = Arc::new(UserAdapter::new(
         wallet.clone(),
         publish_tx_send,
         (deposit_req_send, deposit_rep_recv),

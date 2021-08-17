@@ -1,6 +1,4 @@
-pub mod adapter;
 pub mod jsonrpc;
 pub mod jsonserver;
-pub mod test;
+pub mod adapters;
 
-pub use adapter::{AdapterPtr, RpcAdapter};
