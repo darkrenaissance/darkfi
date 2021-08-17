@@ -43,6 +43,110 @@ impl RpcAdapter {
         })
     }
 
+    pub fn handle_input(self: Arc<Self>, mut io: jsonrpc_core::IoHandler) -> Result<jsonrpc_core::IoHandler> {
+        io.add_sync_method("say_hello", |_| {
+            Ok(jsonrpc_core::Value::String("hello world!".into()))
+        });
+        let self1 = self.clone();
+        io.add_method("get_key", move |_| {
+            let self2 = self1.clone();
+            async move {
+                let pub_key = self2.get_key()?;
+                Ok(jsonrpc_core::Value::String(pub_key))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("get_cash_public", move |_| {
+            let self2 = self1.clone();
+            async move {
+                let cash_key = self2.get_cash_public()?;
+                Ok(jsonrpc_core::Value::String(cash_key))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("get_info", move |_| {
+            let self2 = self1.clone();
+            async move {
+                self2.get_info();
+                Ok(jsonrpc_core::Value::Null)
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("stop", move |_| {
+            let self2 = self1.clone();
+            async move {
+                self2.stop();
+                Ok(jsonrpc_core::Value::Null)
+            }
+        });
+        let self1 = self.clone();
+
+        io.add_method("create_wallet", move |_| {
+            let self2 = self1.clone();
+            async move {
+                self2.init_db()?;
+                Ok(jsonrpc_core::Value::String(
+                    "wallet creation successful".into(),
+                ))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("key_gen", move |_| {
+            let self2 = self1.clone();
+            async move {
+                self2.key_gen()?;
+                Ok(jsonrpc_core::Value::String(
+                    "key generation successful".into(),
+                ))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("deposit", move |_| {
+            let self2 = self1.clone();
+            async move {
+                let btckey = self2.deposit().await?;
+                Ok(jsonrpc_core::Value::String(format!("{}", btckey)))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("transfer", move |params: jsonrpc_core::Params| {
+            let self2 = self1.clone();
+            async move {
+                let parsed: TransferParams = params.parse().unwrap();
+                let amount = parsed.amount.clone();
+                let address = parsed.pub_key.clone();
+                self2.transfer(parsed).await?;
+                Ok(jsonrpc_core::Value::String(format!(
+                    "transfered {} DRK to {}",
+                    amount, address
+                )))
+            }
+        });
+
+        let self1 = self.clone();
+        io.add_method("withdraw", move |params: jsonrpc_core::Params| {
+            let self2 = self1.clone();
+            async move {
+                let parsed: WithdrawParams = params.parse().unwrap();
+                let amount = parsed.amount.clone();
+                let address = parsed.pub_key.clone();
+                self2.withdraw(parsed).await?;
+                Ok(jsonrpc_core::Value::String(format!(
+                    "withdrawing {} BTC to {}...",
+                    amount, address
+                )))
+            }
+        });
+
+        Ok(io)
+    }
+
     pub fn init_db(&self) -> Result<()> {
         debug!(target: "adapter", "init_db() [START]");
         self.wallet.init_db()?;

@@ -77,7 +77,7 @@ pub async fn listen(
 pub async fn start(
     executor: Arc<Executor<'_>>,
     config: Arc<&DarkfidConfig>,
-    adapter: RpcAdapter,
+    adapter: Arc<RpcAdapter>,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;
     let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
@@ -104,18 +104,17 @@ pub struct RpcInterface {
     pub started: Mutex<bool>,
     stop_send: async_channel::Sender<()>,
     stop_recv: async_channel::Receiver<()>,
-    adapter: RpcAdapter,
+    adapter: Arc<RpcAdapter>,
 }
 
 impl RpcInterface {
-    pub fn new(adapter: RpcAdapter) -> Result<Arc<Self>> {
+    pub fn new(adapter: Arc<RpcAdapter>) -> Result<Arc<Self>> {
         let (stop_send, stop_recv) = async_channel::unbounded::<()>();
         Ok(Arc::new(Self {
-            //p2p,
             started: Mutex::new(false),
             stop_send,
             stop_recv,
-            adapter,
+            adapter: adapter.clone(),
         }))
     }
 
@@ -126,9 +125,11 @@ impl RpcInterface {
 
         let io = self.handle_input().await?;
 
+        debug!(target: "rpc", "JsonRpcInterface::serve() [PROCESSING INPUT]");
         let response = io
             .handle_request_sync(&request)
             .ok_or(Error::BadOperationType)?;
+        debug!(target: "rpc", "JsonRpcInterface::serve() [PROCESSED]");
 
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");
@@ -138,114 +139,8 @@ impl RpcInterface {
 
     pub async fn handle_input(self: Arc<Self>) -> Result<jsonrpc_core::IoHandler> {
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [START]");
-        let mut io = jsonrpc_core::IoHandler::new();
-
-        io.add_sync_method("say_hello", |_| {
-            Ok(jsonrpc_core::Value::String("hello world!".into()))
-        });
-
-        // TODO: adapter creates these
-        // new handle_input in adapter
-        // handle_input (top leve)
-        // cashier_handle_input() -> adapter -> cashier_wallet
-        // user_handle_input() -> adapter -> user_wallet
-        let self1 = self.clone();
-        io.add_method("get_key", move |_| {
-            let self2 = self1.clone();
-            async move {
-                let pub_key = self2.adapter.get_key()?;
-                Ok(jsonrpc_core::Value::String(pub_key))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("get_cash_public", move |_| {
-            let self2 = self1.clone();
-            async move {
-                let cash_key = self2.adapter.get_cash_public()?;
-                Ok(jsonrpc_core::Value::String(cash_key))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("get_info", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.get_info();
-                Ok(jsonrpc_core::Value::Null)
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("stop", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.stop();
-                Ok(jsonrpc_core::Value::Null)
-            }
-        });
-        let self1 = self.clone();
-
-        io.add_method("create_wallet", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.init_db()?;
-                Ok(jsonrpc_core::Value::String(
-                    "wallet creation successful".into(),
-                ))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("key_gen", move |_| {
-            let self2 = self1.clone();
-            async move {
-                self2.adapter.key_gen()?;
-                Ok(jsonrpc_core::Value::String(
-                    "key generation successful".into(),
-                ))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("deposit", move |_| {
-            let self2 = self1.clone();
-            async move {
-                let btckey = self2.adapter.deposit().await?;
-                Ok(jsonrpc_core::Value::String(format!("{}", btckey)))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("transfer", move |params: jsonrpc_core::Params| {
-            let self2 = self1.clone();
-            async move {
-                let parsed: TransferParams = params.parse().unwrap();
-                let amount = parsed.amount.clone();
-                let address = parsed.pub_key.clone();
-                self2.adapter.transfer(parsed).await?;
-                Ok(jsonrpc_core::Value::String(format!(
-                    "transfered {} DRK to {}",
-                    amount, address
-                )))
-            }
-        });
-
-        let self1 = self.clone();
-        io.add_method("withdraw", move |params: jsonrpc_core::Params| {
-            let self2 = self1.clone();
-            async move {
-                let parsed: WithdrawParams = params.parse().unwrap();
-                let amount = parsed.amount.clone();
-                let address = parsed.pub_key.clone();
-                self2.adapter.withdraw(parsed).await?;
-                Ok(jsonrpc_core::Value::String(format!(
-                    "withdrawing {} BTC to {}...",
-                    amount, address
-                )))
-            }
-        });
-
+        let io = jsonrpc_core::IoHandler::new();
+        let io = self.adapter.clone().handle_input(io.clone())?;
         debug!(target: "rpc", "JsonRpcInterface::handle_input() [END]");
         Ok(io)
     }

@@ -325,15 +325,15 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         Ok::<(), drk::Error>(())
     });
 
-    let adapter = RpcAdapter::new(
+    let adapter = Arc::new(RpcAdapter::new(
         wallet.clone(),
         publish_tx_send,
         (deposit_req_send, deposit_rep_recv),
         (withdraw_req_send, withdraw_rep_recv),
-    )?;
+    )?);
 
     // start the rpc server
-    jsonserver::start(ex.clone(), config.clone(), adapter).await?;
+    jsonserver::start(ex.clone(), config.clone(), adapter.clone()).await?;
 
     futures_broker_task.cancel().await;
     Ok(())
