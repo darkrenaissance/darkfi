@@ -1,6 +1,6 @@
 use crate::cli::DarkfidConfig;
-use crate::cli::{TransferParams, WithdrawParams};
-use crate::rpc::adapters::user_adapter::UserAdapter;
+//use crate::cli::{TransferParams, WithdrawParams};
+use crate::rpc::adapters::UserAdapter;
 use crate::{Error, Result};
 
 use async_executor::Executor;
@@ -76,7 +76,7 @@ pub async fn listen(
 
 pub async fn start(
     executor: Arc<Executor<'_>>,
-    config: Arc<&DarkfidConfig>,
+    config: Arc<DarkfidConfig>,
     adapter: Arc<UserAdapter>,
 ) -> Result<()> {
     let rpc = RpcInterface::new(adapter)?;
@@ -98,6 +98,7 @@ pub async fn start(
 
     Ok(())
 }
+
 // json RPC server goes here
 #[allow(dead_code)]
 pub struct RpcInterface {
