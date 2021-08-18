@@ -1,6 +1,6 @@
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::cli::TransferParams;
+use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -221,7 +221,7 @@ pub async fn futures_broker(
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Result<()> {
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
     let cashier_addr: SocketAddr = config.cashier_url.parse()?;
@@ -358,7 +358,7 @@ fn main() -> Result<()> {
         Config::<DarkfidConfig>::load_default(config_path)?
     };
 
-    let config_ptr = Arc::new(&config);
+    let config = Arc::new(config);
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -393,7 +393,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_ptr).await?;
+                start(ex2, config).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

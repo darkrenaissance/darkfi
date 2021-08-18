@@ -6,6 +6,7 @@ use std::{path::Path, path::PathBuf};
 
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
+use drk::rpc::adapters::cashier_adapter::CashierAdapter;
 use drk::service::CashierService;
 use drk::service::GatewayClient;
 use drk::util::join_config_path;
@@ -36,8 +37,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     gateway.start().await?;
 
     debug!(target: "cashierd", "starting cashier service");
-    let cashier = CashierService::new(accept_addr, btc_endpoint, wallet, gateway)?;
+    let cashier = CashierService::new(accept_addr, btc_endpoint, wallet.clone(), gateway)?;
     cashier.start(executor.clone()).await?;
+
+    let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
     Ok(())
 }
 
