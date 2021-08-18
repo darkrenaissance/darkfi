@@ -7,7 +7,6 @@ use electrum_client::{Client, ElectrumApi};
 
 use super::GatewayClient;
 use crate::blockchain::Slab;
-
 use crate::crypto::load_params;
 use crate::serial::{deserialize, serialize, Encodable};
 use crate::tx;
@@ -18,9 +17,12 @@ use bellman::groth16;
 use bls12_381::Bls12;
 
 use async_executor::Executor;
+
 use async_std::sync::Arc;
 use log::*;
+
 use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[repr(u8)]
 enum CashierError {
@@ -192,13 +194,16 @@ impl CashierService {
                 info!("Waiting for address balance");
             }
             1 => {
-                let _btc_address = request.get_payload();
+                let btc_address = request.get_payload();
+                let btc_address: String = deserialize(&btc_address)?;
+                let _btc_address = bitcoin::util::address::Address::from_str(&btc_address)?;
 
-                let address = cashier_wallet.get_cashier_public()?;
+                let cashier_secret = cashier_wallet.get_cashier_private()?;
+                let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
-                reply.set_payload(serialize(&address));
+                reply.set_payload(serialize(&cashier_public));
 
                 send_queue.send((peer, reply)).await?;
 
@@ -232,14 +237,14 @@ impl CashierClient {
 
     pub async fn withdraw(
         &mut self,
-        _btc_address: bitcoin::Address,
+        btc_address: String,
     ) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
             .request(
                 CashierCommand::Withdraw as u8,
-                vec![], //TODO convert btc_address to bytes,
+                serialize(&btc_address),
                 handle_error,
             )
             .await?;

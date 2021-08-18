@@ -153,7 +153,7 @@ pub async fn futures_broker(
     gateway_slabs_sub: async_channel::Receiver<Slab>,
     deposit_req: async_channel::Receiver<jubjub::SubgroupPoint>,
     deposit_rep: async_channel::Sender<Option<bitcoin::util::address::Address>>,
-    withdraw_req: async_channel::Receiver<bitcoin::util::address::Address>,
+    withdraw_req: async_channel::Receiver<String>,
     withdraw_rep: async_channel::Sender<Option<jubjub::SubgroupPoint>>,
     publish_tx_recv: async_channel::Receiver<TransferParams>,
 ) -> Result<()> {
@@ -296,7 +296,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&DarkfidConfig>) -> Resu
         async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
 
     // channel to request withdraw from adapter, send BTC key and receive DRK key
-    let (withdraw_req_send, withdraw_req_recv) = async_channel::unbounded::<bitcoin::Address>();
+    let (withdraw_req_send, withdraw_req_recv) = async_channel::unbounded::<String>();
     let (withdraw_rep_send, withdraw_rep_recv) =
         async_channel::unbounded::<Option<jubjub::SubgroupPoint>>();
 

@@ -3,7 +3,6 @@ use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use std::str::FromStr;
 use std::string::ToString;
 
 use log::*;
@@ -16,7 +15,7 @@ pub type DepositChannel = (
     async_channel::Receiver<Option<bitcoin::util::address::Address>>,
 );
 pub type WithdrawChannel = (
-    async_channel::Sender<bitcoin::util::address::Address>,
+    async_channel::Sender<String>,
     async_channel::Receiver<Option<jubjub::SubgroupPoint>>,
 );
 
@@ -195,9 +194,8 @@ impl UserAdapter {
 
     pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
         debug!(target: "withdraw", "withdraw: START");
-        let btc_address = bitcoin::util::address::Address::from_str(&withdraw_params.pub_key)?;
         // do the key exchange
-        self.withdraw_channel.0.send(btc_address).await?;
+        self.withdraw_channel.0.send(withdraw_params.pub_key).await?;
         // send the drk
         if let Some(key) = self.withdraw_channel.1.recv().await? {
             let mut transfer_params = TransferParams::new();
