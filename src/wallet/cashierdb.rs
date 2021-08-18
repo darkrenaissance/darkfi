@@ -104,6 +104,52 @@ impl CashierDb {
         Ok(())
     }
 
+
+
+    pub fn is_btc_adddress_exist_in_withdraw_keypairs(&self, btc_address: &Vec<u8>) -> Result<bool> {
+        debug!(target: "CashierDB", "Check for existing btc address");
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let mut stmt = conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = ?")?;
+        let addr_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
+
+        let mut btc_addresses = vec![];
+
+        for addr in addr_iter {
+            btc_addresses.push(addr);
+        }
+
+        return Ok(!btc_address.is_empty())
+    }
+
+    pub fn put_withdraw_keys(
+        &self,
+        btc_key_id: Vec<u8>,
+        d_key_public: Vec<u8>,
+    ) -> Result<()> {
+        debug!(target: "CashierDB", "Put withdraw keys");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        conn.execute(
+            "INSERT withdraw_keypairs(btc_key_id, d_key_public)
+            VALUES (:btc_key_id, :d_key_public)",
+            named_params! {
+            ":btc_key_id": btc_key_id,
+            ":d_key_public": d_key_public,
+            },
+        )?;
+        Ok(())
+    }
+
+
+
     pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "cash key_gen", "Generating cashier keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
