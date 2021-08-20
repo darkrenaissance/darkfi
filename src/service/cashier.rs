@@ -195,11 +195,19 @@ impl CashierService {
             }
             1 => {
                 let btc_address = request.get_payload();
-                let btc_address: String = deserialize(&btc_address)?;
-                let _btc_address = bitcoin::util::address::Address::from_str(&btc_address)?;
+                //let btc_address: String = deserialize(&btc_address)?;
+                //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)?;
+                //
 
-                let cashier_secret = cashier_wallet.get_cashier_private()?;
-                let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+                let cashier_public: jubjub::SubgroupPoint;
+
+                if let Some(addr) = cashier_wallet.get_address_by_btc_key(&btc_address)? {
+                    cashier_public = deserialize(&addr)?;
+                } else {
+                    let cashier_secret = cashier_wallet.get_cashier_private()?;
+                    cashier_public = cashier_wallet.get_cashier_public()?;
+                    cashier_wallet.put_withdraw_keys(btc_address, serialize(&cashier_public))?;
+                }
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
@@ -235,10 +243,7 @@ impl CashierClient {
         Ok(())
     }
 
-    pub async fn withdraw(
-        &mut self,
-        btc_address: String,
-    ) -> Result<Option<jubjub::SubgroupPoint>> {
+    pub async fn withdraw(&mut self, btc_address: String) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol

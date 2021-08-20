@@ -96,17 +96,18 @@ impl CashierDb {
             "INSERT INTO keypairs(dkey_id, btc_key_private, btc_key_public)
             VALUES (:dkey_id, :btc_key_private, :btc_key_public)",
             named_params! {
-            ":dkey_id": dkey_pub,
-            ":btc_key_private": btc_private,
-            ":btc_key_private": btc_public,
+                ":dkey_id": dkey_pub,
+                ":btc_key_private": btc_private,
+                ":btc_key_private": btc_public,
             },
         )?;
         Ok(())
     }
 
-
-
-    pub fn is_btc_adddress_exist_in_withdraw_keypairs(&self, btc_address: &Vec<u8>) -> Result<bool> {
+    pub fn get_address_by_btc_key(
+        &self,
+        btc_address: &Vec<u8>,
+    ) -> Result<Option<Vec<u8>>> {
         debug!(target: "CashierDB", "Check for existing btc address");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -114,7 +115,8 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let mut stmt = conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = ?")?;
-        let addr_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
+        let addr_iter =
+            stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>([], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
         let mut btc_addresses = vec![];
 
@@ -122,14 +124,14 @@ impl CashierDb {
             btc_addresses.push(addr);
         }
 
-        return Ok(!btc_address.is_empty())
+        if let Some(addr) = btc_addresses.pop() {
+            return Ok(Some(addr?.1));
+        }
+
+        return Ok(None);
     }
 
-    pub fn put_withdraw_keys(
-        &self,
-        btc_key_id: Vec<u8>,
-        d_key_public: Vec<u8>,
-    ) -> Result<()> {
+    pub fn put_withdraw_keys(&self, btc_key_id: Vec<u8>, d_key_public: Vec<u8>) -> Result<()> {
         debug!(target: "CashierDB", "Put withdraw keys");
 
         // open connection
@@ -141,14 +143,12 @@ impl CashierDb {
             "INSERT withdraw_keypairs(btc_key_id, d_key_public)
             VALUES (:btc_key_id, :d_key_public)",
             named_params! {
-            ":btc_key_id": btc_key_id,
-            ":d_key_public": d_key_public,
+                ":btc_key_id": btc_key_id,
+                ":d_key_public": d_key_public,
             },
         )?;
         Ok(())
     }
-
-
 
     pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "cash key_gen", "Generating cashier keys...");
