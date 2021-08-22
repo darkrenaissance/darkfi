@@ -93,24 +93,24 @@ for a_i, b_i, c_i, Ql_i, Qr_i, Qm_i, Qo_i, Qc_i, public_i in \
     assert (Ql_i * a_i + Qr_i * b_i + Qm_i * a_i * b_i + Qo_i * c_i
             + Qc_i + public_i) == 0
 
-#    1   2      3      4    5               6               7       8
+#    0   1      2      3    4               5               6       7
 # a: x,  x,     1,     s,   1 - s,          sxy,            1       -
 #
-#    9   10     11     12   13              14              15      16
+#    8   9      10     11   12              13              14      15
 # b: y,  y,     s,     xy,  x + y,          (1 - s)(x + y), -       -
 #
-#    17  18     19     20   21              22              23      24
+#    16  17     18     19   20              21              22      23
 # c: xy, x + y, 1 - s, sxy, (1 - s)(x + y), -,              -       -
 
-permuted_indices_a = [2,  1,  7,  11, 19, 20, 3,  8]
-permuted_indices_b = [9,  10, 4,  17, 18, 21, 15, 16]
-permuted_indices_c = [12, 13, 5,  6,  14, 22, 23, 24]
+permuted_indices_a = [1,  0,  6,  10, 18, 19, 2,  7]
+permuted_indices_b = [8,  9,  3,  16, 17, 20, 14, 15]
+permuted_indices_c = [11, 12, 4,  5,  13, 21, 22, 23]
 eval_domain = range(0, 8 * 3)
 
 witness = a + b + c
 permuted_indices = permuted_indices_a + permuted_indices_b + permuted_indices_c
 for i, val in enumerate(a + b + c):
-    assert val == witness[permuted_indices[i] - 1]
+    assert val == witness[permuted_indices[i]]
 # Just used to check our values are correct
 del witness
 del permuted_indices
