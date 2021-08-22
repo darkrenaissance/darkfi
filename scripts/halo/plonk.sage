@@ -68,42 +68,48 @@ assert Ql6 * a6 + Qr6 * b6 + Qm6 * a6 * b6 + Qo6 * c6 + Qc6 + public_value == 0
 a7, b7, c7 = var_one, var_zero, var_zero
 Ql7, Qr7, Qm7, Qo7, Qc7 = 1, 0, 0, 0, -1
 assert Ql7 * a7 + Qr7 * b7 + Qm7 * a7 * b7 + Qo7 * c7 + Qc7 == 0
+# Add a last fake constraint so n is a power of 2
+# This is needed since we are working with omega whose size is 2^32
+# and we will create a generator from it whose order is 2^3
+a8, b8, c8 = var_zero, var_zero, var_zero
+Ql8, Qr8, Qm8, Qo8, Qc8 = 0, 0, 0, 0, 0
+assert Ql8 * a8 + Qr8 * b8 + Qm8 * a8 * b8 + Qo8 * c8 + Qc8 == 0
 
-a = [a1, a2, a3, a4, a5, a6, a7]
-b = [b1, b2, b3, b4, b5, b6, b7]
-c = [c1, c2, c3, c4, c5, c6, c7]
+a = [a1, a2, a3, a4, a5, a6, a7, a8]
+b = [b1, b2, b3, b4, b5, b6, b7, b8]
+c = [c1, c2, c3, c4, c5, c6, c7, c8]
 
-Ql = [Ql1, Ql2, Ql3, Ql4, Ql5, Ql6, Ql7]
-Qr = [Qr1, Qr2, Qr3, Qr4, Qr5, Qr6, Qr7]
-Qm = [Qm1, Qm2, Qm3, Qm4, Qm5, Qm6, Qm7]
-Qo = [Qo1, Qo2, Qo3, Qo4, Qo5, Qo6, Qo7]
-Qc = [Qc1, Qc2, Qc3, Qc4, Qc5, Qc6, Qc7]
+Ql = [Ql1, Ql2, Ql3, Ql4, Ql5, Ql6, Ql7, Ql8]
+Qr = [Qr1, Qr2, Qr3, Qr4, Qr5, Qr6, Qr7, Qr8]
+Qm = [Qm1, Qm2, Qm3, Qm4, Qm5, Qm6, Qm7, Qm8]
+Qo = [Qo1, Qo2, Qo3, Qo4, Qo5, Qo6, Qo7, Qo8]
+Qc = [Qc1, Qc2, Qc3, Qc4, Qc5, Qc6, Qc7, Qc8]
 
-public_values = [0, 0, 0, 0, 0, public_value, 0]
+public_values = [0, 0, 0, 0, 0, public_value, 0, 0]
 
 for a_i, b_i, c_i, Ql_i, Qr_i, Qm_i, Qo_i, Qc_i, public_i in \
     zip(a, b, c, Ql, Qr, Qm, Qo, Qc, public_values):
     assert (Ql_i * a_i + Qr_i * b_i + Qm_i * a_i * b_i + Qo_i * c_i
             + Qc_i + public_i) == 0
 
-#    0   1      2      3    4               5               6
-# a: x,  x,     1,     s,   1 - s,          sxy,            1
+#    1   2      3      4    5               6               7       8
+# a: x,  x,     1,     s,   1 - s,          sxy,            1       -
 #
-#    7   8      9      10   11              12              13
-# b: y,  y,     s,     xy,  x + y,          (1 - s)(x + y), -
+#    9   10     11     12   13              14              15      16
+# b: y,  y,     s,     xy,  x + y,          (1 - s)(x + y), -       -
 #
-#    14  15     16     17   18              19              20
-# c: xy, x + y, 1 - s, sxy, (1 - s)(x + y), -,              -
+#    17  18     19     20   21              22              23      24
+# c: xy, x + y, 1 - s, sxy, (1 - s)(x + y), -,              -       -
 
-permuted_indices_a = [1,  0,  6,  9,  16, 17, 2]
-permuted_indices_b = [8,  7,  3,  14, 15, 18, 13]
-permuted_indices_c = [10, 11, 4,  5,  12, 19, 20]
-eval_domain = range(0, 21)
+permuted_indices_a = [2,  1,  7,  11, 19, 20, 3,  8]
+permuted_indices_b = [9,  10, 4,  17, 18, 21, 15, 16]
+permuted_indices_c = [12, 13, 5,  6,  14, 22, 23, 24]
+eval_domain = range(0, 8 * 3)
 
 witness = a + b + c
 permuted_indices = permuted_indices_a + permuted_indices_b + permuted_indices_c
 for i, val in enumerate(a + b + c):
-    assert val == witness[permuted_indices[i]]
+    assert val == witness[permuted_indices[i] - 1]
 # Just used to check our values are correct
 del witness
 del permuted_indices
