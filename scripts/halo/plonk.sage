@@ -1,5 +1,6 @@
 q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
 K = GF(q)
+P.<X> = K[]
 
 # The pallas and vesta curves are 2-adic. This means there is a large
 # power of 2 subgroup within both of their fields.
@@ -114,3 +115,43 @@ for i, val in enumerate(a + b + c):
 del witness
 del permuted_indices
 
+omega = omega^(2^32 / 8)
+assert omega^8 == 1
+
+# Calculate the vanishing polynomial
+# This is the same as (X - omega^0)(X - omega^1)...(X - omega^{n - 1})
+Z_H = X^8 - 1
+assert Z_H(1) == 0
+assert Z_H(omega^4) == 0
+
+b_1 = K.random_element()
+b_2 = K.random_element()
+b_3 = K.random_element()
+b_4 = K.random_element()
+b_5 = K.random_element()
+b_6 = K.random_element()
+b_7 = K.random_element()
+b_8 = K.random_element()
+b_9 = K.random_element()
+
+# Round 1
+
+# Calculate wire witness polynomials
+a_X = (b_1 * X + b_2) * Z_H + \
+    P.lagrange_polynomial((omega^i, a_i) for i, a_i in enumerate(a))
+assert a_X(omega^2) == a[2]
+b_X = (b_3 * X + b_4) * Z_H + \
+    P.lagrange_polynomial((omega^i, b_i) for i, b_i in enumerate(b))
+assert b_X(omega^5) == b[5]
+c_X = (b_5 * X + b_6) * Z_H + \
+    P.lagrange_polynomial((omega^i, c_i) for i, c_i in enumerate(c))
+assert c_X(omega^0) == c[0]
+
+# Commit to a(X), b(X), c(X)
+
+# ...
+
+# Round 2
+
+beta = K.random_element()
+gamma = K.random_element()
