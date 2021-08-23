@@ -38,7 +38,6 @@ pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
     gateway: GatewayClient,
-    btc_endpoint: String,
     mint_params: groth16::Parameters<Bls12>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_params: groth16::Parameters<Bls12>,
@@ -60,7 +59,6 @@ impl CashierService {
             addr,
             wallet,
             gateway,
-            btc_endpoint,
             mint_params,
             mint_pvk,
             spend_params,
@@ -74,23 +72,17 @@ impl CashierService {
         let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
 
         let (send, recv) = protocol.start().await?;
-        let _ex2 = executor.clone();
 
         let handle_request_task =
-            executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
+            executor.spawn(self.handle_request_loop(
+                send.clone(),
+                recv.clone(),
+                executor.clone()
+            ));
 
         protocol.run(executor.clone()).await?;
 
         let _ = handle_request_task.cancel().await;
-
-        Ok(())
-    }
-
-    pub async fn subscribe_to_address(&self, script: Script) -> Result<()> {
-        debug!(target: "BTC", "Subscribe");
-        let client = Client::new(&self.btc_endpoint).unwrap();
-
-        let _response = client.script_subscribe(&script).unwrap();
 
         Ok(())
     }
@@ -158,7 +150,7 @@ impl CashierService {
         msg: (PeerId, Request),
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
-        _executor: Arc<Executor<'_>>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;
@@ -189,7 +181,12 @@ impl CashierService {
                 info!("Received dkey->btc msg");
 
                 // start scheduler for checking balance
-                //let _result = btc_keys.start_scheduler(executor.clone());
+                debug!(target: "BTC", "Subscribing");
+
+                btc_keys.start_subscribe(executor.clone()).await?;
+                //self.mint_dbtc(zkpub, 100);
+                //let _ = self.subscribe_to_address(script);
+
                 info!("Waiting for address balance");
             }
             1 => {

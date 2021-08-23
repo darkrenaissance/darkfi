@@ -6,14 +6,12 @@ use rand::{thread_rng, Rng};
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use secp256k1::key::SecretKey;
-
+use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
-
-
-
-
-
-
+use async_std::sync::Arc;
+use async_executor::Executor;
+use log::*;
+use electrum_client::{Client as ElectrumClient, ElectrumApi};
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -24,12 +22,21 @@ pub type PrivKey = PrivateKey;
 pub struct BitcoinKeys {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
+    btc_client: ElectrumClient,
     pub bitcoin_public_key: PublicKey,
     pub pub_address: Address,
+    pub script: Script,
 }
 
 impl BitcoinKeys {
-    pub fn new() -> Result<BitcoinKeys> {
+    pub fn new() -> Result<Arc<BitcoinKeys>> {
+
+        // Pull address from config later
+        let client_address = "";
+
+        // create client
+        let mut btc_client = ElectrumClient::new(&client_address).unwrap();
+
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -54,12 +61,51 @@ impl BitcoinKeys {
 
         let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Testnet);
 
-        Ok(Self {
+        let script = Script::new_p2pk(&bitcoin_public_key);
+
+        Ok(Arc::new(BitcoinKeys {
             secret_key,
             bitcoin_private_key,
             bitcoin_public_key,
+            btc_client,
             pub_address,
-        })
+            script,
+        }))
+    }
+
+    pub async fn start_subscribe(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "BTC", "Subscribe");
+
+        // Check if script is already subscribed
+        let status = self.btc_client.script_subscribe(&self.script).unwrap();
+        let subscribe_status_task =
+            executor.spawn(
+                self.subscribe_status_loop(executor.clone()),
+            );
+
+        let _ = subscribe_status_task.cancel().await;
+
+        Ok(())
+    }
+
+    async fn subscribe_status_loop(
+        self: Arc<Self>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        loop {
+            let check = self.btc_client.script_pop(&self.script);
+            match check {
+                // Script has a notification update
+                Ok(status) => {
+
+                }
+                // No update
+                Err(_) => {
+                    break
+                }
+            }
+        }
+        Ok(())
     }
 
     // This should do a db lookup to return the same obj
