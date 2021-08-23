@@ -23,17 +23,20 @@ halo2 = { git = "https://github.com/zcash/halo2.git", rev = "27c4187673a9c6ade13
 
 [dependencies.halo2_poseidon]
 git = "https://github.com/parazyd/orchard.git"
-rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
+rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
 features = ["halo2"]
 
 [dependencies.halo2_utilities]
 git = "https://github.com/parazyd/orchard.git"
-rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
+rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
 
 [dependencies.halo2_ecc]
 git = "https://github.com/parazyd/orchard.git"
-rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
+rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
 
-# [dependencies.orchard]
-# git = "https://github.com/parazyd/orchard.git"
-# rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+ [dependencies.orchard]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"

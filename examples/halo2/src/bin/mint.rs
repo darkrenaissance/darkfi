@@ -20,15 +20,13 @@ use halo2_poseidon::{
 use halo2_utilities::{
     lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
 };
+use orchard::constants::fixed_bases::{
+    OrchardFixedBases, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
+    VALUE_COMMITMENT_V_BYTES,
+};
 use rand::rngs::OsRng;
 
-use halo2_examples::{
-    circuit::Config,
-    constants::fixed_bases::{
-        OrchardFixedBases, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
-        VALUE_COMMITMENT_V_BYTES,
-    },
-};
+use halo2_examples::circuit::Config;
 
 const K: u32 = 9;
 
