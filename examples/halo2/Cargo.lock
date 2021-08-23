@@ -187,7 +187,7 @@ dependencies = [
 [[package]]
 name = "halo2_ecc"
 version = "0.0.0"
-source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+source = "git+https://github.com/parazyd/orchard.git?rev=5c8ac8b3630e07559252fe3eff98ca80772249d9#5c8ac8b3630e07559252fe3eff98ca80772249d9"
 dependencies = [
  "arrayvec 0.7.1",
  "bigint",
@@ -221,7 +221,7 @@ dependencies = [
 [[package]]
 name = "halo2_poseidon"
 version = "0.0.0"
-source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+source = "git+https://github.com/parazyd/orchard.git?rev=5c8ac8b3630e07559252fe3eff98ca80772249d9#5c8ac8b3630e07559252fe3eff98ca80772249d9"
 dependencies = [
  "bitvec",
  "halo2",
@@ -232,7 +232,7 @@ dependencies = [
 [[package]]
 name = "halo2_utilities"
 version = "0.0.0"
-source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+source = "git+https://github.com/parazyd/orchard.git?rev=5c8ac8b3630e07559252fe3eff98ca80772249d9#5c8ac8b3630e07559252fe3eff98ca80772249d9"
 dependencies = [
  "ff",
  "halo2",

@@ -17,10 +17,11 @@ lazy_static = "1"
 bigint = "4"
 subtle = "2.3"
 halo2 = { git="https://github.com/zcash/halo2.git", rev = "27c4187673a9c6ade13fbdbd4f20955530c22d7f" }
-halo2_utilities = { git ="https://github.com/parazyd/orchard.git", rev = "ae83fe91e680f5cb9a20f357d239cc2c81191ef8" }
-halo2_ecc = { git ="https://github.com/parazyd/orchard.git", rev = "ae83fe91e680f5cb9a20f357d239cc2c81191ef8" }
+halo2_utilities = { git ="https://github.com/parazyd/orchard.git", rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9" }
+halo2_ecc = { git ="https://github.com/parazyd/orchard.git", rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9" }
+# orchard = { git ="https://github.com/parazyd/orchard.git", rev = "dfb5e3a92acae39af9eda7aa5f7b8c46b469c094" }
 
 [dependencies.halo2_poseidon]
 git = "https://github.com/parazyd/orchard.git"
-rev = "ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9"
 features = ["halo2"]

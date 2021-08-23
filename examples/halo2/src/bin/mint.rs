@@ -11,23 +11,24 @@ use halo2::{
     poly::commitment,
     transcript::{Blake2bRead, Blake2bWrite},
 };
+use halo2_ecc::{chip::EccChip, gadget::FixedPoint};
+use halo2_poseidon::{
+    gadget::{Hash as PoseidonHash, Word},
+    pow5t3::{Pow5T3Chip as PoseidonChip, StateWord},
+    primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
+};
+use halo2_utilities::{
+    lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+};
 use rand::rngs::OsRng;
 
-use halo2_examples::circuit::{
-    gadget::{
-        ecc::{chip::EccChip, FixedPoint, FixedPointShort},
-        poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, StateWord, Word},
-        utilities::{
-            lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-        },
+use halo2_examples::{
+    circuit::Config,
+    constants::fixed_bases::{
+        OrchardFixedBases, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
+        VALUE_COMMITMENT_V_BYTES,
     },
-    Config,
 };
-use halo2_examples::constants::{
-    load::OrchardFixedBasesFull, ValueCommitV, VALUE_COMMITMENT_PERSONALIZATION,
-    VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
-};
-use halo2_examples::primitives::poseidon::{ConstantLength, Hash, OrchardNullifier};
 
 const K: u32 = 9;
 
@@ -106,7 +107,12 @@ impl Circuit<Fp> for MintCircuit {
 
         let range_check = LookupRangeCheckConfig::configure(meta, advices[9], table_idx);
 
-        let ecc_config = EccChip::configure(meta, advices, lagrange_coeffs, range_check.clone());
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices,
+            lagrange_coeffs,
+            range_check.clone(),
+        );
 
         let poseidon_config = PoseidonChip::configure(
             meta,
@@ -182,7 +188,7 @@ impl Circuit<Fp> for MintCircuit {
                         let val = msg[i].value();
                         let var = region.assign_advice(
                             || format!("load message_{}", i),
-                            config.poseidon_config.state[i],
+                            config.poseidon_config.state()[i],
                             0,
                             || val.ok_or(Error::SynthesisError),
                         )?;
@@ -211,9 +217,9 @@ impl Circuit<Fp> for MintCircuit {
             }
         }
 
-        if coin != Fp::zero() {
-            println!("circuit hash: {:?}", coin);
-        }
+        // if coin != Fp::zero() {
+        // println!("circuit hash: {:?}", coin);
+        // }
 
         let hash = self.load_private(
             layouter.namespace(|| "load hash"),
@@ -237,27 +243,21 @@ impl Circuit<Fp> for MintCircuit {
 
         // v*G_1
         let (commitment, _) = {
-            let value_commit_v = ValueCommitV::get();
-            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
-            // TODO: Should we be multiplying here with one so mitigate the
-            // API or is something wrong? Same goes for asset commit below.
-            value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+            let value_commit_v = OrchardFixedBases::ValueCommitV;
+            let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
+            value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
         };
 
         // r_V*G_2
         let (blind, _rcv) = {
             let rcv = self.value_blind;
-            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
+            let value_commit_r = OrchardFixedBases::ValueCommitR;
             let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
 
         // Constrain the x and y; indexes in public values are 1 and 2
         let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
-        if !value_commit.inner().x().value().is_none() {
-            println!("vcomX: {:?}", value_commit.inner().x().value().unwrap());
-            println!("vcomY: {:?}", value_commit.inner().y().value().unwrap());
-        }
         layouter.constrain_instance(value_commit.inner().x().cell(), config.primary, 1)?;
         layouter.constrain_instance(value_commit.inner().y().cell(), config.primary, 2)?;
 
@@ -267,25 +267,21 @@ impl Circuit<Fp> for MintCircuit {
 
         // a*G_1
         let (commitment, _) = {
-            let asset_commit_v = ValueCommitV::get();
-            let asset_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), asset_commit_v);
-            asset_commit_v.mul(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+            let asset_commit_v = OrchardFixedBases::ValueCommitV;
+            let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
+            asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
         };
 
         // r_A*G_2
         let (blind, _rca) = {
             let rca = self.asset_blind;
-            let asset_commit_r = OrchardFixedBasesFull::ValueCommitR;
+            let asset_commit_r = OrchardFixedBases::ValueCommitR;
             let asset_commit_r = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_r);
             asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
         };
 
         // Constrain the x and y; indexes in public values are 3 and 4
         let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
-        if !asset_commit.inner().x().value().is_none() {
-            println!("acomX: {:?}", asset_commit.inner().x().value().unwrap());
-            println!("acomY: {:?}", asset_commit.inner().y().value().unwrap());
-        }
         layouter.constrain_instance(asset_commit.inner().x().cell(), config.primary, 3)?;
         layouter.constrain_instance(asset_commit.inner().y().cell(), config.primary, 4)?;
 
@@ -416,10 +412,6 @@ fn main() {
         *asset_coords.x(),
         *asset_coords.y(),
     ];
-    println!(
-        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
-        public_inputs
-    );
 
     let circuit = MintCircuit {
         pub_x: Some(*coords.x()),
@@ -438,20 +430,13 @@ fn main() {
 
     // Add 1 to break the public inputs
     public_inputs[0] += Fp::from(0xdeadbeef);
-    println!(
-        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
-        public_inputs
-    );
+
     // Invalid MockProver
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
     assert!(prover.verify().is_err());
 
     // Remove 1 to make the public inputs valid again
     public_inputs[0] -= Fp::from(0xdeadbeef);
-    println!(
-        "\nPublic inputs: (coin, vcomX, vcomY, acomX, acomY)\n{:#?}",
-        public_inputs
-    );
 
     // Actual ZK proof
     let start = Instant::now();
