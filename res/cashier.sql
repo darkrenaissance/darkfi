@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS keypairs(
 );
 CREATE TABLE IF NOT EXISTS withdraw_keypairs(
     btc_key_id INTEGER PRIMARY KEY NOT NULL,
-    d_key_public BLOB NOT NULL,
+	d_key_private BLOB NOT NULL,
+    d_key_public BLOB NOT NULL, 
     txid BLOB
 );

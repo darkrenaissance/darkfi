@@ -104,19 +104,23 @@ impl CashierDb {
         Ok(())
     }
 
+    // return (private key, public key)
     pub fn get_address_by_btc_key(
         &self,
         btc_address: &Vec<u8>,
-    ) -> Result<Option<Vec<u8>>> {
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CashierDB", "Check for existing btc address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = ?")?;
-        let addr_iter =
-            stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut stmt =
+            conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = :btc_key_id")?;
+        let addr_iter = stmt
+            .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":btc_key_id", btc_address)], |row| {
+                Ok((row.get(1)?, row.get(2)?))
+            })?;
 
         let mut btc_addresses = vec![];
 
@@ -125,13 +129,18 @@ impl CashierDb {
         }
 
         if let Some(addr) = btc_addresses.pop() {
-            return Ok(Some(addr?.1));
+            return Ok(Some(addr?));
         }
 
         return Ok(None);
     }
 
-    pub fn put_withdraw_keys(&self, btc_key_id: Vec<u8>, d_key_public: Vec<u8>) -> Result<()> {
+    pub fn put_withdraw_keys(
+        &self,
+        btc_key_id: Vec<u8>,
+        d_key_private: Vec<u8>,
+        d_key_public: Vec<u8>,
+    ) -> Result<()> {
         debug!(target: "CashierDB", "Put withdraw keys");
 
         // open connection
@@ -140,10 +149,11 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT withdraw_keypairs(btc_key_id, d_key_public)
-            VALUES (:btc_key_id, :d_key_public)",
+            "INSERT withdraw_keypairs(btc_key_id, d_key_private, d_key_public)
+            VALUES (:btc_key_id, :d_key_private, :d_key_public)",
             named_params! {
                 ":btc_key_id": btc_key_id,
+                ":d_key_private": d_key_private,
                 ":d_key_public": d_key_public,
             },
         )?;
