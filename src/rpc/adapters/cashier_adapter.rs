@@ -1,7 +1,7 @@
 use crate::wallet::CashierDb;
-use crate::{Error, Result};
+use crate::{Result};
 use async_std::sync::Arc;
-use log::*;
+
 
 pub struct CashierAdapter {
     pub wallet: Arc<CashierDb>,

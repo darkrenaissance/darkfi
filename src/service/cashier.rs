@@ -74,7 +74,7 @@ impl CashierService {
         let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
 
         let (send, recv) = protocol.start().await?;
-        let ex2 = executor.clone();
+        let _ex2 = executor.clone();
 
         let handle_request_task =
             executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
@@ -88,9 +88,9 @@ impl CashierService {
 
     pub async fn subscribe_to_address(&self, script: Script) -> Result<()> {
         debug!(target: "BTC", "Subscribe");
-        let mut client = Client::new(&self.btc_endpoint).unwrap();
+        let client = Client::new(&self.btc_endpoint).unwrap();
 
-        let response = client.script_subscribe(&script).unwrap();
+        let _response = client.script_subscribe(&script).unwrap();
 
         Ok(())
     }
@@ -158,7 +158,7 @@ impl CashierService {
         msg: (PeerId, Request),
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
-        executor: Arc<Executor<'_>>,
+        _executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;

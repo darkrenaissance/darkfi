@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{Result};
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -8,12 +8,12 @@ use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use secp256k1::key::SecretKey;
 
 use bitcoin::network::constants::Network;
-use electrum_client::{Client, ElectrumApi};
 
-use async_executor::Executor;
-use async_std::sync::Arc;
 
-use log::debug;
+
+
+
+
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;

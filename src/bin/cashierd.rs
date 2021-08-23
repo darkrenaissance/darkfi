@@ -40,7 +40,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
     let cashier = CashierService::new(accept_addr, btc_endpoint, wallet.clone(), gateway)?;
     cashier.start(executor.clone()).await?;
 
-    let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
+    let _adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
     Ok(())
 }
 

@@ -26,7 +26,7 @@ pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
 }
 
 pub fn prepare_transaction(
-    state: &dyn ProgramState,
+    _state: &dyn ProgramState,
     secret: jubjub::Fr,
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,

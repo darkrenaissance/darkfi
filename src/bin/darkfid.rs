@@ -11,7 +11,7 @@ use drk::crypto::{
 };
 use drk::rpc::adapters::user_adapter::UserAdapter;
 use drk::rpc::jsonserver;
-use drk::serial::{deserialize, Decodable, Encodable};
+use drk::serial::{deserialize, Decodable};
 use drk::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
 use drk::util::{join_config_path, prepare_transaction};
