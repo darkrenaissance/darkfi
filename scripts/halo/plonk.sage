@@ -88,6 +88,8 @@ Qc = [Qc1, Qc2, Qc3, Qc4, Qc5, Qc6, Qc7, Qc8]
 
 public_values = [0, 0, 0, 0, 0, public_value, 0, 0]
 
+n = 8
+
 for a_i, b_i, c_i, Ql_i, Qr_i, Qm_i, Qo_i, Qc_i, public_i in \
     zip(a, b, c, Ql, Qr, Qm, Qo, Qc, public_values):
     assert (Ql_i * a_i + Qr_i * b_i + Qm_i * a_i * b_i + Qo_i * c_i
@@ -105,24 +107,30 @@ for a_i, b_i, c_i, Ql_i, Qr_i, Qm_i, Qo_i, Qc_i, public_i in \
 permuted_indices_a = [1,  0,  6,  10, 18, 19, 2,  7]
 permuted_indices_b = [8,  9,  3,  16, 17, 20, 14, 15]
 permuted_indices_c = [11, 12, 4,  5,  13, 21, 22, 23]
-eval_domain = range(0, 8 * 3)
+eval_domain = range(0, n * 3)
 
 witness = a + b + c
 permuted_indices = permuted_indices_a + permuted_indices_b + permuted_indices_c
 for i, val in enumerate(a + b + c):
     assert val == witness[permuted_indices[i]]
-# Just used to check our values are correct
-del witness
-del permuted_indices
 
-omega = omega^(2^32 / 8)
-assert omega^8 == 1
+omega = omega^(2^32 / n)
+assert omega^n == 1
 
 # Calculate the vanishing polynomial
 # This is the same as (X - omega^0)(X - omega^1)...(X - omega^{n - 1})
-Z_H = X^8 - 1
+Z_H = X^n - 1
 assert Z_H(1) == 0
 assert Z_H(omega^4) == 0
+
+qL_X = P.lagrange_polynomial((omega^i, Ql_i) for i, Ql_i in enumerate(Ql))
+qR_X = P.lagrange_polynomial((omega^i, Qr_i) for i, Qr_i in enumerate(Qr))
+qM_X = P.lagrange_polynomial((omega^i, Qm_i) for i, Qm_i in enumerate(Qm))
+qO_X = P.lagrange_polynomial((omega^i, Qo_i) for i, Qo_i in enumerate(Qo))
+qC_X = P.lagrange_polynomial((omega^i, Qc_i) for i, Qc_i in enumerate(Qc))
+
+PI_X = P.lagrange_polynomial((omega^i, public_i) for i, public_i
+                             in enumerate(public_values))
 
 b_1 = K.random_element()
 b_2 = K.random_element()
@@ -155,3 +163,129 @@ assert c_X(omega^0) == c[0]
 
 beta = K.random_element()
 gamma = K.random_element()
+
+def find_quadratic_non_residue():
+    k = K.random_element()
+    while kronecker(k, q) != -1:
+        k = K.random_element()
+    return k
+
+# These values do not have a square root
+k1 = find_quadratic_non_residue()
+k2 = find_quadratic_non_residue()
+assert k1 != k2
+
+indices = ([omega^i for i in range(n)]
+           + [k1 * omega^i for i in range(n)]
+           + [k2 * omega^i for i in range(n)])
+# Permuted indices
+sigma_star = [indices[i] for i in permuted_indices]
+
+permutation_points = [(1, 1)]
+for i in range(n - 1):
+    x = omega^(i + 1)
+    y = 1
+    for j in range(i + 1):
+        y *= witness[j] + beta * omega^j + gamma
+        y *= witness[n + j] + beta * k1 * omega^j + gamma
+        y *= witness[2 * n + j] + beta * k2 * omega^j + gamma
+        y /= witness[j] + sigma_star[j] * beta + gamma
+        y /= witness[n + j] + sigma_star[n + j] * beta + gamma
+        y /= witness[2 * n + j] + sigma_star[2 * n + j] * beta + gamma
+    permutation_points.append((x, y))
+
+z_X = (b_7 * X^2 + b_8 * X + b_9) * Z_H + \
+    P.lagrange_polynomial(permutation_points)
+
+assert witness[0] == 4
+assert witness[n] == 6
+assert witness[2 * n] == var_xy == 24
+assert sigma_star[0] == omega
+assert sigma_star[n] == k1 * omega^8
+assert sigma_star[2 * n] == k1 * omega^11
+assert z_X(omega^0) == 1
+assert ((4 + beta + gamma) * (6 + beta * k1 + gamma) * (24 + beta * k2 + gamma)
+       ) == (z_X(omega)
+        * (4 + omega * beta + gamma)
+        * (6 + k1 * omega^8 * beta + gamma)
+        * (24 + k1 * omega^11 * beta + gamma))
+
+assert witness[2] == var_one == 1
+assert witness[n + 2] == var_s == 1
+assert witness[2 * n + 2] == var_1_neg_s == 0
+assert sigma_star[2] == omega^6
+assert sigma_star[n + 2] == omega^3
+assert sigma_star[2 * n + 2] == omega^4
+assert (z_X(omega^2) * (1 + beta * omega^2 + gamma) 
+        * (1 + beta * k1 * omega^2 + gamma)
+        * (0 + beta * k2 * omega^2 + gamma)
+       ) == (z_X(omega^3) * (1 + omega^6 * beta + gamma)
+        * (1 + omega^3 * beta + gamma)
+        * (0 + omega^4 * beta + gamma))
+
+
+# Round 3
+
+alpha = K.random_element()
+
+Ssigma_1 = P.lagrange_polynomial((omega^i, sigma_star[i]) for i in range(8))
+Ssigma_2 = P.lagrange_polynomial((omega^i, sigma_star[n + i]) for i in range(8))
+Ssigma_3 = P.lagrange_polynomial((omega^i, sigma_star[2 * n + i])
+                                 for i in range(8))
+assert Ssigma_1(omega^0) == omega^1
+assert Ssigma_1(omega^3) == k1 * omega^10
+assert Ssigma_2(omega^2) == omega^3
+assert Ssigma_3(omega^7) == k2 * omega^7 == k2 * omega^23
+
+t_X_constraints = ((a_X * b_X * qM_X) + (a_X * qL_X) + (b_X * qR_X)
+                   + (c_X * qO_X) + qC_X + PI_X)
+for i in range(8):
+    assert t_X_constraints(omega^i) == 0
+
+t_X_permutations = ((a_X + beta * X + gamma)
+                      * (b_X + beta * k1 * X + gamma)
+                      * (c_X + beta * k2 * X + gamma) * z_X
+                    # Permutated accumulator
+                    - (a_X + beta * Ssigma_1 + gamma)
+                      * (b_X + beta * Ssigma_2 + gamma)
+                      * (c_X + beta * Ssigma_3 + gamma) * z_X(X * omega))
+for i in range(8):
+    assert t_X_permutations(omega^i) == 0
+
+L1_X = P.lagrange_polynomial([(1, 1)] + [(omega^i, 0) for i in range(1, n)])
+assert L1_X(omega^0) == 1
+assert L1_X(omega^2) == 0
+t_X_zloops = (z_X - 1) * L1_X
+assert t_X_zloops(omega^0) == 0
+assert t_X_zloops(omega^2) == 0
+assert t_X_zloops(omega^8) == 0
+
+t = (t_X_constraints + t_X_permutations * alpha + t_X_zloops * alpha^2) / Z_H
+
+# Commit to t
+
+# ...
+
+# Round 4
+
+zeta = K.random_element()
+
+a_bar = a_X(zeta)
+b_bar = b_X(zeta)
+c_bar = c_X(zeta)
+s_bar_1 = Ssigma_1(zeta)
+s_bar_2 = Ssigma_1(zeta)
+z_bar_omega = z_X(zeta * omega)
+
+# Now we provide proofs that all the above values are correct openings
+# of the committed polynomials.
+
+# And we prove that a reconstructed version of t(X) from the polynomial
+# commitments of the witness and permutation polynomials equals the
+# t(X) commitment.
+# t(X) - r(X) = 0 where r(X) is the reconstructed polynomial.
+
+# In order to avoid sending Ssigma_1(zeta) and z(zeta), plonk does an
+# optimization using the Maller trick documented in section 4 under
+# the title "Reducing the number of field elements"
+
