@@ -274,7 +274,7 @@ a_bar = a_X(zeta)
 b_bar = b_X(zeta)
 c_bar = c_X(zeta)
 s_bar_1 = Ssigma_1(zeta)
-s_bar_2 = Ssigma_1(zeta)
+s_bar_2 = Ssigma_2(zeta)
 z_bar_omega = z_X(zeta * omega)
 
 # Now we provide proofs that all the above values are correct openings
@@ -289,3 +289,34 @@ z_bar_omega = z_X(zeta * omega)
 # optimization using the Maller trick documented in section 4 under
 # the title "Reducing the number of field elements"
 
+# Round 5
+
+# To reduce the proof by two elements, we construct a linearization polynomial
+# which only contains 1 interminate per multiplication expression which is
+# enough to prove the polynomial correctly evaluates.
+
+r = (
+    # This is proving the constraint polynomial has roots at H
+    (a_bar * b_bar * qM_X) + (a_bar * qL_X) + (b_bar * qR_X)
+        + (c_bar * qO_X) + PI_X + qC_X
+
+    + alpha * ((a_bar + beta * zeta + gamma)
+               * (b_bar + beta * k1 * zeta + gamma)
+               * (c_bar + beta * k2 * zeta + gamma) * z_X
+               -
+               (a_bar + beta * s_bar_1 + gamma)
+               * (b_bar + beta * s_bar_2 + gamma)
+               * (c_bar + beta * Ssigma_3 + gamma) * z_bar_omega)
+
+    + alpha^2 * (z_X - 1) * L1_X(zeta)
+
+    # t = (t_X_constraints + t_X_permutations * alpha + t_X_zloops * alpha^2)
+    #     -------------------------------------------------------------------
+    #                                Z_H
+    - Z_H(zeta) * t
+)
+
+assert r(zeta) == 0
+
+# That is basically the plonk prover. The remaining stuff are details such as
+# which polynomial commitment scheme you use (kate, bulletproofs, ...)
