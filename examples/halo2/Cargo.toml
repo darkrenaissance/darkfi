@@ -16,12 +16,24 @@ arrayvec = "0.7.0"
 lazy_static = "1"
 bigint = "4"
 subtle = "2.3"
-halo2 = { git="https://github.com/zcash/halo2.git", rev = "27c4187673a9c6ade13fbdbd4f20955530c22d7f" }
-halo2_utilities = { git ="https://github.com/parazyd/orchard.git", rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9" }
-halo2_ecc = { git ="https://github.com/parazyd/orchard.git", rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9" }
-# orchard = { git ="https://github.com/parazyd/orchard.git", rev = "dfb5e3a92acae39af9eda7aa5f7b8c46b469c094" }
+halo2 = "0.0"
+
+[patch.crates-io]
+halo2 = { git = "https://github.com/zcash/halo2.git", rev = "27c4187673a9c6ade13fbdbd4f20955530c22d7f" }
 
 [dependencies.halo2_poseidon]
 git = "https://github.com/parazyd/orchard.git"
-rev = "5c8ac8b3630e07559252fe3eff98ca80772249d9"
+rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
 features = ["halo2"]
+
+[dependencies.halo2_utilities]
+git = "https://github.com/parazyd/orchard.git"
+rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+
+[dependencies.halo2_ecc]
+git = "https://github.com/parazyd/orchard.git"
+rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
+
+# [dependencies.orchard]
+# git = "https://github.com/parazyd/orchard.git"
+# rev = "0c00de95405dc8f559ebbb2b9c37f490ecbf966b"
