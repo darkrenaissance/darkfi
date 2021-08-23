@@ -185,6 +185,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2_ecc"
+version = "0.0.0"
+source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+dependencies = [
+ "arrayvec 0.7.1",
+ "bigint",
+ "ff",
+ "group",
+ "halo2",
+ "halo2_utilities",
+ "lazy_static",
+ "pasta_curves",
+]
+
+[[package]]
 name = "halo2_examples"
 version = "0.1.0"
 dependencies = [
@@ -194,10 +209,34 @@ dependencies = [
  "ff",
  "group",
  "halo2",
+ "halo2_ecc",
+ "halo2_poseidon",
+ "halo2_utilities",
  "lazy_static",
  "pasta_curves",
  "rand",
  "subtle",
+]
+
+[[package]]
+name = "halo2_poseidon"
+version = "0.0.0"
+source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+dependencies = [
+ "bitvec",
+ "halo2",
+ "halo2_utilities",
+ "pasta_curves",
+]
+
+[[package]]
+name = "halo2_utilities"
+version = "0.0.0"
+source = "git+https://github.com/parazyd/orchard.git?rev=ae83fe91e680f5cb9a20f357d239cc2c81191ef8#ae83fe91e680f5cb9a20f357d239cc2c81191ef8"
+dependencies = [
+ "ff",
+ "halo2",
+ "pasta_curves",
 ]
 
 [[package]]
