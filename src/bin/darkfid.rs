@@ -14,7 +14,7 @@ use drk::rpc::jsonserver;
 use drk::serial::{deserialize, Decodable, Encodable};
 use drk::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use drk::state::{state_transition, ProgramState, StateUpdate};
-use drk::util::join_config_path;
+use drk::util::{join_config_path, prepare_transaction};
 use drk::wallet::{WalletDb, WalletPtr};
 use drk::{tx, Result};
 
@@ -176,43 +176,20 @@ pub async fn futures_broker(
             transfer_params = publish_tx_recv.recv().fuse() => {
                 let transfer_params = transfer_params?;
 
-                let merkle_path = {
-                    let (_coin, _, _, witness) = &mut state.wallet.get_own_coins()?[0];
-
-                    let merkle_path = witness.path().unwrap();
-
-                    merkle_path
-                };
-
                 let address = bs58::decode(transfer_params.pub_key).into_vec()?;
                 let address: jubjub::SubgroupPoint = deserialize(&address)?;
 
-                // Make a spend tx
+                let own_coins = state.wallet.get_own_coins()?;
 
-                // Construct a new tx spending the coin
-                let builder = tx::TransactionBuilder {
-                    clear_inputs: vec![],
-                    inputs: vec![tx::TransactionBuilderInputInfo {
-                        merkle_path,
-                        secret: secret.clone(),
-                        note: state.wallet.get_own_coins()?[0].1.clone(),
-                    }],
-                    // We can add more outputs to this list.
-                    // The only constraint is that sum(value in) == sum(value out)
-                    outputs: vec![tx::TransactionBuilderOutputInfo {
-                        value: transfer_params.amount as u64,
-                        asset_id: 1,
-                        public: address,
-                    }],
-                };
-                // Build the tx
-                let mut tx_data = vec![];
-                {
-                    let tx = builder.build(&mint_params, &spend_params);
-                    tx.encode(&mut tx_data).expect("encode tx");
-                }
-
-                let slab = Slab::new(tx_data);
+                let slab = prepare_transaction(
+                    state,
+                    secret.clone(),
+                    mint_params.clone(),
+                    spend_params.clone(),
+                    address,
+                    transfer_params.amount,
+                    own_coins
+                )?;
 
                 client.put_slab(slab).await.expect("put slab");
             }
