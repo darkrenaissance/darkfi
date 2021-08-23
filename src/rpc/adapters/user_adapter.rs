@@ -198,7 +198,10 @@ impl UserAdapter {
     pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
         debug!(target: "withdraw", "withdraw: START");
         // do the key exchange
-        self.withdraw_channel.0.send(withdraw_params.pub_key).await?;
+        self.withdraw_channel
+            .0
+            .send(withdraw_params.pub_key)
+            .await?;
         // send the drk
         if let Some(key) = self.withdraw_channel.1.recv().await? {
             let mut transfer_params = TransferParams::new();

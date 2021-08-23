@@ -1,4 +1,6 @@
-use crate::crypto::{OwnCoins, coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
+use crate::crypto::{
+    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoins,
+};
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};

@@ -1,9 +1,9 @@
 use crate::blockchain::Slab;
-use crate::state::ProgramState;
-use crate::Result;
-use crate::tx;
-use crate::serial::Encodable;
 use crate::crypto::OwnCoins;
+use crate::serial::Encodable;
+use crate::state::ProgramState;
+use crate::tx;
+use crate::Result;
 
 use bls12_381::Bls12;
 

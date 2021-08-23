@@ -26,7 +26,6 @@ pub type OwnCoins = Vec<(
     merkle::IncrementalWitness<merkle_node::MerkleNode>,
 )>;
 
-
 pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Result<()> {
     let buffer = std::fs::File::create(filename)?;
     params.write(buffer)?;

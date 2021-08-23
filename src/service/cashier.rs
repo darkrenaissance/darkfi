@@ -1,6 +1,6 @@
-use super::GatewayClient;
-use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use super::btc::{BitcoinKeys, PubAddress};
+use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
+use super::GatewayClient;
 use crate::blockchain::Slab;
 use crate::crypto::load_params;
 use crate::serial::{deserialize, serialize, Encodable};
@@ -10,14 +10,14 @@ use crate::{Error, Result};
 
 use bellman::groth16;
 use bls12_381::Bls12;
-use rand::rngs::OsRng;
 use ff::Field;
+use rand::rngs::OsRng;
 //use bitcoin::blockdata::script::Script;
 use electrum_client::bitcoin::Script;
 use electrum_client::{Client, ElectrumApi};
 
-use log::*;
 use async_executor::Executor;
+use log::*;
 
 use async_std::sync::Arc;
 
@@ -204,8 +204,13 @@ impl CashierService {
                     cashier_public = deserialize(&addr.1)?;
                 } else {
                     let cashier_secret = jubjub::Fr::random(&mut OsRng);
-                    cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-                    cashier_wallet.put_withdraw_keys(btc_address, serialize(&cashier_secret), serialize(&cashier_public))?;
+                    cashier_public =
+                        zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+                    cashier_wallet.put_withdraw_keys(
+                        btc_address,
+                        serialize(&cashier_secret),
+                        serialize(&cashier_public),
+                    )?;
                 }
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
