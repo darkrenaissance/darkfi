@@ -331,6 +331,7 @@ dependencies = [
  "orchard",
  "pasta_curves",
  "rand",
+ "sinsemilla",
  "subtle",
 ]
 

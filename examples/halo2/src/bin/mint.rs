@@ -2,7 +2,7 @@ use std::{convert::TryInto, time::Instant};
 
 use group::{ff::Field, Curve, Group};
 use halo2::{
-    arithmetic::{CurveAffine, CurveExt, FieldExt},
+    arithmetic::CurveAffine,
     circuit::{floor_planner, Layouter},
     dev::MockProver,
     pasta::{vesta, Ep, Fp, Fq},
@@ -20,13 +20,10 @@ use halo2_poseidon::{
 use halo2_utilities::{
     lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
 };
-use orchard::constants::fixed_bases::{
-    OrchardFixedBases, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
-    VALUE_COMMITMENT_V_BYTES,
-};
+use orchard::constants::fixed_bases::OrchardFixedBases;
 use rand::rngs::OsRng;
 
-use halo2_examples::circuit::Config;
+use halo2_examples::{circuit::Config, pedersen_commitment};
 
 const K: u32 = 9;
 
@@ -359,16 +356,6 @@ impl Proof {
     // fn new(bytes: Vec<u8>) -> Self {
     // Proof(bytes)
     // }
-}
-
-#[allow(non_snake_case)]
-fn pedersen_commitment(value: u64, blind: Fq) -> Ep {
-    let hasher = Ep::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
-    let V = hasher(&VALUE_COMMITMENT_V_BYTES);
-    let R = hasher(&VALUE_COMMITMENT_R_BYTES);
-    let value = Fq::from_u64(value);
-
-    V * value + R * blind
 }
 
 fn main() {
