@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use halo2::{
     circuit::{floor_planner, Layouter},
-    dev::MockProver,
     pasta::{vesta, Fp},
     plonk,
     plonk::{
@@ -13,14 +12,12 @@ use halo2::{
     transcript::{Blake2bRead, Blake2bWrite},
 };
 
-use halo2_examples::circuit::gadget::{
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
-    utilities::{copy, CellValue, UtilitiesInstructions, Var},
+use halo2_poseidon::{
+    gadget::{Hash as PoseidonHash, Word},
+    pow5t3::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig, StateWord},
+    primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
 };
-use halo2_examples::primitives::poseidon::{ConstantLength, Hash, OrchardNullifier};
+use halo2_utilities::{copy, CellValue, UtilitiesInstructions, Var};
 
 const K: u32 = 6;
 
@@ -137,7 +134,7 @@ impl Circuit<Fp> for HashCircuit {
                         let value = message[i].value();
                         let var = region.assign_advice(
                             || format!("load message_{}", i),
-                            config.poseidon_config.state[i],
+                            config.poseidon_config.state()[i],
                             0,
                             || value.ok_or(Error::SynthesisError),
                         )?;
@@ -260,9 +257,9 @@ impl Proof {
         }
     }
 
-    fn new(bytes: Vec<u8>) -> Self {
-        Proof(bytes)
-    }
+    // fn new(bytes: Vec<u8>) -> Self {
+    // Proof(bytes)
+    // }
 }
 
 fn main() {
