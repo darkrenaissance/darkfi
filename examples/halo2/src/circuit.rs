@@ -1,12 +1,10 @@
-pub mod gadget;
-
 use halo2::{
     pasta::pallas,
     plonk::{Advice, Column, Instance as InstanceColumn, Selector},
 };
 
-use gadget::ecc::chip::EccConfig;
-use gadget::poseidon::Pow5T3Config as PoseidonConfig;
+use halo2_ecc::chip::EccConfig;
+use halo2_poseidon::pow5t3::Pow5T3Config as PoseidonConfig;
 
 #[derive(Clone, Debug)]
 pub struct Config {
