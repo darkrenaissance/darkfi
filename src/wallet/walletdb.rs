@@ -1,4 +1,4 @@
-use crate::crypto::{coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
+use crate::crypto::{OwnCoins, coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note};
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
@@ -12,7 +12,6 @@ use rusqlite::{named_params, params, Connection};
 use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDb>;
-pub type OwnCoins = Vec<(Coin, Note, jubjub::Fr, IncrementalWitness<MerkleNode>)>;
 
 pub struct WalletDb {
     pub path: PathBuf,
