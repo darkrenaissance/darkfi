@@ -25,6 +25,7 @@ def get_omega():
 # Order of this element is 2^32
 omega = get_omega()
 
+# f(s, x, y) = sxy + (1 - s)(x + y)
 var_one = K(1)
 var_x = K(4)
 var_y = K(6)
@@ -38,6 +39,8 @@ var_1_neg_s_x_y = var_1_neg_s * var_x_y
 var_zero = K(0)
 
 public_value = -(var_s * (var_x * var_y) + (1 - var_s) * (var_x + var_y))
+
+# Ql a + Qr b + Qm a b + Qo c + Qc + P == 0
 
 # See also the file plonk-naive.sage
 # x * y = xy
