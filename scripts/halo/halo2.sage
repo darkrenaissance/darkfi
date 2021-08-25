@@ -4,6 +4,13 @@ q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
 K = GF(q)
 P.<X> = K[]
 
+# GENERATOR^{2^s} where t * 2^s + 1 = q with t odd.
+# In other words, this is a t root of unity.
+generator = K(5)
+# There is a large 2^32 order subgroup in this curve because it is 2-adic
+#t = (K(q) - 1) / 2^32
+delta = generator^(2^32)
+
 def get_omega():
     generator = K(5)
     assert (q - 1) % 2^32 == 0
