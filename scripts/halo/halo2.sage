@@ -36,7 +36,7 @@ assert omega^n == 1
 # sxy + (s - 1)(x + y) - z = 0
 # s(s - 1) = 0
 
-# F1(A1 - 1) + F2 A1 + F3(1 - A1)(A2 + A3) + F4(A1 A2 A3 - A4) - I = 0
+# F1(A1 - 1) + F2 (A1 - I) + F3((1 - A1)(A2 + A3) - A4) + F4(A1 A2 A3 - A4) = 0
 A = []
 F = []
 
@@ -65,7 +65,7 @@ F_1_2, F_2_2, F_3_2, F_4_2 = 0, 1, 0, 0
 I_2 = 0
 
 # Row 3
-A_1_3, A_2_3, A_3_3, A_4_3 = var_s, var_s, var_zero, 0
+A_1_3, A_2_3, A_3_3, A_4_3 = var_s, var_s, var_zero, var_zero
 F_1_3, F_2_3, F_3_3, F_4_3 = 0, 0, 1, 0
 I_3 = 0
 
@@ -80,15 +80,15 @@ F_1_5, F_2_5, F_3_5, F_4_5 = 0, 0, 1, 0
 I_5 = 0
 
 # Row 6
-A_1_6, A_2_6, A_3_6, A_4_6 = var_zero, var_sxy, var_1s_xy, 0
+A_1_6, A_2_6, A_3_6, A_4_6 = var_zero, var_sxy, var_1s_xy, var_z
 F_1_6, F_2_6, F_3_6, F_4_6 = 0, 0, 1, 0
-I_6 = var_z
+I_6 = 0
 
 # Row 7
 # Empty row
-A_1_7, A_2_7, A_3_7, A_4_7 = 0, 0, 0, 0
-F_1_7, F_2_7, F_3_7, F_4_7 = 0, 0, 0, 0
-I_7 = 0
+A_1_7, A_2_7, A_3_7, A_4_7 = var_z, 0, 0, 0
+F_1_7, F_2_7, F_3_7, F_4_7 = 0, 1, 0, 0
+I_7 = var_z
 
 # Row 8
 # Empty row
@@ -109,9 +109,9 @@ I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6,   I_7,   I_8]
 for A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i in zip(
     A1, A2, A3, A4, F1, F2, F3, F4, I):
     assert (F_1_i * (A_1_i - 1)
-            + F_2_i * A_1_i
-            + F_3_i * (1 - A_1_i) * (A_2_i + A_3_i)
-            + F_4_i * (A_1_i * A_2_i * A_3_i - A_4_i) - I_i) == 0
+            + F_2_i * (A_1_i - I_i)
+            + F_3_i * ((1 - A_1_i) * (A_2_i + A_3_i) - A_4_i)
+            + F_4_i * (A_1_i * A_2_i * A_3_i - A_4_i)) == 0
 
 a_1_X = P.lagrange_polynomial((omega^i, A_1_i) for i, A_1_i in enumerate(A1))
 a_2_X = P.lagrange_polynomial((omega^i, A_2_i) for i, A_2_i in enumerate(A2))
@@ -135,4 +135,18 @@ for i, (A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i) in \
     assert f_2_X(omega^i) == F_2_i
     assert f_3_X(omega^i) == F_3_i
     assert f_4_X(omega^i) == F_4_i
+
+# beta, gamma
+
+y = K.random_element()
+
+gate_0 = f_1_X * (a_1_X - 1)
+gate_1 = f_2_X * (a_1_X - a_5_X)
+gate_2 = f_3_X * ((1 - a_1_X) * (a_2_X + a_3_X) - a_4_X)
+gate_3 = f_4_X * (a_1_X * a_2_X * a_3_X - a_4_X)
+
+h = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
+t = X^n - 1
+for i in range(n):
+    assert h(omega^i) == 0
 
