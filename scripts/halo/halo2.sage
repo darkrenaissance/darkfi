@@ -55,64 +55,84 @@ var_z = var_sxy + var_1s_xy
 # 1 instance column
 
 # Row 1
-A1, A2, A3, A4 = var_one, 0, 0, 0
-F1, F2, F3, F4 = 1, 0, 0, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_1, A_2_1, A_3_1, A_4_1 = var_one, 0, 0, 0
+F_1_1, F_2_1, F_3_1, F_4_1 = 1, 0, 0, 0
+I_1 = 0
 
 # Row 2
-A1, A2, A3, A4 = var_zero, 0, 0, 0
-F1, F2, F3, F4 = 0, 1, 0, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_2, A_2_2, A_3_2, A_4_2 = var_zero, 0, 0, 0
+F_1_2, F_2_2, F_3_2, F_4_2 = 0, 1, 0, 0
+I_2 = 0
 
 # Row 3
-A1, A2, A3, A4 = var_s, var_s, var_zero, 0
-F1, F2, F3, F4 = 0, 0, 1, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_3, A_2_3, A_3_3, A_4_3 = var_s, var_s, var_zero, 0
+F_1_3, F_2_3, F_3_3, F_4_3 = 0, 0, 1, 0
+I_3 = 0
 
 # Row 4
-A1, A2, A3, A4 = var_s, var_x, var_y, var_sxy
-F1, F2, F3, F4 = 0, 0, 0, 1
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_4, A_2_4, A_3_4, A_4_4 = var_s, var_x, var_y, var_sxy
+F_1_4, F_2_4, F_3_4, F_4_4 = 0, 0, 0, 1
+I_4 = 0
 
 # Row 5
-A1, A2, A3, A4 = var_s, var_x, var_y, var_1s_xy
-F1, F2, F3, F4 = 0, 0, 1, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_5, A_2_5, A_3_5, A_4_5 = var_s, var_x, var_y, var_1s_xy
+F_1_5, F_2_5, F_3_5, F_4_5 = 0, 0, 1, 0
+I_5 = 0
 
 # Row 6
-A1, A2, A3, A4 = var_zero, var_sxy, var_1s_xy, 0
-F1, F2, F3, F4 = 0, 0, 1, 0
-I = var_z
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_6, A_2_6, A_3_6, A_4_6 = var_zero, var_sxy, var_1s_xy, 0
+F_1_6, F_2_6, F_3_6, F_4_6 = 0, 0, 1, 0
+I_6 = var_z
 
 # Row 7
 # Empty row
-A1, A2, A3, A4 = 0, 0, 0, 0
-F1, F2, F3, F4 = 0, 0, 0, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_7, A_2_7, A_3_7, A_4_7 = 0, 0, 0, 0
+F_1_7, F_2_7, F_3_7, F_4_7 = 0, 0, 0, 0
+I_7 = 0
 
 # Row 8
 # Empty row
-A1, A2, A3, A4 = 0, 0, 0, 0
-F1, F2, F3, F4 = 0, 0, 0, 0
-I = 0
-A.append((A1, A2, A3, A4, I))
-F.append((F1, F2, F3, F4))
+A_1_8, A_2_8, A_3_8, A_4_8 = 0, 0, 0, 0
+F_1_8, F_2_8, F_3_8, F_4_8 = 0, 0, 0, 0
+I_8 = 0
 
-for (A1, A2, A3, A4, I), (F1, F2, F3, F4) in zip(A, F):
-    assert (F1 * (A1 - 1) + F2 * A1 + F3 * (1 - A1) * (A2 + A3)
-            + F4 * (A1 * A2 * A3 - A4) - I) == 0
+A1 = [A_1_1, A_1_2, A_1_3, A_1_4, A_1_5, A_1_6, A_1_7, A_1_8]
+A2 = [A_2_1, A_2_2, A_2_3, A_2_4, A_2_5, A_2_6, A_2_7, A_2_8]
+A3 = [A_3_1, A_3_2, A_3_3, A_3_4, A_3_5, A_3_6, A_3_7, A_3_8]
+A4 = [A_4_1, A_4_2, A_4_3, A_4_4, A_4_5, A_4_6, A_4_7, A_4_8]
+F1 = [F_1_1, F_1_2, F_1_3, F_1_4, F_1_5, F_1_6, F_1_7, F_1_8]
+F2 = [F_2_1, F_2_2, F_2_3, F_2_4, F_2_5, F_2_6, F_2_7, F_2_8]
+F3 = [F_3_1, F_3_2, F_3_3, F_3_4, F_3_5, F_3_6, F_3_7, F_3_8]
+F4 = [F_4_1, F_4_2, F_4_3, F_4_4, F_4_5, F_4_6, F_4_7, F_4_8]
+I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6,   I_7,   I_8]
+
+for A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i in zip(
+    A1, A2, A3, A4, F1, F2, F3, F4, I):
+    assert (F_1_i * (A_1_i - 1)
+            + F_2_i * A_1_i
+            + F_3_i * (1 - A_1_i) * (A_2_i + A_3_i)
+            + F_4_i * (A_1_i * A_2_i * A_3_i - A_4_i) - I_i) == 0
+
+a_1_X = P.lagrange_polynomial((omega^i, A_1_i) for i, A_1_i in enumerate(A1))
+a_2_X = P.lagrange_polynomial((omega^i, A_2_i) for i, A_2_i in enumerate(A2))
+a_3_X = P.lagrange_polynomial((omega^i, A_3_i) for i, A_3_i in enumerate(A3))
+a_4_X = P.lagrange_polynomial((omega^i, A_4_i) for i, A_4_i in enumerate(A4))
+f_1_X = P.lagrange_polynomial((omega^i, F_1_i) for i, F_1_i in enumerate(F1))
+f_2_X = P.lagrange_polynomial((omega^i, F_2_i) for i, F_2_i in enumerate(F2))
+f_3_X = P.lagrange_polynomial((omega^i, F_3_i) for i, F_3_i in enumerate(F3))
+f_4_X = P.lagrange_polynomial((omega^i, F_4_i) for i, F_4_i in enumerate(F4))
+# Treat the instance wire as a 5th advice wire
+a_5_X = P.lagrange_polynomial((omega^i, A_5_i) for i, A_5_i in enumerate(I))
+
+for i, (A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i) in \
+    enumerate(zip(A1, A2, A3, A4, F1, F2, F3, F4, I)):
+    assert a_1_X(omega^i) == A_1_i
+    assert a_2_X(omega^i) == A_2_i
+    assert a_3_X(omega^i) == A_3_i
+    assert a_4_X(omega^i) == A_4_i
+    assert a_5_X(omega^i) == I_i
+    assert f_1_X(omega^i) == F_1_i
+    assert f_2_X(omega^i) == F_2_i
+    assert f_3_X(omega^i) == F_3_i
+    assert f_4_X(omega^i) == F_4_i
 
