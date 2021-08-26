@@ -22,20 +22,14 @@ pub type PrivKey = PrivateKey;
 pub struct BitcoinKeys {
     secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
-    btc_client: ElectrumClient,
+    btc_client: Arc<ElectrumClient>,
     pub bitcoin_public_key: PublicKey,
     pub pub_address: Address,
     pub script: Script,
 }
 
 impl BitcoinKeys {
-    pub fn new() -> Result<Arc<BitcoinKeys>> {
-        // Pull address from config later
-        let client_address = "";
-
-        // create client
-        let mut btc_client = ElectrumClient::new(&client_address).unwrap();
-
+    pub fn new(btc_client: Arc<ElectrumClient>) -> Result<Arc<BitcoinKeys>> {
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -65,11 +59,41 @@ impl BitcoinKeys {
         Ok(Arc::new(BitcoinKeys {
             secret_key,
             bitcoin_private_key,
-            bitcoin_public_key,
             btc_client,
+            bitcoin_public_key,
             pub_address,
             script,
         }))
+    }
+
+    pub async fn start_subscribe(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "BTC", "Subscribe");
+
+        // Check if script is already subscribed
+        let status_start = self.btc_client.script_subscribe(&self.script).unwrap();
+        let subscribe_status_task =
+            executor.spawn(self.subscribe_status_loop(status_start, executor.clone()));
+        debug!(target: "BTC", "Subscribed to scripthash");
+        let _ = subscribe_status_task.cancel().await;
+
+        Ok(())
+    }
+
+    async fn subscribe_status_loop(
+        self: Arc<Self>,
+        status_start: Option<electrum_client::ScriptStatus>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<Option<String>> {
+        loop {
+            let check = self.btc_client.script_pop(&self.script);
+            match check {
+                // Script has a notification update
+                Ok(status) => {}
+                // No update, repeat
+                Err(_) => break,
+            }
+        }
+        Ok(None)
     }
 
     // This should do a db lookup to return the same obj
