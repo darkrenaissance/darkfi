@@ -43,9 +43,8 @@ impl UserAdapter {
     }
 
     pub fn handle_input(
-        self: Arc<Self>,
-        mut io: jsonrpc_core::IoHandler,
-    ) -> Result<jsonrpc_core::IoHandler> {
+        self: Arc<Self>) -> Result<jsonrpc_core::IoHandler> {
+        let mut io = jsonrpc_core::IoHandler::new();
         io.add_sync_method("say_hello", |_| {
             Ok(jsonrpc_core::Value::String("hello world!".into()))
         });

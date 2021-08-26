@@ -308,8 +308,11 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
         (withdraw_req_send, withdraw_rep_recv),
     )?);
 
+    let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
+
     // start the rpc server
-    jsonserver::start(ex.clone(), config.clone(), adapter.clone()).await?;
+    let io = Arc::new(adapter.handle_input()?);
+    jsonserver::start(ex.clone(), rpc_url, io).await?;
 
     futures_broker_task.cancel().await;
     Ok(())
