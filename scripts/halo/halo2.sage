@@ -27,7 +27,7 @@ def get_omega():
 
 # Order of this element is 2^32
 omega = get_omega()
-k = 3
+k = 4
 n = 2^k
 omega = omega^(2^32 / n)
 assert omega^n == 1
@@ -85,26 +85,40 @@ F_1_6, F_2_6, F_3_6, F_4_6 = 0, 0, 1, 0
 I_6 = 0
 
 # Row 7
-# Empty row
+# z = public z
 A_1_7, A_2_7, A_3_7, A_4_7 = var_z, 0, 0, 0
 F_1_7, F_2_7, F_3_7, F_4_7 = 0, 1, 0, 0
 I_7 = var_z
 
-# Row 8
-# Empty row
-A_1_8, A_2_8, A_3_8, A_4_8 = 0, 0, 0, 0
-F_1_8, F_2_8, F_3_8, F_4_8 = 0, 0, 0, 0
-I_8 = 0
+A1 = [A_1_1, A_1_2, A_1_3, A_1_4, A_1_5, A_1_6, A_1_7]
+A2 = [A_2_1, A_2_2, A_2_3, A_2_4, A_2_5, A_2_6, A_2_7]
+A3 = [A_3_1, A_3_2, A_3_3, A_3_4, A_3_5, A_3_6, A_3_7]
+A4 = [A_4_1, A_4_2, A_4_3, A_4_4, A_4_5, A_4_6, A_4_7]
+F1 = [F_1_1, F_1_2, F_1_3, F_1_4, F_1_5, F_1_6, F_1_7]
+F2 = [F_2_1, F_2_2, F_2_3, F_2_4, F_2_5, F_2_6, F_2_7]
+F3 = [F_3_1, F_3_2, F_3_3, F_3_4, F_3_5, F_3_6, F_3_7]
+F4 = [F_4_1, F_4_2, F_4_3, F_4_4, F_4_5, F_4_6, F_4_7]
+I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6,   I_7]
 
-A1 = [A_1_1, A_1_2, A_1_3, A_1_4, A_1_5, A_1_6, A_1_7, A_1_8]
-A2 = [A_2_1, A_2_2, A_2_3, A_2_4, A_2_5, A_2_6, A_2_7, A_2_8]
-A3 = [A_3_1, A_3_2, A_3_3, A_3_4, A_3_5, A_3_6, A_3_7, A_3_8]
-A4 = [A_4_1, A_4_2, A_4_3, A_4_4, A_4_5, A_4_6, A_4_7, A_4_8]
-F1 = [F_1_1, F_1_2, F_1_3, F_1_4, F_1_5, F_1_6, F_1_7, F_1_8]
-F2 = [F_2_1, F_2_2, F_2_3, F_2_4, F_2_5, F_2_6, F_2_7, F_2_8]
-F3 = [F_3_1, F_3_2, F_3_3, F_3_4, F_3_5, F_3_6, F_3_7, F_3_8]
-F4 = [F_4_1, F_4_2, F_4_3, F_4_4, F_4_5, F_4_6, F_4_7, F_4_8]
-I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6,   I_7,   I_8]
+# There should be 5 unused blinding rows.
+# see src/plonk/circuit.rs: fn blinding_factors(&self) -> usize;
+# We have 9 so we are perfectly fine.
+
+# Add 9 empty rows
+assert n - len(A1) == 9
+for i in range(9):
+    A1.append(K.random_element())
+    A2.append(K.random_element())
+    A3.append(K.random_element())
+    A4.append(K.random_element())
+    F1.append(0)
+    F2.append(0)
+    F3.append(0)
+    F4.append(0)
+    I.append(K.random_element())
+
+assert (len(A1) == len(A2) == len(A3) == len(A4) == len(F1) == len(F2)
+        == len(F3) == len(F4) == len(I) == n)
 
 for A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i in zip(
     A1, A2, A3, A4, F1, F2, F3, F4, I):
@@ -137,6 +151,13 @@ for i, (A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i) in \
     assert f_4_X(omega^i) == F_4_i
 
 # beta, gamma
+
+# A1:   1,  0,  s,   s,            s,          0,   z,  -
+# A2:   -,  -,  s,   x,            x,        sxy,   -,  -
+# A3:   -,  -,  0,   y,            y, (1-s)(x+y),   -,  -
+# A4:   -,  -,  0, sxy, (1-s)(x + y),          z,   -,  -
+# A5:   -,  -,  -,   -,            -,          -,   z,  -
+permuted_indices_A1 = []
 
 y = K.random_element()
 
