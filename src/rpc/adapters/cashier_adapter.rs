@@ -1,7 +1,6 @@
 use crate::wallet::CashierDb;
-use crate::{Result};
+use crate::Result;
 use async_std::sync::Arc;
-
 
 pub struct CashierAdapter {
     pub wallet: Arc<CashierDb>,
@@ -12,9 +11,7 @@ impl CashierAdapter {
         Ok(Self { wallet })
     }
 
-    pub fn handle_input(
-        self: Arc<Self>,
-    ) -> Result<jsonrpc_core::IoHandler> {
+    pub fn handle_input(self: Arc<Self>) -> Result<jsonrpc_core::IoHandler> {
         let mut io = jsonrpc_core::IoHandler::new();
         io.add_sync_method("cashier_hello", |_| {
             Ok(jsonrpc_core::Value::String("hello world!".into()))

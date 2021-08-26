@@ -13,9 +13,9 @@ use bls12_381::Bls12;
 use ff::Field;
 use rand::rngs::OsRng;
 
-use electrum_client::{Client as ElectrumClient, ElectrumApi};
-use bitcoin::blockdata::script::Script;
 use async_executor::Executor;
+use bitcoin::blockdata::script::Script;
+use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 
 use async_std::sync::Arc;
@@ -82,11 +82,7 @@ impl CashierService {
         let (send, recv) = protocol.start().await?;
 
         let handle_request_task =
-            executor.spawn(self.handle_request_loop(
-                send.clone(),
-                recv.clone(),
-                executor.clone()
-            ));
+            executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
 
         protocol.run(executor.clone()).await?;
 
@@ -129,15 +125,17 @@ impl CashierService {
 
         Ok(())
     }
-    async fn start_subscribe(self: Arc<Self>, script: Script, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start_subscribe(
+        self: Arc<Self>,
+        script: Script,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         debug!(target: "BTC", "Subscribe");
 
         // Check if script is already subscribed
         let status_start = self.btc_client.script_subscribe(&script).unwrap();
         let subscribe_status_task =
-            executor.spawn(
-                self.subscribe_status_loop(status_start, script, executor.clone()),
-            );
+            executor.spawn(self.subscribe_status_loop(status_start, script, executor.clone()));
         debug!(target: "BTC", "Subscribed to scripthash");
         let _ = subscribe_status_task.cancel().await;
 
@@ -154,13 +152,9 @@ impl CashierService {
             let check = self.btc_client.script_pop(&script);
             match check {
                 // Script has a notification update
-                Ok(status) => {
-
-                }
+                Ok(status) => {}
                 // No update, repeat
-                Err(_) => {
-                    break
-                }
+                Err(_) => break,
             }
         }
         Ok(())

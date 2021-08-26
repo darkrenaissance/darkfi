@@ -1,17 +1,17 @@
-use crate::{Result};
+use crate::Result;
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use bitcoin::util::address::Address;
-use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
-use secp256k1::key::SecretKey;
+use async_executor::Executor;
+use async_std::sync::Arc;
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
-use async_std::sync::Arc;
-use async_executor::Executor;
-use log::*;
+use bitcoin::util::address::Address;
+use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi};
+use log::*;
+use secp256k1::key::SecretKey;
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -30,7 +30,6 @@ pub struct BitcoinKeys {
 
 impl BitcoinKeys {
     pub fn new() -> Result<Arc<BitcoinKeys>> {
-
         // Pull address from config later
         let client_address = "";
 

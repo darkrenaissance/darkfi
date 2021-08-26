@@ -115,7 +115,11 @@ impl RpcInterface {
         }))
     }
 
-    pub async fn serve(self: Arc<Self>, mut req: Request, io: Arc<jsonrpc_core::IoHandler>) -> http_types::Result<Response> {
+    pub async fn serve(
+        self: Arc<Self>,
+        mut req: Request,
+        io: Arc<jsonrpc_core::IoHandler>,
+    ) -> http_types::Result<Response> {
         info!("RPC serving {}", req.url());
 
         let request = req.body_string().await?;

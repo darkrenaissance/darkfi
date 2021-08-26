@@ -7,12 +7,12 @@ use std::{path::Path, path::PathBuf};
 use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::rpc::adapters::cashier_adapter::CashierAdapter;
+use drk::rpc::jsonserver;
 use drk::service::CashierService;
 use drk::service::GatewayClient;
 use drk::util::join_config_path;
 use drk::wallet::CashierDb;
 use drk::{Error, Result};
-use drk::rpc::jsonserver;
 use log::*;
 
 use async_executor::Executor;
