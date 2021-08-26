@@ -12,10 +12,9 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use ff::Field;
 use rand::rngs::OsRng;
-//use bitcoin::blockdata::script::Script;
-use electrum_client::bitcoin::Script;
-use electrum_client::{Client, ElectrumApi};
 
+use electrum_client::{Client as ElectrumClient, ElectrumApi};
+use bitcoin::blockdata::script::Script;
 use async_executor::Executor;
 use log::*;
 
@@ -38,6 +37,7 @@ pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
     gateway: GatewayClient,
+    btc_client: Arc<ElectrumClient>,
     mint_params: groth16::Parameters<Bls12>,
     mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     spend_params: groth16::Parameters<Bls12>,
@@ -52,6 +52,13 @@ impl CashierService {
         gateway: GatewayClient,
     ) -> Result<Arc<CashierService>> {
         // Load trusted setup parameters
+
+        // Pull address from config later
+        let client_address = btc_endpoint;
+
+        // create client
+        let mut btc_client = Arc::new(ElectrumClient::new(&client_address)?);
+
         let (mint_params, mint_pvk) = load_params("mint.params")?;
         let (spend_params, spend_pvk) = load_params("spend.params")?;
 
@@ -59,6 +66,7 @@ impl CashierService {
             addr,
             wallet,
             gateway,
+            btc_client,
             mint_params,
             mint_pvk,
             spend_params,
@@ -121,6 +129,42 @@ impl CashierService {
 
         Ok(())
     }
+    async fn start_subscribe(self: Arc<Self>, script: Script, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "BTC", "Subscribe");
+
+        // Check if script is already subscribed
+        let status_start = self.btc_client.script_subscribe(&script).unwrap();
+        let subscribe_status_task =
+            executor.spawn(
+                self.subscribe_status_loop(status_start, script, executor.clone()),
+            );
+        debug!(target: "BTC", "Subscribed to scripthash");
+        let _ = subscribe_status_task.cancel().await;
+
+        Ok(())
+    }
+
+    async fn subscribe_status_loop(
+        self: Arc<Self>,
+        status_start: Option<electrum_client::ScriptStatus>,
+        script: Script,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        loop {
+            let check = self.btc_client.script_pop(&script);
+            match check {
+                // Script has a notification update
+                Ok(status) => {
+
+                }
+                // No update, repeat
+                Err(_) => {
+                    break
+                }
+            }
+        }
+        Ok(())
+    }
 
     async fn handle_request_loop(
         self: Arc<Self>,
@@ -132,9 +176,11 @@ impl CashierService {
             match recv_queue.recv().await {
                 Ok(msg) => {
                     let cashier_wallet = self.wallet.clone();
+                    let btc_client = self.btc_client.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
+                            btc_client,
                             cashier_wallet,
                             send_queue.clone(),
                             executor.clone(),
@@ -150,6 +196,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
+        btc_client: Arc<ElectrumClient>,
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
         executor: Arc<Executor<'_>>,
@@ -163,7 +210,7 @@ impl CashierService {
                 let zkpub = request.get_payload();
 
                 //check if key has already been issued
-                let _check = cashier_wallet.get_keys_by_dkey(&zkpub);
+                //let check = cashier_wallet.get_keys_by_dkey(&zkpub);
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new().unwrap();
@@ -171,8 +218,10 @@ impl CashierService {
                 let btc_pub = btc_keys.get_pubkey();
                 let btc_priv = btc_keys.get_privkey();
 
+                let script = btc_keys.get_script();
+
                 // add pairings to db
-                let _result = cashier_wallet.put_exchange_keys(zkpub, *btc_priv, *btc_pub);
+                //let _result = cashier_wallet.put_exchange_keys(zkpub, *btc_priv, *btc_pub);
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
@@ -185,7 +234,8 @@ impl CashierService {
                 // start scheduler for checking balance
                 debug!(target: "BTC", "Subscribing");
 
-                btc_keys.start_subscribe(executor.clone()).await?;
+                //let _ = self.btc_client.start_subscribe(script, executor.clone()).await?;
+                //let _ = self.btc_client.script_subscribe(&script).unwrap();
                 //self.mint_dbtc(zkpub, 100);
                 //let _ = self.subscribe_to_address(script);
 

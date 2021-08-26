@@ -53,6 +53,7 @@ pub enum Error {
     Base58EncodeError(String),
     Base58DecodeError(String),
     BadBTCAddress(String),
+    BtcClientError,
 }
 
 impl std::error::Error for Error {}
@@ -104,6 +105,7 @@ impl fmt::Display for Error {
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
             Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
             Error::BadBTCAddress(ref err) => write!(f, "could not parse BTC address: {}", err),
+            Error::BtcClientError => f.write_str("Unable to create Electrum Client"),
         }
     }
 }
@@ -238,5 +240,10 @@ impl From<bs58::decode::Error> for Error {
 impl From<bitcoin::util::address::Error> for Error {
     fn from(err: bitcoin::util::address::Error) -> Error {
         Error::BadBTCAddress(err.to_string())
+    }
+}
+impl From<electrum_client::Error> for Error {
+    fn from(_err: electrum_client::Error) -> Error {
+        Error::BtcClientError
     }
 }
