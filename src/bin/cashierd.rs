@@ -12,12 +12,14 @@ use drk::service::GatewayClient;
 use drk::util::join_config_path;
 use drk::wallet::CashierDb;
 use drk::{Error, Result};
+use drk::rpc::jsonserver;
 use log::*;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
 
-async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Result<()> {
+    let ex = executor.clone();
     let accept_addr: SocketAddr = config.accept_url.parse()?;
 
     let gateway_addr: SocketAddr = config.gateway_url.parse()?;
@@ -38,9 +40,13 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&CashierdConfig>) -> Res
 
     debug!(target: "cashierd", "starting cashier service");
     let cashier = CashierService::new(accept_addr, btc_endpoint, wallet.clone(), gateway)?;
-    cashier.start(executor.clone()).await?;
+    cashier.start(ex.clone()).await?;
 
-    let _adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
+    let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
+    let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
+    let io = Arc::new(adapter.handle_input()?);
+    jsonserver::start(ex, rpc_url, io).await?;
+
     Ok(())
 }
 
@@ -56,7 +62,7 @@ fn main() -> Result<()> {
         Config::<CashierdConfig>::load_default(path)?
     };
 
-    let config_ptr = Arc::new(&config);
+    let config = Arc::new(config);
 
     let options = CashierdCli::load()?;
 
@@ -90,7 +96,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_ptr).await?;
+                start(ex2, config).await?;
                 drop(signal);
                 Ok::<(), Error>(())
             })

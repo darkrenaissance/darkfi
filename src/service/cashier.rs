@@ -84,6 +84,8 @@ impl CashierService {
 
         let _ = handle_request_task.cancel().await;
 
+        //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
+
         Ok(())
     }
 

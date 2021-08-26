@@ -188,6 +188,10 @@ pub struct CashierdConfig {
     pub accept_url: String,
 
     #[serde(default)]
+    #[serde(rename = "rpc_url")]
+    pub rpc_url: String,
+
+    #[serde(default)]
     #[serde(rename = "database_path")]
     pub database_path: String,
 
@@ -211,6 +215,7 @@ pub struct CashierdConfig {
 impl Default for CashierdConfig {
     fn default() -> Self {
         let accept_url = String::from("127.0.0.1:7777");
+        let rpc_url = String::from("http://127.0.0.1:8000");
         let gateway_url = String::from("127.0.0.1:3333");
         let database_path = String::from("cashierd.db");
         let btc_endpoint = String::from("tcp://electrum.blockstream.info:50001");
@@ -222,6 +227,7 @@ impl Default for CashierdConfig {
         let password = String::new();
         Self {
             accept_url,
+            rpc_url,
             database_path,
             btc_endpoint,
             gateway_url,
