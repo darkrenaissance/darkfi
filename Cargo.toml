@@ -123,6 +123,10 @@ name = "darkfid"
 path = "src/bin/darkfid.rs"
 
 [[bin]]
+name = "darkfid-old"
+path = "src/bin/darkfid-old.rs"
+
+[[bin]]
 name = "drk"
 path = "src/bin/drk.rs"
 
