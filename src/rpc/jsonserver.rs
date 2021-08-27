@@ -69,7 +69,7 @@ pub async fn listen(
         };
 
         // Detach the task to let it run in the background.
-        task.detach();
+        task.await;
     }
 }
 
@@ -87,13 +87,10 @@ pub async fn start(
         io,
     );
 
-    let http_task = executor.spawn(http);
+
+    executor.spawn(http).detach();
 
     *rpc.started.lock().await = true;
-
-    rpc.wait_for_quit().await?;
-
-    http_task.cancel().await;
 
     Ok(())
 }
@@ -133,6 +130,7 @@ impl RpcInterface {
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");
         res.set_body(response);
+        
         Ok(res)
     }
 
