@@ -40,7 +40,6 @@ assert omega^n == 1
 A = []
 F = []
 
-var_one = K(1)
 var_zero = K(0)
 var_x = K(4)
 var_y = K(6)
@@ -55,58 +54,58 @@ var_z = var_sxy + var_1s_xy
 # 1 instance column
 
 # Row 1
-A_1_1, A_2_1, A_3_1, A_4_1 = var_one, 0, 0, 0
+# z = public z
+A_1_1, A_2_1, A_3_1, A_4_1 = var_z, 0, 0, 0
 F_1_1, F_2_1, F_3_1, F_4_1 = 1, 0, 0, 0
-I_1 = 0
+I_1 = var_z
 
 # Row 2
+# A1 == I
 A_1_2, A_2_2, A_3_2, A_4_2 = var_zero, 0, 0, 0
 F_1_2, F_2_2, F_3_2, F_4_2 = 0, 1, 0, 0
 I_2 = 0
 
 # Row 3
+# (1 - s)(s + 0) == 0
 A_1_3, A_2_3, A_3_3, A_4_3 = var_s, var_s, var_zero, var_zero
 F_1_3, F_2_3, F_3_3, F_4_3 = 0, 0, 1, 0
 I_3 = 0
 
 # Row 4
+# s x y == sxy
 A_1_4, A_2_4, A_3_4, A_4_4 = var_s, var_x, var_y, var_sxy
 F_1_4, F_2_4, F_3_4, F_4_4 = 0, 0, 0, 1
 I_4 = 0
 
 # Row 5
+# (1 - s)(x + y) = (1-s)(x+y)
 A_1_5, A_2_5, A_3_5, A_4_5 = var_s, var_x, var_y, var_1s_xy
 F_1_5, F_2_5, F_3_5, F_4_5 = 0, 0, 1, 0
 I_5 = 0
 
 # Row 6
+# (1 - 0)(sxy + (1-s)(x+y)) = z
 A_1_6, A_2_6, A_3_6, A_4_6 = var_zero, var_sxy, var_1s_xy, var_z
 F_1_6, F_2_6, F_3_6, F_4_6 = 0, 0, 1, 0
 I_6 = 0
 
-# Row 7
-# z = public z
-A_1_7, A_2_7, A_3_7, A_4_7 = var_z, 0, 0, 0
-F_1_7, F_2_7, F_3_7, F_4_7 = 0, 1, 0, 0
-I_7 = var_z
-
-A1 = [A_1_1, A_1_2, A_1_3, A_1_4, A_1_5, A_1_6, A_1_7]
-A2 = [A_2_1, A_2_2, A_2_3, A_2_4, A_2_5, A_2_6, A_2_7]
-A3 = [A_3_1, A_3_2, A_3_3, A_3_4, A_3_5, A_3_6, A_3_7]
-A4 = [A_4_1, A_4_2, A_4_3, A_4_4, A_4_5, A_4_6, A_4_7]
-F1 = [F_1_1, F_1_2, F_1_3, F_1_4, F_1_5, F_1_6, F_1_7]
-F2 = [F_2_1, F_2_2, F_2_3, F_2_4, F_2_5, F_2_6, F_2_7]
-F3 = [F_3_1, F_3_2, F_3_3, F_3_4, F_3_5, F_3_6, F_3_7]
-F4 = [F_4_1, F_4_2, F_4_3, F_4_4, F_4_5, F_4_6, F_4_7]
-I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6,   I_7]
+A1 = [A_1_1, A_1_2, A_1_3, A_1_4, A_1_5, A_1_6]
+A2 = [A_2_1, A_2_2, A_2_3, A_2_4, A_2_5, A_2_6]
+A3 = [A_3_1, A_3_2, A_3_3, A_3_4, A_3_5, A_3_6]
+A4 = [A_4_1, A_4_2, A_4_3, A_4_4, A_4_5, A_4_6]
+F1 = [F_1_1, F_1_2, F_1_3, F_1_4, F_1_5, F_1_6]
+F2 = [F_2_1, F_2_2, F_2_3, F_2_4, F_2_5, F_2_6]
+F3 = [F_3_1, F_3_2, F_3_3, F_3_4, F_3_5, F_3_6]
+F4 = [F_4_1, F_4_2, F_4_3, F_4_4, F_4_5, F_4_6]
+I  = [I_1,   I_2,   I_3,   I_4,   I_5,   I_6]
 
 # There should be 5 unused blinding rows.
 # see src/plonk/circuit.rs: fn blinding_factors(&self) -> usize;
 # We have 9 so we are perfectly fine.
 
 # Add 9 empty rows
-assert n - len(A1) == 9
-for i in range(9):
+assert n - len(A1) == 10
+for i in range(10):
     A1.append(K.random_element())
     A2.append(K.random_element())
     A3.append(K.random_element())
@@ -122,8 +121,8 @@ assert (len(A1) == len(A2) == len(A3) == len(A4) == len(F1) == len(F2)
 
 for A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i in zip(
     A1, A2, A3, A4, F1, F2, F3, F4, I):
-    assert (F_1_i * (A_1_i - 1)
-            + F_2_i * (A_1_i - I_i)
+    assert (F_1_i * (A_1_i - I_i)
+            + F_2_i * A_1_i
             + F_3_i * ((1 - A_1_i) * (A_2_i + A_3_i) - A_4_i)
             + F_4_i * (A_1_i * A_2_i * A_3_i - A_4_i)) == 0
 
@@ -166,8 +165,8 @@ permuted_indices_A1 = []
 
 y = K.random_element()
 
-gate_0 = f_1_X * (a_1_X - 1)
-gate_1 = f_2_X * (a_1_X - a_5_X)
+gate_0 = f_1_X * (a_1_X - a_5_X)
+gate_1 = f_2_X * a_1_X
 gate_2 = f_3_X * ((1 - a_1_X) * (a_2_X + a_3_X) - a_4_X)
 gate_3 = f_4_X * (a_1_X * a_2_X * a_3_X - a_4_X)
 
