@@ -182,10 +182,11 @@ pub struct GatewayClient {
     gateway_slabs_sub_s: async_channel::Sender<Slab>,
     gateway_slabs_sub_rv: GatewaySlabsSubscriber,
     is_running: bool,
+    sub_addr: SocketAddr,
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
+    pub fn new(addr: SocketAddr, sub_addr: SocketAddr, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
 
         let slabstore = SlabStore::new(rocks)?;
@@ -198,6 +199,7 @@ impl GatewayClient {
             gateway_slabs_sub_s,
             gateway_slabs_sub_rv,
             is_running: false,
+            sub_addr,
         })
     }
 
@@ -287,10 +289,9 @@ impl GatewayClient {
 
     pub async fn start_subscriber(
         &self,
-        sub_addr: SocketAddr,
         executor: Arc<Executor<'_>>,
     ) -> Result<GatewaySlabsSubscriber> {
-        let mut subscriber = Subscriber::new(sub_addr, String::from("GATEWAY CLIENT"));
+        let mut subscriber = Subscriber::new(self.sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
         executor
             .spawn(Self::subscribe_loop(
