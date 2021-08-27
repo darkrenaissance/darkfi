@@ -14,8 +14,8 @@ use ff::Field;
 use rand::rngs::OsRng;
 
 use async_executor::Executor;
-use bitcoin::blockdata::script::Script;
-use electrum_client::{Client as ElectrumClient, ElectrumApi};
+
+use electrum_client::Client as ElectrumClient;
 use log::*;
 
 use async_std::sync::Arc;
@@ -57,7 +57,7 @@ impl CashierService {
         let client_address = btc_endpoint;
 
         // create client
-        let mut btc_client = Arc::new(ElectrumClient::new(&client_address)?);
+        let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
 
         let (mint_params, mint_pvk) = load_params("mint.params")?;
         let (spend_params, spend_pvk) = load_params("spend.params")?;
@@ -170,7 +170,7 @@ impl CashierService {
                 let zkpub = request.get_payload();
 
                 //check if key has already been issued
-                let check = cashier_wallet.get_keys_by_dkey(&zkpub);
+                let _check = cashier_wallet.get_keys_by_dkey(&zkpub);
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new(btc_client).unwrap();
@@ -178,10 +178,10 @@ impl CashierService {
                 let btc_pub = btc_keys.get_pubkey();
                 let btc_priv = btc_keys.get_privkey();
 
-                let script = btc_keys.get_script();
+                let _script = btc_keys.get_script();
 
                 // add pairings to db
-                let result = cashier_wallet.put_exchange_keys(zkpub, *btc_priv, *btc_pub);
+                let _result = cashier_wallet.put_exchange_keys(zkpub, *btc_priv, *btc_pub);
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 

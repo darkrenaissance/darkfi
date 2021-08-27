@@ -87,7 +87,6 @@ pub async fn start(
         io,
     );
 
-
     executor.spawn(http).detach();
 
     *rpc.started.lock().await = true;
@@ -130,7 +129,7 @@ impl RpcInterface {
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");
         res.set_body(response);
-        
+
         Ok(res)
     }
 

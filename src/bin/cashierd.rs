@@ -34,7 +34,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
     debug!(target: "Client", "Creating gateway client");
-    let mut gateway = GatewayClient::new(gateway_addr,"127.0.0.1:4444".parse()?, slabstore)?;
+    let mut gateway = GatewayClient::new(gateway_addr, "127.0.0.1:4444".parse()?, slabstore)?;
 
     gateway.start().await?;
 

@@ -81,14 +81,14 @@ impl BitcoinKeys {
 
     async fn subscribe_status_loop(
         self: Arc<Self>,
-        status_start: Option<electrum_client::ScriptStatus>,
-        executor: Arc<Executor<'_>>,
+        _status_start: Option<electrum_client::ScriptStatus>,
+        _executor: Arc<Executor<'_>>,
     ) -> Result<Option<String>> {
         loop {
             let check = self.btc_client.script_pop(&self.script);
             match check {
                 // Script has a notification update
-                Ok(status) => {}
+                Ok(_status) => {}
                 // No update, repeat
                 Err(_) => break,
             }

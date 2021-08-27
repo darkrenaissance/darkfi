@@ -186,7 +186,11 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(addr: SocketAddr, sub_addr: SocketAddr, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
+    pub fn new(
+        addr: SocketAddr,
+        sub_addr: SocketAddr,
+        rocks: RocksColumn<columns::Slabs>,
+    ) -> Result<Self> {
         let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
 
         let slabstore = SlabStore::new(rocks)?;

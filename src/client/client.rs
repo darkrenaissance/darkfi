@@ -51,7 +51,7 @@ impl Client {
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
         let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-        // TODO: pass params paths to Client 
+        // TODO: pass params paths to Client
         // Auto create trusted ceremony parameters if they don't exist
         if !Path::new("mint.params").exists() {
             let params = setup_mint_prover();
@@ -100,7 +100,6 @@ impl Client {
         executor: Arc<Executor<'_>>,
         wallet: WalletPtr,
     ) -> Result<()> {
-
         if self.connected_with_cashier {
             warn!("The client already connected to the subscriber");
             return Ok(());
@@ -245,13 +244,13 @@ pub struct State {
     pub mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
     pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    // TODO: remove this 
+    // TODO: remove this
     wallet_path: PathBuf,
 }
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        // TODO: use walletdb instead of connecting with sqlite directly 
+        // TODO: use walletdb instead of connecting with sqlite directly
         let conn =
             Connection::open(self.wallet_path.clone()).expect("Failed to connect to database");
         let mut stmt = conn

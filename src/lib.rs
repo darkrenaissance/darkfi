@@ -9,6 +9,7 @@ pub mod blockchain;
 pub mod bls_extensions;
 pub mod circuit;
 pub mod cli;
+pub mod client;
 pub mod crypto;
 pub mod endian;
 pub mod error;
@@ -23,7 +24,6 @@ pub mod util;
 pub mod vm;
 pub mod vm_serial;
 pub mod wallet;
-pub mod client;
 
 pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};
