@@ -60,12 +60,13 @@ F_1_1, F_2_1, F_3_1, F_4_1 = 1, 0, 0, 0
 I_1 = var_z
 
 # Row 2
-# A1 == I
+# ~0 == 0
 A_1_2, A_2_2, A_3_2, A_4_2 = var_zero, 0, 0, 0
 F_1_2, F_2_2, F_3_2, F_4_2 = 0, 1, 0, 0
 I_2 = 0
 
 # Row 3
+# Boolean check
 # (1 - s)(s + 0) == 0
 A_1_3, A_2_3, A_3_3, A_4_3 = var_s, var_s, var_zero, var_zero
 F_1_3, F_2_3, F_3_3, F_4_3 = 0, 0, 1, 0
@@ -151,17 +152,63 @@ for i, (A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i) in \
 
 # beta, gamma
 
-#       0   1   2    3             4           5    6       ...     15
-# A1:   1,  0,  s,   s,            s,          0,   z
-#      16  17  18   19            20          21   22       ...     31
-# A2:   -,  -,  s,   x,            x,        sxy,   -
-#      32  33  34   35            36          37   38       ...     47
-# A3:   -,  -,  0,   y,            y, (1-s)(x+y),   -
-#      48  49  50   51            52          53   54       ...     63
-# A4:   -,  -,  0, sxy, (1-s)(x + y),          z,   -
-#      64  65  66   67            68          69   70       ...     79
-# A5:   -,  -,  -,   -,            -,          -,   z
-permuted_indices_A1 = []
+#       0   1   2    3             4           5      ...     15
+# A1:   z,  0,  s,   s,            s,          0,
+#
+#      16  17  18   19            20          21      ...     31
+# A2:   -,  -,  s,   x,            x,        sxy,
+#
+#      32  33  34   35            36          37      ...     47
+# A3:   -,  -,  0,   y,            y, (1-s)(x+y),
+#
+#      48  49  50   51            52          53      ...     63
+# A4:   -,  -,  0, sxy, (1-s)(x + y),          z,
+#
+#      64  65  66   67            68          69      ...     79
+# A5:   z,  -,  -,   -,            -,          -,
+
+# z = (0 53 64)
+# 0 = (1 5 34 50)
+# s = (2 3 4 18)
+# x = (19 20)
+# sxy = (21 51)
+# y = (35 36)
+# (1-s)(x+y) = (37 52)
+
+permuted_indices = list(range(n * 5))
+assert len(permuted_indices) == 80
+
+# Apply the actual permutation cycles
+# z
+permuted_indices[0] = 53
+permuted_indices[53] = 64
+permuted_indices[64] = 0
+# ~0
+permuted_indices[1] = 5
+permuted_indices[5] = 34
+permuted_indices[34] = 50
+permuted_indices[50] = 1
+# s
+permuted_indices[2] = 3
+permuted_indices[3] = 4
+permuted_indices[4] = 18
+permuted_indices[18] = 2
+# x
+permuted_indices[19] = 20
+permuted_indices[20] = 19
+# sxy
+permuted_indices[21] = 51
+permuted_indices[51] = 21
+# y
+permuted_indices[35] = 36
+permuted_indices[36] = 35
+# (1-s)(x+y)
+permuted_indices[37] = 52
+permuted_indices[52] = 37
+
+witness = A1 + A2 + A3 + A4 + I
+for i, val in enumerate(witness):
+    assert val == witness[permuted_indices[i]]
 
 y = K.random_element()
 
