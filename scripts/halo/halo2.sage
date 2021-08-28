@@ -303,8 +303,11 @@ h = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
 t = X^n - 1
 for i in range(n):
     assert h(omega^i) == 0
-# TODO: enable this check
+# Normally we do:
 #h /= t
+# But for some reason sage is producing fractional coefficients
+h, rem = h.quo_rem(X^n - 1)
+assert rem == 0
 
 # We send commitments to the terms of h(X)
 # h_0(x), ..., h_{d - 1}(x)
@@ -329,7 +332,7 @@ for i, h_i in enumerate(h):
 assert h_test == h
 assert sum(h_evals) == h(x)
 
-assert sum(h_evals) == (
+assert sum(h_evals) * t(x) == (
     f_1_X(x) * (a_evals[0] - a_evals[4])
     + y * f_2_X(x) * a_evals[0]
     + y^2 * f_3_X(x) * ((1 - a_evals[0]) * (a_evals[1] + a_evals[2])
