@@ -8,8 +8,10 @@ P.<X> = K[]
 # In other words, this is a t root of unity.
 generator = K(5)
 # There is a large 2^32 order subgroup in this curve because it is 2-adic
-#t = (K(q) - 1) / 2^32
+t = (K(q) - 1) / 2^32
+assert int(t) % 2 != 0
 delta = generator^(2^32)
+assert delta^t == 1
 
 def get_omega():
     generator = K(5)
@@ -151,6 +153,8 @@ for i, (A_1_i, A_2_i, A_3_i, A_4_i, F_1_i, F_2_i, F_3_i, F_4_i, I_i) in \
     assert f_4_X(omega^i) == F_4_i
 
 # beta, gamma
+beta = K.random_element()
+gamma = K.random_element()
 
 #       0   1   2    3             4           5      ...     15
 # A1:   z,  0,  s,   s,            s,          0,
@@ -209,6 +213,84 @@ permuted_indices[52] = 37
 witness = A1 + A2 + A3 + A4 + I
 for i, val in enumerate(witness):
     assert val == witness[permuted_indices[i]]
+
+# How to join lists together?
+indices = ([omega^i for i in range(n)]
+           + [delta * omega^i for i in range(n)]
+           + [delta^2 * omega^i for i in range(n)]
+           + [delta^3 * omega^i for i in range(n)]
+           + [delta^4 * omega^i for i in range(n)])
+assert len(indices) == 80
+# Permuted indices
+sigma_star = [indices[i] for i in permuted_indices]
+s = [sigma_star[:n], sigma_star[n:2 * n], sigma_star[2 * n:3 * n],
+     sigma_star[3 * n:4 * n], sigma_star[4 * n:]]
+assert s[0] + s[1] + s[2] + s[3] + s[4] == sigma_star
+v = [A1, A2, A3, A4, I]
+
+# We split the columns into sets of size m.
+# Here we will use m = 1 for illustration purposes
+
+# We have 6 usable rows
+# n = 16 rows total
+# row u (q_last) will be the 7th row
+# So we have 9 unusable rows
+q_blind = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+q_last  = [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# Turn both of these into polynomial form
+q_blind = P.lagrange_polynomial((omega^i, q_i) for i, q_i in enumerate(q_blind))
+assert q_blind(omega^5) == 0
+assert q_blind(omega^6) == 0
+assert q_blind(omega^7) == 1
+assert q_blind(omega^11) == 1
+q_last = P.lagrange_polynomial((omega^i, q_i) for i, q_i in enumerate(q_last))
+assert q_last(omega^5) == 0
+assert q_last(omega^6) == 1
+assert q_last(omega^7) == 0
+assert q_last(omega^11) == 0
+
+m = 5
+assert n == 16
+# 6 usable rows
+u = 6
+# There are 5 columns
+# We will split the columns partitions into 5 partitions to make things easy
+# So b = 5, and each partition contains only a single column
+# We still iterate over the column to make it more obvious
+m = 1
+permutation_points = [(1, 1)]
+last_y_value = 1
+ZP = []
+# a is the current column partition we are aggregating
+for a in range(5):
+    # j iterates over the rows
+    for j in range(u):
+        current = last_y_value
+
+        # i iterates over the columns in our partition
+        for i in range(a * m, (a + 1)):
+            current *= v[i][j] + beta * delta^i * omega^j + gamma
+            current /= v[i][j] + beta * s[i][j] + gamma
+
+        last_y_value = current
+        permutation_points.append((omega^(j + 1), current))
+
+    ZP_a = P.lagrange_polynomial(permutation_points)
+    ZP.append(ZP_a)
+    permutation_points = [(1, last_y_value)]
+
+# l_0(X) (1 - ZP,0(X)) = 0
+# => ZP,0(1) = 1
+assert ZP[0](1) == 1
+# Checks for l_0(X) (ZP,a(X) - ZP,a-1(omega^u X)) = 1
+# => ZP,a(Z) = ZP,a-1(omega^u X)
+# This copies the end value from one partition to the next one
+assert ZP[1](omega^0) == ZP[0](omega^u)
+assert ZP[2](omega^0) == ZP[1](omega^u)
+assert ZP[3](omega^0) == ZP[2](omega^u)
+assert ZP[4](omega^0) == ZP[3](omega^u)
+# Allow the last value to be either 0 or 1 for full ZK
+assert ZP[4](omega^u) in (0, 1)
 
 y = K.random_element()
 
