@@ -303,4 +303,36 @@ h = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
 t = X^n - 1
 for i in range(n):
     assert h(omega^i) == 0
+# TODO: enable this check
+#h /= t
+
+# We send commitments to the terms of h(X)
+# h_0(x), ..., h_{d - 1}(x)
+# Commitments:
+# H = [H_0, ..., H_{d - 1}]
+
+x = K.random_element()
+
+# Send evaluations at x of everything we committed to so far
+# A_0(x), ..., A_{m - 1}(x)
+# ZP,0(x), ..., ZP,b-1(x)
+# H_0(x), ..., H_{d-1}(x)
+a_evals = [a_1_X(x), a_2_X(x), a_3_X(x), a_4_X(x), a_5_X(x)]
+
+h_evals = []
+# Iterate starting from lowest powers first
+h_test = 0
+for i, h_i in enumerate(h):
+    h_evals.append(h_i * x^i)
+
+    h_test += h_i * X^i
+assert h_test == h
+assert sum(h_evals) == h(x)
+
+assert sum(h_evals) == (
+    f_1_X(x) * (a_evals[0] - a_evals[4])
+    + y * f_2_X(x) * a_evals[0]
+    + y^2 * f_3_X(x) * ((1 - a_evals[0]) * (a_evals[1] + a_evals[2])
+                        - a_evals[3])
+    + y^3 * f_4_X(x) * (a_evals[0] * a_evals[1] * a_evals[2] - a_evals[3]))
 
