@@ -3,17 +3,26 @@ use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use std::string::ToString;
+use crate::client::ClientResult;
+
 
 use log::*;
 
 use async_std::sync::Arc;
+use std::string::ToString;
 
 pub type UserAdapterPtr = Arc<UserAdapter>;
+
+pub type TransferChannel = (
+    async_channel::Sender<TransferParams>,
+    async_channel::Receiver<ClientResult<()>>,
+);
+
 pub type DepositChannel = (
     async_channel::Sender<jubjub::SubgroupPoint>,
     async_channel::Receiver<Option<bitcoin::util::address::Address>>,
 );
+
 pub type WithdrawChannel = (
     async_channel::Sender<String>,
     async_channel::Receiver<Option<jubjub::SubgroupPoint>>,
@@ -21,7 +30,7 @@ pub type WithdrawChannel = (
 
 pub struct UserAdapter {
     pub wallet: Arc<WalletDb>,
-    publish_tx_send: async_channel::Sender<TransferParams>,
+    transfer_channel: TransferChannel,
     deposit_channel: DepositChannel,
     withdraw_channel: WithdrawChannel,
 }
@@ -29,14 +38,14 @@ pub struct UserAdapter {
 impl UserAdapter {
     pub fn new(
         wallet: Arc<WalletDb>,
-        publish_tx_send: async_channel::Sender<TransferParams>,
+        transfer_channel: TransferChannel,
         deposit_channel: DepositChannel,
         withdraw_channel: WithdrawChannel,
     ) -> Result<Self> {
         debug!(target: "ADAPTER", "new() [CREATING NEW WALLET]");
         Ok(Self {
             wallet,
-            publish_tx_send,
+            transfer_channel,
             deposit_channel,
             withdraw_channel,
         })
@@ -44,9 +53,11 @@ impl UserAdapter {
 
     pub fn handle_input(self: Arc<Self>) -> Result<jsonrpc_core::IoHandler> {
         let mut io = jsonrpc_core::IoHandler::new();
+
         io.add_sync_method("say_hello", |_| {
             Ok(jsonrpc_core::Value::String("hello world!".into()))
         });
+
         let self1 = self.clone();
         io.add_method("get_key", move |_| {
             let self2 = self1.clone();
@@ -188,12 +199,13 @@ impl UserAdapter {
         }
     }
 
-    pub async fn transfer(&self, transfer_params: TransferParams) -> Result<()> {
-        self.publish_tx_send.send(transfer_params).await?;
+    async fn transfer(&self, transfer_params: TransferParams) -> Result<()> {
+        self.transfer_channel.0.send(transfer_params).await?;
+        self.transfer_channel.1.recv().await??;
         Ok(())
     }
 
-    pub async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
+    async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
         debug!(target: "withdraw", "withdraw: START");
         // do the key exchange
         self.withdraw_channel
@@ -205,7 +217,8 @@ impl UserAdapter {
             let mut transfer_params = TransferParams::new();
             transfer_params.pub_key = key.to_string();
             transfer_params.amount = withdraw_params.amount;
-            self.publish_tx_send.send(transfer_params).await?;
+            self.transfer_channel.0.send(transfer_params).await?;
+            self.transfer_channel.1.recv().await??;
         }
         Ok(())
     }

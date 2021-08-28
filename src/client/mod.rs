@@ -1,3 +1,42 @@
 pub mod client;
 
 pub use client::{Client, State};
+
+use std::fmt;
+
+
+#[derive(Debug)]
+pub enum ClientFailed {
+    NotEnoughValue(u64),
+    BadAddress(String),
+    ClientError(String),
+}
+
+impl std::error::Error for ClientFailed {}
+
+
+impl fmt::Display for ClientFailed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ClientFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            ClientFailed::BadAddress(i) => {
+                write!(f, "Bad Address {}", i)
+            }
+            ClientFailed::ClientError(i) => {
+                write!(f, "ClientError: {}", i)
+            }
+        }
+    }
+}
+
+impl From<super::error::Error> for ClientFailed {
+    fn from(err: super::error::Error) -> ClientFailed {
+        ClientFailed::ClientError(err.to_string())
+    }
+}
+
+pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
+
+

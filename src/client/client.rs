@@ -17,6 +17,8 @@ use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
 
+use super::ClientResult;
+
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -135,7 +137,8 @@ impl Client {
             self.gateway.start_subscriber(executor.clone()).await?;
 
         // channels to request transfer from adapter
-        let (publish_tx_send, publish_tx_recv) = async_channel::unbounded::<TransferParams>();
+        let (transfer_req_send, transfer_req_recv) = async_channel::unbounded::<TransferParams>();
+        let (transfer_rep_send, transfer_rep_recv) = async_channel::unbounded::<ClientResult<()>>();
 
         // channels to request deposit from adapter, send DRK key and receive BTC key
         let (deposit_req_send, deposit_req_recv) =
@@ -153,7 +156,7 @@ impl Client {
 
         let adapter = Arc::new(UserAdapter::new(
             wallet.clone(),
-            publish_tx_send.clone(),
+            (transfer_req_send.clone(), transfer_rep_recv.clone()),
             (deposit_req_send.clone(), deposit_rep_recv.clone()),
             (withdraw_req_send.clone(), withdraw_rep_recv.clone()),
         )?);
@@ -171,7 +174,8 @@ impl Client {
             deposit_rep_send.clone(),
             withdraw_req_recv.clone(),
             withdraw_rep_send.clone(),
-            publish_tx_recv.clone(),
+            transfer_req_recv.clone(),
+            transfer_rep_send.clone(),
         )
         .await?;
 
@@ -187,7 +191,8 @@ impl Client {
         deposit_rep: async_channel::Sender<Option<bitcoin::util::address::Address>>,
         withdraw_req: async_channel::Receiver<String>,
         withdraw_rep: async_channel::Sender<Option<jubjub::SubgroupPoint>>,
-        publish_tx_recv: async_channel::Receiver<TransferParams>,
+        transfer_req: async_channel::Receiver<TransferParams>,
+        transfer_rep: async_channel::Sender<ClientResult<()>>,
     ) -> Result<()> {
         loop {
             futures::select! {
@@ -205,22 +210,32 @@ impl Client {
                     let drk_public = cashier_client.withdraw(withdraw_addr?).await?;
                     withdraw_rep.send(drk_public).await?;
                 }
-                transfer_params = publish_tx_recv.recv().fuse() => {
-                    let transfer_params = transfer_params?;
+                transfer_params = transfer_req.recv().fuse() => {
 
-                    let address = bs58::decode(transfer_params.pub_key).into_vec()?;
-                    let address: jubjub::SubgroupPoint = deserialize(&address)?;
+                    let result: ClientResult<()> = {
+
+                        let transfer_params = transfer_params?;
+
+                        let address = bs58::decode(transfer_params.pub_key).into_vec()?;
+                        let address: jubjub::SubgroupPoint = deserialize(&address)?;
 
 
-                    let slab_tx = self.prepare_transaction(
-                        address,
-                        transfer_params.amount,
-                        wallet.clone()
-                    )?;
+                        let slab_tx = self.prepare_transaction(
+                            address,
+                            transfer_params.amount,
+                            wallet.clone()
+                        )?;
 
-                    if let Some(slab) = slab_tx {
-                        self.gateway.put_slab(slab).await?;
-                    }
+
+                        self.gateway.put_slab(slab_tx).await?;
+
+                        Ok(())
+
+                    };
+
+
+                    transfer_rep.send(result).await?;
+
                 }
 
             }
@@ -232,11 +247,12 @@ impl Client {
         address: jubjub::SubgroupPoint,
         amount: f64,
         wallet: WalletPtr,
-    ) -> Result<Option<Slab>> {
+    ) -> super::ClientResult<Slab> {
         // check if there are coins
         let own_coins = wallet.get_own_coins()?;
-        if own_coins.len() < 1 {
-            return Ok(None);
+
+        if own_coins.is_empty() {
+            return Err(super::ClientFailed::NotEnoughValue(0));
         }
 
         let witness = &own_coins[0].3;
@@ -267,7 +283,7 @@ impl Client {
 
         // build slab from the transaction
         let slab = Slab::new(tx_data);
-        return Ok(Some(slab));
+        return Ok(slab);
     }
 }
 

@@ -2,6 +2,7 @@ use jsonrpc_core::*;
 use std::fmt;
 
 use crate::state;
+use crate::client;
 use crate::vm::ZkVmError;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -40,6 +41,7 @@ pub enum Error {
     ServicesError(&'static str),
     ZmqError(String),
     VerifyFailed,
+    ClientFailed(String),
     TryIntoError,
     TryFromError,
     JsonRpcError(String),
@@ -93,6 +95,7 @@ impl fmt::Display for Error {
             Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
             Error::ZmqError(ref err) => write!(f, "ZmqError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
+            Error::ClientFailed(ref err) => write!(f, "Client failed: {}", err),
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
@@ -206,6 +209,12 @@ impl From<std::str::Utf8Error> for Error {
 impl From<state::VerifyFailed> for Error {
     fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
+    }
+}
+
+impl From<client::ClientFailed> for Error {
+    fn from(err: client::ClientFailed) -> Error {
+        Error::ClientFailed(err.to_string())
     }
 }
 
