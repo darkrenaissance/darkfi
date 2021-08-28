@@ -10,10 +10,10 @@ use crate::crypto::{
 };
 use crate::rpc::adapters::user_adapter::UserAdapter;
 use crate::rpc::jsonserver;
+use crate::serial::Encodable;
 use crate::serial::{deserialize, Decodable};
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
-use crate::util::prepare_transaction;
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
 
@@ -50,7 +50,7 @@ impl Client {
         let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
         let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
-        let spend_params_path  = params_paths.1.to_str().unwrap_or("spend.params");
+        let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
 
         // Auto create trusted ceremony parameters if they don't exist
         if !params_paths.0.exists() {
@@ -211,23 +211,56 @@ impl Client {
                     let address = bs58::decode(transfer_params.pub_key).into_vec()?;
                     let address: jubjub::SubgroupPoint = deserialize(&address)?;
 
-                    let own_coins = wallet.get_own_coins()?;
 
-                    let slab = prepare_transaction(
-                        &self.state,
-                        self.secret.clone(),
-                        self.mint_params.clone(),
-                        self.spend_params.clone(),
+                    let slab = self.prepare_transaction(
                         address,
                         transfer_params.amount,
-                        own_coins
+                        wallet.clone()
                     )?;
 
-                    self.gateway.put_slab(slab).await.expect("put slab");
+                    self.gateway.put_slab(slab).await?;
                 }
 
             }
         }
+    }
+
+    pub fn prepare_transaction(
+        &self,
+        address: jubjub::SubgroupPoint,
+        amount: f64,
+        wallet: WalletPtr,
+    ) -> Result<Slab> {
+        let own_coins = wallet.get_own_coins()?;
+        let witness = &own_coins[0].3;
+        let merkle_path = witness.path().unwrap();
+
+        // Construct a new tx spending the coin
+        let builder = tx::TransactionBuilder {
+            clear_inputs: vec![],
+            inputs: vec![tx::TransactionBuilderInputInfo {
+                merkle_path,
+                secret: self.secret.clone(),
+                note: own_coins[0].1.clone(),
+            }],
+            // We can add more outputs to this list.
+            // The only constraint is that sum(value in) == sum(value out)
+            outputs: vec![tx::TransactionBuilderOutputInfo {
+                value: amount as u64,
+                asset_id: 1,
+                public: address,
+            }],
+        };
+        // Build the tx
+        let mut tx_data = vec![];
+        {
+            let tx = builder.build(&self.mint_params, &self.spend_params);
+            tx.encode(&mut tx_data).expect("encode tx");
+        }
+
+        // build slab from the transaction
+        let slab = Slab::new(tx_data);
+        return Ok(slab);
     }
 }
 

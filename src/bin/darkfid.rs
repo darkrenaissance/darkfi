@@ -29,10 +29,15 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
 
     let rocks = Rocks::new(&database_path)?;
 
-    // wallet secret key
-    let secret = jubjub::Fr::random(&mut OsRng);
-
     let wallet = Arc::new(WalletDb::new(&walletdb_path, config.password.clone())?);
+
+    // wallet secret key
+    let secret: jubjub::Fr;
+    if let Some(prv) = wallet.get_private().ok() {
+        secret = prv;
+    } else {
+        secret = jubjub::Fr::random(&mut OsRng);
+    }
 
     let mut client = Client::new(
         secret,
