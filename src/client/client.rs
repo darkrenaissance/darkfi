@@ -212,13 +212,15 @@ impl Client {
                     let address: jubjub::SubgroupPoint = deserialize(&address)?;
 
 
-                    let slab = self.prepare_transaction(
+                    let slab_tx = self.prepare_transaction(
                         address,
                         transfer_params.amount,
                         wallet.clone()
                     )?;
 
-                    self.gateway.put_slab(slab).await?;
+                    if let Some(slab) = slab_tx {
+                        self.gateway.put_slab(slab).await?;
+                    }
                 }
 
             }
@@ -230,8 +232,13 @@ impl Client {
         address: jubjub::SubgroupPoint,
         amount: f64,
         wallet: WalletPtr,
-    ) -> Result<Slab> {
+    ) -> Result<Option<Slab>> {
+        // check if there are coins
         let own_coins = wallet.get_own_coins()?;
+        if own_coins.len() < 1 {
+            return Ok(None);
+        }
+
         let witness = &own_coins[0].3;
         let merkle_path = witness.path().unwrap();
 
@@ -260,7 +267,7 @@ impl Client {
 
         // build slab from the transaction
         let slab = Slab::new(tx_data);
-        return Ok(slab);
+        return Ok(Some(slab));
     }
 }
 

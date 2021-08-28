@@ -68,7 +68,6 @@ pub async fn listen(
             }
         };
 
-        // Detach the task to let it run in the background.
         task.await;
     }
 }
