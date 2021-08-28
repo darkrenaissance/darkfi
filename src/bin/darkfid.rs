@@ -31,16 +31,14 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
 
     // wallet secret key
     let secret = jubjub::Fr::random(&mut OsRng);
-    // wallet public key
-    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
     let wallet = Arc::new(WalletDb::new(&walletdb_path, config.password.clone())?);
 
     let mut client = Client::new(
         secret,
-        public,
         rocks,
         (connect_addr, sub_addr),
+        (PathBuf::from("mint.params"), PathBuf::from("spend.params")),
         walletdb_path,
     )?;
 

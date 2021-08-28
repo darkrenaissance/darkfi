@@ -26,13 +26,11 @@ use rusqlite::Connection;
 use async_std::sync::Arc;
 use futures::FutureExt;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::path::PathBuf;
 
 pub struct Client {
     state: State,
     secret: jubjub::Fr,
-    _public: jubjub::SubgroupPoint,
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
@@ -42,29 +40,31 @@ pub struct Client {
 impl Client {
     pub fn new(
         secret: jubjub::Fr,
-        public: jubjub::SubgroupPoint,
         rocks: Arc<Rocks>,
         gateway_addrs: (SocketAddr, SocketAddr),
+        params_paths: (PathBuf, PathBuf),
         wallet_path: PathBuf,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
         let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-        // TODO: pass params paths to Client
+        let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
+        let spend_params_path  = params_paths.1.to_str().unwrap_or("spend.params");
+
         // Auto create trusted ceremony parameters if they don't exist
-        if !Path::new("mint.params").exists() {
+        if !params_paths.0.exists() {
             let params = setup_mint_prover();
-            save_params("mint.params", &params)?;
+            save_params(mint_params_path, &params)?;
         }
-        if !Path::new("spend.params").exists() {
+        if !params_paths.1.exists() {
             let params = setup_spend_prover();
-            save_params("spend.params", &params)?;
+            save_params(spend_params_path, &params)?;
         }
 
         // Load trusted setup parameters
-        let (mint_params, mint_pvk) = load_params("mint.params")?;
-        let (spend_params, spend_pvk) = load_params("spend.params")?;
+        let (mint_params, mint_pvk) = load_params(mint_params_path)?;
+        let (spend_params, spend_pvk) = load_params(spend_params_path)?;
 
         let state = State {
             tree: CommitmentTree::empty(),
@@ -84,7 +84,6 @@ impl Client {
             secret,
             mint_params,
             spend_params,
-            _public: public,
             gateway,
             connected_with_cashier: false,
         })
