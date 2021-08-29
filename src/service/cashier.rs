@@ -268,7 +268,7 @@ impl CashierClient {
 
         if let Some(key) = rep {
             let address = deserialize(&key)?;
-            return Ok(Some(address));
+            return Ok(address);
         }
         Ok(None)
     }
@@ -288,7 +288,7 @@ impl CashierClient {
             .await?;
 
         if let Some(key) = rep {
-            let address = BitcoinKeys::address_from_slice(&key).unwrap();
+            let address = BitcoinKeys::address_from_slice(&key)?;
             return Ok(Some(address));
         }
         Ok(None)

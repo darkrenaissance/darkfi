@@ -17,7 +17,7 @@ use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
 
-use super::ClientResult;
+use super::{ClientFailed, ClientResult};
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -144,12 +144,12 @@ impl Client {
         let (deposit_req_send, deposit_req_recv) =
             async_channel::unbounded::<jubjub::SubgroupPoint>();
         let (deposit_rep_send, deposit_rep_recv) =
-            async_channel::unbounded::<Option<bitcoin::util::address::Address>>();
+            async_channel::unbounded::<ClientResult<bitcoin::util::address::Address>>();
 
         // channel to request withdraw from adapter, send BTC key and receive DRK key
         let (withdraw_req_send, withdraw_req_recv) = async_channel::unbounded::<String>();
         let (withdraw_rep_send, withdraw_rep_recv) =
-            async_channel::unbounded::<Option<jubjub::SubgroupPoint>>();
+            async_channel::unbounded::<ClientResult<jubjub::SubgroupPoint>>();
 
         // start cashier_client
         cashier_client.start().await?;
@@ -188,9 +188,9 @@ impl Client {
         wallet: WalletPtr,
         gateway_slabs_sub: async_channel::Receiver<Slab>,
         deposit_req: async_channel::Receiver<jubjub::SubgroupPoint>,
-        deposit_rep: async_channel::Sender<Option<bitcoin::util::address::Address>>,
+        deposit_rep: async_channel::Sender<ClientResult<bitcoin::util::address::Address>>,
         withdraw_req: async_channel::Receiver<String>,
-        withdraw_rep: async_channel::Sender<Option<jubjub::SubgroupPoint>>,
+        withdraw_rep: async_channel::Sender<ClientResult<jubjub::SubgroupPoint>>,
         transfer_req: async_channel::Receiver<TransferParams>,
         transfer_rep: async_channel::Sender<ClientResult<()>>,
     ) -> Result<()> {
@@ -203,38 +203,43 @@ impl Client {
                     self.state.apply(update, wallet.clone()).await?;
                 }
                 deposit_addr = deposit_req.recv().fuse() => {
-                    let btc_public = cashier_client.get_address(deposit_addr?).await?;
-                    deposit_rep.send(btc_public).await?;
+                    let btc_public = cashier_client.get_address(deposit_addr?).await.map_err(|err| {ClientFailed::from(err)});
+
+                    if let Err(err) = btc_public {
+                        deposit_rep.send(Err(err)).await?;
+                    } else {
+                        if let Some(btc_addr) = btc_public? {
+                            deposit_rep.send(Ok(btc_addr)).await?;
+                        }else {
+                            deposit_rep.send(Err(ClientFailed::UnableToGetDepositAddress)).await?;
+                        }
+                    }
                 }
                 withdraw_addr = withdraw_req.recv().fuse() => {
-                    let drk_public = cashier_client.withdraw(withdraw_addr?).await?;
-                    withdraw_rep.send(drk_public).await?;
+                    let drk_public = cashier_client.withdraw(withdraw_addr?).await.map_err(|err| {ClientFailed::from(err)});
+
+                    if let Err(err) = drk_public {
+                        withdraw_rep.send(Err(err)).await?;
+                    } else {
+                        if let Some(drk_addr) = drk_public? {
+                            withdraw_rep.send(Ok(drk_addr)).await?;
+                        }else {
+                            withdraw_rep.send(Err(ClientFailed::UnableToGetDepositAddress)).await?;
+                        }
+                    }
                 }
                 transfer_params = transfer_req.recv().fuse() => {
 
-                    let result: ClientResult<()> = {
+                    let result = self.transfer(
+                        transfer_params?,
+                        wallet.clone()
+                    ).await;
 
-                        let transfer_params = transfer_params?;
-
-                        let address = bs58::decode(transfer_params.pub_key).into_vec()?;
-                        let address: jubjub::SubgroupPoint = deserialize(&address)?;
-
-
-                        let slab_tx = self.prepare_transaction(
-                            address,
-                            transfer_params.amount,
-                            wallet.clone()
-                        )?;
-
-
-                        self.gateway.put_slab(slab_tx).await?;
-
-                        Ok(())
-
-                    };
-
-
-                    transfer_rep.send(result).await?;
+                    if let Err(err) = result {
+                        transfer_rep.send(Err(err)).await?;
+                    } else {
+                        transfer_rep.send(Ok(())).await?;
+                    }
 
                 }
 
@@ -242,17 +247,31 @@ impl Client {
         }
     }
 
-    pub fn prepare_transaction(
-        &self,
-        address: jubjub::SubgroupPoint,
-        amount: f64,
+    pub async fn transfer(
+        &mut self,
+        transfer_params: TransferParams,
         wallet: WalletPtr,
-    ) -> super::ClientResult<Slab> {
+    ) -> ClientResult<()> {
+        let pub_key = transfer_params.pub_key;
+
+        let address = bs58::decode(pub_key.clone())
+            .into_vec()
+            .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
+
+        let address: jubjub::SubgroupPoint =
+            deserialize(&address).map_err(|_| ClientFailed::UnvalidAddress(pub_key))?;
+
+        let amount = transfer_params.amount;
+
+        if amount <= 0.0 {
+            return Err(ClientFailed::UnvalidAmount(amount as u64));
+        }
+
         // check if there are coins
         let own_coins = wallet.get_own_coins()?;
 
         if own_coins.is_empty() {
-            return Err(super::ClientFailed::NotEnoughValue(0));
+            return Err(ClientFailed::NotEnoughValue(0));
         }
 
         let witness = &own_coins[0].3;
@@ -283,7 +302,10 @@ impl Client {
 
         // build slab from the transaction
         let slab = Slab::new(tx_data);
-        return Ok(slab);
+
+        self.gateway.put_slab(slab).await?;
+
+        Ok(())
     }
 }
 

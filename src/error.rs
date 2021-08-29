@@ -49,7 +49,6 @@ pub enum Error {
     TreeFull,
     SerdeJsonError(String),
     SurfHttpError(String),
-    EmptyPassword,
     TomlDeserializeError(String),
     TomlSerializeError(String),
     CashierNoReply,
@@ -83,7 +82,6 @@ impl fmt::Display for Error {
             Error::Groth16Error => f.write_str("Groth16 error"),
             Error::RusqliteError(ref err) => write!(f, "Rusqlite error {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
-
             Error::ConnectFailed => f.write_str("Connection failed"),
             Error::ConnectTimeout => f.write_str("Connection timed out"),
             Error::ChannelStopped => f.write_str("Channel stopped"),
@@ -103,7 +101,6 @@ impl fmt::Display for Error {
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
             Error::SurfHttpError(ref err) => write!(f, "Surf Http error: {}", err),
-            Error::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),

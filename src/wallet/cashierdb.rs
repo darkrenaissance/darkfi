@@ -3,6 +3,7 @@ use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::service::btc::{PrivKey, PubKey};
 use crate::util::join_config_path;
 use crate::{Error, Result};
+use crate::client::ClientFailed;
 
 use async_std::sync::Arc;
 use ff::Field;
@@ -45,7 +46,7 @@ impl CashierDb {
         } else {
             println!("Password is empty. You must set a password to use the wallet.");
             println!("Current password: {}", self.password);
-            return Err(Error::EmptyPassword);
+            return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
     }

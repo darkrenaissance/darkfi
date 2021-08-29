@@ -1,10 +1,9 @@
 use crate::cli::{TransferParams, WithdrawParams};
+use crate::client::ClientResult;
 use crate::serial::serialize;
 use crate::service::btc::PubAddress;
 use crate::wallet::WalletDb;
 use crate::{Error, Result};
-use crate::client::ClientResult;
-
 
 use log::*;
 
@@ -20,12 +19,12 @@ pub type TransferChannel = (
 
 pub type DepositChannel = (
     async_channel::Sender<jubjub::SubgroupPoint>,
-    async_channel::Receiver<Option<bitcoin::util::address::Address>>,
+    async_channel::Receiver<ClientResult<bitcoin::util::address::Address>>,
 );
 
 pub type WithdrawChannel = (
     async_channel::Sender<String>,
-    async_channel::Receiver<Option<jubjub::SubgroupPoint>>,
+    async_channel::Receiver<ClientResult<jubjub::SubgroupPoint>>,
 );
 
 pub struct UserAdapter {
@@ -193,16 +192,21 @@ impl UserAdapter {
         self.wallet.put_keypair(public, private)?;
         let dkey = self.wallet.get_public()?;
         self.deposit_channel.0.send(dkey).await?;
-        match self.deposit_channel.1.recv().await? {
-            Some(key) => Ok(key),
-            None => Err(Error::CashierNoReply),
-        }
+        self.deposit_channel
+            .1
+            .recv()
+            .await?
+            .map_err(|err| Error::from(err))
     }
 
     async fn transfer(&self, transfer_params: TransferParams) -> Result<()> {
         self.transfer_channel.0.send(transfer_params).await?;
-        self.transfer_channel.1.recv().await??;
-        Ok(())
+
+        self.transfer_channel
+            .1
+            .recv()
+            .await?
+            .map_err(|err| Error::from(err))
     }
 
     async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
@@ -213,12 +217,16 @@ impl UserAdapter {
             .send(withdraw_params.pub_key)
             .await?;
         // send the drk
-        if let Some(key) = self.withdraw_channel.1.recv().await? {
+        if let Ok(key) = self.withdraw_channel.1.recv().await? {
             let mut transfer_params = TransferParams::new();
             transfer_params.pub_key = key.to_string();
             transfer_params.amount = withdraw_params.amount;
             self.transfer_channel.0.send(transfer_params).await?;
-            self.transfer_channel.1.recv().await??;
+            self.transfer_channel
+                .1
+                .recv()
+                .await?
+                .map_err(|err| Error::from(err))?;
         }
         Ok(())
     }
