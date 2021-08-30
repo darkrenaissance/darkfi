@@ -2,14 +2,9 @@ use async_std::sync::Arc;
 use std::net::SocketAddr;
 
 use std::{path::Path, path::PathBuf};
-//use toml;
 
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
-use drk::rpc::adapters::cashier_adapter::CashierAdapter;
-use drk::rpc::jsonserver;
 use drk::service::CashierService;
-use drk::service::GatewayClient;
 use drk::util::join_config_path;
 use drk::wallet::CashierDb;
 use drk::{Error, Result};
@@ -28,24 +23,32 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let database_path = config.database_path.clone();
     let database_path = join_config_path(&PathBuf::from(database_path))?;
-    let rocks = Rocks::new(&database_path)?;
-    let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
 
     let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
-    debug!(target: "Client", "Creating gateway client");
-    let mut gateway = GatewayClient::new(gateway_addr, "127.0.0.1:4444".parse()?, slabstore)?;
-
-    gateway.start().await?;
+    // TODO add to config 
+    let client_wallet_path = "cashier_client_wallet.db";
 
     debug!(target: "cashierd", "starting cashier service");
-    let cashier = CashierService::new(accept_addr, btc_endpoint, wallet.clone(), gateway)?;
+    let cashier = CashierService::new(
+        accept_addr,
+        btc_endpoint,
+        wallet.clone(),
+        database_path,
+        (gateway_addr, "127.0.0.1:4444".parse()?),
+        (
+            PathBuf::from("cashier_mint.params"),
+            PathBuf::from("cashier_spend.params"),
+        ),
+        PathBuf::from(client_wallet_path),
+    ).await?;
+
     cashier.start(ex.clone()).await?;
 
-    let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
-    let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
-    let io = Arc::new(adapter.handle_input()?);
-    jsonserver::start(ex, rpc_url, io).await?;
+    //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
+    //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
+    //let io = Arc::new(adapter.handle_input()?);
+    //jsonserver::start(ex, rpc_url, io).await?;
 
     Ok(())
 }

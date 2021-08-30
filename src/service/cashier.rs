@@ -1,15 +1,12 @@
 use super::btc::{BitcoinKeys, PubAddress};
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
-use super::GatewayClient;
-use crate::blockchain::Slab;
-use crate::crypto::load_params;
-use crate::serial::{deserialize, serialize, Encodable};
-use crate::tx;
+use crate::blockchain::Rocks;
+use crate::client::Client;
+use crate::serial::{deserialize, serialize};
 use crate::wallet::CashierDbPtr;
+use crate::wallet::WalletDb;
 use crate::{Error, Result};
 
-use bellman::groth16;
-use bls12_381::Bls12;
 use ff::Field;
 use rand::rngs::OsRng;
 
@@ -19,8 +16,8 @@ use electrum_client::Client as ElectrumClient;
 use log::*;
 
 use async_std::sync::Arc;
-
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 #[repr(u8)]
 enum CashierError {
@@ -36,41 +33,48 @@ enum CashierCommand {
 pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
-    gateway: GatewayClient,
     btc_client: Arc<ElectrumClient>,
-    mint_params: groth16::Parameters<Bls12>,
-    mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    spend_params: groth16::Parameters<Bls12>,
-    spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    client: Client,
 }
 
 impl CashierService {
-    pub fn new(
+    pub async fn new(
         addr: SocketAddr,
         btc_endpoint: String,
         wallet: CashierDbPtr,
-        gateway: GatewayClient,
+        cashier_database_path: PathBuf,
+        gateway_addrs: (SocketAddr, SocketAddr),
+        params_paths: (PathBuf, PathBuf),
+        client_wallet_path: PathBuf,
     ) -> Result<Arc<CashierService>> {
         // Load trusted setup parameters
 
         // Pull address from config later
         let client_address = btc_endpoint;
 
-        // create client
+        // create btc client
         let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
 
-        let (mint_params, mint_pvk) = load_params("mint.params")?;
-        let (spend_params, spend_pvk) = load_params("spend.params")?;
+        wallet.init_db()?;
+        let keys = wallet.cash_key_gen();
+        wallet.put_keypair(keys.0, keys.1)?;
+        let cashier_secret = wallet.get_cashier_private()?;
+        let rocks = Rocks::new(&cashier_database_path)?;
+
+        // TODO find a way to start the connection and subscribe to gateway
+        let client = Client::new(
+            cashier_secret,
+            rocks,
+            gateway_addrs,
+            params_paths,
+            client_wallet_path.clone(),
+        )?;
 
         Ok(Arc::new(CashierService {
             addr,
             wallet,
-            gateway,
             btc_client,
-            mint_params,
-            mint_pvk,
-            spend_params,
-            spend_pvk,
+            client,
         }))
     }
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -88,43 +92,42 @@ impl CashierService {
 
         let _ = handle_request_task.cancel().await;
 
-        //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
-
         Ok(())
     }
 
-    async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
-        let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
-        let builder = tx::TransactionBuilder {
-            clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
-                value: value,
-                asset_id: 1,
-                signature_secret: cashier_secret,
-            }],
-            inputs: vec![],
-            outputs: vec![tx::TransactionBuilderOutputInfo {
-                value: value,
-                asset_id: 1,
-                public: dkey_pub,
-            }],
-        };
+    //async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
+    //    let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
-        let mut tx_data = vec![];
-        {
-            // Build the tx
-            let tx = builder.build(&self.mint_params, &self.spend_params);
-            // Now serialize it
-            tx.encode(&mut tx_data).expect("encode tx");
-        }
+    //    let builder = tx::TransactionBuilder {
+    //        clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
+    //            value: value,
+    //            asset_id: 1,
+    //            signature_secret: cashier_secret,
+    //        }],
+    //        inputs: vec![],
+    //        outputs: vec![tx::TransactionBuilderOutputInfo {
+    //            value: value,
+    //            asset_id: 1,
+    //            public: dkey_pub,
+    //        }],
+    //    };
 
-        //Add to blockchain
-        let slab = Slab::new(tx_data);
-        //let mut gateway = self.gateway.lock().await;
-        self.gateway.put_slab(slab).await.expect("put slab");
+    //    let mut tx_data = vec![];
+    //    {
+    //        // Build the tx
+    //        let tx = builder.build(&self.mint_params, &self.spend_params);
+    //        // Now serialize it
+    //        tx.encode(&mut tx_data).expect("encode tx");
+    //    }
 
-        Ok(())
-    }
+    //    //Add to blockchain
+    //    let slab = Slab::new(tx_data);
+    //    //let mut gateway = self.gateway.lock().await;
+    //    self.gateway.put_slab(slab).await.expect("put slab");
+
+    //    Ok(())
+    //}
 
     async fn handle_request_loop(
         self: Arc<Self>,
