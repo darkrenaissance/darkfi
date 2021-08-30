@@ -1,5 +1,4 @@
-use crate::Result;
-
+use crate::{Error, Result};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -12,6 +11,7 @@ use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 use secp256k1::key::SecretKey;
+
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -70,27 +70,42 @@ impl BitcoinKeys {
         debug!(target: "BTC", "Subscribe");
 
         // Check if script is already subscribed
-        let status_start = self.btc_client.script_subscribe(&self.script).unwrap();
-        let subscribe_status_task =
-            executor.spawn(self.subscribe_status_loop(status_start, executor.clone()));
-        debug!(target: "BTC", "Subscribed to scripthash");
-        let _ = subscribe_status_task.cancel().await;
-
-        Ok(())
+        if let Some(status) = self.btc_client.script_subscribe(&self.script).unwrap() {
+            let subscribe_status_task =
+                executor.spawn(self.subscribe_status_loop(status, executor.clone()));
+            debug!(target: "BTC", "Subscribed to scripthash");
+            let _ = subscribe_status_task.cancel().await;
+            Ok(())
+        } else {
+            return Err(Error::ServicesError("received wrong command"));
+        }
     }
 
     async fn subscribe_status_loop(
         self: Arc<Self>,
-        _status_start: Option<electrum_client::ScriptStatus>,
+        status_start: electrum_client::ScriptStatus,
         _executor: Arc<Executor<'_>>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<electrum_client::GetBalanceRes>> {
         loop {
-            let check = self.btc_client.script_pop(&self.script);
+            let check = self.btc_client.script_pop(&self.script).unwrap();
             match check {
-                // Script has a notification update
-                Ok(_status) => {}
-                // No update, repeat
-                Err(_) => break,
+
+                Some(status) => {
+                    // Script has a notification update
+                    if status != status_start {
+                        let balance = self.btc_client.script_get_balance(&self.script).unwrap();
+                        if balance.confirmed > 0 {
+                            return Ok(Some(balance))
+                        } else {
+                            continue
+                        }
+
+                    } else {
+                        continue
+                    }
+                }
+
+                None => break,
             }
         }
         Ok(None)
