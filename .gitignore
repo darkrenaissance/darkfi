@@ -2,3 +2,6 @@ target
 *.pyc
 mint.params
 spend.params
+cashier_mint.params
+cashier_spend.params
+
