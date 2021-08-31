@@ -36,9 +36,9 @@
 
 - [x] drk: transfer cli option
 - [x] darkfid: construct a new spend tx
-- [ ] darkfid: check address is valid
+- [x] darkfid: check address is valid
 - [x] darkfid: build tx
-- [ ] darkfid: verify tx
+- [x] darkfid: verify tx
 - [x] darkfid: state transition function
 - [x] darkfid: send tx data to rocksdb
 
