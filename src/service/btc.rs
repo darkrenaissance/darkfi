@@ -2,7 +2,6 @@ use crate::{Error, Result};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use async_executor::Executor;
 use async_std::sync::Arc;
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
@@ -66,49 +65,57 @@ impl BitcoinKeys {
         }))
     }
 
-    pub async fn start_subscribe(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "BTC", "Subscribe");
+    pub async fn start_subscribe(self: Arc<Self>) -> Result<Option<electrum_client::GetBalanceRes>> {
+        debug!(target: "deposit", "BTC: Subscribe to scriptpubkey");
 
         // Check if script is already subscribed
         if let Some(status) = self.btc_client.script_subscribe(&self.script).unwrap() {
-            let subscribe_status_task =
-                executor.spawn(self.subscribe_status_loop(status, executor.clone()));
-            debug!(target: "BTC", "Subscribed to scripthash");
-            let _ = subscribe_status_task.cancel().await;
-            Ok(())
+            let subscribe_status_task = self.subscribe_status_loop(status).await?;
+            debug!(target: "deposit", "Subscribed to scriptpubkey");
+
+            match subscribe_status_task {
+                Some(status) => {
+                    Ok(Some(status))
+                },
+                _ => {
+                    Ok(None)
+                },
+            }
         } else {
-            return Err(Error::ServicesError("received wrong command"));
+            return Err(Error::ServicesError("Did not subscribe to scriptpubkey"));
         }
     }
 
     async fn subscribe_status_loop(
         self: Arc<Self>,
         status_start: electrum_client::ScriptStatus,
-        _executor: Arc<Executor<'_>>,
     ) -> Result<Option<electrum_client::GetBalanceRes>> {
+        debug!(target: "deposit", "awaiting balance: Start!");
         loop {
             let check = self.btc_client.script_pop(&self.script).unwrap();
             match check {
-
                 Some(status) => {
                     // Script has a notification update
                     if status != status_start {
                         let balance = self.btc_client.script_get_balance(&self.script).unwrap();
                         if balance.confirmed > 0 {
+                            debug!(target: "deposit", "BTC Balance: Confirmed!");
                             return Ok(Some(balance))
                         } else {
+                            debug!(target: "deposit", "BTC Balance: Unconfirmed!");
                             continue
                         }
-
                     } else {
+                        debug!(target: "deposit", "ScriptPubKey status has not changed");
                         continue
                     }
                 }
-
-                None => break,
+                None => {
+                    debug!(target: "deposit", "Scriptpubkey does not exist in script notifications!");
+                    return Ok(None)
+                },
             }
         }
-        Ok(None)
     }
 
     // This should do a db lookup to return the same obj

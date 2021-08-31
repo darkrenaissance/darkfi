@@ -34,7 +34,7 @@ pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
     btc_client: Arc<ElectrumClient>,
-    client: Client,
+    client: Arc<Client>,
 }
 
 impl CashierService {
@@ -62,13 +62,13 @@ impl CashierService {
         let rocks = Rocks::new(&cashier_database_path)?;
 
         // TODO find a way to start the connection and subscribe to gateway
-        let client = Client::new(
+        let client = Arc::new(Client::new(
             cashier_secret,
             rocks,
             gateway_addrs,
             params_paths,
             client_wallet_path.clone(),
-        )?;
+        )?);
 
         Ok(Arc::new(CashierService {
             addr,
@@ -140,13 +140,14 @@ impl CashierService {
                 Ok(msg) => {
                     let cashier_wallet = self.wallet.clone();
                     let btc_client = self.btc_client.clone();
+                    let client = self.client.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
                             btc_client,
+                            client,
                             cashier_wallet,
                             send_queue.clone(),
-                            executor.clone(),
                         ))
                         .detach();
                 }
@@ -160,9 +161,9 @@ impl CashierService {
     async fn handle_request(
         msg: (PeerId, Request),
         btc_client: Arc<ElectrumClient>,
+        _client: Arc<Client>,
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
-        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;
@@ -172,7 +173,7 @@ impl CashierService {
                 // Exchange zk_pubkey for bitcoin address
                 let zkpub = request.get_payload();
 
-                //check if key has already been issued
+                //TODO: check if key has already been issued
                 let _check = cashier_wallet.get_keys_by_dkey(&zkpub);
 
                 // Generate bitcoin Address
@@ -197,7 +198,7 @@ impl CashierService {
                 // start scheduler for checking balance
                 debug!(target: "BTC", "Subscribing");
 
-                let _ = btc_keys.start_subscribe(executor.clone()).await?;
+                let _ = btc_keys.start_subscribe().await?;
 
                 //self.mint_dbtc(deserialize(&zkpub).unwrap(), 100);
 
