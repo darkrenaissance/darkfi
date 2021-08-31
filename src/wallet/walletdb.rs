@@ -191,15 +191,6 @@ impl WalletDb {
         (pubkey, privkey)
     }
 
-    pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
-        debug!(target: "cash key_gen", "Generating cashier keys...");
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        (pubkey, privkey)
-    }
-
     pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
