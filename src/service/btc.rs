@@ -7,7 +7,7 @@ use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
-use electrum_client::{Client as ElectrumClient, ElectrumApi};
+use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use secp256k1::key::SecretKey;
 
@@ -65,56 +65,38 @@ impl BitcoinKeys {
         }))
     }
 
-    pub async fn start_subscribe(self: Arc<Self>) -> Result<Option<electrum_client::GetBalanceRes>> {
+    pub async fn start_subscribe(self: Arc<Self>) -> Result<Option<GetBalanceRes>> {
         debug!(target: "deposit", "BTC: Subscribe to scriptpubkey");
-
+        let client = &self.btc_client;
         // Check if script is already subscribed
-        if let Some(status) = self.btc_client.script_subscribe(&self.script).unwrap() {
-            let subscribe_status_task = self.subscribe_status_loop(status).await?;
-            debug!(target: "deposit", "Subscribed to scriptpubkey");
-
-            match subscribe_status_task {
-                Some(status) => {
-                    Ok(Some(status))
-                },
-                _ => {
-                    Ok(None)
-                },
-            }
-        } else {
-            return Err(Error::ServicesError("Did not subscribe to scriptpubkey"));
-        }
-    }
-
-    async fn subscribe_status_loop(
-        self: Arc<Self>,
-        status_start: electrum_client::ScriptStatus,
-    ) -> Result<Option<electrum_client::GetBalanceRes>> {
-        debug!(target: "deposit", "awaiting balance: Start!");
-        loop {
-            let check = self.btc_client.script_pop(&self.script).unwrap();
-            match check {
-                Some(status) => {
-                    // Script has a notification update
-                    if status != status_start {
-                        let balance = self.btc_client.script_get_balance(&self.script).unwrap();
-                        if balance.confirmed > 0 {
-                            debug!(target: "deposit", "BTC Balance: Confirmed!");
-                            return Ok(Some(balance))
+        if let Some(status_start) = client.script_subscribe(&self.script)? {
+            loop {
+                match client.script_pop(&self.script)?
+                {
+                    Some(status) => {
+                        // Script has a notification update
+                        if status != status_start {
+                            let balance = client.script_get_balance(&self.script)?;
+                            if balance.confirmed > 0 {
+                                debug!(target: "deposit", "BTC Balance: Confirmed!");
+                                return Ok(Some(balance))
+                            } else {
+                                debug!(target: "deposit", "BTC Balance: Unconfirmed!");
+                                continue
+                            }
                         } else {
-                            debug!(target: "deposit", "BTC Balance: Unconfirmed!");
+                            debug!(target: "deposit", "ScriptPubKey status has not changed");
                             continue
                         }
-                    } else {
-                        debug!(target: "deposit", "ScriptPubKey status has not changed");
-                        continue
                     }
-                }
-                None => {
-                    debug!(target: "deposit", "Scriptpubkey does not exist in script notifications!");
-                    return Ok(None)
-                },
-            }
+                    None => {
+                        debug!(target: "deposit", "Scriptpubkey does not yet exist in script notifications!");
+                        continue
+                    },
+                };
+            } // Endloop
+        } else {
+            return Err(Error::ServicesError("Did not subscribe to scriptpubkey"));
         }
     }
 
