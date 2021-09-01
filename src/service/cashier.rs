@@ -61,11 +61,11 @@ impl CashierService {
         let rocks = Rocks::new(&cashier_database_path)?;
 
         let client = Client::new(
-                cashier_secret,
-                rocks,
-                gateway_addrs,
-                params_paths,
-                client_wallet_path.clone(),
+            cashier_secret,
+            rocks,
+            gateway_addrs,
+            params_paths,
+            client_wallet_path.clone(),
         )?;
 
         let client = Arc::new(Mutex::new(client));
@@ -89,25 +89,25 @@ impl CashierService {
         let btc_client = self.btc_client.clone();
 
         let handle_request_task = executor.spawn(Self::handle_request_loop(
-                send.clone(),
-                recv.clone(),
-                wallet.clone(),
-                btc_client.clone(),
-                executor.clone(),
+            send.clone(),
+            recv.clone(),
+            wallet.clone(),
+            btc_client.clone(),
+            executor.clone(),
         ));
 
         self.client.lock().await.start().await?;
 
         // this for test
         let client_wallet = Arc::new(WalletDb::new(
-                &PathBuf::from("cashier_client_wallet.db"),
-                "123".into(),
+            &PathBuf::from("cashier_client_wallet.db"),
+            "123".into(),
         )?);
 
         let cashier_client_subscriber_task = executor.spawn(Client::connect_to_subscriber(
-                self.client.clone(),
-                executor.clone(),
-                client_wallet,
+            self.client.clone(),
+            executor.clone(),
+            client_wallet,
         ));
 
         protocol.run(executor.clone()).await?;
@@ -163,13 +163,13 @@ impl CashierService {
                 Ok(msg) => {
                     let _ = executor
                         .spawn(Self::handle_request(
-                                msg,
-                                btc_client.clone(),
-                                wallet.clone(),
-                                send_queue.clone(),
+                            msg,
+                            btc_client.clone(),
+                            wallet.clone(),
+                            send_queue.clone(),
                         ))
                         .detach();
-                    }
+                }
                 Err(_) => {
                     break;
                 }
