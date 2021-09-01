@@ -18,16 +18,16 @@ Open .config/darkfi/darkfid.toml and add a password to the 'Password' section.
 $ cargo run --bin gatewayd -- -v
 ```
 
-4. Run darkfid:
-
-```console
-$ cargo run --bin darkfid -- -v
-```
-
-5. Run cashierd:
+4. Run cashierd:
 
 ```console
 $ cargo run --bin cashierd -- -v
+```
+
+5. Run darkfid:
+
+```console
+$ cargo run --bin darkfid -- -v
 ```
 
 6. Initialize wallet and generate key pair:
@@ -44,16 +44,16 @@ Run gateway daemon:
 $ cargo run --bin gatewayd -- -v
 ```
 
-Run darkfid:
-
-```console
-$ cargo run --bin darkfid -- -v
-```
-
 Run cashierd:
 
 ```console
 $ cargo run --bin cashierd -- -v
+```
+
+Run darkfid:
+
+```console
+$ cargo run --bin darkfid -- -v
 ```
 
 Show drk usage manual:
