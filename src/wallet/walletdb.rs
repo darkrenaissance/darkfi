@@ -1,10 +1,10 @@
+use crate::client::ClientFailed;
 use crate::crypto::{
     coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoins,
 };
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
-use crate::client::ClientFailed;
 
 use async_std::sync::{Arc, Mutex};
 use ff::Field;

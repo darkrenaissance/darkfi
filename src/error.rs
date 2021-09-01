@@ -1,8 +1,8 @@
 use jsonrpc_core::*;
 use std::fmt;
 
-use crate::state;
 use crate::client;
+use crate::state;
 use crate::vm::ZkVmError;
 
 pub type Result<T> = std::result::Result<T, Error>;

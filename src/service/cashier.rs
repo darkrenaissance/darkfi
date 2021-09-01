@@ -95,7 +95,6 @@ impl CashierService {
         Ok(())
     }
 
-
     //async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
     //    let cashier_secret = self.wallet.get_cashier_private().unwrap();
 
@@ -177,7 +176,7 @@ impl CashierService {
                 let _check = cashier_wallet.get_keys_by_dkey(&zkpub);
 
                 // Generate bitcoin Address
-                let btc_keys = BitcoinKeys::new(btc_client).unwrap();
+                let btc_keys = BitcoinKeys::new(btc_client)?;
 
                 let btc_pub = btc_keys.get_pubkey();
                 let btc_priv = btc_keys.get_privkey();

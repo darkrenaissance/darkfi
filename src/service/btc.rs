@@ -11,7 +11,6 @@ use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use secp256k1::key::SecretKey;
 
-
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
 pub type PubKey = PublicKey;
@@ -71,28 +70,27 @@ impl BitcoinKeys {
         // Check if script is already subscribed
         if let Some(status_start) = client.script_subscribe(&self.script)? {
             loop {
-                match client.script_pop(&self.script)?
-                {
+                match client.script_pop(&self.script)? {
                     Some(status) => {
                         // Script has a notification update
                         if status != status_start {
                             let balance = client.script_get_balance(&self.script)?;
                             if balance.confirmed > 0 {
                                 debug!(target: "deposit", "BTC Balance: Confirmed!");
-                                return Ok(Some(balance))
+                                return Ok(Some(balance));
                             } else {
                                 debug!(target: "deposit", "BTC Balance: Unconfirmed!");
-                                continue
+                                continue;
                             }
                         } else {
                             debug!(target: "deposit", "ScriptPubKey status has not changed");
-                            continue
+                            continue;
                         }
                     }
                     None => {
                         debug!(target: "deposit", "Scriptpubkey does not yet exist in script notifications!");
-                        continue
-                    },
+                        continue;
+                    }
                 };
             } // Endloop
         } else {
