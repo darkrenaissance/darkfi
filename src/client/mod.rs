@@ -25,19 +25,15 @@ impl fmt::Display for ClientFailed {
             }
             ClientFailed::UnvalidAddress(i) => {
                 write!(f, "Unvalid Address {}", i)
-            }            
+            }
             ClientFailed::UnvalidAmount(i) => {
                 write!(f, "Unvalid Amount {}", i)
             }
-            ClientFailed::UnableToGetDepositAddress => {
-                f.write_str("Unable to get deposit address")
-            }
+            ClientFailed::UnableToGetDepositAddress => f.write_str("Unable to get deposit address"),
             ClientFailed::UnableToGetWithdrawAddress => {
                 f.write_str("Unable to get withdraw address")
             }
-            ClientFailed::EmptyPassword => {
-                f.write_str("Password is empty. Cannot create database")
-            }
+            ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             ClientFailed::ClientError(i) => {
                 write!(f, "ClientError: {}", i)
             }

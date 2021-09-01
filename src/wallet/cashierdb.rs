@@ -1,9 +1,9 @@
+use crate::client::ClientFailed;
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::service::btc::{PrivKey, PubKey};
 use crate::util::join_config_path;
 use crate::{Error, Result};
-use crate::client::ClientFailed;
 
 use async_std::sync::Arc;
 use ff::Field;

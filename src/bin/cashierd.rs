@@ -26,7 +26,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
 
-    // TODO add to config 
+    // TODO add to config
     let client_wallet_path = "cashier_client_wallet.db";
 
     debug!(target: "cashierd", "starting cashier service");
@@ -41,7 +41,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
             PathBuf::from("cashier_spend.params"),
         ),
         PathBuf::from(client_wallet_path),
-    ).await?;
+    )
+    .await?;
 
     cashier.start(ex.clone()).await?;
 

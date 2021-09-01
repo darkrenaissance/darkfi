@@ -17,4 +17,3 @@ pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
 
     Ok(path)
 }
-
