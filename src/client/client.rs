@@ -25,7 +25,7 @@ use bls12_381::Bls12;
 use log::*;
 use rusqlite::Connection;
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use futures::FutureExt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -36,7 +36,6 @@ pub struct Client {
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
-    connected_with_cashier: bool,
 }
 
 impl Client {
@@ -87,36 +86,12 @@ impl Client {
             mint_params,
             spend_params,
             gateway,
-            connected_with_cashier: false,
         })
     }
 
     pub async fn start(&mut self) -> Result<()> {
         self.gateway.start().await?;
         Ok(())
-    }
-
-    pub async fn connect_to_subscriber(
-        &mut self,
-        executor: Arc<Executor<'_>>,
-        wallet: WalletPtr,
-    ) -> Result<()> {
-        if self.connected_with_cashier {
-            warn!("The client already connected to the subscriber");
-            return Ok(());
-        }
-
-        // start subscribing
-        debug!(target: "Client", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber(executor.clone()).await?;
-
-        loop {
-            let slab = gateway_slabs_sub.recv().await?;
-            let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
-            let update = state_transition(&self.state, tx)?;
-            self.state.apply(update, wallet.clone()).await?;
-        }
     }
 
     pub async fn connect_to_cashier(
@@ -126,7 +101,6 @@ impl Client {
         cashier_addr: SocketAddr,
         rpc_url: SocketAddr,
     ) -> Result<()> {
-        self.connected_with_cashier = true;
         // create cashier client
         debug!(target: "Client", "Creating cashier client");
         let mut cashier_client = CashierClient::new(cashier_addr)?;
@@ -306,6 +280,29 @@ impl Client {
         self.gateway.put_slab(slab).await?;
 
         Ok(())
+    }
+
+    pub async fn connect_to_subscriber(
+        client: Arc<Mutex<Client>>,
+        executor: Arc<Executor<'_>>,
+        wallet: WalletPtr,
+    ) -> Result<()> {
+        // start subscribing
+        debug!(target: "Client", "Start subscriber");
+        let gateway_slabs_sub: GatewaySlabsSubscriber = client
+            .lock()
+            .await
+            .gateway
+            .start_subscriber(executor.clone())
+            .await?;
+
+        loop {
+            let slab = gateway_slabs_sub.recv().await?;
+            let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+            let mut client = client.lock().await;
+            let update = state_transition(&client.state, tx)?;
+            client.state.apply(update, wallet.clone()).await?;
+        }
     }
 }
 

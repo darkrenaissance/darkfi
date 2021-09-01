@@ -30,7 +30,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     let client_wallet_path = "cashier_client_wallet.db";
 
     debug!(target: "cashierd", "starting cashier service");
-    let cashier = CashierService::new(
+    let mut cashier = CashierService::new(
         accept_addr,
         btc_endpoint,
         wallet.clone(),

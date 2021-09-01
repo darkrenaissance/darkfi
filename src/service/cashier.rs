@@ -3,8 +3,7 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
-use crate::wallet::CashierDbPtr;
-use crate::wallet::WalletDb;
+use crate::wallet::{CashierDbPtr, WalletDb};
 use crate::{Error, Result};
 
 use ff::Field;
@@ -15,7 +14,7 @@ use async_executor::Executor;
 use electrum_client::Client as ElectrumClient;
 use log::*;
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -34,7 +33,7 @@ pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
     btc_client: Arc<ElectrumClient>,
-    client: Client,
+    client: Arc<Mutex<Client>>,
 }
 
 impl CashierService {
@@ -46,7 +45,7 @@ impl CashierService {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
         client_wallet_path: PathBuf,
-    ) -> Result<Arc<CashierService>> {
+    ) -> Result<CashierService> {
         // Load trusted setup parameters
 
         // Pull address from config later
@@ -61,7 +60,6 @@ impl CashierService {
         let cashier_secret = wallet.get_cashier_private()?;
         let rocks = Rocks::new(&cashier_database_path)?;
 
-        // TODO find a way to start the connection and subscribe to gateway
         let client = Client::new(
             cashier_secret,
             rocks,
@@ -70,14 +68,16 @@ impl CashierService {
             client_wallet_path.clone(),
         )?;
 
-        Ok(Arc::new(CashierService {
+        let client = Arc::new(Mutex::new(client));
+
+        Ok(CashierService {
             addr,
             wallet,
             btc_client,
             client,
-        }))
+        })
     }
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "Cashier", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
@@ -85,16 +85,38 @@ impl CashierService {
 
         let (send, recv) = protocol.start().await?;
 
-        let handle_request_task =
-            executor.spawn(self.handle_request_loop(send.clone(), recv.clone(), executor.clone()));
+        let wallet = self.wallet.clone();
+        let btc_client = self.btc_client.clone();
+
+        let handle_request_task = executor.spawn(Self::handle_request_loop(
+            send.clone(),
+            recv.clone(),
+            wallet.clone(),
+            btc_client.clone(),
+            executor.clone(),
+        ));
+
+        self.client.lock().await.start().await?;
+
+        // this for test
+        let client_wallet = Arc::new(WalletDb::new(
+            &PathBuf::from("cashier_client_wallet.db"),
+            "123".into(),
+        )?);
+
+        let cashier_client_subscriber_task = executor.spawn(Client::connect_to_subscriber(
+            self.client.clone(),
+            executor.clone(),
+            client_wallet,
+        ));
 
         protocol.run(executor.clone()).await?;
 
         let _ = handle_request_task.cancel().await;
+        let _ = cashier_client_subscriber_task.cancel().await;
 
         Ok(())
     }
-
 
     //async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
     //    let cashier_secret = self.wallet.get_cashier_private().unwrap();
@@ -130,21 +152,20 @@ impl CashierService {
     //}
 
     async fn handle_request_loop(
-        self: Arc<Self>,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
         recv_queue: async_channel::Receiver<(PeerId, Request)>,
+        wallet: CashierDbPtr,
+        btc_client: Arc<ElectrumClient>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         loop {
             match recv_queue.recv().await {
                 Ok(msg) => {
-                    let cashier_wallet = self.wallet.clone();
-                    let btc_client = self.btc_client.clone();
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
-                            btc_client,
-                            cashier_wallet,
+                            btc_client.clone(),
+                            wallet.clone(),
                             send_queue.clone(),
                             executor.clone(),
                         ))
