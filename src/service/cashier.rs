@@ -3,7 +3,7 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
-use crate::wallet::{CashierDbPtr, WalletDb};
+use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
 
 use ff::Field;
@@ -77,7 +77,11 @@ impl CashierService {
             client,
         })
     }
-    pub async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(
+        &mut self,
+        executor: Arc<Executor<'_>>,
+        client_wallet: WalletPtr,
+    ) -> Result<()> {
         debug!(target: "Cashier", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
@@ -97,12 +101,6 @@ impl CashierService {
         ));
 
         self.client.lock().await.start().await?;
-
-        // this for test
-        let client_wallet = Arc::new(WalletDb::new(
-            &PathBuf::from("cashier_client_wallet.db"),
-            "123".into(),
-        )?);
 
         let cashier_client_subscriber_task = executor.spawn(Client::connect_to_subscriber(
             self.client.clone(),

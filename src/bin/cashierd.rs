@@ -6,7 +6,7 @@ use std::{path::Path, path::PathBuf};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
 use drk::util::join_config_path;
-use drk::wallet::CashierDb;
+use drk::wallet::{WalletDb, CashierDb};
 use drk::{Error, Result};
 use log::*;
 
@@ -21,13 +21,13 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let btc_endpoint: String = config.btc_endpoint.clone();
 
-    let database_path = config.database_path.clone();
+    let database_path = config.client_database_path.clone();
     let database_path = join_config_path(&PathBuf::from(database_path))?;
 
-    let wallet = Arc::new(CashierDb::new("cashier.db", config.password.clone())?);
-
-    // TODO add to config
-    let client_wallet_path = "cashier_client_wallet.db";
+    let wallet = Arc::new(CashierDb::new(
+        &config.cashierdb_path,
+        config.password.clone(),
+    )?);
 
     debug!(target: "cashierd", "starting cashier service");
     let mut cashier = CashierService::new(
@@ -40,11 +40,16 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
             PathBuf::from("cashier_mint.params"),
             PathBuf::from("cashier_spend.params"),
         ),
-        PathBuf::from(client_wallet_path),
+        PathBuf::from(&config.client_walletdb_path),
     )
     .await?;
 
-    cashier.start(ex.clone()).await?;
+    let client_wallet = Arc::new(WalletDb::new(
+        &PathBuf::from(&config.client_walletdb_path),
+        config.client_password.clone() 
+    )?);
+
+    cashier.start(ex.clone(), client_wallet.clone()).await?;
 
     //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
     //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);

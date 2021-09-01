@@ -106,21 +106,13 @@ impl Default for DarkfidConfig {
 
         let database_path = String::from("database_client.db");
         let database_path = join_config_path(&PathBuf::from(database_path))
-            .expect("error during join database_path to config path");
-        let database_path = String::from(
-            database_path
-                .to_str()
-                .expect("error convert Path to String"),
-        );
+            .expect("join database_path to config path");
+        let database_path = String::from(database_path.to_str().expect("convert Path to String"));
 
         let walletdb_path = String::from("walletdb.db");
         let walletdb_path = join_config_path(&PathBuf::from(walletdb_path))
-            .expect("error during join walletdb_path to config path");
-        let walletdb_path = String::from(
-            walletdb_path
-                .to_str()
-                .expect("error convert Path to String"),
-        );
+            .expect("join walletdb_path to config path");
+        let walletdb_path = String::from(walletdb_path.to_str().expect("convert Path to String"));
 
         let mut lp = PathBuf::new();
         lp.push(env::temp_dir());
@@ -192,8 +184,8 @@ pub struct CashierdConfig {
     pub rpc_url: String,
 
     #[serde(default)]
-    #[serde(rename = "database_path")]
-    pub database_path: String,
+    #[serde(rename = "client_database_path")]
+    pub client_database_path: String,
 
     #[serde(default)]
     #[serde(rename = "btc_endpoint")]
@@ -208,8 +200,20 @@ pub struct CashierdConfig {
     pub log_path: String,
 
     #[serde(default)]
+    #[serde(rename = "cashierdb_path")]
+    pub cashierdb_path: String,
+
+    #[serde(default)]
+    #[serde(rename = "client_walletdb_path")]
+    pub client_walletdb_path: String,
+
+    #[serde(default)]
     #[serde(rename = "password")]
     pub password: String,
+
+    #[serde(default)]
+    #[serde(rename = "client_password")]
+    pub client_password: String,
 }
 
 impl Default for CashierdConfig {
@@ -217,22 +221,41 @@ impl Default for CashierdConfig {
         let accept_url = String::from("127.0.0.1:7777");
         let rpc_url = String::from("http://127.0.0.1:8000");
         let gateway_url = String::from("127.0.0.1:3333");
-        let database_path = String::from("cashierd.db");
+        let client_database_path = String::from("cashier_client_database.db");
         let btc_endpoint = String::from("tcp://electrum.blockstream.info:50001");
         let mut lp = PathBuf::new();
         lp.push(env::temp_dir());
         lp.push("cashierd.log");
         let log_path = String::from(lp.to_str().unwrap());
 
+        let cashierdb_path = String::from("cashier.db");
+        let cashierdb_path = join_config_path(&PathBuf::from(cashierdb_path))
+            .expect("join walletdb_path to config path");
+        let cashierdb_path = String::from(cashierdb_path.to_str().expect("convert Path to String"));
+
+        let client_walletdb_path = String::from("cashier_client_walletdb.db");
+        let client_walletdb_path = join_config_path(&PathBuf::from(client_walletdb_path))
+            .expect("join walletdb_path to config path");
+        let client_walletdb_path = String::from(
+            client_walletdb_path
+                .to_str()
+                .expect("convert Path to String"),
+        );
+
         let password = String::new();
+        let client_password = String::new();
+
         Self {
             accept_url,
             rpc_url,
-            database_path,
+            client_database_path,
             btc_endpoint,
             gateway_url,
             log_path,
+            cashierdb_path,
+            client_walletdb_path,
             password,
+            client_password,
         }
     }
 }
