@@ -220,7 +220,6 @@ impl CashierService {
                 debug!(target: "CASHIER DAEMON","Waiting for address balance");
             }
             1 => {
-
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
                 let btc_address = request.get_payload();
                 //let btc_address: String = deserialize(&btc_address)?;
@@ -248,7 +247,6 @@ impl CashierService {
                 reply.set_payload(serialize(&cashier_public));
 
                 send_queue.send((peer, reply)).await?;
-
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));

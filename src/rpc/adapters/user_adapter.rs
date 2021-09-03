@@ -222,7 +222,6 @@ impl UserAdapter {
             .await?
             .map_err(|err| Error::from(err))?;
 
-
         // transfer the dbtc
         let key = bs58::encode(serialize(&key)).into_string();
         let mut transfer_params = TransferParams::new();

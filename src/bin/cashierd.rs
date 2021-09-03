@@ -6,7 +6,7 @@ use std::{path::Path, path::PathBuf};
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
 use drk::util::join_config_path;
-use drk::wallet::{WalletDb, CashierDb};
+use drk::wallet::{CashierDb, WalletDb};
 use drk::{Error, Result};
 
 use async_executor::Executor;
@@ -44,7 +44,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let client_wallet = Arc::new(WalletDb::new(
         &PathBuf::from(&config.client_walletdb_path),
-        config.client_password.clone() 
+        config.client_password.clone(),
     )?);
 
     cashier.start(ex.clone(), client_wallet.clone()).await?;
