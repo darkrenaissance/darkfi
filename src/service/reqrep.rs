@@ -64,12 +64,12 @@ impl RepProtocol {
     )> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
-        info!("{} SERVICE: Bound To {}", self.service_name, addr);
+        debug!(target: "REP PROTOCOL API", "{} SERVICE: Bound To {}", self.service_name, addr);
         Ok(self.channels.clone())
     }
 
     pub async fn run(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
-        info!("{} SERVICE: Running", self.service_name);
+        debug!(target: "REP PROTOCOL API", "{} SERVICE: Running", self.service_name);
 
         let (stop_s, stop_r) = async_channel::unbounded::<()>();
 
@@ -116,7 +116,7 @@ impl RepProtocol {
             }
         }
         let _ = stop_task.cancel().await;
-        warn!("{} SERVICE: Stopped", self.service_name);
+        debug!(target: "REP PROTOCOL API","{} SERVICE: Stopped", self.service_name);
         Ok(())
     }
 }
@@ -140,7 +140,7 @@ impl ReqProtocol {
     pub async fn start(&mut self) -> Result<()> {
         let addr = addr_to_string(self.addr);
         self.socket.connect(addr.as_str()).await?;
-        info!("{} SERVICE: Connected To {}", self.service_name, self.addr);
+        debug!(target: "REQ PROTOCOL API","{} SERVICE: Connected To {}", self.service_name, self.addr);
         Ok(())
     }
 
@@ -156,10 +156,11 @@ impl ReqProtocol {
         let req: zeromq::ZmqMessage = req.into();
 
         self.socket.send(req).await?;
-        info!(
-            "{} SERVICE: Sent Request {{ command: {} }}",
-            self.service_name, command
-        );
+        debug!(
+        target: "REQ PROTOCOL API",
+                "{} SERVICE: Sent Request {{ command: {} }}",
+                self.service_name, command
+            );
 
         let rep: zeromq::ZmqMessage = self.socket.recv().await?;
         if let Some(reply) = rep.get(0) {
@@ -167,11 +168,12 @@ impl ReqProtocol {
 
             let reply: Reply = deserialize(&reply)?;
 
-            info!(
-                "{} SERVICE: Received Reply {{ error: {} }}",
-                self.service_name,
-                reply.has_error()
-            );
+            debug!(
+            target: "REQ PROTOCOL API",
+                    "{} SERVICE: Received Reply {{ error: {} }}",
+                    self.service_name,
+                    reply.has_error()
+                );
 
             if reply.has_error() {
                 // TODO return error status code instead of None
@@ -210,8 +212,9 @@ impl Publisher {
     pub async fn start(&mut self, recv_queue: async_channel::Receiver<Vec<u8>>) -> Result<()> {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
-        info!(
-            "{} PUBLISHER SERVICE : Bound To {}",
+        debug!(
+            target: "PUBLISHER API",
+            "{} SERVICE : Bound To {}",
             self.service_name, addr
         );
         loop {
@@ -248,8 +251,9 @@ impl Subscriber {
         self.socket.connect(addr.as_str()).await?;
 
         self.socket.subscribe("").await?;
-        info!(
-            "{} SUBSCRIBER SERVICE : Connected To {}",
+        debug!(
+            target: "SUBSCRIBER API",
+            "{} SERVICE : Connected To {}",
             self.service_name, addr
         );
         Ok(())

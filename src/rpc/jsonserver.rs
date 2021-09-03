@@ -23,14 +23,14 @@ pub async fn listen(
         None => format!("http://{}", listener.get_ref().local_addr()?),
         Some(_) => format!("https://{}", listener.get_ref().local_addr()?),
     };
-    println!("Listening on {}", host);
+    debug!(target: "RPC SERVER", "Listening on {}", host);
 
     loop {
         // Accept the next connection.
-        debug!(target: "rpc", "waiting for stream accept [START]");
+        debug!(target: "RPC SERVER", "waiting for stream accept [START]");
         let (stream, _) = listener.accept().await?;
 
-        debug!(target: "rpc", "stream accepted [END]");
+        debug!(target: "RPC SERVER", "stream accepted [END]");
         // Spawn a background task serving this connection.
         let task = match &tls {
             None => {
@@ -44,7 +44,7 @@ pub async fn listen(
                     })
                     .await
                     {
-                        println!("Connection error: {:#?}", err);
+                        debug!(target: "RPC SERVER", "Connection error: {:#?}", err);
                     }
                 })
             }
@@ -61,7 +61,7 @@ pub async fn listen(
                         })
                     }
                     Err(err) => {
-                        println!("Failed to establish secure TLS connection: {:#?}", err);
+                        debug!(target: "RPC SERVER", "Failed to establish secure TLS connection: {:#?}", err);
                         continue;
                     }
                 }
@@ -115,15 +115,15 @@ impl RpcInterface {
         mut req: Request,
         io: Arc<jsonrpc_core::IoHandler>,
     ) -> http_types::Result<Response> {
-        info!("RPC serving {}", req.url());
+        debug!(target: "RPC INTERFACE", "RPC serving {}", req.url());
 
         let request = req.body_string().await?;
 
-        debug!(target: "rpc", "JsonRpcInterface::serve() [PROCESSING INPUT]");
+        debug!(target: "RPC INTERFACE", "JsonRpcInterface::serve() [PROCESSING INPUT]");
         let response = io
             .handle_request_sync(&request)
             .ok_or(Error::BadOperationType)?;
-        debug!(target: "rpc", "JsonRpcInterface::serve() [PROCESSED]");
+        debug!(target: "RPC INTERFACE", "JsonRpcInterface::serve() [PROCESSED]");
 
         let mut res = Response::new(StatusCode::Ok);
         res.insert_header("Content-Type", "text/plain");

@@ -8,7 +8,7 @@ use drk::rpc::jsonrpc::JsonResult;
 use drk::util::join_config_path;
 use drk::{Error, Result};
 
-use log::info;
+use log::debug;
 
 struct Drk {
     url: String,
@@ -22,7 +22,7 @@ impl Drk {
     async fn request(&self, method_name: &str, r: jsonrpc::JsonRequest) -> Result<()> {
         // TODO: Return actual JSON result
         let data = surf::Body::from_json(&r)?;
-        info!("--> {:?}", r);
+        debug!(target: "DRK",  "--> {:?}", r);
         let mut req = surf::post(&self.url).body(data).await?;
 
         let resp = req.take_body();
@@ -31,13 +31,13 @@ impl Drk {
         let v: JsonResult = serde_json::from_str(&json)?;
         match v {
             JsonResult::Resp(r) => {
-                info!("<-- {:?}", r);
+                debug!(target: "DRK", "<-- {:?}", r);
                 println!("{}: {}", method_name, r.result);
                 return Ok(());
             }
 
             JsonResult::Err(e) => {
-                info!("<-- {:?}", e);
+                debug!(target: "DRK", "<-- {:?}", e);
                 return Err(Error::JsonRpcError(e.error.message.to_string()));
             }
         };
@@ -157,7 +157,7 @@ fn main() -> Result<()> {
         let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
 
         let debug_level = if options.verbose {
-            LevelFilter::Info
+            LevelFilter::Debug
         } else {
             LevelFilter::Off
         };

@@ -81,7 +81,7 @@ impl CashierService {
         executor: Arc<Executor<'_>>,
         client_wallet: WalletPtr,
     ) -> Result<()> {
-        debug!(target: "Cashier", "Start Cashier");
+        debug!(target: "CASHIER DAEMON", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
         let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
@@ -182,9 +182,10 @@ impl CashierService {
     ) -> Result<()> {
         let request = msg.1;
         let peer = msg.0;
+        debug!(target: "CASHIER DAEMON", "Get command");
         match request.get_command() {
             0 => {
-                debug!(target: "Cashier", "Get command");
+                debug!(target: "CASHIER DAEMON", "Received deposit request");
                 // Exchange zk_pubkey for bitcoin address
                 let zkpub = request.get_payload();
 
@@ -208,18 +209,19 @@ impl CashierService {
 
                 // send reply
                 send_queue.send((peer, reply)).await?;
-                info!("Received dkey->btc msg");
 
                 // start scheduler for checking balance
-                debug!(target: "BTC", "Subscribing");
+                debug!(target: "CASHIER DAEMON", "Subscribing for deposit");
 
                 let _ = btc_keys.start_subscribe().await?;
 
                 //self.mint_dbtc(deserialize(&zkpub).unwrap(), 100);
 
-                info!("Waiting for address balance");
+                debug!(target: "CASHIER DAEMON","Waiting for address balance");
             }
             1 => {
+
+                debug!(target: "CASHIER DAEMON", "Received withdraw request");
                 let btc_address = request.get_payload();
                 //let btc_address: String = deserialize(&btc_address)?;
                 //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)?;
@@ -247,7 +249,6 @@ impl CashierService {
 
                 send_queue.send((peer, reply)).await?;
 
-                info!("Received withdraw request");
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));
@@ -269,7 +270,7 @@ impl CashierClient {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        debug!(target: "Cashier", "Start CashierClient");
+        debug!(target: "CASHIER CLIENT", "Start CashierClient");
         self.protocol.start().await?;
 
         Ok(())

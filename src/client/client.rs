@@ -77,7 +77,7 @@ impl Client {
         };
 
         // create gateway client
-        debug!(target: "Client", "Creating GatewayClient");
+        debug!(target: "CLIENT", "Creating GatewayClient");
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
         Ok(Self {
@@ -102,11 +102,11 @@ impl Client {
         rpc_url: SocketAddr,
     ) -> Result<()> {
         // create cashier client
-        debug!(target: "Client", "Creating cashier client");
+        debug!(target: "CLIENT", "Creating cashier client");
         let mut cashier_client = CashierClient::new(cashier_addr)?;
 
         // start subscribing
-        debug!(target: "Client", "Start subscriber");
+        debug!(target: "CLIENT", "Start subscriber");
         let gateway_slabs_sub: GatewaySlabsSubscriber =
             self.gateway.start_subscriber(executor.clone()).await?;
 
@@ -136,7 +136,7 @@ impl Client {
         )?);
 
         // start the rpc server
-        debug!(target: "Client", "Start RPC server");
+        debug!(target: "CLIENT", "Start RPC server");
         let io = Arc::new(adapter.handle_input()?);
         let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
@@ -288,7 +288,7 @@ impl Client {
         wallet: WalletPtr,
     ) -> Result<()> {
         // start subscribing
-        debug!(target: "Client", "Start subscriber");
+        debug!(target: "CLIENT", "Start subscriber");
         let gateway_slabs_sub: GatewaySlabsSubscriber = client
             .lock()
             .await

@@ -24,7 +24,7 @@ pub struct CashierDb {
 
 impl CashierDb {
     pub fn new(wallet: &str, password: String) -> Result<Self> {
-        debug!(target: "cashierdb", "new() Constructor called");
+        debug!(target: "CASHIERDB", "new() Constructor called");
         let path = join_config_path(&PathBuf::from(wallet))?;
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
@@ -40,20 +40,18 @@ impl CashierDb {
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../res/cashier.sql");
             let conn = Connection::open(&self.path)?;
-            debug!(target: "cashierdb", "OPENED CONNECTION AT PATH {:?}", self.path);
+            debug!(target: "CASHIERDB", "Opened connection at path {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;
             conn.execute_batch(&contents)?;
         } else {
-            println!("Password is empty. You must set a password to use the wallet.");
-            println!("Current password: {}", self.password);
+            debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
     }
 
     pub fn get_keys_by_dkey(&self, dkey_pub: &Vec<u8>) -> Result<()> {
-        println!("get keys...");
-        debug!(target: "CashierDB", "Check for existing dkey");
+        debug!(target: "CASHIERDB", "Check for existing dkey");
         //let dkey_id = self.get_value_deserialized(dkey_pub)?;
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -82,7 +80,7 @@ impl CashierDb {
         btc_public: PubKey,
         //txid will be updated when exists
     ) -> Result<()> {
-        debug!(target: "CashierDB", "Put exchange keys");
+        debug!(target: "CASHIERDB", "Put exchange keys");
         // prepare the values
         //let dkey_pub = self.get_value_serialized(&dkey_pub)?;
         let btc_private = btc_private.to_bytes();
@@ -110,7 +108,7 @@ impl CashierDb {
         &self,
         btc_address: &Vec<u8>,
     ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-        debug!(target: "CashierDB", "Check for existing btc address");
+        debug!(target: "CASHIERDB", "Check for existing btc address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -142,7 +140,7 @@ impl CashierDb {
         d_key_private: Vec<u8>,
         d_key_public: Vec<u8>,
     ) -> Result<()> {
-        debug!(target: "CashierDB", "Put withdraw keys");
+        debug!(target: "CASHIERDB", "Put withdraw keys");
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -162,7 +160,7 @@ impl CashierDb {
     }
 
     pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
-        debug!(target: "cash key_gen", "Generating cashier keys...");
+        debug!(target: "CASHIERDB", "Generating cashier keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
@@ -172,7 +170,6 @@ impl CashierDb {
 
     pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
-        println!("{}", self.password);
         conn.pragma_update(None, "key", &self.password)?;
         conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
@@ -182,7 +179,7 @@ impl CashierDb {
     }
 
     pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
-        debug!(target: "save_cash_key", "Save cashier keys...");
+        debug!(target: "CASHIERDB", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         conn.execute(
@@ -193,7 +190,7 @@ impl CashierDb {
     }
 
     pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
-        debug!(target: "get_cashier_public", "Returning keys...");
+        debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
@@ -210,7 +207,7 @@ impl CashierDb {
         Ok(public)
     }
     pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
-        debug!(target: "get", "Returning keys...");
+        debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_private FROM keys")?;

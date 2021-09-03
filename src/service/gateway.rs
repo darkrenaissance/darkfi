@@ -121,8 +121,8 @@ impl GatewayService {
         let peer = msg.0;
         match request.get_command() {
             0 => {
+                debug!(target: "GATEWAY DAEMON" ,"Received putslab msg");
                 // PUTSLAB
-
                 let slab = request.get_payload();
 
                 // add to slabstore
@@ -139,10 +139,9 @@ impl GatewayService {
 
                 // publish to all subscribes
                 publish_queue.send(slab).await?;
-
-                info!("Received putslab msg");
             }
             1 => {
+                debug!(target: "GATEWAY DAEMON", "Received getslab msg");
                 let index = request.get_payload();
                 let slab = slabstore.get(index)?;
 
@@ -157,16 +156,15 @@ impl GatewayService {
                 send_queue.send((peer, reply)).await?;
 
                 // GETSLAB
-                info!("Received getslab msg");
             }
             2 => {
+                debug!(target: "GATEWAY DAEMON","Received getlastindex msg");
                 let index = slabstore.get_last_index_as_bytes()?;
 
                 let reply = Reply::from(&request, GatewayError::NoError as u32, index);
                 send_queue.send((peer, reply)).await?;
 
                 // GETLASTINDEX
-                info!("Received getlastindex msg");
             }
             _ => {
                 return Err(Error::ServicesError("received wrong command"));
@@ -215,7 +213,7 @@ impl GatewayClient {
     }
 
     pub async fn sync(&mut self) -> Result<u64> {
-        info!("Start Syncing");
+        debug!(target: "GATEWAY CLIENT", "Start Syncing");
         let local_last_index = self.slabstore.get_last_index()?;
 
         let last_index = self.get_last_index().await?;
@@ -230,7 +228,7 @@ impl GatewayClient {
             }
         }
 
-        info!("End Syncing");
+        debug!(target: "GATEWAY CLIENT","End Syncing");
         Ok(last_index)
     }
 

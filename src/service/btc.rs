@@ -65,7 +65,7 @@ impl BitcoinKeys {
     }
 
     pub async fn start_subscribe(self: Arc<Self>) -> Result<Option<GetBalanceRes>> {
-        debug!(target: "deposit", "BTC: Subscribe to scriptpubkey");
+        debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
         let client = &self.btc_client;
         // Check if script is already subscribed
         if let Some(status_start) = client.script_subscribe(&self.script)? {
@@ -76,19 +76,19 @@ impl BitcoinKeys {
                         if status != status_start {
                             let balance = client.script_get_balance(&self.script)?;
                             if balance.confirmed > 0 {
-                                debug!(target: "deposit", "BTC Balance: Confirmed!");
+                                debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
                                 return Ok(Some(balance));
                             } else {
-                                debug!(target: "deposit", "BTC Balance: Unconfirmed!");
+                                debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
                                 continue;
                             }
                         } else {
-                            debug!(target: "deposit", "ScriptPubKey status has not changed");
+                            debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
                             continue;
                         }
                     }
                     None => {
-                        debug!(target: "deposit", "Scriptpubkey does not yet exist in script notifications!");
+                        debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
                         continue;
                     }
                 };

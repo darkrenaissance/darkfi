@@ -8,7 +8,6 @@ use drk::service::CashierService;
 use drk::util::join_config_path;
 use drk::wallet::{WalletDb, CashierDb};
 use drk::{Error, Result};
-use log::*;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
@@ -29,7 +28,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
         config.password.clone(),
     )?);
 
-    debug!(target: "cashierd", "starting cashier service");
     let mut cashier = CashierService::new(
         accept_addr,
         btc_endpoint,

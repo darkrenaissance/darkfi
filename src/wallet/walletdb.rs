@@ -30,7 +30,7 @@ pub struct WalletDb {
 
 impl WalletDb {
     pub fn new(path: &std::path::PathBuf, password: String) -> Result<Self> {
-        debug!(target: "walletdb", "new() Constructor called");
+        debug!(target: "WALLETDB", "new() Constructor called");
         let cashier_secret = jubjub::Fr::random(&mut OsRng);
         let secret = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -56,22 +56,13 @@ impl WalletDb {
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../res/schema.sql");
             let conn = Connection::open(&self.path)?;
-            debug!(target: "walletdb", "OPENED CONNECTION AT PATH {:?}", self.path);
+            debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;
             conn.execute_batch(&contents)?;
         } else {
-            info!("Password is empty. You must set a password to use the wallet.");
-            info!("Current password: {}", self.password);
+            debug!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
-        Ok(())
-    }
-
-    pub fn init_cashier_db(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        debug!(target: "cashierdb", "OPENED CONNECTION AT PATH {:?}", self.path);
-        let contents = include_str!("../../res/schema.sql");
-        conn.execute_batch(&contents)?;
         Ok(())
     }
 
@@ -183,7 +174,7 @@ impl WalletDb {
     }
 
     pub fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
-        debug!(target: "key_gen", "Attempting to generate keys...");
+        debug!(target: "WALLETDB", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
@@ -202,7 +193,7 @@ impl WalletDb {
     }
 
     pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
-        debug!(target: "save_cash_key", "Save cashier keys...");
+        debug!(target: "WALLETDB", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         conn.execute(
@@ -213,7 +204,7 @@ impl WalletDb {
     }
 
     pub fn get_public(&self) -> Result<jubjub::SubgroupPoint> {
-        debug!(target: "get", "Returning keys...");
+        debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
@@ -233,7 +224,7 @@ impl WalletDb {
     }
 
     pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
-        debug!(target: "get_cashier_public", "Returning keys...");
+        debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
@@ -251,7 +242,7 @@ impl WalletDb {
     }
 
     pub fn get_private(&self) -> Result<jubjub::Fr> {
-        debug!(target: "get", "Returning keys...");
+        debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
