@@ -1,5 +1,4 @@
 use crate::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use crate::cli::{TransferParams, WithdrawParams};
 use crate::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -137,10 +136,10 @@ impl Client {
 
     pub async fn transfer(
         self: &mut Client,
-        transfer_params: TransferParams,
+        pub_key: String,
+        amount: f64,
         wallet: WalletPtr,
     ) -> Result<()> {
-        let pub_key = transfer_params.pub_key;
 
         let address = bs58::decode(pub_key.clone())
             .into_vec()
@@ -148,8 +147,6 @@ impl Client {
 
         let address: jubjub::SubgroupPoint =
             deserialize(&address).map_err(|_| ClientFailed::UnvalidAddress(pub_key))?;
-
-        let amount = transfer_params.amount;
 
         if amount <= 0.0 {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
@@ -330,7 +327,7 @@ impl State {
 /// Rpc trait
 #[rpc(server)]
 pub trait Rpc {
-    /// Adds two numbers and returns a result
+    /// say hello 
     #[rpc(name = "say_hello")]
     fn say_hello(&self) -> Result<String>;
 
@@ -338,11 +335,11 @@ pub trait Rpc {
     #[rpc(name = "get_key")]
     fn get_key(&self) -> Result<String>;
 
-    /// create_wallet
+    /// create wallet
     #[rpc(name = "create_wallet")]
     fn create_wallet(&self) -> Result<String>;
 
-    /// key_gen
+    /// key gen
     #[rpc(name = "key_gen")]
     fn key_gen(&self) -> Result<String>;
 
@@ -369,15 +366,13 @@ impl RpcUserAdapter {
     async fn transfer_process(
         client: Arc<Mutex<Client>>,
         wallet: WalletPtr,
-        transfer_params: TransferParams,
+        address: String,
+        amount: f64,
     ) -> Result<String> {
-        let address = transfer_params.pub_key.clone();
-        let amount = transfer_params.amount.clone();
-
         client
             .lock()
             .await
-            .transfer(transfer_params, wallet.clone())
+            .transfer(address.clone(), amount, wallet.clone())
             .await?;
 
         Ok(format!("transfered {} DRK to {}", amount, address))
@@ -387,11 +382,9 @@ impl RpcUserAdapter {
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
         wallet: WalletPtr,
-        withdraw_params: WithdrawParams,
+        address: String,
+        amount: f64,
     ) -> Result<String> {
-        let address = withdraw_params.pub_key.clone();
-        let amount = withdraw_params.amount.clone();
-
         let drk_public = cashier_client
             .lock()
             .await
@@ -406,10 +399,8 @@ impl RpcUserAdapter {
                 .lock()
                 .await
                 .transfer(
-                    TransferParams {
-                        pub_key: drk_addr.clone(),
-                        amount,
-                    },
+                    drk_addr.clone(),
+                    amount,
                     wallet.clone(),
                 )
                 .await?;
@@ -473,18 +464,17 @@ impl Rpc for RpcUserAdapter {
 
     fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "transfer() [START]");
-        let transfer_params = TransferParams { pub_key, amount };
-        Self::transfer_process(self.client.clone(), self.wallet.clone(), transfer_params).boxed()
+        Self::transfer_process(self.client.clone(), self.wallet.clone(), pub_key, amount).boxed()
     }
 
     fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "withdraw() [START]");
-        let withdraw_params = WithdrawParams { pub_key, amount };
         Self::withdraw_process(
             self.client.clone(),
             self.cashier_client.clone(),
             self.wallet.clone(),
-            withdraw_params,
+            pub_key,
+            amount
         )
         .boxed()
     }
