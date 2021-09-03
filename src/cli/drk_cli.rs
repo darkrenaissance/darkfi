@@ -203,7 +203,7 @@ impl DrkCli {
                     trn.pub_key = address.to_string();
                 }
                 if let Some(amount) = transfer_sub.value_of("amount") {
-                    trn.amount = amount.parse().expect("couldn't convert the amount to f64");
+                    trn.amount = amount.parse().expect("Convert the amount to f64");
                 }
                 transfer = Some(trn);
             }
@@ -218,7 +218,7 @@ impl DrkCli {
                     wdraw.pub_key = address.to_string();
                 }
                 if let Some(amount) = withdraw_sub.value_of("amount") {
-                    wdraw.amount = amount.parse().expect("couldn't convert the amount to f64");
+                    wdraw.amount = amount.parse().expect("Convert the amount to f64");
                 }
                 withdraw = Some(wdraw);
             }

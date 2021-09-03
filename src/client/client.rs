@@ -326,24 +326,24 @@ impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
         // TODO: use walletdb instead of connecting with sqlite directly
         let conn =
-            Connection::open(self.wallet_path.clone()).expect("Failed to connect to database");
+            Connection::open(self.wallet_path.clone()).expect("Connect to database");
         let mut stmt = conn
             .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-            .expect("Cannot generate statement.");
-        stmt.exists([1i32]).expect("Failed to read database")
+            .expect("Generate statement");
+        stmt.exists([1i32]).expect("Read database")
         // do actual validity check
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         self.merkle_roots
             .key_exist(*merkle_root)
-            .expect("couldn't check if the merkle_root valid")
+            .expect("Check if the merkle_root valid")
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
         self.nullifiers
             .key_exist(nullifier.repr)
-            .expect("couldn't check if nullifier exists")
+            .expect("Check if nullifier exists")
     }
 
     // load from disk
@@ -374,7 +374,7 @@ impl State {
 
             // Also update all the coin witnesses
             for witness in wallet.witnesses.lock().await.iter_mut() {
-                witness.append(node).expect("append to witness");
+                witness.append(node).expect("Append to witness");
             }
 
             if let Some((note, secret)) = self.try_decrypt_note(wallet.clone(), enc_note).await {

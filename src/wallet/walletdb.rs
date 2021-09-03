@@ -109,7 +109,7 @@ impl WalletDb {
                 .get_value_deserialized(
                     secret
                         .pop()
-                        .expect("unable to load public_key from walletdb"),
+                        .expect("Load public_key from walletdb"),
                 )
                 .unwrap();
 
@@ -167,7 +167,7 @@ impl WalletDb {
                 ":coin_blind": coin_blind,
                 ":valcom_blind": valcom_blind,
                 ":witness": witness,
-                ":key_id": key_id.pop().expect("key_id not found!"),
+                ":key_id": key_id.pop().expect("Get key_id"),
             },
         )?;
         Ok(())
@@ -217,7 +217,7 @@ impl WalletDb {
         let public: jubjub::SubgroupPoint = self.get_value_deserialized(
             pub_keys
                 .pop()
-                .expect("unable to load public_key from walletdb"),
+                .expect("Load public_key from walletdb"),
         )?;
 
         Ok(public)
@@ -236,7 +236,7 @@ impl WalletDb {
         let public: jubjub::SubgroupPoint = self.get_value_deserialized(
             pub_keys
                 .pop()
-                .expect("unable to load cashier public_key from walletdb"),
+                .expect("Load cashier public_key from walletdb"),
         )?;
         Ok(public)
     }
@@ -253,7 +253,7 @@ impl WalletDb {
         }
         let private: jubjub::Fr = self.get_value_deserialized(
             keys.pop()
-                .expect("unable to load private key from walletdb"),
+                .expect("Load private key from walletdb"),
         )?;
         Ok(private)
     }
