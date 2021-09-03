@@ -188,11 +188,8 @@ impl CashierDb {
         for key in key_iter {
             pub_keys.push(key?);
         }
-        let public: jubjub::SubgroupPoint = self.get_value_deserialized(
-            pub_keys
-                .pop()
-                .expect("load public_key from cashierdb"),
-        )?;
+        let public: jubjub::SubgroupPoint =
+            self.get_value_deserialized(pub_keys.pop().expect("load public_key from cashierdb"))?;
         Ok(public)
     }
 
@@ -206,10 +203,8 @@ impl CashierDb {
         for key in key_iter {
             keys.push(key?);
         }
-        let private: jubjub::Fr = self.get_value_deserialized(
-            keys.pop()
-                .expect("load private_key from cashierdb"),
-        )?;
+        let private: jubjub::Fr =
+            self.get_value_deserialized(keys.pop().expect("load private_key from cashierdb"))?;
         Ok(private)
     }
 

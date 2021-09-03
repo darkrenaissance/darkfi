@@ -129,7 +129,8 @@ impl Client {
         let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
         // start subscriber
-        Client::connect_to_subscriber(client_mutex.clone(), executor.clone(), wallet.clone()).await?;
+        Client::connect_to_subscriber(client_mutex.clone(), executor.clone(), wallet.clone())
+            .await?;
 
         Ok(())
     }
@@ -337,11 +338,11 @@ pub trait Rpc {
     #[rpc(name = "get_key")]
     fn get_key(&self) -> Result<String>;
 
-    /// create_wallet 
+    /// create_wallet
     #[rpc(name = "create_wallet")]
     fn create_wallet(&self) -> Result<String>;
 
-    /// key_gen 
+    /// key_gen
     #[rpc(name = "key_gen")]
     fn key_gen(&self) -> Result<String>;
 

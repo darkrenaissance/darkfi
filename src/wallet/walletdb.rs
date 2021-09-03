@@ -106,11 +106,7 @@ impl WalletDb {
             }
 
             let secret: jubjub::Fr = self
-                .get_value_deserialized(
-                    secret
-                        .pop()
-                        .expect("Load public_key from walletdb"),
-                )
+                .get_value_deserialized(secret.pop().expect("Load public_key from walletdb"))
                 .unwrap();
 
             Ok((coin, note, secret, witness))
@@ -214,11 +210,8 @@ impl WalletDb {
         for key in key_iter {
             pub_keys.push(key?);
         }
-        let public: jubjub::SubgroupPoint = self.get_value_deserialized(
-            pub_keys
-                .pop()
-                .expect("Load public_key from walletdb"),
-        )?;
+        let public: jubjub::SubgroupPoint =
+            self.get_value_deserialized(pub_keys.pop().expect("Load public_key from walletdb"))?;
 
         Ok(public)
     }
@@ -251,10 +244,8 @@ impl WalletDb {
         for key in key_iter {
             keys.push(key?);
         }
-        let private: jubjub::Fr = self.get_value_deserialized(
-            keys.pop()
-                .expect("Load private key from walletdb"),
-        )?;
+        let private: jubjub::Fr =
+            self.get_value_deserialized(keys.pop().expect("Load private key from walletdb"))?;
         Ok(private)
     }
 
