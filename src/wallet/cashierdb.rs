@@ -178,17 +178,6 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
-        debug!(target: "CASHIERDB", "Save cashier keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        conn.execute(
-            "INSERT INTO cashier(key_public) VALUES (?1)",
-            params![key_public],
-        )?;
-        Ok(())
-    }
-
     pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
@@ -202,10 +191,11 @@ impl CashierDb {
         let public: jubjub::SubgroupPoint = self.get_value_deserialized(
             pub_keys
                 .pop()
-                .expect("unable to load public_key from cashierdb"),
+                .expect("load public_key from cashierdb"),
         )?;
         Ok(public)
     }
+
     pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
@@ -218,7 +208,7 @@ impl CashierDb {
         }
         let private: jubjub::Fr = self.get_value_deserialized(
             keys.pop()
-                .expect("unable to load private_key from cashierdb"),
+                .expect("load private_key from cashierdb"),
         )?;
         Ok(private)
     }

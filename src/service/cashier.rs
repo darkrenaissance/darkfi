@@ -45,18 +45,23 @@ impl CashierService {
         params_paths: (PathBuf, PathBuf),
         client_wallet_path: PathBuf,
     ) -> Result<CashierService> {
-        // Load trusted setup parameters
-
         // Pull address from config later
         let client_address = btc_endpoint;
 
         // create btc client
         let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
 
-        wallet.init_db()?;
-        let keys = wallet.cash_key_gen();
-        wallet.put_keypair(keys.0, keys.1)?;
-        let cashier_secret = wallet.get_cashier_private()?;
+        let cashier_secret: jubjub::Fr;
+
+        if let Ok(secret) = wallet.get_cashier_private() {
+            cashier_secret = secret;
+        } else {
+            wallet.init_db()?;
+            let keys = wallet.cash_key_gen();
+            wallet.put_keypair(keys.0, keys.1)?;
+            cashier_secret = wallet.get_cashier_private()?;
+        }
+
         let rocks = Rocks::new(&cashier_database_path)?;
 
         let client = Client::new(
