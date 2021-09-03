@@ -8,7 +8,6 @@ use crate::{Error, Result};
 use log::*;
 
 use async_std::sync::Arc;
-use std::string::ToString;
 
 pub type UserAdapterPtr = Arc<UserAdapter>;
 
@@ -144,11 +143,10 @@ impl UserAdapter {
             let self2 = self1.clone();
             async move {
                 let parsed: WithdrawParams = params.parse().unwrap();
-                let amount = parsed.amount.clone();
-                let address = parsed.pub_key.clone();
-                self2.withdraw(parsed).await?;
+                let amount = parsed.amount;
+                let address = self2.withdraw(parsed).await?;
                 Ok(jsonrpc_core::Value::String(format!(
-                    "withdrawing {} BTC to {}...",
+                    "sending {} dbtc to provided address for withdrawing: {} ",
                     amount, address
                 )))
             }
@@ -187,7 +185,7 @@ impl UserAdapter {
     }
 
     pub async fn deposit(&self) -> Result<PubAddress> {
-        debug!(target: "deposit", "deposit: START");
+        debug!(target: "adapter", "deposit: START");
         let (public, private) = self.wallet.key_gen();
         self.wallet.put_keypair(public, private)?;
         let dkey = self.wallet.get_public()?;
@@ -209,26 +207,35 @@ impl UserAdapter {
             .map_err(|err| Error::from(err))
     }
 
-    async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<()> {
-        debug!(target: "withdraw", "withdraw: START");
-        // do the key exchange
+    async fn withdraw(&self, withdraw_params: WithdrawParams) -> Result<String> {
+        debug!(target: "adapter", "withdraw: START");
         self.withdraw_channel
             .0
             .send(withdraw_params.pub_key)
             .await?;
-        // send the drk
-        if let Ok(key) = self.withdraw_channel.1.recv().await? {
-            let mut transfer_params = TransferParams::new();
-            transfer_params.pub_key = key.to_string();
-            transfer_params.amount = withdraw_params.amount;
-            self.transfer_channel.0.send(transfer_params).await?;
-            self.transfer_channel
-                .1
-                .recv()
-                .await?
-                .map_err(|err| Error::from(err))?;
-        }
-        Ok(())
+
+        // receive dbtc address
+        let key = self
+            .withdraw_channel
+            .1
+            .recv()
+            .await?
+            .map_err(|err| Error::from(err))?;
+
+
+        // transfer the dbtc
+        let key = bs58::encode(serialize(&key)).into_string();
+        let mut transfer_params = TransferParams::new();
+        transfer_params.pub_key = key.clone();
+        transfer_params.amount = withdraw_params.amount;
+        self.transfer_channel.0.send(transfer_params).await?;
+        self.transfer_channel
+            .1
+            .recv()
+            .await?
+            .map_err(|err| Error::from(err))?;
+
+        Ok(key)
     }
 
     pub fn get_info(&self) {}

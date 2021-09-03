@@ -10,7 +10,6 @@ use ff::Field;
 use rand::rngs::OsRng;
 
 use async_executor::Executor;
-
 use electrum_client::Client as ElectrumClient;
 use log::*;
 
@@ -234,6 +233,7 @@ impl CashierService {
                     let cashier_secret = jubjub::Fr::random(&mut OsRng);
                     cashier_public =
                         zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+
                     cashier_wallet.put_withdraw_keys(
                         btc_address,
                         serialize(&cashier_secret),
@@ -287,8 +287,8 @@ impl CashierClient {
             .await?;
 
         if let Some(key) = rep {
-            let address = deserialize(&key)?;
-            return Ok(address);
+            let address: jubjub::SubgroupPoint = deserialize(&key)?;
+            return Ok(Some(address));
         }
         Ok(None)
     }

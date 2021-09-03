@@ -150,7 +150,7 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT withdraw_keypairs(btc_key_id, d_key_private, d_key_public)
+            "INSERT INTO withdraw_keypairs(btc_key_id, d_key_private, d_key_public) 
             VALUES (:btc_key_id, :d_key_private, :d_key_public)",
             named_params! {
                 ":btc_key_id": btc_key_id,

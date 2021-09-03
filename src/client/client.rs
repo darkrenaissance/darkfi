@@ -198,7 +198,7 @@ impl Client {
                         if let Some(drk_addr) = drk_public? {
                             withdraw_rep.send(Ok(drk_addr)).await?;
                         }else {
-                            withdraw_rep.send(Err(ClientFailed::UnableToGetDepositAddress)).await?;
+                            withdraw_rep.send(Err(ClientFailed::UnableToGetWithdrawAddress)).await?;
                         }
                     }
                 }
