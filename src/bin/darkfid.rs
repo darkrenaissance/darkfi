@@ -49,14 +49,14 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
 
     client.start().await?;
 
-    client
-        .connect_to_cashier(
-            executor.clone(),
-            wallet.clone(),
-            cashier_addr.clone(),
-            rpc_url.clone(),
-        )
-        .await?;
+    Client::connect_to_cashier(
+        client,
+        executor.clone(),
+        wallet.clone(),
+        cashier_addr.clone(),
+        rpc_url.clone(),
+    )
+    .await?;
 
     Ok(())
 }

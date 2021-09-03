@@ -1,5 +1,5 @@
 use crate::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use crate::cli::{TransferParams, WithdrawParams};
+use crate::cli::TransferParams;
 use crate::crypto::{
     load_params,
     merkle::{CommitmentTree, IncrementalWitness},
@@ -8,24 +8,22 @@ use crate::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover,
 };
+use crate::rpc::adapters::user_adapter::UserAdapter;
 use crate::rpc::jsonserver;
 use crate::serial::Encodable;
-use crate::serial::{deserialize, serialize, Decodable};
+use crate::serial::{deserialize, Decodable};
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::WalletPtr;
-use crate::{tx, Error, Result};
+use crate::{tx, Result};
 
-use super::ClientFailed;
+use super::{ClientFailed, ClientResult};
 
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::*;
 use rusqlite::Connection;
-
-use jsonrpc_core::{BoxFuture, IoHandler};
-use jsonrpc_derive::rpc;
 
 use async_std::sync::{Arc, Mutex};
 use futures::FutureExt;
@@ -97,7 +95,7 @@ impl Client {
     }
 
     pub async fn connect_to_cashier(
-        client: Client,
+        &mut self,
         executor: Arc<Executor<'_>>,
         wallet: WalletPtr,
         cashier_addr: SocketAddr,
@@ -107,38 +105,127 @@ impl Client {
         debug!(target: "CLIENT", "Creating cashier client");
         let mut cashier_client = CashierClient::new(cashier_addr)?;
 
+        // start subscribing
+        debug!(target: "CLIENT", "Start subscriber");
+        let gateway_slabs_sub: GatewaySlabsSubscriber =
+            self.gateway.start_subscriber(executor.clone()).await?;
+
+        // channels to request transfer from adapter
+        let (transfer_req_send, transfer_req_recv) = async_channel::unbounded::<TransferParams>();
+        let (transfer_rep_send, transfer_rep_recv) = async_channel::unbounded::<ClientResult<()>>();
+
+        // channels to request deposit from adapter, send DRK key and receive BTC key
+        let (deposit_req_send, deposit_req_recv) =
+            async_channel::unbounded::<jubjub::SubgroupPoint>();
+        let (deposit_rep_send, deposit_rep_recv) =
+            async_channel::unbounded::<ClientResult<bitcoin::util::address::Address>>();
+
+        // channel to request withdraw from adapter, send BTC key and receive DRK key
+        let (withdraw_req_send, withdraw_req_recv) = async_channel::unbounded::<String>();
+        let (withdraw_rep_send, withdraw_rep_recv) =
+            async_channel::unbounded::<ClientResult<jubjub::SubgroupPoint>>();
+
         // start cashier_client
         cashier_client.start().await?;
 
-        let client_mutex = Arc::new(Mutex::new(client));
-        let cashier_mutex = Arc::new(Mutex::new(cashier_client));
-
-        let mut io = IoHandler::new();
-        let rpcimpl = RpcUserAdapter {
-            wallet: wallet.clone(),
-            client: client_mutex.clone(),
-            cashier_client: cashier_mutex.clone(),
-        };
-
-        io.extend_with(rpcimpl.to_delegate());
-
-        let io = Arc::new(io);
+        let adapter = Arc::new(UserAdapter::new(
+            wallet.clone(),
+            (transfer_req_send.clone(), transfer_rep_recv.clone()),
+            (deposit_req_send.clone(), deposit_rep_recv.clone()),
+            (withdraw_req_send.clone(), withdraw_rep_recv.clone()),
+        )?);
 
         // start the rpc server
         debug!(target: "CLIENT", "Start RPC server");
+        let io = Arc::new(adapter.handle_input()?);
         let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
-        // start subscriber
-        Client::connect_to_subscriber(client_mutex.clone(), executor.clone(), wallet.clone()).await?;
+        self.futures_broker(
+            &mut cashier_client,
+            wallet,
+            gateway_slabs_sub.clone(),
+            deposit_req_recv.clone(),
+            deposit_rep_send.clone(),
+            withdraw_req_recv.clone(),
+            withdraw_rep_send.clone(),
+            transfer_req_recv.clone(),
+            transfer_rep_send.clone(),
+        )
+        .await?;
 
         Ok(())
     }
 
+    pub async fn futures_broker(
+        &mut self,
+        cashier_client: &mut CashierClient,
+        wallet: WalletPtr,
+        gateway_slabs_sub: async_channel::Receiver<Slab>,
+        deposit_req: async_channel::Receiver<jubjub::SubgroupPoint>,
+        deposit_rep: async_channel::Sender<ClientResult<bitcoin::util::address::Address>>,
+        withdraw_req: async_channel::Receiver<String>,
+        withdraw_rep: async_channel::Sender<ClientResult<jubjub::SubgroupPoint>>,
+        transfer_req: async_channel::Receiver<TransferParams>,
+        transfer_rep: async_channel::Sender<ClientResult<()>>,
+    ) -> Result<()> {
+        loop {
+            futures::select! {
+                slab = gateway_slabs_sub.recv().fuse() => {
+                    let slab = slab?;
+                    let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+                    let update = state_transition(&self.state, tx)?;
+                    self.state.apply(update, wallet.clone()).await?;
+                }
+                deposit_addr = deposit_req.recv().fuse() => {
+                    let btc_public = cashier_client.get_address(deposit_addr?).await.map_err(|err| {ClientFailed::from(err)});
+
+                    if let Err(err) = btc_public {
+                        deposit_rep.send(Err(err)).await?;
+                    } else {
+                        if let Some(btc_addr) = btc_public? {
+                            deposit_rep.send(Ok(btc_addr)).await?;
+                        }else {
+                            deposit_rep.send(Err(ClientFailed::UnableToGetDepositAddress)).await?;
+                        }
+                    }
+                }
+                withdraw_addr = withdraw_req.recv().fuse() => {
+                    let drk_public = cashier_client.withdraw(withdraw_addr?).await.map_err(|err| {ClientFailed::from(err)});
+
+                    if let Err(err) = drk_public {
+                        withdraw_rep.send(Err(err)).await?;
+                    } else {
+                        if let Some(drk_addr) = drk_public? {
+                            withdraw_rep.send(Ok(drk_addr)).await?;
+                        }else {
+                            withdraw_rep.send(Err(ClientFailed::UnableToGetWithdrawAddress)).await?;
+                        }
+                    }
+                }
+                transfer_params = transfer_req.recv().fuse() => {
+
+                    let result = self.transfer(
+                        transfer_params?,
+                        wallet.clone()
+                    ).await;
+
+                    if let Err(err) = result {
+                        transfer_rep.send(Err(err)).await?;
+                    } else {
+                        transfer_rep.send(Ok(())).await?;
+                    }
+
+                }
+
+            }
+        }
+    }
+
     pub async fn transfer(
-        self: &mut Client,
+        &mut self,
         transfer_params: TransferParams,
         wallet: WalletPtr,
-    ) -> Result<()> {
+    ) -> ClientResult<()> {
         let pub_key = transfer_params.pub_key;
 
         let address = bs58::decode(pub_key.clone())
@@ -151,14 +238,14 @@ impl Client {
         let amount = transfer_params.amount;
 
         if amount <= 0.0 {
-            return Err(ClientFailed::UnvalidAmount(amount as u64).into());
+            return Err(ClientFailed::UnvalidAmount(amount as u64));
         }
 
         // check if there are coins
         let own_coins = wallet.get_own_coins()?;
 
         if own_coins.is_empty() {
-            return Err(ClientFailed::NotEnoughValue(0).into());
+            return Err(ClientFailed::NotEnoughValue(0));
         }
 
         let witness = &own_coins[0].3;
@@ -238,7 +325,8 @@ pub struct State {
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
         // TODO: use walletdb instead of connecting with sqlite directly
-        let conn = Connection::open(self.wallet_path.clone()).expect("Connect to database");
+        let conn =
+            Connection::open(self.wallet_path.clone()).expect("Connect to database");
         let mut stmt = conn
             .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
             .expect("Generate statement");
@@ -323,173 +411,5 @@ impl State {
         }
         // We weren't able to decrypt the note with our key.
         None
-    }
-}
-
-/// Rpc trait
-#[rpc(server)]
-pub trait Rpc {
-    /// Adds two numbers and returns a result
-    #[rpc(name = "say_hello")]
-    fn say_hello(&self) -> Result<String>;
-
-    /// get key
-    #[rpc(name = "get_key")]
-    fn get_key(&self) -> Result<String>;
-
-    /// create_wallet 
-    #[rpc(name = "create_wallet")]
-    fn create_wallet(&self) -> Result<String>;
-
-    /// key_gen 
-    #[rpc(name = "key_gen")]
-    fn key_gen(&self) -> Result<String>;
-
-    /// transfer
-    #[rpc(name = "transfer")]
-    fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
-
-    /// withdraw
-    #[rpc(name = "withdraw")]
-    fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
-
-    /// deposit
-    #[rpc(name = "deposit")]
-    fn deposit(&self) -> BoxFuture<Result<String>>;
-}
-
-struct RpcUserAdapter {
-    wallet: WalletPtr,
-    client: Arc<Mutex<Client>>,
-    cashier_client: Arc<Mutex<CashierClient>>,
-}
-
-impl RpcUserAdapter {
-    async fn transfer_process(
-        client: Arc<Mutex<Client>>,
-        wallet: WalletPtr,
-        transfer_params: TransferParams,
-    ) -> Result<String> {
-        let address = transfer_params.pub_key.clone();
-        let amount = transfer_params.amount.clone();
-
-        client
-            .lock()
-            .await
-            .transfer(transfer_params, wallet.clone())
-            .await?;
-
-        Ok(format!("transfered {} DRK to {}", amount, address))
-    }
-
-    async fn withdraw_process(
-        client: Arc<Mutex<Client>>,
-        cashier_client: Arc<Mutex<CashierClient>>,
-        wallet: WalletPtr,
-        withdraw_params: WithdrawParams,
-    ) -> Result<String> {
-        let address = withdraw_params.pub_key.clone();
-        let amount = withdraw_params.amount.clone();
-
-        let drk_public = cashier_client
-            .lock()
-            .await
-            .withdraw(address)
-            .await
-            .map_err(|err| ClientFailed::from(err))?;
-
-        if let Some(drk_addr) = drk_public {
-            let drk_addr = bs58::encode(serialize(&drk_addr)).into_string();
-
-            client
-                .lock()
-                .await
-                .transfer(
-                    TransferParams {
-                        pub_key: drk_addr.clone(),
-                        amount,
-                    },
-                    wallet.clone(),
-                )
-                .await?;
-
-            return Ok(format!(
-                "sending {} dbtc to provided address for withdrawing: {} ",
-                amount, drk_addr
-            ));
-        } else {
-            return Err(Error::from(ClientFailed::UnableToGetWithdrawAddress));
-        }
-    }
-
-    async fn deposit_process(
-        cashier_client: Arc<Mutex<CashierClient>>,
-        wallet: WalletPtr,
-    ) -> Result<String> {
-        let deposit_addr = wallet.get_public()?;
-        let btc_public = cashier_client
-            .lock()
-            .await
-            .get_address(deposit_addr)
-            .await
-            .map_err(|err| ClientFailed::from(err))?;
-
-        if let Some(btc_addr) = btc_public {
-            return Ok(btc_addr.to_string());
-        } else {
-            return Err(Error::from(ClientFailed::UnableToGetDepositAddress));
-        }
-    }
-}
-
-impl Rpc for RpcUserAdapter {
-    fn say_hello(&self) -> Result<String> {
-        debug!(target: "RPC USER ADAPTER", "say_hello() [START]");
-        Ok(String::from("hello world"))
-    }
-
-    fn get_key(&self) -> Result<String> {
-        debug!(target: "RPC USER ADAPTER", "get_key() [START]");
-        let key_public = self.wallet.get_public()?;
-        let bs58_address = bs58::encode(serialize(&key_public)).into_string();
-        Ok(bs58_address)
-    }
-
-    fn create_wallet(&self) -> Result<String> {
-        debug!(target: "RPC USER ADAPTER", "create_wallet() [START]");
-        self.wallet.init_db()?;
-        Ok("wallet creation successful".into())
-    }
-
-    fn key_gen(&self) -> Result<String> {
-        debug!(target: "RPC USER ADAPTER", "key_gen() [START]");
-        let (public, private) = self.wallet.key_gen();
-        debug!(target: "RPC USER ADAPTER", "Created keypair...");
-        debug!(target: "RPC USER ADAPTER", "Attempting to write to database...");
-        self.wallet.put_keypair(public, private)?;
-        Ok("key generation successful".into())
-    }
-
-    fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
-        debug!(target: "RPC USER ADAPTER", "transfer() [START]");
-        let transfer_params = TransferParams { pub_key, amount };
-        Self::transfer_process(self.client.clone(), self.wallet.clone(), transfer_params).boxed()
-    }
-
-    fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
-        debug!(target: "RPC USER ADAPTER", "withdraw() [START]");
-        let withdraw_params = WithdrawParams { pub_key, amount };
-        Self::withdraw_process(
-            self.client.clone(),
-            self.cashier_client.clone(),
-            self.wallet.clone(),
-            withdraw_params,
-        )
-        .boxed()
-    }
-
-    fn deposit(&self) -> BoxFuture<Result<String>> {
-        debug!(target: "RPC USER ADAPTER", "deposit() [START]");
-        Self::deposit_process(self.cashier_client.clone(), self.wallet.clone()).boxed()
     }
 }
