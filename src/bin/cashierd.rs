@@ -28,16 +28,16 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
         config.password.clone(),
     )?);
 
+    let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
+    let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;
+
     let mut cashier = CashierService::new(
         accept_addr,
         btc_endpoint,
         wallet.clone(),
         database_path,
         (gateway_addr, "127.0.0.1:4444".parse()?),
-        (
-            PathBuf::from("cashier_mint.params"),
-            PathBuf::from("cashier_spend.params"),
-        ),
+        (mint_params_path, spend_params_path),
         PathBuf::from(&config.client_walletdb_path),
     )
     .await?;

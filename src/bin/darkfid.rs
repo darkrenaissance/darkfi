@@ -39,11 +39,14 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
         secret = jubjub::Fr::random(&mut OsRng);
     }
 
+    let mint_params_path = join_config_path(&PathBuf::from("mint.params"))?;
+    let spend_params_path = join_config_path(&PathBuf::from("spend.params"))?;
+
     let mut client = Client::new(
         secret,
         rocks,
         (connect_addr, sub_addr),
-        (PathBuf::from("mint.params"), PathBuf::from("spend.params")),
+        (mint_params_path, spend_params_path),
         walletdb_path,
     )?;
 
