@@ -18,37 +18,18 @@ pub type WalletPtr = Arc<WalletDb>;
 
 pub struct WalletDb {
     pub path: PathBuf,
-    pub secrets: Vec<jubjub::Fr>,
-    pub cashier_secrets: Vec<jubjub::Fr>,
-    pub coins: Mutex<Vec<Coin>>,
-    pub notes: Mutex<Vec<Note>>,
     pub witnesses: Mutex<Vec<IncrementalWitness<MerkleNode>>>,
-    pub cashier_public: jubjub::SubgroupPoint,
-    pub public: jubjub::SubgroupPoint,
     pub password: String,
 }
 
 impl WalletDb {
     pub fn new(path: &std::path::PathBuf, password: String) -> Result<Self> {
         debug!(target: "WALLETDB", "new() Constructor called");
-        let cashier_secret = jubjub::Fr::random(&mut OsRng);
-        let secret = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-        let coins = Mutex::new(Vec::new());
-        let notes = Mutex::new(Vec::new());
         let witnesses = Mutex::new(Vec::new());
         Ok(Self {
             path: path.to_owned(),
-            cashier_secrets: vec![cashier_secret.clone()],
-            secrets: vec![secret.clone()],
-            cashier_public,
-            public,
-            coins,
-            notes,
             witnesses,
             password,
-            //conn,
         })
     }
 
