@@ -2,7 +2,7 @@ Not even an alpha product. Just a mere prototype(s).
 
 # First time running the demo:
 
-1. Perform the trusted setup:
+1. Compile the project:
 
 ```console
 $ cargo build --release
