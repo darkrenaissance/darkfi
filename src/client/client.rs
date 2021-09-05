@@ -72,7 +72,7 @@ impl Client {
             nullifiers,
             mint_pvk,
             spend_pvk,
-            wallet
+            wallet,
         };
 
         // create gateway client
@@ -111,8 +111,7 @@ impl Client {
 
         let mut io = IoHandler::new();
 
-        let rpc_client_adapter =
-            RpcClientAdapter::new(client_mutex.clone(), cashier_mutex.clone());
+        let rpc_client_adapter = RpcClientAdapter::new(client_mutex.clone(), cashier_mutex.clone());
 
         io.extend_with(rpc_client_adapter.to_delegate());
 
@@ -123,17 +122,12 @@ impl Client {
         let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
         // start subscriber
-        Client::connect_to_subscriber(client_mutex.clone(), executor.clone())
-            .await?;
+        Client::connect_to_subscriber(client_mutex.clone(), executor.clone()).await?;
 
         Ok(())
     }
 
-    pub async fn transfer(
-        self: &mut Client,
-        pub_key: String,
-        amount: f64,
-    ) -> Result<()> {
+    pub async fn transfer(self: &mut Client, pub_key: String, amount: f64) -> Result<()> {
         let address = bs58::decode(pub_key.clone())
             .into_vec()
             .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
@@ -225,15 +219,11 @@ pub struct State {
 }
 
 impl ProgramState for State {
-    fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        // TODO create a function in walletdb to check if it's a valid cashier public key
-        //let conn = Connection::open(self.wallet_path.clone()).expect("Connect to database");
-        //let mut stmt = conn
-        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-        //    .expect("Generate statement");
-        //stmt.exists([1i32]).expect("Read database")
-        // do actual validity check
-        true
+    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
+        self.wallet
+            .get_cashier_public_keys()
+            .expect("Get cashier public keys")
+            .contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -277,7 +267,8 @@ impl State {
             // Also update all the coin witnesses
             for (coin_id, witness) in self.wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
-                self.wallet.update_witness(coin_id.clone(), witness.clone())?;
+                self.wallet
+                    .update_witness(coin_id.clone(), witness.clone())?;
             }
 
             if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
@@ -293,16 +284,14 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                self.wallet.put_own_coins(coin.clone(), note.clone(),  secret, witness.clone())?;
+                self.wallet
+                    .put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
             }
         }
         Ok(())
     }
 
-    async fn try_decrypt_note(
-        &self,
-        ciphertext: EncryptedNote,
-    ) -> Option<(Note, jubjub::Fr)> {
+    async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
         let secret = self.wallet.get_private().ok()?;
         match ciphertext.decrypt(&secret) {
             Ok(note) => {

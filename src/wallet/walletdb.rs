@@ -233,7 +233,7 @@ impl WalletDb {
         Ok(public)
     }
 
-    pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
+    pub fn get_cashier_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
         debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -241,14 +241,11 @@ impl WalletDb {
         let key_iter = stmt.query_map([], |row| row.get(0))?;
         let mut pub_keys = Vec::new();
         for key in key_iter {
-            pub_keys.push(key?);
+            let public: jubjub::SubgroupPoint = self.get_value_deserialized(key?)?;
+            pub_keys.push(public);
         }
-        let public: jubjub::SubgroupPoint = self.get_value_deserialized(
-            pub_keys
-                .pop()
-                .expect("Load cashier public_key from walletdb"),
-        )?;
-        Ok(public)
+
+        Ok(pub_keys)
     }
 
     pub fn get_private(&self) -> Result<jubjub::Fr> {
