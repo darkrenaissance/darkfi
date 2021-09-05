@@ -186,13 +186,14 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
+    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)>  {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
         let privkey = serial::serialize(&secret);
-        (pubkey, privkey)
+        self.put_keypair(pubkey.clone(), privkey.clone())?;
+        Ok((pubkey, privkey))
     }
 
     pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {

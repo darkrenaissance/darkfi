@@ -67,11 +67,9 @@ impl RpcClientAdapter {
     }
 
     async fn key_gen_process(client: Arc<Mutex<Client>>) -> Result<String> {
-        let client =  client.lock().await;
-        let (public, private) = client.state.wallet.key_gen();
-        debug!(target: "RPC USER ADAPTER", "Created keypair...");
+        debug!(target: "RPC USER ADAPTER", "Generating keypair...");
         debug!(target: "RPC USER ADAPTER", "Attempting to write to database...");
-        client.state.wallet.put_keypair(public, private)?;
+        client.lock().await.state.wallet.key_gen()?;
         Ok("key generation successful".into())
     }
 

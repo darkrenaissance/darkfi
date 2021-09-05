@@ -93,7 +93,7 @@ impl DrkCli {
                 Arg::with_name("key")
                     .short("k")
                     .long("key")
-                    .help("Test key")
+                    .help("Generate new keypair")
                     .takes_value(false),
             )
             .arg(
