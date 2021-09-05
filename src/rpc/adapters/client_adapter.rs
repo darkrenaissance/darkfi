@@ -1,7 +1,6 @@
 use crate::client::{Client, ClientFailed};
 use crate::serial::serialize;
 use crate::service::CashierClient;
-use crate::wallet::WalletPtr;
 use crate::{Error, Result};
 
 use jsonrpc_core::BoxFuture;
@@ -20,15 +19,15 @@ pub trait RpcClient {
 
     /// get key
     #[rpc(name = "get_key")]
-    fn get_key(&self) -> Result<String>;
+    fn get_key(&self) -> BoxFuture<Result<String>>;
 
     /// create wallet
     #[rpc(name = "create_wallet")]
-    fn create_wallet(&self) -> Result<String>;
+    fn create_wallet(&self) -> BoxFuture<Result<String>>;
 
     /// key gen
     #[rpc(name = "key_gen")]
-    fn key_gen(&self) -> Result<String>;
+    fn key_gen(&self) -> BoxFuture<Result<String>>;
 
     /// transfer
     #[rpc(name = "transfer")]
@@ -44,34 +43,47 @@ pub trait RpcClient {
 }
 
 pub struct RpcClientAdapter {
-    wallet: WalletPtr,
     client: Arc<Mutex<Client>>,
     cashier_client: Arc<Mutex<CashierClient>>,
 }
 
 impl RpcClientAdapter {
-    pub fn new(
-        wallet: WalletPtr,
-        client: Arc<Mutex<Client>>,
-        cashier_client: Arc<Mutex<CashierClient>>,
-    ) -> Self {
+    pub fn new(client: Arc<Mutex<Client>>, cashier_client: Arc<Mutex<CashierClient>>) -> Self {
         Self {
-            wallet,
             client,
             cashier_client,
         }
     }
 
+    async fn get_key_process(client: Arc<Mutex<Client>>) -> Result<String> {
+        let key_public = client.lock().await.state.wallet.get_public()?;
+        let bs58_address = bs58::encode(serialize(&key_public)).into_string();
+        Ok(bs58_address)
+    }
+
+    async fn create_wallet_process(client: Arc<Mutex<Client>>) -> Result<String> {
+        client.lock().await.state.wallet.init_db()?;
+        Ok("wallet creation successful".into())
+    }
+
+    async fn key_gen_process(client: Arc<Mutex<Client>>) -> Result<String> {
+        let client =  client.lock().await;
+        let (public, private) = client.state.wallet.key_gen();
+        debug!(target: "RPC USER ADAPTER", "Created keypair...");
+        debug!(target: "RPC USER ADAPTER", "Attempting to write to database...");
+        client.state.wallet.put_keypair(public, private)?;
+        Ok("key generation successful".into())
+    }
+
     async fn transfer_process(
         client: Arc<Mutex<Client>>,
-        wallet: WalletPtr,
         address: String,
         amount: f64,
     ) -> Result<String> {
         client
             .lock()
             .await
-            .transfer(address.clone(), amount, wallet.clone())
+            .transfer(address.clone(), amount)
             .await?;
 
         Ok(format!("transfered {} DRK to {}", amount, address))
@@ -80,7 +92,6 @@ impl RpcClientAdapter {
     async fn withdraw_process(
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
-        wallet: WalletPtr,
         address: String,
         amount: f64,
     ) -> Result<String> {
@@ -97,7 +108,7 @@ impl RpcClientAdapter {
             client
                 .lock()
                 .await
-                .transfer(drk_addr.clone(), amount, wallet.clone())
+                .transfer(drk_addr.clone(), amount)
                 .await?;
 
             return Ok(format!(
@@ -110,10 +121,10 @@ impl RpcClientAdapter {
     }
 
     async fn deposit_process(
+        client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
-        wallet: WalletPtr,
     ) -> Result<String> {
-        let deposit_addr = wallet.get_public()?;
+        let deposit_addr = client.lock().await.state.wallet.get_public()?;
         let btc_public = cashier_client
             .lock()
             .await
@@ -135,31 +146,24 @@ impl RpcClient for RpcClientAdapter {
         Ok(String::from("hello world"))
     }
 
-    fn get_key(&self) -> Result<String> {
+    fn get_key(&self) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "get_key() [START]");
-        let key_public = self.wallet.get_public()?;
-        let bs58_address = bs58::encode(serialize(&key_public)).into_string();
-        Ok(bs58_address)
+        Self::get_key_process(self.client.clone()).boxed()
     }
 
-    fn create_wallet(&self) -> Result<String> {
+    fn create_wallet(&self) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "create_wallet() [START]");
-        self.wallet.init_db()?;
-        Ok("wallet creation successful".into())
+        Self::create_wallet_process(self.client.clone()).boxed()
     }
 
-    fn key_gen(&self) -> Result<String> {
+    fn key_gen(&self) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "key_gen() [START]");
-        let (public, private) = self.wallet.key_gen();
-        debug!(target: "RPC USER ADAPTER", "Created keypair...");
-        debug!(target: "RPC USER ADAPTER", "Attempting to write to database...");
-        self.wallet.put_keypair(public, private)?;
-        Ok("key generation successful".into())
+        Self::key_gen_process(self.client.clone()).boxed()
     }
 
     fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "transfer() [START]");
-        Self::transfer_process(self.client.clone(), self.wallet.clone(), pub_key, amount).boxed()
+        Self::transfer_process(self.client.clone(), pub_key, amount).boxed()
     }
 
     fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
@@ -167,7 +171,6 @@ impl RpcClient for RpcClientAdapter {
         Self::withdraw_process(
             self.client.clone(),
             self.cashier_client.clone(),
-            self.wallet.clone(),
             pub_key,
             amount,
         )
@@ -176,6 +179,6 @@ impl RpcClient for RpcClientAdapter {
 
     fn deposit(&self) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "deposit() [START]");
-        Self::deposit_process(self.cashier_client.clone(), self.wallet.clone()).boxed()
+        Self::deposit_process(self.client.clone(), self.cashier_client.clone()).boxed()
     }
 }

@@ -47,7 +47,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
         rocks,
         (connect_addr, sub_addr),
         (mint_params_path, spend_params_path),
-        walletdb_path,
+        wallet.clone(),
     )?;
 
     client.start().await?;
@@ -55,7 +55,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
     Client::connect_to_cashier(
         client,
         executor.clone(),
-        wallet.clone(),
         cashier_addr.clone(),
         rpc_url.clone(),
     )

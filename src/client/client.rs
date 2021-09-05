@@ -22,7 +22,6 @@ use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::*;
-use rusqlite::Connection;
 
 use jsonrpc_core::IoHandler;
 
@@ -31,7 +30,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 pub struct Client {
-    state: State,
+    pub state: State,
     secret: jubjub::Fr,
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
@@ -44,7 +43,7 @@ impl Client {
         rocks: Arc<Rocks>,
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
-        wallet_path: PathBuf,
+        wallet: WalletPtr,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
@@ -73,7 +72,7 @@ impl Client {
             nullifiers,
             mint_pvk,
             spend_pvk,
-            wallet_path,
+            wallet
         };
 
         // create gateway client
@@ -97,7 +96,6 @@ impl Client {
     pub async fn connect_to_cashier(
         client: Client,
         executor: Arc<Executor<'_>>,
-        wallet: WalletPtr,
         cashier_addr: SocketAddr,
         rpc_url: SocketAddr,
     ) -> Result<()> {
@@ -114,7 +112,7 @@ impl Client {
         let mut io = IoHandler::new();
 
         let rpc_client_adapter =
-            RpcClientAdapter::new(wallet.clone(), client_mutex.clone(), cashier_mutex.clone());
+            RpcClientAdapter::new(client_mutex.clone(), cashier_mutex.clone());
 
         io.extend_with(rpc_client_adapter.to_delegate());
 
@@ -125,7 +123,7 @@ impl Client {
         let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
         // start subscriber
-        Client::connect_to_subscriber(client_mutex.clone(), executor.clone(), wallet.clone())
+        Client::connect_to_subscriber(client_mutex.clone(), executor.clone())
             .await?;
 
         Ok(())
@@ -135,7 +133,6 @@ impl Client {
         self: &mut Client,
         pub_key: String,
         amount: f64,
-        wallet: WalletPtr,
     ) -> Result<()> {
         let address = bs58::decode(pub_key.clone())
             .into_vec()
@@ -149,7 +146,7 @@ impl Client {
         }
 
         // check if there are coins
-        let own_coins = wallet.get_own_coins()?;
+        let own_coins = self.state.wallet.get_own_coins()?;
 
         if own_coins.is_empty() {
             return Err(ClientFailed::NotEnoughValue(0).into());
@@ -192,7 +189,6 @@ impl Client {
     pub async fn connect_to_subscriber(
         client: Arc<Mutex<Client>>,
         executor: Arc<Executor<'_>>,
-        wallet: WalletPtr,
     ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
@@ -208,7 +204,7 @@ impl Client {
             let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
             let mut client = client.lock().await;
             let update = state_transition(&client.state, tx)?;
-            client.state.apply(update, wallet.clone()).await?;
+            client.state.apply(update).await?;
         }
     }
 }
@@ -225,19 +221,19 @@ pub struct State {
     pub mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
     pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    // TODO: remove this
-    wallet_path: PathBuf,
+    pub wallet: WalletPtr,
 }
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, _public: &jubjub::SubgroupPoint) -> bool {
-        // TODO: use walletdb instead of connecting with sqlite directly
-        let conn = Connection::open(self.wallet_path.clone()).expect("Connect to database");
-        let mut stmt = conn
-            .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
-            .expect("Generate statement");
-        stmt.exists([1i32]).expect("Read database")
+        // TODO create a function in walletdb to check if it's a valid cashier public key
+        //let conn = Connection::open(self.wallet_path.clone()).expect("Connect to database");
+        //let mut stmt = conn
+        //    .prepare("SELECT key_public FROM cashier WHERE key_public IN (SELECT key_public)")
+        //    .expect("Generate statement");
+        //stmt.exists([1i32]).expect("Read database")
         // do actual validity check
+        true
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -263,7 +259,7 @@ impl ProgramState for State {
 }
 
 impl State {
-    pub async fn apply(&mut self, update: StateUpdate, wallet: WalletPtr) -> Result<()> {
+    pub async fn apply(&mut self, update: StateUpdate) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
@@ -279,12 +275,12 @@ impl State {
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
             // Also update all the coin witnesses
-            for (coin_id, witness) in wallet.get_witnesses()?.iter_mut() {
+            for (coin_id, witness) in self.wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
-                wallet.update_witness(coin_id.clone(), witness.clone())?;
+                self.wallet.update_witness(coin_id.clone(), witness.clone())?;
             }
 
-            if let Some((note, secret)) = self.try_decrypt_note(wallet.clone(), enc_note).await {
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
                 // We need to keep track of the witness for this coin.
                 // This allows us to prove inclusion of the coin in the merkle tree with ZK.
                 // Just as we update the merkle tree with every new coin, so we do the same with
@@ -297,7 +293,7 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                wallet.put_own_coins(coin.clone(), note.clone(),  secret, witness.clone())?;
+                self.wallet.put_own_coins(coin.clone(), note.clone(),  secret, witness.clone())?;
             }
         }
         Ok(())
@@ -305,10 +301,9 @@ impl State {
 
     async fn try_decrypt_note(
         &self,
-        wallet: WalletPtr,
         ciphertext: EncryptedNote,
     ) -> Option<(Note, jubjub::Fr)> {
-        let secret = wallet.get_private().ok()?;
+        let secret = self.wallet.get_private().ok()?;
         match ciphertext.decrypt(&secret) {
             Ok(note) => {
                 // ... and return the decrypted note for this coin.

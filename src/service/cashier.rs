@@ -40,10 +40,10 @@ impl CashierService {
         addr: SocketAddr,
         btc_endpoint: String,
         wallet: CashierDbPtr,
+        client_wallet: WalletPtr,
         cashier_database_path: PathBuf,
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
-        client_wallet_path: PathBuf,
     ) -> Result<CashierService> {
         // Pull address from config later
         let client_address = btc_endpoint;
@@ -69,7 +69,7 @@ impl CashierService {
             rocks,
             gateway_addrs,
             params_paths,
-            client_wallet_path.clone(),
+            client_wallet.clone(),
         )?;
 
         let client = Arc::new(Mutex::new(client));
@@ -81,11 +81,7 @@ impl CashierService {
             client,
         })
     }
-    pub async fn start(
-        &mut self,
-        executor: Arc<Executor<'_>>,
-        client_wallet: WalletPtr,
-    ) -> Result<()> {
+    pub async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
@@ -109,7 +105,6 @@ impl CashierService {
         let cashier_client_subscriber_task = executor.spawn(Client::connect_to_subscriber(
             self.client.clone(),
             executor.clone(),
-            client_wallet,
         ));
 
         protocol.run(executor.clone()).await?;

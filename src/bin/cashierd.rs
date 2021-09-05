@@ -28,6 +28,11 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
         config.password.clone(),
     )?);
 
+    let client_wallet = Arc::new(WalletDb::new(
+        &PathBuf::from(&config.client_walletdb_path),
+        config.client_password.clone(),
+    )?);
+
     let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
     let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;
 
@@ -35,19 +40,14 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
         accept_addr,
         btc_endpoint,
         wallet.clone(),
+        client_wallet.clone(),
         database_path,
         (gateway_addr, "127.0.0.1:4444".parse()?),
         (mint_params_path, spend_params_path),
-        PathBuf::from(&config.client_walletdb_path),
     )
     .await?;
 
-    let client_wallet = Arc::new(WalletDb::new(
-        &PathBuf::from(&config.client_walletdb_path),
-        config.client_password.clone(),
-    )?);
-
-    cashier.start(ex.clone(), client_wallet.clone()).await?;
+    cashier.start(ex.clone()).await?;
 
     //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
     //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
