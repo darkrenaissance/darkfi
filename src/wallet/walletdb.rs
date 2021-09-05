@@ -6,7 +6,7 @@ use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use ff::Field;
 use log::*;
 use rand::rngs::OsRng;
@@ -18,17 +18,14 @@ pub type WalletPtr = Arc<WalletDb>;
 
 pub struct WalletDb {
     pub path: PathBuf,
-    pub witnesses: Mutex<Vec<IncrementalWitness<MerkleNode>>>,
     pub password: String,
 }
 
 impl WalletDb {
     pub fn new(path: &std::path::PathBuf, password: String) -> Result<Self> {
         debug!(target: "WALLETDB", "new() Constructor called");
-        let witnesses = Mutex::new(Vec::new());
         Ok(Self {
             path: path.to_owned(),
-            witnesses,
             password,
         })
     }
@@ -105,8 +102,8 @@ impl WalletDb {
         &self,
         coin: Coin,
         note: Note,
-        witness: IncrementalWitness<MerkleNode>,
         secret: jubjub::Fr,
+        witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
         // prepare the values
         let coin = self.get_value_serialized(&coin.repr)?;
@@ -147,6 +144,45 @@ impl WalletDb {
                 ":key_id": key_id.pop().expect("Get key_id"),
             },
         )?;
+        Ok(())
+    }
+
+    pub fn get_witnesses(&self) -> Result<Vec<(u64, IncrementalWitness<MerkleNode>)>> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let mut witnesses = conn.prepare("SELECT coin_id, witness FROM coins;")?;
+
+        let rows = witnesses.query_map([], |row| {
+            let coin_id: u64 = row.get(0)?;
+            let witness: IncrementalWitness<MerkleNode> =
+                self.get_value_deserialized(row.get(1)?).unwrap();
+            Ok((coin_id, witness))
+        })?;
+
+        let mut witnesses = Vec::new();
+        for i in rows {
+            witnesses.push(i?)
+        }
+
+        Ok(witnesses)
+    }
+
+    pub fn update_witness(
+        &self,
+        coin_id: u64,
+        witness: IncrementalWitness<MerkleNode>,
+    ) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let witness = self.get_value_serialized(&witness)?;
+
+        conn.execute(
+            "UPDATE coins SET witness = ?1  WHERE coin_id = ?2;",
+            params![witness, coin_id],
+        )?;
+
         Ok(())
     }
 
@@ -335,7 +371,7 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
-        wallet.put_own_coins(coin.clone(), note.clone(), witness.clone(), secret)?;
+        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
@@ -344,6 +380,63 @@ mod tests {
         assert_eq!(own_coin.2, secret);
         assert_eq!(own_coin.3.root(), witness.root());
         assert_eq!(own_coin.3.path(), witness.path());
+
+        wallet.destory()?;
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_get_witnesses_and_update_them() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("test3_wallet.db"))?;
+        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
+        wallet.init_db()?;
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+
+        wallet.put_keypair(key_public, key_private)?;
+
+        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
+
+        let note = Note {
+            serial: jubjub::Fr::random(&mut OsRng),
+            value: 110,
+            asset_id: 1,
+            coin_blind: jubjub::Fr::random(&mut OsRng),
+            valcom_blind: jubjub::Fr::random(&mut OsRng),
+        };
+
+        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+
+        let node = MerkleNode::from_coin(&coin);
+        tree.append(node)?;
+        tree.append(node)?;
+        tree.append(node)?;
+        tree.append(node)?;
+
+        let witness = IncrementalWitness::from_tree(&tree);
+
+        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+
+        let coin2 = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+
+        let node2 = MerkleNode::from_coin(&coin2);
+        tree.append(node2)?;
+
+        for (coin_id, witness) in wallet.get_witnesses()?.iter_mut() {
+            witness.append(node2).expect("Append to witness");
+            wallet.update_witness(coin_id.clone(), witness.clone())?;
+        }
+
+        for (_, witness) in wallet.get_witnesses()?.iter() {
+            assert_eq!(tree.root(), witness.root());
+        }
 
         wallet.destory()?;
 

@@ -279,8 +279,9 @@ impl State {
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
             // Also update all the coin witnesses
-            for witness in wallet.witnesses.lock().await.iter_mut() {
+            for (coin_id, witness) in wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
+                wallet.update_witness(coin_id.clone(), witness.clone())?;
             }
 
             if let Some((note, secret)) = self.try_decrypt_note(wallet.clone(), enc_note).await {
@@ -296,7 +297,7 @@ impl State {
                 // Make a new witness for this coin
                 let witness = IncrementalWitness::from_tree(&self.tree);
 
-                wallet.put_own_coins(coin.clone(), note.clone(), witness.clone(), secret)?;
+                wallet.put_own_coins(coin.clone(), note.clone(),  secret, witness.clone())?;
             }
         }
         Ok(())
