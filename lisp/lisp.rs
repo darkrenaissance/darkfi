@@ -734,9 +734,11 @@ fn main() -> Result<(), ()> {
     // .unwrap();
 
     match matches.subcommand() {
-        Some(("load", matches)) => {
-            let file: String = matches.value_of("FILE").unwrap().parse().unwrap();
-            repl_load(file)?;
+        ("load", matches) => {
+            if let Some(matches) = matches {
+                let file: String = matches.value_of("FILE").unwrap().parse().unwrap();
+                repl_load(file)?;
+            }
         }
         _ => {
             eprintln!("error: Invalid subcommand invoked");

@@ -126,27 +126,35 @@ fn main() -> Result<()> {
     .unwrap();
 
     match matches.subcommand() {
-        Some(("init", matches)) => {
-            let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
-            let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
-            trusted_setup(contract_data, setup_file)?;
+        ("init", matches) => {
+            if let Some(matches) = matches {
+                let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
+                let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
+                trusted_setup(contract_data, setup_file)?;
+            }
         }
-        Some(("prove", matches)) => {
-            let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
-            let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
-            let params: String = matches.value_of("PARAMS").unwrap().parse()?;
-            let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            create_proof(contract_data, setup_file, params, zk_proof)?;
+        ("prove", matches) => {
+            if let Some(matches) = matches {
+                let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
+                let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
+                let params: String = matches.value_of("PARAMS").unwrap().parse()?;
+                let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
+                create_proof(contract_data, setup_file, params, zk_proof)?;
+            }
         }
-        Some(("verify", matches)) => {
-            let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
-            let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
-            let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            verify_proof(contract_data, setup_file, zk_proof)?;
+        ("verify", matches) => {
+            if let Some(matches) = matches {
+                let contract_data: String = matches.value_of("CONTRACT_DATA").unwrap().parse()?;
+                let setup_file: String = matches.value_of("SETUP_FILE").unwrap().parse()?;
+                let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
+                verify_proof(contract_data, setup_file, zk_proof)?;
+            }
         }
-        Some(("show", matches)) => {
-            let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
-            show_public(zk_proof)?;
+        ("show", matches) => {
+            if let Some(matches) = matches {
+                let zk_proof: String = matches.value_of("ZK_PROOF").unwrap().parse()?;
+                show_public(zk_proof)?;
+            }
         }
         _ => {
             eprintln!("error: Invalid subcommand invoked");

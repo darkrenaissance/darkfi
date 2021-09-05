@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-fn amount_f64<'a>(v: &'a str) -> std::result::Result<(), String> {
+fn amount_f64(v: String) -> std::result::Result<(), String> {
     if v.parse::<f64>().is_ok() {
         Ok(())
     } else {
@@ -77,55 +77,55 @@ impl DrkCli {
             .author("Dark Renaissance Technologies")
             .about("Run Drk Client")
             .arg(
-                Arg::new("verbose")
-                    .short('v')
-                    .help_heading(Some("Increase verbosity"))
+                Arg::with_name("verbose")
+                    .short("v")
+                    .help("Increase verbosity")
                     .long("verbose")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("hello")
+                Arg::with_name("hello")
                     .long("hello")
-                    .help_heading(Some("Say hello"))
+                    .help("Say hello")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("key")
-                    .short('k')
+                Arg::with_name("key")
+                    .short("k")
                     .long("key")
-                    .help_heading(Some("Test key"))
+                    .help("Test key")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("getkey")
+                Arg::with_name("getkey")
                     .long("getkey")
-                    .help_heading(Some("Get public key as base-58 encoded string"))
+                    .help("Get public key as base-58 encoded string")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("wallet")
-                    .short('w')
+                Arg::with_name("wallet")
+                    .short("w")
                     .long("wallet")
-                    .help_heading(Some("Create a new wallet"))
+                    .help("Create a new wallet")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("info")
-                    .short('i')
+                Arg::with_name("info")
+                    .short("i")
                     .long("info")
-                    .help_heading(Some("Request info from daemon"))
+                    .help("Request info from daemon")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("stop")
-                    .short('s')
+                Arg::with_name("stop")
+                    .short("s")
                     .long("stop")
-                    .help_heading(Some("Send a stop signal to the daemon"))
+                    .help("Send a stop signal to the daemon")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("config")
-                    .help_heading(Some("Path for config file"))
+                Arg::with_name("config")
+                    .help("Path for config file")
                     .long("config")
                     .takes_value(true),
             )
@@ -133,20 +133,20 @@ impl DrkCli {
                 App::new("transfer")
                     .about("Transfer DBTC between users")
                     .arg(
-                        Arg::new("address")
+                        Arg::with_name("address")
                             .value_name("RECEIVE_ADDRESS")
                             .takes_value(true)
                             .index(1)
-                            .help_heading(Some("Address of recipient"))
+                            .help("Address of recipient")
                             .required(true),
                     )
                     .arg(
-                        Arg::new("amount")
+                        Arg::with_name("amount")
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
                             .validator(amount_f64)
-                            .help_heading(Some("Amount to send, in DBTC"))
+                            .help("Amount to send, in DBTC")
                             .required(true),
                     ),
             )
@@ -155,20 +155,20 @@ impl DrkCli {
                 App::new("withdraw")
                     .about("Withdraw BTC for dBTC")
                     .arg(
-                        Arg::new("address")
+                        Arg::with_name("address")
                             .value_name("RECEIVE_ADDRESS")
                             .takes_value(true)
                             .index(1)
-                            .help_heading(Some("Address of recipient"))
+                            .help("Address of recipient")
                             .required(true),
                     )
                     .arg(
-                        Arg::new("amount")
+                        Arg::with_name("amount")
                             .value_name("AMOUNT")
                             .takes_value(true)
                             .index(2)
                             .validator(amount_f64)
-                            .help_heading(Some("Amount to send, in BTC"))
+                            .help("Amount to send, in BTC")
                             .required(true),
                     ),
             )

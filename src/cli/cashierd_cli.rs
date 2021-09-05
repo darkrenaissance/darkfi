@@ -16,37 +16,37 @@ impl CashierdCli {
             .author("Dark Renaissance Technologies")
             .about("run service daemon")
             .arg(
-                Arg::new("verbose")
-                    .short('v')
-                    .help_heading(Some("Increase verbosity"))
+                Arg::with_name("verbose")
+                    .short("v")
+                    .help("Increase verbosity")
                     .long("verbose")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("hello")
+                Arg::with_name("hello")
                     .long("hello")
-                    .help_heading(Some("Say hello"))
+                    .help("Say hello")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("wallet")
-                    .short('w')
+                Arg::with_name("wallet")
+                    .short("w")
                     .long("wallet")
-                    .help_heading(Some("Create a new wallet"))
+                    .help("Create a new wallet")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("info")
-                    .short('i')
+                Arg::with_name("info")
+                    .short("i")
                     .long("info")
-                    .help_heading(Some("Request info from daemon"))
+                    .help("Request info from daemon")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("stop")
-                    .short('s')
+                Arg::with_name("stop")
+                    .short("s")
                     .long("stop")
-                    .help_heading(Some("Send a stop signal to the daemon"))
+                    .help("Send a stop signal to the daemon")
                     .takes_value(false),
             )
             .get_matches();

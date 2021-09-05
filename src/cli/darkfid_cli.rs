@@ -16,16 +16,16 @@ impl DarkfidCli {
             .author("Dark Renaissance Technologies")
             .about("Run Darkfi Daemon")
             .arg(
-                Arg::new("verbose")
-                    .short('v')
-                    .help_heading(Some("Increase verbosity"))
+                Arg::with_name("verbose")
+                    .short("v")
+                    .help("Increase verbosity")
                     .long("verbose")
                     .takes_value(false),
             )
             .arg(
-                Arg::new("config")
-                    .short('c')
-                    .help_heading(Some("Path for config file"))
+                Arg::with_name("config")
+                    .short("c")
+                    .help("Path for config file")
                     .long("config")
                     .takes_value(true),
             )
