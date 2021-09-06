@@ -8,6 +8,7 @@
 - [ ] sqlcipher: document install process or otherwise remove friction of using bundled version
 - [ ] remove default config from binaries and add to the readme
 - [ ] delete zkvm
+- [ ] SOL bridge poc
 
 ## deposit
 
