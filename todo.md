@@ -15,7 +15,7 @@
 - [x] darkfid: send drk public key to cashierd.rs over tcp, triggered by drk.rs
 - [x] cashierd: receive BTC, mint dBTC (see tx.rs)
 - [x] cashierd: push tx to rocksdb (type: deposit, signed by cashier key)
-- [ ] cashierd: watch address for deposit
+- [x] cashierd: watch address for deposit
 - [ ] cashierd: resume watch after restart
 - [x] darkfid: poll gateway for new tx
 - [x] darkfid: for every new coin received, add to merkle tree
