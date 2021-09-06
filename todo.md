@@ -6,6 +6,7 @@
 - [x] merge cashier branch
 - [x] update cashierd.rs to new config handling. note: password param in toml
 - [ ] sqlcipher: document install process or otherwise remove friction of using bundled version
+- [ ] remove default config from binaries and add to the readme
 
 ## deposit
 
