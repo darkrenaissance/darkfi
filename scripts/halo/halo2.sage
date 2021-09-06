@@ -299,14 +299,14 @@ gate_1 = f_2_X * a_1_X
 gate_2 = f_3_X * ((1 - a_1_X) * (a_2_X + a_3_X) - a_4_X)
 gate_3 = f_4_X * (a_1_X * a_2_X * a_3_X - a_4_X)
 
-h = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
+c = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
 t = X^n - 1
 for i in range(n):
     assert h(omega^i) == 0
 # Normally we do:
-#h /= t
+#h = c / t
 # But for some reason sage is producing fractional coefficients
-h, rem = h.quo_rem(X^n - 1)
+h, rem = c.quo_rem(t)
 assert rem == 0
 
 # We send commitments to the terms of h(X)
