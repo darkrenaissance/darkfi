@@ -12,25 +12,27 @@ $ cargo build --release
 
 Open .config/darkfi/darkfid.toml and add a password to the 'Password' section.
 
-3. Run the gateway daemon:
+3. Set a cashier client password. See above.
+
+4. Run the gateway daemon:
 
 ```console
 $ cargo run --bin gatewayd -- -v
 ```
 
-4. Run cashierd:
+5. Run cashierd:
 
 ```console
 $ cargo run --bin cashierd -- -v
 ```
 
-5. Run darkfid:
+6. Run darkfid:
 
 ```console
 $ cargo run --bin darkfid -- -v
 ```
 
-6. Initialize wallet and generate key pair:
+7. Initialize wallet and generate key pair:
 
 ```console
 $ cargo run --bin drk -- -wk 
