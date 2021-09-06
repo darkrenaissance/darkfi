@@ -12,7 +12,9 @@ $ cargo build --release
 
 Open .config/darkfi/darkfid.toml and add a password to the 'Password' section.
 
-3. Set a cashier client password. See above.
+3. Set a cashier password and a cashier client password.
+
+Open .config/darkfi/cashierd.toml. Add a password to the 'Password' section, and a another password to the 'Client Password' section.
 
 4. Run the gateway daemon:
 
