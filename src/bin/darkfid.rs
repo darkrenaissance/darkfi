@@ -1,7 +1,7 @@
 use drk::blockchain::Rocks;
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::util::join_config_path;
-use drk::wallet::{WalletApi, WalletDb};
+use drk::wallet::WalletDb;
 use drk::Result;
 
 use drk::client::Client;

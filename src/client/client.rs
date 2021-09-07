@@ -13,7 +13,6 @@ use crate::serial::Encodable;
 use crate::serial::{deserialize, Decodable};
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
-use crate::wallet::WalletApi;
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
 

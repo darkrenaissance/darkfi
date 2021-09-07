@@ -2,7 +2,6 @@ use crate::client::{Client, ClientFailed};
 use crate::serial::serialize;
 use crate::service::CashierClient;
 use crate::{Error, Result};
-use crate::wallet::WalletApi;
 
 use jsonrpc_core::BoxFuture;
 use jsonrpc_derive::rpc;
