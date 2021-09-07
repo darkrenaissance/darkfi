@@ -1,7 +1,7 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
-    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoins,
+    merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
@@ -69,6 +69,11 @@ impl WalletApi for WalletDb {
                 self.get_value_deserialized::<jubjub::SubgroupPoint>(key?)?;
             pub_keys.push(public);
         }
+
+        if pub_keys.is_empty() {
+            return Err(Error::from(ClientFailed::DoNotHavePublicKey));
+        }
+
         Ok(pub_keys)
     }
 
@@ -83,6 +88,11 @@ impl WalletApi for WalletDb {
             let private: jubjub::Fr = self.get_value_deserialized(key?)?;
             keys.push(private);
         }
+
+        if keys.is_empty() {
+            return Err(Error::from(ClientFailed::DoNotHavePrivateKey));
+        }
+
         Ok(keys)
     }
 }
@@ -139,7 +149,12 @@ impl WalletDb {
                 .get_value_deserialized(secret.pop().expect("Load public_key from walletdb"))
                 .unwrap();
 
-            Ok((coin, note, secret, witness))
+            Ok(OwnCoin {
+                coin,
+                note,
+                secret,
+                witness,
+            })
         })?;
 
         let mut own_coins = Vec::new();
@@ -150,22 +165,16 @@ impl WalletDb {
         Ok(own_coins)
     }
 
-    pub fn put_own_coins(
-        &self,
-        coin: Coin,
-        note: Note,
-        secret: jubjub::Fr,
-        witness: IncrementalWitness<MerkleNode>,
-    ) -> Result<()> {
+    pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
         // prepare the values
-        let coin = self.get_value_serialized(&coin.repr)?;
-        let serial = self.get_value_serialized(&note.serial)?;
-        let coin_blind = self.get_value_serialized(&note.coin_blind)?;
-        let valcom_blind = self.get_value_serialized(&note.valcom_blind)?;
-        let value: u64 = note.value;
-        let asset_id: u64 = note.asset_id;
-        let witness = self.get_value_serialized(&witness)?;
-        let secret = self.get_value_serialized(&secret)?;
+        let coin = self.get_value_serialized(&own_coin.coin.repr)?;
+        let serial = self.get_value_serialized(&own_coin.note.serial)?;
+        let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
+        let valcom_blind = self.get_value_serialized(&own_coin.note.valcom_blind)?;
+        let value: u64 = own_coin.note.value;
+        let asset_id: u64 = own_coin.note.asset_id;
+        let witness = self.get_value_serialized(&own_coin.witness)?;
+        let secret = self.get_value_serialized(&own_coin.secret)?;
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -261,6 +270,10 @@ impl WalletDb {
             pub_keys.push(public);
         }
 
+        if pub_keys.is_empty() {
+            return Err(Error::from(ClientFailed::DoNotHaveCashierPublicKey));
+        }
+
         Ok(pub_keys)
     }
 
@@ -314,6 +327,7 @@ impl WalletDb {
 mod tests {
 
     use super::*;
+    use crate::crypto::{OwnCoin, coin::Coin};
     use crate::util::join_config_path;
     use ff::PrimeField;
 
@@ -369,15 +383,21 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
-        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+        let own_coin = OwnCoin {
+            coin,
+            note: note.clone(),
+            secret,
+            witness: witness.clone(),
+        };
+        wallet.put_own_coins(own_coin.clone())?;
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
-        assert_eq!(&own_coin.1.valcom_blind, &note.valcom_blind);
-        assert_eq!(&own_coin.1.coin_blind, &note.coin_blind);
-        assert_eq!(own_coin.2, secret);
-        assert_eq!(own_coin.3.root(), witness.root());
-        assert_eq!(own_coin.3.path(), witness.path());
+        assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
+        assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
+        assert_eq!(own_coin.secret, secret);
+        assert_eq!(own_coin.witness.root(), witness.root());
+        assert_eq!(own_coin.witness.path(), witness.path());
 
         wallet.destroy()?;
 
@@ -417,10 +437,17 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
-        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
-        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
-        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
-        wallet.put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+        let own_coin = OwnCoin {
+            coin,
+            note,
+            secret,
+            witness,
+        };
+
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
 
         let coin2 = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
 

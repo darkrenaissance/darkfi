@@ -19,12 +19,15 @@ pub use spend_proof::{
     create_spend_proof, setup_spend_prover, verify_spend_proof, SpendRevealedValues,
 };
 
-pub type OwnCoins = Vec<(
-    coin::Coin,
-    note::Note,
-    jubjub::Fr,
-    merkle::IncrementalWitness<merkle_node::MerkleNode>,
-)>;
+#[derive(Clone)]
+pub struct OwnCoin {
+    pub coin: coin::Coin,
+    pub note: note::Note,
+    pub secret: jubjub::Fr,
+    pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
+}
+
+pub type OwnCoins = Vec<OwnCoin>;
 
 pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Result<()> {
     let buffer = std::fs::File::create(filename)?;
