@@ -98,38 +98,10 @@ impl CashierService {
         Ok(())
     }
 
-    //async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
-    //    let cashier_secret = self.wallet.get_cashier_private().unwrap();
-
-    //    let builder = tx::TransactionBuilder {
-    //        clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
-    //            value: value,
-    //            asset_id: 1,
-    //            signature_secret: cashier_secret,
-    //        }],
-    //        inputs: vec![],
-    //        outputs: vec![tx::TransactionBuilderOutputInfo {
-    //            value: value,
-    //            asset_id: 1,
-    //            public: dkey_pub,
-    //        }],
-    //    };
-
-    //    let mut tx_data = vec![];
-    //    {
-    //        // Build the tx
-    //        let tx = builder.build(&self.mint_params, &self.spend_params);
-    //        // Now serialize it
-    //        tx.encode(&mut tx_data).expect("encode tx");
-    //    }
-
-    //    //Add to blockchain
-    //    let slab = Slab::new(tx_data);
-    //    //let mut gateway = self.gateway.lock().await;
-    //    self.gateway.put_slab(slab).await.expect("put slab");
-
-    //    Ok(())
-    //}
+    async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
+        self.client.lock().await.send(dkey_pub, value, 1).await?;
+        Ok(())
+    }
 
     async fn handle_request_loop(
         send_queue: async_channel::Sender<(PeerId, Reply)>,
