@@ -5,7 +5,7 @@ use crate::crypto::{
     merkle_node::MerkleNode,
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
-    save_params, setup_mint_prover, setup_spend_prover,
+    save_params, setup_mint_prover, setup_spend_prover, OwnCoin, OwnCoins,
 };
 use crate::rpc::adapters::{RpcClient, RpcClientAdapter};
 use crate::rpc::jsonserver;
@@ -13,12 +13,11 @@ use crate::serial::Encodable;
 use crate::serial::{deserialize, Decodable};
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
+use crate::wallet::WalletApi;
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
-use crate::wallet::WalletApi;
 
 use super::ClientFailed;
-
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -33,7 +32,6 @@ use std::path::PathBuf;
 
 pub struct Client {
     pub state: State,
-    secret: jubjub::Fr,
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
@@ -45,7 +43,6 @@ impl Client {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
         wallet: WalletPtr,
-        secret: jubjub::Fr,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
@@ -83,7 +80,6 @@ impl Client {
 
         Ok(Self {
             state,
-            secret,
             mint_params,
             spend_params,
             gateway,
@@ -129,7 +125,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn transfer(self: &mut Client, pub_key: String, amount: f64) -> Result<()> {
+    pub async fn transfer(self: &mut Self, pub_key: String, amount: f64) -> Result<()> {
         let address = bs58::decode(pub_key.clone())
             .into_vec()
             .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
@@ -141,45 +137,104 @@ impl Client {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        // check if there are coins
         let own_coins = self.state.wallet.get_own_coins()?;
 
-        if own_coins.is_empty() {
+        self.send(
+            own_coins,
+            address.clone(),
+            amount.clone() as u64,
+            1,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn send(
+        self: &mut Self,
+        own_coins: OwnCoins,
+        pub_key: jubjub::SubgroupPoint,
+        amount: u64,
+        asset_id: u64,
+    ) -> Result<()> {
+
+        let slab = self.build_slab_from_tx(
+            own_coins,
+            pub_key.clone(),
+            amount.clone() as u64,
+            asset_id
+        )?;
+
+        self.gateway.put_slab(slab).await?;
+
+        Ok(())
+    }
+
+    fn build_slab_from_tx(
+        &self,
+        own_coins: OwnCoins,
+        pub_key: jubjub::SubgroupPoint,
+        amount: u64,
+        asset_id: u64,
+    ) -> Result<Slab> {
+        let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
+        let mut inputs_value: u64 = 0;
+        let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
+
+        for own_coin in own_coins.iter() {
+            if inputs_value >= amount {
+                break;
+            }
+            let witness = &own_coin.witness;
+            let merkle_path = witness.path().unwrap();
+            inputs_value += own_coin.note.value;
+            let input = tx::TransactionBuilderInputInfo {
+                merkle_path,
+                secret: own_coin.secret,
+                note: own_coin.note.clone(),
+            };
+
+            inputs.push(input);
+        }
+
+        if inputs_value < amount {
             return Err(ClientFailed::NotEnoughValue(0).into());
         }
 
-        let witness = &own_coins[0].3;
-        let merkle_path = witness.path().unwrap();
+        if inputs_value > amount {
+            let inputs_len = inputs.len();
+            let input = &inputs[inputs_len - 1];
 
-        // Construct a new tx spending the coin
+            let return_value: u64 = inputs_value - amount;
+
+            let own_pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * input.secret;
+
+            outputs.push(tx::TransactionBuilderOutputInfo {
+                value: return_value,
+                asset_id: 1,
+                public: own_pub_key,
+            });
+        }
+
+        outputs.push(tx::TransactionBuilderOutputInfo {
+            value: amount,
+            asset_id,
+            public: pub_key,
+        });
+
         let builder = tx::TransactionBuilder {
             clear_inputs: vec![],
-            inputs: vec![tx::TransactionBuilderInputInfo {
-                merkle_path,
-                secret: self.secret.clone(),
-                note: own_coins[0].1.clone(),
-            }],
-            // We can add more outputs to this list.
-            // The only constraint is that sum(value in) == sum(value out)
-            outputs: vec![tx::TransactionBuilderOutputInfo {
-                value: amount as u64,
-                asset_id: 1,
-                public: address,
-            }],
+            inputs,
+            outputs,
         };
-        // Build the tx
+
         let mut tx_data = vec![];
         {
             let tx = builder.build(&self.mint_params, &self.spend_params);
             tx.encode(&mut tx_data).expect("encode tx");
         }
-
-        // build slab from the transaction
         let slab = Slab::new(tx_data);
-
-        self.gateway.put_slab(slab).await?;
-
-        Ok(())
+        Ok(slab)
     }
 
     pub async fn connect_to_subscriber(
@@ -288,12 +343,14 @@ impl State {
                     // Make a new witness for this coin
                     let witness = IncrementalWitness::from_tree(&self.tree);
 
-                    self.wallet.put_own_coins(
-                        coin.clone(),
-                        note.clone(),
-                        secret.clone(),
-                        witness.clone(),
-                    )?;
+                    let own_coin = OwnCoin {
+                        coin: coin.clone(),
+                        note: note.clone(),
+                        secret: secret.clone(),
+                        witness: witness.clone(),
+                    };
+
+                    self.wallet.put_own_coins(own_coin)?;
                 }
             }
         }

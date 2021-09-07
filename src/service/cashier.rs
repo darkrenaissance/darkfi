@@ -3,9 +3,9 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
+use crate::wallet::WalletApi;
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
-use crate::wallet::WalletApi; 
 
 use ff::Field;
 use rand::rngs::OsRng;
@@ -54,23 +54,11 @@ impl CashierService {
 
         let rocks = Rocks::new(&cashier_database_path)?;
 
-        // wallet secret key
-        let secret: jubjub::Fr;
-        if let Ok(prv) = wallet.get_private_keys() {
-            secret = prv[0];
-        } else {
-            secret = jubjub::Fr::random(&mut OsRng);
-            let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-            wallet.put_keypair(serialize(&public), serialize(&secret))?;
+        if wallet.get_private_keys()?.is_empty() {
+            wallet.key_gen()?;
         }
 
-        let client = Client::new(
-            rocks,
-            gateway_addrs,
-            params_paths,
-            client_wallet.clone(),
-            secret.clone(),
-        )?;
+        let client = Client::new(rocks, gateway_addrs, params_paths, client_wallet.clone())?;
 
         let client = Arc::new(Mutex::new(client));
 

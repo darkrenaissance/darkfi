@@ -2,15 +2,12 @@ use drk::blockchain::Rocks;
 use drk::cli::{Config, DarkfidCli, DarkfidConfig};
 use drk::util::join_config_path;
 use drk::wallet::{WalletApi, WalletDb};
-use drk::serial::serialize;
 use drk::Result;
 
 use drk::client::Client;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
-use rand::rngs::OsRng;
-use ff::Field;
 
 use async_std::sync::Arc;
 use std::net::SocketAddr;
@@ -35,14 +32,8 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
     let mint_params_path = join_config_path(&PathBuf::from("mint.params"))?;
     let spend_params_path = join_config_path(&PathBuf::from("spend.params"))?;
 
-    // wallet secret key
-    let secret: jubjub::Fr;
-    if let Ok(prv) = wallet.get_private_keys() {
-        secret = prv[0];
-    } else {
-        secret = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        wallet.put_keypair(serialize(&public), serialize(&secret))?;
+    if let Err(_) = wallet.get_private_keys() {
+        wallet.key_gen()?;
     }
 
     let mut client = Client::new(
@@ -50,7 +41,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
         (connect_addr, sub_addr),
         (mint_params_path, spend_params_path),
         wallet.clone(),
-        secret.clone()
     )?;
 
     client.start().await?;
