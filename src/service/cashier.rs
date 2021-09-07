@@ -53,13 +53,13 @@ impl CashierService {
 
         let cashier_secret: jubjub::Fr;
 
-        if let Ok(secret) = wallet.get_cashier_private() {
+        if let Ok(secret) = wallet.get_private() {
             cashier_secret = secret;
         } else {
             wallet.init_db()?;
-            let keys = wallet.cash_key_gen();
+            let keys = wallet.key_gen();
             wallet.put_keypair(keys.0, keys.1)?;
-            cashier_secret = wallet.get_cashier_private()?;
+            cashier_secret = wallet.get_private()?;
         }
 
         let rocks = Rocks::new(&cashier_database_path)?;
@@ -229,7 +229,7 @@ impl CashierService {
                 let cashier_public: jubjub::SubgroupPoint;
 
                 if let Some(addr) = cashier_wallet.get_address_by_btc_key(&btc_address)? {
-                    cashier_public = deserialize(&addr.1)?;
+                    cashier_public = deserialize(&addr.0)?;
                 } else {
                     let cashier_secret = jubjub::Fr::random(&mut OsRng);
                     cashier_public =
@@ -237,8 +237,8 @@ impl CashierService {
 
                     cashier_wallet.put_withdraw_keys(
                         btc_address,
-                        serialize(&cashier_secret),
                         serialize(&cashier_public),
+                        serialize(&cashier_secret),
                     )?;
                 }
 

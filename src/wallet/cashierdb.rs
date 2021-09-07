@@ -95,7 +95,7 @@ impl CashierDb {
         Ok(())
     }
 
-    // return (private key, public key)
+    // return (public key, private key)
     pub fn get_address_by_btc_key(
         &self,
         btc_address: &Vec<u8>,
@@ -110,7 +110,7 @@ impl CashierDb {
             conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = :btc_key_id")?;
         let addr_iter = stmt
             .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":btc_key_id", btc_address)], |row| {
-                Ok((row.get(1)?, row.get(2)?))
+                Ok((row.get(2)?, row.get(1)?))
             })?;
 
         let mut btc_addresses = vec![];
@@ -129,8 +129,8 @@ impl CashierDb {
     pub fn put_withdraw_keys(
         &self,
         btc_key_id: Vec<u8>,
-        d_key_private: Vec<u8>,
         d_key_public: Vec<u8>,
+        d_key_private: Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
 
@@ -151,7 +151,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn cash_key_gen(&self) -> (Vec<u8>, Vec<u8>) {
+    pub fn key_gen(&self) -> (Vec<u8>, Vec<u8>) {
         debug!(target: "CASHIERDB", "Generating cashier keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -170,7 +170,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_cashier_public(&self) -> Result<jubjub::SubgroupPoint> {
+    pub fn get_public(&self) -> Result<jubjub::SubgroupPoint> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -185,7 +185,7 @@ impl CashierDb {
         Ok(public)
     }
 
-    pub fn get_cashier_private(&self) -> Result<jubjub::Fr> {
+    pub fn get_private(&self) -> Result<jubjub::Fr> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
