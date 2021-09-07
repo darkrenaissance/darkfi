@@ -287,7 +287,7 @@ impl WalletDb {
         Ok(tables)
     }
 
-    pub fn destory(&self) -> Result<()> {
+    pub fn destroy(&self) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(public, public2);
         assert_eq!(secret, secret2);
 
-        wallet.destory()?;
+        wallet.destroy()?;
 
         Ok(())
     }
@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(own_coin.3.root(), witness.root());
         assert_eq!(own_coin.3.path(), witness.path());
 
-        wallet.destory()?;
+        wallet.destroy()?;
 
         Ok(())
     }
@@ -436,7 +436,7 @@ mod tests {
             assert_eq!(tree.root(), witness.root());
         }
 
-        wallet.destory()?;
+        wallet.destroy()?;
 
         Ok(())
     }
