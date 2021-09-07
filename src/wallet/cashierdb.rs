@@ -2,7 +2,6 @@ use crate::client::ClientFailed;
 use crate::serial;
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::service::btc::{PrivKey, PubKey};
-use crate::util::join_config_path;
 use crate::{Error, Result};
 
 use async_std::sync::Arc;
@@ -17,23 +16,16 @@ pub type CashierDbPtr = Arc<CashierDb>;
 
 pub struct CashierDb {
     pub path: PathBuf,
-    pub cashier_secrets: Vec<jubjub::Fr>,
-    pub cashier_public: jubjub::SubgroupPoint,
     pub password: String,
 }
 
 impl CashierDb {
-    pub fn new(wallet: &str, password: String) -> Result<Self> {
+    pub fn new(path: &PathBuf, password: String) -> Result<CashierDbPtr> {
         debug!(target: "CASHIERDB", "new() Constructor called");
-        let path = join_config_path(&PathBuf::from(wallet))?;
-        let cashier_secret = jubjub::Fr::random(&mut OsRng);
-        let cashier_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
-        Ok(Self {
-            path,
-            cashier_secrets: vec![cashier_secret.clone()],
-            cashier_public,
+        Ok(Arc::new(Self {
+            path: path.to_owned(),
             password,
-        })
+        }))
     }
 
     pub fn init_db(&self) -> Result<()> {
@@ -148,7 +140,7 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT INTO withdraw_keypairs(btc_key_id, d_key_private, d_key_public) 
+            "INSERT INTO withdraw_keypairs(btc_key_id, d_key_private, d_key_public)
             VALUES (:btc_key_id, :d_key_private, :d_key_public)",
             named_params! {
                 ":btc_key_id": btc_key_id,

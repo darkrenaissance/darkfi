@@ -23,15 +23,15 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     let database_path = config.client_database_path.clone();
     let database_path = join_config_path(&PathBuf::from(database_path))?;
 
-    let wallet = Arc::new(CashierDb::new(
-        &config.cashierdb_path,
+    let wallet = CashierDb::new(
+        &PathBuf::from(&config.cashierdb_path),
         config.password.clone(),
-    )?);
+    )?;
 
-    let client_wallet = Arc::new(WalletDb::new(
+    let client_wallet = WalletDb::new(
         &PathBuf::from(&config.client_walletdb_path),
         config.client_password.clone(),
-    )?);
+    )?;
 
     let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
     let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;

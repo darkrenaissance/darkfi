@@ -22,12 +22,12 @@ pub struct WalletDb {
 }
 
 impl WalletDb {
-    pub fn new(path: &std::path::PathBuf, password: String) -> Result<Self> {
+    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
         debug!(target: "WALLETDB", "new() Constructor called");
-        Ok(Self {
+        Ok(Arc::new(Self {
             path: path.to_owned(),
             password,
-        })
+        }))
     }
 
     pub fn init_db(&self) -> Result<()> {

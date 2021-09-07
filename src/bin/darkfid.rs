@@ -29,7 +29,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
 
     let rocks = Rocks::new(&database_path)?;
 
-    let wallet = Arc::new(WalletDb::new(&walletdb_path, config.password.clone())?);
+    let wallet = WalletDb::new(&walletdb_path, config.password.clone())?;
 
     // wallet secret key
     let secret: jubjub::Fr;
