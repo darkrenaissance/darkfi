@@ -41,6 +41,7 @@ impl WalletApi for CashierDb {
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
         let privkey = serial::serialize(&secret);
+        self.put_keypair(pubkey.clone(), privkey.clone())?;
         Ok((pubkey, privkey))
     }
 
@@ -285,8 +286,7 @@ mod tests {
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
 
-        let (public, secret) = wallet.key_gen()?;
-        wallet.put_keypair(public, secret)?;
+        wallet.key_gen()?;
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
