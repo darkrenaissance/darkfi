@@ -5,7 +5,7 @@ use crate::crypto::{
     merkle_node::MerkleNode,
     note::{EncryptedNote, Note},
     nullifier::Nullifier,
-    save_params, setup_mint_prover, setup_spend_prover, OwnCoin, OwnCoins,
+    save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
 };
 use crate::rpc::adapters::{RpcClient, RpcClientAdapter};
 use crate::rpc::jsonserver;
@@ -136,10 +136,7 @@ impl Client {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        let own_coins = self.state.wallet.get_own_coins()?;
-
         self.send(
-            own_coins,
             address.clone(),
             amount.clone() as u64,
             1,
@@ -151,14 +148,12 @@ impl Client {
 
     pub async fn send(
         self: &mut Self,
-        own_coins: OwnCoins,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
         asset_id: u64,
     ) -> Result<()> {
 
         let slab = self.build_slab_from_tx(
-            own_coins,
             pub_key.clone(),
             amount.clone() as u64,
             asset_id
@@ -171,7 +166,6 @@ impl Client {
 
     fn build_slab_from_tx(
         &self,
-        own_coins: OwnCoins,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
         asset_id: u64,
@@ -179,6 +173,8 @@ impl Client {
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut inputs_value: u64 = 0;
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
+
+        let own_coins = self.state.wallet.get_own_coins()?;
 
         for own_coin in own_coins.iter() {
             if inputs_value >= amount {
