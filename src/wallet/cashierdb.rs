@@ -1,7 +1,6 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::serial;
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::service::btc::{PrivKey, PubKey};
 use crate::{Error, Result};
 
@@ -21,7 +20,24 @@ pub struct CashierDb {
 }
 
 impl WalletApi for CashierDb {
-    fn init_db(&self) -> Result<()> {
+    fn get_password(&self) -> String {
+        self.password.to_owned()
+    }
+    fn get_path(&self) -> PathBuf {
+        self.path.to_owned()
+    }
+}
+
+impl CashierDb {
+    pub fn new(path: &PathBuf, password: String) -> Result<CashierDbPtr> {
+        debug!(target: "CASHIERDB", "new() Constructor called");
+        Ok(Arc::new(Self {
+            path: path.to_owned(),
+            password,
+        }))
+    }
+
+    pub fn init_db(&self) -> Result<()> {
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../res/cashier.sql");
             let conn = Connection::open(&self.path)?;
@@ -35,7 +51,7 @@ impl WalletApi for CashierDb {
         Ok(())
     }
 
-    fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         debug!(target: "CASHIERDB", "Generating cashier keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -45,7 +61,7 @@ impl WalletApi for CashierDb {
         Ok((pubkey, privkey))
     }
 
-    fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         conn.execute(
@@ -55,7 +71,7 @@ impl WalletApi for CashierDb {
         Ok(())
     }
 
-    fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
+    pub fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -70,7 +86,7 @@ impl WalletApi for CashierDb {
         Ok(pub_keys)
     }
 
-    fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
+    pub fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
         debug!(target: "CASHIERDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -82,16 +98,6 @@ impl WalletApi for CashierDb {
             keys.push(private);
         }
         Ok(keys)
-    }
-}
-
-impl CashierDb {
-    pub fn new(path: &PathBuf, password: String) -> Result<CashierDbPtr> {
-        debug!(target: "CASHIERDB", "new() Constructor called");
-        Ok(Arc::new(Self {
-            path: path.to_owned(),
-            password,
-        }))
     }
 
     pub fn get_keys_by_dkey(&self, dkey_pub: &Vec<u8>) -> Result<()> {
@@ -210,44 +216,6 @@ impl CashierDb {
         let _rows = stmt.query([])?;
         Ok(())
     }
-
-    pub fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {
-        let v = serialize(data);
-        Ok(v)
-    }
-
-    pub fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
-        let v: D = deserialize(&key)?;
-        Ok(v)
-    }
-
-    fn get_tables_name(&self) -> Result<Vec<String>> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
-        let table_iter = stmt.query_map::<String, _, _>([], |row| row.get(0))?;
-
-        let mut tables = Vec::new();
-
-        for table in table_iter {
-            tables.push(table?);
-        }
-
-        Ok(tables)
-    }
-
-    pub fn destroy(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-
-        for table in self.get_tables_name()?.iter() {
-            let drop_stmt = format!("DROP TABLE IF EXISTS {}", table);
-            let drop_stmt = drop_stmt.as_str();
-            conn.execute(drop_stmt, [])?;
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -255,34 +223,11 @@ mod tests {
 
     use super::*;
     use crate::util::join_config_path;
-
-    #[test]
-    pub fn test_save_and_load_keypair() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
-        let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
-        wallet.init_db()?;
-
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
-
-        wallet.put_keypair(key_public, key_private)?;
-
-        let public2 = wallet.get_public_keys()?[0];
-        let secret2 = wallet.get_private_keys()?[0];
-
-        assert_eq!(public, public2);
-        assert_eq!(secret, secret2);
-
-        wallet.destroy()?;
-
-        Ok(())
-    }
+    use crate::serial::serialize;
 
     #[test]
     pub fn test_put_withdraw_keys_and_load_them_with_btc_key() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test2.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
 

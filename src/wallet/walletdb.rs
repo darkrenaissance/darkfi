@@ -23,7 +23,24 @@ pub struct WalletDb {
 }
 
 impl WalletApi for WalletDb {
-    fn init_db(&self) -> Result<()> {
+    fn get_password(&self) -> String {
+        self.password.to_owned()
+    }
+    fn get_path(&self) -> PathBuf {
+        self.path.to_owned()
+    }
+}
+
+impl WalletDb {
+    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
+        debug!(target: "WALLETDB", "new() Constructor called");
+        Ok(Arc::new(Self {
+            path: path.to_owned(),
+            password,
+        }))
+    }
+
+    pub fn init_db(&self) -> Result<()> {
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../res/schema.sql");
             let conn = Connection::open(&self.path)?;
@@ -37,7 +54,7 @@ impl WalletApi for WalletDb {
         Ok(())
     }
 
-    fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -47,7 +64,7 @@ impl WalletApi for WalletDb {
         Ok((pubkey, privkey))
     }
 
-    fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         conn.execute(
@@ -56,7 +73,7 @@ impl WalletApi for WalletDb {
         )?;
         Ok(())
     }
-    fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
+    pub fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
         debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -77,7 +94,7 @@ impl WalletApi for WalletDb {
         Ok(pub_keys)
     }
 
-    fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
+    pub fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
         debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -95,17 +112,6 @@ impl WalletApi for WalletDb {
 
         Ok(keys)
     }
-}
-
-impl WalletDb {
-    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
-        debug!(target: "WALLETDB", "new() Constructor called");
-        Ok(Arc::new(Self {
-            path: path.to_owned(),
-            password,
-        }))
-    }
-
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -327,7 +333,7 @@ impl WalletDb {
 mod tests {
 
     use super::*;
-    use crate::crypto::{OwnCoin, coin::Coin};
+    use crate::crypto::{coin::Coin, OwnCoin};
     use crate::util::join_config_path;
     use ff::PrimeField;
 
