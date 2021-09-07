@@ -186,7 +186,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)>  {
+    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
