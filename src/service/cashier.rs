@@ -5,6 +5,7 @@ use crate::client::Client;
 use crate::serial::{deserialize, serialize};
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
+use crate::wallet::WalletApi; 
 
 use ff::Field;
 use rand::rngs::OsRng;
@@ -51,25 +52,24 @@ impl CashierService {
         // create btc client
         let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
 
-        let cashier_secret: jubjub::Fr;
-
-        if let Ok(secret) = wallet.get_private() {
-            cashier_secret = secret;
-        } else {
-            wallet.init_db()?;
-            let keys = wallet.key_gen();
-            wallet.put_keypair(keys.0, keys.1)?;
-            cashier_secret = wallet.get_private()?;
-        }
-
         let rocks = Rocks::new(&cashier_database_path)?;
 
+        // wallet secret key
+        let secret: jubjub::Fr;
+        if let Ok(prv) = wallet.get_private_keys() {
+            secret = prv[0];
+        } else {
+            secret = jubjub::Fr::random(&mut OsRng);
+            let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+            wallet.put_keypair(serialize(&public), serialize(&secret))?;
+        }
+
         let client = Client::new(
-            cashier_secret,
             rocks,
             gateway_addrs,
             params_paths,
             client_wallet.clone(),
+            secret.clone(),
         )?;
 
         let client = Arc::new(Mutex::new(client));

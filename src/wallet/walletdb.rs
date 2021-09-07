@@ -1,3 +1,4 @@
+use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
     coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoins,
@@ -21,16 +22,8 @@ pub struct WalletDb {
     pub password: String,
 }
 
-impl WalletDb {
-    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
-        debug!(target: "WALLETDB", "new() Constructor called");
-        Ok(Arc::new(Self {
-            path: path.to_owned(),
-            password,
-        }))
-    }
-
-    pub fn init_db(&self) -> Result<()> {
+impl WalletApi for WalletDb {
+    fn init_db(&self) -> Result<()> {
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../res/schema.sql");
             let conn = Connection::open(&self.path)?;
@@ -42,6 +35,65 @@ impl WalletDb {
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
+    }
+
+    fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+        debug!(target: "WALLETDB", "Attempting to generate keys...");
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let pubkey = serial::serialize(&public);
+        let privkey = serial::serialize(&secret);
+        self.put_keypair(pubkey.clone(), privkey.clone())?;
+        Ok((pubkey, privkey))
+    }
+
+    fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private],
+        )?;
+        Ok(())
+    }
+    fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
+        debug!(target: "WALLETDB", "Returning keys...");
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
+        // this just gets the first key. maybe we should randomize this
+        let key_iter = stmt.query_map([], |row| row.get(0))?;
+        let mut pub_keys = Vec::new();
+        for key in key_iter {
+            let public: jubjub::SubgroupPoint =
+                self.get_value_deserialized::<jubjub::SubgroupPoint>(key?)?;
+            pub_keys.push(public);
+        }
+        Ok(pub_keys)
+    }
+
+    fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
+        debug!(target: "WALLETDB", "Returning keys...");
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
+        let key_iter = stmt.query_map([], |row| row.get(0))?;
+        let mut keys = Vec::new();
+        for key in key_iter {
+            let private: jubjub::Fr = self.get_value_deserialized(key?)?;
+            keys.push(private);
+        }
+        Ok(keys)
+    }
+}
+
+impl WalletDb {
+    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
+        debug!(target: "WALLETDB", "new() Constructor called");
+        Ok(Arc::new(Self {
+            path: path.to_owned(),
+            password,
+        }))
     }
 
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
@@ -186,26 +238,6 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
-        debug!(target: "WALLETDB", "Attempting to generate keys...");
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        self.put_keypair(pubkey.clone(), privkey.clone())?;
-        Ok((pubkey, privkey))
-    }
-
-    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
-        Ok(())
-    }
-
     pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
         debug!(target: "WALLETDB", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
@@ -215,23 +247,6 @@ impl WalletDb {
             params![key_public],
         )?;
         Ok(())
-    }
-
-    pub fn get_public(&self) -> Result<jubjub::SubgroupPoint> {
-        debug!(target: "WALLETDB", "Returning keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
-        // this just gets the first key. maybe we should randomize this
-        let key_iter = stmt.query_map([], |row| row.get(0))?;
-        let mut pub_keys = Vec::new();
-        for key in key_iter {
-            pub_keys.push(key?);
-        }
-        let public: jubjub::SubgroupPoint =
-            self.get_value_deserialized(pub_keys.pop().expect("Load public_key from walletdb"))?;
-
-        Ok(public)
     }
 
     pub fn get_cashier_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
@@ -247,21 +262,6 @@ impl WalletDb {
         }
 
         Ok(pub_keys)
-    }
-
-    pub fn get_private(&self) -> Result<jubjub::Fr> {
-        debug!(target: "WALLETDB", "Returning keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
-        let key_iter = stmt.query_map([], |row| row.get(0))?;
-        let mut keys = Vec::new();
-        for key in key_iter {
-            keys.push(key?);
-        }
-        let private: jubjub::Fr =
-            self.get_value_deserialized(keys.pop().expect("Load private key from walletdb"))?;
-        Ok(private)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
@@ -330,11 +330,11 @@ mod tests {
 
         wallet.put_keypair(key_public, key_private)?;
 
-        let public2 = wallet.get_public()?;
-        let secret2 = wallet.get_private()?;
+        let public2 = wallet.get_public_keys()?;
+        let secret2 = wallet.get_private_keys()?;
 
-        assert_eq!(public, public2);
-        assert_eq!(secret, secret2);
+        assert_eq!(public, public2[0]);
+        assert_eq!(secret, secret2[0]);
 
         wallet.destroy()?;
 

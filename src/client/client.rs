@@ -15,8 +15,10 @@ use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::WalletPtr;
 use crate::{tx, Result};
+use crate::wallet::WalletApi;
 
 use super::ClientFailed;
+
 
 use async_executor::Executor;
 use bellman::groth16;
@@ -39,11 +41,11 @@ pub struct Client {
 
 impl Client {
     pub fn new(
-        secret: jubjub::Fr,
         rocks: Arc<Rocks>,
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
         wallet: WalletPtr,
+        secret: jubjub::Fr,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
@@ -198,7 +200,8 @@ impl Client {
             let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
             let mut client = client.lock().await;
             let update = state_transition(&client.state, tx)?;
-            client.state.apply(update).await?;
+            let secret_keys = client.state.wallet.get_private_keys()?;
+            client.state.apply(update, secret_keys.clone()).await?;
         }
     }
 }
@@ -249,14 +252,14 @@ impl ProgramState for State {
 }
 
 impl State {
-    pub async fn apply(&mut self, update: StateUpdate) -> Result<()> {
+    pub async fn apply(&mut self, update: StateUpdate, secret_keys: Vec<jubjub::Fr>) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
         }
 
         // Update merkle tree and witnesses
-        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
+        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the merkle tree
             let node = MerkleNode::from_coin(&coin);
             self.tree.append(node).expect("Append to merkle tree");
@@ -271,32 +274,37 @@ impl State {
                     .update_witness(coin_id.clone(), witness.clone())?;
             }
 
-            if let Some((note, secret)) = self.try_decrypt_note(enc_note).await {
-                // We need to keep track of the witness for this coin.
-                // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-                // Just as we update the merkle tree with every new coin, so we do the same with
-                // the witness.
+            for secret in secret_keys.iter() {
+                if let Some(note) = Self::try_decrypt_note(enc_note.clone(), secret.clone()) {
+                    // We need to keep track of the witness for this coin.
+                    // This allows us to prove inclusion of the coin in the merkle tree with ZK.
+                    // Just as we update the merkle tree with every new coin, so we do the same with
+                    // the witness.
 
-                // Derive the current witness from the current tree.
-                // This is done right after we add our coin to the tree (but before any other
-                // coins are added)
+                    // Derive the current witness from the current tree.
+                    // This is done right after we add our coin to the tree (but before any other
+                    // coins are added)
 
-                // Make a new witness for this coin
-                let witness = IncrementalWitness::from_tree(&self.tree);
+                    // Make a new witness for this coin
+                    let witness = IncrementalWitness::from_tree(&self.tree);
 
-                self.wallet
-                    .put_own_coins(coin.clone(), note.clone(), secret, witness.clone())?;
+                    self.wallet.put_own_coins(
+                        coin.clone(),
+                        note.clone(),
+                        secret.clone(),
+                        witness.clone(),
+                    )?;
+                }
             }
         }
         Ok(())
     }
 
-    async fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, jubjub::Fr)> {
-        let secret = self.wallet.get_private().ok()?;
+    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: jubjub::Fr) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
             Ok(note) => {
                 // ... and return the decrypted note for this coin.
-                return Some((note, secret.clone()));
+                return Some(note);
             }
             Err(_) => {}
         }

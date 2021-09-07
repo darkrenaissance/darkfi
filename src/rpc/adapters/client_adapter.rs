@@ -2,6 +2,7 @@ use crate::client::{Client, ClientFailed};
 use crate::serial::serialize;
 use crate::service::CashierClient;
 use crate::{Error, Result};
+use crate::wallet::WalletApi;
 
 use jsonrpc_core::BoxFuture;
 use jsonrpc_derive::rpc;
@@ -56,7 +57,7 @@ impl RpcClientAdapter {
     }
 
     async fn get_key_process(client: Arc<Mutex<Client>>) -> Result<String> {
-        let key_public = client.lock().await.state.wallet.get_public()?;
+        let key_public = client.lock().await.state.wallet.get_public_keys()?[0];
         let bs58_address = bs58::encode(serialize(&key_public)).into_string();
         Ok(bs58_address)
     }
@@ -122,7 +123,7 @@ impl RpcClientAdapter {
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
     ) -> Result<String> {
-        let deposit_addr = client.lock().await.state.wallet.get_public()?;
+        let deposit_addr = client.lock().await.state.wallet.get_public_keys()?[0];
         let btc_public = cashier_client
             .lock()
             .await
