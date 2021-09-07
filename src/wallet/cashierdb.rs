@@ -1,14 +1,12 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
-use crate::serial;
 use crate::service::btc::{PrivKey, PubKey};
 use crate::{Error, Result};
 
 use async_std::sync::Arc;
-use ff::Field;
+
 use log::*;
-use rand::rngs::OsRng;
-use rusqlite::{named_params, params, Connection};
+use rusqlite::{named_params, Connection};
 
 use std::path::PathBuf;
 
@@ -49,55 +47,6 @@ impl CashierDb {
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
-    }
-
-    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
-        debug!(target: "CASHIERDB", "Generating cashier keys...");
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        self.put_keypair(pubkey.clone(), privkey.clone())?;
-        Ok((pubkey, privkey))
-    }
-
-    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
-        Ok(())
-    }
-
-    pub fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
-        debug!(target: "CASHIERDB", "Returning keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
-        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
-        let mut pub_keys = Vec::new();
-        for key in key_iter {
-            let public: jubjub::SubgroupPoint =
-                self.get_value_deserialized::<jubjub::SubgroupPoint>(key?)?;
-            pub_keys.push(public);
-        }
-        Ok(pub_keys)
-    }
-
-    pub fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
-        debug!(target: "CASHIERDB", "Returning keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
-        let key_iter = stmt.query_map::<Vec<u8>, _, _>([], |row| row.get(0))?;
-        let mut keys = Vec::new();
-        for key in key_iter {
-            let private: jubjub::Fr = self.get_value_deserialized(key?)?;
-            keys.push(private);
-        }
-        Ok(keys)
     }
 
     pub fn get_keys_by_dkey(&self, dkey_pub: &Vec<u8>) -> Result<()> {
@@ -208,30 +157,24 @@ impl CashierDb {
         )?;
         Ok(())
     }
-
-    pub fn test_wallet(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
-        let _rows = stmt.query([])?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
-    use crate::util::join_config_path;
     use crate::serial::serialize;
+    use crate::util::join_config_path;
+
+    use crate::serial;
+    use ff::Field;
+    use rand::rngs::OsRng;
 
     #[test]
     pub fn test_put_withdraw_keys_and_load_them_with_btc_key() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
-
-        wallet.key_gen()?;
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;

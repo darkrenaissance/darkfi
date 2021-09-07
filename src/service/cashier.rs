@@ -3,7 +3,6 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
-use crate::wallet::WalletApi;
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
 
@@ -53,10 +52,6 @@ impl CashierService {
         let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
 
         let rocks = Rocks::new(&cashier_database_path)?;
-
-        if wallet.get_private_keys()?.is_empty() {
-            wallet.key_gen()?;
-        }
 
         let client = Client::new(rocks, gateway_addrs, params_paths, client_wallet.clone())?;
 
