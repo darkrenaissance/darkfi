@@ -285,7 +285,7 @@ mod tests {
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
 
-        let (public, secret) = wallet.key_gen();
+        let (public, secret) = wallet.key_gen()?;
         wallet.put_keypair(public, secret)?;
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
