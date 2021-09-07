@@ -217,4 +217,90 @@ impl CashierDb {
         let v: D = deserialize(&key)?;
         Ok(v)
     }
+
+    fn get_tables_name(&self) -> Result<Vec<String>> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
+        let table_iter = stmt.query_map::<String, _, _>([], |row| row.get(0))?;
+
+        let mut tables = Vec::new();
+
+        for table in table_iter {
+            tables.push(table?);
+        }
+
+        Ok(tables)
+    }
+
+    pub fn destroy(&self) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+
+        for table in self.get_tables_name()?.iter() {
+            let drop_stmt = format!("DROP TABLE IF EXISTS {}", table);
+            let drop_stmt = drop_stmt.as_str();
+            conn.execute(drop_stmt, [])?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::util::join_config_path;
+
+    #[test]
+    pub fn test_save_and_load_keypair() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
+        let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
+        wallet.init_db()?;
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+
+        wallet.put_keypair(key_public, key_private)?;
+
+        let public2 = wallet.get_public()?;
+        let secret2 = wallet.get_private()?;
+
+        assert_eq!(public, public2);
+        assert_eq!(secret, secret2);
+
+        wallet.destroy()?;
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_put_withdraw_keys_and_load_them_with_btc_key() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test2.db"))?;
+        let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
+        wallet.init_db()?;
+
+        let (public, secret) = wallet.key_gen();
+        wallet.put_keypair(public, secret)?;
+
+        let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+        let key_public2 = serial::serialize(&public2);
+        let key_private2 = serial::serialize(&secret2);
+
+        let btc_addr = serialize(&String::from("bc10000000000000000000000000000000000000000"));
+
+        wallet.put_withdraw_keys(btc_addr.clone(), key_public2.clone(), key_private2.clone())?;
+
+        let addr = wallet.get_address_by_btc_key(&btc_addr)?;
+
+        assert_eq!(addr, Some((key_public2, key_private2)));
+
+        wallet.destroy()?;
+
+        Ok(())
+    }
 }
