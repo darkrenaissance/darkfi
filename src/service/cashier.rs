@@ -126,7 +126,7 @@ impl CashierService {
         self.client
             .lock()
             .await
-            .send(dkey_pub, value, 1)
+            .send(dkey_pub, value, 1, true)
             .await?;
         Ok(())
     }

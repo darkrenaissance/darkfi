@@ -136,7 +136,8 @@ impl Client {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        self.send(address.clone(), amount.clone() as u64, 1).await?;
+        self.send(address.clone(), amount.clone() as u64, 1, false)
+            .await?;
 
         Ok(())
     }
@@ -146,23 +147,74 @@ impl Client {
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
         asset_id: u64,
+        clear_input: bool,
     ) -> Result<()> {
-        let slab = self.build_slab_from_tx(pub_key.clone(), amount.clone() as u64, asset_id)?;
+        let slab = self.build_slab_from_tx(
+            pub_key.clone(),
+            amount.clone() as u64,
+            asset_id,
+            clear_input,
+        )?;
 
         self.gateway.put_slab(slab).await?;
 
         Ok(())
     }
 
+
     fn build_slab_from_tx(
         &self,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
         asset_id: u64,
+        clear_input: bool,
     ) -> Result<Slab> {
+        let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
+        let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
+        let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
+
+        if clear_input {
+            let cashier_secret = self.state.wallet.get_private_keys()?[0];
+            let input = tx::TransactionBuilderClearInputInfo {
+                value: amount,
+                asset_id,
+                signature_secret: cashier_secret.clone(),
+            };
+            clear_inputs.push(input);
+        } else {
+            inputs = self.build_inputs(amount.clone(), asset_id.clone(), &mut outputs)?;
+        }
+
+        outputs.push(tx::TransactionBuilderOutputInfo {
+            value: amount,
+            asset_id,
+            public: pub_key,
+        });
+
+        let builder = tx::TransactionBuilder {
+            clear_inputs,
+            inputs,
+            outputs,
+        };
+
+        let mut tx_data = vec![];
+        {
+            let tx = builder.build(&self.mint_params, &self.spend_params);
+            tx.encode(&mut tx_data).expect("encode tx");
+        }
+
+        let slab = Slab::new(tx_data);
+        Ok(slab)
+    }
+
+    fn build_inputs(
+        &self,
+        amount: u64,
+        asset_id: u64,
+        outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
+    ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut inputs_value: u64 = 0;
-        let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
 
         let own_coins = self.state.wallet.get_own_coins()?;
 
@@ -196,31 +248,13 @@ impl Client {
 
             outputs.push(tx::TransactionBuilderOutputInfo {
                 value: return_value,
-                asset_id: 1,
+                asset_id,
                 public: own_pub_key,
             });
         }
-
-        outputs.push(tx::TransactionBuilderOutputInfo {
-            value: amount,
-            asset_id,
-            public: pub_key,
-        });
-
-        let builder = tx::TransactionBuilder {
-            clear_inputs: vec![],
-            inputs,
-            outputs,
-        };
-
-        let mut tx_data = vec![];
-        {
-            let tx = builder.build(&self.mint_params, &self.spend_params);
-            tx.encode(&mut tx_data).expect("encode tx");
-        }
-        let slab = Slab::new(tx_data);
-        Ok(slab)
+        Ok(vec![])
     }
+
 
     pub async fn connect_to_subscriber_from_cashier(
         client: Arc<Mutex<Client>>,
