@@ -5,10 +5,12 @@ use crate::{Error, Result};
 
 use async_std::sync::Arc;
 
+use bitcoin::Address as BtcAddr;
 use log::*;
-use rusqlite::{named_params, Connection};
+use rusqlite::{named_params, Connection, params};
 
 use std::path::PathBuf;
+use std::str::FromStr;
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -102,6 +104,30 @@ impl CashierDb {
         Ok(())
     }
 
+    pub fn get_withdraw_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
+        debug!(target: "CASHIERDB", "Get withdraw private keys");
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let mut stmt = conn.prepare("SELECT d_key_private FROM withdraw_keypairs")?;
+        let keys = stmt.query_map([], |row| {
+            let private_key: jubjub::Fr = self
+                .get_value_deserialized(row.get(0)?)
+                .expect("deserialize private key");
+            Ok(private_key)
+        })?;
+
+        let mut private_keys: Vec<jubjub::Fr> = vec![];
+
+        for k in keys {
+            private_keys.push(k?);
+        }
+
+        Ok(private_keys)
+    }
+
     // return (public key, private key)
     pub fn get_address_by_btc_key(
         &self,
@@ -131,6 +157,64 @@ impl CashierDb {
         }
 
         return Ok(None);
+    }
+
+    pub fn get_btc_addr_by_address(
+        &self,
+        pub_key: jubjub::SubgroupPoint,
+    ) -> Result<Option<BtcAddr>> {
+        debug!(target: "CASHIERDB", "Get btc address by pub_key");
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let d_key_public = self.get_value_serialized(&pub_key)?;
+
+        let mut stmt = conn.prepare(
+            "SELECT btc_key_id FROM withdraw_keypairs where d_key_public = :d_key_public",
+        )?;
+        let addr_iter =
+            stmt.query_map::<BtcAddr, _, _>(&[(":d_key_public", &d_key_public)], |row| {
+                let btc_address: String = self
+                    .get_value_deserialized(row.get(0)?)
+                    .expect("deserialize btc address");
+                let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
+                    .expect("get btc_address from_str");
+                Ok(btc_address)
+            })?;
+
+        let mut btc_addresses: Vec<BtcAddr> = vec![];
+
+        for addr in addr_iter {
+            btc_addresses.push(addr?);
+        }
+
+        Ok(btc_addresses.pop())
+    }
+
+    pub fn delete_withdraw_key_record(
+        &self,
+        btc_address: BtcAddr,
+    ) -> Result<()> {
+        debug!(target: "CASHIERDB", "Delete withdraw keys");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let btc_address = btc_address.to_string();
+        let btc_address = self.get_value_serialized(&btc_address)?;
+
+        conn.execute(
+            "DELETE FROM withdraw_keypairs WHERE btc_key_id = ?1;",
+            params! [
+                btc_address
+            ],
+        )?;
+
+        Ok(())
     }
 
     pub fn put_withdraw_keys(
