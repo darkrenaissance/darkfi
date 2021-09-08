@@ -73,6 +73,8 @@ impl CashierService {
 
         let (send, recv) = protocol.start().await?;
 
+        self.wallet.init_db()?;
+
         let wallet = self.wallet.clone();
         let btc_client = self.btc_client.clone();
 
