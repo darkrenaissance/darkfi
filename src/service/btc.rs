@@ -106,6 +106,12 @@ impl BitcoinKeys {
         Ok(address)
     }
 
+    // This should do a db lookup to return the same obj
+    pub fn private_key_from_slice(key: &[u8]) -> Result<PrivKey> {
+        let key = PrivKey::from_slice(key, Network::Testnet).unwrap();
+        Ok(key)
+    }
+
     pub fn get_deposit_address(&self) -> Result<&Address> {
         Ok(&self.pub_address)
     }

@@ -1,13 +1,13 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
-use crate::service::btc::{PrivKey, PubKey};
+use crate::service::btc::{BitcoinKeys, PrivKey, PubKey};
 use crate::{Error, Result};
 
 use async_std::sync::Arc;
 
 use bitcoin::Address as BtcAddr;
 use log::*;
-use rusqlite::{named_params, Connection, params};
+use rusqlite::{named_params, params, Connection};
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -51,39 +51,48 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_keys_by_dkey(&self, dkey_pub: &Vec<u8>) -> Result<()> {
+    pub fn get_btc_keys_by_dkey(
+        &self,
+        dkey_pub: &jubjub::SubgroupPoint,
+    ) -> Result<Vec<(PrivKey, PubKey)>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
-        //let dkey_id = self.get_value_deserialized(dkey_pub)?;
+        let dkey_pub = self.get_value_serialized(dkey_pub)?;
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        // let mut keypairs = conn.prepare("SELECT dkey_id FROM keypairs WHERE dkey_id = :dkey_id")?;
-        // let rows = keypairs.query_map::<Vec<u8>, _, _>(&[(":dkey_id", &secret)], |row| row.get(0))?;
+        let mut stmt = conn.prepare("SELECT * FROM keypairs where dkey_id = :dkey_id")?;
+        let keys_iter =
+            stmt.query_map::<(PrivKey, PubKey), _, _>(&[(":dkey_id", &dkey_pub)], |row| {
+                let s_key: Vec<u8> = row.get(1)?;
+                let private = BitcoinKeys::private_key_from_slice(&s_key)
+                    .expect("get btc private key from slice");
+                let p_key: Vec<u8> = row.get(2)?;
+                let public = PubKey::from_slice(&p_key).expect("get btc public key from slice");
+                Ok((private, public))
+            })?;
 
-        let mut stmt = conn.prepare("SELECT * FROM keypairs where dkey_id = ?")?;
-        let mut rows = stmt.query([dkey_pub])?;
-        if let Some(_row) = rows.next()? {
-            println!("Got something");
-        } else {
-            println!("Did not get something");
+        let mut keys: Vec<(PrivKey, PubKey)> = vec![];
+
+        for k in keys_iter {
+            keys.push(k?);
         }
 
-        Ok(())
+        Ok(keys)
     }
 
     // Update to take BitcoinKeys instance instead
     pub fn put_exchange_keys(
         &self,
-        dkey_pub: Vec<u8>,
-        btc_private: PrivKey,
-        btc_public: PubKey,
+        dkey_pub: &jubjub::SubgroupPoint,
+        btc_private: &PrivKey,
+        btc_public: &PubKey,
         //txid will be updated when exists
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
         // prepare the values
-        //let dkey_pub = self.get_value_serialized(&dkey_pub)?;
+        let dkey_pub = self.get_value_serialized(dkey_pub)?;
         let btc_private = btc_private.to_bytes();
         let btc_public = btc_public.to_bytes();
 
@@ -131,37 +140,44 @@ impl CashierDb {
     // return (public key, private key)
     pub fn get_address_by_btc_key(
         &self,
-        btc_address: &Vec<u8>,
-    ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        btc_address: &BtcAddr,
+    ) -> Result<Option<(jubjub::SubgroupPoint, jubjub::Fr)>> {
         debug!(target: "CASHIERDB", "Check for existing btc address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
+        let btc_address = btc_address.to_string();
+        let btc_address = self.get_value_serialized(&btc_address)?;
+
         let mut stmt =
             conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = :btc_key_id")?;
-        let addr_iter = stmt
-            .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":btc_key_id", btc_address)], |row| {
-                Ok((row.get(2)?, row.get(1)?))
-            })?;
+        let addr_iter = stmt.query_map::<(jubjub::SubgroupPoint, jubjub::Fr), _, _>(
+            &[(":btc_key_id", &btc_address)],
+            |row| {
+                let public: jubjub::SubgroupPoint = self
+                    .get_value_deserialized(row.get(2)?)
+                    .expect("get public key deserialize");
+                let private: jubjub::Fr = self
+                    .get_value_deserialized(row.get(1)?)
+                    .expect("get  private key deserialize");
+                Ok((public, private))
+            },
+        )?;
 
-        let mut btc_addresses = vec![];
+        let mut addresses: Vec<(jubjub::SubgroupPoint, jubjub::Fr)> = vec![];
 
         for addr in addr_iter {
-            btc_addresses.push(addr);
+            addresses.push(addr?);
         }
 
-        if let Some(addr) = btc_addresses.pop() {
-            return Ok(Some(addr?));
-        }
-
-        return Ok(None);
+        Ok(addresses.pop())
     }
 
     pub fn get_btc_addr_by_address(
         &self,
-        pub_key: jubjub::SubgroupPoint,
+        pub_key: &jubjub::SubgroupPoint,
     ) -> Result<Option<BtcAddr>> {
         debug!(target: "CASHIERDB", "Get btc address by pub_key");
         // open connection
@@ -169,7 +185,7 @@ impl CashierDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let d_key_public = self.get_value_serialized(&pub_key)?;
+        let d_key_public = self.get_value_serialized(pub_key)?;
 
         let mut stmt = conn.prepare(
             "SELECT btc_key_id FROM withdraw_keypairs where d_key_public = :d_key_public",
@@ -193,10 +209,7 @@ impl CashierDb {
         Ok(btc_addresses.pop())
     }
 
-    pub fn delete_withdraw_key_record(
-        &self,
-        btc_address: BtcAddr,
-    ) -> Result<()> {
+    pub fn delete_withdraw_key_record(&self, btc_address: &BtcAddr) -> Result<()> {
         debug!(target: "CASHIERDB", "Delete withdraw keys");
 
         // open connection
@@ -209,9 +222,7 @@ impl CashierDb {
 
         conn.execute(
             "DELETE FROM withdraw_keypairs WHERE btc_key_id = ?1;",
-            params! [
-                btc_address
-            ],
+            params![btc_address],
         )?;
 
         Ok(())
@@ -219,11 +230,17 @@ impl CashierDb {
 
     pub fn put_withdraw_keys(
         &self,
-        btc_key_id: Vec<u8>,
-        d_key_public: Vec<u8>,
-        d_key_private: Vec<u8>,
+        btc_key_id: &BtcAddr,
+        d_key_public: &jubjub::SubgroupPoint,
+        d_key_private: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
+
+        let btc_key_id = btc_key_id.to_string();
+        let btc_key_id = self.get_value_serialized(&btc_key_id)?;
+
+        let d_key_public = self.get_value_serialized(d_key_public)?;
+        let d_key_private = self.get_value_serialized(d_key_private)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -247,12 +264,12 @@ impl CashierDb {
 mod tests {
 
     use super::*;
-    use crate::serial::serialize;
     use crate::util::join_config_path;
 
-    use crate::serial;
     use ff::Field;
     use rand::rngs::OsRng;
+
+    // TODO add more tests
 
     #[test]
     pub fn test_put_withdraw_keys_and_load_them_with_btc_key() -> Result<()> {
@@ -262,16 +279,16 @@ mod tests {
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
-        let key_public2 = serial::serialize(&public2);
-        let key_private2 = serial::serialize(&secret2);
 
-        let btc_addr = serialize(&String::from("bc10000000000000000000000000000000000000000"));
+        // btc addr testnet
+        let btc_addr =
+            BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
 
-        wallet.put_withdraw_keys(btc_addr.clone(), key_public2.clone(), key_private2.clone())?;
+        wallet.put_withdraw_keys(&btc_addr, &public2, &secret2)?;
 
         let addr = wallet.get_address_by_btc_key(&btc_addr)?;
 
-        assert_eq!(addr, Some((key_public2, key_private2)));
+        assert_eq!(addr, Some((public2, secret2)));
 
         wallet.destroy()?;
 
