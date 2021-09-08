@@ -50,20 +50,20 @@ pub struct JsonNotification {
 pub fn request(m: Value, p: Value) -> JsonRequest {
     let mut rng = rand::thread_rng();
 
-    return JsonRequest {
+    JsonRequest {
         jsonrpc: json!("2.0"),
         method: m,
         params: p,
         id: json!(rng.gen::<u32>()),
-    };
+    }
 }
 
 pub fn response(r: Value, i: Value) -> JsonResponse {
-    return JsonResponse {
+    JsonResponse {
         jsonrpc: json!("2.0"),
         result: r,
         id: i,
-    };
+    }
 }
 
 pub fn error(c: i64, m: String, i: Value) -> JsonError {
@@ -72,17 +72,17 @@ pub fn error(c: i64, m: String, i: Value) -> JsonError {
         message: json!(m),
     };
 
-    return JsonError {
+    JsonError {
         jsonrpc: json!("2.0"),
         error: ev,
         id: i,
-    };
+    }
 }
 
 pub fn notification(m: Value, p: Value) -> JsonNotification {
-    return JsonNotification {
+    JsonNotification {
         jsonrpc: json!("2.0"),
         method: m,
         params: p,
-    };
+    }
 }
