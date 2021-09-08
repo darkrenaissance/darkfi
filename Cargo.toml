@@ -69,6 +69,7 @@ async-h1 = "2.3.0"
 async-native-tls = "0.3.3"
 toml = "0.5.8"
 
+
 # serde
 serde = { version = "1.0.126", features = ["derive"]}
 
@@ -77,16 +78,29 @@ zeromq = { git="https://github.com/zeromq/zmq.rs", default-features = false, fea
 bytes = "1.0.1"
 
 # wallet deps
-rocksdb = "0.16.0"
+rocksdb = {version = "0.16.0", default-features = false, features = ["lz4"]}
 dirs = "3.0.2"
 
-bitcoin = "0.27.0"
-secp256k1 = "0.20.3"
-electrum-client = "0.8.0"
+## Cashier Solana Dependencies
+solana-sdk = {version = "1.7.11", optional = true}
+solana-client = {version = "1.7.11", optional = true}
+tokio-tungstenite = {version = "0.15.0", optional = true}
+tokio = {version = "1.11.0", features = ["full"], optional = true}
+
+## Cashier Bitcoin Dependencies
+# TODO: Make optional, cashier should have "features" to enable different chains
+# See https://doc.rust-lang.org/cargo/reference/features.html
+bitcoin = {version = "0.27.0", optional = false }
+secp256k1 = {version = "0.20.3", optional = false }
+electrum-client = {version = "0.8.0", optional = false }
 
 [dependencies.rusqlite]
 version = "0.25.1"
 features = ["bundled", "sqlcipher"]
+
+[features]
+sol = ["solana-sdk", "solana-client", "tokio-tungstenite", "tokio"]
+#btc = ["bitcoin", "secp256k1", "electrum-client"]
 
 [[bin]]
 name = "lisp"

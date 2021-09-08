@@ -40,6 +40,13 @@ impl Drk {
                 debug!(target: "DRK", "<-- {:?}", e);
                 return Err(Error::JsonRpcError(e.error.message.to_string()));
             }
+
+            JsonResult::Notif(n) => {
+                debug!(target: "DRK", "<-- {:?}", n);
+                return Err(Error::JsonRpcError(
+                    "Unexpected reply from server".to_string(),
+                ));
+            }
         };
     }
 

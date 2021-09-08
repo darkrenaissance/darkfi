@@ -1,13 +1,15 @@
+use std::str;
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::str;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum JsonResult {
     Resp(JsonResponse),
     Err(JsonError),
+    Notif(JsonNotification),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
