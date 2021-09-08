@@ -85,20 +85,41 @@ impl CashierService {
 
         self.client.lock().await.start().await?;
 
-        let cashier_client_subscriber_task = executor.spawn(Client::connect_to_subscriber(
-            self.client.clone(),
-            executor.clone(),
-        ));
+        let (notify, recv_queue) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+
+        let cashier_client_subscriber_task =
+            executor.spawn(Client::connect_to_subscriber_from_cashier(
+                self.client.clone(),
+                executor.clone(),
+                self.wallet.clone(),
+                notify.clone(),
+            ));
+
+        let wallet = self.wallet.clone();
+        let subscribe_to_withdraw_keys_task = executor.spawn(async move {
+            loop {
+                let (pub_key, amount) = recv_queue.recv().await.expect("Receive Own Coin");
+                debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}", pub_key, amount);
+                let btc_addr = wallet.get_btc_addr_by_address(pub_key).expect("Get btc_key by pub_key");
+                if let Some(addr) =  btc_addr {
+                    // TODO send equivalent amount of btc to this address
+                    // then delete this btc_addr from withdraw_keys records
+                    wallet.delete_withdraw_key_record(addr).expect("Delete withdraw key record");
+                }
+
+            }
+        });
 
         protocol.run(executor.clone()).await?;
 
         let _ = handle_request_task.cancel().await;
         let _ = cashier_client_subscriber_task.cancel().await;
+        let _ = subscribe_to_withdraw_keys_task.cancel().await;
 
         Ok(())
     }
 
-    async fn mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
+    async fn _mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
         self.client.lock().await.send(dkey_pub, value, 1).await?;
         Ok(())
     }

@@ -13,7 +13,7 @@ use crate::serial::Encodable;
 use crate::serial::{deserialize, Decodable};
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
-use crate::wallet::WalletPtr;
+use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{tx, Result};
 
 use super::ClientFailed;
@@ -136,12 +136,7 @@ impl Client {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        self.send(
-            address.clone(),
-            amount.clone() as u64,
-            1,
-        )
-        .await?;
+        self.send(address.clone(), amount.clone() as u64, 1).await?;
 
         Ok(())
     }
@@ -152,12 +147,7 @@ impl Client {
         amount: u64,
         asset_id: u64,
     ) -> Result<()> {
-
-        let slab = self.build_slab_from_tx(
-            pub_key.clone(),
-            amount.clone() as u64,
-            asset_id
-        )?;
+        let slab = self.build_slab_from_tx(pub_key.clone(), amount.clone() as u64, asset_id)?;
 
         self.gateway.put_slab(slab).await?;
 
@@ -232,9 +222,11 @@ impl Client {
         Ok(slab)
     }
 
-    pub async fn connect_to_subscriber(
+    pub async fn connect_to_subscriber_from_cashier(
         client: Arc<Mutex<Client>>,
         executor: Arc<Executor<'_>>,
+        cashier_wallet: CashierDbPtr,
+        notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
     ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
@@ -250,8 +242,48 @@ impl Client {
             let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
             let mut client = client.lock().await;
             let update = state_transition(&client.state, tx)?;
+            let mut secret_keys = client.state.wallet.get_private_keys()?;
+            let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
+            secret_keys.append(&mut withdraw_keys);
+            client
+                .state
+                .apply(update, secret_keys.clone(), notify.clone())
+                .await?;
+        }
+    }
+
+    pub async fn connect_to_subscriber(
+        client: Arc<Mutex<Client>>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        // start subscribing
+        debug!(target: "CLIENT", "Start subscriber");
+        let gateway_slabs_sub: GatewaySlabsSubscriber = client
+            .lock()
+            .await
+            .gateway
+            .start_subscriber(executor.clone())
+            .await?;
+
+        let (notify, recv_queue) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+
+        executor.spawn(async move {
+            loop {
+                let (pub_key, amount) = recv_queue.recv().await.expect("Receive Own Coin");
+                debug!(target: "CLIENT", "Receive coin with following address and amount: {}, {}", pub_key, amount);
+            }
+        }).detach();
+
+        loop {
+            let slab = gateway_slabs_sub.recv().await?;
+            let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+            let mut client = client.lock().await;
+            let update = state_transition(&client.state, tx)?;
             let secret_keys = client.state.wallet.get_private_keys()?;
-            client.state.apply(update, secret_keys.clone()).await?;
+            client
+                .state
+                .apply(update, secret_keys.clone(), notify.clone())
+                .await?;
         }
     }
 }
@@ -302,7 +334,12 @@ impl ProgramState for State {
 }
 
 impl State {
-    pub async fn apply(&mut self, update: StateUpdate, secret_keys: Vec<jubjub::Fr>) -> Result<()> {
+    pub async fn apply(
+        &mut self,
+        update: StateUpdate,
+        secret_keys: Vec<jubjub::Fr>,
+        notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
+    ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
@@ -346,6 +383,8 @@ impl State {
                     };
 
                     self.wallet.put_own_coins(own_coin)?;
+                    let pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+                    notify.send((pub_key, note.value)).await?;
                 }
             }
         }
