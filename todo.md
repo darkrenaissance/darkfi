@@ -9,6 +9,7 @@
 - [ ] remove default config from binaries and add to the readme
 - [ ] delete zkvm
 - [ ] SOL bridge poc
+- [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
 
 ## deposit
 
