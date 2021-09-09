@@ -25,9 +25,9 @@ use bls12_381::Bls12;
 use jsonrpc_core::IoHandler;
 
 use async_std::sync::{Arc, Mutex};
+use log::*;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use log::*;
 
 pub struct Client {
     pub state: State,
@@ -161,7 +161,6 @@ impl Client {
         Ok(())
     }
 
-
     fn build_slab_from_tx(
         &self,
         pub_key: jubjub::SubgroupPoint,
@@ -254,7 +253,6 @@ impl Client {
         }
         Ok(vec![])
     }
-
 
     pub async fn connect_to_subscriber_from_cashier(
         client: Arc<Mutex<Client>>,

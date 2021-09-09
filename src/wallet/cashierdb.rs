@@ -281,8 +281,7 @@ mod tests {
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
         // btc addr testnet
-        let btc_addr =
-            BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
+        let btc_addr = BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
 
         wallet.put_withdraw_keys(&btc_addr, &public2, &secret2)?;
 

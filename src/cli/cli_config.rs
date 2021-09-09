@@ -1,4 +1,4 @@
-use crate::{Result, Error};
+use crate::{Error, Result};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -20,8 +20,7 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
             let str_buff = str::from_utf8(&toml)?;
             let config: T = toml::from_str(str_buff.clone())?;
             Ok(config)
-        }
-        else {
+        } else {
             Err(Error::ConfigNotFound)
         }
     }
