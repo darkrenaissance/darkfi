@@ -22,8 +22,8 @@ gateway_url = "127.0.0.1:3333"
 log_path = "/tmp/cashierd.log"
 cashierdb_path = "/home/x/.config/darkfi/cashier.db"
 client_walletdb_path = "/home/x/.config/darkfi/cashier_client_walletdb.db"
-password = ""
-client_password = ""
+password = "TEST_PASSWORD"
+client_password = "TEST_PASSWORD"
 ```
 
 **darkfid.toml**
@@ -36,7 +36,7 @@ rpc_url = "127.0.0.1:8000"
 database_path = "/home/x/.config/darkfi/database_client.db"
 walletdb_path = "/home/x/.config/darkfi/walletdb.db"
 log_path = "/tmp/darkfid_service_daemon.log"
-password = ""
+password = "TEST_PASSWORD"
 ```
 
 **drk.toml**
