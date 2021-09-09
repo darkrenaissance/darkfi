@@ -1,5 +1,3 @@
-Not even an alpha product. Just a mere prototype(s).
-
 1. First time running the demo:
 
 Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
