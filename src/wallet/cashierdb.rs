@@ -265,6 +265,7 @@ mod tests {
 
     use super::*;
     use crate::util::join_config_path;
+    use crate::service::BtcFailed;
 
     use ff::Field;
     use rand::rngs::OsRng;
@@ -281,7 +282,7 @@ mod tests {
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
         // btc addr testnet
-        let btc_addr = BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
+        let btc_addr = BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk")).map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
 
         wallet.put_withdraw_keys(&btc_addr, &public2, &secret2)?;
 

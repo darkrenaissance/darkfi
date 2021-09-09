@@ -1,24 +1,26 @@
+use crate::serial::{Decodable, Encodable};
 use crate::Result;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 
-use async_std::sync::Arc;
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use secp256k1::key::SecretKey;
+
+use async_std::sync::Arc;
+use std::str::FromStr;
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
 pub type PubKey = PublicKey;
 pub type PrivKey = PrivateKey;
 
-#[allow(dead_code)]
 pub struct BitcoinKeys {
-    secret_key: SecretKey,
+    _secret_key: SecretKey,
     bitcoin_private_key: PrivateKey,
     btc_client: Arc<ElectrumClient>,
     pub bitcoin_public_key: PublicKey,
@@ -55,7 +57,7 @@ impl BitcoinKeys {
         let script = Script::new_p2pk(&bitcoin_public_key);
 
         Ok(Arc::new(BitcoinKeys {
-            secret_key,
+            _secret_key: secret_key,
             bitcoin_private_key,
             btc_client,
             bitcoin_public_key,
@@ -128,6 +130,23 @@ impl BitcoinKeys {
     }
 }
 
+impl Encodable for bitcoin::Address {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let addr = self.to_string();
+        let len = addr.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for bitcoin::Address {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let addr: String = Decodable::decode(&mut d)?;
+        let addr = bitcoin::Address::from_str(&addr)
+            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        Ok(addr)
+    }
+}
+
 #[derive(Debug)]
 pub enum BtcFailed {
     NotEnoughValue(u64),
@@ -173,3 +192,23 @@ impl From<electrum_client::Error> for BtcFailed {
 }
 
 pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
+
+#[cfg(test)]
+mod tests {
+
+    use crate::serial::{deserialize, serialize};
+    use std::str::FromStr;
+
+    #[test]
+    pub fn test_serialize_btc_address() -> super::BtcResult<()> {
+        let btc_addr =
+            bitcoin::Address::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
+
+        let btc_ser = serialize(&btc_addr);
+        let btc_dser = deserialize(&btc_ser)?;
+
+        assert_eq!(btc_addr, btc_dser);
+
+        Ok(())
+    }
+}
