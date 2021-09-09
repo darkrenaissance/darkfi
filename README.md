@@ -1,6 +1,6 @@
-1. First time running the demo:
+# First time running the demo:
 
-Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
+1. Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
 
 **gatewayd.toml**
 
