@@ -1,16 +1,12 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
-use crate::service::btc::{BitcoinKeys, PrivKey, PubKey};
 use crate::{Error, Result};
 
 use async_std::sync::Arc;
-
-use bitcoin::Address as BtcAddr;
 use log::*;
 use rusqlite::{named_params, params, Connection};
 
 use std::path::PathBuf;
-use std::str::FromStr;
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -51,29 +47,27 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_btc_keys_by_dkey(
+    // return private and public keys as a tuple
+    pub fn get_deposit_coin_keys_by_dkey_public(
         &self,
-        dkey_pub: &jubjub::SubgroupPoint,
-    ) -> Result<Vec<(PrivKey, PubKey)>> {
+        d_key_public: &jubjub::SubgroupPoint,
+        asset_id: &Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
-        let dkey_pub = self.get_value_serialized(dkey_pub)?;
+        let d_key_public = self.get_value_serialized(d_key_public)?;
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT * FROM keypairs where dkey_id = :dkey_id")?;
-        let keys_iter =
-            stmt.query_map::<(PrivKey, PubKey), _, _>(&[(":dkey_id", &dkey_pub)], |row| {
-                let s_key: Vec<u8> = row.get(1)?;
-                let private = BitcoinKeys::private_key_from_slice(&s_key)
-                    .expect("get btc private key from slice");
-                let p_key: Vec<u8> = row.get(2)?;
-                let public = PubKey::from_slice(&p_key).expect("get btc public key from slice");
-                Ok((private, public))
-            })?;
+        let mut stmt =
+            conn.prepare("SELECT * FROM deposit_keypairs where d_key_public = :d_key_public AND asset_id = :asset_id")?;
+        let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
+            &[(":d_key_public", &d_key_public), (":asset_id", &asset_id)],
+            |row| Ok((row.get(1)?, row.get(2)?)),
+        )?;
 
-        let mut keys: Vec<(PrivKey, PubKey)> = vec![];
+        let mut keys = vec![];
 
         for k in keys_iter {
             keys.push(k?);
@@ -85,16 +79,14 @@ impl CashierDb {
     // Update to take BitcoinKeys instance instead
     pub fn put_exchange_keys(
         &self,
-        dkey_pub: &jubjub::SubgroupPoint,
-        btc_private: &PrivKey,
-        btc_public: &PubKey,
-        //txid will be updated when exists
+        d_key_public: &jubjub::SubgroupPoint,
+        coin_private: &Vec<u8>,
+        coin_public: &Vec<u8>,
+        asset_id: &Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
-        // prepare the values
-        let dkey_pub = self.get_value_serialized(dkey_pub)?;
-        let btc_private = btc_private.to_bytes();
-        let btc_public = btc_public.to_bytes();
+
+        let d_key_public = self.get_value_serialized(d_key_public)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -102,12 +94,13 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT INTO keypairs(dkey_id, btc_key_private, btc_key_public)
-            VALUES (:dkey_id, :btc_key_private, :btc_key_public)",
+            "INSERT INTO deposit_keypairs(d_key_public, coin_key_private, coin_key_public, asset_id)
+            VALUES (:d_key_public, :coin_key_private, :coin_key_public, :asset_id)",
             named_params! {
-                ":dkey_id": dkey_pub,
-                ":btc_key_private": btc_private,
-                ":btc_key_private": btc_public,
+                ":d_key_public": d_key_public,
+                ":coin_key_private": coin_private,
+                ":coin_key_public": coin_public,
+                ":asset_id": asset_id,
             },
         )?;
         Ok(())
@@ -138,23 +131,21 @@ impl CashierDb {
     }
 
     // return (public key, private key)
-    pub fn get_address_by_btc_key(
+    pub fn get_withdraw_keys_by_coin_public_key(
         &self,
-        btc_address: &BtcAddr,
+        coin_public_key: &Vec<u8>,
+        asset_id: &Vec<u8>,
     ) -> Result<Option<(jubjub::SubgroupPoint, jubjub::Fr)>> {
-        debug!(target: "CASHIERDB", "Check for existing btc address");
+        debug!(target: "CASHIERDB", "Check for existing coin address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let btc_address = btc_address.to_string();
-        let btc_address = self.get_value_serialized(&btc_address)?;
-
         let mut stmt =
-            conn.prepare("SELECT * FROM withdraw_keypairs where btc_key_id = :btc_key_id")?;
+            conn.prepare("SELECT * FROM withdraw_keypairs WHERE coin_key_id = :coin_key_id AND asset_id = :asset_id")?;
         let addr_iter = stmt.query_map::<(jubjub::SubgroupPoint, jubjub::Fr), _, _>(
-            &[(":btc_key_id", &btc_address)],
+            &[(":coin_key_id", &coin_public_key), (":asset_id", &asset_id)],
             |row| {
                 let public: jubjub::SubgroupPoint = self
                     .get_value_deserialized(row.get(2)?)
@@ -175,11 +166,12 @@ impl CashierDb {
         Ok(addresses.pop())
     }
 
-    pub fn get_btc_addr_by_address(
+    pub fn get_withdraw_coin_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-    ) -> Result<Option<BtcAddr>> {
-        debug!(target: "CASHIERDB", "Get btc address by pub_key");
+        asset_id: &Vec<u8>,
+    ) -> Result<Option<Vec<u8>>> {
+        debug!(target: "CASHIERDB", "Get coin address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -188,28 +180,23 @@ impl CashierDb {
         let d_key_public = self.get_value_serialized(pub_key)?;
 
         let mut stmt = conn.prepare(
-            "SELECT btc_key_id FROM withdraw_keypairs where d_key_public = :d_key_public",
+            "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id",
         )?;
         let addr_iter =
-            stmt.query_map::<BtcAddr, _, _>(&[(":d_key_public", &d_key_public)], |row| {
-                let btc_address: String = self
-                    .get_value_deserialized(row.get(0)?)
-                    .expect("deserialize btc address");
-                let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
-                    .expect("get btc_address from_str");
-                Ok(btc_address)
+            stmt.query_map::<Vec<u8>, _, _>(&[(":d_key_public", &d_key_public), (":asset_id", &asset_id)], |row| {
+                Ok(row.get(0)?)
             })?;
 
-        let mut btc_addresses: Vec<BtcAddr> = vec![];
+        let mut coin_addresses = vec![];
 
         for addr in addr_iter {
-            btc_addresses.push(addr?);
+            coin_addresses.push(addr?);
         }
 
-        Ok(btc_addresses.pop())
+        Ok(coin_addresses.pop())
     }
 
-    pub fn delete_withdraw_key_record(&self, btc_address: &BtcAddr) -> Result<()> {
+    pub fn delete_withdraw_key_record(&self, coin_address: &Vec<u8>, asset_id: &Vec<u8> ) -> Result<()> {
         debug!(target: "CASHIERDB", "Delete withdraw keys");
 
         // open connection
@@ -217,12 +204,9 @@ impl CashierDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let btc_address = btc_address.to_string();
-        let btc_address = self.get_value_serialized(&btc_address)?;
-
         conn.execute(
-            "DELETE FROM withdraw_keypairs WHERE btc_key_id = ?1;",
-            params![btc_address],
+            "DELETE FROM withdraw_keypairs WHERE coin_key_id = ?1 AND asset_id = ?2;",
+            params![coin_address, asset_id],
         )?;
 
         Ok(())
@@ -230,14 +214,12 @@ impl CashierDb {
 
     pub fn put_withdraw_keys(
         &self,
-        btc_key_id: &BtcAddr,
+        coin_key_id: &Vec<u8>,
         d_key_public: &jubjub::SubgroupPoint,
         d_key_private: &jubjub::Fr,
+        asset_id: &Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
-
-        let btc_key_id = btc_key_id.to_string();
-        let btc_key_id = self.get_value_serialized(&btc_key_id)?;
 
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let d_key_private = self.get_value_serialized(d_key_private)?;
@@ -248,12 +230,13 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT INTO withdraw_keypairs(btc_key_id, d_key_private, d_key_public)
-            VALUES (:btc_key_id, :d_key_private, :d_key_public)",
+            "INSERT INTO withdraw_keypairs(coin_key_id, d_key_private, d_key_public, asset_id)
+            VALUES (:coin_key_id, :d_key_private, :d_key_public, :asset_id)",
             named_params! {
-                ":btc_key_id": btc_key_id,
+                ":coin_key_id": coin_key_id,
                 ":d_key_private": d_key_private,
                 ":d_key_public": d_key_public,
+                ":asset_id": asset_id,
             },
         )?;
         Ok(())
@@ -264,8 +247,8 @@ impl CashierDb {
 mod tests {
 
     use super::*;
+    use crate::serial::serialize;
     use crate::util::join_config_path;
-    use crate::service::BtcFailed;
 
     use ff::Field;
     use rand::rngs::OsRng;
@@ -273,7 +256,7 @@ mod tests {
     // TODO add more tests
 
     #[test]
-    pub fn test_put_withdraw_keys_and_load_them_with_btc_key() -> Result<()> {
+    pub fn test_put_withdraw_keys_and_load_them_with_coin_key() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
@@ -282,13 +265,21 @@ mod tests {
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
         // btc addr testnet
-        let btc_addr = BtcAddr::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk")).map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        let coin_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
 
-        wallet.put_withdraw_keys(&btc_addr, &public2, &secret2)?;
+        let asset_id = serialize(&1);
 
-        let addr = wallet.get_address_by_btc_key(&btc_addr)?;
+        wallet.put_withdraw_keys(&coin_addr, &public2, &secret2, &asset_id)?;
+
+        let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
 
         assert_eq!(addr, Some((public2, secret2)));
+
+        wallet.delete_withdraw_key_record(&coin_addr, &asset_id)?;
+
+        let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
+
+        assert_eq!(addr, None);
 
         wallet.destroy()?;
 

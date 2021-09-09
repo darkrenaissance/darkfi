@@ -16,7 +16,6 @@ use log::*;
 use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 #[repr(u8)]
 enum CashierError {
@@ -106,11 +105,11 @@ impl CashierService {
             loop {
                 let (pub_key, amount) = recv_queue.recv().await.expect("Receive Own Coin");
                 debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}", pub_key, amount);
-                let btc_addr = wallet.get_btc_addr_by_address(&pub_key).expect("Get btc_key by pub_key");
+                let btc_addr = wallet.get_withdraw_coin_public_key_by_dkey_public(&pub_key, &serialize(&1)).expect("Get btc_key by pub_key");
                 if let Some(addr) =  btc_addr {
                     // TODO send equivalent amount of btc to this address
                     // then delete this btc_addr from withdraw_keys records
-                    wallet.delete_withdraw_key_record(&addr).expect("Delete withdraw key record");
+                    wallet.delete_withdraw_key_record(&addr, &serialize(&1) ).expect("Delete withdraw key record");
                 }
 
             }
@@ -173,11 +172,12 @@ impl CashierService {
             0 => {
                 debug!(target: "CASHIER DAEMON", "Received deposit request");
                 // Exchange zk_pubkey for bitcoin address
-                let zkpub = request.get_payload();
+                let dpub = request.get_payload();
 
                 //TODO: check if key has already been issued
-                let dpub: jubjub::SubgroupPoint = deserialize(&zkpub)?;
-                let _check = cashier_wallet.get_btc_keys_by_dkey(&dpub);
+                let dpub: jubjub::SubgroupPoint = deserialize(&dpub)?;
+                let _check =
+                    cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
                 // Generate bitcoin Address
                 let btc_keys = BitcoinKeys::new(btc_client)?;
@@ -188,7 +188,12 @@ impl CashierService {
                 let _script = btc_keys.get_script();
 
                 // add pairings to db
-                let _result = cashier_wallet.put_exchange_keys(&dpub, btc_priv, btc_pub);
+                let _result = cashier_wallet.put_exchange_keys(
+                    &dpub,
+                    &btc_priv.to_bytes(),
+                    &btc_pub.to_bytes(),
+                    &serialize(&1),
+                );
 
                 let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
@@ -209,15 +214,15 @@ impl CashierService {
             1 => {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
                 let btc_address = request.get_payload();
-                let btc_address: String = deserialize(&btc_address)?;
-                let btc_address =
-                    bitcoin::util::address::Address::from_str(&btc_address).map_err(|err| {
-                        crate::Error::from(super::BtcFailed::from(err))
-                    })?;
+                //let btc_address: String = deserialize(&btc_address)?;
+                //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
+                //   .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
                 let cashier_public: jubjub::SubgroupPoint;
 
-                if let Some(addr) = cashier_wallet.get_address_by_btc_key(&btc_address)? {
+                if let Some(addr) = cashier_wallet
+                    .get_withdraw_keys_by_coin_public_key(&btc_address, &serialize(&1))?
+                {
                     cashier_public = addr.0;
                 } else {
                     let cashier_secret = jubjub::Fr::random(&mut OsRng);
@@ -228,6 +233,7 @@ impl CashierService {
                         &btc_address,
                         &cashier_public,
                         &cashier_secret,
+                        &serialize(&1),
                     )?;
                 }
 
