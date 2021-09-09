@@ -56,6 +56,7 @@ pub enum Error {
     Base58DecodeError(String),
     BadBTCAddress(String),
     BtcClientError,
+    ConfigNotFound,
 }
 
 impl std::error::Error for Error {}
@@ -108,6 +109,7 @@ impl fmt::Display for Error {
             Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
             Error::BadBTCAddress(ref err) => write!(f, "could not parse BTC address: {}", err),
             Error::BtcClientError => f.write_str("Unable to create Electrum Client"),
+            Error::ConfigNotFound => f.write_str("No config file detected. Please create a config file"),
         }
     }
 }

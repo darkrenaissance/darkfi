@@ -1,7 +1,7 @@
 use async_std::sync::Arc;
 use std::net::SocketAddr;
 
-use std::{path::Path, path::PathBuf};
+use std::path::PathBuf;
 
 use drk::cli::{CashierdCli, CashierdConfig, Config};
 use drk::service::CashierService;
@@ -63,11 +63,7 @@ fn main() -> Result<()> {
 
     let path = join_config_path(&PathBuf::from("cashierd.toml")).unwrap();
 
-    let config: CashierdConfig = if Path::new(&path).exists() {
-        Config::<CashierdConfig>::load(path)?
-    } else {
-        Config::<CashierdConfig>::load_default(path)?
-    };
+    let config: CashierdConfig = Config::<CashierdConfig>::load(path)?;
 
     let config = Arc::new(config);
 

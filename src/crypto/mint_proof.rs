@@ -118,7 +118,7 @@ impl Decodable for MintRevealedValues {
 }
 
 pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
-    println!("Making random params...");
+    println!("Mint: Making random params...");
     let start = Instant::now();
     let params = {
         let c = MintContract {

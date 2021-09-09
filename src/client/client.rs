@@ -21,13 +21,13 @@ use super::ClientFailed;
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
-use log::*;
 
 use jsonrpc_core::IoHandler;
 
 use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use log::*;
 
 pub struct Client {
     pub state: State,

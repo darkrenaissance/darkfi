@@ -198,7 +198,7 @@ impl Decodable for SpendRevealedValues {
 }
 
 pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
-    println!("Making random params...");
+    println!("Spend: Making random params...");
     let start = Instant::now();
     let params = {
         let c = SpendContract {

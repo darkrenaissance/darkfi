@@ -6,7 +6,7 @@ use drk::cli::{Config, GatewaydCli, GatewaydConfig};
 use drk::service::GatewayService;
 use drk::util::join_config_path;
 use drk::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 extern crate clap;
 use async_executor::Executor;
@@ -33,11 +33,7 @@ fn main() -> Result<()> {
 
     let path = join_config_path(&PathBuf::from("gatewayd.toml")).unwrap();
 
-    let config: GatewaydConfig = if Path::new(&path).exists() {
-        Config::<GatewaydConfig>::load(path)?
-    } else {
-        Config::<GatewaydConfig>::load_default(path)?
-    };
+    let config: GatewaydConfig = Config::<GatewaydConfig>::load(path)?;
 
     let config_ptr = Arc::new(&config);
 

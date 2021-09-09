@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::json;
 
@@ -153,11 +153,17 @@ fn main() -> Result<()> {
         }
     }
 
-    let config: DrkConfig = if Path::new(&config_path).exists() {
-        Config::<DrkConfig>::load(config_path)?
-    } else {
-        Config::<DrkConfig>::load_default(config_path)?
-    };
+    let config: DrkConfig = Config::<DrkConfig>::load(config_path)?;
+    //let config: DrkConfig = if Path::new(&config_path).exists() {
+    //    Config::<DrkConfig>::load(config_path)?
+    //};
+
+    //if Path::new(&config_path).exists() {
+    //    let config: DrkConfig = Config::<DrkConfig>::load(config_path)?
+    //}
+    //else {
+    //    Error::NoConfigError
+    //};
 
     {
         use simplelog::*;

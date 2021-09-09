@@ -11,7 +11,6 @@ use easy_parallel::Parallel;
 
 use async_std::sync::Arc;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::path::PathBuf;
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Result<()> {
@@ -70,11 +69,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let config: DarkfidConfig = if Path::new(&config_path).exists() {
-        Config::<DarkfidConfig>::load(config_path)?
-    } else {
-        Config::<DarkfidConfig>::load_default(config_path)?
-    };
+    let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
 
     let config = Arc::new(config);
 
