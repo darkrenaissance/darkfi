@@ -50,7 +50,10 @@ impl CashierService {
         let client_address = btc_endpoint;
 
         // create btc client
-        let btc_client = Arc::new(ElectrumClient::new(&client_address)?);
+        let btc_client = Arc::new(
+            ElectrumClient::new(&client_address)
+                .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?,
+        );
 
         let rocks = Rocks::new(&cashier_database_path)?;
 
@@ -207,7 +210,10 @@ impl CashierService {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
                 let btc_address = request.get_payload();
                 let btc_address: String = deserialize(&btc_address)?;
-                let btc_address = bitcoin::util::address::Address::from_str(&btc_address)?;
+                let btc_address =
+                    bitcoin::util::address::Address::from_str(&btc_address).map_err(|err| {
+                        crate::Error::from(super::BtcFailed::from(err))
+                    })?;
 
                 let cashier_public: jubjub::SubgroupPoint;
 

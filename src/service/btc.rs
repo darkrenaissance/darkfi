@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::Result;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -64,7 +64,7 @@ impl BitcoinKeys {
         }))
     }
 
-    pub async fn start_subscribe(self: Arc<Self>) -> Result<Option<GetBalanceRes>> {
+    pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<Option<GetBalanceRes>> {
         debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
         let client = &self.btc_client;
         // Check if script is already subscribed
@@ -94,7 +94,9 @@ impl BitcoinKeys {
                 };
             } // Endloop
         } else {
-            return Err(Error::ServicesError("Did not subscribe to scriptpubkey"));
+            return Err(BtcFailed::ElectrumError(
+                "Did not subscribe to scriptpubkey".to_string(),
+            ));
         }
     }
 
@@ -125,3 +127,49 @@ impl BitcoinKeys {
         &self.script
     }
 }
+
+#[derive(Debug)]
+pub enum BtcFailed {
+    NotEnoughValue(u64),
+    BadBTCAddress(String),
+    ElectrumError(String),
+    BtcError(String),
+}
+
+impl std::error::Error for BtcFailed {}
+
+impl std::fmt::Display for BtcFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            BtcFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            BtcFailed::BadBTCAddress(ref err) => {
+                write!(f, "Unable to create Electrum Client: {}", err)
+            }
+            BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
+            BtcFailed::BtcError(i) => {
+                write!(f, "BtcFailed: {}", i)
+            }
+        }
+    }
+}
+
+impl From<crate::error::Error> for BtcFailed {
+    fn from(err: crate::error::Error) -> BtcFailed {
+        BtcFailed::BtcError(err.to_string())
+    }
+}
+
+impl From<bitcoin::util::address::Error> for BtcFailed {
+    fn from(err: bitcoin::util::address::Error) -> BtcFailed {
+        BtcFailed::BadBTCAddress(err.to_string())
+    }
+}
+impl From<electrum_client::Error> for BtcFailed {
+    fn from(err: electrum_client::Error) -> BtcFailed {
+        BtcFailed::ElectrumError(err.to_string())
+    }
+}
+
+pub type BtcResult<T> = std::result::Result<T, BtcFailed>;

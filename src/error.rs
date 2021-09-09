@@ -42,6 +42,7 @@ pub enum Error {
     ZmqError(String),
     VerifyFailed,
     ClientFailed(String),
+    BtcFailed(String),
     TryIntoError,
     TryFromError,
     JsonRpcError(String),
@@ -54,8 +55,6 @@ pub enum Error {
     CashierNoReply,
     Base58EncodeError(String),
     Base58DecodeError(String),
-    BadBTCAddress(String),
-    BtcClientError,
     ConfigNotFound,
 }
 
@@ -95,6 +94,7 @@ impl fmt::Display for Error {
             Error::ZmqError(ref err) => write!(f, "ZmqError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
             Error::ClientFailed(ref err) => write!(f, "Client failed: {}", err),
+            Error::BtcFailed(ref err) => write!(f, "Btc client failed: {}", err),
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
@@ -107,8 +107,6 @@ impl fmt::Display for Error {
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
             Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
-            Error::BadBTCAddress(ref err) => write!(f, "could not parse BTC address: {}", err),
-            Error::BtcClientError => f.write_str("Unable to create Electrum Client"),
             Error::ConfigNotFound => {
                 f.write_str("No config file detected. Please create a config file")
             }
@@ -219,6 +217,12 @@ impl From<client::ClientFailed> for Error {
     }
 }
 
+impl From<crate::service::BtcFailed> for Error {
+    fn from(err: crate::service::BtcFailed) -> Error {
+        Error::BtcFailed(err.to_string())
+    }
+}
+
 impl From<surf::Error> for Error {
     fn from(err: surf::Error) -> Error {
         Error::SurfHttpError(err.to_string())
@@ -249,13 +253,3 @@ impl From<bs58::decode::Error> for Error {
     }
 }
 
-impl From<bitcoin::util::address::Error> for Error {
-    fn from(err: bitcoin::util::address::Error) -> Error {
-        Error::BadBTCAddress(err.to_string())
-    }
-}
-impl From<electrum_client::Error> for Error {
-    fn from(_err: electrum_client::Error) -> Error {
-        Error::BtcClientError
-    }
-}

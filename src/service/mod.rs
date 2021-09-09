@@ -8,4 +8,4 @@ pub use gateway::{GatewayClient, GatewayService, GatewaySlabsSubscriber};
 
 pub use cashier::{CashierClient, CashierService};
 
-pub use btc::{BitcoinKeys, PubAddress};
+pub use btc::{BitcoinKeys, PubAddress, BtcFailed, BtcResult};
