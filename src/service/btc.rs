@@ -1,7 +1,8 @@
-use crate::serial::{Decodable, Encodable};
-use crate::Result;
 use super::bridge::CoinClient;
+use crate::serial::{Decodable, Encodable, serialize};
+use crate::Result;
 
+use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
@@ -11,7 +12,6 @@ use log::*;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use secp256k1::key::SecretKey;
-use async_trait::async_trait;
 
 use async_std::sync::Arc;
 use std::str::FromStr;
@@ -132,50 +132,6 @@ impl BitcoinKeys {
     }
 }
 
-impl Encodable for bitcoin::Address {
-    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let addr = self.to_string();
-        let len = addr.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for bitcoin::Address {
-    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-        let addr: String = Decodable::decode(&mut d)?;
-        let addr = bitcoin::Address::from_str(&addr)
-            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
-        Ok(addr)
-    }
-}
-
-#[derive(Debug)]
-pub enum BtcFailed {
-    NotEnoughValue(u64),
-    BadBTCAddress(String),
-    ElectrumError(String),
-    BtcError(String),
-}
-
-impl std::error::Error for BtcFailed {}
-
-impl std::fmt::Display for BtcFailed {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            BtcFailed::NotEnoughValue(i) => {
-                write!(f, "There is no enough value {}", i)
-            }
-            BtcFailed::BadBTCAddress(ref err) => {
-                write!(f, "Unable to create Electrum Client: {}", err)
-            }
-            BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
-            BtcFailed::BtcError(i) => {
-                write!(f, "BtcFailed: {}", i)
-            }
-        }
-    }
-}
-
 
 pub struct BtcClient {
     client: Arc<ElectrumClient>,
@@ -209,13 +165,96 @@ impl CoinClient for BtcClient {
         //let _script = btc_keys.get_script();
         //
 
-        Ok((btc_priv.to_bytes(), btc_pub.to_bytes()))
+        Ok((serialize(&btc_priv.to_bytes()), serialize(&btc_pub.to_bytes())))
     }
+
     async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
         // TODO
         Ok(())
     }
 }
+
+impl Encodable for bitcoin::Address {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let addr = self.to_string();
+        let len = addr.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for bitcoin::Address {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let addr: String = Decodable::decode(&mut d)?;
+        let addr = bitcoin::Address::from_str(&addr)
+            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        Ok(addr)
+    }
+}
+
+impl Encodable for bitcoin::PublicKey {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let key = self.to_bytes();
+        let len = key.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for bitcoin::PublicKey {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let key: Vec<u8> = Decodable::decode(&mut d)?;
+        let key = bitcoin::PublicKey::from_slice(&key)
+            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        Ok(key)
+    }
+}
+
+impl Encodable for bitcoin::PrivateKey {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let key = self.to_bytes();
+        let len = key.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for bitcoin::PrivateKey {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let key: Vec<u8> = Decodable::decode(&mut d)?;
+        let key = bitcoin::PrivateKey::from_slice(&key, Network::Testnet)
+            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        Ok(key)
+    }
+}
+
+
+#[derive(Debug)]
+pub enum BtcFailed {
+    NotEnoughValue(u64),
+    BadBTCAddress(String),
+    ElectrumError(String),
+    BtcError(String),
+    DecodeAndEncodeError(String),
+}
+
+impl std::error::Error for BtcFailed {}
+
+impl std::fmt::Display for BtcFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            BtcFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            BtcFailed::BadBTCAddress(ref err) => {
+                write!(f, "Unable to create Electrum Client: {}", err)
+            }
+            BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
+            BtcFailed::DecodeAndEncodeError(ref err) => write!(f, "Decode and decode keys error: {}", err),
+            BtcFailed::BtcError(i) => {
+                write!(f, "BtcFailed: {}", i)
+            }
+        }
+    }
+}
+
 
 impl From<crate::error::Error> for BtcFailed {
     fn from(err: crate::error::Error) -> BtcFailed {
@@ -231,6 +270,12 @@ impl From<bitcoin::util::address::Error> for BtcFailed {
 impl From<electrum_client::Error> for BtcFailed {
     fn from(err: electrum_client::Error) -> BtcFailed {
         BtcFailed::ElectrumError(err.to_string())
+    }
+}
+
+impl From<bitcoin::util::key::Error> for BtcFailed {
+    fn from(err: bitcoin::util::key::Error) -> BtcFailed {
+        BtcFailed::DecodeAndEncodeError(err.to_string())
     }
 }
 

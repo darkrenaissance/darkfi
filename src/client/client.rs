@@ -10,7 +10,7 @@ use crate::crypto::{
 use crate::rpc::adapters::{RpcClient, RpcClientAdapter};
 use crate::rpc::jsonserver;
 use crate::serial::Encodable;
-use crate::serial::{deserialize, Decodable};
+use crate::serial::Decodable;
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::{CashierDbPtr, WalletPtr};
@@ -124,19 +124,17 @@ impl Client {
         Ok(())
     }
 
-    pub async fn transfer(self: &mut Self, pub_key: String, amount: f64) -> Result<()> {
-        let address = bs58::decode(pub_key.clone())
-            .into_vec()
-            .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
-
-        let address: jubjub::SubgroupPoint =
-            deserialize(&address).map_err(|_| ClientFailed::UnvalidAddress(pub_key))?;
+    pub async fn transfer(
+        self: &mut Self,
+        pub_key: jubjub::SubgroupPoint,
+        amount: f64,
+    ) -> Result<()> {
 
         if amount <= 0.0 {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        self.send(address.clone(), amount.clone() as u64, 1, false)
+        self.send(pub_key.clone(), amount.clone() as u64, 1, false)
             .await?;
 
         Ok(())
