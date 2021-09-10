@@ -1,5 +1,6 @@
 use crate::{Error, Result};
 
+use log::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -21,6 +22,7 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
             let config: T = toml::from_str(str_buff.clone())?;
             Ok(config)
         } else {
+            println!("No config files were found in .config/darkfi. Please follow the instructions in the README and add default configs.");
             Err(Error::ConfigNotFound)
         }
     }
