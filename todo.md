@@ -46,9 +46,38 @@
 - [x] darkfid: state transition function
 - [x] darkfid: send tx data to rocksdb
 
-# blockchain
+# Research
 
-- [ ]
+Open research questions.
+
+## Light-Clients
+
+- [ ] Fast efficient batch DH technique. Currently all new transactions need to be scanned. There should be a means of efficiently batching this test for light clients initially syncing against a server.
+- [ ] Anonymouse fetch using an Oblivious-Transfer protocol. Light clients potentially leak info to servers based on the data they request, but with an OT protocol they do not reveal exactly what they are requesting.
+
+## Cryptography
+
+- [ ] FFT for polynomial multiplication
+- [ ] finish bulletproofs impl
+
+## Blockchain
+
+- [ ] basic sequencer architecture design
+- [ ] basic DHT design
+- [ ] consensus algorithm
+- [ ] solve double verify problem (potentially need need a payment inside the contract to handle exceptions)
+- [ ] research polygon design
+- [ ] code up a simple demo
+
+## Product
+
+- [ ] first MPC services
+- [ ] DAO
+- [ ] auctions
+- [ ] staking. Look up how TORN was distributed anonymously.
+- [ ] swaps
+- [ ] token issuance
+- [ ] NFTs
 
 # halo2
 
