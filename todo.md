@@ -5,9 +5,9 @@
 - [x] random ID param for jsonrpc requests (bin/drk.rs)
 - [x] merge cashier branch
 - [x] update cashierd.rs to new config handling. note: password param in toml
-- [ ] sqlcipher: document install process or otherwise remove friction of using bundled version
+- [ ] sqlcipher: better document install process or otherwise remove friction of using bundled version
 - [X] remove default config from binaries and add to the readme
-- [ ] delete zkvm
+- [X] delete zkvm
 - [X] SOL bridge poc
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
 

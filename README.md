@@ -1,6 +1,8 @@
-# First time running the demo:
+## First time running the demo:
 
-1. Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
+1. Install [sqlcipher] (https://github.com/sqlcipher/sqlcipher).
+
+2. Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
 
 **gatewayd.toml**
 
@@ -46,45 +48,45 @@ rpc_url = "http://127.0.0.1:8000"
 log_path = "/tmp/drk_cli.log"
 ```
 
-2. Configure the password field on all TOML files.
+3. Configure the password field on all TOML files.
 
-3. Compile the project:
+4. Compile the project:
 
 ```console
 $ cargo build --release
 ```
 
-4. Run the gateway daemon:
+5. Run the gateway daemon:
 
 ```console
 $ cargo run --bin gatewayd -- -v
 ```
 
-5. Run cashierd:
+6. Run cashierd:
 
 ```console
 $ cargo run --bin cashierd -- -v
 ```
 
-6. Run darkfid:
+7. Run darkfid:
 
 ```console
 $ cargo run --bin darkfid -- -v
 ```
 
-7. Initialize drk wallet and generate a key pair:
+8. Initialize drk wallet and generate a key pair:
 
 ```console
 $ cargo run --bin drk -- -wk 
 ```
 
-8. Play.
+9. Play.
 
 ```console
 $ cargo run --bin drk -- -help
 ```
 
-# Every time running the demo:
+## Every time running the demo:
 
 Run gateway daemon:
 
@@ -110,11 +112,11 @@ Show drk usage manual:
 $ cargo run --bin drk -- -help
 ```
 
-# darkfid & drk configurations:
+## darkfid & drk configurations:
 
 Darkfid and drk can be configured using the TOML files in the .config/darkfid directory. Make sure to recompile darkfid and drk after customizing the TOML.
 
-# Go dark
+## Go dark
 
 Let's liberate people from the claws of big tech and create the democratic paradigm of technology.
 
