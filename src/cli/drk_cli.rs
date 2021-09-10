@@ -16,6 +16,7 @@ fn amount_f64(v: String) -> std::result::Result<(), String> {
 
 #[derive(Deserialize, Debug)]
 pub struct TransferParams {
+    pub asset: String,
     pub pub_key: String,
     pub amount: f64,
 }
@@ -23,6 +24,7 @@ pub struct TransferParams {
 impl TransferParams {
     pub fn new() -> Self {
         Self {
+            asset: String::new(),
             pub_key: String::new(),
             amount: 0.0,
         }
@@ -43,6 +45,7 @@ impl Deposit {
 
 #[derive(Deserialize, Debug)]
 pub struct WithdrawParams {
+    pub asset: String,
     pub pub_key: String,
     pub amount: f64,
 }
@@ -50,6 +53,7 @@ pub struct WithdrawParams {
 impl WithdrawParams {
     pub fn new() -> Self {
         Self {
+            asset: String::new(),
             pub_key: String::new(),
             amount: 0.0,
         }
@@ -131,12 +135,20 @@ impl DrkCli {
             )
             .subcommand(
                 App::new("transfer")
-                    .about("Transfer DBTC between users")
+                    .about("Transfer dark assets between users")
+                    .arg(
+                        Arg::with_name("asset")
+                            .value_name("ASSET_TYPE")
+                            .takes_value(true)
+                            .index(1)
+                            .help("Desired asset type")
+                            .required(true),
+                    )
                     .arg(
                         Arg::with_name("address")
                             .value_name("RECEIVE_ADDRESS")
                             .takes_value(true)
-                            .index(1)
+                            .index(2)
                             .help("Address of recipient")
                             .required(true),
                     )
@@ -144,21 +156,40 @@ impl DrkCli {
                         Arg::with_name("amount")
                             .value_name("AMOUNT")
                             .takes_value(true)
-                            .index(2)
+                            .index(3)
                             .validator(amount_f64)
-                            .help("Amount to send, in DBTC")
+                            .help("Amount to send")
                             .required(true),
                     ),
             )
-            .subcommand(App::new("deposit").about("Deposit BTC for dBTC"))
+            .subcommand(
+                App::new("deposit")
+                    .about("Deposit clear assets for dark assets")
+                    .arg(
+                        Arg::with_name("asset")
+                            .value_name("ASSET_TYPE")
+                            .takes_value(true)
+                            .index(1)
+                            .help("Desired asset type")
+                            .required(true),
+                    ),
+            )
             .subcommand(
                 App::new("withdraw")
-                    .about("Withdraw BTC for dBTC")
+                    .about("Withdraw dark assets for clear assets")
+                    .arg(
+                        Arg::with_name("asset")
+                            .value_name("ASSET_TYPE")
+                            .takes_value(true)
+                            .index(1)
+                            .help("Desired asset type")
+                            .required(true),
+                    )
                     .arg(
                         Arg::with_name("address")
                             .value_name("RECEIVE_ADDRESS")
                             .takes_value(true)
-                            .index(1)
+                            .index(2)
                             .help("Address of recipient")
                             .required(true),
                     )
@@ -166,13 +197,12 @@ impl DrkCli {
                         Arg::with_name("amount")
                             .value_name("AMOUNT")
                             .takes_value(true)
-                            .index(2)
+                            .index(3)
                             .validator(amount_f64)
-                            .help("Amount to send, in BTC")
+                            .help("Amount to send")
                             .required(true),
                     ),
             )
-            .subcommand(App::new("deposit").about("Deposit BTC for dBTC"))
             .get_matches();
 
         let verbose = app.is_present("verbose");
@@ -199,6 +229,9 @@ impl DrkCli {
         match app.subcommand_matches("transfer") {
             Some(transfer_sub) => {
                 let mut trn = TransferParams::new();
+                if let Some(asset) = transfer_sub.value_of("asset") {
+                    trn.asset = asset.to_string();
+                }
                 if let Some(address) = transfer_sub.value_of("address") {
                     trn.pub_key = address.to_string();
                 }
@@ -214,6 +247,9 @@ impl DrkCli {
         match app.subcommand_matches("withdraw") {
             Some(withdraw_sub) => {
                 let mut wdraw = WithdrawParams::new();
+                if let Some(asset) = withdraw_sub.value_of("asset") {
+                    wdraw.asset = asset.to_string();
+                }
                 if let Some(address) = withdraw_sub.value_of("address") {
                     wdraw.pub_key = address.to_string();
                 }
