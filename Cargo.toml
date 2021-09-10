@@ -107,10 +107,6 @@ name = "lisp"
 path = "lisp/lisp.rs"
 
 [[bin]]
-name = "zkvm"
-path = "src/bin/zkvm.rs"
-
-[[bin]]
 name = "mimc"
 path = "src/old/mimc.rs"
 

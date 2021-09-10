@@ -1,6 +1,5 @@
 use crate::{Error, Result};
 
-use log::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
