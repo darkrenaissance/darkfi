@@ -31,15 +31,15 @@ pub trait RpcClient {
 
     /// transfer
     #[rpc(name = "transfer")]
-    fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
+    fn transfer(&self, asset_id: u64, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
 
     /// withdraw
     #[rpc(name = "withdraw")]
-    fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
+    fn withdraw(&self, asset_id: u64, pub_key: String, amount: f64) -> BoxFuture<Result<String>>;
 
     /// deposit
     #[rpc(name = "deposit")]
-    fn deposit(&self) -> BoxFuture<Result<String>>;
+    fn deposit(&self, asset_id: u64) -> BoxFuture<Result<String>>;
 }
 
 pub struct RpcClientAdapter {
@@ -75,13 +75,14 @@ impl RpcClientAdapter {
 
     async fn transfer_process(
         client: Arc<Mutex<Client>>,
+        asset_id: u64,
         address: String,
         amount: f64,
     ) -> Result<String> {
         client
             .lock()
             .await
-            .transfer(address.clone(), amount)
+            .transfer(asset_id, address.clone(), amount)
             .await?;
 
         Ok(format!("transfered {} DRK to {}", amount, address))
@@ -90,13 +91,14 @@ impl RpcClientAdapter {
     async fn withdraw_process(
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
+        asset_id: u64,
         address: String,
         amount: f64,
     ) -> Result<String> {
         let drk_public = cashier_client
             .lock()
             .await
-            .withdraw(1, address)
+            .withdraw(asset_id, address)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
@@ -106,7 +108,7 @@ impl RpcClientAdapter {
             client
                 .lock()
                 .await
-                .transfer(drk_addr.clone(), amount)
+                .transfer(asset_id, drk_addr.clone(), amount)
                 .await?;
 
             return Ok(format!(
@@ -121,12 +123,13 @@ impl RpcClientAdapter {
     async fn deposit_process(
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
+        asset_id: u64,
     ) -> Result<String> {
         let deposit_addr = client.lock().await.state.wallet.get_public_keys()?[0];
         let coin_public = cashier_client
             .lock()
             .await
-            .get_address(1, deposit_addr)
+            .get_address(asset_id, deposit_addr)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
@@ -159,24 +162,25 @@ impl RpcClient for RpcClientAdapter {
         Self::key_gen_process(self.client.clone()).boxed()
     }
 
-    fn transfer(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
+    fn transfer(&self, asset_id: u64, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "transfer() [START]");
-        Self::transfer_process(self.client.clone(), pub_key, amount).boxed()
+        Self::transfer_process(self.client.clone(), asset_id, pub_key, amount).boxed()
     }
 
-    fn withdraw(&self, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
+    fn withdraw(&self, asset_id: u64, pub_key: String, amount: f64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "withdraw() [START]");
         Self::withdraw_process(
             self.client.clone(),
             self.cashier_client.clone(),
+            asset_id,
             pub_key,
             amount,
         )
         .boxed()
     }
 
-    fn deposit(&self) -> BoxFuture<Result<String>> {
+    fn deposit(&self, asset_id: u64) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "deposit() [START]");
-        Self::deposit_process(self.client.clone(), self.cashier_client.clone()).boxed()
+        Self::deposit_process(self.client.clone(), self.cashier_client.clone(), asset_id).boxed()
     }
 }

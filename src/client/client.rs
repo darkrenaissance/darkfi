@@ -124,7 +124,12 @@ impl Client {
         Ok(())
     }
 
-    pub async fn transfer(self: &mut Self, pub_key: String, amount: f64) -> Result<()> {
+    pub async fn transfer(
+        self: &mut Self,
+        asset_id: u64,
+        pub_key: String,
+        amount: f64,
+    ) -> Result<()> {
         let address = bs58::decode(pub_key.clone())
             .into_vec()
             .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
@@ -136,7 +141,7 @@ impl Client {
             return Err(ClientFailed::UnvalidAmount(amount as u64).into());
         }
 
-        self.send(address.clone(), amount.clone() as u64, 1, false)
+        self.send(address.clone(), amount.clone() as u64, asset_id, false)
             .await?;
 
         Ok(())
