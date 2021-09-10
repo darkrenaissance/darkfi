@@ -96,7 +96,7 @@ impl RpcClientAdapter {
         let drk_public = cashier_client
             .lock()
             .await
-            .withdraw(address)
+            .withdraw(1, address)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
@@ -126,7 +126,7 @@ impl RpcClientAdapter {
         let coin_public = cashier_client
             .lock()
             .await
-            .get_address(deposit_addr)
+            .get_address(1, deposit_addr)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 

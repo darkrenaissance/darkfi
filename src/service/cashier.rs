@@ -198,17 +198,16 @@ impl CashierService {
             0 => {
                 debug!(target: "CASHIER DAEMON", "Received deposit request");
                 // Exchange zk_pubkey for bitcoin address
-                let dpub = request.get_payload();
+                let (asset_id, dpub): (u64, jubjub::SubgroupPoint) = deserialize(&request.get_payload())?;
 
                 //TODO: check if key has already been issued
-                let dpub: jubjub::SubgroupPoint = deserialize(&dpub)?;
                 let _check =
                     cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
-                        asset_id: 1,
+                        asset_id,
                         payload: bridge::BridgeRequestsPayload::WatchRequest,
                     })
                     .await?;
@@ -222,7 +221,7 @@ impl CashierService {
                             &dpub,
                             &coin_priv,
                             &coin_pub,
-                            &serialize(&1),
+                            &serialize(&asset_id),
                         );
 
                         let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
@@ -239,15 +238,19 @@ impl CashierService {
             }
             1 => {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
-                let coin_address = request.get_payload();
+                let (asset_id, coin_address): (u64, String) = deserialize(&request.get_payload())?;
                 //let btc_address: String = deserialize(&btc_address)?;
                 //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
                 //   .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+                //
+
+                let asset_id = serialize(&asset_id);
+                let coin_address = serialize(&coin_address);
 
                 let cashier_public: jubjub::SubgroupPoint;
 
                 if let Some(addr) = cashier_wallet
-                    .get_withdraw_keys_by_coin_public_key(&coin_address, &serialize(&1))?
+                    .get_withdraw_keys_by_coin_public_key(&coin_address, &asset_id)?
                 {
                     cashier_public = addr.0;
                 } else {
@@ -259,7 +262,7 @@ impl CashierService {
                         &coin_address,
                         &cashier_public,
                         &cashier_secret,
-                        &serialize(&1),
+                        &asset_id,
                     )?;
                 }
 
@@ -297,6 +300,7 @@ impl CashierClient {
 
     pub async fn withdraw(
         &mut self,
+        asset_id: u64,
         coin_address: String,
     ) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
@@ -304,7 +308,7 @@ impl CashierClient {
             .protocol
             .request(
                 CashierCommand::Withdraw as u8,
-                serialize(&coin_address),
+                serialize(&(asset_id, coin_address)),
                 handle_error,
             )
             .await?;
@@ -316,13 +320,17 @@ impl CashierClient {
         Ok(None)
     }
 
-    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<Vec<u8>>> {
+    pub async fn get_address(
+        &mut self,
+        asset_id: u64,
+        index: jubjub::SubgroupPoint,
+    ) -> Result<Option<Vec<u8>>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
             .request(
                 CashierCommand::GetAddress as u8,
-                serialize(&index),
+                serialize(&(asset_id, index)),
                 handle_error,
             )
             .await?;
