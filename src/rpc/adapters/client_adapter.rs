@@ -1,5 +1,5 @@
 use crate::client::{Client, ClientFailed};
-use crate::serial::serialize;
+use crate::serial::{deserialize, serialize};
 use crate::service::CashierClient;
 use crate::{Error, Result};
 
@@ -110,7 +110,7 @@ impl RpcClientAdapter {
                 .await?;
 
             return Ok(format!(
-                "sending {} dbtc to provided address for withdrawing: {} ",
+                "sending {} drk to provided address for withdrawing: {} ",
                 amount, drk_addr
             ));
         } else {
@@ -123,15 +123,15 @@ impl RpcClientAdapter {
         cashier_client: Arc<Mutex<CashierClient>>,
     ) -> Result<String> {
         let deposit_addr = client.lock().await.state.wallet.get_public_keys()?[0];
-        let btc_public = cashier_client
+        let coin_public = cashier_client
             .lock()
             .await
             .get_address(deposit_addr)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
-        if let Some(btc_addr) = btc_public {
-            return Ok(btc_addr.to_string());
+        if let Some(coin_addr) = coin_public {
+            return Ok(deserialize(&coin_addr)?);
         } else {
             return Err(Error::from(ClientFailed::UnableToGetDepositAddress));
         }

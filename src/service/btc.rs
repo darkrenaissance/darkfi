@@ -1,5 +1,6 @@
 use crate::serial::{Decodable, Encodable};
 use crate::Result;
+use super::bridge::CoinClient;
 
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
@@ -10,6 +11,7 @@ use log::*;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use secp256k1::key::SecretKey;
+use async_trait::async_trait;
 
 use async_std::sync::Arc;
 use std::str::FromStr;
@@ -171,6 +173,47 @@ impl std::fmt::Display for BtcFailed {
                 write!(f, "BtcFailed: {}", i)
             }
         }
+    }
+}
+
+
+pub struct BtcClient {
+    client: Arc<ElectrumClient>,
+}
+
+impl BtcClient {
+    pub fn new(client_address: String) -> Result<Self> {
+        let client = ElectrumClient::new(&client_address)
+            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+        Ok(Self {
+            client: Arc::new(client),
+        })
+    }
+}
+
+#[async_trait]
+impl CoinClient for BtcClient {
+    async fn watch(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+        //// Generate bitcoin Address
+        let btc_keys = BitcoinKeys::new(self.client.clone())?;
+
+        let btc_pub = btc_keys.clone();
+        let btc_pub = btc_pub.get_pubkey();
+        let btc_priv = btc_keys.clone();
+        let btc_priv = btc_priv.get_privkey();
+
+        // let _ = btc_keys.start_subscribe().await?;
+
+        // start scheduler for checking balance
+        debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
+        //let _script = btc_keys.get_script();
+        //
+
+        Ok((btc_priv.to_bytes(), btc_pub.to_bytes()))
+    }
+    async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
+        // TODO
+        Ok(())
     }
 }
 

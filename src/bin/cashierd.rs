@@ -38,7 +38,6 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let mut cashier = CashierService::new(
         accept_addr,
-        btc_endpoint,
         wallet.clone(),
         client_wallet.clone(),
         database_path,
@@ -47,7 +46,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     )
     .await?;
 
-    cashier.start(ex.clone()).await?;
+    cashier.start(ex.clone(), btc_endpoint).await?;
 
     //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
     //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);

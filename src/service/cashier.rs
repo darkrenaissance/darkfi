@@ -1,4 +1,4 @@
-use super::btc::{BitcoinKeys, PubAddress};
+use super::bridge;
 use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
@@ -10,7 +10,6 @@ use ff::Field;
 use rand::rngs::OsRng;
 
 use async_executor::Executor;
-use electrum_client::Client as ElectrumClient;
 use log::*;
 
 use async_std::sync::{Arc, Mutex};
@@ -31,14 +30,12 @@ enum CashierCommand {
 pub struct CashierService {
     addr: SocketAddr,
     wallet: CashierDbPtr,
-    btc_client: Arc<ElectrumClient>,
     client: Arc<Mutex<Client>>,
 }
 
 impl CashierService {
     pub async fn new(
         addr: SocketAddr,
-        btc_endpoint: String,
         wallet: CashierDbPtr,
         client_wallet: WalletPtr,
         cashier_database_path: PathBuf,
@@ -46,13 +43,6 @@ impl CashierService {
         params_paths: (PathBuf, PathBuf),
     ) -> Result<CashierService> {
         // Pull address from config later
-        let client_address = btc_endpoint;
-
-        // create btc client
-        let btc_client = Arc::new(
-            ElectrumClient::new(&client_address)
-                .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?,
-        );
 
         let rocks = Rocks::new(&cashier_database_path)?;
 
@@ -63,11 +53,14 @@ impl CashierService {
         Ok(CashierService {
             addr,
             wallet,
-            btc_client,
             client,
         })
     }
-    pub async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(
+        &mut self,
+        executor: Arc<Executor<'_>>,
+        client_address: String,
+    ) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
 
@@ -78,19 +71,25 @@ impl CashierService {
         self.wallet.init_db()?;
 
         let wallet = self.wallet.clone();
-        let btc_client = self.btc_client.clone();
+
+        let bridge = bridge::Bridge::new();
+
+        #[cfg(feature = "default")]
+        let btc_client = super::btc::BtcClient::new(client_address)?;
+        #[cfg(feature = "default")]
+        bridge.clone().add_clients(1, Arc::new(btc_client)).await;
 
         let handle_request_task = executor.spawn(Self::handle_request_loop(
             send.clone(),
             recv.clone(),
             wallet.clone(),
-            btc_client.clone(),
+            bridge.clone(),
             executor.clone(),
         ));
 
         self.client.lock().await.start().await?;
 
-        let (notify, recv_queue) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+        let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
         let cashier_client_subscriber_task =
             executor.spawn(Client::connect_to_subscriber_from_cashier(
@@ -101,15 +100,40 @@ impl CashierService {
             ));
 
         let wallet = self.wallet.clone();
+
+        let ex = executor.clone();
         let subscribe_to_withdraw_keys_task = executor.spawn(async move {
             loop {
-                let (pub_key, amount) = recv_queue.recv().await.expect("Receive Own Coin");
+                let bridge = bridge.clone();
+                let bridge_subscribtion  = bridge.subscribe(ex.clone()).await;
+                let (pub_key, amount) = recv_coin.recv().await.expect("Receive Own Coin");
                 debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}", pub_key, amount);
-                let btc_addr = wallet.get_withdraw_coin_public_key_by_dkey_public(&pub_key, &serialize(&1)).expect("Get btc_key by pub_key");
-                if let Some(addr) =  btc_addr {
-                    // TODO send equivalent amount of btc to this address
-                    // then delete this btc_addr from withdraw_keys records
-                    wallet.delete_withdraw_key_record(&addr, &serialize(&1) ).expect("Delete withdraw key record");
+                let coin_addr = wallet.get_withdraw_coin_public_key_by_dkey_public(&pub_key, &serialize(&1))
+                    .expect("Get coin_key by pub_key");
+                if let Some(addr) =  coin_addr {
+                    // send equivalent amount of coin to this address
+                    bridge_subscribtion.sender.send(
+                        bridge::BridgeRequests {
+                            asset_id: 1,
+                            payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount)
+                        }
+                    ).await.expect("send request to bridge");
+
+                    let res = bridge_subscribtion.receiver.recv().await.expect("bridge resonse");
+
+                    if res.error == 0 {
+                        match res.payload {
+                            bridge::BridgeResponsePayload::SendResponse => {
+                                // then delete this coin addr from withdraw_keys records
+                                wallet.delete_withdraw_key_record(&addr, &serialize(&1) )
+                                    .expect("Delete withdraw key record");
+                            }
+                            _ => {}
+                        }
+
+                    }
+
+
                 }
 
             }
@@ -124,7 +148,7 @@ impl CashierService {
         Ok(())
     }
 
-    async fn _mint_dbtc(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
+    async fn _mint_coin(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
         self.client
             .lock()
             .await
@@ -137,16 +161,18 @@ impl CashierService {
         send_queue: async_channel::Sender<(PeerId, Reply)>,
         recv_queue: async_channel::Receiver<(PeerId, Request)>,
         wallet: CashierDbPtr,
-        btc_client: Arc<ElectrumClient>,
+        bridge: Arc<bridge::Bridge>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         loop {
             match recv_queue.recv().await {
                 Ok(msg) => {
+                    let bridge = bridge.clone();
+                    let bridge_subscribtion = bridge.subscribe(executor.clone()).await;
                     let _ = executor
                         .spawn(Self::handle_request(
                             msg,
-                            btc_client.clone(),
+                            bridge_subscribtion,
                             wallet.clone(),
                             send_queue.clone(),
                         ))
@@ -161,7 +187,7 @@ impl CashierService {
     }
     async fn handle_request(
         msg: (PeerId, Request),
-        btc_client: Arc<ElectrumClient>,
+        bridge_subscribtion: bridge::BridgeSubscribtion,
         cashier_wallet: CashierDbPtr,
         send_queue: async_channel::Sender<(PeerId, Reply)>,
     ) -> Result<()> {
@@ -179,41 +205,41 @@ impl CashierService {
                 let _check =
                     cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
-                // Generate bitcoin Address
-                let btc_keys = BitcoinKeys::new(btc_client)?;
+                bridge_subscribtion
+                    .sender
+                    .send(bridge::BridgeRequests {
+                        asset_id: 1,
+                        payload: bridge::BridgeRequestsPayload::WatchRequest,
+                    })
+                    .await?;
 
-                let btc_pub = btc_keys.get_pubkey();
-                let btc_priv = btc_keys.get_privkey();
+                let bridge_res = bridge_subscribtion.receiver.recv().await?;
 
-                let _script = btc_keys.get_script();
+                match bridge_res.payload {
+                    bridge::BridgeResponsePayload::WatchResponse(coin_priv, coin_pub) => {
+                        // add pairings to db
+                        let _result = cashier_wallet.put_exchange_keys(
+                            &dpub,
+                            &coin_priv,
+                            &coin_pub,
+                            &serialize(&1),
+                        );
 
-                // add pairings to db
-                let _result = cashier_wallet.put_exchange_keys(
-                    &dpub,
-                    &btc_priv.to_bytes(),
-                    &btc_pub.to_bytes(),
-                    &serialize(&1),
-                );
+                        let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
 
-                let mut reply = Reply::from(&request, CashierError::NoError as u32, vec![]);
+                        reply.set_payload(coin_pub);
 
-                reply.set_payload(btc_pub.to_bytes());
-
-                // send reply
-                send_queue.send((peer, reply)).await?;
-
-                // start scheduler for checking balance
-                debug!(target: "CASHIER DAEMON", "Subscribing for deposit");
-
-                let _ = btc_keys.start_subscribe().await?;
-
-                //self.mint_dbtc(deserialize(&zkpub).unwrap(), 100);
+                        // send reply
+                        send_queue.send((peer, reply)).await?;
+                    }
+                    _ => {}
+                }
 
                 debug!(target: "CASHIER DAEMON","Waiting for address balance");
             }
             1 => {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
-                let btc_address = request.get_payload();
+                let coin_address = request.get_payload();
                 //let btc_address: String = deserialize(&btc_address)?;
                 //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
                 //   .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
@@ -221,7 +247,7 @@ impl CashierService {
                 let cashier_public: jubjub::SubgroupPoint;
 
                 if let Some(addr) = cashier_wallet
-                    .get_withdraw_keys_by_coin_public_key(&btc_address, &serialize(&1))?
+                    .get_withdraw_keys_by_coin_public_key(&coin_address, &serialize(&1))?
                 {
                     cashier_public = addr.0;
                 } else {
@@ -230,7 +256,7 @@ impl CashierService {
                         zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
 
                     cashier_wallet.put_withdraw_keys(
-                        &btc_address,
+                        &coin_address,
                         &cashier_public,
                         &cashier_secret,
                         &serialize(&1),
@@ -269,13 +295,16 @@ impl CashierClient {
         Ok(())
     }
 
-    pub async fn withdraw(&mut self, btc_address: String) -> Result<Option<jubjub::SubgroupPoint>> {
+    pub async fn withdraw(
+        &mut self,
+        coin_address: String,
+    ) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
             .request(
                 CashierCommand::Withdraw as u8,
-                serialize(&btc_address),
+                serialize(&coin_address),
                 handle_error,
             )
             .await?;
@@ -287,10 +316,7 @@ impl CashierClient {
         Ok(None)
     }
 
-    pub async fn get_address(
-        &mut self,
-        index: jubjub::SubgroupPoint,
-    ) -> Result<Option<PubAddress>> {
+    pub async fn get_address(&mut self, index: jubjub::SubgroupPoint) -> Result<Option<Vec<u8>>> {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
@@ -302,8 +328,7 @@ impl CashierClient {
             .await?;
 
         if let Some(key) = rep {
-            let address = BitcoinKeys::address_from_slice(&key)?;
-            return Ok(Some(address));
+            return Ok(Some(key));
         }
         Ok(None)
     }
