@@ -32,6 +32,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
     let spend_params_path = join_config_path(&PathBuf::from("spend.params"))?;
 
     if let Err(_) = wallet.get_private_keys() {
+        wallet.init_db()?;
         wallet.key_gen()?;
     }
 
