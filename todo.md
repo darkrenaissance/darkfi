@@ -60,6 +60,7 @@ Open research questions.
 - [x] FFT for polynomial multiplication
 - [ ] finish bulletproofs impl
 - [ ] halo2 lookup
+- [ ] read groth permutation paper
 
 ## blockchain
 
