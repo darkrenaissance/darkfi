@@ -10,6 +10,8 @@ pub use btc::{BitcoinKeys, PubAddress, BtcFailed, BtcResult};
 
 #[cfg(feature = "sol")]
 pub mod sol;
+#[cfg(feature = "sol")]
+pub use sol::{SolClient, SolFailed, SolResult};
 
 pub use gateway::{GatewayClient, GatewayService, GatewaySlabsSubscriber};
 
