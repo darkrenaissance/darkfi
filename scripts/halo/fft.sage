@@ -1,3 +1,5 @@
+# See also https://cp-algorithms.com/algebra/fft.html
+
 q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
 K = GF(q)
 P.<X> = K[]
