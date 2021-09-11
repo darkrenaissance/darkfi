@@ -13,6 +13,12 @@ assert int(t) % 2 != 0
 delta = generator^(2^32)
 assert delta^t == 1
 
+# The size of the multiplicative group is phi(q) = q - 1
+# And inside this group are 2 distinct subgroups of size t and 2^s.
+# delta is the generator for the size t subgroup, and omega for the 2^s one.
+# Taking powers of these generators and multiplying them will produce
+# unique cosets that divide the entire group for q.
+
 def get_omega():
     generator = K(5)
     assert (q - 1) % 2^32 == 0

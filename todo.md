@@ -54,12 +54,14 @@ Open research questions.
 ## light-clients
 
 - [ ] Fast efficient batch DH technique. Currently all new transactions need to be scanned. There should be a means of efficiently batching this test for light clients initially syncing against a server.
-- [ ] Anonymouse fetch using an Oblivious-Transfer protocol. Light clients potentially leak info to servers based on the data they request, but with an OT protocol they do not reveal exactly what they are requesting.
+- [ ] Anonymous fetch using an Oblivious-Transfer protocol. Light clients potentially leak info to servers based on the data they request, but with an OT protocol they do not reveal exactly what they are requesting.
 
 ## cryptography
 
-- [ ] FFT for polynomial multiplication
+- [x] FFT for polynomial multiplication
 - [ ] finish bulletproofs impl
+- [ ] halo2 lookup
+- [ ] read groth permutation paper
 
 ## blockchain
 
