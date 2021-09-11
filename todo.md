@@ -34,6 +34,7 @@
 - [x] darkfid: send cashout request to cashier with btc pub key
 - [x] cashierd: receive cashout request, reply with drk pub key
 - [x] darkfid: send dbtc to the cashier drk pub key
+- [ ] cashierd: send the received coins to the main address of cashierd
 - [ ] cashierd: burn dbtc, send back btc (see tx.rs)
 
 ## drk -> drk

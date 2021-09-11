@@ -135,6 +135,8 @@ impl SolClient {
                         // XXX casting f64 to u64
                         let received_balance = lamports_to_sol(received_balance) as u64;
 
+                        // TODO Send the received coins to the main address
+                    
                         self.notify_channel
                             .0
                             .send((

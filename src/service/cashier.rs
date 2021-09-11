@@ -125,6 +125,7 @@ impl CashierService {
                         match res.payload {
                             bridge::BridgeResponsePayload::SendResponse => {
                                 // then delete this coin addr from withdraw_keys records
+                                // TODO Send the received coins to the main address
                                 wallet.delete_withdraw_key_record(&addr, &serialize(&1) )
                                     .expect("Delete withdraw key record");
                             }
