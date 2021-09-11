@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde_json::json;
 
+use drk::serial::serialize;
 use drk::cli::{Config, DrkCli, DrkConfig};
 use drk::rpc::jsonrpc;
 use drk::rpc::jsonrpc::JsonResult;
@@ -86,11 +87,13 @@ impl Drk {
     }
 
     pub async fn transfer(&self, address: String, amount: f64) -> Result<()> {
+        let address = serialize(&address);
         let r = jsonrpc::request(json!("transfer"), json!([address, amount]));
         Ok(self.request("transfer", r).await?)
     }
 
     pub async fn withdraw(&self, address: String, amount: f64) -> Result<()> {
+        let address = serialize(&address);
         let r = jsonrpc::request(json!("withdraw"), json!([address, amount]));
         Ok(self.request("withdraw", r).await?)
     }
