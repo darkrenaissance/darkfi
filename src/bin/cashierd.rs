@@ -46,7 +46,9 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     )
     .await?;
 
-    cashier.start(ex.clone(), btc_endpoint).await?;
+    let dummy_asset = Vec::new();
+
+    cashier.start(ex.clone(), btc_endpoint, dummy_asset).await?;
 
     //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
     //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);

@@ -3,7 +3,7 @@ use crate::Result;
 
 use blake2b_simd::Params;
 use clap::{App, Arg};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::serial;
 use std::path::PathBuf;
@@ -62,7 +62,7 @@ impl WithdrawParams {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Asset {
     pub ticker: String,
     pub id: Vec<u8>,

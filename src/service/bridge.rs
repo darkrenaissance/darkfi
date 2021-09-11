@@ -97,5 +97,3 @@ pub trait CoinClient {
     async fn watch(&self) -> Result<(Vec<u8>, Vec<u8>)>;
     async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()>;
 }
-
-

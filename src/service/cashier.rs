@@ -3,6 +3,7 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
+use crate::util::hash_to_u64;
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
 
@@ -60,6 +61,7 @@ impl CashierService {
         &mut self,
         executor: Arc<Executor<'_>>,
         client_address: String,
+        asset_id: Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
@@ -74,10 +76,15 @@ impl CashierService {
 
         let bridge = bridge::Bridge::new();
 
+        let asset_id = hash_to_u64(asset_id);
+
         #[cfg(feature = "default")]
         let btc_client = super::btc::BtcClient::new(client_address)?;
         #[cfg(feature = "default")]
-        bridge.clone().add_clients(1, Arc::new(btc_client)).await;
+        bridge
+            .clone()
+            .add_clients(asset_id, Arc::new(btc_client))
+            .await;
 
         let handle_request_task = executor.spawn(Self::handle_request_loop(
             send.clone(),
@@ -114,7 +121,7 @@ impl CashierService {
                     // send equivalent amount of coin to this address
                     bridge_subscribtion.sender.send(
                         bridge::BridgeRequests {
-                            asset_id: 1,
+                            asset_id,
                             payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount)
                         }
                     ).await.expect("send request to bridge");
@@ -149,11 +156,16 @@ impl CashierService {
         Ok(())
     }
 
-    async fn _mint_coin(&mut self, dkey_pub: jubjub::SubgroupPoint, value: u64) -> Result<()> {
+    async fn _mint_coin(
+        &mut self,
+        dkey_pub: jubjub::SubgroupPoint,
+        value: u64,
+        asset_id: Vec<u8>,
+    ) -> Result<()> {
         self.client
             .lock()
             .await
-            .send(dkey_pub, value, 1, true)
+            .send(dkey_pub, value, asset_id, true)
             .await?;
         Ok(())
     }
@@ -199,12 +211,14 @@ impl CashierService {
             0 => {
                 debug!(target: "CASHIER DAEMON", "Received deposit request");
                 // Exchange zk_pubkey for bitcoin address
-                let (asset_id, dpub): (u64, jubjub::SubgroupPoint) = deserialize(&request.get_payload())?;
+                let (asset_id, dpub): (Vec<u8>, jubjub::SubgroupPoint) =
+                    deserialize(&request.get_payload())?;
 
                 //TODO: check if key has already been issued
                 let _check =
                     cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
+                let asset_id = hash_to_u64(asset_id);
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
@@ -249,8 +263,8 @@ impl CashierService {
 
                 let cashier_public: jubjub::SubgroupPoint;
 
-                if let Some(addr) = cashier_wallet
-                    .get_withdraw_keys_by_coin_public_key(&coin_address, &asset_id)?
+                if let Some(addr) =
+                    cashier_wallet.get_withdraw_keys_by_coin_public_key(&coin_address, &asset_id)?
                 {
                     cashier_public = addr.0;
                 } else {
@@ -300,7 +314,7 @@ impl CashierClient {
 
     pub async fn withdraw(
         &mut self,
-        asset_id: u64,
+        asset_id: Vec<u8>,
         coin_address: Vec<u8>,
     ) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
@@ -322,7 +336,7 @@ impl CashierClient {
 
     pub async fn get_address(
         &mut self,
-        asset_id: u64,
+        asset_id: Vec<u8>,
         index: jubjub::SubgroupPoint,
     ) -> Result<Option<Vec<u8>>> {
         let handle_error = Arc::new(handle_error);
