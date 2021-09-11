@@ -15,7 +15,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
 
 pub struct MintContract {
     pub value: Option<u64>,
-    pub asset_id: Option<u64>,
+    pub asset_id: Option<jubjub::Fr>,
     pub randomness_value: Option<jubjub::Fr>,
     pub randomness_asset: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
@@ -34,7 +34,7 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         )?;
 
         // Line 19: u64_as_binary_le asset_id param:asset_id
-        let asset_id = boolean::u64_into_boolean_vec_le(
+        let asset_id = boolean::field_into_boolean_vec_le(
             cs.namespace(|| "Line 19: u64_as_binary_le asset_id param:asset_id"),
             self.asset_id,
         )?;

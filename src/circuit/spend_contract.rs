@@ -17,7 +17,7 @@ use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 pub struct SpendContract {
     pub value: Option<u64>,
-    pub asset_id: Option<u64>,
+    pub asset_id: Option<jubjub::Fr>,
     pub randomness_value: Option<jubjub::Fr>,
     pub randomness_asset: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
@@ -39,7 +39,7 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         )?;
 
         // Line 41: u64_as_binary_le asset_id param:asset_id
-        let asset_id = boolean::u64_into_boolean_vec_le(
+        let asset_id = boolean::field_into_boolean_vec_le(
             cs.namespace(|| "Line 41: u64_as_binary_le value param:value"),
             self.asset_id,
         )?;
