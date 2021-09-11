@@ -1,9 +1,11 @@
 //use super::cli_config::DrkCliConfig;
 use crate::Result;
 
+use blake2b_simd::Params;
 use clap::{App, Arg};
 use serde::Deserialize;
 
+use crate::serial;
 use std::path::PathBuf;
 
 fn amount_f64(v: String) -> std::result::Result<(), String> {
@@ -16,7 +18,7 @@ fn amount_f64(v: String) -> std::result::Result<(), String> {
 
 #[derive(Deserialize, Debug)]
 pub struct TransferParams {
-    pub asset: String,
+    pub asset: Asset,
     pub pub_key: String,
     pub amount: f64,
 }
@@ -24,7 +26,7 @@ pub struct TransferParams {
 impl TransferParams {
     pub fn new() -> Self {
         Self {
-            asset: String::new(),
+            asset: Asset::new(),
             pub_key: String::new(),
             amount: 0.0,
         }
@@ -32,20 +34,20 @@ impl TransferParams {
 }
 
 pub struct Deposit {
-    pub asset: String,
+    pub asset: Asset,
 }
 
 impl Deposit {
     pub fn new() -> Self {
         Self {
-            asset: String::new(),
+            asset: Asset::new(),
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct WithdrawParams {
-    pub asset: String,
+    pub asset: Asset,
     pub pub_key: String,
     pub amount: f64,
 }
@@ -53,10 +55,33 @@ pub struct WithdrawParams {
 impl WithdrawParams {
     pub fn new() -> Self {
         Self {
-            asset: String::new(),
+            asset: Asset::new(),
             pub_key: String::new(),
             amount: 0.0,
         }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Asset {
+    pub ticker: String,
+    pub id: Vec<u8>,
+}
+
+impl Asset {
+    pub fn new() -> Self {
+        Self {
+            ticker: String::new(),
+            id: Vec::new(),
+        }
+    }
+    pub fn id_hash(&self, ticker: &String) -> Result<Vec<u8>> {
+        let mut hasher = Params::new().hash_length(64).to_state();
+        hasher.update(ticker.as_bytes());
+        let result = hasher.finalize();
+        let scalar = jubjub::Fr::from_bytes_wide(result.as_array());
+        let id = serial::serialize(&scalar);
+        Ok(id)
     }
 }
 
@@ -218,7 +243,8 @@ impl DrkCli {
             Some(deposit_sub) => {
                 let mut dep = Deposit::new();
                 if let Some(asset) = deposit_sub.value_of("asset") {
-                    dep.asset = asset.to_string();
+                    dep.asset.ticker = asset.to_string();
+                    dep.asset.id = dep.asset.id_hash(&dep.asset.ticker)?;
                 }
                 deposit = Some(dep);
             }
@@ -230,7 +256,8 @@ impl DrkCli {
             Some(transfer_sub) => {
                 let mut trn = TransferParams::new();
                 if let Some(asset) = transfer_sub.value_of("asset") {
-                    trn.asset = asset.to_string();
+                    trn.asset.ticker = asset.to_string();
+                    trn.asset.id = trn.asset.id_hash(&trn.asset.ticker)?;
                 }
                 if let Some(address) = transfer_sub.value_of("address") {
                     trn.pub_key = address.to_string();
@@ -248,7 +275,8 @@ impl DrkCli {
             Some(withdraw_sub) => {
                 let mut wdraw = WithdrawParams::new();
                 if let Some(asset) = withdraw_sub.value_of("asset") {
-                    wdraw.asset = asset.to_string();
+                    wdraw.asset.ticker = asset.to_string();
+                    wdraw.asset.id = wdraw.asset.id_hash(&wdraw.asset.ticker)?;
                 }
                 if let Some(address) = withdraw_sub.value_of("address") {
                     wdraw.pub_key = address.to_string();
