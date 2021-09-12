@@ -3,7 +3,6 @@ use super::reqrep::{PeerId, RepProtocol, Reply, ReqProtocol, Request};
 use crate::blockchain::Rocks;
 use crate::client::Client;
 use crate::serial::{deserialize, serialize};
-use crate::util::hash_to_u64;
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{Error, Result};
 
@@ -61,7 +60,8 @@ impl CashierService {
         &mut self,
         executor: Arc<Executor<'_>>,
         client_address: String,
-        asset_id: Vec<u8>,
+        // TODO: make this a vector of assets
+        asset_id: jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Start Cashier");
         let service_name = String::from("CASHIER DAEMON");
@@ -75,8 +75,6 @@ impl CashierService {
         let wallet = self.wallet.clone();
 
         let bridge = bridge::Bridge::new();
-
-        let asset_id = hash_to_u64(asset_id);
 
         #[cfg(feature = "default")]
         let btc_client = super::btc::BtcClient::new(client_address)?;
@@ -160,7 +158,7 @@ impl CashierService {
         &mut self,
         dkey_pub: jubjub::SubgroupPoint,
         value: u64,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
     ) -> Result<()> {
         self.client
             .lock()
@@ -211,14 +209,13 @@ impl CashierService {
             0 => {
                 debug!(target: "CASHIER DAEMON", "Received deposit request");
                 // Exchange zk_pubkey for bitcoin address
-                let (asset_id, dpub): (Vec<u8>, jubjub::SubgroupPoint) =
+                let (asset_id, dpub): (jubjub::Fr, jubjub::SubgroupPoint) =
                     deserialize(&request.get_payload())?;
 
                 //TODO: check if key has already been issued
                 let _check =
                     cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
-                let asset_id = hash_to_u64(asset_id);
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
@@ -253,7 +250,8 @@ impl CashierService {
             }
             1 => {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
-                let (asset_id, coin_address): (u64, Vec<u8>) = deserialize(&request.get_payload())?;
+                let (asset_id, coin_address): (jubjub::Fr, Vec<u8>) =
+                    deserialize(&request.get_payload())?;
                 //let btc_address: String = deserialize(&btc_address)?;
                 //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
                 //   .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
@@ -314,7 +312,7 @@ impl CashierClient {
 
     pub async fn withdraw(
         &mut self,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
         coin_address: Vec<u8>,
     ) -> Result<Option<jubjub::SubgroupPoint>> {
         let handle_error = Arc::new(handle_error);
@@ -336,7 +334,7 @@ impl CashierClient {
 
     pub async fn get_address(
         &mut self,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
         index: jubjub::SubgroupPoint,
     ) -> Result<Option<Vec<u8>>> {
         let handle_error = Arc::new(handle_error);

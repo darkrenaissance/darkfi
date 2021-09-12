@@ -3,14 +3,39 @@ use std::net::SocketAddr;
 
 use std::path::PathBuf;
 
+use blake2b_simd::Params;
 use drk::cli::{CashierdCli, CashierdConfig, Config};
+use drk::serial::{deserialize, serialize};
 use drk::service::CashierService;
 use drk::util::join_config_path;
 use drk::wallet::{CashierDb, WalletDb};
 use drk::{Error, Result};
+use serde::{Deserialize, Serialize};
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
+
+// TODO: this will be replaced by a vector of assets that can be updated at runtime
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Asset {
+    pub name: String,
+    pub id: Vec<u8>,
+}
+
+impl Asset {
+    pub fn new(name: String) -> Self {
+        let id = Self::id_hash(&name);
+        Self { name, id }
+    }
+    pub fn id_hash(name: &String) -> Vec<u8> {
+        let mut hasher = Params::new().hash_length(64).to_state();
+        hasher.update(name.as_bytes());
+        let result = hasher.finalize();
+        let hash = jubjub::Fr::from_bytes_wide(result.as_array());
+        let id = serialize(&hash);
+        id
+    }
+}
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Result<()> {
     let ex = executor.clone();
@@ -46,14 +71,13 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     )
     .await?;
 
-    let dummy_asset = Vec::new();
+    // TODO: make this a vector of accepted assets
+    let asset = Asset::new("btc".to_string());
+    // TODO: this should be done by the user
+    let asset_id = deserialize(&asset.id)?;
 
-    cashier.start(ex.clone(), btc_endpoint, dummy_asset).await?;
-
-    //let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
-    //let adapter = Arc::new(CashierAdapter::new(wallet.clone())?);
-    //let io = Arc::new(adapter.handle_input()?);
-    //jsonserver::start(ex, rpc_url, io).await?;
+    // TODO: pass vector of assets into cashier.start()
+    cashier.start(ex.clone(), btc_endpoint, asset_id).await?;
 
     Ok(())
 }

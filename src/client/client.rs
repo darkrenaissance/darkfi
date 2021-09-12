@@ -13,7 +13,6 @@ use crate::serial::Decodable;
 use crate::serial::Encodable;
 use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
-use crate::util::hash_to_u64;
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{tx, Result};
 
@@ -127,7 +126,7 @@ impl Client {
 
     pub async fn transfer(
         self: &mut Self,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
         pub_key: jubjub::SubgroupPoint,
         amount: f64,
     ) -> Result<()> {
@@ -145,7 +144,7 @@ impl Client {
         self: &mut Self,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<()> {
         let slab = self.build_slab_from_tx(
@@ -164,14 +163,12 @@ impl Client {
         &self,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
-        asset_id: Vec<u8>,
+        asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<Slab> {
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
-
-        let asset_id = hash_to_u64(asset_id);
 
         if clear_input {
             let cashier_secret = self.state.wallet.get_private_keys()?[0];
@@ -182,7 +179,7 @@ impl Client {
             };
             clear_inputs.push(input);
         } else {
-            inputs = self.build_inputs(amount.clone(), asset_id.clone(), &mut outputs)?;
+            inputs = self.build_inputs(amount.clone(), asset_id, &mut outputs)?;
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo {
@@ -210,7 +207,7 @@ impl Client {
     fn build_inputs(
         &self,
         amount: u64,
-        asset_id: u64,
+        asset_id: jubjub::Fr,
         outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
     ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];

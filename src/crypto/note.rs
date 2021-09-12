@@ -19,7 +19,7 @@ pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 pub struct Note {
     pub serial: jubjub::Fr,
     pub value: u64,
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub coin_blind: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
 }

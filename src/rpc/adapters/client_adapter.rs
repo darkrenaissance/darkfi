@@ -1,4 +1,4 @@
-use crate::cli::Asset;
+//use crate::cli::jubjub::Fr;
 use crate::client::{Client, ClientFailed};
 use crate::serial::{deserialize, serialize, Decodable};
 use crate::service::CashierClient;
@@ -32,15 +32,25 @@ pub trait RpcClient {
 
     /// transfer
     #[rpc(name = "transfer")]
-    fn transfer(&self, asset: Asset, pub_key: Vec<u8>, amount: f64) -> BoxFuture<Result<String>>;
+    fn transfer(
+        &self,
+        asset_id: Vec<u8>,
+        pub_key: Vec<u8>,
+        amount: f64,
+    ) -> BoxFuture<Result<String>>;
 
     /// withdraw
     #[rpc(name = "withdraw")]
-    fn withdraw(&self, asset: Asset, pub_key: Vec<u8>, amount: f64) -> BoxFuture<Result<String>>;
+    fn withdraw(
+        &self,
+        asset_id: Vec<u8>,
+        pub_key: Vec<u8>,
+        amount: f64,
+    ) -> BoxFuture<Result<String>>;
 
     /// deposit
     #[rpc(name = "deposit")]
-    fn deposit(&self, asset: Asset) -> BoxFuture<Result<String>>;
+    fn deposit(&self, asset_id: Vec<u8>) -> BoxFuture<Result<String>>;
 }
 
 pub struct RpcClientAdapter {
@@ -76,7 +86,7 @@ impl RpcClientAdapter {
 
     async fn transfer_process(
         client: Arc<Mutex<Client>>,
-        asset: Asset,
+        asset_id: Vec<u8>,
         address: Vec<u8>,
         amount: f64,
     ) -> Result<String> {
@@ -88,10 +98,12 @@ impl RpcClientAdapter {
         let address: jubjub::SubgroupPoint =
             deserialize(&address).map_err(|_| ClientFailed::UnvalidAddress(pub_key))?;
 
+        let asset_id: jubjub::Fr = deserialize(&asset_id)?;
+
         client
             .lock()
             .await
-            .transfer(asset.id, address.clone(), amount)
+            .transfer(asset_id, address.clone(), amount)
             .await?;
 
         Ok(format!("transfered {} DRK to {}", amount, address))
@@ -100,14 +112,16 @@ impl RpcClientAdapter {
     async fn withdraw_process(
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
-        asset: Asset,
+        asset_id: Vec<u8>,
         address: Vec<u8>,
         amount: f64,
     ) -> Result<String> {
+        let asset_id: jubjub::Fr = deserialize(&asset_id)?;
+
         let drk_public = cashier_client
             .lock()
             .await
-            .withdraw(asset.id.clone(), address)
+            .withdraw(asset_id, address)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
@@ -115,7 +129,7 @@ impl RpcClientAdapter {
             client
                 .lock()
                 .await
-                .transfer(asset.id.clone(), drk_addr.clone(), amount)
+                .transfer(asset_id, drk_addr.clone(), amount)
                 .await?;
 
             return Ok(format!(
@@ -130,16 +144,17 @@ impl RpcClientAdapter {
     async fn deposit_process<T>(
         client: Arc<Mutex<Client>>,
         cashier_client: Arc<Mutex<CashierClient>>,
-        asset: Asset,
+        asset_id: Vec<u8>,
     ) -> Result<String>
     where
         T: Decodable + ToString,
     {
+        let asset_id: jubjub::Fr = deserialize(&asset_id)?;
         let deposit_addr = client.lock().await.state.wallet.get_public_keys()?[0];
         let coin_public = cashier_client
             .lock()
             .await
-            .get_address(asset.id, deposit_addr)
+            .get_address(asset_id, deposit_addr)
             .await
             .map_err(|err| ClientFailed::from(err))?;
 
@@ -173,14 +188,19 @@ impl RpcClient for RpcClientAdapter {
         Self::key_gen_process(self.client.clone()).boxed()
     }
 
-    fn transfer(&self, asset: Asset, pub_key: Vec<u8>, amount: f64) -> BoxFuture<Result<String>> {
+    fn transfer(
+        &self,
+        asset_id: Vec<u8>,
+        pub_key: Vec<u8>,
+        amount: f64,
+    ) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "transfer() [START]");
-        Self::transfer_process(self.client.clone(), asset, pub_key, amount).boxed()
+        Self::transfer_process(self.client.clone(), asset_id, pub_key, amount).boxed()
     }
 
     fn withdraw(
         &self,
-        asset_id: Asset,
+        asset_id: Vec<u8>,
         pub_key: Vec<u8>,
         amount: f64,
     ) -> BoxFuture<Result<String>> {
@@ -195,7 +215,7 @@ impl RpcClient for RpcClientAdapter {
         .boxed()
     }
 
-    fn deposit(&self, asset_id: Asset) -> BoxFuture<Result<String>> {
+    fn deposit(&self, asset_id: Vec<u8>) -> BoxFuture<Result<String>> {
         debug!(target: "RPC USER ADAPTER", "deposit() [START]");
         #[cfg(feature = "default")]
         Self::deposit_process::<bitcoin::PublicKey>(

@@ -27,7 +27,7 @@ pub struct SpendRevealedValues {
 impl SpendRevealedValues {
     fn compute(
         value: u64,
-        asset_id: u64,
+        asset_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
         randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
@@ -71,7 +71,7 @@ impl SpendRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
-                .update(&asset_id.to_le_bytes())
+                .update(&asset_id.to_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -224,7 +224,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
 pub fn create_spend_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
-    asset_id: u64,
+    asset_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
     randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,

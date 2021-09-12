@@ -3,11 +3,12 @@ use crate::Result;
 use async_executor::Executor;
 use async_trait::async_trait;
 
+use crate::serial::serialize;
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 pub struct BridgeRequests {
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub payload: BridgeRequestsPayload,
 }
 
@@ -32,7 +33,7 @@ pub struct BridgeSubscribtion {
 }
 
 pub struct Bridge {
-    clients: Mutex<HashMap<u64, Arc<dyn CoinClient + Send + Sync>>>,
+    clients: Mutex<HashMap<Vec<u8>, Arc<dyn CoinClient + Send + Sync>>>,
 }
 impl Bridge {
     pub fn new() -> Arc<Self> {
@@ -43,9 +44,10 @@ impl Bridge {
 
     pub async fn add_clients(
         self: Arc<Self>,
-        asset_id: u64,
+        asset_id: jubjub::Fr,
         client: Arc<dyn CoinClient + Send + Sync>,
     ) {
+        let asset_id = serialize(&asset_id);
         self.clients.lock().await.insert(asset_id, client);
     }
 
@@ -66,7 +68,8 @@ impl Bridge {
         rep: async_channel::Sender<BridgeResponse>,
     ) -> Result<()> {
         let req = req.recv().await?;
-        let client = &self.clients.lock().await[&req.asset_id];
+        let asset_id = serialize(&req.asset_id);
+        let client = &self.clients.lock().await[&asset_id];
 
         match req.payload {
             BridgeRequestsPayload::WatchRequest => {

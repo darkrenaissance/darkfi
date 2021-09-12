@@ -21,7 +21,7 @@ pub struct TransactionBuilder {
 
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub signature_secret: jubjub::Fr,
 }
 
@@ -33,7 +33,7 @@ pub struct TransactionBuilderInputInfo {
 
 pub struct TransactionBuilderOutputInfo {
     pub value: u64,
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub public: jubjub::SubgroupPoint,
 }
 

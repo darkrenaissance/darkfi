@@ -16,7 +16,7 @@ pub struct PartialTransaction {
 
 pub struct PartialTransactionClearInput {
     pub value: u64,
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
     pub asset_commit_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,

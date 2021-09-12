@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde_json::json;
 
-use drk::cli::{Asset, Config, DrkCli, DrkConfig};
+use drk::cli::{Config, DrkCli, DrkConfig};
 use drk::rpc::jsonrpc;
 use drk::rpc::jsonrpc::JsonResult;
 use drk::serial::serialize;
@@ -81,18 +81,18 @@ impl Drk {
         Ok(self.request("stop", r).await?)
     }
 
-    pub async fn deposit(&self, asset: Asset) -> Result<()> {
+    pub async fn deposit(&self, asset: Vec<u8>) -> Result<()> {
         let r = jsonrpc::request(json!("deposit"), json!([asset]));
         Ok(self.request("deposit coins to this address:", r).await?)
     }
 
-    pub async fn transfer(&self, asset: Asset, address: String, amount: f64) -> Result<()> {
+    pub async fn transfer(&self, asset: Vec<u8>, address: String, amount: f64) -> Result<()> {
         let address = serialize(&address);
         let r = jsonrpc::request(json!("transfer"), json!([asset, address, amount]));
         Ok(self.request("transfer", r).await?)
     }
 
-    pub async fn withdraw(&self, asset: Asset, address: String, amount: f64) -> Result<()> {
+    pub async fn withdraw(&self, asset: Vec<u8>, address: String, amount: f64) -> Result<()> {
         let address = serialize(&address);
         let r = jsonrpc::request(json!("withdraw"), json!([asset, address, amount]));
         Ok(self.request("withdraw", r).await?)
@@ -125,17 +125,17 @@ async fn start(config: &DrkConfig, options: DrkCli) -> Result<()> {
 
     if let Some(transfer) = options.transfer {
         client
-            .transfer(transfer.asset, transfer.pub_key, transfer.amount)
+            .transfer(transfer.asset_id, transfer.pub_key, transfer.amount)
             .await?;
     }
 
     if let Some(deposit) = options.deposit {
-        client.deposit(deposit.asset).await?;
+        client.deposit(deposit.asset_id).await?;
     }
 
     if let Some(withdraw) = options.withdraw {
         client
-            .withdraw(withdraw.asset, withdraw.pub_key, withdraw.amount)
+            .withdraw(withdraw.asset_id, withdraw.pub_key, withdraw.amount)
             .await?;
     }
 
@@ -161,16 +161,6 @@ fn main() -> Result<()> {
     }
 
     let config: DrkConfig = Config::<DrkConfig>::load(config_path)?;
-    //let config: DrkConfig = if Path::new(&config_path).exists() {
-    //    Config::<DrkConfig>::load(config_path)?
-    //};
-
-    //if Path::new(&config_path).exists() {
-    //    let config: DrkConfig = Config::<DrkConfig>::load(config_path)?
-    //}
-    //else {
-    //    Error::NoConfigError
-    //};
 
     {
         use simplelog::*;

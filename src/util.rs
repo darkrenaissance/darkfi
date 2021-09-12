@@ -17,7 +17,3 @@ pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
 
     Ok(path)
 }
-
-pub fn hash_to_u64(asset_id: Vec<u8>) -> u64 {
-    asset_id.iter().fold(0, |x, &i| x << 8 | i as u64)
-}

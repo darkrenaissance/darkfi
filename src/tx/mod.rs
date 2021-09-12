@@ -29,7 +29,7 @@ pub struct Transaction {
 
 pub struct TransactionClearInput {
     pub value: u64,
-    pub asset_id: u64,
+    pub asset_id: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
     pub asset_commit_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,
@@ -57,9 +57,8 @@ impl Transaction {
         Ok(len)
     }
 
-    fn compute_pedersen_commit(value: u64, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
-        let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * jubjub::Fr::from(value))
+    fn compute_pedersen_commit(value: jubjub::Fr, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
+        let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR * value)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind);
         value_commit
     }
@@ -92,7 +91,8 @@ impl Transaction {
     ) -> state::VerifyResult<()> {
         let mut valcom_total = jubjub::SubgroupPoint::identity();
         for input in &self.clear_inputs {
-            valcom_total += Self::compute_pedersen_commit(input.value, &input.valcom_blind);
+            let value = jubjub::Fr::from(input.value);
+            valcom_total += Self::compute_pedersen_commit(value, &input.valcom_blind);
         }
         for (i, input) in self.inputs.iter().enumerate() {
             if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {

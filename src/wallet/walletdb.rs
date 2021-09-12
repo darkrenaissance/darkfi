@@ -127,7 +127,7 @@ impl WalletDb {
             let coin_blind = self.get_value_deserialized(row.get(3)?).unwrap();
             let valcom_blind = self.get_value_deserialized(row.get(4)?).unwrap();
             let value: u64 = row.get(5)?;
-            let asset_id: u64 = row.get(6)?;
+            let asset_id = self.get_value_deserialized(row.get(6)?).unwrap();
 
             let note = Note {
                 serial,
@@ -178,7 +178,7 @@ impl WalletDb {
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
         let valcom_blind = self.get_value_serialized(&own_coin.note.valcom_blind)?;
         let value: u64 = own_coin.note.value;
-        let asset_id: u64 = own_coin.note.asset_id;
+        let asset_id = self.get_value_serialized(&own_coin.note.asset_id)?;
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
         // open connection

@@ -20,7 +20,7 @@ pub struct MintRevealedValues {
 impl MintRevealedValues {
     fn compute(
         value: u64,
-        asset_id: u64,
+        asset_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
         randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
@@ -45,7 +45,7 @@ impl MintRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
-                .update(&asset_id.to_le_bytes())
+                .update(&asset_id.to_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -139,7 +139,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
 pub fn create_mint_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
-    asset_id: u64,
+    asset_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
     randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,

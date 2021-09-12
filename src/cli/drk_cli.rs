@@ -1,11 +1,11 @@
 //use super::cli_config::DrkCliConfig;
 use crate::Result;
 
+use crate::serial::{deserialize, serialize};
 use blake2b_simd::Params;
 use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
 
-use crate::serial;
 use std::path::PathBuf;
 
 fn amount_f64(v: String) -> std::result::Result<(), String> {
@@ -18,70 +18,66 @@ fn amount_f64(v: String) -> std::result::Result<(), String> {
 
 #[derive(Deserialize, Debug)]
 pub struct TransferParams {
-    pub asset: Asset,
+    pub asset_id: Vec<u8>,
     pub pub_key: String,
     pub amount: f64,
 }
 
 impl TransferParams {
-    pub fn new() -> Self {
+    pub fn new(asset_id: Vec<u8>, pub_key: String, amount: f64) -> Self {
         Self {
-            asset: Asset::new(),
-            pub_key: String::new(),
-            amount: 0.0,
+            asset_id,
+            pub_key,
+            amount,
         }
     }
 }
 
 pub struct Deposit {
-    pub asset: Asset,
+    pub asset_id: Vec<u8>,
 }
 
 impl Deposit {
-    pub fn new() -> Self {
-        Self {
-            asset: Asset::new(),
-        }
+    pub fn new(asset_id: Vec<u8>) -> Self {
+        Self { asset_id }
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct WithdrawParams {
-    pub asset: Asset,
+    pub asset_id: Vec<u8>,
     pub pub_key: String,
     pub amount: f64,
 }
 
 impl WithdrawParams {
-    pub fn new() -> Self {
+    pub fn new(asset_id: Vec<u8>, pub_key: String, amount: f64) -> Self {
         Self {
-            asset: Asset::new(),
-            pub_key: String::new(),
-            amount: 0.0,
+            asset_id,
+            pub_key,
+            amount,
         }
     }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Asset {
-    pub ticker: String,
+    pub name: String,
     pub id: Vec<u8>,
 }
 
 impl Asset {
-    pub fn new() -> Self {
-        Self {
-            ticker: String::new(),
-            id: Vec::new(),
-        }
+    pub fn new(name: String) -> Self {
+        let id = Self::id_hash(&name);
+        Self { name, id }
     }
-    pub fn id_hash(&self, ticker: &String) -> Result<Vec<u8>> {
+    pub fn id_hash(name: &String) -> Vec<u8> {
         let mut hasher = Params::new().hash_length(64).to_state();
-        hasher.update(ticker.as_bytes());
+        hasher.update(name.as_bytes());
         let result = hasher.finalize();
-        let scalar = jubjub::Fr::from_bytes_wide(result.as_array());
-        let id = serial::serialize(&scalar);
-        Ok(id)
+        let hash = jubjub::Fr::from_bytes_wide(result.as_array());
+        let id = serialize(&hash);
+        id
     }
 }
 
@@ -241,12 +237,15 @@ impl DrkCli {
         let mut deposit = None;
         match app.subcommand_matches("deposit") {
             Some(deposit_sub) => {
-                let mut dep = Deposit::new();
-                if let Some(asset) = deposit_sub.value_of("asset") {
-                    dep.asset.ticker = asset.to_string();
-                    dep.asset.id = dep.asset.id_hash(&dep.asset.ticker)?;
-                }
+                let asset_value = deposit_sub.value_of("asset").unwrap();
+                let asset = Asset::new(asset_value.to_string());
+                let dep = Deposit::new(asset.id.clone());
                 deposit = Some(dep);
+                let id: jubjub::Fr = deserialize(&asset.id)?;
+                println!(
+                    "deposit request for asset: {}, asset ID: {:?}",
+                    asset_value, id
+                );
             }
             None => {}
         }
@@ -254,18 +253,21 @@ impl DrkCli {
         let mut transfer = None;
         match app.subcommand_matches("transfer") {
             Some(transfer_sub) => {
-                let mut trn = TransferParams::new();
-                if let Some(asset) = transfer_sub.value_of("asset") {
-                    trn.asset.ticker = asset.to_string();
-                    trn.asset.id = trn.asset.id_hash(&trn.asset.ticker)?;
-                }
-                if let Some(address) = transfer_sub.value_of("address") {
-                    trn.pub_key = address.to_string();
-                }
-                if let Some(amount) = transfer_sub.value_of("amount") {
-                    trn.amount = amount.parse().expect("Convert the amount to f64");
-                }
+                let asset_value = transfer_sub.value_of("asset").unwrap().to_string();
+                let asset = Asset::new(asset_value.clone());
+                let address = transfer_sub.value_of("address").unwrap().to_string();
+                let amount = transfer_sub
+                    .value_of("amount")
+                    .unwrap()
+                    .parse()
+                    .expect("Convert the amount to f64");
+                let trn = TransferParams::new(asset.id.clone(), address, amount);
                 transfer = Some(trn);
+                let id: jubjub::Fr = deserialize(&asset.id)?;
+                println!(
+                    "transfer request for asset: {}, amount: {}, asset ID: {:?}",
+                    asset_value, amount, id
+                );
             }
             None => {}
         }
@@ -273,18 +275,21 @@ impl DrkCli {
         let mut withdraw = None;
         match app.subcommand_matches("withdraw") {
             Some(withdraw_sub) => {
-                let mut wdraw = WithdrawParams::new();
-                if let Some(asset) = withdraw_sub.value_of("asset") {
-                    wdraw.asset.ticker = asset.to_string();
-                    wdraw.asset.id = wdraw.asset.id_hash(&wdraw.asset.ticker)?;
-                }
-                if let Some(address) = withdraw_sub.value_of("address") {
-                    wdraw.pub_key = address.to_string();
-                }
-                if let Some(amount) = withdraw_sub.value_of("amount") {
-                    wdraw.amount = amount.parse().expect("Convert the amount to f64");
-                }
+                let asset_value = withdraw_sub.value_of("asset").unwrap().to_string();
+                let asset = Asset::new(asset_value.clone());
+                let address = withdraw_sub.value_of("address").unwrap().to_string();
+                let amount = withdraw_sub
+                    .value_of("amount")
+                    .unwrap()
+                    .parse()
+                    .expect("Convert the amount to f64");
+                let wdraw = WithdrawParams::new(asset.id.clone(), address, amount);
                 withdraw = Some(wdraw);
+                let id: jubjub::Fr = deserialize(&asset.id)?;
+                println!(
+                    "withdraw request for asset: {}, amount: {}, asset ID: {:?}",
+                    asset_value, amount, id
+                );
             }
             None => {}
         }
