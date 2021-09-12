@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 use bellman::{
     gadgets::{
         blake2s, boolean,
@@ -27,140 +28,196 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        // Line 18: u64_as_binary_le value param:value
+        // Line 20: u64_as_binary_le value param:value
         let value = boolean::u64_into_boolean_vec_le(
-            cs.namespace(|| "Line 18: u64_as_binary_le value param:value"),
+            cs.namespace(|| "Line 20: u64_as_binary_le value param:value"),
             self.value,
         )?;
 
-        // Line 19: u64_as_binary_le asset_id param:asset_id
+        // Line 21: fr_as_binary_le asset_id param:asset_id
         let asset_id = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 19: u64_as_binary_le asset_id param:asset_id"),
+            cs.namespace(|| "Line 21: fr_as_binary_le asset_id param:asset_id"),
             self.asset_id,
         )?;
 
-        // Line 19: fr_as_binary_le randomness_value param:randomness_value
+        // Line 22: fr_as_binary_le randomness_value param:randomness_value
         let randomness_value = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 19: fr_as_binary_le randomness_value param:randomness_value"),
+            cs.namespace(|| "Line 22: fr_as_binary_le randomness_value param:randomness_value"),
             self.randomness_value,
         )?;
 
-        // Line 19: fr_as_binary_le randomness_asset param:randomness_asset
+        // Line 23: fr_as_binary_le randomness_asset param:randomness_asset
         let randomness_asset = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 19: fr_as_binary_le randomness_asset param:randomness_asset"),
+            cs.namespace(|| "Line 23: fr_as_binary_le randomness_asset param:randomness_asset"),
             self.randomness_asset,
         )?;
 
-        // Line 20: fr_as_binary_le serial param:serial
+        // Line 24: fr_as_binary_le serial param:serial
         let serial = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 20: fr_as_binary_le serial param:serial"),
+            cs.namespace(|| "Line 24: fr_as_binary_le serial param:serial"),
             self.serial,
         )?;
 
-        // Line 21: fr_as_binary_le randomness_coin param:randomness_coin
+        // Line 25: fr_as_binary_le randomness_coin param:randomness_coin
         let randomness_coin = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 21: fr_as_binary_le randomness_coin param:randomness_coin"),
+            cs.namespace(|| "Line 25: fr_as_binary_le randomness_coin param:randomness_coin"),
             self.randomness_coin,
         )?;
 
-        // Line 23: witness public param:public
+        // Line 27: witness public param:public
         let public = ecc::EdwardsPoint::witness(
-            cs.namespace(|| "Line 23: witness public param:public"),
+            cs.namespace(|| "Line 27: witness public param:public"),
             self.public.map(jubjub::ExtendedPoint::from),
         )?;
 
-        // Line 24: assert_not_small_order public
-        public.assert_not_small_order(cs.namespace(|| "Line 24: assert_not_small_order public"))?;
+        // Line 28: assert_not_small_order public
+        public.assert_not_small_order(cs.namespace(|| "Line 28: assert_not_small_order public"))?;
 
-        // Line 29: ec_mul_const vcv value G_VCV
+        // Line 33: ec_mul_const vcv value G_VCV
         let vcv = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 29: ec_mul_const vcv value G_VCV"),
+            cs.namespace(|| "Line 33: ec_mul_const vcv value G_VCV"),
             &zcash_proofs::constants::VALUE_COMMITMENT_VALUE_GENERATOR,
             &value,
         )?;
 
-        // Line 30: ec_mul_const rcv randomness_value G_VCR
+        // Line 34: ec_mul_const rcv randomness_value G_VCR
         let rcv = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 30: ec_mul_const rcv randomness_value G_VCR"),
+            cs.namespace(|| "Line 34: ec_mul_const rcv randomness_value G_VCR"),
             &zcash_proofs::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR,
             &randomness_value,
         )?;
 
-        // Line 31: ec_add cv vcv rcv
-        let cv = vcv.add(cs.namespace(|| "Line 31: ec_add cv vcv rcv"), &rcv)?;
+        // Line 35: ec_add cv vcv rcv
+        let cv = vcv.add(cs.namespace(|| "Line 35: ec_add cv vcv rcv"), &rcv)?;
 
-        // Line 33: emit_ec cv
-        cv.inputize(cs.namespace(|| "Line 33: emit_ec cv"))?;
+        // Line 37: emit_ec cv
+        cv.inputize(cs.namespace(|| "Line 37: emit_ec cv"))?;
 
-        // Line 29: ec_mul_const vca asset_id G_VCV
+        // Line 42: ec_mul_const vca asset_id G_VCV
         let vca = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 29: ec_mul_const vca asset_id G_VCV"),
+            cs.namespace(|| "Line 42: ec_mul_const vca asset_id G_VCV"),
             &zcash_proofs::constants::VALUE_COMMITMENT_VALUE_GENERATOR,
             &asset_id,
         )?;
 
-        // Line 47: ec_mul_const rca randomness_asset G_VCR
+        // Line 43: ec_mul_const rca randomness_asset G_VCR
         let rca = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 47: ec_mul_const rca randomness_asset G_VCR"),
+            cs.namespace(|| "Line 43: ec_mul_const rca randomness_asset G_VCR"),
             &zcash_proofs::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR,
             &randomness_asset,
         )?;
 
-        // Line 48: ec_add ca vca rca
-        let ca = vca.add(cs.namespace(|| "Line 48: ec_add ca vca rca"), &rca)?;
+        // Line 44: ec_add ca vca rca
+        let ca = vca.add(cs.namespace(|| "Line 44: ec_add ca vca rca"), &rca)?;
 
-        // Line 50: emit_ec ca
-        ca.inputize(cs.namespace(|| "Line 50: emit_ec ca"))?;
+        // Line 46: emit_ec ca
+        ca.inputize(cs.namespace(|| "Line 46: emit_ec ca"))?;
 
-        // Line 39: alloc_binary preimage
+        // Line 53: alloc_binary preimage
         let mut preimage = vec![];
 
-        // Line 42: ec_repr repr_public public
-        let repr_public = public.repr(cs.namespace(|| "Line 42: ec_repr repr_public public"))?;
+        // Line 56: ec_repr repr_public public
+        let repr_public = public.repr(cs.namespace(|| "Line 56: ec_repr repr_public public"))?;
 
-        // Line 43: binary_extend preimage repr_public
+        // Line 57: binary_extend preimage repr_public
         preimage.extend(repr_public);
 
-        // Line 46: binary_extend preimage value
+        // Line 60: binary_extend preimage value
         preimage.extend(value);
 
-        // Line 47: binary_extend preimage asset_id
-        preimage.extend(asset_id);
-
-        // Line 53: binary_extend preimage serial
+        // Line 67: binary_extend preimage serial
         preimage.extend(serial);
 
-        for _ in 0..4 {
-            // Line 55: alloc_const_bit zero_bit false
-            let zero_bit = Boolean::constant(false);
+        // Line 69: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
 
-            // Line 56: binary_push preimage zero_bit
-            preimage.push(zero_bit);
-        }
+        // Line 70: binary_push preimage zero_bit
+        preimage.push(zero_bit);
 
-        // Line 69: binary_extend preimage randomness_coin
+        // Line 72: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 73: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 75: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 76: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 78: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 79: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 83: binary_extend preimage randomness_coin
         preimage.extend(randomness_coin);
 
-        for _ in 0..4 {
-            // Line 71: alloc_const_bit zero_bit false
-            let zero_bit = Boolean::constant(false);
+        // Line 85: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
 
-            // Line 72: binary_push preimage zero_bit
-            preimage.push(zero_bit);
-        }
+        // Line 86: binary_push preimage zero_bit
+        preimage.push(zero_bit);
 
-        // Line 89: static_assert_binary_size preimage 896
-        assert_eq!(preimage.len(), 896);
+        // Line 88: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
 
-        // Line 90: blake2s coin preimage CRH_IVK
+        // Line 89: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 91: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 92: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 94: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 95: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 99: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
+        // Line 101: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 102: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 104: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 105: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 107: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 108: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 110: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 111: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 120: static_assert_binary_size preimage 1088
+        assert_eq!(preimage.len(), 1088);
+
+        // Line 121: blake2s coin preimage CRH_IVK
         let mut coin = blake2s::blake2s(
-            cs.namespace(|| "Line 90: blake2s coin preimage CRH_IVK"),
+            cs.namespace(|| "Line 121: blake2s coin preimage CRH_IVK"),
             &preimage,
             zcash_primitives::constants::CRH_IVK_PERSONALIZATION,
         )?;
 
-        // Line 91: emit_binary coin
-        multipack::pack_into_inputs(cs.namespace(|| "Line 91: emit_binary coin"), &coin)?;
+        // Line 122: emit_binary coin
+        multipack::pack_into_inputs(cs.namespace(|| "Line 122: emit_binary coin"), &coin)?;
 
         Ok(())
     }

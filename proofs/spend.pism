@@ -11,7 +11,7 @@ constant NOTE_COMMIT PedersenPersonalization
 contract spend_contract
     # Value commitment
     param value U64
-    param asset_id U64
+    param asset_id Fr
     param randomness_value Fr
     param randomness_asset Fr
 
@@ -27,7 +27,7 @@ contract spend_contract
 start
     # Witness input values
     u64_as_binary_le value param:value
-    u64_as_binary_le asset_id param:asset_id
+    fr_as_binary_le asset_id param:asset_id
     fr_as_binary_le randomness_value param:randomness_value
     fr_as_binary_le randomness_asset param:randomness_asset
 
@@ -99,21 +99,22 @@ start
     # value
     binary_extend preimage value
 
-    # asset_id
-    binary_extend preimage asset_id
-
     # serial
     {{ binary_put_fr("preimage", "serial") }}
 
     # randomness_coin
     {{ binary_put_fr("preimage", "randomness_coin") }}
 
+    # asset_id
+    {{ binary_put_fr("preimage", "asset_id") }}
+
     # Public key:       SubgroupPoint   = 256 bits
     # Value:            u64             = 64 bits
+    # AssetID:          Fr              = 252 + 4 bits padding
     # Serial:           Fr              = 252 + 4 bits padding
     # Randomness coin   Fr              = 252 + 4 bits padding
-    # TOTAL: 896 bits for preimage
-    static_assert_binary_size preimage 896
+    # TOTAL: 1088 bits for preimage
+    static_assert_binary_size preimage 1088
     blake2s coin preimage CRH_IVK
     # Debug stuff. Normally we don't reveal the coin in the spend proof.
     #binary_clone coin2 coin

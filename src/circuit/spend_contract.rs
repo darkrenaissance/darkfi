@@ -197,6 +197,11 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             self.randomness_coin,
         )?;
 
+        // Line 110: fr_as_binary_le asset_id param:asset_id
+        let asset_id = boolean::field_into_boolean_vec_le(
+            cs.namespace(|| "Line 109: fr_as_binary_le asset_id param:asset_id"),
+            self.randomness_coin,
+        )?;
         // Line 113: alloc_binary preimage
         let mut preimage = vec![];
 
@@ -208,9 +213,6 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
 
         // Line 120: binary_extend preimage value
         preimage.extend(value);
-
-        // Line 121: binary_extend preimage asset_id
-        preimage.extend(asset_id);
 
         // Line 123: binary_extend preimage serial
         preimage.extend(serial);
@@ -266,8 +268,35 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 151: binary_push preimage zero_bit
         preimage.push(zero_bit);
 
-        // Line 159: static_assert_binary_size preimage 896
-        assert_eq!(preimage.len(), 896);
+        // Line 109: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
+        // Line 109: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 109: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 109: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 109: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 109: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 109: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 109: alloc_const_bit zero_bit false
+        let zero_bit = Boolean::constant(false);
+
+        // Line 109: binary_push preimage zero_bit
+        preimage.push(zero_bit);
+
+        // Line 159: static_assert_binary_size preimage 1088
+        assert_eq!(preimage.len(), 1088);
 
         // Line 160: blake2s coin preimage CRH_IVK
         let mut coin = blake2s::blake2s(
