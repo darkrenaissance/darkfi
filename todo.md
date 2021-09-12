@@ -10,11 +10,6 @@
 - [X] delete zkvm
 - [X] SOL bridge poc
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
-- [ ] delete ALL old directories
-- [ ] unpluralize directories
-- [ ] delete tutorial
-- [ ] fix spelling mistakes
-- [ ] make cashier asset vector
 
 ## deposit
 
