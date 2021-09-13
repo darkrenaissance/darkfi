@@ -127,7 +127,7 @@ fn test_note_encdec() {
     let note = Note {
         serial: jubjub::Fr::random(&mut OsRng),
         value: 110,
-        asset_id: 1,
+        asset_id: jubjub::Fr::random(&mut OsRng),
         coin_blind: jubjub::Fr::random(&mut OsRng),
         valcom_blind: jubjub::Fr::random(&mut OsRng),
     };
