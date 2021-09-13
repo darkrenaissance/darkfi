@@ -7,7 +7,7 @@ use crate::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
 };
-use crate::rpc::adapters::{RpcClient, RpcClientAdapter};
+use crate::rpc::adapter::{RpcClient, RpcClientAdapter};
 use crate::rpc::jsonserver;
 use crate::serial::Decodable;
 use crate::serial::Encodable;
