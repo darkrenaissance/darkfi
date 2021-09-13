@@ -93,10 +93,10 @@ impl RpcClientAdapter {
         let pub_key: String = deserialize(&address)?;
         let address = bs58::decode(pub_key.clone())
             .into_vec()
-            .map_err(|_| ClientFailed::UnvalidAddress(pub_key.clone()))?;
+            .map_err(|_| ClientFailed::InvalidAddress(pub_key.clone()))?;
 
         let address: jubjub::SubgroupPoint =
-            deserialize(&address).map_err(|_| ClientFailed::UnvalidAddress(pub_key))?;
+            deserialize(&address).map_err(|_| ClientFailed::InvalidAddress(pub_key))?;
 
         let asset_id: jubjub::Fr = deserialize(&asset_id)?;
 

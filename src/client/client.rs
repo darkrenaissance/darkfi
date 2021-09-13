@@ -131,7 +131,7 @@ impl Client {
         amount: f64,
     ) -> Result<()> {
         if amount <= 0.0 {
-            return Err(ClientFailed::UnvalidAmount(amount as u64).into());
+            return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
         self.send(pub_key.clone(), amount.clone() as u64, asset_id, false)

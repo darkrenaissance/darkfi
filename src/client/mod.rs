@@ -7,8 +7,8 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ClientFailed {
     NotEnoughValue(u64),
-    UnvalidAddress(String),
-    UnvalidAmount(u64),
+    InvalidAddress(String),
+    InvalidAmount(u64),
     UnableToGetDepositAddress,
     UnableToGetWithdrawAddress,
     DoNotHaveCashierPublicKey,
@@ -26,11 +26,11 @@ impl fmt::Display for ClientFailed {
             ClientFailed::NotEnoughValue(i) => {
                 write!(f, "There is no enough value {}", i)
             }
-            ClientFailed::UnvalidAddress(i) => {
-                write!(f, "Unvalid Address {}", i)
+            ClientFailed::InvalidAddress(i) => {
+                write!(f, "Invalid Address {}", i)
             }
-            ClientFailed::UnvalidAmount(i) => {
-                write!(f, "Unvalid Amount {}", i)
+            ClientFailed::InvalidAmount(i) => {
+                write!(f, "Invalid Amount {}", i)
             }
             ClientFailed::UnableToGetDepositAddress => f.write_str("Unable to get deposit address"),
             ClientFailed::UnableToGetWithdrawAddress => {
