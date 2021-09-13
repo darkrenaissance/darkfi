@@ -42,7 +42,7 @@ impl WalletDb {
 
     pub fn init_db(&self) -> Result<()> {
         if !self.password.trim().is_empty() {
-            let contents = include_str!("../../res/schema.sql");
+            let contents = include_str!("../../sql/schema.sql");
             let conn = Connection::open(&self.path)?;
             debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;

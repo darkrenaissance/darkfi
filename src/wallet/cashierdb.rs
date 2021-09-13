@@ -35,7 +35,7 @@ impl CashierDb {
 
     pub fn init_db(&self) -> Result<()> {
         if !self.password.trim().is_empty() {
-            let contents = include_str!("../../res/cashier.sql");
+            let contents = include_str!("../../sql/cashier.sql");
             let conn = Connection::open(&self.path)?;
             debug!(target: "CASHIERDB", "Opened connection at path {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;
@@ -182,10 +182,10 @@ impl CashierDb {
         let mut stmt = conn.prepare(
             "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id",
         )?;
-        let addr_iter =
-            stmt.query_map::<Vec<u8>, _, _>(&[(":d_key_public", &d_key_public), (":asset_id", &asset_id)], |row| {
-                Ok(row.get(0)?)
-            })?;
+        let addr_iter = stmt.query_map::<Vec<u8>, _, _>(
+            &[(":d_key_public", &d_key_public), (":asset_id", &asset_id)],
+            |row| Ok(row.get(0)?),
+        )?;
 
         let mut coin_addresses = vec![];
 
@@ -196,7 +196,11 @@ impl CashierDb {
         Ok(coin_addresses.pop())
     }
 
-    pub fn delete_withdraw_key_record(&self, coin_address: &Vec<u8>, asset_id: &Vec<u8> ) -> Result<()> {
+    pub fn delete_withdraw_key_record(
+        &self,
+        coin_address: &Vec<u8>,
+        asset_id: &Vec<u8>,
+    ) -> Result<()> {
         debug!(target: "CASHIERDB", "Delete withdraw keys");
 
         // open connection
