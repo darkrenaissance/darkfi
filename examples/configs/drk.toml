@@ -1,2 +1,0 @@
-rpc_url = "http://127.0.0.1:8000"
-log_path = "/tmp/drk_cli.log"

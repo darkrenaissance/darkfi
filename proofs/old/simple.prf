@@ -1,8 +1,0 @@
-const G_SPEND: SubgroupPoint
-
-contract input_spend(
-    secret: Fr -> BinaryNumber
-) -> Point:
-    let public: Point = secret * G_SPEND
-    emit public
-
