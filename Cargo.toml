@@ -102,6 +102,26 @@ default = ["bitcoin", "secp256k1", "electrum-client"]
 sol = ["solana-sdk", "solana-client", "tokio-tungstenite", "tokio", "ed25519-dalek" ]
 
 [[bin]]
+name = "lisp"
+path = "lisp/lisp.rs"
+
+[[bin]]
+name = "mimc"
+path = "src/old/mimc.rs"
+
+[[bin]]
+name = "mint-classic"
+path = "src/bin/mint-classic.rs"
+
+[[bin]]
+name = "spend-classic"
+path = "src/bin/spend-classic.rs"
+
+[[bin]]
+name = "tx"
+path = "src/bin/tx.rs"
+
+[[bin]]
 name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
