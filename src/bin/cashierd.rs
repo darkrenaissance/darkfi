@@ -43,7 +43,12 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let gateway_addr: SocketAddr = config.gateway_url.parse()?;
 
-    let btc_endpoint: String = config.btc_endpoint.clone();
+    let btc_endpoint: (bool, String) = if config.btc_testnet {
+        ( true, config.btc_testnet_endpoint.clone() )
+    }
+    else {
+        ( false, config.btc_mainnet_endpoint.clone() )
+    };
 
     let database_path = config.client_database_path.clone();
     let database_path = join_config_path(&PathBuf::from(database_path))?;

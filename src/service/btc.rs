@@ -28,10 +28,14 @@ pub struct BitcoinKeys {
     pub bitcoin_public_key: PublicKey,
     pub pub_address: Address,
     pub script: Script,
+    pub network: Network,
 }
 
 impl BitcoinKeys {
-    pub fn new(btc_client: Arc<ElectrumClient>) -> Result<Arc<BitcoinKeys>> {
+    pub fn new(
+        btc_client: Arc<ElectrumClient>,
+        network: Network,
+    ) -> Result<Arc<BitcoinKeys>> {
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -49,12 +53,12 @@ impl BitcoinKeys {
         let secret_key = SecretKey::from_slice(&hex::decode(data_slice).unwrap()).unwrap();
 
         // Use Testnet
-        let bitcoin_private_key = PrivateKey::new(secret_key, Network::Testnet);
+        let bitcoin_private_key = PrivateKey::new(secret_key, network);
 
         let bitcoin_public_key = PublicKey::from_private_key(&context, &bitcoin_private_key);
         //let pubkey_serialized = bitcoin_public_key.to_bytes();
 
-        let pub_address = Address::p2pkh(&bitcoin_public_key, Network::Testnet);
+        let pub_address = Address::p2pkh(&bitcoin_public_key, network);
 
         let script = Script::new_p2pk(&bitcoin_public_key);
 
@@ -65,6 +69,7 @@ impl BitcoinKeys {
             bitcoin_public_key,
             pub_address,
             script,
+            network,
         }))
     }
 
@@ -135,14 +140,17 @@ impl BitcoinKeys {
 
 pub struct BtcClient {
     client: Arc<ElectrumClient>,
+    network: Network,
 }
 
 impl BtcClient {
-    pub fn new(client_address: String) -> Result<Self> {
+    pub fn new( btc_endpoint: (bool, String) ) -> Result<Self> {
+        let (network, client_address) = btc_endpoint;
         let client = ElectrumClient::new(&client_address)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
         Ok(Self {
             client: Arc::new(client),
+            network: if network {Network::Testnet} else {Network::Bitcoin},
         })
     }
 }
@@ -151,7 +159,7 @@ impl BtcClient {
 impl CoinClient for BtcClient {
     async fn watch(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         //// Generate bitcoin Address
-        let btc_keys = BitcoinKeys::new(self.client.clone())?;
+        let btc_keys = BitcoinKeys::new(self.client.clone(), self.network)?;
 
         let btc_pub = btc_keys.clone();
         let btc_pub = btc_pub.get_pubkey();

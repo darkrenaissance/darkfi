@@ -59,7 +59,7 @@ impl CashierService {
     pub async fn start(
         &mut self,
         executor: Arc<Executor<'_>>,
-        client_address: String,
+        btc_endpoint: (bool, String),
         // TODO: make this a vector of assets
         asset_id: jubjub::Fr,
     ) -> Result<()> {
@@ -77,7 +77,7 @@ impl CashierService {
         let bridge = bridge::Bridge::new();
 
         #[cfg(feature = "default")]
-        let btc_client = super::btc::BtcClient::new(client_address)?;
+        let btc_client = super::btc::BtcClient::new(btc_endpoint)?;
         #[cfg(feature = "default")]
         bridge
             .clone()
