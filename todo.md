@@ -6,19 +6,19 @@
 - [x] merge cashier branch
 - [x] update cashierd.rs to new config handling. note: password param in toml
 - [ ] sqlcipher: better document install process or otherwise remove friction of using bundled version
-- [X] remove default config from binaries and add to the readme
-- [X] delete zkvm
-- [X] SOL bridge poc
+- [x] remove default config from binaries and add to the readme
+- [x] delete zkvm
+- [x] SOL bridge poc
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
-- [X] delete ALL old directories and files
-- [ ] fix spelling mistakes
+- [x] delete ALL old directories and files
+- [x] fix spelling mistakes
 - [ ] make cashier asset vector 
 
 ## deposit
 
 - [x] drk: key generation
 - [x] drk: deposit cli option
-- [ ] darkfid: check addresses are valid
+- [x] darkfid: check addresses are valid
 - [x] darkfid: send drk public key to cashierd.rs over tcp, triggered by drk.rs
 - [x] cashierd: receive BTC, mint dBTC (see tx.rs)
 - [x] cashierd: push tx to rocksdb (type: deposit, signed by cashier key)
