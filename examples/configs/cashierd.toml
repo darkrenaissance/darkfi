@@ -1,10 +1,14 @@
 accept_url = "127.0.0.1:7777"
 rpc_url = "http://127.0.0.1:8000"
 client_database_path = "cashier_client_database.db"
-btc_endpoint = "tcp://electrum.blockstream.info:50001"
+
 gateway_url = "127.0.0.1:3333"
 log_path = "/tmp/cashierd.log"
 cashierdb_path = "~/.config/darkfi/cashier.db"
 client_walletdb_path = "~/.config/darkfi/cashier_client_walletdb.db"
 password = "TEST_PASSWORD"
 client_password = "TEST_PASSWORD"
+
+btc_testnet = true
+btc_mainnet_endpoint = "tcp://electrum.blockstream.info:50001"
+btc_testnet_endpoint = "tcp://electrum.blockstream.info:60002"

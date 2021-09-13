@@ -87,9 +87,6 @@ pub struct CashierdConfig {
     #[serde(rename = "client_database_path")]
     pub client_database_path: String,
 
-    #[serde(rename = "btc_endpoint")]
-    pub btc_endpoint: String,
-
     #[serde(rename = "gateway_url")]
     pub gateway_url: String,
 
@@ -107,4 +104,13 @@ pub struct CashierdConfig {
 
     #[serde(rename = "client_password")]
     pub client_password: String,
+
+    #[serde(rename = "btc_testnet")]
+    pub btc_testnet: bool,
+
+    #[serde(rename = "btc_mainnet_endpoint")]
+    pub btc_mainnet_endpoint: String,
+
+    #[serde(rename = "btc_testnet_endpoint")]
+    pub btc_testnet_endpoint: String,
 }
