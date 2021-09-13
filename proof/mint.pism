@@ -1,0 +1,92 @@
+# :set syntax=pism
+# :source ../scripts/pism.vim
+constant G_VCV FixedGenerator
+constant G_VCR FixedGenerator
+constant CRH_IVK BlakePersonalization
+#constant JUBJUB_FR_CAPACITY BinarySize
+#constant NOTE_COMMIT PedersenPersonalization
+
+contract mint_contract
+    # Value commitment
+    param value U64
+    param asset_id Fr
+    param randomness_value Fr
+    param randomness_asset Fr
+
+    param serial Fr
+    param randomness_coin Fr
+    param public Point
+start
+    # Witness input values
+    u64_as_binary_le value param:value
+    fr_as_binary_le asset_id param:asset_id
+    fr_as_binary_le randomness_value param:randomness_value
+    fr_as_binary_le randomness_asset param:randomness_asset
+    fr_as_binary_le serial param:serial
+    fr_as_binary_le randomness_coin param:randomness_coin
+
+    witness public param:public
+    assert_not_small_order public
+
+    # Make value commitment
+    # V = v * G_VCV + r * G_VCR
+
+    ec_mul_const vcv value G_VCV
+    ec_mul_const rcv randomness_value G_VCR
+    ec_add cv vcv rcv
+    # emit cv
+    emit_ec cv
+
+    # Make asset_id commitment
+    # A = a * G_VCV + r_a * G_VCR
+
+    ec_mul_const vca asset_id G_VCV
+    ec_mul_const rca randomness_asset G_VCR
+    ec_add ca vca rca
+    # emit ca
+    emit_ec ca
+
+
+    # Make the coin
+    # C = Hash(public_key, value, asset_id, serial, randomness_coin)
+
+    # Build the preimage to hash
+    alloc_binary preimage
+
+    # public_key
+    ec_repr repr_public public
+    binary_extend preimage repr_public
+
+    # value
+    binary_extend preimage value
+
+# Fr values are 252 bits so we need to pad it with extra 0s
+# to match the Rust values which are 256 bits
+{% macro binary_put_fr(binary, var) -%}
+    binary_extend {{ binary }} {{ var }}
+    {% for n in range(4) %}
+        alloc_const_bit zero_bit false
+        binary_push {{ binary }} zero_bit
+    {% endfor %}
+{%- endmacro %}
+
+    # serial
+    {{ binary_put_fr("preimage", "serial") }}
+
+    # randomness_coin
+    {{ binary_put_fr("preimage", "randomness_coin") }}
+
+    # asset_id
+    {{ binary_put_fr("preimage", "asset_id") }}
+
+    # Public key:       SubgroupPoint   = 256 bits
+    # Value:            u64             = 64 bits
+    # AssetID:          Fr              = 252 + 4 bits padding
+    # Serial:           Fr              = 252 + 4 bits padding
+    # Randomness coin   Fr              = 252 + 4 bits padding
+    # TOTAL: 1088 bits for preimage
+    static_assert_binary_size preimage 1088
+    blake2s coin preimage CRH_IVK
+    emit_binary coin
+end
+

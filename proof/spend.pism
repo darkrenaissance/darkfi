@@ -1,0 +1,158 @@
+constant G_VCV FixedGenerator
+constant G_VCR FixedGenerator
+constant G_SPEND FixedGenerator
+constant PRF_NF BlakePersonalization
+constant CRH_IVK BlakePersonalization
+constant NOTE_COMMIT PedersenPersonalization
+{% for i in range(32) %}
+    constant MERKLE_{{ i }} PedersenPersonalization
+{% endfor %}
+
+contract spend_contract
+    # Value commitment
+    param value U64
+    param asset_id Fr
+    param randomness_value Fr
+    param randomness_asset Fr
+
+    param serial Fr
+    param randomness_coin Fr
+    param secret Fr
+    param signature_secret Fr
+
+{% for i in range(32) %}
+    param branch_{{ i }} Scalar
+    param is_right_{{ i }} Bool
+{% endfor %}
+start
+    # Witness input values
+    u64_as_binary_le value param:value
+    fr_as_binary_le asset_id param:asset_id
+    fr_as_binary_le randomness_value param:randomness_value
+    fr_as_binary_le randomness_asset param:randomness_asset
+
+    # Make value commitment
+    # V = v * G_VCV + r * G_VCR
+
+    ec_mul_const vcv value G_VCV
+    ec_mul_const rcv randomness_value G_VCR
+    ec_add cv vcv rcv
+    # emit cv
+    emit_ec cv
+
+    # Make asset_id commitment
+    # A = a * G_VCV + r * G_VCR
+
+    ec_mul_const vca asset_id G_VCV
+    ec_mul_const rca randomness_asset G_VCR
+    ec_add ca vca rca
+    # emit ca
+    emit_ec ca
+
+    # Make the nullifier
+    # N = Hash(secret, serial)
+    fr_as_binary_le serial param:serial
+    fr_as_binary_le secret param:secret
+
+    alloc_binary nf_preimage
+
+# Fr values are 252 bits so we need to pad it with extra 0s
+# to match the Rust values which are 256 bits
+{% macro binary_put_fr(binary, var) -%}
+    binary_extend {{ binary }} {{ var }}
+    {% for n in range(4) %}
+        alloc_const_bit zero_bit false
+        binary_push {{ binary }} zero_bit
+    {% endfor %}
+{%- endmacro %}
+
+    # secret
+    binary_clone secret2 secret
+    {{ binary_put_fr("nf_preimage", "secret2") }}
+
+    # serial
+    binary_clone serial2 serial
+    {{ binary_put_fr("nf_preimage", "serial2") }}
+
+    # Secret:           Fr              = 252 + 4 bits padding
+    # Serial:           Fr              = 252 + 4 bits padding
+    # TOTAL: 512 bits for preimage
+    static_assert_binary_size nf_preimage 512
+    blake2s nf nf_preimage PRF_NF
+    emit_binary nf
+
+    # Derive the public key
+    # P = secret * G
+    ec_mul_const public secret G_SPEND
+
+    # Make the coin (same as mint contract)
+    # C = Hash(public_key, value, asset_id, serial, randomness_coin)
+    fr_as_binary_le randomness_coin param:randomness_coin
+
+    # Build the preimage to hash
+    alloc_binary preimage
+
+    # public_key
+    ec_repr repr_public public
+    binary_extend preimage repr_public
+
+    # value
+    binary_extend preimage value
+
+    # serial
+    {{ binary_put_fr("preimage", "serial") }}
+
+    # randomness_coin
+    {{ binary_put_fr("preimage", "randomness_coin") }}
+
+    # asset_id
+    {{ binary_put_fr("preimage", "asset_id") }}
+
+    # Public key:       SubgroupPoint   = 256 bits
+    # Value:            u64             = 64 bits
+    # AssetID:          Fr              = 252 + 4 bits padding
+    # Serial:           Fr              = 252 + 4 bits padding
+    # Randomness coin   Fr              = 252 + 4 bits padding
+    # TOTAL: 1088 bits for preimage
+    static_assert_binary_size preimage 1088
+    blake2s coin preimage CRH_IVK
+    # Debug stuff. Normally we don't reveal the coin in the spend proof.
+    #binary_clone coin2 coin
+    #emit_binary coin2
+
+    # coin_commit = PedersenHash(coin)
+    pedersen_hash cm coin NOTE_COMMIT
+    # left = coin_commit.u
+    ec_get_u current cm
+
+    # Our merkle tree has a height of 32
+{% for i in range(32) %}
+    # left = current
+    # right = branch[{{ i }}]
+    alloc_scalar branch param:branch_{{ i }}
+
+    # is_right = is_right[{{ i }}]
+    alloc_bit is_right param:is_right_{{ i }}
+
+    # reverse(a, b, condition) = if condition (b, a) else (a, b)
+    conditionally_reverse left right current branch is_right
+
+    # coin_commit = PedersenHash(left || right)
+    scalar_as_binary left left
+    scalar_as_binary right right
+    alloc_binary preimage
+    binary_extend preimage left
+    binary_extend preimage right
+    pedersen_hash cm preimage MERKLE_{{ i }}
+    # current = coin_commit.u
+    ec_get_u current cm
+{% endfor %}
+    # Reveal the merkle root
+    emit_scalar current
+
+    # Emit the signature public key
+    fr_as_binary_le signature_secret param:signature_secret
+    ec_mul_const signature_public signature_secret G_SPEND
+    emit_ec signature_public
+end
+
