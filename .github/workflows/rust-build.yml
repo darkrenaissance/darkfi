@@ -26,5 +26,5 @@ jobs:
                 mkdir -p ~/.config/darkfi
             - name: Compile
               run: |
-                cargo build --release
+                cargo build --features sol --release
                 cargo test
