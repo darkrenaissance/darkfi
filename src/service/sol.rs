@@ -15,8 +15,8 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
 use solana_sdk::{
-    native_token::lamports_to_sol, pubkey::Pubkey, signature::Signer, signer::keypair::Keypair,
-    system_instruction, transaction::Transaction,
+    pubkey::Pubkey, signature::Signer, signer::keypair::Keypair, system_instruction,
+    transaction::Transaction,
 };
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -44,7 +44,7 @@ pub struct SolClient {
     // subscription hashmap with pubkey and balance
     subscriptions: Arc<Mutex<HashMap<String, u64>>>,
 
-    // notify when get new update 
+    // notify when get new update
     notify_channel: (
         async_channel::Sender<(Vec<u8>, u64)>,
         async_channel::Receiver<(Vec<u8>, u64)>,
@@ -72,7 +72,9 @@ impl SolClient {
         }))
     }
 
-    pub async fn subscribe_to_notify_channel(self: Arc<Self>) -> Result<async_channel::Receiver<(Vec<u8>, u64)>> {
+    pub async fn subscribe_to_notify_channel(
+        self: Arc<Self>,
+    ) -> Result<async_channel::Receiver<(Vec<u8>, u64)>> {
         Ok(self.notify_channel.1.clone())
     }
 
@@ -124,6 +126,7 @@ impl SolClient {
                 }
 
                 JsonResult::Notif(n) => {
+                    // TODO remove unwrap
                     let new_bal = n.params["result"]["value"]["lamports"].as_u64().unwrap();
                     let owner_pubkey = n.params["result"]["value"]["owner"].as_str().unwrap();
                     let old_balance = self.subscriptions.lock().await[owner_pubkey];
@@ -132,11 +135,8 @@ impl SolClient {
                         let sub_id = n.params["subscription"].as_u64().unwrap();
                         let received_balance = new_bal - old_balance;
 
-                        // XXX casting f64 to u64
-                        let received_balance = lamports_to_sol(received_balance) as u64;
-
                         // TODO Send the received coins to the main address
-                    
+
                         self.notify_channel
                             .0
                             .send((
@@ -152,9 +152,14 @@ impl SolClient {
 
                         debug!(
                             target: "SOL BRIDGE",
-                            "Received {} SOL, to the pubkey: {} ",
+                            "Received {} lamports, to the pubkey: {} ",
                             received_balance, owner_pubkey.to_string(),
                         );
+                    } else if new_bal < old_balance {
+                        let sub_id = n.params["subscription"].as_u64().unwrap();
+                        SolClient::unsubscribe(self.watch_channel.0.clone(), sub_id)
+                            .await
+                            .unwrap();
                     }
                 }
             }
@@ -235,7 +240,11 @@ impl Encodable for Keypair {
 impl Decodable for Keypair {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
-        let key = Keypair::from_bytes(key.as_slice()).unwrap();
+        let key = Keypair::from_bytes(key.as_slice()).map_err(|_| {
+            crate::Error::from(SolFailed::DecodeAndEncodeError(
+                "load keypair from slice".into(),
+            ))
+        })?;
         Ok(key)
     }
 }
@@ -251,8 +260,11 @@ impl Encodable for Pubkey {
 impl Decodable for Pubkey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
-        // TODO remove unwrap
-        let key = Pubkey::try_from(key.as_str()).unwrap();
+        let key = Pubkey::try_from(key.as_str()).map_err(|_| {
+            crate::Error::from(SolFailed::DecodeAndEncodeError(
+                "load public key from slice".into(),
+            ))
+        })?;
         Ok(key)
     }
 }
@@ -268,7 +280,6 @@ impl Encodable for SecretKey {
 impl Decodable for SecretKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
-        // TODO remove unwrap
         let key = SecretKey::from_bytes(key.as_slice()).map_err(|_| {
             crate::Error::from(SolFailed::DecodeAndEncodeError(
                 "load secret key from slice".into(),
