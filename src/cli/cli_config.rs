@@ -9,6 +9,7 @@ use std::{
     str,
 };
 
+#[derive(Default)]
 pub struct Config<T> {
     config: PhantomData<T>,
 }

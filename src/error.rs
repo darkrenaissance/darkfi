@@ -16,6 +16,7 @@ pub enum Error {
     /// Parsing error
     ParseFailed(&'static str),
     ParseIntError,
+    ParseFloatError,
     AsyncChannelSenderError,
     AsyncChannelReceiverError,
     MalformedPacket,
@@ -71,6 +72,7 @@ impl fmt::Display for Error {
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
+            Error::ParseFloatError => f.write_str("Parse float error"),
             Error::AsyncChannelSenderError => f.write_str("Async_channel sender error"),
             Error::AsyncChannelReceiverError => f.write_str("Async_channel receiver error"),
             Error::MalformedPacket => f.write_str("Malformed packet"),
@@ -199,6 +201,12 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
+impl From<std::num::ParseFloatError> for Error {
+    fn from(_err: std::num::ParseFloatError) -> Error {
+        Error::ParseFloatError
+    }
+}
+
 impl From<std::string::FromUtf8Error> for Error {
     fn from(_err: std::string::FromUtf8Error) -> Error {
         Error::Utf8Error
@@ -266,4 +274,3 @@ impl From<bs58::decode::Error> for Error {
         Error::Base58DecodeError(err.to_string())
     }
 }
-
