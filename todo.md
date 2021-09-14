@@ -13,6 +13,10 @@
 - [x] delete ALL old directories and files
 - [x] fix spelling mistakes
 - [ ] make cashier asset vector 
+- [ ] asset IDs as token addresses on the chosen network
+- [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
+- [ ] drk -wk reports success on subsequent calls, it should rather tell that things are already initialized
+- [ ] use f64 (and only positive/absolute) for amounts only on the client-facing side. internally, use u64 and num of decimals
 
 ## deposit
 
