@@ -7,7 +7,8 @@ use bitcoin::blockdata::script::Script;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
-use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
+use bitcoin::hash_types::Txid;
+use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -73,7 +74,7 @@ impl BitcoinKeys {
         }))
     }
 
-    pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<Option<GetBalanceRes>> {
+    pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
         debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
         let client = &self.btc_client;
         // Check if script is already subscribed
@@ -86,7 +87,9 @@ impl BitcoinKeys {
                             let balance = client.script_get_balance(&self.script)?;
                             if balance.confirmed > 0 {
                                 debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
-                                return Ok(Some(balance));
+                                let history = client.script_get_history(&self.script)?;
+                                //return tx_hash of latest tx that created balance
+                                return Ok((history[0].tx_hash, balance.confirmed));
                             } else {
                                 debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
                                 continue;
@@ -167,12 +170,11 @@ impl CoinClient for BtcClient {
         let btc_priv = btc_keys.clone();
         let btc_priv = btc_priv.get_privkey();
 
-        let _ = btc_keys.start_subscribe().await?;
-
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
+
+        let (_txid, _balance) = btc_keys.start_subscribe().await?;
         //let _script = btc_keys.get_script();
-        //
 
         Ok((serialize(&btc_priv.to_bytes()), serialize(&btc_pub.to_bytes())))
     }
