@@ -17,10 +17,11 @@ jobs:
                 toolchain: stable
                 override: true
                 components: rustfmt, clippy
-            - name: Install sqlcipher
+            - name: Install Dependencies
               run: |
                 sudo apt-get update
                 sudo apt-get install libsqlcipher-dev
+                sudo apt-get install libudev-dev
             - name: Create Config Dir 
               run: |
                 mkdir -p ~/.config/darkfi
