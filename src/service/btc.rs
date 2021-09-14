@@ -135,6 +135,7 @@ impl BitcoinKeys {
     pub fn get_script(&self) -> &Script {
         &self.script
     }
+
 }
 
 
@@ -166,7 +167,7 @@ impl CoinClient for BtcClient {
         let btc_priv = btc_keys.clone();
         let btc_priv = btc_priv.get_privkey();
 
-        // let _ = btc_keys.start_subscribe().await?;
+        let _ = btc_keys.start_subscribe().await?;
 
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");

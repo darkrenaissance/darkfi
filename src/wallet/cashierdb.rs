@@ -105,7 +105,32 @@ impl CashierDb {
         )?;
         Ok(())
     }
+    pub fn put_btc_utxo(
+        &self,
+        tx_id: &Vec<u8>,
+        btc_key_public: &Vec<u8>,
+        balance: i64,
+    ) -> Result<()> {
+        debug!(target: "CASHIERDB", "Put BTC Utxo");
 
+        let tx_id = self.get_value_serialized(tx_id)?;
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        conn.execute(
+            "INSERT INTO btc_utxo(tx_id, btc_key_public, balance)
+            VALUES (:tx_id, :btc_key_public, :balance)",
+            named_params! {
+                ":tx_id": tx_id,
+                ":btc_key_public": btc_key_public,
+                ":balance": balance,
+            },
+        )?;
+        Ok(())
+    }
     pub fn get_withdraw_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
         debug!(target: "CASHIERDB", "Get withdraw private keys");
         // open connection
