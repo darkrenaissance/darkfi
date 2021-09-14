@@ -81,6 +81,7 @@ Open research questions.
 
 ## product
 
+- [ ] move DRK in and out of contracts from the root chain
 - [ ] first MPC services
 - [ ] DAO
 - [ ] auctions
