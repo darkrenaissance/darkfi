@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDb>;
 
+#[derive(Debug, Clone)]
 pub struct Keypair {
     pub public: jubjub::SubgroupPoint,
     pub private: jubjub::Fr,
@@ -303,7 +304,7 @@ mod tests {
 
         wallet.put_keypair(key_public, key_private)?;
 
-        let keypair = wallet.get_keypairs()?[0];
+        let keypair = wallet.get_keypairs()?[0].clone();
 
         assert_eq!(public, keypair.public);
         assert_eq!(secret, keypair.private);

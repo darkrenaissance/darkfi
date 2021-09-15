@@ -132,8 +132,8 @@ impl CashierService {
                         match res.payload {
                             bridge::BridgeResponsePayload::SendResponse => {
                                 // TODO Send the received coins to the main address
-                                // wallet.delete_withdraw_key_record(&addr, &serialize(&1) )
-                                //     .expect("Delete withdraw key record");
+                                wallet.confirm_withdraw_key_record(&addr, &serialize(&1) )
+                                    .expect("Confirm withdraw key record");
                             }
                             _ => {}
                         }
@@ -260,7 +260,7 @@ impl CashierService {
                 if let Some(addr) =
                     cashier_wallet.get_withdraw_keys_by_coin_public_key(&coin_address, &asset_id)?
                 {
-                    cashier_public = addr.0;
+                    cashier_public = addr.public;
                 } else {
                     let cashier_secret = jubjub::Fr::random(&mut OsRng);
                     cashier_public =
