@@ -171,7 +171,7 @@ impl Client {
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
 
         if clear_input {
-            let cashier_secret = self.state.wallet.get_private_keys()?[0];
+            let cashier_secret = self.state.wallet.get_keypairs()?[0].private;
             let input = tx::TransactionBuilderClearInputInfo {
                 value: amount,
                 asset_id,
@@ -272,7 +272,13 @@ impl Client {
             let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
             let mut client = client.lock().await;
             let update = state_transition(&client.state, tx)?;
-            let mut secret_keys = client.state.wallet.get_private_keys()?;
+            let mut secret_keys: Vec<jubjub::Fr> = client
+                .state
+                .wallet
+                .get_keypairs()?
+                .iter()
+                .map(|k| k.private)
+                .collect();
             let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
             secret_keys.append(&mut withdraw_keys);
             client
@@ -309,7 +315,15 @@ impl Client {
             let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
             let mut client = client.lock().await;
             let update = state_transition(&client.state, tx)?;
-            let secret_keys = client.state.wallet.get_private_keys()?;
+
+            let secret_keys: Vec<jubjub::Fr> = client
+                .state
+                .wallet
+                .get_keypairs()?
+                .iter()
+                .map(|k| k.private)
+                .collect();
+
             client
                 .state
                 .apply(update, secret_keys.clone(), notify.clone())

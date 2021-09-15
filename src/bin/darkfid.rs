@@ -31,7 +31,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
     let mint_params_path = join_config_path(&PathBuf::from("mint.params"))?;
     let spend_params_path = join_config_path(&PathBuf::from("spend.params"))?;
 
-    if let Err(_) = wallet.get_private_keys() {
+    if let Err(_) = wallet.get_keypairs() {
         wallet.init_db()?;
         wallet.key_gen()?;
     }

@@ -16,6 +16,8 @@ use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+
+
 #[repr(u8)]
 enum CashierError {
     NoError,
@@ -42,13 +44,13 @@ impl CashierService {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
     ) -> Result<CashierService> {
-        // Pull address from config later
 
         let rocks = Rocks::new(&cashier_database_path)?;
 
         let client = Client::new(rocks, gateway_addrs, params_paths, client_wallet.clone())?;
 
         let client = Arc::new(Mutex::new(client));
+
 
         Ok(CashierService {
             addr,
@@ -59,6 +61,7 @@ impl CashierService {
     pub async fn start(
         &mut self,
         executor: Arc<Executor<'_>>,
+        // TODO: the endpoint should be generic according to asset_id 
         btc_endpoint: (bool, String),
         // TODO: make this a vector of assets
         asset_id: jubjub::Fr,
@@ -76,13 +79,12 @@ impl CashierService {
 
         let bridge = bridge::Bridge::new();
 
-        #[cfg(feature = "default")]
-        let btc_client = super::btc::BtcClient::new(btc_endpoint)?;
-        #[cfg(feature = "default")]
-        bridge
-            .clone()
-            .add_clients(asset_id, Arc::new(btc_client))
-            .await;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "default")]{
+                let btc_client = super::btc::BtcClient::new(btc_endpoint)?;
+                bridge.clone().add_clients(asset_id, Arc::new(btc_client)).await;
+            }
+        }
 
         let handle_request_task = executor.spawn(Self::handle_request_loop(
             send.clone(),
@@ -129,10 +131,9 @@ impl CashierService {
                     if res.error == 0 {
                         match res.payload {
                             bridge::BridgeResponsePayload::SendResponse => {
-                                // then delete this coin addr from withdraw_keys records
                                 // TODO Send the received coins to the main address
-                                wallet.delete_withdraw_key_record(&addr, &serialize(&1) )
-                                    .expect("Delete withdraw key record");
+                                // wallet.delete_withdraw_key_record(&addr, &serialize(&1) )
+                                //     .expect("Delete withdraw key record");
                             }
                             _ => {}
                         }
@@ -212,7 +213,6 @@ impl CashierService {
                 let (asset_id, dpub): (jubjub::Fr, jubjub::SubgroupPoint) =
                     deserialize(&request.get_payload())?;
 
-                //TODO: check if key has already been issued
                 let _check =
                     cashier_wallet.get_deposit_coin_keys_by_dkey_public(&dpub, &serialize(&1));
 
@@ -252,10 +252,6 @@ impl CashierService {
                 debug!(target: "CASHIER DAEMON", "Received withdraw request");
                 let (asset_id, coin_address): (jubjub::Fr, Vec<u8>) =
                     deserialize(&request.get_payload())?;
-                //let btc_address: String = deserialize(&btc_address)?;
-                //let btc_address = bitcoin::util::address::Address::from_str(&btc_address)
-                //   .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-                //
 
                 let asset_id = serialize(&asset_id);
 
