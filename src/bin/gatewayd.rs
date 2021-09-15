@@ -15,8 +15,7 @@ use easy_parallel::Parallel;
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Result<()> {
     let accept_addr: SocketAddr = config.accept_url.parse()?;
     let pub_addr: SocketAddr = config.publisher_url.parse()?;
-    let database_path = config.database_path.clone();
-    let database_path = join_config_path(&PathBuf::from(database_path))?;
+    let database_path = join_config_path(&PathBuf::from("gatewayd.db"))?;
 
     let rocks = Rocks::new(&database_path)?;
     let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks);
@@ -31,7 +30,7 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let path = join_config_path(&PathBuf::from("gatewayd.toml")).unwrap();
+    let path = join_config_path(&PathBuf::from("gatewayd.toml"))?;
 
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(path)?;
 

@@ -17,12 +17,10 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<DarkfidConfig>) -> Resul
     let connect_addr: SocketAddr = config.connect_url.parse()?;
     let sub_addr: SocketAddr = config.subscriber_url.parse()?;
     let cashier_addr: SocketAddr = config.cashier_url.parse()?;
-    let database_path = config.database_path.clone();
-    let walletdb_path = config.walletdb_path.clone();
     let rpc_url: std::net::SocketAddr = config.rpc_url.parse()?;
 
-    let database_path = join_config_path(&PathBuf::from(database_path))?;
-    let walletdb_path = join_config_path(&PathBuf::from(walletdb_path))?;
+    let database_path = join_config_path(&PathBuf::from("database_client.db"))?;
+    let walletdb_path = join_config_path(&PathBuf::from("walletdb.db"))?;
 
     let rocks = Rocks::new(&database_path)?;
 

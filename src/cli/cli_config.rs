@@ -31,7 +31,6 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DrkConfig {
     pub rpc_url: String,
-
     pub log_path: String,
 }
 
@@ -49,12 +48,6 @@ pub struct DarkfidConfig {
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
-    #[serde(rename = "database_path")]
-    pub database_path: String,
-
-    #[serde(rename = "walletdb_path")]
-    pub walletdb_path: String,
-
     #[serde(rename = "log_path")]
     pub log_path: String,
 
@@ -70,9 +63,6 @@ pub struct GatewaydConfig {
     #[serde(rename = "publisher_url")]
     pub publisher_url: String,
 
-    #[serde(rename = "database_path")]
-    pub database_path: String,
-
     #[serde(rename = "log_path")]
     pub log_path: String,
 }
@@ -85,33 +75,15 @@ pub struct CashierdConfig {
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
-    #[serde(rename = "client_database_path")]
-    pub client_database_path: String,
-
     #[serde(rename = "gateway_url")]
     pub gateway_url: String,
 
     #[serde(rename = "log_path")]
     pub log_path: String,
 
-    #[serde(rename = "cashierdb_path")]
-    pub cashierdb_path: String,
-
-    #[serde(rename = "client_walletdb_path")]
-    pub client_walletdb_path: String,
-
     #[serde(rename = "password")]
     pub password: String,
 
     #[serde(rename = "client_password")]
     pub client_password: String,
-
-    #[serde(rename = "btc_testnet")]
-    pub btc_testnet: bool,
-
-    #[serde(rename = "btc_mainnet_endpoint")]
-    pub btc_mainnet_endpoint: String,
-
-    #[serde(rename = "btc_testnet_endpoint")]
-    pub btc_testnet_endpoint: String,
 }

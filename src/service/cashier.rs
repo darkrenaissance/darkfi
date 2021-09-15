@@ -16,8 +16,6 @@ use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-
-
 #[repr(u8)]
 enum CashierError {
     NoError,
@@ -44,13 +42,11 @@ impl CashierService {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
     ) -> Result<CashierService> {
-
         let rocks = Rocks::new(&cashier_database_path)?;
 
         let client = Client::new(rocks, gateway_addrs, params_paths, client_wallet.clone())?;
 
         let client = Arc::new(Mutex::new(client));
-
 
         Ok(CashierService {
             addr,
@@ -61,8 +57,6 @@ impl CashierService {
     pub async fn start(
         &mut self,
         executor: Arc<Executor<'_>>,
-        // TODO: the endpoint should be generic according to asset_id 
-        btc_endpoint: (bool, String),
         // TODO: make this a vector of assets
         asset_id: jubjub::Fr,
     ) -> Result<()> {
@@ -81,6 +75,10 @@ impl CashierService {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "default")]{
+                // TODO: the endpoint should be generic according to asset_id
+                let btc_endpoint: (bool, String) = 
+                    (true, String::from("tcp://electrum.blockstream.info:60001"));
+
                 let btc_client = super::btc::BtcClient::new(btc_endpoint)?;
                 bridge.clone().add_clients(asset_id, Arc::new(btc_client)).await;
             }
