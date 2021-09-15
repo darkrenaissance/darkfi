@@ -168,6 +168,28 @@ impl SolClient {
         Ok(())
     }
 
+    async fn send_to_main_account(
+        &self,
+        keypair: Keypair,
+    ) -> Result<()> {
+        let rpc = RpcClient::new(RPC_SERVER.to_string());
+        
+        let amount = rpc.get_balance(&keypair.pubkey()).unwrap();
+
+        let instruction = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
+
+        let mut tx = Transaction::new_with_payer(&[instruction], Some(&keypair.pubkey()));
+        let bhq = BlockhashQuery::default();
+        match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
+            Err(_) => panic!("Couldn't connect to RPC"),
+            Ok(v) => tx.sign(&[&keypair], v.0),
+        }
+        let _signature = rpc
+            .send_and_confirm_transaction(&tx)
+            .expect("send transaction");
+        Ok(())
+    }
+
     async fn unsubscribe(
         watch_channel_sender: async_channel::Sender<jsonrpc::JsonRequest>,
         sub_id: u64,
@@ -227,6 +249,7 @@ impl CoinClient for SolClient {
             .expect("send transaction");
         Ok(())
     }
+
 }
 
 impl Encodable for Keypair {
