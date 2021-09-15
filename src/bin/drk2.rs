@@ -139,7 +139,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("deposit") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKEN").unwrap().to_lowercase();
+        let token = matches.value_of("TOKEN").unwrap();
 
         // TODO: Retrieve cashier features and error if they
         // don't support the network.
@@ -156,7 +156,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("withdraw") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKEN").unwrap().to_lowercase();
+        let token = matches.value_of("TOKEN").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
@@ -171,7 +171,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     }
 
     if let Some(matches) = options.subcommand_matches("transfer") {
-        let asset_type = matches.value_of("ASSET_TYPE").unwrap().to_lowercase();
+        let asset_type = matches.value_of("ASSET_TYPE").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
