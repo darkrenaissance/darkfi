@@ -93,6 +93,7 @@ Open research questions.
 ## dev
 
 - [ ] make bitreich halo2 impl
+- [ ] doc on circuit design
 
 # halo2
 
