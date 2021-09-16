@@ -1351,7 +1351,6 @@ dependencies = [
  "ctrlc",
  "dirs 3.0.2",
  "easy-parallel",
- "ed25519-dalek",
  "electrum-client",
  "failure",
  "failure_derive",

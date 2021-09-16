@@ -87,7 +87,6 @@ solana-sdk = {version = "1.7.11", optional = true}
 solana-client = {version = "1.7.11", optional = true}
 tokio-tungstenite = {version = "0.15.0", optional = true} 
 tokio = {version = "1.11.0", features = ["full"], optional = true}
-ed25519-dalek = {version = "1.0.1", optional = true}
 
 ## Cashier Bitcoin Dependencies
 bitcoin = {version = "0.27.0", optional = true }
@@ -100,7 +99,7 @@ features = ["bundled", "sqlcipher"]
 
 [features]
 default = ["bitcoin", "secp256k1", "electrum-client"]
-sol = ["solana-sdk", "solana-client", "tokio-tungstenite", "tokio", "ed25519-dalek" ]
+sol = ["solana-sdk", "solana-client", "tokio-tungstenite", "tokio" ]
 
 [[bin]]
 name = "gatewayd"
