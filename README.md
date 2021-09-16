@@ -9,8 +9,8 @@
 ```
 connect_url = "127.0.0.1:3333"
 publisher_url = "127.0.0.1:4444"
-database_path = "gatewayd.db"
-log_path = "/tmp/gatewayd.log"
+log_path = "/tmp/gatewayd.log"	
+
 ```
 
 **cashierd.toml**
@@ -18,14 +18,11 @@ log_path = "/tmp/gatewayd.log"
 ```
 accept_url = "127.0.0.1:7777"
 rpc_url = "http://127.0.0.1:8000"
-client_database_path = "cashier_client_database.db"
-btc_endpoint = "tcp://electrum.blockstream.info:50001"
 gateway_url = "127.0.0.1:3333"
 log_path = "/tmp/cashierd.log"
-cashierdb_path = "~/.config/darkfi/cashier.db"
-client_walletdb_path = "~/.config/darkfi/cashier_client_walletdb.db"
 password = "TEST_PASSWORD"
 client_password = "TEST_PASSWORD"
+
 ```
 
 **darkfid.toml**
@@ -35,10 +32,9 @@ connect_url = "127.0.0.1:3333"
 subscriber_url = "127.0.0.1:4444"
 cashier_url = "127.0.0.1:7777"
 rpc_url = "127.0.0.1:8000"
-database_path = "~/.config/darkfi/database_client.db"
-walletdb_path = "~/.config/darkfi/walletdb.db"
 log_path = "/tmp/darkfid_service_daemon.log"
 password = "TEST_PASSWORD"
+
 ```
 
 **drk.toml**
@@ -46,6 +42,7 @@ password = "TEST_PASSWORD"
 ```
 rpc_url = "http://127.0.0.1:8000"
 log_path = "/tmp/drk_cli.log"
+
 ```
 
 3. Configure the password field on all TOML files.

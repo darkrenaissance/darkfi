@@ -1,4 +1,4 @@
-use super::WalletApi;
+use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
 use crate::{Error, Result};
 
@@ -138,8 +138,11 @@ impl CashierDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT d_key_private FROM withdraw_keypairs")?;
-        let keys = stmt.query_map([], |row| {
+        let confirm = self.get_value_serialized(&false)?;
+
+        let mut stmt =
+            conn.prepare("SELECT d_key_private FROM withdraw_keypairs WHERE confirm = :confirm")?;
+        let keys = stmt.query_map(&[(":confirm", &confirm)], |row| {
             let private_key: jubjub::Fr = self
                 .get_value_deserialized(row.get(0)?)
                 .expect("deserialize private key");
@@ -155,22 +158,29 @@ impl CashierDb {
         Ok(private_keys)
     }
 
-    // return (public key, private key)
     pub fn get_withdraw_keys_by_coin_public_key(
         &self,
         coin_public_key: &Vec<u8>,
         asset_id: &Vec<u8>,
-    ) -> Result<Option<(jubjub::SubgroupPoint, jubjub::Fr)>> {
+    ) -> Result<Option<Keypair>> {
         debug!(target: "CASHIERDB", "Check for existing coin address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
+        let confirm = self.get_value_serialized(&false)?;
+
         let mut stmt =
-            conn.prepare("SELECT * FROM withdraw_keypairs WHERE coin_key_id = :coin_key_id AND asset_id = :asset_id")?;
-        let addr_iter = stmt.query_map::<(jubjub::SubgroupPoint, jubjub::Fr), _, _>(
-            &[(":coin_key_id", &coin_public_key), (":asset_id", &asset_id)],
+            conn.prepare(
+                "SELECT * FROM withdraw_keypairs WHERE coin_key_id = :coin_key_id AND asset_id = :asset_id AND confirm = :confirm;")?;
+
+        let addr_iter = stmt.query_map::<Keypair, _, _>(
+            &[
+                (":coin_key_id", &coin_public_key),
+                (":asset_id", &asset_id),
+                (":confirm", &&confirm),
+            ],
             |row| {
                 let public: jubjub::SubgroupPoint = self
                     .get_value_deserialized(row.get(2)?)
@@ -178,11 +188,11 @@ impl CashierDb {
                 let private: jubjub::Fr = self
                     .get_value_deserialized(row.get(1)?)
                     .expect("get  private key deserialize");
-                Ok((public, private))
+                Ok(Keypair { public, private })
             },
         )?;
 
-        let mut addresses: Vec<(jubjub::SubgroupPoint, jubjub::Fr)> = vec![];
+        let mut addresses: Vec<Keypair> = vec![];
 
         for addr in addr_iter {
             addresses.push(addr?);
@@ -204,11 +214,17 @@ impl CashierDb {
 
         let d_key_public = self.get_value_serialized(pub_key)?;
 
+        let confirm = self.get_value_serialized(&false)?;
+
         let mut stmt = conn.prepare(
-            "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id",
+            "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id AND confirm = :confirm;",
         )?;
         let addr_iter = stmt.query_map::<Vec<u8>, _, _>(
-            &[(":d_key_public", &d_key_public), (":asset_id", &asset_id)],
+            &[
+                (":d_key_public", &d_key_public),
+                (":asset_id", &asset_id),
+                (":confirm", &&confirm),
+            ],
             |row| Ok(row.get(0)?),
         )?;
 
@@ -221,21 +237,23 @@ impl CashierDb {
         Ok(coin_addresses.pop())
     }
 
-    pub fn delete_withdraw_key_record(
+    pub fn confirm_withdraw_key_record(
         &self,
         coin_address: &Vec<u8>,
         asset_id: &Vec<u8>,
     ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Delete withdraw keys");
+        debug!(target: "CASHIERDB", "Confirm withdraw keys");
 
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
+        let confirm = self.get_value_serialized(&true)?;
+
         conn.execute(
-            "DELETE FROM withdraw_keypairs WHERE coin_key_id = ?1 AND asset_id = ?2;",
-            params![coin_address, asset_id],
+            "UPDATE withdraw_keypairs SET confirm = ?1  WHERE coin_key_id = ?2 AND asset_id = ?3;",
+            params![confirm, coin_address, asset_id],
         )?;
 
         Ok(())
@@ -258,14 +276,17 @@ impl CashierDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
+        let confirm = self.get_value_serialized(&false)?;
+
         conn.execute(
-            "INSERT INTO withdraw_keypairs(coin_key_id, d_key_private, d_key_public, asset_id)
-            VALUES (:coin_key_id, :d_key_private, :d_key_public, :asset_id)",
+            "INSERT INTO withdraw_keypairs(coin_key_id, d_key_private, d_key_public, asset_id, confirm)
+            VALUES (:coin_key_id, :d_key_private, :d_key_public, :asset_id, :confirm)",
             named_params! {
                 ":coin_key_id": coin_key_id,
                 ":d_key_private": d_key_private,
                 ":d_key_public": d_key_public,
                 ":asset_id": asset_id,
+                ":confirm": confirm,
             },
         )?;
         Ok(())
@@ -302,13 +323,13 @@ mod tests {
 
         let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
 
-        assert_eq!(addr, Some((public2, secret2)));
+        assert_eq!(addr.is_some(), true);
 
-        wallet.delete_withdraw_key_record(&coin_addr, &asset_id)?;
+        wallet.confirm_withdraw_key_record(&coin_addr, &asset_id)?;
 
         let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
 
-        assert_eq!(addr, None);
+        assert_eq!(addr.is_none(), true);
 
         wallet.destroy()?;
 

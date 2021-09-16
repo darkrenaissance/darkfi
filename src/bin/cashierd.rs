@@ -43,23 +43,18 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
 
     let gateway_addr: SocketAddr = config.gateway_url.parse()?;
 
-    let btc_endpoint: (bool, String) = if config.btc_testnet {
-        ( true, config.btc_testnet_endpoint.clone() )
-    }
-    else {
-        ( false, config.btc_mainnet_endpoint.clone() )
-    };
+    let database_path = join_config_path(&PathBuf::from("cashier_client_database.db"))?;
 
-    let database_path = config.client_database_path.clone();
-    let database_path = join_config_path(&PathBuf::from(database_path))?;
+    let cashierdb = join_config_path(&PathBuf::from("cashier.db"))?;
+    let client_wallet = join_config_path(&PathBuf::from("cashier_client_walletdb.db"))?;
 
     let wallet = CashierDb::new(
-        &PathBuf::from(&config.cashierdb_path),
+        &cashierdb.clone(),
         config.password.clone(),
     )?;
 
     let client_wallet = WalletDb::new(
-        &PathBuf::from(&config.client_walletdb_path),
+        &client_wallet.clone(),
         config.client_password.clone(),
     )?;
 
@@ -82,7 +77,7 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<CashierdConfig>) -> Resu
     let asset_id = deserialize(&asset.id)?;
 
     // TODO: pass vector of assets into cashier.start()
-    cashier.start(ex.clone(), btc_endpoint, asset_id).await?;
+    cashier.start(ex.clone(), asset_id).await?;
 
     Ok(())
 }

@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS withdraw_keypairs(
     coin_key_id BLOB PRIMARY KEY NOT NULL,
 	d_key_private BLOB NOT NULL,
     d_key_public BLOB NOT NULL,
-	asset_id BLOB NOT NULL
+	asset_id BLOB NOT NULL,
+	confirm BLOB NOT NULL
 );

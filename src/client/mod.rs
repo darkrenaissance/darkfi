@@ -12,8 +12,7 @@ pub enum ClientFailed {
     UnableToGetDepositAddress,
     UnableToGetWithdrawAddress,
     DoNotHaveCashierPublicKey,
-    DoNotHavePublicKey,
-    DoNotHavePrivateKey,
+    DoNotHaveKeypair,
     EmptyPassword,
     ClientError(String),
 }
@@ -37,8 +36,7 @@ impl fmt::Display for ClientFailed {
                 f.write_str("Unable to get withdraw address")
             }
             ClientFailed::DoNotHaveCashierPublicKey => f.write_str("Don't have cashier public key"),
-            ClientFailed::DoNotHavePublicKey => f.write_str("Don't have public key"),
-            ClientFailed::DoNotHavePrivateKey => f.write_str("Don't have private key"),
+            ClientFailed::DoNotHaveKeypair => f.write_str("Don't have keypair"),
             ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             ClientFailed::ClientError(i) => {
                 write!(f, "ClientError: {}", i)

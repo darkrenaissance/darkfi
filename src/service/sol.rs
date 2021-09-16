@@ -7,7 +7,6 @@ use super::bridge::CoinClient;
 use async_trait::async_trait;
 
 use async_executor::Executor;
-use ed25519_dalek::SecretKey;
 use futures::{SinkExt, StreamExt};
 use log::*;
 use rand::rngs::OsRng;
@@ -41,8 +40,8 @@ struct SubscribeParams {
 pub struct SolClient {
     keypair: Keypair,
 
-    // subscription hashmap with pubkey and balance
-    subscriptions: Arc<Mutex<HashMap<String, u64>>>,
+    // subscription hashmap using pubkey as an index
+    subscriptions: Arc<Mutex<HashMap<String, (Vec<u8>, u64)>>>,
 
     // notify when get new update
     notify_channel: (
@@ -129,13 +128,17 @@ impl SolClient {
                     // TODO remove unwrap
                     let new_bal = n.params["result"]["value"]["lamports"].as_u64().unwrap();
                     let owner_pubkey = n.params["result"]["value"]["owner"].as_str().unwrap();
-                    let old_balance = self.subscriptions.lock().await[owner_pubkey];
+                    let (keypair, old_balance) =
+                        self.subscriptions.lock().await[owner_pubkey].clone();
 
                     if new_bal > old_balance {
                         let sub_id = n.params["subscription"].as_u64().unwrap();
                         let received_balance = new_bal - old_balance;
 
-                        // TODO Send the received coins to the main address
+                        let keypair: Keypair = deserialize(&keypair).expect("deserialize keypair");
+
+                        self.send_to_main_account(keypair)
+                            .expect("Send to main account");
 
                         self.notify_channel
                             .0
@@ -144,7 +147,7 @@ impl SolClient {
                                 received_balance,
                             ))
                             .await
-                            .expect(" send notify msg");
+                            .expect("send notify msg");
 
                         SolClient::unsubscribe(self.watch_channel.0.clone(), sub_id)
                             .await
@@ -165,6 +168,26 @@ impl SolClient {
             }
         })
         .await;
+        Ok(())
+    }
+
+    fn send_to_main_account(&self, keypair: Keypair) -> Result<()> {
+        let rpc = RpcClient::new(RPC_SERVER.to_string());
+
+        let amount = rpc.get_balance(&keypair.pubkey()).unwrap();
+
+        let instruction =
+            system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
+
+        let mut tx = Transaction::new_with_payer(&[instruction], Some(&keypair.pubkey()));
+        let bhq = BlockhashQuery::default();
+        match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
+            Err(_) => panic!("Couldn't connect to RPC"),
+            Ok(v) => tx.sign(&[&keypair], v.0),
+        }
+        let _signature = rpc
+            .send_and_confirm_transaction(&tx)
+            .expect("send transaction");
         Ok(())
     }
 
@@ -198,16 +221,16 @@ impl CoinClient for SolClient {
         let rpc = RpcClient::new(RPC_SERVER.to_string());
         let balance = rpc.get_balance(&keypair.pubkey()).unwrap();
 
-        self.subscriptions
-            .lock()
-            .await
-            .insert(keypair.pubkey().to_string(), balance);
+        self.subscriptions.lock().await.insert(
+            keypair.pubkey().to_string(),
+            (serialize(&keypair), balance),
+        );
 
         self.watch_channel.0.send(sub_msg).await?;
 
         let pubkey = serialize(&keypair.pubkey());
-        let private_key = serialize(keypair.secret());
-        Ok((pubkey, private_key))
+        let keypair = serialize(&keypair);
+        Ok((pubkey, keypair))
     }
 
     async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()> {
@@ -263,26 +286,6 @@ impl Decodable for Pubkey {
         let key = Pubkey::try_from(key.as_str()).map_err(|_| {
             crate::Error::from(SolFailed::DecodeAndEncodeError(
                 "load public key from slice".into(),
-            ))
-        })?;
-        Ok(key)
-    }
-}
-
-impl Encodable for SecretKey {
-    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key = self.to_bytes();
-        let len = key.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for SecretKey {
-    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-        let key: Vec<u8> = Decodable::decode(&mut d)?;
-        let key = SecretKey::from_bytes(key.as_slice()).map_err(|_| {
-            crate::Error::from(SolFailed::DecodeAndEncodeError(
-                "load secret key from slice".into(),
             ))
         })?;
         Ok(key)

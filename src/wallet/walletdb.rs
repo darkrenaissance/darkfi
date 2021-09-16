@@ -4,7 +4,6 @@ use crate::crypto::{
     merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
 };
 use crate::serial;
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
 use async_std::sync::Arc;
@@ -16,6 +15,12 @@ use rusqlite::{named_params, params, Connection};
 use std::path::PathBuf;
 
 pub type WalletPtr = Arc<WalletDb>;
+
+#[derive(Debug, Clone)]
+pub struct Keypair {
+    pub public: jubjub::SubgroupPoint,
+    pub private: jubjub::Fr,
+}
 
 pub struct WalletDb {
     pub path: PathBuf,
@@ -73,45 +78,31 @@ impl WalletDb {
         )?;
         Ok(())
     }
-    pub fn get_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
+    pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_public FROM keys")?;
+        let mut stmt = conn.prepare("SELECT * FROM keys")?;
         // this just gets the first key. maybe we should randomize this
-        let key_iter = stmt.query_map([], |row| row.get(0))?;
-        let mut pub_keys = Vec::new();
+        let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
+        let mut keypairs = Vec::new();
         for key in key_iter {
+            let key = key?;
+            let public = key.0;
+            let private = key.1;
             let public: jubjub::SubgroupPoint =
-                self.get_value_deserialized::<jubjub::SubgroupPoint>(key?)?;
-            pub_keys.push(public);
+                self.get_value_deserialized::<jubjub::SubgroupPoint>(public)?;
+            let private: jubjub::Fr = self.get_value_deserialized::<jubjub::Fr>(private)?;
+            keypairs.push(Keypair { public, private });
         }
 
-        if pub_keys.is_empty() {
-            return Err(Error::from(ClientFailed::DoNotHavePublicKey));
+        if keypairs.is_empty() {
+            return Err(Error::from(ClientFailed::DoNotHaveKeypair));
         }
 
-        Ok(pub_keys)
+        Ok(keypairs)
     }
 
-    pub fn get_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
-        debug!(target: "WALLETDB", "Returning keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT key_private FROM keys")?;
-        let key_iter = stmt.query_map([], |row| row.get(0))?;
-        let mut keys = Vec::new();
-        for key in key_iter {
-            let private: jubjub::Fr = self.get_value_deserialized(key?)?;
-            keys.push(private);
-        }
-
-        if keys.is_empty() {
-            return Err(Error::from(ClientFailed::DoNotHavePrivateKey));
-        }
-
-        Ok(keys)
-    }
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -290,43 +281,6 @@ impl WalletDb {
         let _rows = stmt.query([])?;
         Ok(())
     }
-
-    fn get_tables_name(&self) -> Result<Vec<String>> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
-        let table_iter = stmt.query_map::<String, _, _>([], |row| row.get(0))?;
-
-        let mut tables = Vec::new();
-
-        for table in table_iter {
-            tables.push(table?);
-        }
-
-        Ok(tables)
-    }
-
-    pub fn destroy(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-
-        for table in self.get_tables_name()?.iter() {
-            let drop_stmt = format!("DROP TABLE IF EXISTS {}", table);
-            let drop_stmt = drop_stmt.as_str();
-            conn.execute(drop_stmt, [])?;
-        }
-
-        Ok(())
-    }
-    pub fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {
-        let v = serialize(data);
-        Ok(v)
-    }
-
-    pub fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
-        let v: D = deserialize(&key)?;
-        Ok(v)
-    }
 }
 
 #[cfg(test)]
@@ -350,11 +304,10 @@ mod tests {
 
         wallet.put_keypair(key_public, key_private)?;
 
-        let public2 = wallet.get_public_keys()?;
-        let secret2 = wallet.get_private_keys()?;
+        let keypair = wallet.get_keypairs()?[0].clone();
 
-        assert_eq!(public, public2[0]);
-        assert_eq!(secret, secret2[0]);
+        assert_eq!(public, keypair.public);
+        assert_eq!(secret, keypair.private);
 
         wallet.destroy()?;
 

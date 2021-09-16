@@ -67,7 +67,7 @@ impl RpcClientAdapter {
     }
 
     async fn get_key_process(client: Arc<Mutex<Client>>) -> Result<String> {
-        let key_public = client.lock().await.state.wallet.get_public_keys()?[0];
+        let key_public = client.lock().await.state.wallet.get_keypairs()?[0].public;
         let bs58_address = bs58::encode(serialize(&key_public)).into_string();
         Ok(bs58_address)
     }
@@ -150,7 +150,7 @@ impl RpcClientAdapter {
         T: Decodable + ToString,
     {
         let asset_id: jubjub::Fr = deserialize(&asset_id)?;
-        let deposit_addr = client.lock().await.state.wallet.get_public_keys()?[0];
+        let deposit_addr = client.lock().await.state.wallet.get_keypairs()?[0].public;
         let coin_public = cashier_client
             .lock()
             .await
