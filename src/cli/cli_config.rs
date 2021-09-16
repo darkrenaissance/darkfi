@@ -9,7 +9,7 @@ use std::{
     str,
 };
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Config<T> {
     config: PhantomData<T>,
 }
@@ -34,7 +34,7 @@ pub struct DrkConfig {
     pub log_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
     #[serde(rename = "connect_url")]
     pub connect_url: String,
@@ -47,6 +47,12 @@ pub struct DarkfidConfig {
 
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
+
+    #[serde(rename = "database_path")]
+    pub database_path: String,
+
+    #[serde(rename = "walletdb_path")]
+    pub walletdb_path: String,
 
     #[serde(rename = "log_path")]
     pub log_path: String,

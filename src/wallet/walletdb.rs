@@ -22,6 +22,7 @@ pub struct Keypair {
     pub private: jubjub::Fr,
 }
 
+#[derive(Clone)]
 pub struct WalletDb {
     pub path: PathBuf,
     pub password: String,
