@@ -3,9 +3,13 @@ use std::str;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
-#[derive(Serialize, Deserialize, Debug)]
+use crate::Error;
+
 #[serde(untagged)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum JsonResult {
     Resp(JsonResponse),
     Err(JsonError),
@@ -85,4 +89,17 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
         method: m,
         params: p,
     }
+}
+
+pub async fn send_request(url: String, data: Value) -> Result<JsonResult, Error> {
+    // TODO: TLS
+    let mut buf = [0; 2048];
+    let mut stream = TcpStream::connect(url).await?;
+    let data_str = serde_json::to_string(&data)?;
+
+    stream.write_all(&data_str.as_bytes()).await?;
+    let bytes_read = stream.read(&mut buf[..]).await?;
+
+    let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+    Ok(reply)
 }
