@@ -77,7 +77,7 @@ impl CashierService {
             if #[cfg(feature = "default")]{
                 // TODO: the endpoint should be generic according to asset_id
                 let btc_endpoint: (bool, String) = 
-                    (true, String::from("tcp://electrum.blockstream.info:60001"));
+                    (true, String::from("ssl://blockstream.info:993"));
 
                 let btc_client = super::btc::BtcClient::new(btc_endpoint)?;
                 bridge.clone().add_clients(asset_id, Arc::new(btc_client)).await;
