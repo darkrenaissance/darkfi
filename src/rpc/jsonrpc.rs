@@ -8,6 +8,41 @@ use tokio::net::TcpStream;
 
 use crate::Error;
 
+#[derive(Debug, Clone)]
+pub enum ErrorCode {
+    ParseError,
+    InvalidRequest,
+    MethodNotFound,
+    InvalidParams,
+    InternalError,
+    ServerError(i64),
+}
+
+impl ErrorCode {
+    pub fn code(&self) -> i64 {
+        match *self {
+            ErrorCode::ParseError => -32700,
+            ErrorCode::InvalidRequest => -32600,
+            ErrorCode::MethodNotFound => -32601,
+            ErrorCode::InvalidParams => -32602,
+            ErrorCode::InternalError => -32603,
+            ErrorCode::ServerError(c) => c,
+        }
+    }
+
+    pub fn description(&self) -> String {
+        let desc = match *self {
+            ErrorCode::ParseError => "Parse error",
+            ErrorCode::InvalidRequest => "Invalid request",
+            ErrorCode::MethodNotFound => "Method not found",
+            ErrorCode::InvalidParams => "Invalid params",
+            ErrorCode::InternalError => "Internal error",
+            ErrorCode::ServerError(_) => "Server error",
+        };
+        desc.to_string()
+    }
+}
+
 #[serde(untagged)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum JsonResult {
@@ -70,10 +105,14 @@ pub fn response(r: Value, i: Value) -> JsonResponse {
     }
 }
 
-pub fn error(c: i64, m: String, i: Value) -> JsonError {
+pub fn error(c: ErrorCode, m: Option<String>, i: Value) -> JsonError {
     let ev = JsonErrorVal {
-        code: json!(c),
-        message: json!(m),
+        code: json!(c.code()),
+        message: if m.is_none() {
+            json!(c.description())
+        } else {
+            json!(Some(m))
+        },
     };
 
     JsonError {
