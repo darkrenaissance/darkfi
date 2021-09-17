@@ -5,7 +5,7 @@ pub mod drk_cli;
 pub mod gatewayd_cli;
 
 pub use cashierd_cli::CashierdCli;
-pub use cli_config::{CashierdConfig, Config, DarkfidConfig, DrkConfig, GatewaydConfig};
+pub use cli_config::{CashierdConfig, Config, DrkConfig, GatewaydConfig};
 pub use darkfid_cli::DarkfidCli;
 pub use drk_cli::Asset;
 pub use drk_cli::DrkCli;
