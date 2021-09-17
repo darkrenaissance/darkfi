@@ -14,8 +14,8 @@ use tokio::net::TcpListener;
 use drk::{
     cli::{Config, DarkfidConfig},
     rpc::{
-        jsonrpc,
-        jsonrpc::{JsonRequest, JsonResult},
+        jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
+        jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
     serial::serialize,
     util::join_config_path,
@@ -48,13 +48,10 @@ impl Darkfid {
         })
     }
 
+    // TODO: ServerError codes should be part of the lib.
     async fn handle_request(self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonrpc::error(
-                -69,
-                "invalid parameters".to_string(),
-                req.id,
-            ));
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
         debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
@@ -71,25 +68,23 @@ impl Darkfid {
             None => {}
         };
 
-        return JsonResult::Err(jsonrpc::error(
-            -69,
-            "method not implemented".to_string(),
-            req.id,
-        ));
+        return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
 
     // --> {"method": "say_hello", "params": []}
     // <-- {"result": "hello world"}
     async fn say_hello(self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonrpc::response(json!("hello world"), id))
+        JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
 
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
     async fn create_wallet(self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.init_db() {
-            Ok(()) => return JsonResult::Resp(jsonrpc::response(json!(true), id)),
-            Err(e) => return JsonResult::Err(jsonrpc::error(-69, e.to_string(), id)),
+            Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id))
+            }
         }
     }
 
@@ -97,8 +92,10 @@ impl Darkfid {
     // <-- {"result": true}
     async fn key_gen(self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.key_gen() {
-            Ok((_, _)) => return JsonResult::Resp(jsonrpc::response(json!(true), id)),
-            Err(e) => return JsonResult::Err(jsonrpc::error(-69, e.to_string(), id)),
+            Ok((_, _)) => return JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
+            }
         }
     }
 
@@ -109,9 +106,11 @@ impl Darkfid {
             Ok(v) => {
                 let pk = v[0].public;
                 let b58 = bs58::encode(serialize(&pk)).into_string();
-                return JsonResult::Resp(jsonrpc::response(json!(b58), id));
+                return JsonResult::Resp(jsonresp(json!(b58), id));
             }
-            Err(e) => return JsonResult::Err(jsonrpc::error(-69, e.to_string(), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32003), Some(e.to_string()), id))
+            }
         }
     }
 
@@ -124,7 +123,7 @@ impl Darkfid {
     async fn deposit(self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 2 {
-            return JsonResult::Err(jsonrpc::error(-69, "missing parameters".to_string(), id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
         let network = &args[0];
@@ -137,29 +136,27 @@ impl Darkfid {
                 let pk = v[0].public;
                 pubkey = bs58::encode(serialize(&pk)).into_string();
             }
-            Err(e) => return JsonResult::Err(jsonrpc::error(-69, e.to_string(), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32003), Some(e.to_string()), id))
+            }
         }
 
         // Send request to cashier. If the cashier supports the requested network
         // (and token), it shall return a valid address where assets can be deposited.
         // If not, an error is returned, and forwarded to the method caller.
-        let req = jsonrpc::request(json!("deposit"), json!([network, token, pubkey]));
+        let req = jsonreq(json!("deposit"), json!([network, token, pubkey]));
         let rep: JsonResult;
-        match jsonrpc::send_request(self.config.cashier_url, json!(req)).await {
+        match send_request(self.config.cashier_url, json!(req)).await {
             Ok(v) => rep = v,
-            Err(e) => return JsonResult::Err(jsonrpc::error(-69, e.to_string(), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
+            }
         }
 
         match rep {
             JsonResult::Resp(r) => return JsonResult::Resp(r),
             JsonResult::Err(e) => return JsonResult::Err(e),
-            JsonResult::Notif(_n) => {
-                return JsonResult::Err(jsonrpc::error(
-                    -69,
-                    "invalid reply from cashier".to_string(),
-                    id,
-                ))
-            }
+            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
         }
     }
 
@@ -173,7 +170,7 @@ impl Darkfid {
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 4 {
-            return JsonResult::Err(jsonrpc::error(-69, "missing parameters".to_string(), id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
         let network = &args[0];
@@ -186,13 +183,21 @@ impl Darkfid {
         //    return adeposit address.
         // 3. We issue a transfer of $amount to the given address.
 
-        return JsonResult::Err(jsonrpc::error(-69, "failed to withdraw".to_string(), id));
+        return JsonResult::Err(jsonerr(
+            ServerError(-32005),
+            Some("failed to withdraw".to_string()),
+            id,
+        ));
     }
 
     // --> {"method": "transfer", [dToken, address, amount]}
     // <-- {"result": "txID"}
     async fn transfer(self, id: Value, _params: Value) -> JsonResult {
-        return JsonResult::Err(jsonrpc::error(-69, "failed to transfer".to_string(), id));
+        return JsonResult::Err(jsonerr(
+            ServerError(-32006),
+            Some("failed to transfer".to_string()),
+            id,
+        ));
     }
 }
 
