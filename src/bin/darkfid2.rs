@@ -3,7 +3,6 @@ use log::*;
 use std::path::PathBuf;
 
 use clap::clap_app;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
@@ -13,7 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use drk::{
-    cli::Config,
+    cli::{Config, DarkfidConfig},
     rpc::{
         jsonrpc,
         jsonrpc::{JsonRequest, JsonResult},
@@ -23,33 +22,6 @@ use drk::{
     wallet::WalletDb,
     Error,
 };
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-struct DarkfidConfig {
-    #[serde(rename = "connect_url")]
-    connect_url: String,
-
-    #[serde(rename = "subscriber_url")]
-    subscriber_url: String,
-
-    #[serde(rename = "cashier_url")]
-    cashier_url: String,
-
-    #[serde(rename = "rpc_url")]
-    rpc_url: String,
-
-    #[serde(rename = "database_path")]
-    database_path: String,
-
-    #[serde(rename = "walletdb_path")]
-    walletdb_path: String,
-
-    #[serde(rename = "log_path")]
-    log_path: String,
-
-    #[serde(rename = "password")]
-    password: String,
-}
 
 #[derive(Clone)]
 struct Darkfid {

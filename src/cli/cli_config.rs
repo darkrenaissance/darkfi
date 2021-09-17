@@ -34,6 +34,33 @@ pub struct DrkConfig {
     pub log_path: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DarkfidConfig {
+    #[serde(rename = "connect_url")]
+    pub connect_url: String,
+
+    #[serde(rename = "subscriber_url")]
+    pub subscriber_url: String,
+
+    #[serde(rename = "cashier_url")]
+    pub cashier_url: String,
+
+    #[serde(rename = "rpc_url")]
+    pub rpc_url: String,
+
+    #[serde(rename = "database_path")]
+    pub database_path: String,
+
+    #[serde(rename = "walletdb_path")]
+    pub walletdb_path: String,
+
+    #[serde(rename = "log_path")]
+    pub log_path: String,
+
+    #[serde(rename = "password")]
+    pub password: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GatewaydConfig {
     #[serde(rename = "connect_url")]
