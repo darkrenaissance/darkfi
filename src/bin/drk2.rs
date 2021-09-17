@@ -1,16 +1,16 @@
-#[macro_use]
-extern crate clap;
-use clap::ArgMatches;
-use drk::cli::{Config, DrkConfig};
-use drk::util::join_config_path;
-use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 use log::debug;
+use std::path::PathBuf;
+
+use clap::{clap_app, ArgMatches};
 use serde_json::{json, Value};
 use simplelog::{
     CombinedLogger, Config as SimplelogConfig, ConfigBuilder, LevelFilter, TermLogger,
     TerminalMode, WriteLogger,
 };
-use std::path::PathBuf;
+
+use drk::cli::{Config, DrkConfig};
+use drk::util::join_config_path;
+use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 
 struct Drk {
     url: String,
@@ -22,32 +22,28 @@ impl Drk {
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let data = surf::Body::from_json(&r)?;
-        debug!(target: "DRK", "--> {:?}", r);
-        let mut req = surf::post(&self.url).body(data).await?;
+        let reply: JsonResult;
+        match jsonrpc::send_request(self.url.clone(), json!(r)).await {
+            Ok(v) => reply = v,
+            Err(e) => return Err(e),
+        }
 
-        let resp = req.take_body();
-        let json = resp.into_string().await?;
-
-        let v: JsonResult = serde_json::from_str(&json)?;
-        match v {
+        match reply {
             JsonResult::Resp(r) => {
-                debug!(target: "DRK", "<-- {:?}", r);
+                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&r)?);
                 return Ok(r.result);
             }
 
             JsonResult::Err(e) => {
-                debug!(target: "DRK", "<-- {:?}", e);
+                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&e)?);
                 return Err(Error::JsonRpcError(e.error.message.to_string()));
             }
 
             JsonResult::Notif(n) => {
-                debug!(target: "DRK", "<-- {:?}", n);
-                return Err(Error::JsonRpcError(
-                    "Unexpected reply from server".to_string(),
-                ));
+                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&n)?);
+                return Err(Error::JsonRpcError("Unexpected reply".to_string()));
             }
-        };
+        }
     }
 
     // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
@@ -186,7 +182,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     Err(Error::MissingParams)
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = clap_app!(drk =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
@@ -252,5 +249,5 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    futures::executor::block_on(start(&config, args))
+    start(&config, args).await
 }
