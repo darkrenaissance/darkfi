@@ -9,52 +9,33 @@ use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
     WriteLogger,
 };
+use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
+use async_executor::Executor;
+use easy_parallel::Parallel;
+
 use drk::{
-    cli::Config,
+    cli::{CashierdConfig, Config},
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
     serial::{deserialize, serialize},
-    service::bridge,
+    service::{bridge, CashierService},
     util::join_config_path,
-    wallet::CashierDb,
-    Result,
+    wallet::{CashierDb, WalletDb},
+    Error, Result,
 };
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-struct CashierdConfig {
-    #[serde(rename = "accept_url")]
-    pub accept_url: String,
-
-    #[serde(rename = "rpc_url")]
-    pub rpc_url: String,
-
-    #[serde(rename = "gateway_url")]
-    pub gateway_url: String,
-
-    #[serde(rename = "log_path")]
-    pub log_path: String,
-
-    #[serde(rename = "cashierdb_path")]
-    pub cashierdb_path: String,
-
-    #[serde(rename = "password")]
-    pub password: String,
-
-    #[serde(rename = "client_password")]
-    pub client_password: String,
-}
 
 #[derive(Clone)]
 struct Cashierd {
     verbose: bool,
     config: CashierdConfig,
-    wallet: Arc<CashierDb>,
-    bridge: Arc<bridge::Bridge>,
+    client_wallet: Arc<WalletDb>,
+    cashier_wallet: Arc<CashierDb>,
+    //bridge: Arc<bridge::Bridge>,
     // clientdb:
     // mint_params:
     // spend_params:
@@ -63,23 +44,61 @@ struct Cashierd {
 impl Cashierd {
     fn new(verbose: bool, config_path: PathBuf) -> Result<Self> {
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
-        let wallet = CashierDb::new(
+        let cashier_wallet = CashierDb::new(
             &PathBuf::from(config.cashierdb_path.clone()),
             config.password.clone(),
         )?;
-        let bridge = bridge::Bridge::new();
+        let client_wallet = WalletDb::new(
+            &PathBuf::from(config.cashierdb_path.clone()),
+            config.password.clone(),
+        )?;
+        //let bridge = bridge::Bridge::new();
 
         Ok(Self {
             verbose,
             config,
-            wallet,
-            bridge,
+            cashier_wallet,
+            client_wallet,
+            //bridge,
         })
     }
 
-    //async fn bridge_subscribe() -> Result<()> {
-    //    Ok(())
-    //}
+    async fn start(self, executor: Arc<Executor<'_>>, config: CashierdConfig) -> Result<()> {
+        let ex = executor.clone();
+        let accept_addr: SocketAddr = config.accept_url.parse()?;
+
+        let gateway_addr: SocketAddr = config.gateway_url.parse()?;
+
+        let database_path = PathBuf::from(config.cashierdb_path);
+
+        //let database_path = join_config_path(&PathBuf::from("cashier_client_database.db"))?;
+
+        //let cashierdb = join_config_path(&PathBuf::from("cashier.db"))?;
+        //let client_wallet = join_config_path(&PathBuf::from("cashier_client_walletdb.db"))?;
+
+        let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
+        let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;
+
+        let mut cashier = CashierService::new(
+            accept_addr,
+            self.cashier_wallet.clone(),
+            self.client_wallet.clone(),
+            database_path,
+            (gateway_addr, "127.0.0.1:4444".parse()?),
+            (mint_params_path, spend_params_path),
+        )
+        .await?;
+
+        //// TODO: make this a vector of accepted assets
+        //let asset = Asset::new("btc".to_string());
+        //// TODO: this should be done by the user
+        //let asset_id = deserialize(&asset.id)?;
+
+        //// TODO: pass vector of assets into cashier.start()
+        //cashier.start(ex.clone(), asset_id).await?;
+
+        Ok(())
+    }
 
     async fn handle_request(self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
@@ -88,6 +107,7 @@ impl Cashierd {
 
         debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
 
+        // TODO: "features"
         match req.method.as_str() {
             //Some("say_hello") => return self.say_hello(req.id, req.params).await,
             //Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
@@ -117,7 +137,7 @@ impl Cashierd {
 
         // TODO: Sanity check.
         let _check = self
-            .wallet
+            .cashier_wallet
             .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
 
         // TODO: implement bridge communication
@@ -167,7 +187,7 @@ async fn main() -> Result<()> {
     }
 
     let cashierd = Cashierd::new(args.clone().is_present("verbose"), config_path)?;
-    // TODO: TLS
+
     let listener = TcpListener::bind(cashierd.clone().config.rpc_url).await?;
     debug!(target: "RPC SERVER", "Listening on {}", cashierd.clone().config.rpc_url);
 
@@ -188,14 +208,33 @@ async fn main() -> Result<()> {
         ),
     ])
     .unwrap();
+
+    let ex = Arc::new(Executor::new());
+    let ex2 = ex.clone();
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let cashierd2 = cashierd.clone();
+    let cashierd3 = cashierd.clone();
+    let (_, _result) = Parallel::new()
+        // Run four executor threads.
+        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                cashierd2.start(ex2, cashierd3.clone().config).await?;
+                drop(signal);
+                Ok::<(), Error>(())
+            })
+        });
+
     loop {
         debug!(target: "RPC SERVER", "waiting for client");
 
         let (mut socket, _) = listener.accept().await?;
-        let cashierd = cashierd.clone();
 
         debug!(target: "RPC SERVER", "accepted client");
 
+        let cashierd = cashierd.clone();
         tokio::spawn(async move {
             let mut buf = [0; 2048];
 
