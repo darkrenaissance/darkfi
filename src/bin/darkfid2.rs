@@ -1,8 +1,13 @@
 use async_std::sync::Arc;
+use log::*;
 use std::path::PathBuf;
 
 use clap::clap_app;
 use serde_json::{json, Value};
+use simplelog::{
+    CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
+    WriteLogger,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -51,6 +56,8 @@ impl Darkfid {
                 req.id,
             ));
         }
+
+        debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
@@ -189,12 +196,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let darkfid = Darkfid::new(args.clone().is_present("verbose"), config_path)?;
     // TODO: TLS
     let listener = TcpListener::bind(darkfid.clone().config.rpc_url).await?;
+    debug!(target: "RPC SERVER", "Listening on {}", darkfid.clone().config.rpc_url);
+
+    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+    let debug_level = if args.is_present("verbose") {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Off
+    };
+
+    let log_path = darkfid.clone().config.log_path;
+    CombinedLogger::init(vec![
+        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
+        WriteLogger::new(
+            LevelFilter::Debug,
+            SimLogConfig::default(),
+            std::fs::File::create(log_path).unwrap(),
+        ),
+    ])
+    .unwrap();
 
     loop {
-        let (mut socket, _) = listener.accept().await?;
+        debug!(target: "RPC SERVER", "waiting for client");
 
-        println!("Accepted client");
+        let (mut socket, _) = listener.accept().await?;
         let darkfid = darkfid.clone();
+
+        debug!(target: "RPC SERVER", "accepted client");
 
         tokio::spawn(async move {
             let mut buf = [0; 2048];
@@ -202,20 +230,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             loop {
                 let n = match socket.read(&mut buf).await {
                     Ok(n) if n == 0 => {
-                        println!("Closed connection");
+                        debug!(target: "RPC SERVER", "closed connection");
                         return;
                     }
                     Ok(n) => n,
                     Err(e) => {
-                        eprintln!("failed to read from socket; err = {:?}", e);
+                        debug!(target: "RPC SERVER", "failed to read from socket; err = {:?}", e);
                         return;
                     }
                 };
 
                 let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
                     Ok(r) => r,
-                    Err(_) => {
-                        eprintln!("received invalid json");
+                    Err(e) => {
+                        debug!(target: "RPC SERVER", "received invalid json; err = {:?}", e);
                         return;
                     }
                 };
@@ -223,9 +251,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let reply = darkfid.clone().handle_request(r).await;
                 let j = serde_json::to_string(&reply).unwrap();
 
+                debug!(target: "RPC", "<-- {:#?}", j);
+
                 // Write the data back
                 if let Err(e) = socket.write_all(j.as_bytes()).await {
-                    eprintln!("failed to writeto socket; err = {:?}", e);
+                    debug!(target: "RPC SERVER", "failed to write to socket; err = {:?}", e);
                     return;
                 }
             }
