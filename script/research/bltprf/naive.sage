@@ -74,7 +74,7 @@ A_prime = dot(a_prime, G_prime)
 
 assert (int(x^-4) * A_neg_4 + int(x^-3) * A_neg_3 + int(x^-2) * A_neg_2
         + int(x^-1) * A_neg_1
-        + A_0
+        + A
         + int(x) * A_1 + int(x^2) * A_2 + int(x^3) * A_3 + int(x^4) * A_4) \
        == A_prime
 
