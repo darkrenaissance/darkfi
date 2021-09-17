@@ -73,7 +73,7 @@ pub struct GatewaydConfig {
     pub log_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
     #[serde(rename = "accept_url")]
     pub accept_url: String,
@@ -86,6 +86,12 @@ pub struct CashierdConfig {
 
     #[serde(rename = "log_path")]
     pub log_path: String,
+
+    #[serde(rename = "database_path")]
+    pub database_path: String,
+
+    #[serde(rename = "cashierdb_path")]
+    pub cashierdb_path: String,
 
     #[serde(rename = "password")]
     pub password: String,
