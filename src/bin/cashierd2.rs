@@ -125,51 +125,72 @@ impl Cashierd {
 
     async fn deposit(self, id: Value, params: Value) -> JsonResult {
         debug!(target: "CASHIER", "Received deposit request");
-        let args = params.as_array().unwrap();
-        if args.len() != 2 {
+
+        if params.as_array().is_none() {
+            debug!(target: "CASHIER", "Array is empty");
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
+        let args = params.as_array().expect("Params is empty");
+
+        if args.len() != 3 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        debug!(target: "CASHIER", "Processing input");
         let _network = &args[0];
-        let _token: jubjub::Fr = deserialize(&args[1].as_str().unwrap().as_bytes()).unwrap();
-        let pubkey: jubjub::SubgroupPoint =
-            deserialize(&args[2].as_str().unwrap().as_bytes()).unwrap();
 
-        // TODO: Sanity check.
-        let _check = self
-            .cashier_wallet
-            .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
+        if args[1].as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
 
-        // TODO: implement bridge communication
-        //let bridge_subscription = bridge.subscribe(ex.clone()).await;
-        //bridge_subscribtion
-        //    .sender
-        //    .send(bridge::BridgeRequests {
-        //        token,
-        //        payload: bridge::BridgeRequestsPayload::WatchRequest,
-        //    })
-        //    .await
-        //    .unwrap();
+        // TODO: change token type away from jubjub::Fr
+        // TODO: reply with deposit address
 
-        //    let bridge_res = bridge_subscribtion.receiver.recv().await?;
+        //let _token: jubjub::Fr = deserialize(&args[1].as_str().unwrap().as_bytes()).unwrap();
 
-        //    match bridge_res.payload {
-        //        bridge::BridgeResponsePayload::WatchResponse(coin_priv, coin_pub) => {
-        //            // add pairings to db
-        //            let _result = cashier_wallet.put_exchange_keys(
-        //                &dpub,
-        //                &coin_priv,
-        //                &coin_pub,
-        //                &serialize(&asset_id),
-        //            );
+        //let pubkey: jubjub::SubgroupPoint =
+        //    deserialize(&args[2].as_str().expect("Thing was empty").as_bytes())
+        //        .expect("could not deserialize");
 
-        // TODO: read pubkey from wallet. This is just a stand-in
-        let pubkey = bs58::encode(serialize(&pubkey)).into_string();
+        //// TODO: Sanity check.
+        //debug!(target: "CASHIER", "PROCESSING INPUT");
+        //let _check = self
+        //    .cashier_wallet
+        //    .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
 
+        //let pubkey = bs58::encode(serialize(&pubkey)).into_string();
+
+        let pubkey = args[2].as_str().unwrap();
+        debug!(target: "CASHIER", "Attemping reply");
         JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
     }
 }
 
+// TODO: implement bridge communication
+//let bridge_subscription = bridge.subscribe(ex.clone()).await;
+//bridge_subscribtion
+//    .sender
+//    .send(bridge::BridgeRequests {
+//        token,
+//        payload: bridge::BridgeRequestsPayload::WatchRequest,
+//    })
+//    .await
+//    .unwrap();
+
+//    let bridge_res = bridge_subscribtion.receiver.recv().await?;
+
+//    match bridge_res.payload {
+//        bridge::BridgeResponsePayload::WatchResponse(coin_priv, coin_pub) => {
+//            // add pairings to db
+//            let _result = cashier_wallet.put_exchange_keys(
+//                &dpub,
+//                &coin_priv,
+//                &coin_pub,
+//                &serialize(&asset_id),
+//            );
+
+// TODO: read pubkey from wallet. This is just a stand-in
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = clap_app!(cashierd =>
