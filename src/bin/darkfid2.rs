@@ -106,10 +106,14 @@ impl Darkfid {
         ));
     }
 
+    // --> {"method": "say_hello", "params": []}
+    // <-- {"result": "hello world"}
     async fn say_hello(self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonrpc::response(json!("hello world"), id))
     }
 
+    // --> {"method": "create_wallet", "params": []}
+    // <-- {"result": true}
     async fn create_wallet(self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.init_db() {
             Ok(()) => return JsonResult::Resp(jsonrpc::response(json!(true), id)),
@@ -117,6 +121,8 @@ impl Darkfid {
         }
     }
 
+    // --> {"method": "key_gen", "params": []}
+    // <-- {"result": true}
     async fn key_gen(self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.key_gen() {
             Ok((_, _)) => return JsonResult::Resp(jsonrpc::response(json!(true), id)),
@@ -124,6 +130,8 @@ impl Darkfid {
         }
     }
 
+    // --> {"method": "get_key", "params": []}
+    // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
     async fn get_key(self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.get_keypairs() {
             Ok(v) => {
@@ -140,6 +148,7 @@ impl Darkfid {
     //      "id": 42}
     // The publickey sent here is used so the cashier can know where to send
     // assets once the deposit is received.
+    // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn deposit(self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 2 {
@@ -182,6 +191,13 @@ impl Darkfid {
         }
     }
 
+    // --> {"method": "withdraw", "params": [network, token, publickey, amount]}
+    // The publickey sent here is the address where the caller wants to receive
+    // the tokens they plan to withdraw.
+    // On request, send request to cashier to get deposit address, and then transfer
+    // dark assets to the cashier's wallet. Following that, the cashier should return
+    // a transaction ID of them sending the funds that are requested for withdrawal.
+    // <-- {"result": "txID"}
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 4 {
@@ -201,6 +217,8 @@ impl Darkfid {
         return JsonResult::Err(jsonrpc::error(-69, "failed to withdraw".to_string(), id));
     }
 
+    // --> {"method": "transfer", [dToken, address, amount]}
+    // <-- {"result": "txID"}
     async fn transfer(self, id: Value, _params: Value) -> JsonResult {
         return JsonResult::Err(jsonrpc::error(-69, "failed to transfer".to_string(), id));
     }
