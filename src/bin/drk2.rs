@@ -23,6 +23,7 @@ impl Drk {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
         let reply: JsonResult;
+        debug!(target: "DRK", "--> {:#?}", serde_json::to_string(&r)?);
         match jsonrpc::send_request(self.url.clone(), json!(r)).await {
             Ok(v) => reply = v,
             Err(e) => return Err(e),
