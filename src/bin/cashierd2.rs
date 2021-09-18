@@ -27,6 +27,8 @@ use drk::{
     Error, Result,
 };
 
+use ff::PrimeField;
+
 #[derive(Clone)]
 struct Cashierd {
     verbose: bool,
@@ -150,18 +152,14 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        //let token = if deserialize(token.as_bytes()).is_err() {
-        //    // do something
-        //} else {
-        //    // do something else
-        //    // token.unwrap()
-        //};
+        let token = token.as_str().unwrap();
 
-        //let _token: jubjub::Fr = deserialize(&args[1].as_str().unwrap().as_bytes()).unwrap();
+        let token = jubjub::Fr::from_str(token);
+        if token.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        };
 
-        //let pubkey: jubjub::SubgroupPoint =
-        //    deserialize(&args[2].as_str().expect("Thing was empty").as_bytes())
-        //        .expect("could not deserialize");
+        let token = token.unwrap();
 
         //// TODO: Sanity check.
         //debug!(target: "CASHIER", "PROCESSING INPUT");
