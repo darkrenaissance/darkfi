@@ -1,5 +1,5 @@
-use async_std::sync::Arc;
 use log::*;
+use std::fs;
 use std::path::PathBuf;
 
 use clap::clap_app;
@@ -8,6 +8,8 @@ use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
     WriteLogger,
 };
+
+use async_std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -61,6 +63,7 @@ impl Darkfid {
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
+            Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
@@ -114,6 +117,34 @@ impl Darkfid {
         }
     }
 
+    // --> {"jsonrpc": "2.0", "method": "get_token_id",
+    //      "params": [token],
+    //      "id": 42}
+    // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
+    async fn get_token_id(self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array().unwrap();
+        let symbol = &args[0];
+
+        if symbol.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        };
+
+        let symbol = symbol.as_str().unwrap().to_uppercase();
+
+        let file_contents =
+            fs::read_to_string("token/solanatokenlist.json").expect("Can't find tokenlist file");
+        let root: Value = serde_json::from_str(&file_contents).unwrap();
+        let tokens = root["tokens"].as_array().unwrap();
+
+        for item in tokens {
+            if item["symbol"] == symbol {
+                let address = &item["address"];
+                return JsonResult::Resp(jsonresp(json!(address), id));
+            }
+        }
+        return JsonResult::Err(jsonerr(InvalidParams, None, id));
+    }
+
     // --> {"jsonrpc": "2.0", "method": "deposit",
     //      "params": [network, token, publickey],
     //      "id": 42}
@@ -128,6 +159,11 @@ impl Darkfid {
 
         let network = &args[0];
         let token = &args[1];
+
+        if token.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        };
+
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
         let pubkey: String;

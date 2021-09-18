@@ -3,7 +3,6 @@ use log::*;
 use std::path::PathBuf;
 
 use clap::clap_app;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
@@ -22,7 +21,6 @@ use drk::{
         jsonrpc::{error as jsonerr, response as jsonresp},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
-    serial::{deserialize, serialize},
     service::{bridge, CashierService},
     util::join_config_path,
     wallet::{CashierDb, WalletDb},
@@ -35,7 +33,7 @@ struct Cashierd {
     config: CashierdConfig,
     client_wallet: Arc<WalletDb>,
     cashier_wallet: Arc<CashierDb>,
-    //bridge: Arc<bridge::Bridge>,
+    bridge: Arc<bridge::Bridge>,
     // clientdb:
     // mint_params:
     // spend_params:
@@ -52,7 +50,7 @@ impl Cashierd {
             &PathBuf::from(config.cashierdb_path.clone()),
             config.password.clone(),
         )?;
-        //let bridge = bridge::Bridge::new();
+        let bridge = bridge::Bridge::new();
 
         Ok(Self {
             verbose,
@@ -123,6 +121,16 @@ impl Cashierd {
         return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
 
+    // TODO: change token type away from jubjub::Fr
+    // TODO: reply with deposit address
+
+    // 1. deserialize asset_id and dark pubkey
+    // 2. get deposit coin keys
+    // 3. create bridge subscription
+    // 4. send over async channel
+    // 5. create receiver
+    // 6. match the payload
+    // 7. send the reply
     async fn deposit(self, id: Value, params: Value) -> JsonResult {
         debug!(target: "CASHIER", "Received deposit request");
 
@@ -131,21 +139,23 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let args = params.as_array().expect("Params is empty");
-
-        if args.len() != 3 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        }
+        let args = params.as_array().unwrap();
 
         debug!(target: "CASHIER", "Processing input");
         let _network = &args[0];
+        let token = &args[1];
+        let pubkey = &args[2];
 
-        if args[1].as_str().is_none() {
+        if token.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        // TODO: change token type away from jubjub::Fr
-        // TODO: reply with deposit address
+        //let token = if deserialize(token.as_bytes()).is_err() {
+        //    // do something
+        //} else {
+        //    // do something else
+        //    // token.unwrap()
+        //};
 
         //let _token: jubjub::Fr = deserialize(&args[1].as_str().unwrap().as_bytes()).unwrap();
 

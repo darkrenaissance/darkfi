@@ -75,6 +75,13 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["usdc"], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
+    async fn get_token_id(&self, token: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_token_id"), json!([token]));
+        Ok(self.request(req).await?)
+    }
+
     // --> {"jsonrpc": "2.0", "method": "deposit", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 42}
     async fn deposit(&self, network: &str, asset: &str) -> Result<Value> {
@@ -132,6 +139,15 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             println!("Server replied: {}", &reply.to_string());
             return Ok(());
         }
+    }
+
+    if let Some(matches) = options.subcommand_matches("id") {
+        let token = matches.value_of("TOKEN").unwrap();
+
+        let reply = client.get_token_id(&token).await?;
+
+        println!("Server replied: {}", &reply.to_string());
+        return Ok(());
     }
 
     if let Some(matches) = options.subcommand_matches("deposit") {
@@ -196,6 +212,11 @@ async fn main() -> Result<()> {
             (@arg create: --create "Initialize a new wallet")
             (@arg keygen: --keygen "Generate wallet keypair")
             (@arg address: --address "Get wallet address")
+        )
+        (@subcommand id =>
+            (about: "Get hexidecimal ID for token symbol")
+            (@arg TOKEN: +required
+                    "Which token to query (BTC/SOL/USDC/...)")
         )
         (@subcommand deposit =>
             (about: "Deposit clear assets for Dark assets")
