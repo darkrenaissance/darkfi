@@ -148,13 +148,13 @@ pub struct BtcClient {
 }
 
 impl BtcClient {
-    pub fn new( btc_endpoint: (bool, String) ) -> Result<Self> {
+    pub fn new( btc_endpoint: (Network, String) ) -> Result<Self> {
         let (network, client_address) = btc_endpoint;
         let client = ElectrumClient::new(&client_address)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
         Ok(Self {
             client: Arc::new(client),
-            network: if network {Network::Testnet} else {Network::Bitcoin},
+            network: network,
         })
     }
 }
@@ -181,6 +181,7 @@ impl CoinClient for BtcClient {
 
     async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
         // TODO
+
         Ok(())
     }
 }
