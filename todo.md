@@ -66,7 +66,7 @@ Open research questions.
 ## cryptography
 
 - [x] FFT for polynomial multiplication
-- [ ] finish bulletproofs impl
+- [x] finish bulletproofs impl
 - [ ] halo2 lookup
 - [ ] read groth permutation paper
 

@@ -47,6 +47,9 @@ L = hash(zeros, a_lo)
 R = hash(a_hi, zeros)
 P = hash(a_lo, a_hi)
 
+# Same value
+assert P == A
+
 a_prime = x * a_lo + x^-1 * a_hi
 assert len(a_prime) == 5
 
@@ -57,3 +60,12 @@ assert P_prime == int(x^2) * L + P + int(x^-2) * R
 # Proof is 5 + 2 elements instead of 10 commitments to each value a_i
 proof = (L, R, a)
 
+# Using dot product notation, we can write:
+#
+# P_prime = <a_prime, G>
+#         = <x a_lo + x^-1 a_hi, x^-1 G_lo + x G_hi>
+#         = <a_lo, G_lo> + <a_hi, G_hi> + x^2 <a_lo, G_hi> + x^-2 <a_hi, G_lo>
+#         = P + x^2 L + x^-2 R
+#
+# See also P_{k - 1} from:
+# https://doc-internal.dalek.rs/bulletproofs/notes/inner_product_proof/index.html
