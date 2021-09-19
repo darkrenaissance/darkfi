@@ -30,6 +30,12 @@ use drk::{
 
 use ff::PrimeField;
 
+// network: String specifier
+// asset_id: Token HEX
+struct Networks {
+    supported_networks: Vec<String>,
+}
+
 #[derive(Clone)]
 struct Cashierd {
     verbose: bool,
@@ -141,15 +147,10 @@ impl Cashierd {
         if pubkey.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
+        // TODO: get rid of these unwraps
         let pubkey = pubkey.as_str().unwrap();
-        let hex = hex::decode(pubkey);
-        if hex.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        };
-        let pubkey: jubjub::SubgroupPoint = deserialize(&hex);
-        if pubkey.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        }
+        let hex = hex::decode(pubkey).unwrap();
+        let pubkey: jubjub::SubgroupPoint = deserialize(&hex).unwrap();
 
         //// TODO: Sanity check.
         debug!(target: "CASHIER", "GET DEPOSIT COIN KEYS");
@@ -159,8 +160,9 @@ impl Cashierd {
 
         // TODO: implement bridge communication
         // NOTE: this just returns the user public key
+        let pubkey_vec = serialize(&pubkey);
         debug!(target: "CASHIER", "ATTEMPING REPLY");
-        JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
+        JsonResult::Resp(jsonresp(json!(pubkey_vec), json!(id)))
     }
 
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
@@ -176,7 +178,7 @@ impl Cashierd {
         // 2. Cashier checks if they support the network, and if so,
         //    return adeposit address.
 
-        JsonResult::Err(jsonerr(InvalidParams, None, id));
+        JsonResult::Err(jsonerr(InvalidParams, None, id))
     }
 }
 
