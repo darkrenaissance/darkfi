@@ -21,7 +21,7 @@ use drk::{
         jsonrpc::{error as jsonerr, response as jsonresp},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
-    serial::deserialize,
+    serial::{deserialize, serialize},
     service::{bridge, CashierService},
     util::join_config_path,
     wallet::{CashierDb, WalletDb},
@@ -36,7 +36,6 @@ struct Cashierd {
     config: CashierdConfig,
     client_wallet: Arc<WalletDb>,
     cashier_wallet: Arc<CashierDb>,
-    bridge: Arc<bridge::Bridge>,
     // clientdb:
     // mint_params:
     // spend_params:
@@ -53,14 +52,12 @@ impl Cashierd {
             &PathBuf::from(config.cashierdb_path.clone()),
             config.password.clone(),
         )?;
-        let bridge = bridge::Bridge::new();
 
         Ok(Self {
             verbose,
             config,
             cashier_wallet,
             client_wallet,
-            bridge,
         })
     }
 
@@ -124,90 +121,50 @@ impl Cashierd {
         return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
 
-    // TODO: change token type away from jubjub::Fr
-    // TODO: reply with deposit address
-
-    // 1. deserialize asset_id and dark pubkey
-    // 2. get deposit coin keys
-    // 3. create bridge subscription
-    // 4. send over async channel
-    // 5. create receiver
-    // 6. match the payload
-    // 7. send the reply
     async fn deposit(self, id: Value, params: Value) -> JsonResult {
-        debug!(target: "CASHIER", "Received deposit request");
+        debug!(target: "CASHIER", "RECEIVED DEPOSIT REQUEST");
 
         if params.as_array().is_none() {
-            debug!(target: "CASHIER", "Array is empty");
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
         let args = params.as_array().unwrap();
 
-        debug!(target: "CASHIER", "Processing input");
         let _network = &args[0];
         let token = &args[1];
         let pubkey = &args[2];
 
+        debug!(target: "CASHIER", "PROCESSING INPUT");
         if token.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let token = token.as_str().unwrap();
-        let token = jubjub::Fr::from_str(token);
-        if token.is_none() {
+        let token_str = token.as_str().unwrap();
+        let token_fr = jubjub::Fr::from_str(token_str);
+        if token_fr.is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         };
 
-        let token = token.unwrap();
+        let token = token_fr.unwrap();
 
         let pubkey = pubkey.as_str().unwrap();
-        // TODO: implement SubgroupPoint
-        //let pubkey: jubjub::SubgroupPoint = deserialize(pubkey).unwrap();
-        //let pubkey = jubjub::SubgroupPoint::from_str(pubkey);
-        //if pubkey.is_none() {
-        //    return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        //};
+        let hex = hex::decode(pubkey).unwrap();
 
-        //let pubkey = pubkey.unwrap();
+        let pubkey: jubjub::SubgroupPoint = deserialize(&hex).unwrap();
+
         //// TODO: Sanity check.
-        debug!(target: "CASHIER", "PROCESSING INPUT");
-        //let _check = self
-        //    .cashier_wallet
-        //    .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
+        debug!(target: "CASHIER", "GET DEPOSIT COIN KEYS");
+        let _check = self
+            .cashier_wallet
+            .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
 
-        //let pubkey = bs58::encode(serialize(&pubkey)).into_string();
-
-        let pubkey = args[2].as_str().unwrap();
-        debug!(target: "CASHIER", "Attemping reply");
+        // TODO: implement bridge communication
+        // NOTE: this just returns the user public key
+        debug!(target: "CASHIER", "ATTEMPING REPLY");
         JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
     }
 }
 
-// TODO: implement bridge communication
-//let bridge_subscription = bridge.subscribe(ex.clone()).await;
-//bridge_subscribtion
-//    .sender
-//    .send(bridge::BridgeRequests {
-//        token,
-//        payload: bridge::BridgeRequestsPayload::WatchRequest,
-//    })
-//    .await
-//    .unwrap();
-
-//    let bridge_res = bridge_subscribtion.receiver.recv().await?;
-
-//    match bridge_res.payload {
-//        bridge::BridgeResponsePayload::WatchResponse(coin_priv, coin_pub) => {
-//            // add pairings to db
-//            let _result = cashier_wallet.put_exchange_keys(
-//                &dpub,
-//                &coin_priv,
-//                &coin_pub,
-//                &serialize(&asset_id),
-//            );
-
-// TODO: read pubkey from wallet. This is just a stand-in
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = clap_app!(cashierd =>
