@@ -102,13 +102,8 @@ impl Cashierd {
 
         // TODO: "features"
         match req.method.as_str() {
-            //Some("say_hello") => return self.say_hello(req.id, req.params).await,
-            //Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
-            //Some("key_gen") => return self.key_gen(req.id, req.params).await,
-            //Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
-            //Some("withdraw") => return self.withdraw(req.id, req.params).await,
-            //Some("transfer") => return self.transfer(req.id, req.params).await,
+            Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some(_) => {}
             None => {}
         };
@@ -166,6 +161,22 @@ impl Cashierd {
         // NOTE: this just returns the user public key
         debug!(target: "CASHIER", "ATTEMPING REPLY");
         JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
+    }
+
+    async fn withdraw(self, id: Value, params: Value) -> JsonResult {
+        debug!(target: "CASHIER", "RECEIVED DEPOSIT REQUEST");
+
+        let args = params.as_array().unwrap();
+
+        let network = &args[0];
+        let token = &args[1];
+        let address = &args[2];
+        let amount = &args[3];
+
+        // 2. Cashier checks if they support the network, and if so,
+        //    return adeposit address.
+
+        JsonResult::Err(jsonerr(InvalidParams, None, id));
     }
 }
 
