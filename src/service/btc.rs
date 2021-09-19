@@ -1,13 +1,13 @@
-use super::bridge::CoinClient;
-use crate::serial::{Decodable, Encodable, serialize};
+use super::bridge::{CoinClient, CoinNotification, CoinSubscribtion};
+use crate::serial::{serialize, Decodable, Encodable};
 use crate::Result;
 
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
+use bitcoin::hash_types::Txid;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
-use bitcoin::hash_types::Txid;
 use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 use rand::distributions::Alphanumeric;
@@ -33,10 +33,7 @@ pub struct BitcoinKeys {
 }
 
 impl BitcoinKeys {
-    pub fn new(
-        btc_client: Arc<ElectrumClient>,
-        network: Network,
-    ) -> Result<Arc<BitcoinKeys>> {
+    pub fn new(btc_client: Arc<ElectrumClient>, network: Network) -> Result<Arc<BitcoinKeys>> {
         let context = secp256k1::Secp256k1::new();
 
         // Probably not good enough for release
@@ -138,9 +135,7 @@ impl BitcoinKeys {
     pub fn get_script(&self) -> &Script {
         &self.script
     }
-
 }
-
 
 pub struct BtcClient {
     client: Arc<ElectrumClient>,
@@ -148,7 +143,7 @@ pub struct BtcClient {
 }
 
 impl BtcClient {
-    pub fn new( btc_endpoint: (Network, String) ) -> Result<Self> {
+    pub fn new(btc_endpoint: (Network, String)) -> Result<Self> {
         let (network, client_address) = btc_endpoint;
         let client = ElectrumClient::new(&client_address)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
@@ -161,7 +156,7 @@ impl BtcClient {
 
 #[async_trait]
 impl CoinClient for BtcClient {
-    async fn watch(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+    async fn subscribe(&self) -> Result<CoinSubscribtion> {
         //// Generate bitcoin Address
         let btc_keys = BitcoinKeys::new(self.client.clone(), self.network)?;
 
@@ -176,9 +171,17 @@ impl CoinClient for BtcClient {
         let (_txid, _balance) = btc_keys.start_subscribe().await?;
         //let _script = btc_keys.get_script();
 
-        Ok((serialize(&btc_priv.to_bytes()), serialize(&btc_pub.to_bytes())))
+        Ok(CoinSubscribtion {
+            secret_key: serialize(&btc_priv.to_bytes()),
+            public_key: serialize(&btc_pub.to_bytes()),
+        })
     }
 
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<CoinNotification>> {
+        // TODO this not implemented yet
+        let (_, notifier) = async_channel::unbounded();
+        Ok(notifier)
+    }
     async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
         // TODO
 
@@ -237,7 +240,6 @@ impl Decodable for bitcoin::PrivateKey {
     }
 }
 
-
 #[derive(Debug)]
 pub enum BtcFailed {
     NotEnoughValue(u64),
@@ -259,14 +261,15 @@ impl std::fmt::Display for BtcFailed {
                 write!(f, "Unable to create Electrum Client: {}", err)
             }
             BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
-            BtcFailed::DecodeAndEncodeError(ref err) => write!(f, "Decode and decode keys error: {}", err),
+            BtcFailed::DecodeAndEncodeError(ref err) => {
+                write!(f, "Decode and decode keys error: {}", err)
+            }
             BtcFailed::BtcError(i) => {
                 write!(f, "BtcFailed: {}", i)
             }
         }
     }
 }
-
 
 impl From<crate::error::Error> for BtcFailed {
     fn from(err: crate::error::Error) -> BtcFailed {

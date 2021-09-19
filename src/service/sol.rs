@@ -2,7 +2,7 @@ use crate::rpc::{jsonrpc, jsonrpc::JsonResult};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
-use super::bridge::CoinClient;
+use super::bridge::{ CoinSubscribtion, CoinNotification, CoinClient};
 
 use async_trait::async_trait;
 
@@ -40,17 +40,15 @@ struct SubscribeParams {
 pub struct SolClient {
     keypair: Keypair,
 
-    // subscription hashmap using pubkey as an index
-    subscriptions: Arc<Mutex<HashMap<String, (Vec<u8>, u64)>>>,
+    // subscriptions hashmap using pubkey as an index and a value of (keypair, amount)
+    subscriptions: Arc<Mutex<HashMap<Pubkey, (Keypair, u64)>>>,
 
-    // notify when get new update
     notify_channel: (
-        async_channel::Sender<(Vec<u8>, u64)>,
-        async_channel::Receiver<(Vec<u8>, u64)>,
+        async_channel::Sender<CoinNotification>,
+        async_channel::Receiver<CoinNotification>,
     ),
 
-    // send subscription msg to websocket
-    watch_channel: (
+    subscribe_channel: (
         async_channel::Sender<jsonrpc::JsonRequest>,
         async_channel::Receiver<jsonrpc::JsonRequest>,
     ),
@@ -61,20 +59,14 @@ impl SolClient {
         let keypair: Keypair = deserialize(&keypair)?;
 
         let notify_channel = async_channel::unbounded();
-        let watch_channel = async_channel::unbounded();
+        let subscribe_channel = async_channel::unbounded();
 
         Ok(Arc::new(Self {
             keypair,
             subscriptions: Arc::new(Mutex::new(HashMap::new())),
             notify_channel,
-            watch_channel,
+            subscribe_channel,
         }))
-    }
-
-    pub async fn subscribe_to_notify_channel(
-        self: Arc<Self>,
-    ) -> Result<async_channel::Receiver<(Vec<u8>, u64)>> {
-        Ok(self.notify_channel.1.clone())
     }
 
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> SolResult<()> {
@@ -86,8 +78,10 @@ impl SolClient {
         let self2 = self.clone();
         let _: async_executor::Task<Result<()>> = executor.spawn(async move {
             loop {
-                let sub_msg = self2.watch_channel.1.recv().await?;
+                // recv a request for websocket
+                let sub_msg = self2.subscribe_channel.1.recv().await?;
 
+                // write the request to websocket
                 write
                     .send(Message::Text(serde_json::to_string(&sub_msg)?))
                     .await
@@ -96,8 +90,8 @@ impl SolClient {
         });
 
         read.for_each(|message| async {
-            let self2 = self.clone();
-            self2
+            // read ws msg
+            self.clone()
                 .read_ws_msg(message)
                 .await
                 .expect("read from websocket");
@@ -116,22 +110,26 @@ impl SolClient {
 
         match v {
             JsonResult::Resp(r) => {
-                if let Some(sub_id) = r.result.as_i64() {
-                    debug!(
-                        target: "SOL BRIDGE",
-                        "Successfully get response : {:?}",
-                        sub_id
-                    );
-                }
+                // receive a response with subscription id
+                let sub_id = r.result.as_i64().ok_or(Error::ParseIntError)?;
+                debug!(
+                    target: "SOL BRIDGE",
+                    "Successfully get response : {:?}",
+                    sub_id
+                );
             }
 
             JsonResult::Err(e) => {
+                // receive an error
                 debug!(
                         target: "SOL BRIDGE",
                         "Error on subscription: {:?}", e.error.message.to_string());
             }
 
             JsonResult::Notif(n) => {
+                // receive notification once an account get updated
+
+                // get values from the notification
                 let new_bal = n.params["result"]["value"]["lamports"]
                     .as_u64()
                     .ok_or(Error::ParseIntError)?;
@@ -139,45 +137,46 @@ impl SolClient {
                 let owner_pubkey = n.params["result"]["value"]["owner"]
                     .as_str()
                     .ok_or(Error::ParseFailed("Error Parse serde_json Value to &str"))?;
-
-                let (keypair, old_balance) = self.subscriptions.lock().await[owner_pubkey].clone();
+                
+                let owner_pubkey: Pubkey = Pubkey::from_str(&owner_pubkey)?;
 
                 let sub_id = n.params["subscription"]
                     .as_u64()
                     .ok_or(Error::ParseIntError)?;
 
-                if new_bal > old_balance {
+                // get the keypair and old_balance from the subscriptions list
+                let (keypair, old_balance) = &self.subscriptions.lock().await[&owner_pubkey];
+
+                if new_bal > old_balance.to_owned() {
                     let received_balance = new_bal - old_balance;
 
-                    let keypair: Keypair = deserialize(&keypair)?;
-
-                    self.send_to_main_account(keypair)?;
+                    self.send_to_main_account(&keypair)?;
 
                     self.notify_channel
                         .0
-                        .send((
-                            serialize(&Pubkey::from_str(owner_pubkey)?),
+                        .send(CoinNotification {
+                            secret_key: serialize(keypair),
                             received_balance,
-                        ))
+                        })
                         .await
                         .map_err(|err| Error::from(err))?;
 
-                    SolClient::unsubscribe(self.watch_channel.0.clone(), sub_id).await?;
+                    self.unsubscribe(sub_id, &owner_pubkey).await?;
 
                     debug!(
                         target: "SOL BRIDGE",
                         "Received {} lamports, to the pubkey: {} ",
                         received_balance, owner_pubkey.to_string(),
                     );
-                } else if new_bal < old_balance {
-                    SolClient::unsubscribe(self.watch_channel.0.clone(), sub_id).await?;
+                } else if new_bal < old_balance.to_owned() {
+                    self.unsubscribe(sub_id, &owner_pubkey).await?;
                 }
             }
         }
         Ok(())
     }
 
-    fn send_to_main_account(&self, keypair: Keypair) -> SolResult<()> {
+    fn send_to_main_account(&self, keypair: &Keypair) -> SolResult<()> {
         let rpc = RpcClient::new(RPC_SERVER.to_string());
 
         let amount = rpc.get_balance(&keypair.pubkey())?;
@@ -189,25 +188,23 @@ impl SolClient {
         let bhq = BlockhashQuery::default();
         match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
             Err(_) => panic!("Couldn't connect to RPC"),
-            Ok(v) => tx.sign(&[&keypair], v.0),
+            Ok(v) => tx.sign(&[keypair], v.0),
         }
         let _signature = rpc.send_and_confirm_transaction(&tx)?;
         Ok(())
     }
 
-    async fn unsubscribe(
-        watch_channel_sender: async_channel::Sender<jsonrpc::JsonRequest>,
-        sub_id: u64,
-    ) -> Result<()> {
+    async fn unsubscribe(&self, sub_id: u64, pubkey: &Pubkey) -> Result<()> {
         let sub_msg = jsonrpc::request(json!("accountUnsubscribe"), json!([json!(sub_id)]));
-        watch_channel_sender.send(sub_msg).await?;
+        self.subscribe_channel.0.send(sub_msg).await?;
+        self.subscriptions.lock().await.remove(pubkey);
         Ok(())
     }
 }
 
 #[async_trait]
 impl CoinClient for SolClient {
-    async fn watch(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+    async fn subscribe(&self) -> Result<CoinSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
         // Parameters for subscription to events related to `pubkey`.
@@ -227,16 +224,24 @@ impl CoinClient for SolClient {
             .get_balance(&keypair.pubkey())
             .map_err(|err| SolFailed::from(err))?;
 
+        let public_key = serialize(&keypair.pubkey());
+        // NOTE we send keypair for sol as secret_key
+        let secret_key = serialize(&keypair);
+
+        // add to subscriptions list
         self.subscriptions
             .lock()
             .await
-            .insert(keypair.pubkey().to_string(), (serialize(&keypair), balance));
+            .insert(keypair.pubkey(), (keypair, balance));
 
-        self.watch_channel.0.send(sub_msg).await?;
+        //  send
+        self.subscribe_channel.0.send(sub_msg).await?;
 
-        let pubkey = serialize(&keypair.pubkey());
-        let keypair = serialize(&keypair);
-        Ok((pubkey, keypair))
+        Ok(CoinSubscribtion { secret_key, public_key})
+    }
+
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<CoinNotification>>{
+        Ok(self.notify_channel.1.clone())
     }
 
     async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()> {
