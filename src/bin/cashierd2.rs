@@ -69,11 +69,6 @@ impl Cashierd {
 
         let database_path = PathBuf::from(config.cashierdb_path);
 
-        //let database_path = join_config_path(&PathBuf::from("cashier_client_database.db"))?;
-
-        //let cashierdb = join_config_path(&PathBuf::from("cashier.db"))?;
-        //let client_wallet = join_config_path(&PathBuf::from("cashier_client_walletdb.db"))?;
-
         let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
         let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;
 
@@ -135,22 +130,31 @@ impl Cashierd {
         let pubkey = &args[2];
 
         debug!(target: "CASHIER", "PROCESSING INPUT");
+
+        // parse token
         if token.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-
         let token_str = token.as_str().unwrap();
         let token_fr = jubjub::Fr::from_str(token_str);
         if token_fr.is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         };
-
         let token = token_fr.unwrap();
 
+        // parse pubkey
+        if pubkey.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
         let pubkey = pubkey.as_str().unwrap();
-        let hex = hex::decode(pubkey).unwrap();
-
-        let pubkey: jubjub::SubgroupPoint = deserialize(&hex).unwrap();
+        let hex = hex::decode(pubkey);
+        if hex.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        };
+        let pubkey: jubjub::SubgroupPoint = deserialize(&hex);
+        if pubkey.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
 
         //// TODO: Sanity check.
         debug!(target: "CASHIER", "GET DEPOSIT COIN KEYS");
