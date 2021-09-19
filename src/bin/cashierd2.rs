@@ -21,6 +21,7 @@ use drk::{
         jsonrpc::{error as jsonerr, response as jsonresp},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
+    serial::deserialize,
     service::{bridge, CashierService},
     util::join_config_path,
     wallet::{CashierDb, WalletDb},
@@ -59,7 +60,7 @@ impl Cashierd {
             config,
             cashier_wallet,
             client_wallet,
-            //bridge,
+            bridge,
         })
     }
 
@@ -153,7 +154,6 @@ impl Cashierd {
         }
 
         let token = token.as_str().unwrap();
-
         let token = jubjub::Fr::from_str(token);
         if token.is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -161,8 +161,17 @@ impl Cashierd {
 
         let token = token.unwrap();
 
+        let pubkey = pubkey.as_str().unwrap();
+        // TODO: implement SubgroupPoint
+        //let pubkey: jubjub::SubgroupPoint = deserialize(pubkey).unwrap();
+        //let pubkey = jubjub::SubgroupPoint::from_str(pubkey);
+        //if pubkey.is_none() {
+        //    return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        //};
+
+        //let pubkey = pubkey.unwrap();
         //// TODO: Sanity check.
-        //debug!(target: "CASHIER", "PROCESSING INPUT");
+        debug!(target: "CASHIER", "PROCESSING INPUT");
         //let _check = self
         //    .cashier_wallet
         //    .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
