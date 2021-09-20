@@ -165,7 +165,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("deposit") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKEN").unwrap();
+        //  TODO: check that it's a tokenID and not a symbol
+        let token = matches.value_of("TOKENID").unwrap();
 
         // TODO: Retrieve cashier features and error if they
         // don't support the network.
@@ -182,7 +183,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("withdraw") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKEN").unwrap();
+        //  TODO: check that it's a tokenID and not a symbol
+        let token = matches.value_of("TOKENID").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
@@ -238,8 +240,8 @@ async fn main() -> Result<()> {
             (about: "Deposit clear assets for Dark assets")
             (@arg network: +required +takes_value --network
                     "Which network to use (bitcoin/solana/...)")
-            (@arg TOKEN: +required
-                    "Which token to deposit (BTC/SOL/USDC/...)")
+            (@arg TOKENID: +required
+                    "Which tokenID to deposit (alphanumeric string)")
         )
         (@subcommand transfer =>
             (about: "Transfer Dark assets to address")
@@ -251,7 +253,7 @@ async fn main() -> Result<()> {
             (about: "Withdraw Dark assets for clear assets")
             (@arg network: +required +takes_value --network
                 "Which network to use (bitcoin/solana/...)")
-            (@arg TOKEN: +required "Desired asset")
+            (@arg TOKENID: +required "Which tokenID to receive (alphanumeric string)")
             (@arg ADDRESS: +required "Recipient address")
             (@arg AMOUNT: +required "Amount to send")
         )
