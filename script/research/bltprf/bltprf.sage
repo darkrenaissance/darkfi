@@ -37,9 +37,11 @@ def dot(x, y):
 challenges = []
 commits = []
 
+original_a, original_G = a, G
+
 # Iterate k times where n = 2^k
-for k in range(k, 0, -1):
-    half = 2^(k - 1)
+for current_k in range(k, 0, -1):
+    half = 2^(current_k - 1)
     assert half * 2 == len(a)
 
     L = dot(a[half:], G[:half])
@@ -52,11 +54,38 @@ for k in range(k, 0, -1):
     challenges.append(challenge)
 
     a = [a[i] + challenge^-1 * a[half + i] for i in range(half)]
-    G = [G[i] + int(challenge) * G[half + i] for i in range(half)]
+    G = [int(challenge^-1) * G[i] + int(challenge) * G[half + i] for i in range(half)]
     assert len(a) == len(G) == half
 
-    if k == 0:
-        print("Last round")
-        assert len(a[-1]) == 1
-        assert len(G[-1]) == 1
+    # Last iteration
+    if current_k == 1:
+        assert len(a) == 1
+        assert len(G) == 1
+
+        final_a = a[0]
+        final_G = G[0]
+
+assert len(challenges) == k
+
+def get_jth_bit(value, idx):
+    digits = bin(value)[2:]
+    # Add zero padding
+    digits = digits.zfill(k)
+    return True if digits[idx] == "1" else False
+
+# get scalar values
+counters = []
+for i in range(1, n + 1):
+    s = Scalar(1)
+    for j in range(0, k):
+        if get_jth_bit(i - 1, j):
+            b = 1
+        else:
+            b = -1
+        s *= challenges[j]^b
+    counters.append(s)
+
+assert len(counters) == len(original_G)
+
+assert dot(counters, original_G) == final_G
 
