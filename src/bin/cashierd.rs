@@ -153,12 +153,12 @@ impl Cashierd {
         debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}"
             , drk_pub_key, amount);
 
-        // get public key, and asset_id of the coin get received
-        let coin = cashier_wallet.get_withdraw_coin_public_key_by_dkey_public(&drk_pub_key)?;
+        // get public key, and asset_id of the token
+        let token = cashier_wallet.get_withdraw_token_public_key_by_dkey_public(&drk_pub_key)?;
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
-        if let Some((addr, asset_id)) = coin {
+        if let Some((addr, asset_id)) = token {
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
@@ -242,7 +242,7 @@ impl Cashierd {
         //// TODO: Sanity check.
         let _check = self
             .cashier_wallet
-            .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
+            .get_deposit_token_keys_by_dkey_public(&pubkey, &serialize(&1));
 
         // TODO: implement bridge communication
         // this just returns the user public key

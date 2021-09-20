@@ -1,4 +1,4 @@
-use super::bridge::{CoinClient, CoinNotification, CoinSubscribtion};
+use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
 use crate::serial::{serialize, Decodable, Encodable};
 use crate::Result;
 
@@ -155,8 +155,8 @@ impl BtcClient {
 }
 
 #[async_trait]
-impl CoinClient for BtcClient {
-    async fn subscribe(&self) -> Result<CoinSubscribtion> {
+impl TokenClient for BtcClient {
+    async fn subscribe(&self) -> Result<TokenSubscribtion> {
         //// Generate bitcoin Address
         let btc_keys = BitcoinKeys::new(self.client.clone(), self.network)?;
 
@@ -171,13 +171,13 @@ impl CoinClient for BtcClient {
         let (_txid, _balance) = btc_keys.start_subscribe().await?;
         //let _script = btc_keys.get_script();
 
-        Ok(CoinSubscribtion {
+        Ok(TokenSubscribtion {
             secret_key: serialize(&btc_priv.to_bytes()),
             public_key: serialize(&btc_pub.to_bytes()),
         })
     }
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<CoinNotification>> {
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
         // TODO this not implemented yet
         let (_, notifier) = async_channel::unbounded();
         Ok(notifier)
