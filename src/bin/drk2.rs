@@ -231,6 +231,9 @@ async fn main() -> Result<()> {
             (@arg TOKEN: +required
                     "Which token to query (BTC/SOL/USDC/...)")
         )
+        (@subcommand features =>
+            (about: "Show what features the cashier supports")
+        )
         (@subcommand deposit =>
             (about: "Deposit clear assets for Dark assets")
             (@arg network: +required +takes_value --network

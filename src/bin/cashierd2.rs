@@ -3,6 +3,7 @@ use log::*;
 use std::path::PathBuf;
 
 use clap::clap_app;
+use serde::Serialize;
 use serde_json::{json, Value};
 use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
@@ -30,10 +31,18 @@ use drk::{
 
 use ff::PrimeField;
 
-// network: String specifier
-// asset_id: Token HEX
+#[derive(Debug, Clone, Serialize)]
 struct Features {
     networks: Vec<String>,
+}
+
+impl Features {
+    fn new() -> Self {
+        let mut networks = Vec::new();
+        networks.push("solana".to_string());
+        networks.push("bitcoin".to_string());
+        Self { networks }
+    }
 }
 
 #[derive(Clone)]
@@ -42,6 +51,7 @@ struct Cashierd {
     config: CashierdConfig,
     client_wallet: Arc<WalletDb>,
     cashier_wallet: Arc<CashierDb>,
+    features: Features,
     // clientdb:
     // mint_params:
     // spend_params:
@@ -58,12 +68,14 @@ impl Cashierd {
             &PathBuf::from(config.cashierdb_path.clone()),
             config.password.clone(),
         )?;
+        let features = Features::new();
 
         Ok(Self {
             verbose,
             config,
             cashier_wallet,
             client_wallet,
+            features,
         })
     }
 
@@ -184,7 +196,7 @@ impl Cashierd {
 
     // TODO: implement this
     async fn features(self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Err(jsonerr(InvalidParams, None, id))
+        JsonResult::Resp(jsonresp(json!(self.features), id))
     }
 }
 
