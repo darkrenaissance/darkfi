@@ -6,7 +6,6 @@
 
 ## v0-release
 
-- [ ] refactor bridge to work with new rpc setup
 - [ ] change assetID variable to network and add switch statement in cashier::start()
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
 - [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
@@ -20,6 +19,10 @@
 ## deposit
 
 - [ ] cashierd: resume watch after restart
+
+## bridge
+
+- [ ] implement listen function
 
 ## withdraw
 
