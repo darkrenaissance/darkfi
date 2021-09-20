@@ -2,7 +2,7 @@ use crate::rpc::{jsonrpc, jsonrpc::JsonResult};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
-use super::bridge::{ CoinSubscribtion, CoinNotification, CoinClient};
+use super::bridge::{ TokenSubscribtion, TokenNotification, TokenClient};
 
 use async_trait::async_trait;
 
@@ -44,8 +44,8 @@ pub struct SolClient {
     subscriptions: Arc<Mutex<HashMap<Pubkey, (Keypair, u64)>>>,
 
     notify_channel: (
-        async_channel::Sender<CoinNotification>,
-        async_channel::Receiver<CoinNotification>,
+        async_channel::Sender<TokenNotification>,
+        async_channel::Receiver<TokenNotification>,
     ),
 
     subscribe_channel: (
@@ -154,7 +154,7 @@ impl SolClient {
 
                     self.notify_channel
                         .0
-                        .send(CoinNotification {
+                        .send(TokenNotification {
                             secret_key: serialize(keypair),
                             received_balance,
                         })
@@ -203,8 +203,8 @@ impl SolClient {
 }
 
 #[async_trait]
-impl CoinClient for SolClient {
-    async fn subscribe(&self) -> Result<CoinSubscribtion> {
+impl TokenClient for SolClient {
+    async fn subscribe(&self) -> Result<TokenSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
         // Parameters for subscription to events related to `pubkey`.
@@ -237,10 +237,10 @@ impl CoinClient for SolClient {
         //  send
         self.subscribe_channel.0.send(sub_msg).await?;
 
-        Ok(CoinSubscribtion { secret_key, public_key})
+        Ok(TokenSubscribtion { secret_key, public_key})
     }
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<CoinNotification>>{
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>>{
         Ok(self.notify_channel.1.clone())
     }
 

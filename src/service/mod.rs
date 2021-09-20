@@ -1,4 +1,4 @@
-pub mod cashier;
+//pub mod cashier;
 pub mod gateway;
 pub mod reqrep;
 pub mod bridge;
@@ -15,5 +15,4 @@ pub use sol::{SolClient, SolFailed, SolResult};
 
 pub use gateway::{GatewayClient, GatewayService, GatewaySlabsSubscriber};
 
-pub use cashier::{CashierClient, CashierService};
 

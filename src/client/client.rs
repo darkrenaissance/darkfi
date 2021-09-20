@@ -7,11 +7,9 @@ use crate::crypto::{
     nullifier::Nullifier,
     save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
 };
-use crate::rpc::adapter::{RpcClient, RpcClientAdapter};
-use crate::rpc::jsonserver;
 use crate::serial::Decodable;
 use crate::serial::Encodable;
-use crate::service::{CashierClient, GatewayClient, GatewaySlabsSubscriber};
+use crate::service::{GatewayClient, GatewaySlabsSubscriber};
 use crate::state::{state_transition, ProgramState, StateUpdate};
 use crate::wallet::{CashierDbPtr, WalletPtr};
 use crate::{tx, Result};
@@ -21,8 +19,6 @@ use super::ClientFailed;
 use async_executor::Executor;
 use bellman::groth16;
 use bls12_381::Bls12;
-
-use jsonrpc_core::IoHandler;
 
 use async_std::sync::{Arc, Mutex};
 use log::*;
@@ -93,30 +89,8 @@ impl Client {
     pub async fn connect_to_cashier(
         client: Client,
         executor: Arc<Executor<'_>>,
-        cashier_addr: SocketAddr,
-        rpc_url: SocketAddr,
     ) -> Result<()> {
-        // create cashier client
-        debug!(target: "CLIENT", "Creating cashier client");
-        let mut cashier_client = CashierClient::new(cashier_addr)?;
-
-        // start cashier_client
-        cashier_client.start().await?;
-
         let client_mutex = Arc::new(Mutex::new(client));
-        let cashier_mutex = Arc::new(Mutex::new(cashier_client));
-
-        let mut io = IoHandler::new();
-
-        let rpc_client_adapter = RpcClientAdapter::new(client_mutex.clone(), cashier_mutex.clone());
-
-        io.extend_with(rpc_client_adapter.to_delegate());
-
-        let io = Arc::new(io);
-
-        // start the rpc server
-        debug!(target: "CLIENT", "Start RPC server");
-        let _ = jsonserver::start(executor.clone(), rpc_url, io).await?;
 
         // start subscriber
         Client::connect_to_subscriber(client_mutex.clone(), executor.clone()).await?;

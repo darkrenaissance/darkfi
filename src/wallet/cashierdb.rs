@@ -48,7 +48,7 @@ impl CashierDb {
     }
 
     // return private and public keys as a tuple
-    pub fn get_deposit_coin_keys_by_dkey_public(
+    pub fn get_deposit_token_keys_by_dkey_public(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
         asset_id: &Vec<u8>,
@@ -76,12 +76,11 @@ impl CashierDb {
         Ok(keys)
     }
 
-    // Update to take BitcoinKeys instance instead
     pub fn put_exchange_keys(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
-        coin_private: &Vec<u8>,
-        coin_public: &Vec<u8>,
+        token_private: &Vec<u8>,
+        token_public: &Vec<u8>,
         asset_id: &Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
@@ -94,17 +93,19 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
-            "INSERT INTO deposit_keypairs(d_key_public, coin_key_private, coin_key_public, asset_id)
-            VALUES (:d_key_public, :coin_key_private, :coin_key_public, :asset_id)",
+            "INSERT INTO deposit_keypairs(d_key_public, token_key_private, token_public_key_public, asset_id)
+            VALUES (:d_key_public, :token_key_private, :token_key_public, :asset_id)",
             named_params! {
                 ":d_key_public": d_key_public,
-                ":coin_key_private": coin_private,
-                ":coin_key_public": coin_public,
+                ":token_key_private": token_private,
+                ":token_key_public": token_public,
                 ":asset_id": asset_id,
             },
         )?;
         Ok(())
     }
+
+    // TODO convert this to generic function work with different tokens
     pub fn put_btc_utxo(
         &self,
         tx_id: &Vec<u8>,
@@ -131,6 +132,7 @@ impl CashierDb {
         )?;
         Ok(())
     }
+
     pub fn get_withdraw_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
         debug!(target: "CASHIERDB", "Get withdraw private keys");
         // open connection
@@ -158,12 +160,12 @@ impl CashierDb {
         Ok(private_keys)
     }
 
-    pub fn get_withdraw_keys_by_coin_public_key(
+    pub fn get_withdraw_keys_by_token_public_key(
         &self,
-        coin_public_key: &Vec<u8>,
+        token_public_key: &Vec<u8>,
         asset_id: &Vec<u8>,
     ) -> Result<Option<Keypair>> {
-        debug!(target: "CASHIERDB", "Check for existing coin address");
+        debug!(target: "CASHIERDB", "Check for existing token address");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -173,11 +175,11 @@ impl CashierDb {
 
         let mut stmt =
             conn.prepare(
-                "SELECT * FROM withdraw_keypairs WHERE coin_key_id = :coin_key_id AND asset_id = :asset_id AND confirm = :confirm;")?;
+                "SELECT * FROM withdraw_keypairs WHERE token_key_id = :token_key_id AND asset_id = :asset_id AND confirm = :confirm;")?;
 
         let addr_iter = stmt.query_map::<Keypair, _, _>(
             &[
-                (":coin_key_id", &coin_public_key),
+                (":token_key_id", &token_public_key),
                 (":asset_id", &asset_id),
                 (":confirm", &&confirm),
             ],
@@ -201,12 +203,11 @@ impl CashierDb {
         Ok(addresses.pop())
     }
 
-    pub fn get_withdraw_coin_public_key_by_dkey_public(
+    pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-        asset_id: &Vec<u8>,
-    ) -> Result<Option<Vec<u8>>> {
-        debug!(target: "CASHIERDB", "Get coin address by pub_key");
+    ) -> Result<Option<(Vec<u8>, jubjub::Fr)>> {
+        debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -217,29 +218,32 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id AND confirm = :confirm;",
+            "SELECT token_key_id, asset_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
-        let addr_iter = stmt.query_map::<Vec<u8>, _, _>(
-            &[
-                (":d_key_public", &d_key_public),
-                (":asset_id", &asset_id),
-                (":confirm", &&confirm),
-            ],
-            |row| Ok(row.get(0)?),
+        let addr_iter = stmt.query_map::<(Vec<u8>, jubjub::Fr), _, _>(
+            &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
+            |row| {
+                let token_public_key = row.get(0)?;
+                let asset_id = row.get(1)?;
+                let asset_id: jubjub::Fr = self
+                    .get_value_deserialized(asset_id)
+                    .expect("deserialize asset_id");
+                Ok((token_public_key, asset_id))
+            },
         )?;
 
-        let mut coin_addresses = vec![];
+        let mut token_addresses = vec![];
 
         for addr in addr_iter {
-            coin_addresses.push(addr?);
+            token_addresses.push(addr?);
         }
 
-        Ok(coin_addresses.pop())
+        Ok(token_addresses.pop())
     }
 
     pub fn confirm_withdraw_key_record(
         &self,
-        coin_address: &Vec<u8>,
+        token_address: &Vec<u8>,
         asset_id: &Vec<u8>,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");
@@ -252,8 +256,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&true)?;
 
         conn.execute(
-            "UPDATE withdraw_keypairs SET confirm = ?1  WHERE coin_key_id = ?2 AND asset_id = ?3;",
-            params![confirm, coin_address, asset_id],
+            "UPDATE withdraw_keypairs SET confirm = ?1  WHERE token_key_id = ?2 AND asset_id = ?3;",
+            params![confirm, token_address, asset_id],
         )?;
 
         Ok(())
@@ -261,7 +265,7 @@ impl CashierDb {
 
     pub fn put_withdraw_keys(
         &self,
-        coin_key_id: &Vec<u8>,
+        token_key_id: &Vec<u8>,
         d_key_public: &jubjub::SubgroupPoint,
         d_key_private: &jubjub::Fr,
         asset_id: &Vec<u8>,
@@ -279,10 +283,10 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         conn.execute(
-            "INSERT INTO withdraw_keypairs(coin_key_id, d_key_private, d_key_public, asset_id, confirm)
-            VALUES (:coin_key_id, :d_key_private, :d_key_public, :asset_id, :confirm)",
+            "INSERT INTO withdraw_keypairs(token_key_id, d_key_private, d_key_public, asset_id, confirm)
+            VALUES (:token_key_id, :d_key_private, :d_key_public, :asset_id, :confirm)",
             named_params! {
-                ":coin_key_id": coin_key_id,
+                ":token_key_id": token_key_id,
                 ":d_key_private": d_key_private,
                 ":d_key_public": d_key_public,
                 ":asset_id": asset_id,
@@ -306,7 +310,7 @@ mod tests {
     // TODO add more tests
 
     #[test]
-    pub fn test_put_withdraw_keys_and_load_them_with_coin_key() -> Result<()> {
+    pub fn test_put_withdraw_keys_and_load_them_with_token_key() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
         let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
         wallet.init_db()?;
@@ -315,19 +319,19 @@ mod tests {
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
 
         // btc addr testnet
-        let coin_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
+        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
 
         let asset_id = serialize(&1);
 
-        wallet.put_withdraw_keys(&coin_addr, &public2, &secret2, &asset_id)?;
+        wallet.put_withdraw_keys(&token_addr, &public2, &secret2, &asset_id)?;
 
-        let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
+        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &asset_id)?;
 
         assert_eq!(addr.is_some(), true);
 
-        wallet.confirm_withdraw_key_record(&coin_addr, &asset_id)?;
+        wallet.confirm_withdraw_key_record(&token_addr, &asset_id)?;
 
-        let addr = wallet.get_withdraw_keys_by_coin_public_key(&coin_addr, &asset_id)?;
+        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &asset_id)?;
 
         assert_eq!(addr.is_none(), true);
 

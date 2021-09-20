@@ -32,19 +32,19 @@ pub struct BridgeSubscribtion {
     pub receiver: async_channel::Receiver<BridgeResponse>,
 }
 
-pub struct CoinSubscribtion {
+pub struct TokenSubscribtion {
     pub secret_key: Vec<u8>,
     pub public_key: Vec<u8>,
 }
 
-pub struct CoinNotification {
+pub struct TokenNotification {
     pub secret_key: Vec<u8>,
     pub received_balance: u64,
 }
 
 pub struct Bridge {
-    clients: Mutex<HashMap<Vec<u8>, Arc<dyn CoinClient + Send + Sync>>>,
-    notifiers: Mutex<HashMap<Vec<u8>, async_channel::Receiver<CoinNotification>>>,
+    clients: Mutex<HashMap<Vec<u8>, Arc<dyn TokenClient + Send + Sync>>>,
+    notifiers: Mutex<HashMap<Vec<u8>, async_channel::Receiver<TokenNotification>>>,
 }
 
 impl Bridge {
@@ -58,7 +58,7 @@ impl Bridge {
     pub async fn add_clients(
         self: Arc<Self>,
         asset_id: jubjub::Fr,
-        client: Arc<dyn CoinClient + Send + Sync>,
+        client: Arc<dyn TokenClient + Send + Sync>,
     ) -> Result<()> {
         let asset_id = serialize(&asset_id);
 
@@ -118,8 +118,8 @@ impl Bridge {
 }
 
 #[async_trait]
-pub trait CoinClient {
-    async fn subscribe(&self) -> Result<CoinSubscribtion>;
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<CoinNotification>>;
+pub trait TokenClient {
+    async fn subscribe(&self) -> Result<TokenSubscribtion>;
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>>;
     async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()>;
 }

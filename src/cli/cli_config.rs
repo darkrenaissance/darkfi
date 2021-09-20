@@ -84,14 +84,11 @@ pub struct CashierdConfig {
     #[serde(rename = "gateway_url")]
     pub gateway_url: String,
 
+    #[serde(rename = "gateway_subscriber_url")]
+    pub gateway_subscriber_url: String,
+
     #[serde(rename = "log_path")]
     pub log_path: String,
-
-    #[serde(rename = "database_path")]
-    pub database_path: String,
-
-    #[serde(rename = "cashierdb_path")]
-    pub cashierdb_path: String,
 
     #[serde(rename = "password")]
     pub password: String,
