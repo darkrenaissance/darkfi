@@ -54,7 +54,7 @@ for current_k in range(k, 0, -1):
     challenges.append(challenge)
 
     a = [a[i] + challenge^-1 * a[half + i] for i in range(half)]
-    G = [int(challenge^-1) * G[i] + int(challenge) * G[half + i] for i in range(half)]
+    G = [G[i] + int(challenge) * G[half + i] for i in range(half)]
     assert len(a) == len(G) == half
 
     # Last iteration
@@ -66,6 +66,26 @@ for current_k in range(k, 0, -1):
         final_G = G[0]
 
 assert len(challenges) == k
+
+# G_3 = [G1, G2, G3, G4, G5, G6, G7, G8]
+# G_2 = [
+#     G1 + x G5,
+#     G2 + x G6,
+#     G3 + x G7,
+#     G4 + x G8
+# ]
+# G_1 = [
+#     G_2_1 + x G_2_3,
+#     G_2_2 + x G_2_4
+# ] = [
+#     (G1 + x G5) + x (G3 + x G7) = G1 + x G3 + x G5 + x^2 G7,
+#     (G2 + x G6) + x (G4 + x G8) = G2 + x G4 + x G6 + x^2 G8
+# ]
+#
+# We end up with a single remaining value
+#
+# G_0 = G_1_1 + x G_1_2
+#     = G1 + x G2 + x G3 + x^2 G4 + x G5 + x^2 G6 + x^2 G7 + x^3 G8
 
 def get_jth_bit(value, idx):
     digits = bin(value)[2:]
@@ -81,7 +101,7 @@ for i in range(1, n + 1):
         if get_jth_bit(i - 1, j):
             b = 1
         else:
-            b = -1
+            b = 0
         s *= challenges[j]^b
     counters.append(s)
 
