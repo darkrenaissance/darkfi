@@ -10,19 +10,18 @@
 connect_url = "127.0.0.1:3333"
 publisher_url = "127.0.0.1:4444"
 log_path = "/tmp/gatewayd.log"	
-
 ```
 
 **cashierd.toml**
 
 ```
 accept_url = "127.0.0.1:7777"
-rpc_url = "http://127.0.0.1:8000"
+rpc_url = "127.0.0.1:8000"
 gateway_url = "127.0.0.1:3333"
+gateway_subscriber_url = "127.0.0.1:4444"
 log_path = "/tmp/cashierd.log"
 password = "TEST_PASSWORD"
 client_password = "TEST_PASSWORD"
-
 ```
 
 **darkfid.toml**
@@ -34,15 +33,13 @@ cashier_url = "127.0.0.1:7777"
 rpc_url = "127.0.0.1:8000"
 log_path = "/tmp/darkfid_service_daemon.log"
 password = "TEST_PASSWORD"
-
 ```
 
 **drk.toml**
 
 ```
-rpc_url = "http://127.0.0.1:8000"
+rpc_url = "127.0.0.1:8000"
 log_path = "/tmp/drk_cli.log"
-
 ```
 
 3. Configure the password field on all TOML files.
