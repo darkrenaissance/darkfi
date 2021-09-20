@@ -204,8 +204,7 @@ impl CashierDb {
     pub fn get_withdraw_coin_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-        asset_id: &Vec<u8>,
-    ) -> Result<Option<Vec<u8>>> {
+    ) -> Result<Option<(Vec<u8>, jubjub::Fr)>> {
         debug!(target: "CASHIERDB", "Get coin address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -217,15 +216,18 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT coin_key_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND asset_id = :asset_id AND confirm = :confirm;",
+            "SELECT coin_key_id, asset_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
-        let addr_iter = stmt.query_map::<Vec<u8>, _, _>(
-            &[
-                (":d_key_public", &d_key_public),
-                (":asset_id", &asset_id),
-                (":confirm", &&confirm),
-            ],
-            |row| Ok(row.get(0)?),
+        let addr_iter = stmt.query_map::<(Vec<u8>, jubjub::Fr), _, _>(
+            &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
+            |row| {
+                let coin_public_key = row.get(0)?;
+                let asset_id = row.get(1)?;
+                let asset_id: jubjub::Fr = self
+                    .get_value_deserialized(asset_id)
+                    .expect("deserialize asset_id");
+                Ok((coin_public_key, asset_id))
+            },
         )?;
 
         let mut coin_addresses = vec![];
