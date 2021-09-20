@@ -12,17 +12,17 @@ Scalar = GF(p)
 k = 3
 n = 2^k
 
-a = [Scalar(110), Scalar(56),  Scalar(89), Scalar(6543),
-     Scalar(2),   Scalar(110), Scalar(44), Scalar(78)]
+start_a = [Scalar(110), Scalar(56),  Scalar(89), Scalar(6543),
+           Scalar(2),   Scalar(110), Scalar(44), Scalar(78)]
 
 x = Scalar.random_element()
-b = [x^i for i in range(n)]
+start_b = [x^i for i in range(n)]
 
-G = [E.random_element(), E.random_element(), E.random_element(),
-     E.random_element(), E.random_element(), E.random_element(),
-     E.random_element(), E.random_element()]
+start_G = [E.random_element(), E.random_element(), E.random_element(),
+           E.random_element(), E.random_element(), E.random_element(),
+           E.random_element(), E.random_element()]
 
-assert len(a) == len(b) == len(G) == n
+assert len(start_a) == len(start_b) == len(start_G) == n
 
 # Dot product
 def dot(x, y):
@@ -34,27 +34,41 @@ def dot(x, y):
             result += int(x_i) * y_i
     return result
 
+# This is the main commitment we are proving over
+P = dot(start_a, start_G)
+
 challenges = []
 commits = []
 
-original_a, original_G = a, G
+a, G = start_a, start_G
 
 # Iterate k times where n = 2^k
 for current_k in range(k, 0, -1):
+    # This should make sense to you
     half = 2^(current_k - 1)
     assert half * 2 == len(a)
 
-    L = dot(a[half:], G[:half])
-    R = dot(a[:half], G[half:])
+    a_lo, a_hi = a[:half], a[half:]
+    G_lo, G_hi = G[:half], G[half:]
+
+    # L = <a_hi, G_lo>
+    # R = <a_lo, G_hi>
+    L = dot(a_hi, G_lo)
+    R = dot(a_lo, G_hi)
     #z_L = dot(a[half:], b[:half])
     #z_R = dot(a[:half], b[half:])
     commits.append((L, R))
 
+    # Random x value
     challenge = Scalar.random_element()
     challenges.append(challenge)
 
-    a = [a[i] + challenge^-1 * a[half + i] for i in range(half)]
-    G = [G[i] + int(challenge) * G[half + i] for i in range(half)]
+    # a = a_lo + x^-1 a_hi
+    # G = G_lo + x G_hi
+    a = [a_lo_i + challenge^-1 * a_hi_i
+         for a_lo_i, a_hi_i in zip(a_lo, a_hi)]
+    G = [G_lo_i + int(challenge) * G_hi_i
+         for G_lo_i, G_hi_i in zip(G_lo, G_hi)]
     assert len(a) == len(G) == half
 
     # Last iteration
@@ -105,7 +119,16 @@ for i in range(1, n + 1):
         s *= challenges[j]^b
     counters.append(s)
 
-assert len(counters) == len(original_G)
+assert len(counters) == len(start_G)
 
-assert dot(counters, original_G) == final_G
+# Verifier can recompute the final G value by doing this calc
+G_verif = dot(counters, start_G)
+assert G_verif == final_G
+# final_a value is passed to the verifier
+
+# Verification check
+L, R = zip(*commits)
+challenges_inv = [c^-1 for c in challenges]
+assert int(final_a) * G_verif == (P
+    + dot(challenges, R) + dot(challenges_inv, L))
 
