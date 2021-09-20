@@ -126,43 +126,43 @@ impl Cashierd {
 
         let args = params.as_array().unwrap();
 
-        let _network = &args[0];
-        let token = &args[1];
-        let pubkey = &args[2];
+        let _ntwk = &args[0];
+        let tkn = &args[1];
+        let pk = &args[2];
 
         debug!(target: "CASHIER", "PROCESSING INPUT");
 
-        // parse token
-        if token.as_str().is_none() {
+        if tkn.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-        let token_str = token.as_str().unwrap();
-        let token_fr = jubjub::Fr::from_str(token_str);
-        if token_fr.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        };
-        let token = token_fr.unwrap();
+        let tkn_str = tkn.as_str().unwrap();
 
-        // parse pubkey
-        if pubkey.as_str().is_none() {
+        let _tkn_fr = jubjub::Fr::from_str(tkn_str);
+        // TODO: debug this
+        //if tkn_fr.is_none() {
+        //    return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        //};
+        //let token = tkn_fr.unwrap();
+
+        if pk.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-        // TODO: get rid of these unwraps
-        let pubkey = pubkey.as_str().unwrap();
-        let hex = hex::decode(pubkey).unwrap();
-        let pubkey: jubjub::SubgroupPoint = deserialize(&hex).unwrap();
+        let pk_str = pk.as_str().unwrap();
+
+        let pk_58 = bs58::decode(pk_str).into_vec().unwrap();
+
+        let pubkey: jubjub::SubgroupPoint = deserialize(&pk_58).unwrap();
 
         //// TODO: Sanity check.
-        debug!(target: "CASHIER", "GET DEPOSIT COIN KEYS");
         let _check = self
             .cashier_wallet
             .get_deposit_coin_keys_by_dkey_public(&pubkey, &serialize(&1));
 
         // TODO: implement bridge communication
-        // NOTE: this just returns the user public key
-        let pubkey_vec = serialize(&pubkey);
+        // this just returns the user public key
+        let pubkey = bs58::encode(serialize(&pubkey)).into_string();
         debug!(target: "CASHIER", "ATTEMPING REPLY");
-        JsonResult::Resp(jsonresp(json!(pubkey_vec), json!(id)))
+        JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
     }
 
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
