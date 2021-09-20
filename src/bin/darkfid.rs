@@ -148,7 +148,7 @@ impl Darkfid {
 
     // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
-    async fn features(self, id: Value, params: Value) -> JsonResult {
+    async fn features(self, id: Value, _params: Value) -> JsonResult {
         // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
@@ -230,10 +230,10 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0];
-        let token = &args[1];
-        let address = &args[2];
-        let amount = &args[3];
+        let _network = &args[0];
+        let _token = &args[1];
+        let _address = &args[2];
+        let _amount = &args[3];
 
         // 1. Send request to cashier.
         // 2. Cashier checks if they support the network, and if so,
