@@ -7,7 +7,7 @@ use drk::{
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
     },
     serial::{deserialize, serialize},
-    service::bridge,
+    service::{bridge, bridge::Bridge},
     util::join_config_path,
     wallet::{CashierDb, WalletDb},
     Error, Result,
@@ -97,18 +97,18 @@ impl Cashierd {
         })
     }
 
-    async fn start(self, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
         //// TODO: pass vector of assets
 
         self.cashier_wallet.init_db()?;
 
-        let bridge = bridge::Bridge::new();
+        let bridge = Bridge::new();
 
         self.client.lock().await.start().await?;
 
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
-        let _cashier_client_subscriber_task =
+        let cashier_client_subscriber_task =
             executor.spawn(Client::connect_to_subscriber_from_cashier(
                 self.client.clone(),
                 executor.clone(),
@@ -119,42 +119,67 @@ impl Cashierd {
         let cashier_wallet = self.cashier_wallet.clone();
 
         let ex = executor.clone();
-        executor.spawn(async move {
-            loop {
-                let bridge = bridge.clone();
-                let bridge_subscribtion  = bridge.subscribe(ex.clone()).await;
-                let (pub_key, amount) = recv_coin.recv().await.expect("Receive Own Coin");
-                debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}", pub_key, amount);
-                let coin = cashier_wallet.get_withdraw_coin_public_key_by_dkey_public(&pub_key)
-                    .expect("Get coin_key by pub_key");
-                if let Some((addr, asset_id)) =  coin {
-                    // send equivalent amount of coin to this address
-                    bridge_subscribtion.sender.send(
-                        bridge::BridgeRequests {
-                            asset_id,
-                            payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount)
-                        }
-                    ).await.expect("send request to bridge");
-
-                    let res = bridge_subscribtion.receiver.recv().await.expect("bridge resonse");
-
-                    if res.error == 0 {
-                        match res.payload {
-                            bridge::BridgeResponsePayload::SendResponse => {
-                                // TODO Send the received coins to the main address
-                                cashier_wallet.confirm_withdraw_key_record(&addr, &serialize(&1) )
-                                    .expect("Confirm withdraw key record");
-                            }
-                            _ => {}
-                        }
-
-                    }
-
-
+        executor
+            .spawn(async move {
+                loop {
+                    Self::listen_for_receiving_coins(
+                        ex.clone(),
+                        bridge.clone(),
+                        cashier_wallet.clone(),
+                        recv_coin.clone(),
+                    )
+                    .await
+                    .expect(" listen for receiving coins");
                 }
+            })
+            .await;
 
+        cashier_client_subscriber_task.cancel().await;
+
+        Ok(())
+    }
+
+    async fn listen_for_receiving_coins(
+        ex: Arc<Executor<'_>>,
+        bridge: Arc<Bridge>,
+        cashier_wallet: Arc<CashierDb>,
+        recv_coin: async_channel::Receiver<(jubjub::SubgroupPoint, u64)>,
+    ) -> Result<()> {
+        let bridge_subscribtion = bridge.subscribe(ex.clone()).await;
+
+        // received drk coin
+        let (drk_pub_key, amount) = recv_coin.recv().await?;
+
+        debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}"
+            , drk_pub_key, amount);
+
+        // get public key, and asset_id of the coin get received
+        let coin = cashier_wallet.get_withdraw_coin_public_key_by_dkey_public(&drk_pub_key)?;
+
+        // send a request to bridge to send equivalent amount of
+        // received drk coin to token publickey
+        if let Some((addr, asset_id)) = coin {
+            bridge_subscribtion
+                .sender
+                .send(bridge::BridgeRequests {
+                    asset_id,
+                    payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount),
+                })
+                .await?;
+
+            // receive a response
+            let res = bridge_subscribtion.receiver.recv().await?;
+
+            if res.error == 0 {
+                match res.payload {
+                    bridge::BridgeResponsePayload::SendResponse => {
+                        // TODO Send the received coins to the main address
+                        cashier_wallet.confirm_withdraw_key_record(&addr, &serialize(&1))?;
+                    }
+                    _ => {}
+                }
             }
-        }).await;
+        }
 
         Ok(())
     }
