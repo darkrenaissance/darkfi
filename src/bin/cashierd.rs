@@ -62,16 +62,23 @@ impl Cashierd {
 
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
+        let cashier_wallet_path = join_config_path(&PathBuf::from("cashier_wallet.db"))?;
+
+        let client_wallet_path = join_config_path(&PathBuf::from("cashier_client_wallet.db"))?;
+
         let cashier_wallet = CashierDb::new(
-            &PathBuf::from(config.cashierdb_path.clone()),
+            &cashier_wallet_path,
             config.password.clone(),
         )?;
         let client_wallet = WalletDb::new(
-            &PathBuf::from(config.cashierdb_path.clone()),
+            &client_wallet_path.clone(),
             config.password.clone(),
         )?;
 
-        let rocks = Rocks::new(&PathBuf::from(&config.cashierdb_path))?;
+
+        let database_path = join_config_path(&PathBuf::from("cashier_database.db"))?;
+
+        let rocks = Rocks::new(&database_path)?;
 
         let client = Client::new(
             rocks,

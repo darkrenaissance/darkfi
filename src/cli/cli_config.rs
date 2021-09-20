@@ -90,12 +90,6 @@ pub struct CashierdConfig {
     #[serde(rename = "log_path")]
     pub log_path: String,
 
-    #[serde(rename = "database_path")]
-    pub database_path: String,
-
-    #[serde(rename = "cashierdb_path")]
-    pub cashierdb_path: String,
-
     #[serde(rename = "password")]
     pub password: String,
 
