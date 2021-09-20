@@ -107,13 +107,13 @@ sol = ["solana-sdk", "solana-client", "tokio-tungstenite"]
 name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
-[[bin]]
-name = "cashierd"
-path = "src/bin/cashierd.rs"
-
-[[bin]]
-name = "darkfid"
-path = "src/bin/darkfid.rs"
+# [[bin]]
+# name = "cashierd"
+# path = "src/bin/cashierd.rs"
+# 
+# [[bin]]
+# name = "darkfid"
+# path = "src/bin/darkfid.rs"
 
 [[bin]]
 name = "drk"
