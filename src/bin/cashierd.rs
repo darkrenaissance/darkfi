@@ -119,23 +119,24 @@ impl Cashierd {
         let cashier_wallet = self.cashier_wallet.clone();
 
         let ex = executor.clone();
-        executor
-            .spawn(async move {
-                loop {
-                    Self::listen_for_receiving_coins(
-                        ex.clone(),
-                        bridge.clone(),
-                        cashier_wallet.clone(),
-                        recv_coin.clone(),
-                    )
-                    .await
-                    .expect(" listen for receiving coins");
-                }
-            })
-            .await;
+        let listen_for_receiving_coins_task = executor.spawn(async move {
+            loop {
+                Self::listen_for_receiving_coins(
+                    ex.clone(),
+                    bridge.clone(),
+                    cashier_wallet.clone(),
+                    recv_coin.clone(),
+                )
+                .await
+                .expect(" listen for receiving coins");
+            }
+        });
 
+        let rpc_url = self.config.rpc_url.clone();
+        run_rpc_server(self.clone(), rpc_url).await?;
+
+        listen_for_receiving_coins_task.cancel().await;
         cashier_client_subscriber_task.cancel().await;
-
         Ok(())
     }
 
@@ -273,62 +274,9 @@ impl Cashierd {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args = clap_app!(cashierd =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg verbose: -v --verbose "Increase verbosity")
-    )
-    .get_matches();
-
-    let config_path: PathBuf;
-
-    if args.is_present("CONFIG") {
-        config_path = PathBuf::from(args.value_of("CONFIG").unwrap());
-    } else {
-        config_path = join_config_path(&PathBuf::from("cashierd.toml"))?;
-    }
-
-    let cashierd = Cashierd::new(args.clone().is_present("verbose"), config_path)?;
-
-    let listener = TcpListener::bind(cashierd.clone().config.rpc_url).await?;
-    debug!(target: "RPC SERVER", "Listening on {}", cashierd.clone().config.rpc_url);
-
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-    let debug_level = if args.is_present("verbose") {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
-    };
-
-    let log_path = cashierd.clone().config.log_path;
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            SimLogConfig::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
-
-    let ex = Arc::new(Executor::new());
-    let ex2 = ex.clone();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-
-    let cashierd2 = cashierd.clone();
-    let (_, _result) = Parallel::new()
-        // Run four executor threads.
-        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                cashierd2.start(ex2).await?;
-                drop(signal);
-                Ok::<(), Error>(())
-            })
-        });
-
+async fn run_rpc_server(cashierd: Cashierd, rpc_url: String) -> Result<()> {
+    let listener = TcpListener::bind(rpc_url.clone()).await?;
+    debug!(target: "RPC SERVER", "Listening on {}", rpc_url);
     loop {
         debug!(target: "RPC SERVER", "waiting for client");
 
@@ -374,4 +322,60 @@ async fn main() -> Result<()> {
             }
         });
     }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = clap_app!(cashierd =>
+        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg verbose: -v --verbose "Increase verbosity")
+    )
+    .get_matches();
+
+    let config_path: PathBuf;
+
+    if args.is_present("CONFIG") {
+        config_path = PathBuf::from(args.value_of("CONFIG").unwrap());
+    } else {
+        config_path = join_config_path(&PathBuf::from("cashierd.toml"))?;
+    }
+
+    let cashierd = Cashierd::new(args.clone().is_present("verbose"), config_path)?;
+
+    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
+    let debug_level = if args.is_present("verbose") {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Off
+    };
+
+    let log_path = cashierd.clone().config.log_path;
+    CombinedLogger::init(vec![
+        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
+        WriteLogger::new(
+            LevelFilter::Debug,
+            SimLogConfig::default(),
+            std::fs::File::create(log_path).unwrap(),
+        ),
+    ])
+    .unwrap();
+
+    let ex = Arc::new(Executor::new());
+    let ex2 = ex.clone();
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let cashierd2 = cashierd.clone();
+    let (_, _result) = Parallel::new()
+        // Run four executor threads.
+        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                cashierd2.start(ex2).await?;
+                drop(signal);
+                Ok::<(), Error>(())
+            })
+        });
+
+    Ok(())
 }
