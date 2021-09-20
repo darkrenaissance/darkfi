@@ -64,6 +64,7 @@ impl Darkfid {
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
+            Some("features") => return self.features(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
@@ -143,6 +144,26 @@ impl Darkfid {
             }
         }
         return JsonResult::Err(jsonerr(InvalidParams, None, id));
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
+    async fn features(self, id: Value, params: Value) -> JsonResult {
+        // TODO: return a dictionary of features
+        let req = jsonreq(json!("features"), json!([]));
+        let rep: JsonResult;
+        match send_request(self.config.cashier_url, json!(req)).await {
+            Ok(v) => rep = v,
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
+            }
+        }
+
+        match rep {
+            JsonResult::Resp(r) => return JsonResult::Resp(r),
+            JsonResult::Err(e) => return JsonResult::Err(e),
+            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+        }
     }
 
     // --> {"jsonrpc": "2.0", "method": "deposit",

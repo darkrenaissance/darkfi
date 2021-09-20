@@ -82,6 +82,13 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
+    async fn features(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("features"), json!([]));
+        Ok(self.request(req).await?)
+    }
+
     // --> {"jsonrpc": "2.0", "method": "deposit", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 42}
     async fn deposit(&self, network: &str, asset: &str) -> Result<Value> {
@@ -146,6 +153,12 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         let reply = client.get_token_id(&token).await?;
 
+        println!("Server replied: {}", &reply.to_string());
+        return Ok(());
+    }
+
+    if options.is_present("features") {
+        let reply = client.features().await?;
         println!("Server replied: {}", &reply.to_string());
         return Ok(());
     }

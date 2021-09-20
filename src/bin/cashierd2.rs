@@ -32,8 +32,8 @@ use ff::PrimeField;
 
 // network: String specifier
 // asset_id: Token HEX
-struct Networks {
-    supported_networks: Vec<String>,
+struct Features {
+    networks: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -110,6 +110,7 @@ impl Cashierd {
         match req.method.as_str() {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
+            Some("features") => return self.features(req.id, req.params).await,
             Some(_) => {}
             None => {}
         };
@@ -178,6 +179,11 @@ impl Cashierd {
         // 2. Cashier checks if they support the network, and if so,
         //    return adeposit address.
 
+        JsonResult::Err(jsonerr(InvalidParams, None, id))
+    }
+
+    // TODO: implement this
+    async fn features(self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Err(jsonerr(InvalidParams, None, id))
     }
 }
