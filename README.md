@@ -15,7 +15,6 @@ log_path = "/tmp/gatewayd.log"
 **cashierd.toml**
 
 ```
-accept_url = "127.0.0.1:7777"
 rpc_url = "127.0.0.1:8000"
 gateway_url = "127.0.0.1:3333"
 gateway_subscriber_url = "127.0.0.1:4444"
