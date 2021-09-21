@@ -29,6 +29,7 @@ use easy_parallel::Parallel;
 
 use async_std::sync::{Arc, Mutex};
 use ff::PrimeField;
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize)]
@@ -219,38 +220,7 @@ impl Cashierd {
 
         debug!(target: "CASHIER", "PROCESSING INPUT");
 
-        if tkn.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        }
-        let tkn_str = tkn.as_str().unwrap();
-        debug!(target: "CASHIER", "Token STR length: {}", tkn_str.len());
-
-        //
-        // 1. attempt to decode data
-        // 2. decoding fails
-        // 3. increment counter
-        // 4. write counter to top bytes
-        // 5. loop back again
-        //
-        let mut counter = 0;
-        let tkn_fr = jubjub::Fr::from_str(tkn_str);
-        if tkn_fr.is_none() {
-            debug!(target: "CASHIER", "TOKEN IS NONE. COMMENCING LOOP");
-            loop {
-                counter += 1;
-                debug!(target: "CASHIER", "LOOP NUMBER {}", counter);
-                counter.to_string().push_str(tkn_str);
-                debug!(target: "CASHIER", "STR length: {}", tkn_str.len());
-                let tkn_fr = jubjub::Fr::from_str(tkn_str);
-                if tkn_fr.is_none() {
-                    continue;
-                }
-                break;
-                //return JsonResult::Err(jsonerr(InvalidParams, None, id));
-            }
-        };
-
-        let token = tkn_fr.unwrap();
+        let token_id = self.clone().parse_id(tkn);
 
         if pk.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -263,6 +233,7 @@ impl Cashierd {
 
         //// TODO: Sanity check.
         let _check = self
+            .clone()
             .cashier_wallet
             .get_deposit_token_keys_by_dkey_public(&pubkey, &serialize(&1));
 
@@ -271,6 +242,36 @@ impl Cashierd {
         let pubkey = bs58::encode(serialize(&pubkey)).into_string();
         debug!(target: "CASHIER", "ATTEMPING REPLY");
         JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
+    }
+
+    async fn parse_id(self, token: &Value) -> Result<jubjub::Fr> {
+        let tkn_str = token.as_str().unwrap();
+        if bs58::decode(tkn_str).into_vec().is_err() {
+            // TODO: make this an error
+            debug!(target: "CASHIER", "COULD NOT DECODE STR");
+        }
+        let mut data = bs58::decode(tkn_str).into_vec().unwrap();
+        let token_id = deserialize::<jubjub::Fr>(&data);
+        if token_id.is_err() {
+            let mut counter = 0;
+            loop {
+                data.truncate(28);
+                let serialized_counter = serialize(&counter);
+                data.extend(serialized_counter.iter());
+                let mut hasher = Sha256::new();
+                hasher.update(&data);
+                let hash = hasher.finalize();
+                let token_id = deserialize::<jubjub::Fr>(&hash);
+                if token_id.is_err() {
+                    counter += 1;
+                    continue;
+                }
+                debug!(target: "CASHIER", "DESERIALIZATION SUCCESSFUL");
+                let tkn = token_id.unwrap();
+                return Ok(tkn);
+            }
+        }
+        unreachable!();
     }
 
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
@@ -403,30 +404,58 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use drk::serial::{deserialize, serialize};
     use ff::PrimeField;
+    use sha2::{Digest, Sha256};
 
     #[test]
     fn test_jubjub_parsing() {
+        // 1. counter = 0
+        // 2. serialized_counter = serialize(counter)
+        // 3. asset_id_data = hash(data + serialized_counter)
+        // 4. asset_id = deserialize(asset_id_data)
+        // 5. test parse
+        // 6. loop
+        let tkn_str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+        println!("{}", tkn_str);
+        if bs58::decode(tkn_str).into_vec().is_err() {
+            println!("Could not decode str into vec");
+        }
+        let mut data = bs58::decode(tkn_str).into_vec().unwrap();
+        println!("{:?}", data);
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        let hash = hasher.finalize();
+        let token_id = deserialize::<jubjub::Fr>(&hash);
+        println!("{:?}", token_id);
         let mut counter = 0;
-        let tkn = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-        let tkn_fr = jubjub::Fr::from_str(tkn);
-        if tkn_fr.is_none() {
-            println!("TOKEN IS NONE. COMMENCING LOOP");
+        if token_id.is_err() {
+            println!("could not deserialize tkn 58");
             loop {
+                println!("TOKEN IS NONE. COMMENCING LOOP");
                 counter += 1;
                 println!("LOOP NUMBER {}", counter);
-                counter.to_string().push_str(tkn);
-                println!("STR length: {}", tkn.len());
-                let tkn_fr = jubjub::Fr::from_str(tkn);
-                if tkn_fr.is_none() {
+                println!("{:?}", data.len());
+                data.truncate(28);
+                let serialized_counter = serialize(&counter);
+                println!("{:?}", serialized_counter);
+                data.extend(serialized_counter.iter());
+                println!("{:?}", data.len());
+                let mut hasher = Sha256::new();
+                hasher.update(&data);
+                let hash = hasher.finalize();
+                let token_id = deserialize::<jubjub::Fr>(&hash);
+                println!("{:?}", token_id);
+                if token_id.is_err() {
                     continue;
                 }
-                println!("TOKEN PARSING SUCCESSFUL");
+                if counter > 10 {
+                    break;
+                }
+                println!("deserialization successful");
+                token_id.unwrap();
                 break;
             }
         };
-
-        let token = tkn_fr.unwrap();
-        println!("UNWRAP SUCCESSFUL {:?}", token);
     }
 }
