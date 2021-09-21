@@ -66,15 +66,8 @@ impl Cashierd {
 
         let client_wallet_path = join_config_path(&PathBuf::from("cashier_client_wallet.db"))?;
 
-        let cashier_wallet = CashierDb::new(
-            &cashier_wallet_path,
-            config.password.clone(),
-        )?;
-        let client_wallet = WalletDb::new(
-            &client_wallet_path.clone(),
-            config.password.clone(),
-        )?;
-
+        let cashier_wallet = CashierDb::new(&cashier_wallet_path, config.password.clone())?;
+        let client_wallet = WalletDb::new(&client_wallet_path.clone(), config.password.clone())?;
 
         let database_path = join_config_path(&PathBuf::from("cashier_database.db"))?;
 
@@ -230,13 +223,34 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
         let tkn_str = tkn.as_str().unwrap();
+        debug!(target: "CASHIER", "Token STR length: {}", tkn_str.len());
 
-        let _tkn_fr = jubjub::Fr::from_str(tkn_str);
-        // TODO: debug this
-        //if tkn_fr.is_none() {
-        //    return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        //};
-        //let token = tkn_fr.unwrap();
+        //
+        // 1. attempt to decode data
+        // 2. decoding fails
+        // 3. increment counter
+        // 4. write counter to top bytes
+        // 5. loop back again
+        //
+        let mut counter = 0;
+        let tkn_fr = jubjub::Fr::from_str(tkn_str);
+        if tkn_fr.is_none() {
+            debug!(target: "CASHIER", "TOKEN IS NONE. COMMENCING LOOP");
+            loop {
+                counter += 1;
+                debug!(target: "CASHIER", "LOOP NUMBER {}", counter);
+                counter.to_string().push_str(tkn_str);
+                debug!(target: "CASHIER", "STR length: {}", tkn_str.len());
+                let tkn_fr = jubjub::Fr::from_str(tkn_str);
+                if tkn_fr.is_none() {
+                    continue;
+                }
+                break;
+                //return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            }
+        };
+
+        let token = tkn_fr.unwrap();
 
         if pk.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -385,4 +399,34 @@ async fn main() -> Result<()> {
         });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use ff::PrimeField;
+
+    #[test]
+    fn test_jubjub_parsing() {
+        let mut counter = 0;
+        let tkn = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+        let tkn_fr = jubjub::Fr::from_str(tkn);
+        if tkn_fr.is_none() {
+            println!("TOKEN IS NONE. COMMENCING LOOP");
+            loop {
+                counter += 1;
+                println!("LOOP NUMBER {}", counter);
+                counter.to_string().push_str(tkn);
+                println!("STR length: {}", tkn.len());
+                let tkn_fr = jubjub::Fr::from_str(tkn);
+                if tkn_fr.is_none() {
+                    continue;
+                }
+                println!("TOKEN PARSING SUCCESSFUL");
+                break;
+            }
+        };
+
+        let token = tkn_fr.unwrap();
+        println!("UNWRAP SUCCESSFUL {:?}", token);
+    }
 }

@@ -48,12 +48,11 @@ pub struct DarkfidConfig {
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
-    #[serde(rename = "database_path")]
-    pub database_path: String,
-
-    #[serde(rename = "walletdb_path")]
-    pub walletdb_path: String,
-
+    //TODO: reimplement this
+    //#[serde(rename = "database_path")]
+    //pub database_path: String,
+    //#[serde(rename = "walletdb_path")]
+    //pub walletdb_path: String,
     #[serde(rename = "log_path")]
     pub log_path: String,
 
@@ -75,9 +74,6 @@ pub struct GatewaydConfig {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
-    #[serde(rename = "accept_url")]
-    pub accept_url: String,
-
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
