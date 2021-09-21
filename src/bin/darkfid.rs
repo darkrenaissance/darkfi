@@ -38,10 +38,8 @@ struct Darkfid {
 impl Darkfid {
     fn new(verbose: bool, config_path: PathBuf) -> Result<Self, Error> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-        let wallet = WalletDb::new(
-            &PathBuf::from(config.walletdb_path.clone()),
-            config.password.clone(),
-        )?;
+        let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
+        let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
 
         Ok(Self {
             verbose,
