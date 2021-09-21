@@ -2,7 +2,7 @@ use crate::rpc::{jsonrpc, jsonrpc::JsonResult};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
-use super::bridge::{ TokenSubscribtion, TokenNotification, TokenClient};
+use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
 
 use async_trait::async_trait;
 
@@ -137,7 +137,7 @@ impl SolClient {
                 let owner_pubkey = n.params["result"]["value"]["owner"]
                     .as_str()
                     .ok_or(Error::ParseFailed("Error Parse serde_json Value to &str"))?;
-                
+
                 let owner_pubkey: Pubkey = Pubkey::from_str(&owner_pubkey)?;
 
                 let sub_id = n.params["subscription"]
@@ -237,10 +237,13 @@ impl TokenClient for SolClient {
         //  send
         self.subscribe_channel.0.send(sub_msg).await?;
 
-        Ok(TokenSubscribtion { secret_key, public_key})
+        Ok(TokenSubscribtion {
+            secret_key,
+            public_key,
+        })
     }
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>>{
+    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
     }
 
@@ -370,3 +373,18 @@ impl From<crate::error::Error> for SolFailed {
 }
 
 pub type SolResult<T> = std::result::Result<T, SolFailed>;
+
+/// Derive an associated token address from given owner and mint
+fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
+    let associated_token =
+        Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap();
+
+    Pubkey::find_program_address(
+        &[
+            &owner.to_bytes(),
+            &spl_token::id().to_bytes(),
+            &mint.to_bytes(),
+        ],
+        &associated_token,
+    )
+}

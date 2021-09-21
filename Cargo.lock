@@ -1384,6 +1384,7 @@ dependencies = [
  "smol",
  "solana-client",
  "solana-sdk",
+ "spl-token",
  "surf",
  "tokio",
  "tokio-tungstenite",
