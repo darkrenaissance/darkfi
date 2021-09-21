@@ -126,6 +126,9 @@ G_verif = dot(counters, start_G)
 assert G_verif == final_G
 # final_a value is passed to the verifier
 
+# We can also get this final G value by just looping like we did
+# in the proving algo, and recomputing the G values.
+
 # Verification check
 L, R = zip(*commits)
 challenges_inv = [c^-1 for c in challenges]
