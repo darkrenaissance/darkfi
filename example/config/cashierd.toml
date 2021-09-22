@@ -5,5 +5,14 @@ log_path = "/tmp/cashierd.log"
 password = "TEST_PASSWORD"
 client_password = "TEST_PASSWORD"
 
+[[networks]]
+name = "btc"
+blockchain = "testnet"
+
+[[networks]]
+name = "sol"
+blockchain = "testnet"
+
+
 
 

@@ -72,6 +72,12 @@ pub struct GatewaydConfig {
     pub log_path: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FeatureNetwork {
+    pub name: String,
+    pub blockchain: String,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
     #[serde(rename = "rpc_url")]
@@ -91,4 +97,7 @@ pub struct CashierdConfig {
 
     #[serde(rename = "client_password")]
     pub client_password: String,
+
+    #[serde(rename = "networks")]
+    pub networks: Vec<FeatureNetwork>,
 }
