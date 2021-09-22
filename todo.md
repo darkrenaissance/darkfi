@@ -64,7 +64,7 @@ Open research questions.
 - [ ] first MPC services
 - [ ] DAO
 - [ ] auctions
-- [ ] staking. Look up how TORN was distributed anonymously.
+- [x] staking. Look up how TORN was distributed anonymously.
 - [ ] swaps
 - [ ] token issuance
 - [ ] NFTs
