@@ -25,6 +25,7 @@
 ## bridge
 
 - [ ] implement listen function
+- [ ] solana: Check if given token mint is valid and initialized on deposito/withdraw
 
 ## withdraw
 
