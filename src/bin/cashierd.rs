@@ -51,7 +51,7 @@ impl Features {
 struct Cashierd {
     verbose: bool,
     config: CashierdConfig,
-    client_wallet: Arc<WalletDb>,
+    bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
     features: Features,
     client: Arc<Mutex<Client>>,
@@ -89,11 +89,13 @@ impl Cashierd {
 
         let features = Features::new();
 
+        let bridge = bridge::Bridge::new();
+
         Ok(Self {
             verbose,
             config: config.clone(),
+            bridge,
             cashier_wallet,
-            client_wallet,
             features,
             client: client.clone(),
         })
@@ -133,7 +135,7 @@ impl Cashierd {
         });
 
         let rpc_url = self.config.rpc_url.clone();
-        run_rpc_server(self.clone(), rpc_url).await?;
+        run_rpc_server(executor.clone(), self.clone(), rpc_url).await?;
 
         listen_for_receiving_coins_task.cancel().await;
         cashier_client_subscriber_task.cancel().await;
@@ -185,7 +187,7 @@ impl Cashierd {
         Ok(())
     }
 
-    async fn handle_request(self, req: JsonRequest) -> JsonResult {
+    async fn handle_request(self, executor: Arc<Executor<'_>>, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
@@ -193,7 +195,7 @@ impl Cashierd {
         debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("deposit") => return self.deposit(req.id, req.params).await,
+            Some("deposit") => return self.deposit(executor.clone(), req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
             Some(_) => {}
@@ -203,44 +205,67 @@ impl Cashierd {
         return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
 
-    async fn deposit(self, id: Value, params: Value) -> JsonResult {
-        debug!(target: "CASHIER", "RECEIVED DEPOSIT REQUEST");
+    async fn deposit(self, executor: Arc<Executor<'_>>, id: Value, params: Value) -> JsonResult {
+        debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
 
-        if params.as_array().is_none() {
+        let args: &Vec<serde_json::Value>;
+
+        if let Some(ar) = params.as_array() {
+            args = ar;
+        } else {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let args = params.as_array().unwrap();
+        let result: Result<String> = async {
+            let _network = &args[0];
+            let token_id = &args[1];
+            let drk_pub_key = &args[2];
 
-        let _ntwk = &args[0];
-        let tkn = &args[1];
-        let pk = &args[2];
+            let asset_id = Self::parse_id(token_id)?;
 
-        debug!(target: "CASHIER", "PROCESSING INPUT");
+            let drk_pub_key = bs58::decode(&drk_pub_key.to_string()).into_vec()?;
+            let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
 
-        // TODO: proper error handling
-        let token_id = Self::parse_id(tkn).unwrap();
+            // TODO check if the drk public key is already exist
+            let _check = self
+                .cashier_wallet
+                .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &asset_id)?;
 
-        if pk.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            let bridge_subscribtion = self.bridge.subscribe(executor.clone()).await;
+
+            bridge_subscribtion
+                .sender
+                .send(bridge::BridgeRequests {
+                    asset_id,
+                    payload: bridge::BridgeRequestsPayload::WatchRequest,
+                })
+                .await?;
+
+            let bridge_res = bridge_subscribtion.receiver.recv().await?;
+
+            match bridge_res.payload {
+                bridge::BridgeResponsePayload::WatchResponse(token_priv, token_pub) => {
+                    // add pairings to db
+                    self.cashier_wallet.put_exchange_keys(
+                        &drk_pub_key,
+                        &token_priv,
+                        &token_pub,
+                        &asset_id,
+                    )?;
+
+                    return Ok(String::new());
+                }
+                _ => Err(Error::BridgeError(
+                    "Receive unknown value from Subscription".into(),
+                )),
+            }
         }
-        let pk_str = pk.as_str().unwrap();
+        .await;
 
-        let pk_58 = bs58::decode(pk_str).into_vec().unwrap();
-
-        let pubkey: jubjub::SubgroupPoint = deserialize(&pk_58).unwrap();
-
-        //// TODO: Sanity check.
-        let _check = self
-            .clone()
-            .cashier_wallet
-            .get_deposit_token_keys_by_dkey_public(&pubkey, &token_id);
-
-        // TODO: implement bridge communication
-        // this just returns the user public key
-        let pubkey = bs58::encode(serialize(&pubkey)).into_string();
-        debug!(target: "CASHIER", "ATTEMPING REPLY");
-        JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
     }
 
     // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
@@ -281,14 +306,15 @@ impl Cashierd {
         // TODO Cashier checks if they support the network, and if so,
         //    return adeposit address.
 
-        let result: Result<String> = async {
-            let args: &Vec<serde_json::Value>;
-            if let Some(ar) = params.as_array() {
-                args = ar;
-            } else {
-                return Err(Error::ParseFailed("Unable to parse rpc params to array"));
-            }
+        let args: &Vec<serde_json::Value>;
 
+        if let Some(ar) = params.as_array() {
+            args = ar;
+        } else {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let result: Result<String> = async {
             let _network = &args[0];
             let token = &args[1];
             let address = &args[2];
@@ -333,7 +359,11 @@ impl Cashierd {
     }
 }
 
-async fn run_rpc_server(cashierd: Cashierd, rpc_url: String) -> Result<()> {
+async fn run_rpc_server(
+    executor: Arc<Executor<'_>>,
+    cashierd: Cashierd,
+    rpc_url: String,
+) -> Result<()> {
     let listener = TcpListener::bind(rpc_url.clone()).await?;
     debug!(target: "RPC SERVER", "Listening on {}", rpc_url);
     loop {
@@ -344,7 +374,8 @@ async fn run_rpc_server(cashierd: Cashierd, rpc_url: String) -> Result<()> {
         debug!(target: "RPC SERVER", "accepted client");
 
         let cashierd = cashierd.clone();
-        tokio::spawn(async move {
+        let ex = executor.clone();
+        executor.spawn(async move {
             let mut buf = [0; 2048];
 
             loop {
@@ -368,7 +399,7 @@ async fn run_rpc_server(cashierd: Cashierd, rpc_url: String) -> Result<()> {
                     }
                 };
 
-                let reply = cashierd.clone().handle_request(r).await;
+                let reply = cashierd.clone().handle_request(ex.clone(), r).await;
                 let j = serde_json::to_string(&reply).unwrap();
 
                 debug!(target: "RPC", "<-- {:#?}", j);
@@ -379,12 +410,11 @@ async fn run_rpc_server(cashierd: Cashierd, rpc_url: String) -> Result<()> {
                     return;
                 }
             }
-        });
+        }).await;
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = clap_app!(cashierd =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")

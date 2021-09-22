@@ -95,8 +95,7 @@ impl Bridge {
         let client = &self.clients.lock().await[&asset_id];
 
         match req.payload {
-            BridgeRequestsPayload::WatchRequest => {
-                let sub = client.subscribe().await?;
+            BridgeRequestsPayload::WatchRequest => { let sub = client.subscribe().await?;
                 let res = BridgeResponse {
                     error: 0,
                     payload: BridgeResponsePayload::WatchResponse(sub.secret_key, sub.public_key),
