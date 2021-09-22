@@ -130,12 +130,12 @@ impl Darkfid {
 
         let symbol = symbol.as_str().unwrap();
 
-        let token_id = self.search_id(&symbol).await;
+        let token_id = self.search_id(&symbol);
         return JsonResult::Resp(jsonresp(json!(token_id), id));
     }
 
     // TODO: proper error handling here
-    async fn search_id(self, symbol: &str) -> Value {
+    fn search_id(self, symbol: &str) -> Value {
         debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
         let file_contents =
             fs::read_to_string("token/solanatokenlist.json").expect("Can't find tokenlist file");
@@ -196,7 +196,7 @@ impl Darkfid {
 
         // check if the token input is an ID
         // if not, find the associated ID
-        let _token_id = self.clone().parse_token(tkn_str).await;
+        let _token_id = self.clone().parse_token(tkn_str);
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
@@ -230,7 +230,7 @@ impl Darkfid {
         }
     }
 
-    async fn parse_token(self, token: &str) -> Value {
+    fn parse_token(self, token: &str) -> Value {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
         for c in vec {
@@ -239,7 +239,7 @@ impl Darkfid {
             }
         }
         if counter == token.len() {
-            let token_id = self.search_id(token).await;
+            let token_id = self.search_id(token);
             return token_id;
         } else {
             let token_id: Value = serde_json::from_str(token).unwrap();
