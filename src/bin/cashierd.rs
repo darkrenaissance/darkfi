@@ -26,9 +26,10 @@ use tokio::net::TcpListener;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
+use ff::Field;
+use rand::rngs::OsRng;
 
 use async_std::sync::{Arc, Mutex};
-use ff::PrimeField;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
@@ -174,7 +175,7 @@ impl Cashierd {
                 match res.payload {
                     bridge::BridgeResponsePayload::SendResponse => {
                         // TODO Send the received coins to the main address
-                        cashier_wallet.confirm_withdraw_key_record(&addr, &serialize(&1))?;
+                        cashier_wallet.confirm_withdraw_key_record(&addr, &asset_id)?;
                     }
                     _ => {}
                 }
@@ -218,7 +219,7 @@ impl Cashierd {
         debug!(target: "CASHIER", "PROCESSING INPUT");
 
         // TODO: proper error handling
-        let token_id = self.clone().parse_id(tkn);
+        let token_id = Self::parse_id(tkn).unwrap();
 
         if pk.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -233,7 +234,7 @@ impl Cashierd {
         let _check = self
             .clone()
             .cashier_wallet
-            .get_deposit_token_keys_by_dkey_public(&pubkey, &serialize(&1));
+            .get_deposit_token_keys_by_dkey_public(&pubkey, &token_id);
 
         // TODO: implement bridge communication
         // this just returns the user public key
@@ -244,7 +245,7 @@ impl Cashierd {
 
     // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
     // again, and keep repeating until it works.
-    async fn parse_id(self, token: &Value) -> Result<jubjub::Fr> {
+    fn parse_id(token: &Value) -> Result<jubjub::Fr> {
         let tkn_str = token.as_str().unwrap();
         if bs58::decode(tkn_str).into_vec().is_err() {
             // TODO: make this an error
@@ -275,19 +276,56 @@ impl Cashierd {
     }
 
     async fn withdraw(self, id: Value, params: Value) -> JsonResult {
-        debug!(target: "CASHIER", "RECEIVED DEPOSIT REQUEST");
+        debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
 
-        let args = params.as_array().unwrap();
-
-        let _network = &args[0];
-        let _token = &args[1];
-        let _address = &args[2];
-        let _amount = &args[3];
-
-        // 2. Cashier checks if they support the network, and if so,
+        // TODO Cashier checks if they support the network, and if so,
         //    return adeposit address.
 
-        JsonResult::Err(jsonerr(InvalidParams, None, id))
+        let result: Result<String> = async {
+            let args: &Vec<serde_json::Value>;
+            if let Some(ar) = params.as_array() {
+                args = ar;
+            } else {
+                return Err(Error::ParseFailed("Unable to parse rpc params to array"));
+            }
+
+            let _network = &args[0];
+            let token = &args[1];
+            let address = &args[2];
+            let _amount = &args[3];
+
+            let asset_id = Self::parse_id(&token)?;
+            let address = serialize(&address.to_string());
+
+            let cashier_public: jubjub::SubgroupPoint;
+
+            if let Some(addr) = self
+                .cashier_wallet
+                .get_withdraw_keys_by_token_public_key(&address, &asset_id)?
+            {
+                cashier_public = addr.public;
+            } else {
+                let cashier_secret = jubjub::Fr::random(&mut OsRng);
+                cashier_public =
+                    zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+
+                self.cashier_wallet.put_withdraw_keys(
+                    &address,
+                    &cashier_public,
+                    &cashier_secret,
+                    &asset_id,
+                )?;
+            }
+
+            let cashier_public_str = bs58::encode(serialize(&cashier_public)).into_string();
+            Ok(cashier_public_str)
+        }
+        .await;
+
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
     }
 
     async fn features(self, id: Value, _params: Value) -> JsonResult {
@@ -404,7 +442,6 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use drk::serial::{deserialize, serialize};
-    use ff::PrimeField;
     use sha2::{Digest, Sha256};
 
     #[test]
