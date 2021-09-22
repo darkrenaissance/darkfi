@@ -16,6 +16,7 @@
 - [ ] drk2: check user input is valid tokenID and not symbol
 - [ ] drk2: retrieve cashier features and error if don't support the network
 - [ ] standardize error handling in drk2, cashierd, darkfid
+- [ ] load token/solanatokenlist.json into global variable in darkfid
 
 ## deposit
 
