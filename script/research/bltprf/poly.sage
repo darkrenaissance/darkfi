@@ -212,6 +212,25 @@ assert a == dot([s_i^-1 for s_i in s], list(final_poly))
 assert b_1[0] == dot(s, [x^i for i in range(n)])
 b = b_1[0]
 
+# Alternatively we have a faster form of calculating b which
+# arises naturally from the structure of how it's computed.
+#
+# b = (1, x, x^2, x^3, x^4, x^5, x^6, x^7)
+# i = 3
+# b = (     1 + u3 x^4,
+#      x   (1 + u3 x^4),
+#      x^2 (1 + u3 x^4),
+#      x^3 (1 + u3 x^4))
+# i = 2
+# b = (   1 + u3 x^4 + u2 x^2 (1 + u3 x^4),
+#      x (1 + u3 x^4 + u2 x^2 (1 + u3 x^4)))
+#   = (  (1 + u2 x^2)(1 + u3 x^4),
+#      x (1 + u2 x^2)(1 + u3 x^4))
+# i = 1
+# b = (1 + u1 x)(1 + u2 x^2)(1 + u3 x^4)
+assert ((1 + challenge_1 * x)
+        * (1 + challenge_2 * x^2) * (1 + challenge_3 * x^4)) == b
+
 msm = (P - int(v) * base_G[0] + int(iota) * s_poly_commitment
     + int(challenge_1^-1) * l_1 + int(challenge_1) * r_1
     + int(challenge_2^-1) * l_2 + int(challenge_2) * r_2
