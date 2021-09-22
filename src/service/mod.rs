@@ -3,9 +3,9 @@ pub mod gateway;
 pub mod reqrep;
 pub mod bridge;
 
-#[cfg(feature = "default")]
+#[cfg(feature = "btc")]
 pub mod btc;
-#[cfg(feature = "default")]
+#[cfg(feature = "btc")]
 pub use btc::{BitcoinKeys, PubAddress, BtcFailed, BtcResult};
 
 #[cfg(feature = "sol")]

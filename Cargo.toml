@@ -101,7 +101,7 @@ version = "0.25.1"
 features = ["bundled", "sqlcipher"]
 
 [features]
-default = ["bitcoin", "secp256k1", "electrum-client"]
+btc = ["bitcoin", "secp256k1", "electrum-client"]
 sol = ["solana-sdk", "solana-client", "spl-token", "tokio-tungstenite"]
 
 [[bin]]

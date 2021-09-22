@@ -43,7 +43,7 @@ pub enum Error {
     ZmqError(String),
     VerifyFailed,
     ClientFailed(String),
-    #[cfg(feature = "default")]
+    #[cfg(feature = "btc")]
     BtcFailed(String),
     #[cfg(feature = "sol")]
     SolFailed(String),
@@ -100,7 +100,7 @@ impl fmt::Display for Error {
             Error::ZmqError(ref err) => write!(f, "ZmqError: {}", err),
             Error::VerifyFailed => f.write_str("Verify failed"),
             Error::ClientFailed(ref err) => write!(f, "Client failed: {}", err),
-            #[cfg(feature = "default")]
+            #[cfg(feature = "btc")]
             Error::BtcFailed(ref err) => write!(f, "Btc client failed: {}", err),
             #[cfg(feature = "sol")]
             Error::SolFailed(ref err) => write!(f, "Sol client failed: {}", err),
@@ -233,7 +233,7 @@ impl From<client::ClientFailed> for Error {
     }
 }
 
-#[cfg(feature = "default")]
+#[cfg(feature = "btc")]
 impl From<crate::service::BtcFailed> for Error {
     fn from(err: crate::service::BtcFailed) -> Error {
         Error::BtcFailed(err.to_string())
