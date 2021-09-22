@@ -19,6 +19,7 @@ x = F(88)
 px = (F(110) + F(56) * X + F(89) * X^2 + F(6543) * X^3
       + F(2) * X^4 + F(110) * X^5 + F(44) * X^6 + F(78) * X^7)
 assert px.degree() <= n
+v = px(x)
 
 base_G = [E.random_element(), E.random_element(), E.random_element(),
           E.random_element(), E.random_element(), E.random_element(),
@@ -28,7 +29,7 @@ base_U = E.random_element()
 
 # Make the initial commitment to px
 blind = F.random_element()
-C = int(blind) * base_H + sum(int(k) * G for k, G in zip(px, base_G))
+P = int(blind) * base_H + sum(int(k) * G for k, G in zip(px, base_G))
 
 # Dot product
 def dot(x, y):
@@ -181,4 +182,40 @@ blind += r_randomness_1 * challenge_1
 # Finished looping
 assert len(a_1) == 1
 a = a_1[0]
+assert len(G_1) == 1
+G = G_1[0]
+
+# Verify
+
+# This is a table of how often the challenges appear in G_1, G_2, ...
+# as well as a and b (applies equally)
+#
+#              12345678
+# challenge 3: 00001111
+# challenge 2: 00110011
+# challenge 1: 01010101
+#
+s_1 = F(1)
+s_2 = challenge_1
+s_3 = challenge_2
+s_4 = challenge_1 * challenge_2
+s_5 = challenge_3
+s_6 = challenge_1 * challenge_3
+s_7 = challenge_2 * challenge_3
+s_8 = challenge_1 * challenge_2 * challenge_3
+
+s = (s_1, s_2, s_3, s_4, s_5, s_6, s_7, s_8)
+
+# Verifier can recompute the final G value by doing this calc
+assert G == dot(s, base_G)
+assert a == dot([s_i^-1 for s_i in s], list(final_poly))
+assert b_1[0] == dot(s, [x^i for i in range(n)])
+b = b_1[0]
+
+msm = (P - int(v) * base_G[0] + int(iota) * s_poly_commitment
+    + int(challenge_1^-1) * l_1 + int(challenge_1) * r_1
+    + int(challenge_2^-1) * l_2 + int(challenge_2) * r_2
+    + int(challenge_3^-1) * l_3 + int(challenge_3) * r_3)
+rhs = int(a) * (G + int(b * z) * base_U) + int(blind) * base_H
+assert msm == rhs
 

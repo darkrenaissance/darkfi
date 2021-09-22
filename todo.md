@@ -16,6 +16,7 @@
 - [ ] drk2: check user input is valid tokenID and not symbol
 - [ ] drk2: retrieve cashier features and error if don't support the network
 - [ ] standardize error handling in drk2, cashierd, darkfid
+- [ ] load token/solanatokenlist.json into global variable in darkfid
 
 ## deposit
 
@@ -24,6 +25,7 @@
 ## bridge
 
 - [ ] implement listen function
+- [ ] solana: Check if given token mint is valid and initialized on deposito/withdraw
 
 ## withdraw
 
@@ -64,7 +66,7 @@ Open research questions.
 - [ ] first MPC services
 - [ ] DAO
 - [ ] auctions
-- [ ] staking. Look up how TORN was distributed anonymously.
+- [x] staking. Look up how TORN was distributed anonymously.
 - [ ] swaps
 - [ ] token issuance
 - [ ] NFTs
