@@ -22,7 +22,7 @@ use drk::{
     serial::serialize,
     util::join_config_path,
     wallet::WalletDb,
-    Error,
+    Error, Result,
 };
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ struct Darkfid {
 }
 
 impl Darkfid {
-    fn new(verbose: bool, config_path: PathBuf) -> Result<Self, Error> {
+    fn new(verbose: bool, config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
         let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
         let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
@@ -289,7 +289,7 @@ impl Darkfid {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
