@@ -30,6 +30,7 @@ struct Darkfid {
     verbose: bool,
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
+    tokenlist: Value,
     // clientdb:
     // mint_params:
     // spend_params:
@@ -40,11 +41,14 @@ impl Darkfid {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
         let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
         let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
+        let file_contents = fs::read_to_string("token/solanatokenlist.json")?;
+        let tokenlist: Value = serde_json::from_str(&file_contents)?;
 
         Ok(Self {
             verbose,
             config,
             wallet,
+            tokenlist,
         })
     }
 
@@ -137,11 +141,7 @@ impl Darkfid {
     // TODO: proper error handling here
     fn search_id(self, symbol: &str) -> Value {
         debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
-        let file_contents =
-            fs::read_to_string("token/solanatokenlist.json").expect("Can't find tokenlist file");
-        let root: Value =
-            serde_json::from_str(&file_contents).expect("Can't parse file into valid json");
-        let tokens = root["tokens"]
+        let tokens = self.tokenlist["tokens"]
             .as_array()
             .expect("Can't find 'tokens' in file");
         for item in tokens {
