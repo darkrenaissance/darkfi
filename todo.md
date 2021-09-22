@@ -11,12 +11,9 @@
 - [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
 - [ ] drk -wk reports success on subsequent calls, it should rather tell that things are already initialized
 - [ ] use f64 (and only positive/absolute) for amounts only on the client-facing side. internally, use u64 and num of decimals
-- [ ] replace bin/drk, cashierd, darkfid with new binaries
-- [ ] delete deprecated rpc code 
-- [ ] drk2: check user input is valid tokenID and not symbol
 - [ ] drk2: retrieve cashier features and error if don't support the network
+- [ ] darkfid: match 'bitcoin' to 'btc'
 - [ ] standardize error handling in drk2, cashierd, darkfid
-- [ ] load token/solanatokenlist.json into global variable in darkfid
 
 ## deposit
 
