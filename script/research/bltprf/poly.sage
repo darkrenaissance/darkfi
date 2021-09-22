@@ -231,10 +231,33 @@ b = b_1[0]
 assert ((1 + challenge_1 * x)
         * (1 + challenge_2 * x^2) * (1 + challenge_3 * x^4)) == b
 
+# There are 2 versions of the check below.
+
+# This one is the use_challenges() version
 msm = (P - int(v) * base_G[0] + int(iota) * s_poly_commitment
     + int(challenge_1^-1) * l_1 + int(challenge_1) * r_1
     + int(challenge_2^-1) * l_2 + int(challenge_2) * r_2
     + int(challenge_3^-1) * l_3 + int(challenge_3) * r_3)
 rhs = int(a) * (G + int(b * z) * base_U) + int(blind) * base_H
+assert msm == rhs
+
+# The other version allows the verifier to be a supplied a blinded G value.
+# They can substitute this G value into the equaion below, and still verify
+# the equation.
+# This means construct a valid G value that is used in multiple verifications
+# repeatedly.
+msm = (P - int(v) * base_G[0] + int(iota) * s_poly_commitment
+    + int(challenge_1^-1) * l_1 + int(challenge_1) * r_1
+    + int(challenge_2^-1) * l_2 + int(challenge_2) * r_2
+    + int(challenge_3^-1) * l_3 + int(challenge_3) * r_3)
+rhs = int(a * b * z) * base_U + int(a + blind) * base_H
+# compute_g()
+# We compute s vector combined challenges.
+G = dot(s, base_G)
+# H is used for blinding.
+G -= base_H
+# use_g() version
+rhs += int(a) * G
+# ... and do the final check
 assert msm == rhs
 
