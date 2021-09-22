@@ -99,8 +99,6 @@ impl Cashierd {
     }
 
     async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
-        //// TODO: pass vector of assets
-
         self.cashier_wallet.init_db()?;
 
         let bridge = Bridge::new();
@@ -193,7 +191,6 @@ impl Cashierd {
 
         debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
 
-        // TODO: "features"
         match req.method.as_str() {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
@@ -220,6 +217,7 @@ impl Cashierd {
 
         debug!(target: "CASHIER", "PROCESSING INPUT");
 
+        // TODO: proper error handling
         let token_id = self.clone().parse_id(tkn);
 
         if pk.as_str().is_none() {
@@ -244,6 +242,8 @@ impl Cashierd {
         JsonResult::Resp(jsonresp(json!(pubkey), json!(id)))
     }
 
+    // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
+    // again, and keep repeating until it works.
     async fn parse_id(self, token: &Value) -> Result<jubjub::Fr> {
         let tkn_str = token.as_str().unwrap();
         if bs58::decode(tkn_str).into_vec().is_err() {
@@ -290,7 +290,6 @@ impl Cashierd {
         JsonResult::Err(jsonerr(InvalidParams, None, id))
     }
 
-    // TODO: implement this
     async fn features(self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!(self.features), id))
     }
