@@ -31,21 +31,8 @@ use rand::rngs::OsRng;
 
 use async_std::sync::{Arc, Mutex};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::PathBuf;
-
-#[derive(Debug, Clone, Serialize)]
-struct Features {
-    networks: Vec<String>,
-}
-
-impl Features {
-    fn new() -> Self {
-        let mut networks = Vec::new();
-        networks.push("solana".to_string());
-        networks.push("bitcoin".to_string());
-        Self { networks }
-    }
-}
 
 #[derive(Clone)]
 struct Cashierd {
@@ -53,7 +40,7 @@ struct Cashierd {
     config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
-    features: Features,
+    features: HashMap<String, String>,
     client: Arc<Mutex<Client>>,
 }
 
@@ -87,7 +74,11 @@ impl Cashierd {
 
         let client = Arc::new(Mutex::new(client));
 
-        let features = Features::new();
+        let mut features = HashMap::new();
+
+        for network in config.clone().networks {
+            features.insert(network.name, network.blockchain);
+        }
 
         let bridge = bridge::Bridge::new();
 
@@ -105,6 +96,34 @@ impl Cashierd {
         self.cashier_wallet.init_db()?;
 
         let bridge = Bridge::new();
+
+        let sol_feature = String::from("sol");
+        let btc_feature = String::from("btc");
+        for (feature_name, _) in self.features.iter() {
+            match feature_name {
+                #[cfg(feature = "sol")]
+                sol_feature => {
+                    debug!(target: "CASHIER DAEMON", "Add sol network");
+                    use drk::service::SolClient;
+                    use solana_sdk::signer::keypair::Keypair;
+                    let main_keypari = Keypair::new();
+                    let _sol_client = SolClient::new(serialize(&main_keypari));
+                    //bridge.add_clients(sol_client).await?;
+                }
+                #[cfg(feature = "btc")]
+                btc_feature => {
+                    debug!(target: "CASHIER DAEMON", "Add btc network");
+                    let btc_endpoint: (bitcoin::network::constants::Network, String) = (
+                        bitcoin::network::constants::Network::Bitcoin,
+                        String::from("ssl://blockstream.info:993"),
+                    );
+                    use drk::service::btc::BtcClient;
+                    let _btc_client = BtcClient::new(btc_endpoint);
+                    //bridge.add_clients(sol_client).await?;
+                }
+                _ => return Err(Error::NotSupportedNetwork),
+            }
+        }
 
         self.client.lock().await.start().await?;
 
@@ -216,11 +235,19 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let result: Result<String> = async {
-            let _network = &args[0];
-            let token_id = &args[1];
-            let drk_pub_key = &args[2];
+        let network = &args[0].to_string();
+        let token_id = &args[1];
+        let drk_pub_key = &args[2];
 
+        if !self.features.contains_key(network) {
+            return JsonResult::Err(jsonerr(
+                InvalidParams,
+                Some(format!("Cashier doesn't support this network: {}", network)),
+                id,
+            ));
+        }
+
+        let result: Result<String> = async {
             let asset_id = Self::parse_id(token_id)?;
 
             let drk_pub_key = bs58::decode(&drk_pub_key.to_string()).into_vec()?;
@@ -314,12 +341,20 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let result: Result<String> = async {
-            let _network = &args[0];
-            let token = &args[1];
-            let address = &args[2];
-            let _amount = &args[3];
+        let network = &args[0].to_string();
+        let token = &args[1];
+        let address = &args[2];
+        let _amount = &args[3];
 
+        if !self.features.contains_key(network) {
+            return JsonResult::Err(jsonerr(
+                InvalidParams,
+                Some(format!("Cashier doesn't support this network: {}", network)),
+                id,
+            ));
+        }
+
+        let result: Result<String> = async {
             let asset_id = Self::parse_id(&token)?;
             let address = serialize(&address.to_string());
 
