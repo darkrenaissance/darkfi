@@ -128,20 +128,29 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         };
 
-        let symbol = symbol.as_str().unwrap().to_uppercase();
+        let symbol = symbol.as_str().unwrap();
 
+        let token_id = self.search_id(&symbol).await;
+        return JsonResult::Resp(jsonresp(json!(token_id), id));
+    }
+
+    // TODO: proper error handling here
+    async fn search_id(self, symbol: &str) -> Value {
+        debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
         let file_contents =
             fs::read_to_string("token/solanatokenlist.json").expect("Can't find tokenlist file");
-        let root: Value = serde_json::from_str(&file_contents).unwrap();
-        let tokens = root["tokens"].as_array().unwrap();
-
+        let root: Value =
+            serde_json::from_str(&file_contents).expect("Can't parse file into valid json");
+        let tokens = root["tokens"]
+            .as_array()
+            .expect("Can't find 'tokens' in file");
         for item in tokens {
-            if item["symbol"] == symbol {
-                let address = &item["address"];
-                return JsonResult::Resp(jsonresp(json!(address), id));
+            if item["symbol"] == symbol.to_uppercase() {
+                let address = item["address"].clone();
+                return address;
             }
         }
-        return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        unreachable!();
     }
 
     // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
@@ -181,7 +190,13 @@ impl Darkfid {
 
         if token.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        };
+        }
+
+        let tkn_str = token.as_str().unwrap();
+
+        // check if the token input is an ID
+        // if not, find the associated ID
+        let _token_id = self.clone().parse_token(tkn_str).await;
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
@@ -212,6 +227,23 @@ impl Darkfid {
             JsonResult::Resp(r) => return JsonResult::Resp(r),
             JsonResult::Err(e) => return JsonResult::Err(e),
             JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+        }
+    }
+
+    async fn parse_token(self, token: &str) -> Value {
+        let vec: Vec<char> = token.chars().collect();
+        let mut counter = 0;
+        for c in vec {
+            if c.is_alphabetic() {
+                counter += 1;
+            }
+        }
+        if counter == token.len() {
+            let token_id = self.search_id(token).await;
+            return token_id;
+        } else {
+            let token_id: Value = serde_json::from_str(token).unwrap();
+            return token_id;
         }
     }
 
@@ -338,5 +370,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         });
+    }
+}
+
+mod tests {
+
+    #[test]
+    fn test_token_parsing() {
+        let token = "usdc";
+
+        let vec: Vec<char> = token.chars().collect();
+        let mut counter = 0;
+        for c in vec {
+            if c.is_alphabetic() {
+                counter += 1;
+                println!("Found letter: {}", c)
+            }
+        }
+        if counter == token.len() {
+            println!("Every character is a letter");
+        }
     }
 }
