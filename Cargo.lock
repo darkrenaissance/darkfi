@@ -1208,6 +1208,7 @@ dependencies = [
  "spl-token",
  "tokio-tungstenite",
  "toml",
+ "url",
  "zcash_primitives",
  "zcash_proofs",
  "zeromq",

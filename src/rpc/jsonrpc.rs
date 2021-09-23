@@ -1,12 +1,11 @@
+use std::net::{TcpStream, ToSocketAddrs};
 use std::str;
 
-use async_std::{
-    io::{ReadExt, WriteExt},
-    net::TcpStream,
-};
+use async_std::io::{ReadExt, WriteExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use smol::Async;
 
 use crate::Error;
 
@@ -133,13 +132,41 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
 }
 
 pub async fn send_request(url: &str, data: Value) -> Result<JsonResult, Error> {
-    // TODO: TLS
+    let use_tls: bool;
+    let parsed_url = url::Url::parse(url)?;
+
+    match parsed_url.scheme() {
+        "tcp" => use_tls = false,
+        "tls" => use_tls = true,
+        _ => return Err(Error::UrlParseError),
+    }
+
+    // TODO: Error handling
+    let host = parsed_url.host().unwrap().to_string();
+    let port = parsed_url.port().unwrap();
+
+    let socket_addr = {
+        let host = host.clone();
+        smol::unblock(move || (host.as_str(), port).to_socket_addrs())
+            .await?
+            .next()
+            .ok_or_else(|| Error::UrlParseError)?
+    };
+
     let mut buf = [0; 2048];
-    let mut stream = TcpStream::connect(url).await?;
+    let bytes_read: usize;
     let data_str = serde_json::to_string(&data)?;
 
-    stream.write_all(&data_str.as_bytes()).await?;
-    let bytes_read = stream.read(&mut buf[..]).await?;
+    let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
+
+    if use_tls {
+        let mut stream = async_native_tls::connect(&host, stream).await?;
+        stream.write_all(&data_str.as_bytes()).await?;
+        bytes_read = stream.read(&mut buf[..]).await?;
+    } else {
+        stream.write_all(&data_str.as_bytes()).await?;
+        bytes_read = stream.read(&mut buf[..]).await?;
+    }
 
     let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
     Ok(reply)

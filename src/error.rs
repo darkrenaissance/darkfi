@@ -16,6 +16,7 @@ pub enum Error {
     ParseFailed(&'static str),
     ParseIntError,
     ParseFloatError,
+    UrlParseError,
     AsyncChannelSenderError,
     AsyncChannelReceiverError,
     AsyncNativeTlsError,
@@ -75,6 +76,7 @@ impl fmt::Display for Error {
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
             Error::ParseFloatError => f.write_str("Parse float error"),
+            Error::UrlParseError => f.write_str("Failed to parse URL"),
             Error::AsyncChannelSenderError => f.write_str("Async_channel sender error"),
             Error::AsyncChannelReceiverError => f.write_str("Async_channel receiver error"),
             Error::AsyncNativeTlsError => f.write_str("Async_Native_TLS error"),
@@ -192,6 +194,12 @@ impl From<async_native_tls::Error> for Error {
 impl From<std::net::AddrParseError> for Error {
     fn from(_err: std::net::AddrParseError) -> Error {
         Error::AddrParseError
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(_err: url::ParseError) -> Error {
+        Error::UrlParseError
     }
 }
 
