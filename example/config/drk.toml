@@ -1,2 +1,8 @@
-rpc_url = "127.0.0.1:8000"
-log_path = "/tmp/drk_cli.log"
+## drk client configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your client properly.
+
+# The RPC endpoint where darkfid is listening on
+darkfid_url = "tcp://127.0.0.1:8000"
+#darkfid_url = "tls://127.0.0.1:8000"
