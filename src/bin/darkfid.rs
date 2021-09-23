@@ -196,7 +196,8 @@ impl Darkfid {
 
         // check if the token input is an ID
         // if not, find the associated ID
-        let _token_id = self.clone().parse_token(tkn_str);
+        // TODO 
+        //let _token_id = self.clone().parse_token(tkn_str);
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
@@ -204,7 +205,8 @@ impl Darkfid {
         match self.wallet.get_keypairs() {
             Ok(v) => {
                 let pk = v[0].public;
-                pubkey = bs58::encode(serialize(&pk)).into_string();
+                let pk = serialize(&pk);
+                pubkey = bs58::encode(pk).into_string();
             }
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32003), Some(e.to_string()), id))

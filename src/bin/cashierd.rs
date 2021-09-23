@@ -238,19 +238,17 @@ impl Cashierd {
     async fn deposit(&self, id: Value, params: Value) -> JsonResult {
         debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
 
-        let args: &Vec<serde_json::Value>;
+        let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
-        if let Some(ar) = params.as_array() {
-            args = ar;
-        } else {
+        if args.len() != 3 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0].to_string();
+        let network = &args[0].as_str().unwrap();
         let token_id = &args[1];
-        let drk_pub_key = &args[2];
+        let drk_pub_key = &args[2].as_str().unwrap();
 
-        if !self.features.contains_key(network) {
+        if !self.features.contains_key(network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -261,7 +259,7 @@ impl Cashierd {
         let result: Result<String> = async {
             let asset_id = drk::util::parse_id(token_id)?;
 
-            let drk_pub_key = bs58::decode(&drk_pub_key.to_string()).into_vec()?;
+            let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
 
             // TODO check if the drk public key is already exist
@@ -310,20 +308,18 @@ impl Cashierd {
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
         debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
 
-        let args: &Vec<serde_json::Value>;
+        let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
-        if let Some(ar) = params.as_array() {
-            args = ar;
-        } else {
+        if args.len() != 4 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0].to_string();
+        let network = &args[0].as_str().unwrap();
         let token = &args[1];
-        let address = &args[2];
+        let address = &args[2].as_str().unwrap();
         let _amount = &args[3];
 
-        if !self.features.contains_key(network) {
+        if !self.features.contains_key(network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -371,7 +367,8 @@ impl Cashierd {
     }
 }
 
-fn main() -> Result<()> {
+#[async_std::main]
+async fn main() -> Result<()> {
     let args = clap_app!(cashierd =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
@@ -408,20 +405,5 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-
-    let cashierd2 = cashierd.clone();
-    let (_, _result) = Parallel::new()
-        // Run four executor threads.
-        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                cashierd2.start().await?;
-                drop(signal);
-                Ok::<(), Error>(())
-            })
-        });
-
-    Ok(())
+    cashierd.start().await
 }
