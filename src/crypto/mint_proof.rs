@@ -33,7 +33,7 @@ impl MintRevealedValues {
                 * randomness_value);
 
         let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * jubjub::Fr::from(asset_id))
+            * asset_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_asset);
 
@@ -136,6 +136,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
     params
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_mint_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,

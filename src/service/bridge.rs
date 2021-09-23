@@ -79,7 +79,7 @@ impl Bridge {
         let (rep, receiver) = async_channel::unbounded();
 
         executor
-            .spawn(self.listen_for_new_subscribtion(req.clone(), rep.clone()))
+            .spawn(self.listen_for_new_subscribtion(req, rep))
             .detach();
 
         BridgeSubscribtion { sender, receiver }
@@ -95,7 +95,8 @@ impl Bridge {
         let client = &self.clients.lock().await[&asset_id];
 
         match req.payload {
-            BridgeRequestsPayload::WatchRequest => { let sub = client.subscribe().await?;
+            BridgeRequestsPayload::WatchRequest => {
+                let sub = client.subscribe().await?;
                 let res = BridgeResponse {
                     error: 0,
                     payload: BridgeResponsePayload::WatchResponse(sub.secret_key, sub.public_key),

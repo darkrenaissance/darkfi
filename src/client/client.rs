@@ -86,10 +86,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn connect_to_cashier(
-        client: Client,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    pub async fn connect_to_cashier(client: Client, executor: Arc<Executor<'_>>) -> Result<()> {
         let client_mutex = Arc::new(Mutex::new(client));
 
         // start subscriber
@@ -99,34 +96,29 @@ impl Client {
     }
 
     pub async fn transfer(
-        self: &mut Self,
+        &mut self,
         asset_id: jubjub::Fr,
         pub_key: jubjub::SubgroupPoint,
+        // TODO: FIX THIS
         amount: f64,
     ) -> Result<()> {
         if amount <= 0.0 {
             return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
-        self.send(pub_key.clone(), amount.clone() as u64, asset_id, false)
-            .await?;
+        self.send(pub_key, amount as u64, asset_id, false).await?;
 
         Ok(())
     }
 
     pub async fn send(
-        self: &mut Self,
+        &mut self,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<()> {
-        let slab = self.build_slab_from_tx(
-            pub_key.clone(),
-            amount.clone() as u64,
-            asset_id,
-            clear_input,
-        )?;
+        let slab = self.build_slab_from_tx(pub_key, amount, asset_id, clear_input)?;
 
         self.gateway.put_slab(slab).await?;
 
@@ -136,7 +128,7 @@ impl Client {
     fn build_slab_from_tx(
         &self,
         pub_key: jubjub::SubgroupPoint,
-        amount: u64,
+        value: u64,
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<Slab> {
@@ -145,19 +137,19 @@ impl Client {
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
 
         if clear_input {
-            let cashier_secret = self.state.wallet.get_keypairs()?[0].private;
+            let signature_secret = self.state.wallet.get_keypairs()?[0].private;
             let input = tx::TransactionBuilderClearInputInfo {
-                value: amount,
+                value,
                 asset_id,
-                signature_secret: cashier_secret.clone(),
+                signature_secret,
             };
             clear_inputs.push(input);
         } else {
-            inputs = self.build_inputs(amount.clone(), asset_id, &mut outputs)?;
+            inputs = self.build_inputs(value, asset_id, &mut outputs)?;
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo {
-            value: amount,
+            value,
             asset_id,
             public: pub_key,
         });
@@ -375,12 +367,11 @@ impl State {
             // Also update all the coin witnesses
             for (coin_id, witness) in self.wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
-                self.wallet
-                    .update_witness(coin_id.clone(), witness.clone())?;
+                self.wallet.update_witness(*coin_id, witness.clone())?;
             }
 
             for secret in secret_keys.iter() {
-                if let Some(note) = Self::try_decrypt_note(enc_note.clone(), secret.clone()) {
+                if let Some(note) = Self::try_decrypt_note(enc_note, *secret) {
                     // We need to keep track of the witness for this coin.
                     // This allows us to prove inclusion of the coin in the merkle tree with ZK.
                     // Just as we update the merkle tree with every new coin, so we do the same with
@@ -396,7 +387,7 @@ impl State {
                     let own_coin = OwnCoin {
                         coin: coin.clone(),
                         note: note.clone(),
-                        secret: secret.clone(),
+                        secret: *secret,
                         witness: witness.clone(),
                     };
 
@@ -411,13 +402,10 @@ impl State {
 
     fn try_decrypt_note(ciphertext: &EncryptedNote, secret: jubjub::Fr) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
-            Ok(note) => {
-                // ... and return the decrypted note for this coin.
-                return Some(note);
-            }
-            Err(_) => {}
+            // ... and return the decrypted note for this coin.
+            Ok(note) => Some(note),
+            // We weren't able to decrypt the note with our key.
+            Err(_) => None,
         }
-        // We weren't able to decrypt the note with our key.
-        None
     }
 }

@@ -18,7 +18,7 @@ impl Coin {
 
 impl Encodable for Coin {
     fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        Ok(self.repr.encode(s)?)
+        self.repr.encode(s)
     }
 }
 

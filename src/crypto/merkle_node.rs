@@ -120,7 +120,7 @@ impl From<MerkleNode> for bls12_381::Scalar {
 
 impl Encodable for MerkleNode {
     fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        Ok(self.repr.encode(s)?)
+        self.repr.encode(s)
     }
 }
 

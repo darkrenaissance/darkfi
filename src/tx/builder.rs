@@ -39,9 +39,9 @@ pub struct TransactionBuilderOutputInfo {
 
 impl TransactionBuilder {
     fn compute_remainder_blind(
-        clear_inputs: &Vec<PartialTransactionClearInput>,
-        input_blinds: &Vec<jubjub::Fr>,
-        output_blinds: &Vec<jubjub::Fr>,
+        clear_inputs: &[PartialTransactionClearInput],
+        input_blinds: &[jubjub::Fr],
+        output_blinds: &[jubjub::Fr],
     ) -> jubjub::Fr {
         let mut total = jubjub::Fr::zero();
 
@@ -86,7 +86,7 @@ impl TransactionBuilder {
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
         for input in &self.inputs {
-            input_blinds.push(input.note.valcom_blind.clone());
+            input_blinds.push(input.note.valcom_blind);
 
             let signature_secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
@@ -110,7 +110,7 @@ impl TransactionBuilder {
                 input.note.coin_blind,
                 input.secret,
                 auth_path,
-                signature_secret.clone(),
+                signature_secret,
             );
 
             // First we make the tx then sign after
@@ -142,11 +142,11 @@ impl TransactionBuilder {
                 mint_params,
                 output.value,
                 output.asset_id,
-                valcom_blind.clone(),
-                asset_commit_blind.clone(),
-                serial.clone(),
-                coin_blind.clone(),
-                output.public.clone(),
+                valcom_blind,
+                asset_commit_blind,
+                serial,
+                coin_blind,
+                output.public,
             );
 
             // Encrypted note
@@ -182,7 +182,7 @@ impl TransactionBuilder {
 
         let mut clear_inputs = vec![];
         for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
-            let secret = schnorr::SecretKey(info.signature_secret.clone());
+            let secret = schnorr::SecretKey(info.signature_secret);
             let signature = secret.sign(&unsigned_tx_data[..]);
             let input = TransactionClearInput::from_partial(input, signature);
             clear_inputs.push(input);

@@ -19,7 +19,7 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
         if Path::new(&path).exists() {
             let toml = fs::read(&path)?;
             let str_buff = str::from_utf8(&toml)?;
-            let config: T = toml::from_str(str_buff.clone())?;
+            let config: T = toml::from_str(str_buff)?;
             Ok(config)
         } else {
             println!("No config files were found in .config/darkfi. Please follow the instructions in the README and add default configs.");
@@ -60,8 +60,9 @@ pub struct DarkfidConfig {
     //TODO: reimplement this
     //#[serde(rename = "database_path")]
     //pub database_path: String,
-    //#[serde(rename = "walletdb_path")]
-    //pub walletdb_path: String,
+    #[serde(rename = "wallet_path")]
+    pub wallet_path: String,
+
     #[serde(rename = "log_path")]
     pub log_path: String,
 

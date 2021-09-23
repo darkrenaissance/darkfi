@@ -60,12 +60,10 @@ impl ProtocolSeed {
             Some(addr) => {
                 debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
                 let addr = messages::AddrsMessage { addrs: vec![addr] };
-                self.channel.clone().send(addr).await?;
+                Ok(self.channel.clone().send(addr).await?)
             }
-            None => {
-                // Do nothing if external address is not configured
-            }
+            // Do nothing if external address is not configured
+            None => Ok(()),
         }
-        Ok(())
     }
 }

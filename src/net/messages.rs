@@ -220,7 +220,7 @@ pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) 
         .encode_async(stream)
         .await?;
 
-    if packet.payload.len() > 0 {
+    if !packet.payload.is_empty() {
         stream.write_all(&packet.payload).await?;
     }
     debug!(target: "net", "sent payload {} bytes", packet.payload.len() as u64);

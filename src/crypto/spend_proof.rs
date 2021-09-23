@@ -25,6 +25,7 @@ pub struct SpendRevealedValues {
 }
 
 impl SpendRevealedValues {
+    #[allow(clippy::too_many_arguments)]
     fn compute(
         value: u64,
         asset_id: jubjub::Fr,
@@ -42,7 +43,7 @@ impl SpendRevealedValues {
                 * randomness_value);
 
         let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * jubjub::Fr::from(asset_id))
+            * asset_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_asset);
 
@@ -221,6 +222,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
     params
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_spend_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
@@ -237,8 +239,8 @@ pub fn create_spend_proof(
     let mut branch: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
     let mut is_right: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
     for (i, (branch_i, is_right_i)) in merkle_path.iter().enumerate() {
-        branch[i] = Some(branch_i.clone());
-        is_right[i] = Some(is_right_i.clone());
+        branch[i] = Some(*branch_i);
+        is_right[i] = Some(*is_right_i);
     }
     let c = SpendContract {
         value: Some(value),

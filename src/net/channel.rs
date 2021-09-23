@@ -168,7 +168,7 @@ impl Channel {
     /// End of file error. Triggered when unexpected end of file occurs.
     fn is_eof_error(err: Error) -> bool {
         match err {
-            Error::Io(io_err) => io_err.clone() == std::io::ErrorKind::UnexpectedEof,
+            Error::Io(io_err) => io_err == std::io::ErrorKind::UnexpectedEof,
             _ => false,
         }
     }

@@ -38,7 +38,7 @@ impl SeedSession {
         let mut tasks = Vec::new();
 
         for (i, seed) in settings.seeds.iter().enumerate() {
-            tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
+            tasks.push(executor.spawn(self.clone().start_seed(i, *seed, executor.clone())));
         }
 
         // This line loops through all the tasks and waits for them to finish.

@@ -112,7 +112,7 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         let mut nf_preimage = vec![];
 
         // Line 64: binary_clone secret2 secret
-        let mut secret2: Vec<_> = secret.iter().cloned().collect();
+        let mut secret2: Vec<_> = secret.to_vec();
 
         // Line 65: binary_extend nf_preimage secret2
         nf_preimage.extend(secret2);
@@ -142,7 +142,7 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         nf_preimage.push(zero_bit);
 
         // Line 81: binary_clone serial2 serial
-        let mut serial2: Vec<_> = serial.iter().cloned().collect();
+        let mut serial2: Vec<_> = serial.to_vec();
 
         // Line 82: binary_extend nf_preimage serial2
         nf_preimage.extend(serial2);

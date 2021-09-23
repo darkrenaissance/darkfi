@@ -21,7 +21,7 @@ impl Hosts {
     }
 
     /// Checks if a host address is in the host list.
-    async fn contains(&self, addrs: &Vec<SocketAddr>) -> bool {
+    async fn contains(&self, addrs: &[SocketAddr]) -> bool {
         let a_set: HashSet<_> = addrs.iter().copied().collect();
         self.addrs
             .lock()

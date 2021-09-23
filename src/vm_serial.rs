@@ -50,7 +50,7 @@ impl Encodable for ZkProof {
         let mut len = self
             .public
             .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (k.clone(), *v))
             .collect::<Vec<_>>()
             .encode(&mut s)?;
         len += self.proof.encode(&mut s)?;

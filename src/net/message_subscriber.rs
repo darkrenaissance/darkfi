@@ -236,6 +236,12 @@ impl MessageSubsystem {
     }
 }
 
+impl Default for MessageSubsystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Test functions for message subsystem.
 // This is a test function for the message subsystem code above
 // Normall we would use the #[test] macro but cannot since it is async code

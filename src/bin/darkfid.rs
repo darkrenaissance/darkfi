@@ -56,8 +56,7 @@ impl RequestHandler for Darkfid {
 impl Darkfid {
     fn new(config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-        let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
-        let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
+        let wallet = WalletDb::new(&PathBuf::from(&config.wallet_path), config.password.clone())?;
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
         let tokenlist: Value = serde_json::from_str(&file_contents)?;
 
@@ -179,7 +178,7 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let tkn_str = token.as_str().unwrap();
+        let _tkn_str = token.as_str().unwrap();
 
         // check if the token input is an ID
         // if not, find the associated ID
@@ -228,11 +227,10 @@ impl Darkfid {
             }
         }
         if counter == token.len() {
-            let token_id = self.search_id(token);
-            return token_id;
+            self.search_id(token)
         } else {
             let token_id: Value = serde_json::from_str(token).unwrap();
-            return token_id;
+            token_id
         }
     }
 

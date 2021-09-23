@@ -149,7 +149,7 @@ impl BtcClient {
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
         Ok(Self {
             client: Arc::new(client),
-            network: network,
+            network,
         })
     }
 }
@@ -243,7 +243,7 @@ impl Decodable for bitcoin::PrivateKey {
 #[derive(Debug)]
 pub enum BtcFailed {
     NotEnoughValue(u64),
-    BadBTCAddress(String),
+    BadBtcAddress(String),
     ElectrumError(String),
     BtcError(String),
     DecodeAndEncodeError(String),
@@ -257,7 +257,7 @@ impl std::fmt::Display for BtcFailed {
             BtcFailed::NotEnoughValue(i) => {
                 write!(f, "There is no enough value {}", i)
             }
-            BtcFailed::BadBTCAddress(ref err) => {
+            BtcFailed::BadBtcAddress(ref err) => {
                 write!(f, "Unable to create Electrum Client: {}", err)
             }
             BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
@@ -279,7 +279,7 @@ impl From<crate::error::Error> for BtcFailed {
 
 impl From<bitcoin::util::address::Error> for BtcFailed {
     fn from(err: bitcoin::util::address::Error) -> BtcFailed {
-        BtcFailed::BadBTCAddress(err.to_string())
+        BtcFailed::BadBtcAddress(err.to_string())
     }
 }
 impl From<electrum_client::Error> for BtcFailed {

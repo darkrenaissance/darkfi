@@ -92,6 +92,7 @@ impl ZkContract {
         }
 
         // execute
+        //let params = std::mem::take(&mut self.params);
         let params = std::mem::replace(&mut self.params, HashMap::default());
         self.vm.initialize(&params.into_iter().collect())?;
 
@@ -116,7 +117,7 @@ impl ZkContract {
         for (name, value) in &proof.public {
             match self.public_map.get_by_left(name) {
                 Some(index) => {
-                    public.push((index, value.clone()));
+                    public.push((index, *value));
                 }
                 None => return false,
             }

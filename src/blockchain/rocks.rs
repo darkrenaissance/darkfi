@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
@@ -39,7 +39,7 @@ pub struct Rocks {
 }
 
 impl Rocks {
-    pub fn new(path: &PathBuf) -> Result<Arc<Self>> {
+    pub fn new(path: &Path) -> Result<Arc<Self>> {
         // column family options
         let cf_opts = Options::default();
 
@@ -73,7 +73,7 @@ impl Rocks {
     {
         self.db
             .cf_handle(C::NAME)
-            .ok_or(Error::RocksdbError("unknown column".to_string()))
+            .ok_or_else(|| Error::RocksdbError("unknown column".to_string()))
     }
 
     pub fn put_cf(&self, cf: &ColumnFamily, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
@@ -99,7 +99,7 @@ impl Rocks {
         self.db.iterator_cf(cf, iterator_mode)
     }
 
-    pub fn destroy(path: &PathBuf) -> Result<()> {
+    pub fn destroy(path: &Path) -> Result<()> {
         DB::destroy(&Options::default(), path)?;
         Ok(())
     }

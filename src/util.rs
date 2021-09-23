@@ -8,14 +8,12 @@ use crate::{
     Result,
 };
 
-pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
+pub fn join_config_path(file: &Path) -> Result<PathBuf> {
     let mut path = PathBuf::new();
     let dfi_path = Path::new("darkfi");
 
-    match dirs::config_dir() {
-        Some(v) => path.push(v),
-        // This should not fail on any modern OS
-        None => {}
+    if let Some(v) = dirs::config_dir() {
+        path.push(v);
     }
 
     path.push(dfi_path);

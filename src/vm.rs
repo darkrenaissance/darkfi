@@ -101,8 +101,8 @@ impl ZkVirtualMachine {
             match op {
                 CryptoOperation::Set(self_, other) => {
                     let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
@@ -112,8 +112,8 @@ impl ZkVirtualMachine {
                 }
                 CryptoOperation::Mul(self_, other) => {
                     let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
@@ -123,8 +123,8 @@ impl ZkVirtualMachine {
                 }
                 CryptoOperation::Add(self_, other) => {
                     let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
@@ -134,8 +134,8 @@ impl ZkVirtualMachine {
                 }
                 CryptoOperation::Sub(self_, other) => {
                     let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
@@ -152,8 +152,8 @@ impl ZkVirtualMachine {
                 }
                 CryptoOperation::Divide(self_, other) => {
                     let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let self_ = match self_ {
                         VariableRef::Aux(index) => &mut self.aux[*index],
@@ -193,8 +193,8 @@ impl ZkVirtualMachine {
                 }
                 CryptoOperation::UnpackBits(value, start, end) => {
                     let value = match value {
-                        VariableRef::Aux(index) => self.aux[*index].clone(),
-                        VariableRef::Local(index) => local_stack[*index].clone(),
+                        VariableRef::Aux(index) => self.aux[*index],
+                        VariableRef::Local(index) => local_stack[*index],
                     };
                     let (self_, start_index, end_index) = match start {
                         VariableRef::Aux(start_index) => match end {
@@ -270,7 +270,7 @@ impl ZkVirtualMachine {
             match alloc_type {
                 AllocType::Private => {}
                 AllocType::Public => {
-                    let scalar = self.aux[*index].clone();
+                    let scalar = self.aux[*index];
                     publics.push((*index, scalar));
                 }
             }
@@ -301,7 +301,7 @@ impl ZkVirtualMachine {
     }
 
     pub fn prove(&self) -> groth16::Proof<Bls12> {
-        let aux = self.aux.iter().map(|scalar| Some(scalar.clone())).collect();
+        let aux = self.aux.iter().map(|scalar| Some(*scalar)).collect();
         // Create an instance of our circuit (with the preimage as a witness).
         let circuit = ZkVmCircuit {
             aux,
@@ -319,7 +319,7 @@ impl ZkVirtualMachine {
         proof
     }
 
-    pub fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &Vec<Scalar>) -> bool {
+    pub fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &[Scalar]) -> bool {
         let start = Instant::now();
         let is_passed =
             groth16::verify_proof(self.verifying_key.as_ref().unwrap(), proof, public_values)

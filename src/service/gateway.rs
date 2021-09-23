@@ -48,7 +48,7 @@ impl GatewayService {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let service_name = String::from("GATEWAY DAEMON");
 
-        let mut protocol = RepProtocol::new(self.addr.clone(), service_name.clone());
+        let mut protocol = RepProtocol::new(self.addr, service_name.clone());
 
         let (send, recv) = protocol.start().await?;
 
@@ -90,23 +90,16 @@ impl GatewayService {
         publish_queue: async_channel::Sender<Vec<u8>>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        loop {
-            match recv_queue.recv().await {
-                Ok(msg) => {
-                    let slabstore = self.slabstore.clone();
-                    let _ = executor
-                        .spawn(Self::handle_request(
-                            msg,
-                            slabstore,
-                            send_queue.clone(),
-                            publish_queue.clone(),
-                        ))
-                        .detach();
-                }
-                Err(_) => {
-                    break;
-                }
-            }
+        while let Ok(msg) = recv_queue.recv().await {
+            let slabstore = self.slabstore.clone();
+            let _ = executor
+                .spawn(Self::handle_request(
+                    msg,
+                    slabstore,
+                    send_queue.clone(),
+                    publish_queue.clone(),
+                ))
+                .detach();
         }
         Ok(())
     }
@@ -130,7 +123,7 @@ impl GatewayService {
 
                 let mut reply = Reply::from(&request, GatewayError::NoError as u32, vec![]);
 
-                if let None = error {
+                if error.is_none() {
                     reply.set_error(GatewayError::UpdateIndex as u32);
                 }
 
@@ -222,7 +215,7 @@ impl GatewayClient {
 
         if last_index > 0 {
             for index in (local_last_index + 1)..(last_index + 1) {
-                if let None = self.get_slab(index).await? {
+                if self.get_slab(index).await?.is_none() {
                     break;
                 }
             }
@@ -265,7 +258,7 @@ impl GatewayClient {
                 .request(GatewayCommand::PutSlab as u8, slab.clone(), handle_error)
                 .await?;
 
-            if let Some(_) = rep {
+            if rep.is_some() {
                 break;
             }
         }
@@ -280,7 +273,7 @@ impl GatewayClient {
             .request(GatewayCommand::GetLastIndex as u8, vec![], handle_error)
             .await?;
         if let Some(index) = rep {
-            return Ok(deserialize(&index)?);
+            return deserialize(&index);
         }
         Ok(0)
     }

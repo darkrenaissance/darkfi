@@ -67,7 +67,7 @@ impl OutboundSession {
         slot_number: u32,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let connector = Connector::new(self.p2p().settings().clone());
+        let connector = Connector::new(self.p2p().settings());
 
         loop {
             let addr = self.load_address(slot_number).await?;
@@ -160,7 +160,7 @@ impl OutboundSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let settings = self.p2p().settings().clone();
-        let hosts = self.p2p().hosts().clone();
+        let hosts = self.p2p().hosts();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         let protocol_addr = ProtocolAddress::new(channel, hosts).await;

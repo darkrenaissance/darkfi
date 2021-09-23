@@ -24,12 +24,12 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-//const RPC_SERVER: &'static str = "https://api.mainnet-beta.solana.com";
-//const WSS_SERVER: &'static str = "wss://api.mainnet-beta.solana.com";
-const RPC_SERVER: &'static str = "https://api.devnet.solana.com";
-const WSS_SERVER: &'static str = "wss://api.devnet.solana.com";
-//const RPC_SERVER: &'static str = "http://localhost:8899";
-//const WSS_SERVER: &'static str = "ws://localhost:8900";
+//const RPC_SERVER: &str = "https://api.mainnet-beta.solana.com";
+//const WSS_SERVER: &str = "wss://api.mainnet-beta.solana.com";
+const RPC_SERVER: &str = "https://api.devnet.solana.com";
+const WSS_SERVER: &str = "wss://api.devnet.solana.com";
+//const RPC_SERVER: &str = "http://localhost:8899";
+//const WSS_SERVER: &str = "ws://localhost:8900";
 
 #[derive(Serialize)]
 struct SubscribeParams {
@@ -147,29 +147,32 @@ impl SolClient {
                 // get the keypair and old_balance from the subscriptions list
                 let (keypair, old_balance) = &self.subscriptions.lock().await[&owner_pubkey];
 
-                if new_bal > old_balance.to_owned() {
-                    let received_balance = new_bal - old_balance;
+                match new_bal > *old_balance {
+                    true => {
+                        let received_balance = new_bal - old_balance;
 
-                    self.send_to_main_account(&keypair)?;
+                        self.send_to_main_account(&keypair)?;
 
-                    self.notify_channel
-                        .0
-                        .send(TokenNotification {
-                            secret_key: serialize(keypair),
-                            received_balance,
-                        })
-                        .await
-                        .map_err(|err| Error::from(err))?;
+                        self.notify_channel
+                            .0
+                            .send(TokenNotification {
+                                secret_key: serialize(keypair),
+                                received_balance,
+                            })
+                            .await
+                            .map_err(|err| Error::from(err))?;
 
-                    self.unsubscribe(sub_id, &owner_pubkey).await?;
+                        self.unsubscribe(sub_id, &owner_pubkey).await?;
 
-                    debug!(
-                        target: "SOL BRIDGE",
-                        "Received {} lamports, to the pubkey: {} ",
-                        received_balance, owner_pubkey.to_string(),
-                    );
-                } else if new_bal < old_balance.to_owned() {
-                    self.unsubscribe(sub_id, &owner_pubkey).await?;
+                        debug!(
+                            target: "SOL BRIDGE",
+                            "Received {} lamports, to the pubkey: {} ",
+                            received_balance, owner_pubkey.to_string(),
+                        );
+                    }
+                    false => {
+                        self.unsubscribe(sub_id, &owner_pubkey).await?;
+                    }
                 }
             }
         }

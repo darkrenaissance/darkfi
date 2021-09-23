@@ -111,7 +111,7 @@ impl InboundSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let settings = self.p2p().settings().clone();
-        let hosts = self.p2p().hosts().clone();
+        let hosts = self.p2p().hosts();
 
         let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
         let protocol_addr = ProtocolAddress::new(channel, hosts).await;

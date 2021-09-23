@@ -6,7 +6,7 @@ use async_std::sync::Arc;
 use log::*;
 use rusqlite::{named_params, params, Connection};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -25,7 +25,7 @@ impl WalletApi for CashierDb {
 }
 
 impl CashierDb {
-    pub fn new(path: &PathBuf, password: String) -> Result<CashierDbPtr> {
+    pub fn new(path: &Path, password: String) -> Result<CashierDbPtr> {
         debug!(target: "CASHIERDB", "new() Constructor called");
         Ok(Arc::new(Self {
             path: path.to_owned(),

@@ -44,7 +44,7 @@ impl RepProtocol {
         let (send_queue, recv_channel) = async_channel::unbounded::<(PeerId, Request)>();
         let (send_channel, recv_queue) = async_channel::unbounded::<(PeerId, Reply)>();
 
-        let channels = (send_channel.clone(), recv_channel.clone());
+        let channels = (send_channel, recv_channel);
 
         RepProtocol {
             addr,
@@ -76,6 +76,7 @@ impl RepProtocol {
         let mut signals = Signals::new(&[SIGINT])?;
 
         let stop_task = executor.spawn(async move {
+            // TODO: Why?
             for _ in signals.forever() {
                 stop_s.send(()).await?;
                 break;
@@ -325,11 +326,7 @@ impl Reply {
     }
 
     pub fn has_error(&self) -> bool {
-        if self.error == 0 {
-            false
-        } else {
-            true
-        }
+        self.error != 0
     }
 
     pub fn get_error(&self) -> u32 {

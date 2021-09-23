@@ -17,7 +17,7 @@ impl Nullifier {
 
 impl Encodable for Nullifier {
     fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        Ok(self.repr.encode(s)?)
+        self.repr.encode(s)
     }
 }
 

@@ -25,7 +25,7 @@ impl SlabStore {
         let key = last_index + 1;
 
         if slab.get_index() == key {
-            self.rocks.put(key.clone(), slab)?;
+            self.rocks.put(key, slab)?;
             Ok(Some(key))
         } else {
             Ok(None)

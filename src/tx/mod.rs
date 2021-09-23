@@ -58,9 +58,8 @@ impl Transaction {
     }
 
     fn compute_pedersen_commit(value: jubjub::Fr, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
-        let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR * value)
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind);
-        value_commit
+        (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR * value)
+            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind)
     }
 
     fn verify_asset_commitments(&self) -> bool {
@@ -121,13 +120,13 @@ impl Transaction {
         self.encode_without_signature(&mut unsigned_tx_data)
             .expect("TODO handle this");
         for (i, input) in self.clear_inputs.iter().enumerate() {
-            let public = schnorr::PublicKey(input.signature_public.clone());
+            let public = schnorr::PublicKey(input.signature_public);
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
                 return Err(state::VerifyFailed::ClearInputSignature(i));
             }
         }
         for (i, input) in self.inputs.iter().enumerate() {
-            let public = schnorr::PublicKey(input.revealed.signature_public.clone());
+            let public = schnorr::PublicKey(input.revealed.signature_public);
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
                 return Err(state::VerifyFailed::InputSignature(i));
             }

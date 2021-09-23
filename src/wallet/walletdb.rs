@@ -12,7 +12,7 @@ use log::*;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, params, Connection};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -38,7 +38,7 @@ impl WalletApi for WalletDb {
 }
 
 impl WalletDb {
-    pub fn new(path: &PathBuf, password: String) -> Result<WalletPtr> {
+    pub fn new(path: &Path, password: String) -> Result<WalletPtr> {
         debug!(target: "WALLETDB", "new() Constructor called");
         Ok(Arc::new(Self {
             path: path.to_owned(),
