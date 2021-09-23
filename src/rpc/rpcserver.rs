@@ -1,6 +1,7 @@
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::path::PathBuf;
 
 use async_native_tls::{Identity, TlsAcceptor};
 use async_trait::async_trait;
@@ -16,7 +17,7 @@ use crate::Result;
 pub struct RpcServerConfig {
     pub socket_addr: String,
     pub use_tls: bool,
-    pub identity_path: String,
+    pub identity_path: PathBuf,
     pub identity_pass: String,
 }
 

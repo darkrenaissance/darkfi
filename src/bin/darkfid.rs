@@ -13,7 +13,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::serialize,
-    util::join_config_path,
+    util::{expand_path, join_config_path},
     wallet::WalletDb,
     Result,
 };
@@ -54,7 +54,7 @@ impl Darkfid {
     fn new(config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
         let wallet = WalletDb::new(
-            &PathBuf::from(&config.wallet_path),
+            expand_path(&config.wallet_path)?.as_path(),
             config.wallet_password.clone(),
         )?;
         // TODO: FIXME
@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
     let server_config = RpcServerConfig {
         socket_addr: darkfid.config.clone().listen_address,
         use_tls: darkfid.config.serve_tls,
-        identity_path: darkfid.config.clone().tls_identity_path,
+        identity_path: expand_path(&darkfid.config.clone().tls_identity_path)?,
         identity_pass: darkfid.config.clone().tls_identity_password,
     };
 

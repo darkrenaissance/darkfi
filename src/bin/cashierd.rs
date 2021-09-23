@@ -9,7 +9,7 @@ use drk::{
     },
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
-    util::join_config_path,
+    util::{expand_path, join_config_path},
     wallet::{CashierDb, WalletDb},
     Error, Result,
 };
@@ -70,16 +70,16 @@ impl Cashierd {
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
         let cashier_wallet = CashierDb::new(
-            &PathBuf::from(config.cashier_wallet_path.clone()),
+            expand_path(&config.cashier_wallet_path.clone())?.as_path(),
             config.cashier_wallet_password.clone(),
         )?;
 
         let client_wallet = WalletDb::new(
-            &PathBuf::from(config.client_wallet_path.clone()),
+            expand_path(&config.client_wallet_path.clone())?.as_path(),
             config.client_wallet_password.clone(),
         )?;
 
-        let rocks = Rocks::new(&PathBuf::from(config.database_path.clone()))?;
+        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
         let client = Client::new(
             rocks,
@@ -88,8 +88,8 @@ impl Cashierd {
                 config.gateway_subscriber_url.parse()?,
             ),
             (
-                PathBuf::from(config.mint_params.clone()),
-                PathBuf::from(config.spend_params.clone()),
+                expand_path(&config.mint_params.clone())?,
+                expand_path(&config.spend_params.clone())?,
             ),
             client_wallet.clone(),
         )?;
@@ -151,11 +151,11 @@ impl Cashierd {
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
         let cashier_client_subscriber_task =
             smol::spawn(Client::connect_to_subscriber_from_cashier(
-                    self.client.clone(),
-                    executor.clone(),
-                    self.cashier_wallet.clone(),
-                    notify.clone(),
-                ));
+                self.client.clone(),
+                executor.clone(),
+                self.cashier_wallet.clone(),
+                notify.clone(),
+            ));
 
         let cashier_wallet = self.cashier_wallet.clone();
         let listen_for_receiving_coins_task = smol::spawn(async move {
@@ -173,7 +173,7 @@ impl Cashierd {
         let cfg = RpcServerConfig {
             socket_addr: self.config.clone().listen_url,
             use_tls: self.config.serve_tls,
-            identity_path: self.config.clone().tls_identity_path,
+            identity_path: expand_path(&self.config.clone().tls_identity_path)?,
             identity_pass: self.config.clone().tls_identity_password,
         };
 
