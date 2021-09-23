@@ -214,7 +214,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     Err(Error::MissingParams)
 }
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<()> {
     let args = clap_app!(drk =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")

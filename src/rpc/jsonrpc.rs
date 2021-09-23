@@ -1,10 +1,12 @@
 use std::str;
 
+use async_std::{
+    io::{ReadExt, WriteExt},
+    net::TcpStream,
+};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 
 use crate::Error;
 
