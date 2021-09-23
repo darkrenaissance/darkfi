@@ -42,7 +42,7 @@ impl RequestHandler for Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
-        debug!(target: "RPC", "--> {:?}", serde_json::to_string(&req).unwrap());
+        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
@@ -54,10 +54,8 @@ impl RequestHandler for Darkfid {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
-            Some(_) | None => {}
+            Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         };
-
-        return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
 }
 
@@ -169,7 +167,7 @@ impl Darkfid {
         match rep {
             JsonResult::Resp(r) => return JsonResult::Resp(r),
             JsonResult::Err(e) => return JsonResult::Err(e),
-            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+            JsonResult::Notif(_) => return JsonResult::Err(jsonerr(InternalError, None, id)),
         }
     }
 
