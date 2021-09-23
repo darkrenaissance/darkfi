@@ -1,5 +1,7 @@
 # DarkFi
 
+![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/rust-build.yml/badge.svg)
+
 ## Building
 
 ```
