@@ -104,6 +104,16 @@ pub struct CashierdConfig {
     #[serde(rename = "password")]
     pub password: String,
 
+
+    #[serde(rename = "use_tls")]
+    pub use_tls: bool,
+
+    #[serde(rename = "tls_identity_path")]
+    pub tls_identity_path: String,
+
+    #[serde(rename = "tls_identity_password")]
+    pub tls_identity_password: String,
+
     #[serde(rename = "client_password")]
     pub client_password: String,
 
