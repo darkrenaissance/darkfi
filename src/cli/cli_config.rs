@@ -48,6 +48,15 @@ pub struct DarkfidConfig {
     #[serde(rename = "rpc_url")]
     pub rpc_url: String,
 
+    #[serde(rename = "use_tls")]
+    pub use_tls: bool,
+
+    #[serde(rename = "tls_identity_path")]
+    pub tls_identity_path: String,
+
+    #[serde(rename = "tls_identity_password")]
+    pub tls_identity_password: String,
+
     //TODO: reimplement this
     //#[serde(rename = "database_path")]
     //pub database_path: String,

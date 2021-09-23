@@ -130,7 +130,7 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     }
 }
 
-pub async fn send_request(url: String, data: Value) -> Result<JsonResult, Error> {
+pub async fn send_request(url: &str, data: Value) -> Result<JsonResult, Error> {
     // TODO: TLS
     let mut buf = [0; 2048];
     let mut stream = TcpStream::connect(url).await?;

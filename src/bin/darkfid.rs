@@ -1,28 +1,26 @@
-use log::*;
-use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use async_trait::async_trait;
 use clap::clap_app;
+use log::debug;
 use serde_json::{json, Value};
 use simplelog::{
     CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
     WriteLogger,
 };
 
-use async_std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
-
 use drk::{
     cli::{Config, DarkfidConfig},
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
+        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::serialize,
     util::join_config_path,
     wallet::WalletDb,
-    Error, Result,
+    Result,
 };
 
 #[derive(Clone)]
@@ -36,29 +34,15 @@ struct Darkfid {
     // spend_params:
 }
 
-impl Darkfid {
-    fn new(verbose: bool, config_path: PathBuf) -> Result<Self> {
-        let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-        let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
-        let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
-        let file_contents = fs::read_to_string("token/solanatokenlist.json")?;
-        let tokenlist: Value = serde_json::from_str(&file_contents)?;
-
-        Ok(Self {
-            verbose,
-            config,
-            wallet,
-            tokenlist,
-        })
-    }
-
+#[async_trait]
+impl RequestHandler for Darkfid {
     // TODO: ServerError codes should be part of the lib.
-    async fn handle_request(self, req: JsonRequest) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
-        debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
+        debug!(target: "RPC", "--> {:?}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
@@ -70,22 +54,38 @@ impl Darkfid {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
-            Some(_) => {}
-            None => {}
+            Some(_) | None => {}
         };
 
         return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
     }
+}
+
+impl Darkfid {
+    fn new(verbose: bool, config_path: PathBuf) -> Result<Self> {
+        let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
+        let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
+        let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
+        let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
+        let tokenlist: Value = serde_json::from_str(&file_contents)?;
+
+        Ok(Self {
+            verbose,
+            config,
+            wallet,
+            tokenlist,
+        })
+    }
 
     // --> {"method": "say_hello", "params": []}
     // <-- {"result": "hello world"}
-    async fn say_hello(self, id: Value, _params: Value) -> JsonResult {
+    async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
 
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
-    async fn create_wallet(self, id: Value, _params: Value) -> JsonResult {
+    async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.init_db() {
             Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
@@ -96,7 +96,7 @@ impl Darkfid {
 
     // --> {"method": "key_gen", "params": []}
     // <-- {"result": true}
-    async fn key_gen(self, id: Value, _params: Value) -> JsonResult {
+    async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.key_gen() {
             Ok((_, _)) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
@@ -107,7 +107,7 @@ impl Darkfid {
 
     // --> {"method": "get_key", "params": []}
     // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
-    async fn get_key(self, id: Value, _params: Value) -> JsonResult {
+    async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.get_keypairs() {
             Ok(v) => {
                 let pk = v[0].public;
@@ -124,7 +124,7 @@ impl Darkfid {
     //      "params": [token],
     //      "id": 42}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
-    async fn get_token_id(self, id: Value, params: Value) -> JsonResult {
+    async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         let symbol = &args[0];
 
@@ -139,7 +139,7 @@ impl Darkfid {
     }
 
     // TODO: proper error handling here
-    fn search_id(self, symbol: &str) -> Value {
+    fn search_id(&self, symbol: &str) -> Value {
         debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
         let tokens = self.tokenlist["tokens"]
             .as_array()
@@ -155,11 +155,11 @@ impl Darkfid {
 
     // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
-    async fn features(self, id: Value, _params: Value) -> JsonResult {
+    async fn features(&self, id: Value, _params: Value) -> JsonResult {
         // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
-        match send_request(self.config.cashier_url, json!(req)).await {
+        match send_request(&self.config.cashier_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -179,7 +179,7 @@ impl Darkfid {
     // The publickey sent here is used so the cashier can know where to send
     // assets once the deposit is received.
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
-    async fn deposit(self, id: Value, params: Value) -> JsonResult {
+    async fn deposit(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 2 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -216,7 +216,7 @@ impl Darkfid {
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token, pubkey]));
         let rep: JsonResult;
-        match send_request(self.config.cashier_url, json!(req)).await {
+        match send_request(&self.config.cashier_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -230,7 +230,7 @@ impl Darkfid {
         }
     }
 
-    fn parse_token(self, token: &str) -> Value {
+    fn parse_token(&self, token: &str) -> Value {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
         for c in vec {
@@ -254,7 +254,7 @@ impl Darkfid {
     // dark assets to the cashier's wallet. Following that, the cashier should return
     // a transaction ID of them sending the funds that are requested for withdrawal.
     // <-- {"result": "txID"}
-    async fn withdraw(self, id: Value, params: Value) -> JsonResult {
+    async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
         if args.len() != 4 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -279,7 +279,7 @@ impl Darkfid {
 
     // --> {"method": "transfer", [dToken, address, amount]}
     // <-- {"result": "txID"}
-    async fn transfer(self, id: Value, _params: Value) -> JsonResult {
+    async fn transfer(&self, id: Value, _params: Value) -> JsonResult {
         return JsonResult::Err(jsonerr(
             ServerError(-32006),
             Some("failed to transfer".to_string()),
@@ -288,7 +288,7 @@ impl Darkfid {
     }
 }
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
@@ -303,11 +303,6 @@ async fn main() -> Result<()> {
         config_path = join_config_path(&PathBuf::from("darkfid.toml"))?;
     }
 
-    let darkfid = Darkfid::new(args.clone().is_present("verbose"), config_path)?;
-    // TODO: TLS
-    let listener = TcpListener::bind(darkfid.clone().config.rpc_url).await?;
-    debug!(target: "RPC SERVER", "Listening on {}", darkfid.clone().config.rpc_url);
-
     let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
     let debug_level = if args.is_present("verbose") {
         LevelFilter::Debug
@@ -315,7 +310,16 @@ async fn main() -> Result<()> {
         LevelFilter::Off
     };
 
-    let log_path = darkfid.clone().config.log_path;
+    let dfi = Darkfid::new(args.is_present("verbose"), config_path)?;
+
+    let cfg = RpcServerConfig {
+        socket_addr: dfi.config.clone().rpc_url,
+        use_tls: dfi.config.use_tls,
+        identity_path: dfi.config.clone().tls_identity_path,
+        identity_pass: dfi.config.clone().tls_identity_password,
+    };
+
+    let log_path = &dfi.config.log_path;
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
         WriteLogger::new(
@@ -326,51 +330,7 @@ async fn main() -> Result<()> {
     ])
     .unwrap();
 
-    loop {
-        debug!(target: "RPC SERVER", "waiting for client");
-
-        let (mut socket, _) = listener.accept().await?;
-        let darkfid = darkfid.clone();
-
-        debug!(target: "RPC SERVER", "accepted client");
-
-        tokio::spawn(async move {
-            let mut buf = [0; 2048];
-
-            loop {
-                let n = match socket.read(&mut buf).await {
-                    Ok(n) if n == 0 => {
-                        debug!(target: "RPC SERVER", "closed connection");
-                        return;
-                    }
-                    Ok(n) => n,
-                    Err(e) => {
-                        debug!(target: "RPC SERVER", "failed to read from socket; err = {:?}", e);
-                        return;
-                    }
-                };
-
-                let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        debug!(target: "RPC SERVER", "received invalid json; err = {:?}", e);
-                        return;
-                    }
-                };
-
-                let reply = darkfid.clone().handle_request(r).await;
-                let j = serde_json::to_string(&reply).unwrap();
-
-                debug!(target: "RPC", "<-- {:#?}", j);
-
-                // Write the data back
-                if let Err(e) = socket.write_all(j.as_bytes()).await {
-                    debug!(target: "RPC SERVER", "failed to write to socket; err = {:?}", e);
-                    return;
-                }
-            }
-        });
-    }
+    listen_and_serve(cfg, dfi).await
 }
 
 mod tests {

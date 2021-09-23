@@ -1,6 +1,17 @@
 connect_url = "127.0.0.1:3333"
 subscriber_url = "127.0.0.1:4444"
 cashier_url = "127.0.0.1:7777"
+# The URL where darkfid will bind it's RPC socket
 rpc_url = "127.0.0.1:8000"
+# Whether to listen with TLS or plain TCP
+use_tls = false
+# Path to DER-formatted PKCS#12 archive.
+# This can be created using openssl:
+# openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
+tls_identity_path = "~/.config/darkfi/darkfid_identity.pfx"
+# Password for the created identity
+tls_identity_password = "FOOBAR"
+# Path to darkfid log file
 log_path = "/tmp/darkfid_service_daemon.log"
+# Wallet password
 password = "TEST_PASSWORD"
