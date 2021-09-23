@@ -1,117 +1,64 @@
-## First time running the demo:
+# DarkFi
 
-1. Install [sqlcipher] (https://github.com/sqlcipher/sqlcipher).
-
-2. Configure gatewayd, cashierd, darkfid and drk TOML files. Copy paste the following defaults to .config/darkfi:
-
-**gatewayd.toml**
+## Building
 
 ```
-connect_url = "127.0.0.1:3333"
-publisher_url = "127.0.0.1:4444"
-log_path = "/tmp/gatewayd.log"	
+$ make
 ```
 
-**cashierd.toml**
+## Configuration
+
+The daemons can be configured using TOML files. Find examples in
+this repo: [example/config](example/config) and copy them over to
+`~/.config/darkfi`. The defaults should be safe to use for demo
+purpose.
+
+## Usage
+
+For demo purposes we have to run three daemons. It is best practice to
+run them in three different terminals, and use the fourth to interact
+with them using the provided `drk` command line tool.
+
+1. Run `gatewayd`:
 
 ```
-rpc_url = "127.0.0.1:8000"
-gateway_url = "127.0.0.1:3333"
-gateway_subscriber_url = "127.0.0.1:4444"
-log_path = "/tmp/cashierd.log"
-password = "TEST_PASSWORD"
-client_password = "TEST_PASSWORD"
+$ ./target/release/gatewayd -v
 ```
 
-**darkfid.toml**
+2. Run `cashierd`:
 
 ```
-connect_url = "127.0.0.1:3333"
-subscriber_url = "127.0.0.1:4444"
-cashier_url = "127.0.0.1:7777"
-rpc_url = "127.0.0.1:8000"
-log_path = "/tmp/darkfid_service_daemon.log"
-password = "TEST_PASSWORD"
+$ ./target/release/cashierd -v
 ```
 
-**drk.toml**
+3. Run `darkfid`:
 
 ```
-rpc_url = "127.0.0.1:8000"
-log_path = "/tmp/drk_cli.log"
+$ ./target/release/darkfid -v
 ```
 
-3. Configure the password field on all TOML files.
+Now using the command line interface to the `darkfid` daemon, we can
+make use of the system:
 
-4. Compile the project:
 
-```console
-$ cargo build --release
+1. Initialize the wallet and generate a keypair:
+
+```
+$ ./target/release/drk -v wallet --create
+$ ./target/release/drk -v wallet --keygen
 ```
 
-5. Run the gateway daemon:
+2. Play.
 
-```console
-$ cargo run --bin gatewayd -- -v
+```
+$ ./target/release/drk help
 ```
 
-6. Run cashierd:
 
-```console
-$ cargo run --bin cashierd -- -v
-```
+## Go Dark
 
-7. Run darkfid:
-
-```console
-$ cargo run --bin darkfid -- -v
-```
-
-8. Initialize drk wallet and generate a key pair:
-
-```console
-$ cargo run --bin drk -- -wk 
-```
-
-9. Play.
-
-```console
-$ cargo run --bin drk -- -help
-```
-
-## Every time running the demo:
-
-Run gateway daemon:
-
-```console
-$ cargo run --bin gatewayd -- -v
-```
-
-Run cashierd:
-
-```console
-$ cargo run --bin cashierd -- -v
-```
-
-Run darkfid:
-
-```console
-$ cargo run --bin darkfid -- -v
-```
-
-Show drk usage manual:
-
-```console
-$ cargo run --bin drk -- -help
-```
-
-## darkfid & drk configurations:
-
-Darkfid and drk can be configured using the TOML files in the .config/darkfid directory. Make sure to recompile darkfid and drk after customizing the TOML.
-
-## Go dark
-
-Let's liberate people from the claws of big tech and create the democratic paradigm of technology.
+Let's liberate people from the claws of big tech and create the
+democratic paradigm of technology.
 
 Self-defense is integral to any organism's survival and growth.
 
