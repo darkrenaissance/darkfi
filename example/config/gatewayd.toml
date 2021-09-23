@@ -1,2 +1,2 @@
-connect_url = "127.0.0.1:3333"
+accept_url = "127.0.0.1:3333"
 publisher_url = "127.0.0.1:4444"
