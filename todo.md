@@ -3,7 +3,7 @@
 ## misc
 
 - [ ] sqlcipher: better document install process or otherwise remove friction of using bundled version
-- [ ] Fix "~/.config" path expansion
+- [x] Fix "~/.config" path expansion
 
 ## v0-release
 
