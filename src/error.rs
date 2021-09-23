@@ -18,6 +18,7 @@ pub enum Error {
     ParseFloatError,
     AsyncChannelSenderError,
     AsyncChannelReceiverError,
+    AsyncNativeTlsError,
     MalformedPacket,
     AddrParseError,
     BadVariableRefType,
@@ -75,6 +76,7 @@ impl fmt::Display for Error {
             Error::ParseFloatError => f.write_str("Parse float error"),
             Error::AsyncChannelSenderError => f.write_str("Async_channel sender error"),
             Error::AsyncChannelReceiverError => f.write_str("Async_channel receiver error"),
+            Error::AsyncNativeTlsError => f.write_str("Async_Native_TLS error"),
             Error::MalformedPacket => f.write_str("Malformed packet"),
             Error::AddrParseError => f.write_str("Unable to parse address"),
             Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
@@ -176,6 +178,12 @@ impl<T> From<async_channel::SendError<T>> for Error {
 impl From<async_channel::RecvError> for Error {
     fn from(_err: async_channel::RecvError) -> Error {
         Error::AsyncChannelReceiverError
+    }
+}
+
+impl From<async_native_tls::Error> for Error {
+    fn from(_err: async_native_tls::Error) -> Error {
+        Error::AsyncNativeTlsError
     }
 }
 
