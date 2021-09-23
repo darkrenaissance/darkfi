@@ -1,4 +1,3 @@
-use jsonrpc_core::*;
 use std::fmt;
 
 use crate::client;
@@ -55,7 +54,6 @@ pub enum Error {
     BridgeError(String),
     NotSupportedNetwork,
     SerdeJsonError(String),
-    SurfHttpError(String),
     TomlDeserializeError(String),
     TomlSerializeError(String),
     CashierNoReply,
@@ -110,10 +108,11 @@ impl fmt::Display for Error {
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
-            Error::NotSupportedNetwork => f.write_str("Not supported network inside cashierd config file"),
+            Error::NotSupportedNetwork => {
+                f.write_str("Not supported network inside cashierd config file")
+            }
             Error::BridgeError(ref err) => write!(f, "Bridge error: {}", err),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
-            Error::SurfHttpError(ref err) => write!(f, "Surf Http error: {}", err),
             Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
@@ -135,19 +134,6 @@ impl From<zeromq::ZmqError> for Error {
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())
-    }
-}
-
-impl From<jsonrpc_core::Error> for Error {
-    fn from(err: jsonrpc_core::Error) -> Error {
-        Error::JsonRpcError(err.to_string())
-    }
-}
-
-// err.fmt();
-impl From<Error> for jsonrpc_core::Error {
-    fn from(err: Error) -> jsonrpc_core::Error {
-        jsonrpc_core::Error::invalid_params(err.to_string())
     }
 }
 
@@ -246,12 +232,6 @@ impl From<crate::service::BtcFailed> for Error {
 impl From<crate::service::SolFailed> for Error {
     fn from(err: crate::service::SolFailed) -> Error {
         Error::SolFailed(err.to_string())
-    }
-}
-
-impl From<surf::Error> for Error {
-    fn from(err: surf::Error) -> Error {
-        Error::SurfHttpError(err.to_string())
     }
 }
 
