@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate clap;
 use bellman::groth16;
 use bls12_381::{Bls12, Scalar};
 use std::collections::{HashMap, HashSet};

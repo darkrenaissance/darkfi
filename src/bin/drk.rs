@@ -18,7 +18,7 @@ impl Drk {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
         let reply: JsonResult;
-        debug!(target: "DRK", "--> {}", serde_json::to_string(&r)?);
+        debug!(target: "RPC", "--> {}", serde_json::to_string(&r)?);
         match jsonrpc::send_request(&self.url, json!(r)).await {
             Ok(v) => reply = v,
             Err(e) => return Err(e),
@@ -26,17 +26,17 @@ impl Drk {
 
         match reply {
             JsonResult::Resp(r) => {
-                debug!(target: "DRK", "<-- {}", serde_json::to_string(&r)?);
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
                 return Ok(r.result);
             }
 
             JsonResult::Err(e) => {
-                debug!(target: "DRK", "<-- {}", serde_json::to_string(&e)?);
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
                 return Err(Error::JsonRpcError(e.error.message.to_string()));
             }
 
             JsonResult::Notif(n) => {
-                debug!(target: "DRK", "<-- {}", serde_json::to_string(&n)?);
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
                 return Err(Error::JsonRpcError("Unexpected reply".to_string()));
             }
         }
@@ -115,7 +115,7 @@ impl Drk {
 }
 
 async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
-    let client = Drk::new(config.darkfid_url.clone());
+    let client = Drk::new(config.darkfid_rpc_url.clone());
 
     if options.is_present("hello") {
         let reply = client.say_hello().await?;

@@ -148,7 +148,7 @@ impl Darkfid {
         // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
-        match send_request(&self.config.cashier_url, json!(req)).await {
+        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -205,7 +205,7 @@ impl Darkfid {
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token, pubkey]));
         let rep: JsonResult;
-        match send_request(&self.config.cashier_url, json!(req)).await {
+        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -301,10 +301,10 @@ async fn main() -> Result<()> {
     let darkfid = Darkfid::new(config_path)?;
 
     let server_config = RpcServerConfig {
-        socket_addr: darkfid.config.clone().listen_address,
+        socket_addr: darkfid.config.rpc_listen_address.clone(),
         use_tls: darkfid.config.serve_tls,
-        identity_path: expand_path(&darkfid.config.clone().tls_identity_path)?,
-        identity_pass: darkfid.config.clone().tls_identity_password,
+        identity_path: expand_path(&darkfid.config.tls_identity_path.clone())?,
+        identity_pass: darkfid.config.tls_identity_password.clone(),
     };
 
     listen_and_serve(server_config, darkfid).await

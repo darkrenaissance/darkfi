@@ -11,10 +11,12 @@ use crate::{
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let ret: PathBuf;
 
-    if path.starts_with("~") {
+    if path.starts_with("~/") {
         let homedir = dirs::home_dir().unwrap();
         let remains = PathBuf::from(path.strip_prefix("~/").unwrap());
         ret = [homedir, remains].iter().collect();
+    } else if path.starts_with('~') {
+        ret = dirs::home_dir().unwrap();
     } else {
         ret = PathBuf::from(path);
     }

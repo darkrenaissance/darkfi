@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs,
     marker::PhantomData,
+    net::SocketAddr,
     path::{Path, PathBuf},
     str,
 };
@@ -32,15 +33,15 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
 /// The configuration for drk
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DrkConfig {
-    /// The URL where darkfid is listening on.
-    pub darkfid_url: String,
+    /// The URL where darkfid RPC is listening on
+    pub darkfid_rpc_url: String,
 }
 
 /// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
     /// The address where darkfid should bind its RPC socket
-    pub listen_address: String,
+    pub rpc_listen_address: SocketAddr,
     /// Whether to listen with TLS or plain TCP
     pub serve_tls: bool,
     /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
@@ -48,7 +49,7 @@ pub struct DarkfidConfig {
     /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
     /// The RPC endpoint for a selected cashier
-    pub cashier_url: String,
+    pub cashier_rpc_url: String,
     /// Path to the client database
     pub database_path: String,
     /// Path to the wallet database
@@ -57,10 +58,21 @@ pub struct DarkfidConfig {
     pub wallet_password: String,
 }
 
+/// The configuration for gatewayd
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GatewaydConfig {
-    pub accept_url: String,
-    pub publisher_url: String,
+    /// The address where gatewayd should bind its protocol socket
+    pub protocol_listen_address: SocketAddr,
+    /// The address where gatewayd should bind its publisher socket
+    pub publisher_listen_address: SocketAddr,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+    pub tls_identity_path: String,
+    /// Password for the TLS identity. (Unused if serve_tls=false)
+    pub tls_identity_password: String,
+    /// Path to the database
+    pub database_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -74,21 +86,21 @@ pub struct FeatureNetwork {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
     /// The endpoint where cashierd will bind its RPC socket
-    pub listen_url: String,
+    pub rpc_listen_address: SocketAddr,
     /// Whether to listen with TLS or plain TCP
     pub serve_tls: bool,
     /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
     pub tls_identity_path: String,
     /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
-    /// ?
-    pub gateway_url: String,
-    /// ?
-    pub gateway_subscriber_url: String,
+    /// The endpoint to a gatewayd protocol API
+    pub gateway_protocol_url: String,
+    /// The endpoint to a gatewayd publisher API
+    pub gateway_publisher_url: String,
     /// Path to mint.params
-    pub mint_params: String,
+    pub mint_params_path: String,
     /// Path to spend.params
-    pub spend_params: String,
+    pub spend_params_path: String,
     /// Path to cashierd wallet
     pub cashier_wallet_path: String,
     /// Password for cashierd wallet

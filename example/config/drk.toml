@@ -4,5 +4,5 @@
 ## your client properly.
 
 # The RPC endpoint where darkfid is listening on
-darkfid_url = "tcp://127.0.0.1:8000"
-#darkfid_url = "tls://127.0.0.1:8000"
+darkfid_rpc_url = "tcp://127.0.0.1:8000"
+#darkfid_rpc_url = "tls://127.0.0.1:8000"

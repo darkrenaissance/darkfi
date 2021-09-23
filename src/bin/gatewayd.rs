@@ -1,7 +1,6 @@
 use async_executor::Executor;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -9,19 +8,19 @@ use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{Config, GatewaydConfig},
     service::GatewayService,
-    util::join_config_path,
+    util::{expand_path, join_config_path},
     Result,
 };
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Result<()> {
-    let accept_addr: SocketAddr = config.accept_url.parse()?;
-    let pub_addr: SocketAddr = config.publisher_url.parse()?;
-    let database_path = join_config_path(&PathBuf::from("gatewayd.db"))?;
-
-    let rocks = Rocks::new(&database_path)?;
+    let rocks = Rocks::new(&expand_path(&config.database_path)?)?;
     let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks);
 
-    let gateway = GatewayService::new(accept_addr, pub_addr, rocks_slabstore_column)?;
+    let gateway = GatewayService::new(
+        config.protocol_listen_address,
+        config.publisher_listen_address,
+        rocks_slabstore_column,
+    )?;
 
     Ok(gateway.start(executor.clone()).await?)
 }

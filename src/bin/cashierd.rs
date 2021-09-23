@@ -1,3 +1,14 @@
+use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
+use async_trait::async_trait;
+use clap::clap_app;
+use ff::Field;
+use log::{debug, warn};
+use rand::rngs::OsRng;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use drk::{
     blockchain::Rocks,
     cli::{CashierdConfig, Config},
@@ -13,19 +24,6 @@ use drk::{
     wallet::{CashierDb, WalletDb},
     Error, Result,
 };
-
-use clap::clap_app;
-use log::*;
-use serde_json::{json, Value};
-
-use async_executor::Executor;
-use ff::Field;
-use rand::rngs::OsRng;
-
-use async_std::sync::{Arc, Mutex};
-use async_trait::async_trait;
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
@@ -51,7 +49,7 @@ impl RequestHandler for Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
-        debug!(target: "RPC", "--> {:#?}", serde_json::to_string(&req).unwrap());
+        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
             Some("deposit") => return self.deposit(req.id, req.params).await,
@@ -84,12 +82,12 @@ impl Cashierd {
         let client = Client::new(
             rocks,
             (
-                config.gateway_url.parse()?,
-                config.gateway_subscriber_url.parse()?,
+                config.gateway_protocol_url.parse()?,
+                config.gateway_publisher_url.parse()?,
             ),
             (
-                expand_path(&config.mint_params.clone())?,
-                expand_path(&config.spend_params.clone())?,
+                expand_path(&config.mint_params_path.clone())?,
+                expand_path(&config.spend_params_path.clone())?,
             ),
             client_wallet.clone(),
         )?;
@@ -171,10 +169,10 @@ impl Cashierd {
         });
 
         let cfg = RpcServerConfig {
-            socket_addr: self.config.clone().listen_url,
+            socket_addr: self.config.rpc_listen_address.clone(),
             use_tls: self.config.serve_tls,
             identity_path: expand_path(&self.config.clone().tls_identity_path)?,
-            identity_pass: self.config.clone().tls_identity_password,
+            identity_pass: self.config.tls_identity_password.clone(),
         };
 
         listen_and_serve(cfg, self.clone()).await?;

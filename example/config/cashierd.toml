@@ -4,7 +4,7 @@
 ## your daemon properly.
 
 # The endpoint where cashierd will bind its RPC socket
-listen_url = "127.0.0.1:9000"
+rpc_listen_address = "127.0.0.1:9000"
 
 # Whether to listen with TLS or plain TCP
 serve_tls = false
@@ -12,19 +12,22 @@ serve_tls = false
 # Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
 # This can be created using openssl:
 # openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
-tls_identity_path = "~/.config/darkfi/darkfid_identity.pfx"
+tls_identity_path = "~/.config/darkfi/cashierd_identity.pfx"
 
 # Password for the created TLS identity. (Unused if serve_tls=false)
 tls_identity_password = "FOOBAR"
 
-gateway_url = "127.0.0.1:3333"
-gateway_subscriber_url = "127.0.0.1:4444"
+# The endpoint to a gatewayd protocol API
+gateway_protocol_url = "127.0.0.1:3333"
+
+# The endpoint to a gatewayd publisher API
+gateway_publisher_url = "127.0.0.1:4444"
 
 # Path to mint.params
-mint_params = "~/.config/darkfi/cashierd_mint.params"
+mint_params_path = "~/.config/darkfi/cashierd_mint.params"
 
 # Path to spend.params
-spend_params = "~/.config/darkfi/cashierd_spend.params"
+spend_params_path = "~/.config/darkfi/cashierd_spend.params"
 
 # Path to cashierd wallet
 cashier_wallet_path = "~/.config/darkfi/cashier_wallet.db"

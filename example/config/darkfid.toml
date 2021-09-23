@@ -4,7 +4,7 @@
 ## your daemon properly.
 
 # The address where darkfid should bind its RPC socket
-listen_address = "127.0.0.1:8000"
+rpc_listen_address = "127.0.0.1:8000"
 
 # Whether to listen with TLS or plain TCP
 serve_tls = false
@@ -18,8 +18,8 @@ tls_identity_path = "~/.config/darkfi/darkfid_identity.pfx"
 tls_identity_password = "FOOBAR"
 
 # The RPC endpoint for a selected cashier
-cashier_url = "tcp://127.0.0.1:9000"
-#cashier_url = "tls://127.0.0.1:9000"
+cashier_rpc_url = "tcp://127.0.0.1:9000"
+#cashier_rpc_url = "tls://127.0.0.1:9000"
 
 # Path to the client database
 database_path = "~/.config/darkfi/darkfid_client.db"

@@ -1,7 +1,6 @@
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::str::FromStr;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_native_tls::{Identity, TlsAcceptor};
 use async_trait::async_trait;
@@ -15,7 +14,7 @@ use crate::rpc::jsonrpc::{JsonRequest, JsonResult};
 use crate::Result;
 
 pub struct RpcServerConfig {
-    pub socket_addr: String,
+    pub socket_addr: SocketAddr,
     pub use_tls: bool,
     pub identity_path: PathBuf,
     pub identity_pass: String,
@@ -144,8 +143,6 @@ pub async fn listen_and_serve(
 ) -> Result<()> {
     let tls: Option<TlsAcceptor>;
 
-    let sockaddr = SocketAddr::from_str(&cfg.socket_addr)?;
-
     if cfg.use_tls {
         let ident_bytes = std::fs::read(cfg.identity_path)?;
         let identity = Identity::from_pkcs12(&ident_bytes, &cfg.identity_pass)?;
@@ -155,6 +152,6 @@ pub async fn listen_and_serve(
     }
 
     let rh = Arc::new(rh);
-    let listener = listen(Async::<TcpListener>::bind(sockaddr)?, tls, rh);
+    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh);
     listener.await
 }
