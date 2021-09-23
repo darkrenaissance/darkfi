@@ -104,7 +104,6 @@ pub struct CashierdConfig {
     #[serde(rename = "password")]
     pub password: String,
 
-
     #[serde(rename = "use_tls")]
     pub use_tls: bool,
 

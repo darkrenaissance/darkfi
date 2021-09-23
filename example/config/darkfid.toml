@@ -1,6 +1,6 @@
 connect_url = "127.0.0.1:3333"
 subscriber_url = "127.0.0.1:4444"
-cashier_url = "127.0.0.1:7777"
+cashier_url = "127.0.0.1:9000"
 # The URL where darkfid will bind it's RPC socket
 rpc_url = "127.0.0.1:8000"
 # Whether to listen with TLS or plain TCP
