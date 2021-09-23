@@ -227,7 +227,7 @@ impl TokenClient for SolClient {
             .get_balance(&keypair.pubkey())
             .map_err(|err| SolFailed::from(err))?;
 
-        let public_key = serialize(&keypair.pubkey());
+        let public_key = keypair.pubkey().to_string();
         // NOTE we send keypair for sol as secret_key
         let secret_key = serialize(&keypair);
 

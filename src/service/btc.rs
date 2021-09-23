@@ -173,7 +173,7 @@ impl TokenClient for BtcClient {
 
         Ok(TokenSubscribtion {
             secret_key: serialize(&btc_priv.to_bytes()),
-            public_key: serialize(&btc_pub.to_bytes()),
+            public_key: btc_pub.to_string(),
         })
     }
 
