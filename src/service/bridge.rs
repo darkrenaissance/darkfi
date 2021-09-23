@@ -1,6 +1,5 @@
 use crate::Result;
 
-use async_executor::Executor;
 use async_trait::async_trait;
 
 use crate::serial::serialize;
@@ -13,7 +12,7 @@ pub struct BridgeRequests {
 }
 
 pub struct BridgeResponse {
-    pub error: u64,
+    pub error: BridgeResponseError,
     pub payload: BridgeResponsePayload,
 }
 
@@ -23,8 +22,15 @@ pub enum BridgeRequestsPayload {
 }
 
 pub enum BridgeResponsePayload {
-    WatchResponse(Vec<u8>, Vec<u8>),
+    WatchResponse(Vec<u8>, String),
     SendResponse,
+    Empty,
+}
+
+#[repr(u8)]
+pub enum BridgeResponseError {
+    NoError,
+    NotSupportedClient,
 }
 
 pub struct BridgeSubscribtion {
@@ -34,7 +40,7 @@ pub struct BridgeSubscribtion {
 
 pub struct TokenSubscribtion {
     pub secret_key: Vec<u8>,
-    pub public_key: Vec<u8>,
+    pub public_key: String,
 }
 
 pub struct TokenNotification {
@@ -74,13 +80,11 @@ impl Bridge {
 
     pub async fn listen(self: Arc<Self>) {}
 
-    pub async fn subscribe(self: Arc<Self>, executor: Arc<Executor<'_>>) -> BridgeSubscribtion {
+    pub async fn subscribe(self: Arc<Self>) -> BridgeSubscribtion {
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
 
-        executor
-            .spawn(self.listen_for_new_subscribtion(req, rep))
-            .detach();
+        smol::spawn(self.listen_for_new_subscribtion(req.clone(), rep.clone())).detach();
 
         BridgeSubscribtion { sender, receiver }
     }
@@ -92,13 +96,23 @@ impl Bridge {
     ) -> Result<()> {
         let req = req.recv().await?;
         let asset_id = serialize(&req.asset_id);
+
+        if !self.clients.lock().await.contains_key(&asset_id) {
+            let res = BridgeResponse {
+                error: BridgeResponseError::NotSupportedClient,
+                payload: BridgeResponsePayload::Empty,
+            };
+            rep.send(res).await?;
+            return Ok(());
+        }
+
         let client = &self.clients.lock().await[&asset_id];
 
         match req.payload {
             BridgeRequestsPayload::WatchRequest => {
                 let sub = client.subscribe().await?;
                 let res = BridgeResponse {
-                    error: 0,
+                    error: BridgeResponseError::NoError,
                     payload: BridgeResponsePayload::WatchResponse(sub.secret_key, sub.public_key),
                 };
                 rep.send(res).await?;
@@ -106,7 +120,7 @@ impl Bridge {
             BridgeRequestsPayload::SendRequest(addr, amount) => {
                 client.send(addr, amount).await?;
                 let res = BridgeResponse {
-                    error: 0,
+                    error: BridgeResponseError::NoError,
                     payload: BridgeResponsePayload::SendResponse,
                 };
                 rep.send(res).await?;
