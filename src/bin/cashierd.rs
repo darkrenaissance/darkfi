@@ -27,6 +27,13 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+fn handle_bridge_error(error_code: u32) -> Result<()> {
+    match error_code {
+        1 => Err(Error::BridgeError("Not Supported Client".into())),
+        _ => Err(Error::BridgeError("Unknown error_code".into())),
+    }
+}
+
 #[derive(Clone)]
 struct Cashierd {
     config: CashierdConfig,
@@ -34,7 +41,6 @@ struct Cashierd {
     cashier_wallet: Arc<CashierDb>,
     features: HashMap<String, String>,
     client: Arc<Mutex<Client>>,
-    executor: Arc<Executor<'static>>,
 }
 
 #[async_trait]
@@ -60,7 +66,7 @@ impl RequestHandler for Cashierd {
 }
 
 impl Cashierd {
-    fn new(executor: Arc<Executor<'static>>, config_path: PathBuf) -> Result<Self> {
+    fn new(config_path: PathBuf) -> Result<Self> {
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
         let cashier_wallet = CashierDb::new(
@@ -104,11 +110,10 @@ impl Cashierd {
             cashier_wallet,
             features,
             client: client.clone(),
-            executor: executor.clone(),
         })
     }
 
-    async fn start(&self) -> Result<()> {
+    async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
         self.cashier_wallet.init_db()?;
 
         let bridge = Bridge::new();
@@ -145,20 +150,17 @@ impl Cashierd {
 
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
         let cashier_client_subscriber_task =
-            self.executor
-                .spawn(Client::connect_to_subscriber_from_cashier(
+            smol::spawn(Client::connect_to_subscriber_from_cashier(
                     self.client.clone(),
-                    self.executor.clone(),
+                    executor.clone(),
                     self.cashier_wallet.clone(),
                     notify.clone(),
                 ));
 
         let cashier_wallet = self.cashier_wallet.clone();
-        let ex = self.executor.clone();
-        let listen_for_receiving_coins_task = self.executor.spawn(async move {
+        let listen_for_receiving_coins_task = smol::spawn(async move {
             loop {
                 Self::listen_for_receiving_coins(
-                    ex.clone(),
                     bridge.clone(),
                     cashier_wallet.clone(),
                     recv_coin.clone(),
@@ -183,12 +185,11 @@ impl Cashierd {
     }
 
     async fn listen_for_receiving_coins(
-        ex: Arc<Executor<'_>>,
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
         recv_coin: async_channel::Receiver<(jubjub::SubgroupPoint, u64)>,
     ) -> Result<()> {
-        let bridge_subscribtion = bridge.subscribe(ex.clone()).await;
+        let bridge_subscribtion = bridge.subscribe().await;
 
         // received drk coin
         let (drk_pub_key, amount) = recv_coin.recv().await?;
@@ -213,7 +214,8 @@ impl Cashierd {
             // receive a response
             let res = bridge_subscribtion.receiver.recv().await?;
 
-            if res.error == 0 {
+            let error_code = res.error as u32;
+            if error_code == 0 {
                 match res.payload {
                     bridge::BridgeResponsePayload::SendResponse => {
                         // TODO Send the received coins to the main address
@@ -221,6 +223,8 @@ impl Cashierd {
                     }
                     _ => {}
                 }
+            } else {
+                return handle_bridge_error(error_code);
             }
         }
 
@@ -260,7 +264,7 @@ impl Cashierd {
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &asset_id)?;
 
             let bridge = self.bridge.clone();
-            let bridge_subscribtion = bridge.subscribe(self.executor.clone()).await;
+            let bridge_subscribtion = bridge.subscribe().await;
 
             bridge_subscribtion
                 .sender
@@ -272,17 +276,23 @@ impl Cashierd {
 
             let bridge_res = bridge_subscribtion.receiver.recv().await?;
 
+            let error_code = bridge_res.error as u32;
+
+            if error_code != 0 {
+                return handle_bridge_error(error_code).map(|_| String::new());
+            }
+
             match bridge_res.payload {
                 bridge::BridgeResponsePayload::WatchResponse(token_priv, token_pub) => {
                     // add pairings to db
                     self.cashier_wallet.put_exchange_keys(
                         &drk_pub_key,
                         &token_priv,
-                        &token_pub,
+                        &serialize(&token_pub),
                         &asset_id,
                     )?;
 
-                    return Ok(String::new());
+                    return Ok(token_pub);
                 }
                 _ => Err(Error::BridgeError(
                     "Receive unknown value from Subscription".into(),
@@ -381,6 +391,6 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
     let ex = Arc::new(Executor::new());
-    let cashierd = Cashierd::new(ex.clone(), config_path)?;
-    cashierd.start().await
+    let cashierd = Cashierd::new(config_path)?;
+    cashierd.start(ex.clone()).await
 }
