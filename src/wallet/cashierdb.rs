@@ -344,7 +344,6 @@ mod tests {
 
         assert_eq!(addr.is_none(), true);
 
-        wallet.destroy()?;
         std::fs::remove_file(walletdb_path)?;
 
         Ok(())
