@@ -29,7 +29,6 @@ use std::path::PathBuf;
 
 #[derive(Clone)]
 struct Cashierd {
-    verbose: bool,
     config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
@@ -61,22 +60,20 @@ impl RequestHandler for Cashierd {
 }
 
 impl Cashierd {
-    fn new(verbose: bool, executor: Arc<Executor<'static>>, config_path: PathBuf) -> Result<Self> {
-        let mint_params_path = join_config_path(&PathBuf::from("cashier_mint.params"))?;
-        let spend_params_path = join_config_path(&PathBuf::from("cashier_spend.params"))?;
-
+    fn new(executor: Arc<Executor<'static>>, config_path: PathBuf) -> Result<Self> {
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
-        let cashier_wallet_path = join_config_path(&PathBuf::from("cashier_wallet.db"))?;
+        let cashier_wallet = CashierDb::new(
+            &PathBuf::from(config.cashier_wallet_path.clone()),
+            config.cashier_wallet_password.clone(),
+        )?;
 
-        let client_wallet_path = join_config_path(&PathBuf::from("cashier_client_wallet.db"))?;
+        let client_wallet = WalletDb::new(
+            &PathBuf::from(config.client_wallet_path.clone()),
+            config.client_wallet_password.clone(),
+        )?;
 
-        let cashier_wallet = CashierDb::new(&cashier_wallet_path, config.password.clone())?;
-        let client_wallet = WalletDb::new(&client_wallet_path.clone(), config.password.clone())?;
-
-        let database_path = join_config_path(&PathBuf::from("cashier_database.db"))?;
-
-        let rocks = Rocks::new(&database_path)?;
+        let rocks = Rocks::new(&PathBuf::from(config.database_path.clone()))?;
 
         let client = Client::new(
             rocks,
@@ -84,7 +81,10 @@ impl Cashierd {
                 config.gateway_url.parse()?,
                 config.gateway_subscriber_url.parse()?,
             ),
-            (mint_params_path, spend_params_path),
+            (
+                PathBuf::from(config.mint_params.clone()),
+                PathBuf::from(config.spend_params.clone()),
+            ),
             client_wallet.clone(),
         )?;
 
@@ -99,7 +99,6 @@ impl Cashierd {
         let bridge = bridge::Bridge::new();
 
         Ok(Self {
-            verbose,
             config: config.clone(),
             bridge,
             cashier_wallet,
@@ -170,8 +169,8 @@ impl Cashierd {
         });
 
         let cfg = RpcServerConfig {
-            socket_addr: self.config.clone().rpc_url,
-            use_tls: self.config.use_tls,
+            socket_addr: self.config.clone().listen_url,
+            use_tls: self.config.serve_tls,
             identity_path: self.config.clone().tls_identity_path,
             identity_pass: self.config.clone().tls_identity_password,
         };
@@ -382,6 +381,6 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
     let ex = Arc::new(Executor::new());
-    let cashierd = Cashierd::new(args.clone().is_present("verbose"), ex.clone(), config_path)?;
+    let cashierd = Cashierd::new(ex.clone(), config_path)?;
     cashierd.start().await
 }

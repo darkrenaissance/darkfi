@@ -115,7 +115,7 @@ impl Drk {
 }
 
 async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
-    let client = Drk::new(config.rpc_url.clone());
+    let client = Drk::new(config.darkfid_url.clone());
 
     if options.is_present("hello") {
         let reply = client.say_hello().await?;

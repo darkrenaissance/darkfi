@@ -1,13 +1,13 @@
-use crate::{Error, Result};
-
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 use std::{
     fs,
+    marker::PhantomData,
     path::{Path, PathBuf},
     str,
 };
+
+use crate::{Error, Result};
 
 #[derive(Clone, Default)]
 pub struct Config<T> {
@@ -22,101 +22,83 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
             let config: T = toml::from_str(str_buff)?;
             Ok(config)
         } else {
-            println!("No config files were found in .config/darkfi. Please follow the instructions in the README and add default configs.");
+            println!("Could not parse configuration");
+            println!("Please follow the instructions in the README");
             Err(Error::ConfigNotFound)
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+/// The configuration for drk
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DrkConfig {
-    pub rpc_url: String,
-    pub log_path: String,
+    /// The URL where darkfid is listening on.
+    pub darkfid_url: String,
 }
 
+/// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
-    #[serde(rename = "connect_url")]
-    pub connect_url: String,
-
-    #[serde(rename = "subscriber_url")]
-    pub subscriber_url: String,
-
-    #[serde(rename = "cashier_url")]
-    pub cashier_url: String,
-
-    #[serde(rename = "rpc_url")]
-    pub rpc_url: String,
-
-    #[serde(rename = "use_tls")]
-    pub use_tls: bool,
-
-    #[serde(rename = "tls_identity_path")]
+    /// The address where darkfid should bind its RPC socket
+    pub listen_address: String,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
     pub tls_identity_path: String,
-
-    #[serde(rename = "tls_identity_password")]
+    /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
-
-    //TODO: reimplement this
-    //#[serde(rename = "database_path")]
-    //pub database_path: String,
-    #[serde(rename = "wallet_path")]
+    /// The RPC endpoint for a selected cashier
+    pub cashier_url: String,
+    /// Path to the client database
+    pub database_path: String,
+    /// Path to the wallet database
     pub wallet_path: String,
-
-    #[serde(rename = "log_path")]
-    pub log_path: String,
-
-    #[serde(rename = "password")]
-    pub password: String,
+    /// The wallet password
+    pub wallet_password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GatewaydConfig {
-    #[serde(rename = "connect_url")]
     pub accept_url: String,
-
-    #[serde(rename = "publisher_url")]
     pub publisher_url: String,
-
-    #[serde(rename = "log_path")]
-    pub log_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FeatureNetwork {
+    /// Network name
     pub name: String,
+    /// Blockchain (mainnet/testnet/etc.)
     pub blockchain: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
-    #[serde(rename = "rpc_url")]
-    pub rpc_url: String,
-
-    #[serde(rename = "gateway_url")]
-    pub gateway_url: String,
-
-    #[serde(rename = "gateway_subscriber_url")]
-    pub gateway_subscriber_url: String,
-
-    #[serde(rename = "log_path")]
-    pub log_path: String,
-
-    #[serde(rename = "password")]
-    pub password: String,
-
-    #[serde(rename = "use_tls")]
-    pub use_tls: bool,
-
-    #[serde(rename = "tls_identity_path")]
+    /// The endpoint where cashierd will bind its RPC socket
+    pub listen_url: String,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
     pub tls_identity_path: String,
-
-    #[serde(rename = "tls_identity_password")]
+    /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
-
-    #[serde(rename = "client_password")]
-    pub client_password: String,
-
-    #[serde(rename = "networks")]
+    /// ?
+    pub gateway_url: String,
+    /// ?
+    pub gateway_subscriber_url: String,
+    /// Path to mint.params
+    pub mint_params: String,
+    /// Path to spend.params
+    pub spend_params: String,
+    /// Path to cashierd wallet
+    pub cashier_wallet_path: String,
+    /// Password for cashierd wallet
+    pub cashier_wallet_password: String,
+    /// Path to client wallet
+    pub client_wallet_path: String,
+    /// Password for client wallet
+    pub client_wallet_password: String,
+    /// Path to database
+    pub database_path: String,
+    /// The configured networks to use
     pub networks: Vec<FeatureNetwork>,
 }

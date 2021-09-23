@@ -23,9 +23,6 @@ struct Darkfid {
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
     tokenlist: Value,
-    // clientdb:
-    // mint_params:
-    // spend_params:
 }
 
 #[async_trait]
@@ -56,7 +53,11 @@ impl RequestHandler for Darkfid {
 impl Darkfid {
     fn new(config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-        let wallet = WalletDb::new(&PathBuf::from(&config.wallet_path), config.password.clone())?;
+        let wallet = WalletDb::new(
+            &PathBuf::from(&config.wallet_path),
+            config.wallet_password.clone(),
+        )?;
+        // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
         let tokenlist: Value = serde_json::from_str(&file_contents)?;
 
@@ -297,16 +298,16 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
 
-    let dfi = Darkfid::new(config_path)?;
+    let darkfid = Darkfid::new(config_path)?;
 
     let server_config = RpcServerConfig {
-        socket_addr: dfi.config.clone().rpc_url,
-        use_tls: dfi.config.use_tls,
-        identity_path: dfi.config.clone().tls_identity_path,
-        identity_pass: dfi.config.clone().tls_identity_password,
+        socket_addr: darkfid.config.clone().listen_address,
+        use_tls: darkfid.config.serve_tls,
+        identity_path: darkfid.config.clone().tls_identity_path,
+        identity_pass: darkfid.config.clone().tls_identity_password,
     };
 
-    listen_and_serve(server_config, dfi).await
+    listen_and_serve(server_config, darkfid).await
 }
 
 mod tests {
