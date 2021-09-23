@@ -705,7 +705,7 @@ mod tests {
     fn test_varint_len(varint: VarInt, expected: usize) {
         let mut encoder = io::Cursor::new(vec![]);
         assert_eq!(varint.encode(&mut encoder).unwrap(), expected);
-        assert_eq!(varint.len(), expected);
+        assert_eq!(varint.length(), expected);
     }
 
     fn test_varint_encode(n: u8, x: &[u8]) -> Result<VarInt> {

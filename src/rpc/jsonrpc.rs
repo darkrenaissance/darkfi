@@ -44,7 +44,6 @@ impl ErrorCode {
     }
 }
 
-#[serde(untagged)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum JsonResult {
     Resp(JsonResponse),
