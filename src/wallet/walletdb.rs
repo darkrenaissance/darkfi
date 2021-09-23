@@ -311,6 +311,7 @@ mod tests {
         assert_eq!(secret, keypair.private);
 
         wallet.destroy()?;
+        std::fs::remove_file(walletdb_path)?;
 
         Ok(())
     }
@@ -360,6 +361,7 @@ mod tests {
         assert_eq!(own_coin.witness.path(), witness.path());
 
         wallet.destroy()?;
+        std::fs::remove_file(walletdb_path)?;
 
         Ok(())
     }
@@ -424,6 +426,7 @@ mod tests {
         }
 
         wallet.destroy()?;
+        std::fs::remove_file(walletdb_path)?;
 
         Ok(())
     }
