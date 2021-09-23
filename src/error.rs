@@ -61,6 +61,7 @@ pub enum Error {
     Base58EncodeError(String),
     Base58DecodeError(String),
     ConfigNotFound,
+    SetLoggerError,
 }
 
 impl std::error::Error for Error {}
@@ -123,6 +124,7 @@ impl fmt::Display for Error {
             Error::ConfigNotFound => {
                 f.write_str("No config file detected. Please create a config file")
             }
+            Error::SetLoggerError => f.write_str("SetLoggerError"),
         }
     }
 }
@@ -264,5 +266,11 @@ impl From<bs58::encode::Error> for Error {
 impl From<bs58::decode::Error> for Error {
     fn from(err: bs58::decode::Error) -> Error {
         Error::Base58DecodeError(err.to_string())
+    }
+}
+
+impl From<log::SetLoggerError> for Error {
+    fn from(_err: log::SetLoggerError) -> Error {
+        Error::SetLoggerError
     }
 }

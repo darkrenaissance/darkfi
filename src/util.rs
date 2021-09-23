@@ -1,11 +1,12 @@
-use crate::Result;
-use crate::serial::{deserialize, serialize};
-
-use sha2::{Digest, Sha256};
+use log::debug;
 use serde_json::Value;
-use log::*;
-
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+
+use crate::{
+    serial::{deserialize, serialize},
+    Result,
+};
 
 pub fn join_config_path(file: &PathBuf) -> Result<PathBuf> {
     let mut path = PathBuf::new();
@@ -54,8 +55,6 @@ pub fn parse_id(token: &Value) -> Result<jubjub::Fr> {
     }
     unreachable!();
 }
-
-
 
 #[cfg(test)]
 mod tests {

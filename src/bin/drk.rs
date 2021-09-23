@@ -1,12 +1,7 @@
-use log::debug;
-use std::path::PathBuf;
-
 use clap::{clap_app, ArgMatches};
+use log::debug;
 use serde_json::{json, Value};
-use simplelog::{
-    CombinedLogger, Config as SimplelogConfig, ConfigBuilder, LevelFilter, TermLogger,
-    TerminalMode, WriteLogger,
-};
+use std::path::PathBuf;
 
 use drk::cli::{Config, DrkConfig};
 use drk::util::join_config_path;
@@ -23,7 +18,7 @@ impl Drk {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
         let reply: JsonResult;
-        debug!(target: "DRK", "--> {:#?}", serde_json::to_string(&r)?);
+        debug!(target: "DRK", "--> {}", serde_json::to_string(&r)?);
         match jsonrpc::send_request(&self.url, json!(r)).await {
             Ok(v) => reply = v,
             Err(e) => return Err(e),
@@ -31,17 +26,17 @@ impl Drk {
 
         match reply {
             JsonResult::Resp(r) => {
-                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&r)?);
+                debug!(target: "DRK", "<-- {}", serde_json::to_string(&r)?);
                 return Ok(r.result);
             }
 
             JsonResult::Err(e) => {
-                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&e)?);
+                debug!(target: "DRK", "<-- {}", serde_json::to_string(&e)?);
                 return Err(Error::JsonRpcError(e.error.message.to_string()));
             }
 
             JsonResult::Notif(n) => {
-                debug!(target: "DRK", "<-- {:#?}", serde_json::to_string(&n)?);
+                debug!(target: "DRK", "<-- {}", serde_json::to_string(&n)?);
                 return Err(Error::JsonRpcError("Unexpected reply".to_string()));
             }
         }
@@ -260,34 +255,20 @@ async fn main() -> Result<()> {
     )
     .get_matches();
 
-    let config_path: PathBuf;
-    if args.is_present("CONFIG") {
-        config_path = PathBuf::from(args.value_of("CONFIG").unwrap());
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
     } else {
-        config_path = join_config_path(&PathBuf::from("drk.toml"))?;
-    }
-
-    let config = Config::<DrkConfig>::load(config_path)?;
-
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-
-    let debug_level = if args.is_present("verbose") {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
+        join_config_path(&PathBuf::from("drk.toml"))?
     };
 
-    let log_path = config.log_path.clone();
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
 
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            SimplelogConfig::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
+    simple_logger::init_with_level(loglevel)?;
+    let config = Config::<DrkConfig>::load(config_path)?;
 
     start(&config, args).await
 }

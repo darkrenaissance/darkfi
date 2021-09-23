@@ -1,16 +1,17 @@
+use async_executor::Executor;
+use clap::clap_app;
+use easy_parallel::Parallel;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use drk::blockchain::{rocks::columns, Rocks, RocksColumn};
-use drk::cli::{Config, GatewaydCli, GatewaydConfig};
-use drk::service::GatewayService;
-use drk::util::join_config_path;
-use drk::Result;
-use std::path::PathBuf;
-
-extern crate clap;
-use async_executor::Executor;
-use easy_parallel::Parallel;
+use drk::{
+    blockchain::{rocks::columns, Rocks, RocksColumn},
+    cli::{Config, GatewaydConfig},
+    service::GatewayService,
+    util::join_config_path,
+    Result,
+};
 
 async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Result<()> {
     let accept_addr: SocketAddr = config.accept_url.parse()?;
@@ -22,43 +23,37 @@ async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Res
 
     let gateway = GatewayService::new(accept_addr, pub_addr, rocks_slabstore_column)?;
 
-    gateway.start(executor.clone()).await?;
-    Ok(())
+    Ok(gateway.start(executor.clone()).await?)
 }
 
-fn main() -> Result<()> {
+#[async_std::main]
+async fn main() -> Result<()> {
+    let args = clap_app!(gatewayd =>
+        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg verbose: -v --verbose "Increase verbosity")
+    )
+    .get_matches();
+
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
+    } else {
+        join_config_path(&PathBuf::from("gatewayd.toml"))?
+    };
+
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
+
+    simple_logger::init_with_level(loglevel)?;
+
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    let path = join_config_path(&PathBuf::from("gatewayd.toml"))?;
-
-    let config: GatewaydConfig = Config::<GatewaydConfig>::load(path)?;
+    let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;
 
     let config_ptr = Arc::new(&config);
-
-    let options = GatewaydCli::load()?;
-
-    {
-        use simplelog::*;
-        let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-
-        let debug_level = if options.verbose {
-            LevelFilter::Debug
-        } else {
-            LevelFilter::Off
-        };
-
-        let log_path = config.log_path.clone();
-        CombinedLogger::init(vec![
-            TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-            WriteLogger::new(
-                LevelFilter::Debug,
-                Config::default(),
-                std::fs::File::create(log_path).unwrap(),
-            ),
-        ])
-        .unwrap();
-    }
 
     let ex2 = ex.clone();
 

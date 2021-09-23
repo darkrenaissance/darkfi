@@ -17,10 +17,6 @@ use drk::{
 use clap::clap_app;
 use log::*;
 use serde_json::{json, Value};
-use simplelog::{
-    CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
-    WriteLogger,
-};
 
 use async_executor::Executor;
 use ff::Field;
@@ -372,35 +368,20 @@ async fn main() -> Result<()> {
     )
     .get_matches();
 
-    let config_path: PathBuf;
-
-    if args.is_present("CONFIG") {
-        config_path = PathBuf::from(args.value_of("CONFIG").unwrap());
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
     } else {
-        config_path = join_config_path(&PathBuf::from("cashierd.toml"))?;
-    }
-
-    let ex = Arc::new(Executor::new());
-
-    let cashierd = Cashierd::new(args.clone().is_present("verbose"), ex.clone(), config_path)?;
-
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-    let debug_level = if args.is_present("verbose") {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
+        join_config_path(&PathBuf::from("cashierd.toml"))?
     };
 
-    let log_path = cashierd.clone().config.log_path;
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            SimLogConfig::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
 
+    simple_logger::init_with_level(loglevel)?;
+    let ex = Arc::new(Executor::new());
+    let cashierd = Cashierd::new(args.clone().is_present("verbose"), ex.clone(), config_path)?;
     cashierd.start().await
 }

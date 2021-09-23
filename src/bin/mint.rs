@@ -7,7 +7,8 @@ use ff::{Field, PrimeField};
 use group::{Curve, Group};
 use rand::rngs::OsRng;
 
-type Result<T> = std::result::Result<T, failure::Error>;
+//type Result<T> = std::result::Result<T, failure::Error>;
+use drk::Result;
 
 // Unpack a value (such as jubjub::Fr) into 256 Scalar binary digits
 fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {

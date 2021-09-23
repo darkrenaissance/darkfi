@@ -1,14 +1,9 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use clap::clap_app;
 use log::debug;
 use serde_json::{json, Value};
-use simplelog::{
-    CombinedLogger, Config as SimLogConfig, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
-    WriteLogger,
-};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use drk::{
     cli::{Config, DarkfidConfig},
@@ -25,7 +20,6 @@ use drk::{
 
 #[derive(Clone)]
 struct Darkfid {
-    verbose: bool,
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
     tokenlist: Value,
@@ -60,7 +54,7 @@ impl RequestHandler for Darkfid {
 }
 
 impl Darkfid {
-    fn new(verbose: bool, config_path: PathBuf) -> Result<Self> {
+    fn new(config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
         let wallet_path = join_config_path(&PathBuf::from("walletdb.db"))?;
         let wallet = WalletDb::new(&PathBuf::from(wallet_path.clone()), config.password.clone())?;
@@ -68,7 +62,6 @@ impl Darkfid {
         let tokenlist: Value = serde_json::from_str(&file_contents)?;
 
         Ok(Self {
-            verbose,
             config,
             wallet,
             tokenlist,
@@ -118,9 +111,7 @@ impl Darkfid {
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "get_token_id",
-    //      "params": [token],
-    //      "id": 42}
+    // --> {"method": "get_token_id", "params": [token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
@@ -151,8 +142,8 @@ impl Darkfid {
         unreachable!();
     }
 
-    // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
+    // --> {""method": "features", "params": []}
+    // <-- {"result": { "network": ["btc", "sol"] } }
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
@@ -171,9 +162,7 @@ impl Darkfid {
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "deposit",
-    //      "params": [network, token, publickey],
-    //      "id": 42}
+    // --> {"method": "deposit", "params": [network, token, publickey]}
     // The publickey sent here is used so the cashier can know where to send
     // assets once the deposit is received.
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
@@ -194,7 +183,7 @@ impl Darkfid {
 
         // check if the token input is an ID
         // if not, find the associated ID
-        // TODO 
+        // TODO
         //let _token_id = self.clone().parse_token(tkn_str);
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
@@ -296,41 +285,30 @@ async fn main() -> Result<()> {
     )
     .get_matches();
 
-    let config_path: PathBuf;
-    if args.is_present("CONFIG") {
-        config_path = PathBuf::from(args.value_of("CONFIG").unwrap());
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
     } else {
-        config_path = join_config_path(&PathBuf::from("darkfid.toml"))?;
-    }
-
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-    let debug_level = if args.is_present("verbose") {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
+        join_config_path(&PathBuf::from("darkfid.toml"))?
     };
 
-    let dfi = Darkfid::new(args.is_present("verbose"), config_path)?;
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
 
-    let cfg = RpcServerConfig {
+    simple_logger::init_with_level(loglevel)?;
+
+    let dfi = Darkfid::new(config_path)?;
+
+    let server_config = RpcServerConfig {
         socket_addr: dfi.config.clone().rpc_url,
         use_tls: dfi.config.use_tls,
         identity_path: dfi.config.clone().tls_identity_path,
         identity_pass: dfi.config.clone().tls_identity_password,
     };
 
-    let log_path = &dfi.config.log_path;
-    CombinedLogger::init(vec![
-        TermLogger::new(debug_level, logger_config, TerminalMode::Mixed).unwrap(),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            SimLogConfig::default(),
-            std::fs::File::create(log_path).unwrap(),
-        ),
-    ])
-    .unwrap();
-
-    listen_and_serve(cfg, dfi).await
+    listen_and_serve(server_config, dfi).await
 }
 
 mod tests {
