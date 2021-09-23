@@ -23,7 +23,6 @@ use simplelog::{
 };
 
 use async_executor::Executor;
-use easy_parallel::Parallel;
 use ff::Field;
 use rand::rngs::OsRng;
 
@@ -119,12 +118,10 @@ impl Cashierd {
 
         let bridge = Bridge::new();
 
-        let sol_feature = String::from("sol");
-        let btc_feature = String::from("btc");
         for (feature_name, _) in self.features.iter() {
-            match feature_name {
+            match feature_name.as_str() {
                 #[cfg(feature = "sol")]
-                sol_feature => {
+                "sol" | "solana" => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
                     use solana_sdk::signer::keypair::Keypair;
@@ -133,7 +130,7 @@ impl Cashierd {
                     //bridge.add_clients(sol_client).await?;
                 }
                 #[cfg(feature = "btc")]
-                btc_feature => {
+                "btc" | "bitcoin" => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
                     let btc_endpoint: (bitcoin::network::constants::Network, String) = (
                         bitcoin::network::constants::Network::Bitcoin,
