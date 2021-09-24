@@ -114,9 +114,9 @@ impl Cashierd {
     async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
         self.cashier_wallet.init_db()?;
 
-        let bridge = Bridge::new();
 
         for (feature_name, _) in self.features.iter() {
+            let bridge2 = self.bridge.clone();
             match feature_name.as_str() {
                 #[cfg(feature = "sol")]
                 "sol" | "solana" => {
@@ -124,8 +124,8 @@ impl Cashierd {
                     use drk::service::SolClient;
                     use solana_sdk::signer::keypair::Keypair;
                     let main_keypari = Keypair::new();
-                    let _sol_client = SolClient::new(serialize(&main_keypari));
-                    //bridge.add_clients(sol_client).await?;
+                    let sol_client = SolClient::new(serialize(&main_keypari)).await?;
+                    bridge2.add_clients("sol".into(), sol_client).await?;
                 }
                 #[cfg(feature = "btc")]
                 "btc" | "bitcoin" => {
@@ -135,8 +135,8 @@ impl Cashierd {
                         String::from("ssl://blockstream.info:993"),
                     );
                     use drk::service::btc::BtcClient;
-                    let _btc_client = BtcClient::new(btc_endpoint);
-                    //bridge.add_clients(sol_client).await?;
+                    let _btc_client = BtcClient::new(btc_endpoint)?;
+                    //bridge2.add_clients("btc".into(), btc_client).await?;
                 }
                 _ => {
                     warn!("No feature enabled for {} network", feature_name);
@@ -156,6 +156,7 @@ impl Cashierd {
             ));
 
         let cashier_wallet = self.cashier_wallet.clone();
+        let bridge = self.bridge.clone();
         let listen_for_receiving_coins_task = smol::spawn(async move {
             loop {
                 Self::listen_for_receiving_coins(
@@ -200,10 +201,11 @@ impl Cashierd {
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
-        if let Some((addr, asset_id)) = token {
+        if let Some((addr, network, asset_id)) = token {
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
+                    network: network.to_string(),
                     asset_id,
                     payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount),
                 })
@@ -239,10 +241,11 @@ impl Cashierd {
         }
 
         let network = &args[0].as_str().unwrap();
+        let network = network.to_string();
         let token_id = &args[1];
         let drk_pub_key = &args[2].as_str().unwrap();
 
-        if !self.features.contains_key(network.clone()) {
+        if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -267,6 +270,7 @@ impl Cashierd {
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
+                    network: network.clone(),
                     asset_id,
                     payload: bridge::BridgeRequestsPayload::WatchRequest,
                 })
@@ -287,6 +291,7 @@ impl Cashierd {
                         &drk_pub_key,
                         &token_priv,
                         &serialize(&token_pub),
+                        &network,
                         &asset_id,
                     )?;
 
@@ -347,6 +352,7 @@ impl Cashierd {
                     &address,
                     &cashier_public,
                     &cashier_secret,
+                    &network.to_string(),
                     &asset_id,
                 )?;
             }
