@@ -1,7 +1,6 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
-use crate::crypto::{
-    merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
+use crate::crypto::{ merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::{Error, Result};
@@ -300,11 +299,26 @@ mod tests {
     use crate::util::join_config_path;
     use ff::PrimeField;
 
+    pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
+        if !password.trim().is_empty() {
+            let contents = include_str!("../../sql/schema.sql");
+            let conn = Connection::open(&path)?;
+            debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", path);
+            conn.pragma_update(None, "key", &password)?;
+            conn.execute_batch(&contents)?;
+        } else {
+            debug!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
+            return Err(Error::from(ClientFailed::EmptyPassword));
+        }
+        Ok(())
+    }
+
     #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
-        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
-        wallet.init_db()?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -326,8 +340,9 @@ mod tests {
     #[test]
     pub fn test_put_and_get_own_coins() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
-        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
-        wallet.init_db()?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -375,8 +390,9 @@ mod tests {
     #[test]
     pub fn test_get_witnesses_and_update_them() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("test3_wallet.db"))?;
-        let wallet = WalletDb::new(&walletdb_path, "darkfi".into())?;
-        wallet.init_db()?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;

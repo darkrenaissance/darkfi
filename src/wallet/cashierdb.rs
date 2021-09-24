@@ -333,12 +333,28 @@ mod tests {
     use rand::rngs::OsRng;
 
     // TODO add more tests
+    
+
+    pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
+        if !password.trim().is_empty() {
+            let contents = include_str!("../../sql/cashier.sql");
+            let conn = Connection::open(&path)?;
+            debug!(target: "CASHIERDB", "OPENED CONNECTION AT PATH {:?}", path);
+            conn.pragma_update(None, "key", &password)?;
+            conn.execute_batch(&contents)?;
+        } else {
+            debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
+            return Err(Error::from(ClientFailed::EmptyPassword));
+        }
+        Ok(())
+    }
 
     #[test]
     pub fn test_put_withdraw_keys_and_load_them_with_token_key() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
-        let wallet = CashierDb::new(&walletdb_path, "darkfi".into())?;
-        wallet.init_db()?;
+        let password: String = "darkfi".into();
+        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
