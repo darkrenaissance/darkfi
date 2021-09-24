@@ -122,8 +122,8 @@ impl SolClient {
             JsonResult::Err(e) => {
                 // receive an error
                 debug!(
-                        target: "SOL BRIDGE",
-                        "Error on subscription: {:?}", e.error.message.to_string());
+                    target: "SOL BRIDGE",
+                    "Error on subscription: {:?}", e.error.message.to_string());
             }
 
             JsonResult::Notif(n) => {
@@ -197,18 +197,17 @@ impl SolClient {
         Ok(())
     }
 
-    async fn unsubscribe(&self, sub_id: u64, pubkey: &Pubkey) -> Result<()> {
-        let sub_msg = jsonrpc::request(json!("accountUnsubscribe"), json!([json!(sub_id)]));
-        self.subscribe_channel.0.send(sub_msg).await?;
-        self.subscriptions.lock().await.remove(pubkey);
-        Ok(())
-    }
-}
+    async fn handle_subscribe_request(&self, keypair: Keypair) -> Result<()> {
 
-#[async_trait]
-impl TokenClient for SolClient {
-    async fn subscribe(&self) -> Result<TokenSubscribtion> {
-        let keypair = Keypair::generate(&mut OsRng);
+        // check first if it's not already subscribed
+        if self
+            .subscriptions
+            .lock()
+            .await
+            .contains_key(&keypair.pubkey())
+        {
+            return Ok(());
+        }
 
         // Parameters for subscription to events related to `pubkey`.
         let sub_params = SubscribeParams {
@@ -227,10 +226,6 @@ impl TokenClient for SolClient {
             .get_balance(&keypair.pubkey())
             .map_err(|err| SolFailed::from(err))?;
 
-        let public_key = keypair.pubkey().to_string();
-        // NOTE we send keypair for sol as secret_key
-        let secret_key = serialize(&keypair);
-
         // add to subscriptions list
         self.subscriptions
             .lock()
@@ -240,10 +235,46 @@ impl TokenClient for SolClient {
         //  send
         self.subscribe_channel.0.send(sub_msg).await?;
 
+        Ok(())
+    }
+
+    async fn unsubscribe(&self, sub_id: u64, pubkey: &Pubkey) -> Result<()> {
+        let sub_msg = jsonrpc::request(json!("accountUnsubscribe"), json!([json!(sub_id)]));
+        self.subscribe_channel.0.send(sub_msg).await?;
+        self.subscriptions.lock().await.remove(pubkey);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl TokenClient for SolClient {
+    async fn subscribe(&self) -> Result<TokenSubscribtion> {
+        let keypair = Keypair::generate(&mut OsRng);
+
+        let public_key = keypair.pubkey().to_string();
+        let secret_key = serialize(&keypair);
+
+        self.handle_subscribe_request(keypair).await?;
+
         Ok(TokenSubscribtion {
             secret_key,
             public_key,
         })
+    }
+
+    // in solana case private key it's the same as keypair
+    async fn subscribe_with_keypair(
+        &self,
+        private_key: Vec<u8>,
+        _public_key: Vec<u8>,
+    ) -> Result<String> {
+        let keypair: Keypair = deserialize(&private_key)?;
+
+        let public_key = keypair.pubkey().to_string();
+
+        self.handle_subscribe_request(keypair).await?;
+
+        Ok(public_key)
     }
 
     async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
@@ -272,7 +303,6 @@ impl TokenClient for SolClient {
 
 /// Derive an associated token address from given owner and mint
 fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
-
     let associated_token =
         Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap();
 
@@ -401,5 +431,3 @@ impl From<crate::error::Error> for SolFailed {
 }
 
 pub type SolResult<T> = std::result::Result<T, SolFailed>;
-
-

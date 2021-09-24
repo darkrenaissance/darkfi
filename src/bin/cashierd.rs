@@ -130,7 +130,7 @@ impl Cashierd {
                     } else {
                         main_keypair = deserialize(&main_keypairs[0].0)?;
                     }
-                    
+
                     let sol_client = SolClient::new(serialize(&main_keypair)).await?;
 
                     bridge2.add_clients("sol".into(), sol_client).await?;
@@ -146,8 +146,8 @@ impl Cashierd {
                     let _btc_client = BtcClient::new(btc_endpoint)?;
                     // NOTE bitcoin is not implemented yet
                     //
-                    // TODO check if there is main_keypair inside 
-                    // cashierdb before generating new one 
+                    // TODO check if there is main_keypair inside
+                    // cashierdb before generating new one
                     //
                     //bridge2.add_clients("btc".into(), btc_client).await?;
                 }
@@ -156,6 +156,12 @@ impl Cashierd {
                 }
             }
         }
+
+        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
+            self.bridge.clone(),
+            self.cashier_wallet.clone(),
+            self.features.clone(),
+        ));
 
         self.client.lock().await.start().await?;
 
@@ -191,8 +197,32 @@ impl Cashierd {
 
         listen_and_serve(cfg, self.clone()).await?;
 
+        resume_watch_deposit_keys_task.cancel().await;
         listen_for_receiving_coins_task.cancel().await;
         cashier_client_subscriber_task.cancel().await;
+        Ok(())
+    }
+
+    async fn resume_watch_deposit_keys(
+        bridge: Arc<Bridge>,
+        cashier_wallet: Arc<CashierDb>,
+        features: HashMap<String, String>,
+    ) -> Result<()> {
+        for (network, _) in features.iter() {
+            let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
+
+            for keypair in keypairs_to_watch {
+                let bridge = bridge.clone();
+                let bridge_subscribtion = bridge.subscribe().await;
+                bridge_subscribtion
+                    .sender
+                    .send(bridge::BridgeRequests {
+                        network: network.to_owned(),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some((keypair.0, keypair.1))),
+                    })
+                    .await?;
+            }
+        }
         Ok(())
     }
 
@@ -214,13 +244,12 @@ impl Cashierd {
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
-        if let Some((addr, network, asset_id)) = token {
+        if let Some((addr, network, _asset_id)) = token {
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
                     network: network.to_string(),
-                    asset_id,
-                    payload: bridge::BridgeRequestsPayload::SendRequest(addr.clone(), amount),
+                    payload: bridge::BridgeRequestsPayload::Send(addr.clone(), amount),
                 })
                 .await?;
 
@@ -230,7 +259,7 @@ impl Cashierd {
             let error_code = res.error as u32;
             if error_code == 0 {
                 match res.payload {
-                    bridge::BridgeResponsePayload::SendResponse => {
+                    bridge::BridgeResponsePayload::Send => {
                         // TODO Send the received coins to the main address
                         cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
                     }
@@ -272,22 +301,32 @@ impl Cashierd {
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
 
-            // TODO check if the drk public key is already exist
-            let _check = self
+            // check if the drk public key is already exist
+            let check = self
                 .cashier_wallet
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
 
             let bridge = self.bridge.clone();
             let bridge_subscribtion = bridge.subscribe().await;
 
-            bridge_subscribtion
-                .sender
-                .send(bridge::BridgeRequests {
-                    network: network.clone(),
-                    asset_id,
-                    payload: bridge::BridgeRequestsPayload::WatchRequest,
-                })
-                .await?;
+            if check.is_empty() {
+                bridge_subscribtion
+                    .sender
+                    .send(bridge::BridgeRequests {
+                        network: network.clone(),
+                        payload: bridge::BridgeRequestsPayload::Watch(None),
+                    })
+                    .await?;
+            } else {
+                let keypair = check[0].to_owned();
+                bridge_subscribtion
+                    .sender
+                    .send(bridge::BridgeRequests {
+                        network: network.clone(),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some((keypair.0, keypair.1))),
+                    })
+                    .await?;
+            }
 
             let bridge_res = bridge_subscribtion.receiver.recv().await?;
 
@@ -298,9 +337,9 @@ impl Cashierd {
             }
 
             match bridge_res.payload {
-                bridge::BridgeResponsePayload::WatchResponse(token_priv, token_pub) => {
+                bridge::BridgeResponsePayload::Watch(token_priv, token_pub) => {
                     // add pairings to db
-                    self.cashier_wallet.put_exchange_keys(
+                    self.cashier_wallet.put_deposit_keys(
                         &drk_pub_key,
                         &token_priv,
                         &serialize(&token_pub),
@@ -308,6 +347,9 @@ impl Cashierd {
                         &asset_id,
                     )?;
 
+                    return Ok(token_pub);
+                }
+                bridge::BridgeResponsePayload::Address(token_pub) => {
                     return Ok(token_pub);
                 }
                 _ => Err(Error::BridgeError(

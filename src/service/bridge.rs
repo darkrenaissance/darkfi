@@ -7,7 +7,6 @@ use std::collections::HashMap;
 
 pub struct BridgeRequests {
     pub network: String,
-    pub asset_id: jubjub::Fr,
     pub payload: BridgeRequestsPayload,
 }
 
@@ -17,13 +16,14 @@ pub struct BridgeResponse {
 }
 
 pub enum BridgeRequestsPayload {
-    SendRequest(Vec<u8>, u64), // send (address, amount)
-    WatchRequest,
+    Send(Vec<u8>, u64),                // send (address, amount)
+    Watch(Option<(Vec<u8>, Vec<u8>)>), // if already has a keypair
 }
 
 pub enum BridgeResponsePayload {
-    WatchResponse(Vec<u8>, String),
-    SendResponse,
+    Watch(Vec<u8>, String),
+    Address(String),
+    Send,
     Empty,
 }
 
@@ -111,19 +111,31 @@ impl Bridge {
         let client = &self.clients.lock().await[&network];
 
         match req.payload {
-            BridgeRequestsPayload::WatchRequest => {
-                let sub = client.subscribe().await?;
-                let res = BridgeResponse {
-                    error: BridgeResponseError::NoError,
-                    payload: BridgeResponsePayload::WatchResponse(sub.secret_key, sub.public_key),
-                };
-                rep.send(res).await?;
-            }
-            BridgeRequestsPayload::SendRequest(addr, amount) => {
+            BridgeRequestsPayload::Watch(val) => match val {
+                Some((private_key, public_key)) => {
+                    let pub_key = client
+                        .subscribe_with_keypair(private_key, public_key)
+                        .await?;
+                    let res = BridgeResponse {
+                        error: BridgeResponseError::NoError,
+                        payload: BridgeResponsePayload::Address(pub_key),
+                    };
+                    rep.send(res).await?;
+                }
+                None => {
+                    let sub = client.subscribe().await?;
+                    let res = BridgeResponse {
+                        error: BridgeResponseError::NoError,
+                        payload: BridgeResponsePayload::Watch(sub.secret_key, sub.public_key),
+                    };
+                    rep.send(res).await?;
+                }
+            },
+            BridgeRequestsPayload::Send(addr, amount) => {
                 client.send(addr, amount).await?;
                 let res = BridgeResponse {
                     error: BridgeResponseError::NoError,
-                    payload: BridgeResponsePayload::SendResponse,
+                    payload: BridgeResponsePayload::Send,
                 };
                 rep.send(res).await?;
             }
@@ -136,6 +148,15 @@ impl Bridge {
 #[async_trait]
 pub trait TokenClient {
     async fn subscribe(&self) -> Result<TokenSubscribtion>;
+
+    // should check if the keypair in not already subscribed
+    async fn subscribe_with_keypair(
+        &self,
+        private_key: Vec<u8>,
+        public_key: Vec<u8>,
+    ) -> Result<String>;
+
     async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>>;
+
     async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()>;
 }

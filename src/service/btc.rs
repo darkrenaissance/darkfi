@@ -177,14 +177,22 @@ impl TokenClient for BtcClient {
         })
     }
 
+    async fn subscribe_with_keypair(
+        &self,
+        _private_key: Vec<u8>,
+        _public_key: Vec<u8>,
+    ) -> Result<String> {
+        // TODO this not implemented yet
+        Ok(String::new())
+    }
+
     async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
         // TODO this not implemented yet
         let (_, notifier) = async_channel::unbounded();
         Ok(notifier)
     }
     async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
-        // TODO
-
+        // TODO this not implemented yet
         Ok(())
     }
 }
