@@ -18,7 +18,7 @@
 
 ## deposit
 
-- [ ] cashierd: resume watch after restart
+- [X] cashierd: resume watch after restart
 
 ## bridge
 
