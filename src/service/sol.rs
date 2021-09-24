@@ -391,3 +391,12 @@ fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
         &associated_token,
     )
 }
+
+/// Check if given account is a valid token mint
+fn account_is_initialized_mint(mint: &Pubkey) -> bool {
+    let rpc = RpcClient::new(RPC_SERVER.to_string());
+    match rpc.get_token_supply(mint) {
+        Ok(_) => return true,
+        Err(_) => return false,
+    }
+}
