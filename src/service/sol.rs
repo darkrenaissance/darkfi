@@ -1,12 +1,13 @@
-use crate::rpc::{jsonrpc, jsonrpc::JsonResult};
+use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets::connect};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
 use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
 
-use async_trait::async_trait;
-
 use async_executor::Executor;
+use async_native_tls::TlsConnector;
+use async_std::sync::{Arc, Mutex};
+use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use log::*;
 use rand::rngs::OsRng;
@@ -17,12 +18,10 @@ use solana_sdk::{
     pubkey::Pubkey, signature::Signer, signer::keypair::Keypair, system_instruction,
     transaction::Transaction,
 };
-use tokio_tungstenite::{connect_async, tungstenite, tungstenite::protocol::Message};
-
-use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
+use tungstenite::Message;
 
 //const RPC_SERVER: &str = "https://api.mainnet-beta.solana.com";
 //const WSS_SERVER: &str = "wss://api.mainnet-beta.solana.com";
@@ -71,9 +70,10 @@ impl SolClient {
 
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> SolResult<()> {
         // WebSocket handshake/connect
-        let (ws_stream, _) = connect_async(WSS_SERVER).await?;
-
-        let (mut write, read) = ws_stream.split();
+        let builder = native_tls::TlsConnector::builder();
+        let tls = TlsConnector::from(builder);
+        let (stream, _) = connect(WSS_SERVER, tls).await?;
+        let (mut write, read) = stream.split();
 
         let self2 = self.clone();
         let _: async_executor::Task<Result<()>> = executor.spawn(async move {
@@ -83,13 +83,13 @@ impl SolClient {
 
                 // write the request to websocket
                 write
-                    .send(Message::Text(serde_json::to_string(&sub_msg)?))
+                    .send(Message::text(serde_json::to_string(&sub_msg)?))
                     .await
                     .map_err(|err| SolFailed::from(err))?;
             }
         });
 
-        read.for_each(|message| async {
+        futures::StreamExt::for_each(read, |message| async {
             // read ws msg
             self.clone()
                 .read_ws_msg(message)

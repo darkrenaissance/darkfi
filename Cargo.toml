@@ -44,6 +44,9 @@ async-native-tls = "0.3.3"
 native-tls = "0.2.8"
 easy-parallel = "3.1.0"
 
+tungstenite = "0.15.0"
+async-tungstenite = "0.15.0"
+
 simple_logger = "1.13.0"
 log = "0.4.14"
 clap = "2.33.3"
@@ -62,7 +65,6 @@ rocksdb = {version = "0.16.0", default-features = false, features = ["lz4"]}
 spl-token = {version = "3.2.0", optional = true}
 solana-sdk = {version = "1.7.11", optional = true}
 solana-client = {version = "1.7.11", optional = true}
-tokio-tungstenite = {version = "0.15.0", optional = true} 
 
 ## Cashier Bitcoin Dependencies
 bitcoin = {version = "0.27.0", optional = true }
@@ -80,4 +82,4 @@ features = ["async-std-runtime", "all-transport"]
 
 [features]
 btc = ["bitcoin", "secp256k1", "electrum-client"]
-sol = ["solana-sdk", "solana-client", "spl-token", "tokio-tungstenite"]
+sol = ["solana-sdk", "solana-client", "spl-token"]

@@ -10,11 +10,11 @@
 - [ ] change assetID variable to network and add switch statement in cashier::start()
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
 - [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
-- [ ] drk -wk reports success on subsequent calls, it should rather tell that things are already initialized
+- [X] drk -wk reports success on subsequent calls, it should rather tell that things are already initialized
 - [ ] use f64 (and only positive/absolute) for amounts only on the client-facing side. internally, use u64 and num of decimals
 - [ ] drk2: retrieve cashier features and error if don't support the network
 - [ ] darkfid: match 'bitcoin' to 'btc'
-- [ ] standardize error handling in drk2, cashierd, darkfid
+- [X] standardize error handling in drk2, cashierd, darkfid
 
 ## deposit
 
