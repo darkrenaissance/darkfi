@@ -58,14 +58,37 @@ impl CashierDb {
         Ok(())
     }
 
-    // return private and public keys as a tuple
-    pub fn get_deposit_token_keys_by_dkey_public(
+    pub fn put_main_keys(
         &self,
-        d_key_public: &jubjub::SubgroupPoint,
+        token_key_private: &Vec<u8>,
+        token_key_public: &Vec<u8>,
         network: &String,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-        debug!(target: "CASHIERDB", "Check for existing dkey");
-        let d_key_public = self.get_value_serialized(d_key_public)?;
+    ) -> Result<()> {
+        debug!(target: "CASHIERDB", "Put main keys");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let network = self.get_value_serialized(network)?;
+
+        conn.execute(
+            "INSERT INTO main_keypairs
+            (token_key_private, token_key_public, network)
+            VALUES 
+            (:token_key_private, :token_key_public, :network)",
+            named_params! {
+                ":token_key_private": token_key_private,
+                ":token_key_public": token_key_public,
+                ":network": &network,
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn get_main_keys(&self, network: &String) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+        debug!(target: "CASHIERDB", "Get main keys");
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -75,14 +98,13 @@ impl CashierDb {
 
         let mut stmt = conn.prepare(
             "SELECT token_key_private, token_key_public 
-            FROM deposit_keypairs 
-            WHERE d_key_public = :d_key_public 
-            AND network = :network ;",
+            FROM main_keypairs 
+            WHERE network = :network ;",
         )?;
-        let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
-            &[(":d_key_public", &d_key_public), (":network", &network)],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        let keys_iter = stmt
+            .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":network", &network)], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
 
         let mut keys = vec![];
 
@@ -91,6 +113,45 @@ impl CashierDb {
         }
 
         Ok(keys)
+    }
+
+    pub fn put_withdraw_keys(
+        &self,
+        token_key_public: &Vec<u8>,
+        d_key_public: &jubjub::SubgroupPoint,
+        d_key_private: &jubjub::Fr,
+        network: &String,
+        asset_id: &jubjub::Fr,
+    ) -> Result<()> {
+        debug!(target: "CASHIERDB", "Put withdraw keys");
+
+        let d_key_public = self.get_value_serialized(d_key_public)?;
+        let d_key_private = self.get_value_serialized(d_key_private)?;
+        let network = self.get_value_serialized(network)?;
+        let asset_id = self.get_value_serialized(asset_id)?;
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let confirm = self.get_value_serialized(&false)?;
+
+        conn.execute(
+            "INSERT INTO withdraw_keypairs
+            (token_key_public, d_key_private, d_key_public, network,  asset_id, confirm)
+            VALUES 
+            (:token_key_public, :d_key_private, :d_key_public,:network, :asset_id, :confirm);",
+            named_params! {
+                ":token_key_public": token_key_public,
+                ":d_key_private": d_key_private,
+                ":d_key_public": d_key_public,
+                ":network": network,
+                ":asset_id": asset_id,
+                ":confirm": confirm,
+            },
+        )?;
+        Ok(())
     }
 
     pub fn put_exchange_keys(
@@ -159,6 +220,85 @@ impl CashierDb {
         Ok(private_keys)
     }
 
+    // return token public key, network name, and asset_id as tuple
+    pub fn get_withdraw_token_public_key_by_dkey_public(
+        &self,
+        pub_key: &jubjub::SubgroupPoint,
+    ) -> Result<Option<(Vec<u8>, String, jubjub::Fr)>> {
+        debug!(target: "CASHIERDB", "Get token address by pub_key");
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let d_key_public = self.get_value_serialized(pub_key)?;
+
+        let confirm = self.get_value_serialized(&false)?;
+
+        let mut stmt = conn.prepare(
+            "SELECT token_key_public, network, asset_id 
+            FROM withdraw_keypairs 
+            WHERE d_key_public = :d_key_public AND confirm = :confirm;",
+        )?;
+        let addr_iter = stmt.query_map::<(Vec<u8>, String, jubjub::Fr), _, _>(
+            &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
+            |row| {
+                let token_key_public = row.get(0)?;
+                let network: String = self
+                    .get_value_deserialized(row.get(1)?)
+                    .expect("deserialize network str");
+                let asset_id = row.get(2)?;
+                let asset_id: jubjub::Fr = self
+                    .get_value_deserialized(asset_id)
+                    .expect("deserialize asset_id");
+                Ok((token_key_public, network, asset_id))
+            },
+        )?;
+
+        let mut token_addresses = vec![];
+
+        for addr in addr_iter {
+            token_addresses.push(addr?);
+        }
+
+        Ok(token_addresses.pop())
+    }
+
+    // return private and public keys as a tuple
+    pub fn get_deposit_token_keys_by_dkey_public(
+        &self,
+        d_key_public: &jubjub::SubgroupPoint,
+        network: &String,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+        debug!(target: "CASHIERDB", "Check for existing dkey");
+        let d_key_public = self.get_value_serialized(d_key_public)?;
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let network = self.get_value_serialized(network)?;
+
+        let mut stmt = conn.prepare(
+            "SELECT token_key_private, token_key_public 
+            FROM deposit_keypairs 
+            WHERE d_key_public = :d_key_public 
+            AND network = :network ;",
+        )?;
+        let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
+            &[(":d_key_public", &d_key_public), (":network", &network)],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        let mut keys = vec![];
+
+        for k in keys_iter {
+            keys.push(k?);
+        }
+
+        Ok(keys)
+    }
+
     pub fn get_withdraw_keys_by_token_public_key(
         &self,
         token_key_public: &Vec<u8>,
@@ -207,50 +347,6 @@ impl CashierDb {
         Ok(addresses.pop())
     }
 
-    // return token public key, network name, and asset_id as tuple
-    pub fn get_withdraw_token_public_key_by_dkey_public(
-        &self,
-        pub_key: &jubjub::SubgroupPoint,
-    ) -> Result<Option<(Vec<u8>, String, jubjub::Fr)>> {
-        debug!(target: "CASHIERDB", "Get token address by pub_key");
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
-        let d_key_public = self.get_value_serialized(pub_key)?;
-
-        let confirm = self.get_value_serialized(&false)?;
-
-        let mut stmt = conn.prepare(
-            "SELECT token_key_public, network, asset_id 
-            FROM withdraw_keypairs 
-            WHERE d_key_public = :d_key_public AND confirm = :confirm;",
-        )?;
-        let addr_iter = stmt.query_map::<(Vec<u8>, String, jubjub::Fr), _, _>(
-            &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
-            |row| {
-                let token_key_public = row.get(0)?;
-                let network: String = self
-                    .get_value_deserialized(row.get(1)?)
-                    .expect("deserialize network str");
-                let asset_id = row.get(2)?;
-                let asset_id: jubjub::Fr = self
-                    .get_value_deserialized(asset_id)
-                    .expect("deserialize asset_id");
-                Ok((token_key_public, network, asset_id))
-            },
-        )?;
-
-        let mut token_addresses = vec![];
-
-        for addr in addr_iter {
-            token_addresses.push(addr?);
-        }
-
-        Ok(token_addresses.pop())
-    }
-
     pub fn confirm_withdraw_key_record(
         &self,
         token_address: &Vec<u8>,
@@ -275,45 +371,6 @@ impl CashierDb {
             params![confirm, token_address, network],
         )?;
 
-        Ok(())
-    }
-
-    pub fn put_withdraw_keys(
-        &self,
-        token_key_public: &Vec<u8>,
-        d_key_public: &jubjub::SubgroupPoint,
-        d_key_private: &jubjub::Fr,
-        network: &String,
-        asset_id: &jubjub::Fr,
-    ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Put withdraw keys");
-
-        let d_key_public = self.get_value_serialized(d_key_public)?;
-        let d_key_private = self.get_value_serialized(d_key_private)?;
-        let network = self.get_value_serialized(network)?;
-        let asset_id = self.get_value_serialized(asset_id)?;
-
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
-        let confirm = self.get_value_serialized(&false)?;
-
-        conn.execute(
-            "INSERT INTO withdraw_keypairs
-            (token_key_public, d_key_private, d_key_public, network,  asset_id, confirm)
-            VALUES 
-            (:token_key_public, :d_key_private, :d_key_public,:network, :asset_id, :confirm);",
-            named_params! {
-                ":token_key_public": token_key_public,
-                ":d_key_private": d_key_private,
-                ":d_key_public": d_key_public,
-                ":network": network,
-                ":asset_id": asset_id,
-                ":confirm": confirm,
-            },
-        )?;
         Ok(())
     }
 
@@ -373,6 +430,70 @@ mod tests {
     }
 
     #[test]
+    pub fn test_put_main_keys_and_load_them_with_network_name() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test2.db"))?;
+        let password: String = "darkfi".into();
+        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
+
+        // btc addr testnet
+        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
+        let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
+
+        let network = String::from("btc");
+
+        wallet.put_main_keys(&token_addr_private, &token_addr, &network)?;
+
+        let keys = wallet.get_main_keys(&network)?;
+
+        assert_eq!(keys.len(), 1);
+
+        assert_eq!(keys[0].0, token_addr_private);
+        assert_eq!(keys[0].1, token_addr);
+
+        std::fs::remove_file(walletdb_path)?;
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_put_deposit_keys_and_load_them_with_() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test3.db"))?;
+        let password: String = "darkfi".into();
+        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
+
+        // btc addr testnet
+        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
+        let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
+
+        let network = String::from("btc");
+
+        let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+        let asset_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+
+        wallet.put_exchange_keys(
+            &public2,
+            &token_addr_private,
+            &token_addr,
+            &network,
+            &asset_id,
+        )?;
+
+        let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;
+
+        assert_eq!(keys.len(), 1);
+
+        assert_eq!(keys[0].0, token_addr_private);
+        assert_eq!(keys[0].1, token_addr);
+
+        std::fs::remove_file(walletdb_path)?;
+
+        Ok(())
+    }
+
+    #[test]
     pub fn test_put_withdraw_keys_and_load_them_with_token_key() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
         let password: String = "darkfi".into();
@@ -381,11 +502,10 @@ mod tests {
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
+        let asset_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
         // btc addr testnet
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
-
-        let asset_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
         let network = String::from("btc");
 
