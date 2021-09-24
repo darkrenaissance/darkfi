@@ -1,6 +1,7 @@
 use super::WalletApi;
 use crate::client::ClientFailed;
-use crate::crypto::{ merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
+use crate::crypto::{
+    merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::{Error, Result};
@@ -57,7 +58,10 @@ impl WalletDb {
                 conn.execute_batch(&contents)?;
                 *self.initialized.lock().await = true;
             } else {
-                debug!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
+                debug!(
+                target: "WALLETDB",
+                "Password is empty. You must set a password to use the wallet."
+                );
                 return Err(Error::from(ClientFailed::EmptyPassword));
             }
         } else {
@@ -197,8 +201,10 @@ impl WalletDb {
         }
 
         conn.execute(
-            "INSERT INTO coins(coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
-            VALUES (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id)",
+            "INSERT INTO coins
+            (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
+            VALUES 
+            (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id);",
             named_params! {
                 ":coin": coin,
                 ":serial": serial,
@@ -307,7 +313,9 @@ mod tests {
             conn.pragma_update(None, "key", &password)?;
             conn.execute_batch(&contents)?;
         } else {
-            debug!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
+            debug!(
+            target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
+            );
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
