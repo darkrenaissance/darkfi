@@ -89,12 +89,7 @@ impl Darkfid {
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.key_gen() {
-            Ok((public, private)) => match self.wallet.put_keypair(public, private) {
-                Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
-                Err(e) => {
-                    return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
-                }
-            },
+            Ok((_, _)) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
             }
@@ -162,6 +157,7 @@ impl Darkfid {
     // --> {""method": "features", "params": []}
     // <-- {"result": { "network": ["btc", "sol"] } }
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
+        // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
         match send_request(&self.config.cashier_rpc_url, json!(req)).await {
