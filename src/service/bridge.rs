@@ -2,11 +2,11 @@ use crate::Result;
 
 use async_trait::async_trait;
 
-use crate::serial::serialize;
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 pub struct BridgeRequests {
+    pub network: String,
     pub asset_id: jubjub::Fr,
     pub payload: BridgeRequestsPayload,
 }
@@ -49,32 +49,34 @@ pub struct TokenNotification {
 }
 
 pub struct Bridge {
-    clients: Mutex<HashMap<Vec<u8>, Arc<dyn TokenClient + Send + Sync>>>,
-    notifiers: Mutex<HashMap<Vec<u8>, async_channel::Receiver<TokenNotification>>>,
+    clients: Mutex<HashMap<String, Arc<dyn TokenClient + Send + Sync>>>,
+    //notifiers: Mutex<HashMap<Vec<u8>, async_channel::Receiver<TokenNotification>>>,
 }
 
 impl Bridge {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             clients: Mutex::new(HashMap::new()),
-            notifiers: Mutex::new(HashMap::new()),
+            //notifiers: Mutex::new(HashMap::new()),
         })
     }
 
     pub async fn add_clients(
         self: Arc<Self>,
-        asset_id: jubjub::Fr,
+        network: String,
         client: Arc<dyn TokenClient + Send + Sync>,
     ) -> Result<()> {
-        let asset_id = serialize(&asset_id);
+        //let notifier = client.get_notifier().await?;
 
-        let notifier = client.get_notifier().await?;
-
-        self.clients.lock().await.insert(asset_id.clone(), client);
-        self.notifiers
+        self.clients
             .lock()
             .await
-            .insert(asset_id, notifier.clone());
+            .insert(network.clone(), client.clone());
+
+        //        self.notifiers
+        //            .lock()
+        //            .await
+        //            .insert(asset_id, notifier.clone());
         Ok(())
     }
 
@@ -95,9 +97,9 @@ impl Bridge {
         rep: async_channel::Sender<BridgeResponse>,
     ) -> Result<()> {
         let req = req.recv().await?;
-        let asset_id = serialize(&req.asset_id);
+        let network = req.network;
 
-        if !self.clients.lock().await.contains_key(&asset_id) {
+        if !self.clients.lock().await.contains_key(&network) {
             let res = BridgeResponse {
                 error: BridgeResponseError::NotSupportedClient,
                 payload: BridgeResponsePayload::Empty,
@@ -106,7 +108,7 @@ impl Bridge {
             return Ok(());
         }
 
-        let client = &self.clients.lock().await[&asset_id];
+        let client = &self.clients.lock().await[&network];
 
         match req.payload {
             BridgeRequestsPayload::WatchRequest => {

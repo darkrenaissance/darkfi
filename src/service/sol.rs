@@ -270,9 +270,34 @@ impl TokenClient for SolClient {
     }
 }
 
+/// Derive an associated token address from given owner and mint
+fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
+
+    let associated_token =
+        Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap();
+
+    Pubkey::find_program_address(
+        &[
+            &owner.to_bytes(),
+            &spl_token::id().to_bytes(),
+            &mint.to_bytes(),
+        ],
+        &associated_token,
+    )
+}
+
+/// Check if given account is a valid token mint
+fn account_is_initialized_mint(mint: &Pubkey) -> bool {
+    let rpc = RpcClient::new(RPC_SERVER.to_string());
+    match rpc.get_token_supply(mint) {
+        Ok(_) => return true,
+        Err(_) => return false,
+    }
+}
+
 impl Encodable for Keypair {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key = self.to_bytes();
+        let key: Vec<u8> = self.to_bytes().to_vec();
         let len = key.encode(s)?;
         Ok(len)
     }
@@ -377,26 +402,4 @@ impl From<crate::error::Error> for SolFailed {
 
 pub type SolResult<T> = std::result::Result<T, SolFailed>;
 
-/// Derive an associated token address from given owner and mint
-fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
-    let associated_token =
-        Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap();
 
-    Pubkey::find_program_address(
-        &[
-            &owner.to_bytes(),
-            &spl_token::id().to_bytes(),
-            &mint.to_bytes(),
-        ],
-        &associated_token,
-    )
-}
-
-/// Check if given account is a valid token mint
-fn account_is_initialized_mint(mint: &Pubkey) -> bool {
-    let rpc = RpcClient::new(RPC_SERVER.to_string());
-    match rpc.get_token_supply(mint) {
-        Ok(_) => return true,
-        Err(_) => return false,
-    }
-}

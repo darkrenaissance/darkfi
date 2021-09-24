@@ -143,14 +143,14 @@ pub struct BtcClient {
 }
 
 impl BtcClient {
-    pub fn new(btc_endpoint: (Network, String)) -> Result<Self> {
+    pub fn new(btc_endpoint: (Network, String)) -> Result<Arc<Self>> {
         let (network, client_address) = btc_endpoint;
         let client = ElectrumClient::new(&client_address)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-        Ok(Self {
+        Ok(Arc::new(Self {
             client: Arc::new(client),
             network,
-        })
+        }))
     }
 }
 

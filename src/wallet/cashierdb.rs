@@ -63,10 +63,10 @@ impl CashierDb {
         let asset_id = self.get_value_serialized(asset_id)?;
 
         let mut stmt =
-            conn.prepare("SELECT * FROM deposit_keypairs where d_key_public = :d_key_public AND asset_id = :asset_id")?;
+            conn.prepare("SELECT token_key_private, token_key_public FROM deposit_keypairs where d_key_public = :d_key_public AND asset_id = :asset_id")?;
         let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
             &[(":d_key_public", &d_key_public), (":asset_id", &asset_id)],
-            |row| Ok((row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
         let mut keys = vec![];
@@ -83,27 +83,29 @@ impl CashierDb {
         d_key_public: &jubjub::SubgroupPoint,
         token_private: &Vec<u8>,
         token_public: &Vec<u8>,
+        network: &String,
         asset_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
-
-        let d_key_public = self.get_value_serialized(d_key_public)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
+        let d_key_public = self.get_value_serialized(d_key_public)?;
         let asset_id = self.get_value_serialized(asset_id)?;
+        let network = self.get_value_serialized(network)?;
 
         conn.execute(
-            "INSERT INTO deposit_keypairs(d_key_public, token_key_private, token_public_key_public, asset_id)
-            VALUES (:d_key_public, :token_key_private, :token_key_public, :asset_id)",
+            "INSERT INTO deposit_keypairs(d_key_public, token_key_private, token_key_public, network, asset_id)
+            VALUES (:d_key_public, :token_key_private, :token_key_public, :network, :asset_id)",
             named_params! {
-                ":d_key_public": d_key_public,
+                ":d_key_public": &d_key_public,
                 ":token_key_private": token_private,
                 ":token_key_public": token_public,
-                ":asset_id": asset_id,
+                ":network": &network,
+                ":asset_id": &asset_id,
             },
         )?;
         Ok(())
@@ -191,10 +193,10 @@ impl CashierDb {
             ],
             |row| {
                 let public: jubjub::SubgroupPoint = self
-                    .get_value_deserialized(row.get(2)?)
+                    .get_value_deserialized(row.get(3)?)
                     .expect("get public key deserialize");
                 let private: jubjub::Fr = self
-                    .get_value_deserialized(row.get(1)?)
+                    .get_value_deserialized(row.get(2)?)
                     .expect("get  private key deserialize");
                 Ok(Keypair { public, private })
             },
@@ -212,7 +214,7 @@ impl CashierDb {
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-    ) -> Result<Option<(Vec<u8>, jubjub::Fr)>> {
+    ) -> Result<Option<(Vec<u8>, String, jubjub::Fr)>> {
         debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -224,17 +226,20 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_id, asset_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND confirm = :confirm;",
+            "SELECT token_key_id, network, asset_id FROM withdraw_keypairs WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
-        let addr_iter = stmt.query_map::<(Vec<u8>, jubjub::Fr), _, _>(
+        let addr_iter = stmt.query_map::<(Vec<u8>, String, jubjub::Fr), _, _>(
             &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
             |row| {
                 let token_public_key = row.get(0)?;
-                let asset_id = row.get(1)?;
+                let network: String = self
+                    .get_value_deserialized(row.get(1)?)
+                    .expect("deserialize network str");
+                let asset_id = row.get(2)?;
                 let asset_id: jubjub::Fr = self
                     .get_value_deserialized(asset_id)
                     .expect("deserialize asset_id");
-                Ok((token_public_key, asset_id))
+                Ok((token_public_key, network, asset_id))
             },
         )?;
 
@@ -276,12 +281,14 @@ impl CashierDb {
         token_key_id: &Vec<u8>,
         d_key_public: &jubjub::SubgroupPoint,
         d_key_private: &jubjub::Fr,
+        network: &String,
         asset_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
 
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let d_key_private = self.get_value_serialized(d_key_private)?;
+        let network = self.get_value_serialized(network)?;
         let asset_id = self.get_value_serialized(asset_id)?;
 
         // open connection
@@ -292,12 +299,13 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         conn.execute(
-            "INSERT INTO withdraw_keypairs(token_key_id, d_key_private, d_key_public, asset_id, confirm)
-            VALUES (:token_key_id, :d_key_private, :d_key_public, :asset_id, :confirm)",
+            "INSERT INTO withdraw_keypairs(token_key_id, d_key_private, d_key_public, network,  asset_id, confirm)
+            VALUES (:token_key_id, :d_key_private, :d_key_public,:network, :asset_id, :confirm)",
             named_params! {
                 ":token_key_id": token_key_id,
                 ":d_key_private": d_key_private,
                 ":d_key_public": d_key_public,
+                ":network": network,
                 ":asset_id": asset_id,
                 ":confirm": confirm,
             },
@@ -332,7 +340,13 @@ mod tests {
 
         let asset_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
-        wallet.put_withdraw_keys(&token_addr, &public2, &secret2, &asset_id)?;
+        wallet.put_withdraw_keys(
+            &token_addr,
+            &public2,
+            &secret2,
+            &String::from("btc"),
+            &asset_id,
+        )?;
 
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &asset_id)?;
 
