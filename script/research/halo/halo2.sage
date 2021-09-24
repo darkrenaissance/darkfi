@@ -274,7 +274,7 @@ for a in range(5):
         current = last_y_value
 
         # i iterates over the columns in our partition
-        for i in range(a * m, (a + 1)):
+        for i in range(a * m, (a + 1) * m):
             current *= v[i][j] + beta * delta^i * omega^j + gamma
             current /= v[i][j] + beta * s[i][j] + gamma
 
@@ -308,7 +308,7 @@ gate_3 = f_4_X * (a_1_X * a_2_X * a_3_X - a_4_X)
 c = gate_0 + y * gate_1 + y^2 * gate_2 + y^3 * gate_3
 t = X^n - 1
 for i in range(n):
-    assert h(omega^i) == 0
+    assert c(omega^i) == 0
 # Normally we do:
 #h = c / t
 # But for some reason sage is producing fractional coefficients
