@@ -1,10 +1,12 @@
-use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets::connect};
+use crate::rpc::{
+    jsonrpc, jsonrpc::JsonError, jsonrpc::JsonNotification, jsonrpc::JsonRequest,
+    jsonrpc::JsonResponse, jsonrpc::JsonResult, websockets::connect,
+};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
 use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
 
-use async_executor::Executor;
 use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
@@ -18,7 +20,6 @@ use solana_sdk::{
     pubkey::Pubkey, signature::Signer, signer::keypair::Keypair, system_instruction,
     transaction::Transaction,
 };
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use tungstenite::Message;
@@ -38,18 +39,15 @@ struct SubscribeParams {
 
 pub struct SolClient {
     keypair: Keypair,
-
-    // subscriptions hashmap using pubkey as an index and a value of (keypair, amount)
-    subscriptions: Arc<Mutex<HashMap<Pubkey, (Keypair, u64)>>>,
-
+    // subscriptions hashmap using sub_id as an index and a value of (Keypair, amount)
+    subscriptions: Arc<Mutex<Vec<Pubkey>>>,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
-
     subscribe_channel: (
-        async_channel::Sender<jsonrpc::JsonRequest>,
-        async_channel::Receiver<jsonrpc::JsonRequest>,
+        async_channel::Sender<JsonRequest>,
+        async_channel::Receiver<JsonRequest>,
     ),
 }
 
@@ -62,61 +60,75 @@ impl SolClient {
 
         Ok(Arc::new(Self {
             keypair,
-            subscriptions: Arc::new(Mutex::new(HashMap::new())),
+            subscriptions: Arc::new(Mutex::new(Vec::new())),
             notify_channel,
             subscribe_channel,
         }))
     }
 
-    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> SolResult<()> {
-        // WebSocket handshake/connect
-        let builder = native_tls::TlsConnector::builder();
-        let tls = TlsConnector::from(builder);
-        let (stream, _) = connect(WSS_SERVER, tls).await?;
-        let (mut write, read) = stream.split();
-
-        let self2 = self.clone();
-        let _: async_executor::Task<Result<()>> = executor.spawn(async move {
-            loop {
-                // recv a request for websocket
-                let sub_msg = self2.subscribe_channel.1.recv().await?;
-
-                // write the request to websocket
-                write
-                    .send(Message::text(serde_json::to_string(&sub_msg)?))
-                    .await
-                    .map_err(|err| SolFailed::from(err))?;
-            }
-        });
-
-        futures::StreamExt::for_each(read, |message| async {
-            // read ws msg
-            self.clone()
-                .read_ws_msg(message)
-                .await
-                .expect("read from websocket");
-        })
-        .await;
-        Ok(())
-    }
-
-    async fn read_ws_msg(
-        self: Arc<Self>,
+    async fn read_ws_subscribe_msg(
+        &self,
         message: std::result::Result<Message, tungstenite::Error>,
+        keypair: &Vec<u8>,
+        old_balance: u64,
     ) -> SolResult<()> {
         let data = message?.into_text()?;
 
-        let v: JsonResult = serde_json::from_str(&data).map_err(|err| Error::from(err))?;
+        let json_res: JsonResult;
 
-        match v {
+        let v: std::collections::HashMap<String, Value> =
+            serde_json::from_str(&data).map_err(|err| Error::from(err))?;
+
+        // XXX this for testing 
+        if v.contains_key(&String::from("result")) {
+            json_res = JsonResult::Resp(JsonResponse {
+                jsonrpc: v["jsonrpc"].clone(),
+                result: v["result"].clone(),
+                id: v["id"].clone(),
+            });
+        } else if v.contains_key(&String::from("error")) {
+            json_res = JsonResult::Err(JsonError {
+                jsonrpc: v["jsonrpc"].clone(),
+                error: serde_json::from_value(v["error"].clone()).unwrap(),
+                id: v["id"].clone(),
+            });
+        } else {
+            json_res = JsonResult::Notif(JsonNotification {
+                jsonrpc: v["jsonrpc"].clone(),
+                method: v["method"].clone(),
+                params: v["params"].clone(),
+            });
+        }
+
+        match json_res {
             JsonResult::Resp(r) => {
                 // receive a response with subscription id
-                let sub_id = r.result.as_i64().ok_or(Error::ParseIntError)?;
-                debug!(
-                    target: "SOL BRIDGE",
-                    "Successfully get response : {:?}",
-                    sub_id
-                );
+                let keypair: Keypair = deserialize(&keypair)?;
+                match r.result.as_bool() {
+                    Some(v) => {
+                        if v {
+                            debug!(
+                                target: "SOL BRIDGE",
+                                "Successfully unsubscribe from address {}",
+                                keypair.pubkey(),
+                            );
+                        } else {
+                            debug!(
+                                target: "SOL BRIDGE",
+                                "Unsuccessfully unsubscribe from address {}",
+                                keypair.pubkey(),
+                            );
+                        }
+                    }
+                    None => {
+                        self.subscriptions.lock().await.push(keypair.pubkey());
+                        debug!(
+                            target: "SOL BRIDGE",
+                            "Successfully get response and subscribed to address {}",
+                            keypair.pubkey(),
+                        );
+                    }
+                }
             }
 
             JsonResult::Err(e) => {
@@ -128,50 +140,46 @@ impl SolClient {
 
             JsonResult::Notif(n) => {
                 // receive notification once an account get updated
-
+                debug!(
+                    target: "SOL BRIDGE",
+                    "receive new notification"
+                );
                 // get values from the notification
                 let new_bal = n.params["result"]["value"]["lamports"]
                     .as_u64()
                     .ok_or(Error::ParseIntError)?;
 
-                let owner_pubkey = n.params["result"]["value"]["owner"]
-                    .as_str()
-                    .ok_or(Error::ParseFailed("Error Parse serde_json Value to &str"))?;
-
-                let owner_pubkey: Pubkey = Pubkey::from_str(&owner_pubkey)?;
-
                 let sub_id = n.params["subscription"]
                     .as_u64()
                     .ok_or(Error::ParseIntError)?;
 
-                // get the keypair and old_balance from the subscriptions list
-                let (keypair, old_balance) = &self.subscriptions.lock().await[&owner_pubkey];
+                let keypair: Keypair = deserialize(&keypair)?;
 
-                match new_bal > *old_balance {
+                match new_bal > old_balance {
                     true => {
                         let received_balance = new_bal - old_balance;
-
-                        self.send_to_main_account(&keypair)?;
 
                         self.notify_channel
                             .0
                             .send(TokenNotification {
-                                secret_key: serialize(keypair),
+                                secret_key: serialize(&keypair),
                                 received_balance,
                             })
                             .await
                             .map_err(|err| Error::from(err))?;
 
-                        self.unsubscribe(sub_id, &owner_pubkey).await?;
+                        self.unsubscribe(sub_id, &keypair.pubkey()).await?;
+
+                        self.send_to_main_account(&keypair, new_bal)?;
 
                         debug!(
                             target: "SOL BRIDGE",
                             "Received {} lamports, to the pubkey: {} ",
-                            received_balance, owner_pubkey.to_string(),
+                            received_balance, keypair.pubkey().to_string(),
                         );
                     }
                     false => {
-                        self.unsubscribe(sub_id, &owner_pubkey).await?;
+                        self.unsubscribe(sub_id, &keypair.pubkey()).await?;
                     }
                 }
             }
@@ -179,10 +187,12 @@ impl SolClient {
         Ok(())
     }
 
-    fn send_to_main_account(&self, keypair: &Keypair) -> SolResult<()> {
+    fn send_to_main_account(&self, keypair: &Keypair, amount: u64) -> SolResult<()> {
+        debug!(
+            target: "SOL BRIDGE",
+            "send received token to main account"
+        );
         let rpc = RpcClient::new(RPC_SERVER.to_string());
-
-        let amount = rpc.get_balance(&keypair.pubkey())?;
 
         let instruction =
             system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
@@ -198,14 +208,13 @@ impl SolClient {
     }
 
     async fn handle_subscribe_request(&self, keypair: Keypair) -> Result<()> {
+        debug!(
+            target: "SOL BRIDGE",
+            "Handle subscribe request"
+        );
 
         // check first if it's not already subscribed
-        if self
-            .subscriptions
-            .lock()
-            .await
-            .contains_key(&keypair.pubkey())
-        {
+        if self.subscriptions.lock().await.contains(&keypair.pubkey()) {
             return Ok(());
         }
 
@@ -222,26 +231,69 @@ impl SolClient {
         );
 
         let rpc = RpcClient::new(RPC_SERVER.to_string());
-        let balance = rpc
+        let old_balance = rpc
             .get_balance(&keypair.pubkey())
             .map_err(|err| SolFailed::from(err))?;
 
-        // add to subscriptions list
-        self.subscriptions
-            .lock()
-            .await
-            .insert(keypair.pubkey(), (keypair, balance));
+        // WebSocket handshake/connect
+        let builder = native_tls::TlsConnector::builder();
+        let tls = TlsConnector::from(builder);
+        let (stream, _) = connect(WSS_SERVER, tls).await?;
 
-        //  send
-        self.subscribe_channel.0.send(sub_msg).await?;
+        let (mut write, read) = stream.split();
 
+        let unsub_recv = self.subscribe_channel.1.clone();
+        let ws_write_task: smol::Task<Result<()>> = smol::spawn(async move {
+            write
+                .send(Message::text(serde_json::to_string(&sub_msg)?))
+                .await
+                .map_err(|err| SolFailed::from(err))?;
+
+            let unsub_msg = unsub_recv.recv().await?;
+            write
+                .send(Message::text(serde_json::to_string(&unsub_msg)?))
+                .await
+                .map_err(|err| SolFailed::from(err))?;
+            Ok(())
+        });
+
+        let keypair = serialize(&keypair);
+
+        futures::StreamExt::for_each(read, |message| async {
+            // read ws msg
+            self.clone()
+                .read_ws_subscribe_msg(message, &keypair, old_balance)
+                .await
+                .expect("read_ws_msg");
+            // TODO handle this error
+        })
+        .await;
+
+        ws_write_task.cancel().await;
         Ok(())
     }
 
     async fn unsubscribe(&self, sub_id: u64, pubkey: &Pubkey) -> Result<()> {
-        let sub_msg = jsonrpc::request(json!("accountUnsubscribe"), json!([json!(sub_id)]));
+        let sub_msg = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
+
         self.subscribe_channel.0.send(sub_msg).await?;
-        self.subscriptions.lock().await.remove(pubkey);
+
+        let index = self
+            .subscriptions
+            .lock()
+            .await
+            .iter()
+            .position(|p| p == pubkey)
+            .unwrap();
+
+        self.subscriptions.lock().await.remove(index);
+
+        debug!(
+            target: "SOL BRIDGE",
+            "Successfully unsubscribe : {:?}",
+            sub_id
+        );
+
         Ok(())
     }
 }
@@ -302,7 +354,7 @@ impl TokenClient for SolClient {
 }
 
 /// Derive an associated token address from given owner and mint
-fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
+pub fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     let associated_token =
         Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap();
 
