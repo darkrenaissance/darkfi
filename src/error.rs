@@ -63,6 +63,7 @@ pub enum Error {
     Base58DecodeError(String),
     ConfigNotFound,
     SetLoggerError,
+    TokenParseError,
 }
 
 impl std::error::Error for Error {}
@@ -127,6 +128,7 @@ impl fmt::Display for Error {
                 f.write_str("No config file detected. Please create a config file")
             }
             Error::SetLoggerError => f.write_str("SetLoggerError"),
+            Error::TokenParseError => f.write_str("Could not parse token list"),
         }
     }
 }

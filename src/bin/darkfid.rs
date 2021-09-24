@@ -15,7 +15,7 @@ use drk::{
     serial::serialize,
     util::{expand_path, join_config_path},
     wallet::WalletDb,
-    Result,
+    Error, Result,
 };
 
 #[derive(Clone)]
@@ -114,29 +114,41 @@ impl Darkfid {
     // --> {"method": "get_token_id", "params": [token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
-        let args = params.as_array().unwrap();
-        let symbol = &args[0];
+        let args = params.as_array();
 
-        if symbol.as_str().is_none() {
+        if args.is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        };
+        }
 
-        let symbol = symbol.as_str().unwrap();
+        let args = args.unwrap();
+        let symbol = args[0].as_str();
 
-        let token_id = self.search_id(&symbol);
-        return JsonResult::Resp(jsonresp(json!(token_id), id));
+        if symbol.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+        let symbol = symbol.unwrap();
+
+        let result: Result<Value> = async {
+            let token_id = self.search_id(symbol)?;
+            Ok(token_id)
+        }
+        .await;
+
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
     }
 
-    // TODO: proper error handling here
-    fn search_id(&self, symbol: &str) -> Value {
+    fn search_id(&self, symbol: &str) -> Result<Value> {
         debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
         let tokens = self.tokenlist["tokens"]
             .as_array()
-            .expect("Can't find 'tokens' in file");
+            .ok_or_else(|| Error::TokenParseError)?;
         for item in tokens {
             if item["symbol"] == symbol.to_uppercase() {
                 let address = item["address"].clone();
-                return address;
+                return Ok(address);
             }
         }
         unreachable!();
@@ -167,7 +179,13 @@ impl Darkfid {
     // assets once the deposit is received.
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn deposit(&self, id: Value, params: Value) -> JsonResult {
-        let args = params.as_array().unwrap();
+        let args = params.as_array();
+
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let args = args.unwrap();
         if args.len() != 2 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
@@ -219,7 +237,7 @@ impl Darkfid {
         }
     }
 
-    fn parse_token(&self, token: &str) -> Value {
+    fn parse_token(&self, token: &str) -> Result<Value> {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
         for c in vec {
@@ -230,8 +248,8 @@ impl Darkfid {
         if counter == token.len() {
             self.search_id(token)
         } else {
-            let token_id: Value = serde_json::from_str(token).unwrap();
-            token_id
+            let token_id: Value = serde_json::from_str(token)?;
+            Ok(token_id)
         }
     }
 
@@ -243,7 +261,14 @@ impl Darkfid {
     // a transaction ID of them sending the funds that are requested for withdrawal.
     // <-- {"result": "txID"}
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
-        let args = params.as_array().unwrap();
+        let args = params.as_array();
+
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let args = args.unwrap();
+
         if args.len() != 4 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
