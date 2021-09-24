@@ -219,7 +219,7 @@ impl Cashierd {
                 match res.payload {
                     bridge::BridgeResponsePayload::SendResponse => {
                         // TODO Send the received coins to the main address
-                        cashier_wallet.confirm_withdraw_key_record(&addr, &asset_id)?;
+                        cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
                     }
                     _ => {}
                 }
@@ -262,7 +262,7 @@ impl Cashierd {
             // TODO check if the drk public key is already exist
             let _check = self
                 .cashier_wallet
-                .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &asset_id)?;
+                .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
 
             let bridge = self.bridge.clone();
             let bridge_subscribtion = bridge.subscribe().await;
@@ -320,11 +320,12 @@ impl Cashierd {
         }
 
         let network = &args[0].as_str().unwrap();
+        let network = network.to_string();
         let token = &args[1];
         let address = &args[2].as_str().unwrap();
         let _amount = &args[3];
 
-        if !self.features.contains_key(network.clone()) {
+        if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -340,7 +341,7 @@ impl Cashierd {
 
             if let Some(addr) = self
                 .cashier_wallet
-                .get_withdraw_keys_by_token_public_key(&address, &asset_id)?
+                .get_withdraw_keys_by_token_public_key(&address, &network)?
             {
                 cashier_public = addr.public;
             } else {
