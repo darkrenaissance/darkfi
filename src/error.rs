@@ -64,6 +64,7 @@ pub enum Error {
     ConfigNotFound,
     SetLoggerError,
     TokenParseError,
+    TungsteniteError,
 }
 
 impl std::error::Error for Error {}
@@ -129,6 +130,7 @@ impl fmt::Display for Error {
             }
             Error::SetLoggerError => f.write_str("SetLoggerError"),
             Error::TokenParseError => f.write_str("Could not parse token list"),
+            Error::TungsteniteError => f.write_str("TungsteniteError"),
         }
     }
 }
@@ -282,5 +284,11 @@ impl From<bs58::decode::Error> for Error {
 impl From<log::SetLoggerError> for Error {
     fn from(_err: log::SetLoggerError) -> Error {
         Error::SetLoggerError
+    }
+}
+
+impl From<tungstenite::Error> for Error {
+    fn from(_err: tungstenite::Error) -> Error {
+        Error::TungsteniteError
     }
 }
