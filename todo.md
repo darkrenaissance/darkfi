@@ -48,6 +48,7 @@ Open research questions.
 - [x] finish bulletproofs impl
 - [ ] halo2 lookup
 - [ ] read groth permutation paper
+- [ ] fflonk
 
 ## blockchain
 
