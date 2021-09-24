@@ -114,7 +114,6 @@ impl Cashierd {
     async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
         self.cashier_wallet.init_db().await?;
 
-
         for (feature_name, _) in self.features.iter() {
             let bridge2 = self.bridge.clone();
             match feature_name.as_str() {
@@ -123,8 +122,17 @@ impl Cashierd {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
                     use solana_sdk::signer::keypair::Keypair;
-                    let main_keypari = Keypair::new();
-                    let sol_client = SolClient::new(serialize(&main_keypari)).await?;
+                    let main_keypair: Keypair;
+
+                    let main_keypairs = self.cashier_wallet.get_main_keys(&"sol".into())?;
+                    if main_keypairs.is_empty() {
+                        main_keypair = Keypair::new();
+                    } else {
+                        main_keypair = deserialize(&main_keypairs[0].0)?;
+                    }
+                    
+                    let sol_client = SolClient::new(serialize(&main_keypair)).await?;
+
                     bridge2.add_clients("sol".into(), sol_client).await?;
                 }
                 #[cfg(feature = "btc")]
@@ -136,6 +144,11 @@ impl Cashierd {
                     );
                     use drk::service::btc::BtcClient;
                     let _btc_client = BtcClient::new(btc_endpoint)?;
+                    // NOTE bitcoin is not implemented yet
+                    //
+                    // TODO check if there is main_keypair inside 
+                    // cashierdb before generating new one 
+                    //
                     //bridge2.add_clients("btc".into(), btc_client).await?;
                 }
                 _ => {
