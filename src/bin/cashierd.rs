@@ -112,7 +112,7 @@ impl Cashierd {
     }
 
     async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
-        self.cashier_wallet.init_db()?;
+        self.cashier_wallet.init_db().await?;
 
         let bridge = Bridge::new();
 

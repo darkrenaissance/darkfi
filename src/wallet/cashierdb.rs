@@ -2,7 +2,7 @@ use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
 use crate::{Error, Result};
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use log::*;
 use rusqlite::{named_params, params, Connection};
 
@@ -13,6 +13,7 @@ pub type CashierDbPtr = Arc<CashierDb>;
 pub struct CashierDb {
     pub path: PathBuf,
     pub password: String,
+    pub initialized: Mutex<bool>,
 }
 
 impl WalletApi for CashierDb {
@@ -30,19 +31,26 @@ impl CashierDb {
         Ok(Arc::new(Self {
             path: path.to_owned(),
             password,
+            initialized: Mutex::new(false),
         }))
     }
 
-    pub fn init_db(&self) -> Result<()> {
-        if !self.password.trim().is_empty() {
-            let contents = include_str!("../../sql/cashier.sql");
-            let conn = Connection::open(&self.path)?;
-            debug!(target: "CASHIERDB", "Opened connection at path {:?}", self.path);
-            conn.pragma_update(None, "key", &self.password)?;
-            conn.execute_batch(&contents)?;
+    pub async fn init_db(&self) -> Result<()> {
+        if *self.initialized.lock().await == false {
+            if !self.password.trim().is_empty() {
+                let contents = include_str!("../../sql/cashier.sql");
+                let conn = Connection::open(&self.path)?;
+                debug!(target: "CASHIERDB", "Opened connection at path {:?}", self.path);
+                conn.pragma_update(None, "key", &self.password)?;
+                conn.execute_batch(&contents)?;
+                *self.initialized.lock().await = true;
+            } else {
+                debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
+                return Err(Error::from(ClientFailed::EmptyPassword));
+            }
         } else {
-            debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword));
+            debug!(target: "WALLETDB", "Wallet already initialized.");
+            return Err(Error::from(ClientFailed::WalletInitialized));
         }
         Ok(())
     }
