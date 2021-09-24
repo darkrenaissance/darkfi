@@ -296,6 +296,8 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
+            Self::check_token_id(&network, token_id.as_str().unwrap())?;
+
             let asset_id = drk::util::parse_id(token_id)?;
 
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
@@ -389,6 +391,8 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
+            Self::check_token_id(&network, token.as_str().unwrap())?;
+
             let asset_id = drk::util::parse_id(&token)?;
             let address = serialize(&address.to_string());
 
@@ -426,6 +430,36 @@ impl Cashierd {
 
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!(self.features), id))
+    }
+
+    fn check_token_id(network: &str, _token_id: &str) -> Result<()> {
+        match network {
+            #[cfg(feature = "sol")]
+            "sol" | "solana" => {
+                if _token_id != "So11111111111111111111111111111111111111112" {
+                    // This is supposed to be a token mint account now
+                    use drk::service::sol::account_is_initialized_mint;
+                    use drk::service::sol::SolFailed::BadSolAddress;
+                    use solana_sdk::pubkey::Pubkey;
+                    use std::str::FromStr;
+
+                    if !account_is_initialized_mint(
+                        &Pubkey::from_str(_token_id)
+                            .map_err(|err| Error::from(BadSolAddress(err.to_string())))?,
+                    ) {
+                        return Err(Error::CashierInvalidTokenId(
+                            "Given address is not a valid token mint".into(),
+                        ));
+                    }
+                }
+            }
+            #[cfg(feature = "btc")]
+            "btc" | "bitcoin" => {
+                // Handle bitcoin address here if needed
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

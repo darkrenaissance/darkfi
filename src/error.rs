@@ -59,6 +59,7 @@ pub enum Error {
     TomlDeserializeError(String),
     TomlSerializeError(String),
     CashierNoReply,
+    CashierInvalidTokenId(String),
     Base58EncodeError(String),
     Base58DecodeError(String),
     ConfigNotFound,
@@ -124,7 +125,8 @@ impl fmt::Display for Error {
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
-            Error::CashierNoReply => f.write_str("Cashier did not reply with BTC address"),
+            Error::CashierInvalidTokenId(ref err) => write!(f, "Cashier invalid token id: {}", err),
+            Error::CashierNoReply => f.write_str("Cashier did not reply with token address"),
             Error::ConfigNotFound => {
                 f.write_str("No config file detected. Please create a config file")
             }
