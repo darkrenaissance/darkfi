@@ -71,32 +71,32 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+    pub fn key_gen(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
-        // check here whether the field exists. if no, return error
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let pubkey = serial::serialize(&public);
-        let privkey = serial::serialize(&secret);
-        self.put_keypair(pubkey.clone(), privkey.clone())?;
-        Ok((pubkey, privkey))
-    }
-
-    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
         let key_check = stmt.exists(&[(":id", &"0")])?;
         if key_check == false {
-            conn.execute(
-                "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-                params![key_public, key_private],
-            )?;
+            let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+            let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+            let pubkey = serial::serialize(&public);
+            let privkey = serial::serialize(&secret);
+            self.put_keypair(pubkey.clone(), privkey.clone())?;
         } else {
             debug!(target: "WALLETDB", "Keys already exist.");
             return Err(Error::from(ClientFailed::KeyExists));
         }
+        Ok(())
+    }
 
+    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private],
+        )?;
         Ok(())
     }
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
