@@ -65,6 +65,7 @@ pub enum Error {
     ConfigNotFound,
     SetLoggerError,
     TokenParseError,
+    NetworkParseError,
     TungsteniteError,
 }
 
@@ -131,8 +132,9 @@ impl fmt::Display for Error {
                 f.write_str("No config file detected. Please create a config file")
             }
             Error::SetLoggerError => f.write_str("SetLoggerError"),
-            Error::TokenParseError => f.write_str("Could not parse token list"),
+            Error::TokenParseError => f.write_str("Could not parse token parameter"),
             Error::TungsteniteError => f.write_str("TungsteniteError"),
+            Error::NetworkParseError => f.write_str("Cannot parse network parameter"),
         }
     }
 }
