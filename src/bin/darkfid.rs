@@ -194,16 +194,15 @@ impl Darkfid {
         let network = &args[0];
         let token = &args[1];
 
-        if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
-        }
-
-        let _tkn_str = token.as_str().unwrap();
-
-        // check if the token input is an ID
-        // if not, find the associated ID
-        // TODO
-        //let _token_id = self.clone().parse_token(tkn_str);
+        let token_id = match self.parse_network(&network, &token) {
+            Ok(t) => t,
+            Err(_e) => {
+                debug!(target: "DARKFID", "TOKEN ID IS ERR");
+                // TODO: this should return the relevant drk error
+                // right now it just flattens it into ParseError
+                return JsonResult::Err(jsonerr(ParseError, None, id));
+            }
+        };
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
@@ -222,12 +221,13 @@ impl Darkfid {
         // Send request to cashier. If the cashier supports the requested network
         // (and token), it shall return a valid address where assets can be deposited.
         // If not, an error is returned, and forwarded to the method caller.
-        let req = jsonreq(json!("deposit"), json!([network, token, pubkey]));
+        let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
         let rep: JsonResult;
         match send_request(&self.config.cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
+                debug!(target: "DARKFID", "REQUEST IS ERR");
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
             }
         }
 
@@ -235,6 +235,24 @@ impl Darkfid {
             JsonResult::Resp(r) => return JsonResult::Resp(r),
             JsonResult::Err(e) => return JsonResult::Err(e),
             JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+        }
+    }
+
+    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
+        match network.as_str() {
+            Some("solana") | Some("sol") => match token.as_str() {
+                Some("solana") | Some("sol") => {
+                    let token_id = "So11111111111111111111111111111111111111112";
+                    Ok(json!(token_id))
+                }
+                Some(tkn) => {
+                    let id = self.parse_token(tkn)?;
+                    Ok(id)
+                }
+                None => Err(Error::TokenParseError),
+            },
+            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
+            Some(_) | None => Err(Error::NetworkParseError),
         }
     }
 
@@ -249,8 +267,7 @@ impl Darkfid {
         if counter == token.len() {
             self.search_id(token)
         } else {
-            let token_id: Value = serde_json::from_str(token)?;
-            Ok(token_id)
+            Ok(json!(token))
         }
     }
 
