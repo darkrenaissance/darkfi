@@ -3,18 +3,15 @@
 ## misc
 
 - [ ] sqlcipher: better document install process or otherwise remove friction of using bundled version
-- [x] Fix "~/.config" path expansion
 
 ## v0-release
 
 - [ ] change assetID variable to network and add switch statement in cashier::start()
 - [ ] Optional Cargo "features" for cashierd/darkfid, to {en,dis}able different chains
 - [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
-- [X] drk -wk reports success on subsequent calls, it should rather tell that things are already initialized
 - [ ] use f64 (and only positive/absolute) for amounts only on the client-facing side. internally, use u64 and num of decimals
 - [ ] drk2: retrieve cashier features and error if don't support the network
 - [ ] darkfid: match 'bitcoin' to 'btc'
-- [X] standardize error handling in drk2, cashierd, darkfid
 
 ## deposit
 
