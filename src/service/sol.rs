@@ -5,7 +5,7 @@ use crate::rpc::{
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
 
-use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
+use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
 use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
@@ -79,7 +79,7 @@ impl SolClient {
         let v: std::collections::HashMap<String, Value> =
             serde_json::from_str(&data).map_err(|err| Error::from(err))?;
 
-        // XXX this for testing 
+        // XXX this for testing
         if v.contains_key(&String::from("result")) {
             json_res = JsonResult::Resp(JsonResponse {
                 jsonrpc: v["jsonrpc"].clone(),
@@ -170,7 +170,7 @@ impl SolClient {
 
                         self.unsubscribe(sub_id, &keypair.pubkey()).await?;
 
-                        self.send_to_main_account(&keypair, new_bal)?;
+                        //self.send_to_main_account(&keypair, new_bal)?;
 
                         debug!(
                             target: "SOL BRIDGE",
@@ -187,7 +187,7 @@ impl SolClient {
         Ok(())
     }
 
-    fn send_to_main_account(&self, keypair: &Keypair, amount: u64) -> SolResult<()> {
+    pub fn send_to_main_account(&self, keypair: &Keypair, amount: u64) -> SolResult<()> {
         debug!(
             target: "SOL BRIDGE",
             "send received token to main account"
@@ -207,7 +207,7 @@ impl SolClient {
         Ok(())
     }
 
-    async fn handle_subscribe_request(&self, keypair: Keypair) -> Result<()> {
+    async fn handle_subscribe_request(self: Arc<Self>, keypair: Keypair) -> Result<()> {
         debug!(
             target: "SOL BRIDGE",
             "Handle subscribe request"
@@ -299,14 +299,15 @@ impl SolClient {
 }
 
 #[async_trait]
-impl TokenClient for SolClient {
-    async fn subscribe(&self) -> Result<TokenSubscribtion> {
+impl NetworkClient for SolClient {
+    async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
         let public_key = keypair.pubkey().to_string();
         let secret_key = serialize(&keypair);
 
-        self.handle_subscribe_request(keypair).await?;
+        let self2 = self.clone();
+        smol::spawn(self2.handle_subscribe_request(keypair)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -316,7 +317,7 @@ impl TokenClient for SolClient {
 
     // in solana case private key it's the same as keypair
     async fn subscribe_with_keypair(
-        &self,
+        self: Arc<Self>,
         private_key: Vec<u8>,
         _public_key: Vec<u8>,
     ) -> Result<String> {
@@ -324,16 +325,17 @@ impl TokenClient for SolClient {
 
         let public_key = keypair.pubkey().to_string();
 
-        self.handle_subscribe_request(keypair).await?;
+        let self2 = self.clone();
+        smol::spawn(self2.handle_subscribe_request(keypair)).detach();
 
         Ok(public_key)
     }
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
+    async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
     }
 
-    async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()> {
+    async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
         let rpc = RpcClient::new(RPC_SERVER.to_string());
         let address: Pubkey = deserialize(&address)?;
         let instruction = system_instruction::transfer(&self.keypair.pubkey(), &address, amount);

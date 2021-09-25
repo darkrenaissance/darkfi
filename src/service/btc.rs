@@ -1,4 +1,4 @@
-use super::bridge::{TokenClient, TokenNotification, TokenSubscribtion};
+use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::serial::{serialize, Decodable, Encodable};
 use crate::Result;
 
@@ -155,8 +155,8 @@ impl BtcClient {
 }
 
 #[async_trait]
-impl TokenClient for BtcClient {
-    async fn subscribe(&self) -> Result<TokenSubscribtion> {
+impl NetworkClient for BtcClient {
+    async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
         //// Generate bitcoin Address
         let btc_keys = BitcoinKeys::new(self.client.clone(), self.network)?;
 
@@ -178,7 +178,7 @@ impl TokenClient for BtcClient {
     }
 
     async fn subscribe_with_keypair(
-        &self,
+        self: Arc<Self>,
         _private_key: Vec<u8>,
         _public_key: Vec<u8>,
     ) -> Result<String> {
@@ -186,12 +186,12 @@ impl TokenClient for BtcClient {
         Ok(String::new())
     }
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>> {
+    async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         // TODO this not implemented yet
         let (_, notifier) = async_channel::unbounded();
         Ok(notifier)
     }
-    async fn send(&self, _address: Vec<u8>, _amount: u64) -> Result<()> {
+    async fn send(self: Arc<Self>, _address: Vec<u8>, _amount: u64) -> Result<()> {
         // TODO this not implemented yet
         Ok(())
     }

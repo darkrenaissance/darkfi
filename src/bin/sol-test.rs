@@ -42,7 +42,7 @@ async fn run() -> Result<()> {
 
     let bridge_res = bridge_subscribtion.receiver.recv().await?;
 
-    // XXX this will not work 
+    // XXX this will not work
     match bridge_res.payload {
         bridge::BridgeResponsePayload::Watch(_, token_pub) => {
             println!("watch this address {}", token_pub);
@@ -57,19 +57,22 @@ async fn run() -> Result<()> {
 
 fn main() -> Result<()> {
     #[cfg(feature = "sol")]
-    let args = clap_app!(darkfid =>
-        (@arg verbose: -v --verbose "Increase verbosity")
-    )
-    .get_matches();
+    {
+        let args = clap_app!(darkfid =>
+            (@arg verbose: -v --verbose "Increase verbosity")
+        )
+        .get_matches();
 
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
+        let loglevel = if args.is_present("verbose") {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        };
 
-    simple_logger::init_with_level(loglevel)?;
+        simple_logger::init_with_level(loglevel)?;
+    }
 
+    #[cfg(feature = "sol")]
     smol::block_on(run())?;
     Ok(())
 }

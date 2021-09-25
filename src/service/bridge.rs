@@ -49,7 +49,7 @@ pub struct TokenNotification {
 }
 
 pub struct Bridge {
-    clients: Mutex<HashMap<String, Arc<dyn TokenClient + Send + Sync>>>,
+    clients: Mutex<HashMap<String, Arc<dyn NetworkClient + Send + Sync>>>,
     //notifiers: Mutex<HashMap<Vec<u8>, async_channel::Receiver<TokenNotification>>>,
 }
 
@@ -64,7 +64,7 @@ impl Bridge {
     pub async fn add_clients(
         self: Arc<Self>,
         network: String,
-        client: Arc<dyn TokenClient + Send + Sync>,
+        client: Arc<dyn NetworkClient + Send + Sync>,
     ) -> Result<()> {
         //let notifier = client.get_notifier().await?;
 
@@ -97,6 +97,7 @@ impl Bridge {
         rep: async_channel::Sender<BridgeResponse>,
     ) -> Result<()> {
         let req = req.recv().await?;
+
         let network = req.network;
 
         if !self.clients.lock().await.contains_key(&network) {
@@ -108,7 +109,13 @@ impl Bridge {
             return Ok(());
         }
 
-        let client = &self.clients.lock().await[&network];
+
+        let client: Arc<dyn NetworkClient + Send + Sync>;
+        // avoid deadlock
+        {
+            let c = &self.clients.lock().await[&network];
+            client = c.clone();
+        }
 
         match req.payload {
             BridgeRequestsPayload::Watch(val) => match val {
@@ -146,17 +153,17 @@ impl Bridge {
 }
 
 #[async_trait]
-pub trait TokenClient {
-    async fn subscribe(&self) -> Result<TokenSubscribtion>;
+pub trait NetworkClient {
+    async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion>;
 
     // should check if the keypair in not already subscribed
     async fn subscribe_with_keypair(
-        &self,
+        self: Arc<Self>,
         private_key: Vec<u8>,
         public_key: Vec<u8>,
     ) -> Result<String>;
 
-    async fn get_notifier(&self) -> Result<async_channel::Receiver<TokenNotification>>;
+    async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>>;
 
-    async fn send(&self, address: Vec<u8>, amount: u64) -> Result<()>;
+    async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()>;
 }
