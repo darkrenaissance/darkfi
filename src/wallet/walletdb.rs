@@ -73,6 +73,7 @@ impl WalletDb {
 
     pub fn key_gen(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
+        // check here whether the field exists. if no, return error
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
         let pubkey = serial::serialize(&public);
@@ -304,6 +305,18 @@ mod tests {
     use crate::crypto::{coin::Coin, OwnCoin};
     use crate::util::join_config_path;
     use ff::PrimeField;
+
+    #[test]
+    fn test_key_exist() -> Result<()> {
+        let path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let password: String = "darkfi".into();
+        let contents = include_str!("../../sql/schema.sql");
+        let conn = Connection::open(&path)?;
+        conn.pragma_update(None, "key", &password)?;
+        conn.execute_batch(&contents)?;
+        std::fs::remove_file(path)?;
+        Ok(())
+    }
 
     pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
         if !password.trim().is_empty() {
