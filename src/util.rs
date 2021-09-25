@@ -66,8 +66,9 @@ pub fn parse_id(token: &Value) -> Result<jubjub::Fr> {
             let tkn = token_id.unwrap();
             return Ok(tkn);
         }
+    } else {
+        Ok(token_id.unwrap())
     }
-    unreachable!();
 }
 
 #[cfg(test)]
