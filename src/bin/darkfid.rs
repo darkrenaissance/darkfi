@@ -57,6 +57,7 @@ impl Darkfid {
             expand_path(&config.wallet_path)?.as_path(),
             config.wallet_password.clone(),
         )?;
+        debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
         // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
         let tokenlist: Value = serde_json::from_str(&file_contents)?;
@@ -89,7 +90,7 @@ impl Darkfid {
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         match self.wallet.key_gen() {
-            Ok((_, _)) => return JsonResult::Resp(jsonresp(json!(true), id)),
+            Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
             }
