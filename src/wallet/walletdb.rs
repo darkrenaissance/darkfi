@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test4_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
