@@ -15,6 +15,7 @@ pub enum ClientFailed {
     DoNotHaveKeypair,
     EmptyPassword,
     WalletInitialized,
+    KeyExists,
     ClientError(String),
 }
 
@@ -40,6 +41,7 @@ impl fmt::Display for ClientFailed {
             ClientFailed::DoNotHaveKeypair => f.write_str("Don't have keypair"),
             ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             ClientFailed::WalletInitialized => f.write_str("Wallet already initalized"),
+            ClientFailed::KeyExists => f.write_str("Keypair already exists"),
             ClientFailed::ClientError(i) => {
                 write!(f, "ClientError: {}", i)
             }

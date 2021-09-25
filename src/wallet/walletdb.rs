@@ -85,10 +85,18 @@ impl WalletDb {
     pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
+        let key_check = stmt.exists(&[(":id", &"0")])?;
+        if key_check == false {
+            conn.execute(
+                "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+                params![key_public, key_private],
+            )?;
+        } else {
+            debug!(target: "WALLETDB", "Keys already exist.");
+            return Err(Error::from(ClientFailed::KeyExists));
+        }
+
         Ok(())
     }
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
@@ -314,6 +322,36 @@ mod tests {
         let conn = Connection::open(&path)?;
         conn.pragma_update(None, "key", &password)?;
         conn.execute_batch(&contents)?;
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
+        let boolean = stmt.exists(&[(":id", &"0")])?;
+
+        println!("Attempt 1. Result is the following: {}", boolean);
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private],
+        )?;
+
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
+        let boolean = stmt.exists(&[(":id", &"0")])?;
+
+        println!("Wrote keys, result is the following: {}", boolean);
+
+        conn.execute(
+            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
+            params![key_public, key_private],
+        )?;
+
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
+        let boolean = stmt.exists(&[(":id", &"0")])?;
+
+        println!("Third time, result is the following: {}", boolean);
+
         std::fs::remove_file(path)?;
         Ok(())
     }
