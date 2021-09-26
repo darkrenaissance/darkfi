@@ -35,7 +35,7 @@ hex = "0.4.2"
 bs58 = "0.4.0"
 
 smol = "1.2.4"
-futures = "0.3.5"
+futures = "0.3.17"
 async-channel = "1.4.2"
 async-trait = "0.1.42"
 async-executor = "1.4.0"
