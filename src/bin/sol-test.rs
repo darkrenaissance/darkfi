@@ -11,14 +11,15 @@ async fn run() -> Result<()> {
 
     let main_keypair: Keypair;
     main_keypair = Keypair::from_bytes(&[
-        80, 20, 135, 18, 220, 115, 132, 178, 122, 1, 195, 250, 182, 241, 4, 82, 88, 12, 232, 249,
-        154, 105, 222, 221, 229, 138, 22, 232, 197, 151, 155, 28, 173, 182, 189, 174, 66, 196, 63,
-        98, 201, 68, 203, 60, 72, 93, 179, 244, 39, 158, 223, 249, 102, 160, 217, 245, 24, 153,
-        152, 52, 41, 248, 226, 32,
+        60, 233, 151, 189, 143, 1, 111, 173, 241, 1, 171, 31, 123, 156, 160, 235, 32, 108, 157, 75,
+        100, 150, 255, 154, 36, 254, 230, 97, 83, 248, 213, 223, 183, 146, 221, 49, 146, 156, 140,
+        27, 196, 234, 193, 229, 174, 93, 126, 232, 9, 85, 58, 45, 95, 105, 168, 167, 153, 123, 246,
+        110, 193, 70, 192, 186,
     ])
     .unwrap();
     let bridge = bridge::Bridge::new();
 
+    println!("main keypair {:?}", main_keypair.to_bytes());
     println!("main pubkey {}", main_keypair.pubkey().to_string());
 
     let network = String::from("sol");
@@ -29,6 +30,26 @@ async fn run() -> Result<()> {
         .clone()
         .add_clients(network.clone(), sol_client)
         .await?;
+
+    let bridge2 = bridge.clone();
+    let bridge_subscribtion = bridge2.subscribe().await;
+
+    bridge_subscribtion
+        .sender
+        .send(bridge::BridgeRequests {
+            network: network.clone(),
+            payload: bridge::BridgeRequestsPayload::Watch(None),
+        })
+        .await?;
+
+    let bridge_res = bridge_subscribtion.receiver.recv().await?;
+
+    match bridge_res.payload {
+        bridge::BridgeResponsePayload::Watch(_, token_pub) => {
+            println!("watch this address {}", token_pub);
+        }
+        _ => {}
+    }
 
     let bridge_subscribtion = bridge.subscribe().await;
 
@@ -42,7 +63,6 @@ async fn run() -> Result<()> {
 
     let bridge_res = bridge_subscribtion.receiver.recv().await?;
 
-    // XXX this will not work
     match bridge_res.payload {
         bridge::BridgeResponsePayload::Watch(_, token_pub) => {
             println!("watch this address {}", token_pub);
