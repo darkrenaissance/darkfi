@@ -136,44 +136,6 @@ impl BtcClient {
         }))
     }
 
-    // pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
-    //     debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
-    //     let client = &self.btc_client;
-    //     // Check if script is already subscribed
-    //     if let Some(status_start) = client.script_subscribe(&self.script)? {
-    //         loop {
-    //             match client.script_pop(&self.script)? {
-    //                 Some(status) => {
-    //                     // Script has a notification update
-    //                     if status != status_start {
-    //                         let balance = client.script_get_balance(&self.script)?;
-    //                         if balance.confirmed > 0 {
-    //                             debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
-    //                             let history = client.script_get_history(&self.script)?;
-    //                             //return tx_hash of latest tx that created balance
-    //                             return Ok((history[0].tx_hash, balance.confirmed));
-    //                         } else {
-    //                             debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
-    //                             continue;
-    //                         }
-    //                     } else {
-    //                         debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
-    //                         continue;
-    //                     }
-    //                 }
-    //                 None => {
-    //                     debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
-    //                     continue;
-    //                 }
-    //             };
-    //         } // Endloop
-    //     } else {
-    //         return Err(BtcFailed::ElectrumError(
-    //             "Did not subscribe to scriptpubkey".to_string(),
-    //         ));
-    //     }
-    // }
-
     async fn handle_subscribe_request(self: Arc<Self>, keypair: Arc<BitcoinKeys>) -> Result<()> {
         debug!(
             target: "BTC BRIDGE",
@@ -195,7 +157,7 @@ impl BtcClient {
 impl NetworkClient for BtcClient {
     async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
-        let btc_keys = BitcoinKeys::new(Network::Testnet)?;
+        let btc_keys = BitcoinKeys::new(self.network)?;
         let btc_privkey = btc_keys.clone();
         let btc_privkey = btc_privkey.btc_privkey();
         let btc_pubkey = btc_keys.clone();
