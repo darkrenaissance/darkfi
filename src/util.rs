@@ -40,7 +40,7 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
 
 // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
 // again, and keep repeating until it works.
-pub fn parse_id(token: &Value) -> Result<jubjub::Fr> {
+pub fn generate_id(token: &Value) -> Result<jubjub::Fr> {
     let tkn_str = token.as_str().unwrap();
     if bs58::decode(tkn_str).into_vec().is_err() {
         // TODO: make this an error

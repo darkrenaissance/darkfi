@@ -20,7 +20,7 @@ use drk::{
     },
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
-    util::{expand_path, join_config_path},
+    util::{expand_path, generate_id, join_config_path},
     wallet::{CashierDb, WalletDb},
     Error, Result,
 };
@@ -298,7 +298,7 @@ impl Cashierd {
         let result: Result<String> = async {
             Self::check_token_id(&network, token_id.as_str().unwrap())?;
 
-            let asset_id = drk::util::parse_id(token_id)?;
+            let asset_id = generate_id(token_id)?;
 
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
@@ -393,7 +393,7 @@ impl Cashierd {
         let result: Result<String> = async {
             Self::check_token_id(&network, token.as_str().unwrap())?;
 
-            let asset_id = drk::util::parse_id(&token)?;
+            let asset_id = generate_id(&token)?;
             let address = serialize(&address.to_string());
 
             let cashier_public: jubjub::SubgroupPoint;

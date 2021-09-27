@@ -16,7 +16,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{expand_path, join_config_path, parse_id},
+    util::{expand_path, generate_id, join_config_path},
     wallet::WalletDb,
     Error, Result,
 };
@@ -349,13 +349,13 @@ impl Darkfid {
         match token.as_str() {
             Some("sol") | Some("SOL") => {
                 let id = "So11111111111111111111111111111111111111112";
-                let token_id = parse_id(&json!(id))?;
+                let token_id = generate_id(&json!(id))?;
                 Ok(token_id)
             }
             Some("btc") | Some("BTC") => Err(Error::TokenParseError),
             Some(tkn) => {
                 let id = self.parse_token(tkn)?;
-                let token_id = parse_id(&id)?;
+                let token_id = generate_id(&id)?;
                 Ok(token_id)
             }
             None => Err(Error::TokenParseError),
@@ -380,6 +380,7 @@ impl Darkfid {
         }
     }
 
+    // symbol to id
     fn parse_token(&self, token: &str) -> Result<Value> {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
