@@ -4,11 +4,11 @@ use crate::{Error, Result};
 
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
-use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
+use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
-use electrum_client::Client as ElectrumClient;
+use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 
 use secp256k1::key::{PublicKey, SecretKey};
@@ -21,8 +21,6 @@ use std::str::FromStr;
 pub type PubAddress = Address;
 pub type PubKey = BtcPubKey;
 pub type PrivKey = BtcPrivKey;
-
-const ELECTRUM_SERVER: &str = "ssl://blockstream.info:993";
 
 pub struct BitcoinKeys {
     secret_key: SecretKey,
@@ -59,45 +57,6 @@ impl BitcoinKeys {
     pub fn btc_privkey(&self) -> &BtcPrivKey {
         &self.btc_privkey
     }
-
-    //pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
-    //    debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
-    //    let client = &self.btc_client;
-    //    // Check if script is already subscribed
-    //    if let Some(status_start) = client.script_subscribe(&self.script)? {
-    //        loop {
-    //            match client.script_pop(&self.script)? {
-    //                Some(status) => {
-    //                    // Script has a notification update
-    //                    if status != status_start {
-    //                        let balance = client.script_get_balance(&self.script)?;
-    //                        if balance.confirmed > 0 {
-    //                            debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
-    //                            let history = client.script_get_history(&self.script)?;
-    //                            //return tx_hash of latest tx that created balance
-    //                            return Ok((history[0].tx_hash, balance.confirmed));
-    //                        } else {
-    //                            debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
-    //                            continue;
-    //                        }
-    //                    } else {
-    //                        debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
-    //                        continue;
-    //                    }
-    //                }
-    //                None => {
-    //                    debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
-    //                    continue;
-    //                }
-    //            };
-    //        } // Endloop
-    //    } else {
-    //        return Err(BtcFailed::ElectrumError(
-    //            "Did not subscribe to scriptpubkey".to_string(),
-    //        ));
-    //    }
-    //}
-
     pub fn btc_pubkey(&self) -> &BtcPubKey {
         &self.btc_pubkey
     }
@@ -121,8 +80,8 @@ pub struct BtcClient {
 impl BtcClient {
     pub fn new(network: &str, keypair: BitcoinKeys) -> Result<Arc<Self>> {
         let (network, url) = match network {
-            "mainnet" => (Network::Bitcoin, "https://api.testnet.solana.com"),
-            "testnet" => (Network::Testnet, "wss://api.testnet.solana.com"),
+            "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
+            "testnet" => (Network::Testnet, "ssl://electrum.blockstream.info:60002"),
             _ => return Err(Error::NotSupportedNetwork),
         };
 
@@ -136,20 +95,52 @@ impl BtcClient {
         }))
     }
 
-    async fn handle_subscribe_request(self: Arc<Self>, keypair: Arc<BitcoinKeys>) -> Result<()> {
+    async fn handle_subscribe_request(self: Arc<Self>, keypair: Arc<BitcoinKeys>) -> BtcResult<(Txid, u64)> {
         debug!(
             target: "BTC BRIDGE",
             "Handle subscribe request"
         );
+        let client = &self.client;
 
         // p2pkh script
-        let _script = BitcoinKeys::derive_script(keypair.btc_pubkey_hash());
+        let script = BitcoinKeys::derive_script(keypair.btc_pubkey_hash());
 
-        //if self.client.script_subscribe(&script)?
+        if let Some(status_start) = client.script_subscribe(&script)? {
+            loop {
+                match client.script_pop(&script)? {
+                    Some(status) => {
+                        // Script has a notification update
+                        if status != status_start {
+                            let balance = client.script_get_balance(&script)?;
+                            if balance.confirmed > 0 {
+                                debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
+                                let history = client.script_get_history(&script)?;
+                                //return tx_hash of latest tx that created balance
+                                return Ok((history[0].tx_hash, balance.confirmed));
+                            } else {
+                                debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
+                                continue;
+                            }
+                        } else {
+                            debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
+                            continue;
+                        }
+                    }
+                    None => {
+                        debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
+                        continue;
+                    }
+                };
+            } // Endloop
+        } else {
+            return Err(BtcFailed::ElectrumError(
+                "Did not subscribe to scriptpubkey".to_string(),
+            ));
+        }
 
         //let keypair = serialize(&keypair);
 
-        Ok(())
+        //Ok(())
     }
 }
 
