@@ -76,7 +76,7 @@ impl CashierDb {
         conn.execute(
             "INSERT INTO main_keypairs
             (token_key_private, token_key_public, network)
-            VALUES 
+            VALUES
             (:token_key_private, :token_key_public, :network)",
             named_params! {
                 ":token_key_private": token_key_private,
@@ -97,8 +97,8 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public 
-            FROM main_keypairs 
+            "SELECT token_key_private, token_key_public
+            FROM main_keypairs
             WHERE network = :network ;",
         )?;
         let keys_iter = stmt
@@ -140,7 +140,7 @@ impl CashierDb {
         conn.execute(
             "INSERT INTO withdraw_keypairs
             (token_key_public, d_key_private, d_key_public, network,  asset_id, confirm)
-            VALUES 
+            VALUES
             (:token_key_public, :d_key_private, :d_key_public,:network, :asset_id, :confirm);",
             named_params! {
                 ":token_key_public": token_key_public,
@@ -178,7 +178,7 @@ impl CashierDb {
         conn.execute(
             "INSERT INTO deposit_keypairs
             (d_key_public, token_key_private, token_key_public, network, asset_id, confirm)
-            VALUES 
+            VALUES
             (:d_key_public, :token_key_private, :token_key_public, :network, :asset_id, :confirm)",
             named_params! {
                 ":d_key_public": &d_key_public,
@@ -202,8 +202,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT d_key_private 
-                FROM withdraw_keypairs 
+            "SELECT d_key_private
+                FROM withdraw_keypairs
                 WHERE confirm = :confirm",
         )?;
 
@@ -239,8 +239,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_public, network, asset_id 
-            FROM withdraw_keypairs 
+            "SELECT token_key_public, network, asset_id
+            FROM withdraw_keypairs
             WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
         let addr_iter = stmt.query_map::<(Vec<u8>, String, jubjub::Fr), _, _>(
@@ -284,10 +284,10 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public 
-            FROM deposit_keypairs 
-            WHERE d_key_public = :d_key_public 
-            AND network = :network 
+            "SELECT token_key_private, token_key_public
+            FROM deposit_keypairs
+            WHERE d_key_public = :d_key_public
+            AND network = :network
             AND confirm = :confirm ;",
         )?;
         let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
@@ -323,9 +323,9 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public 
-            FROM deposit_keypairs 
-            WHERE network = :network 
+            "SELECT token_key_private, token_key_public
+            FROM deposit_keypairs
+            WHERE network = :network
             AND confirm = :confirm ;",
         )?;
         let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
@@ -361,9 +361,9 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
 
         let mut stmt = conn.prepare(
-            "SELECT * FROM withdraw_keypairs 
+            "SELECT * FROM withdraw_keypairs
                 WHERE token_key_public = :token_key_public
-                AND network = :network 
+                AND network = :network
                 AND confirm = :confirm;",
         )?;
 
@@ -410,9 +410,9 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&true)?;
 
         conn.execute(
-            "UPDATE withdraw_keypairs 
-            SET confirm = ?1  
-            WHERE token_key_public = ?2 
+            "UPDATE withdraw_keypairs
+            SET confirm = ?1
+            WHERE token_key_public = ?2
             AND network = ?3;",
             params![confirm, token_address, network],
         )?;
@@ -437,43 +437,15 @@ impl CashierDb {
         let d_key_public = self.get_value_serialized(d_key_public)?;
 
         conn.execute(
-            "UPDATE deposit_keypairs 
-            SET confirm = ?1  
-            WHERE d_key_public = ?2 
+            "UPDATE deposit_keypairs
+            SET confirm = ?1
+            WHERE d_key_public = ?2
             AND network = ?3;",
             params![confirm, d_key_public, network],
         )?;
 
         Ok(())
     }
-
-    // TODO convert this to generic function work with different tokens
-    //pub fn put_btc_utxo(
-    //    &self,
-    //    tx_id: &Vec<u8>,
-    //    btc_key_public: &Vec<u8>,
-    //    balance: i64,
-    //) -> Result<()> {
-    //    debug!(target: "CASHIERDB", "Put BTC Utxo");
-
-    //    let tx_id = self.get_value_serialized(tx_id)?;
-
-    //    // open connection
-    //    let conn = Connection::open(&self.path)?;
-    //    // unlock database
-    //    conn.pragma_update(None, "key", &self.password)?;
-
-    //    conn.execute(
-    //        "INSERT INTO btc_utxo(tx_id, btc_key_public, balance)
-    //        VALUES (:tx_id, :btc_key_public, :balance)",
-    //        named_params! {
-    //            ":tx_id": tx_id,
-    //            ":btc_key_public": btc_key_public,
-    //            ":balance": balance,
-    //        },
-    //    )?;
-    //    Ok(())
-    //}
 }
 
 #[cfg(test)]
