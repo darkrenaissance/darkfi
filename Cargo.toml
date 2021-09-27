@@ -68,7 +68,7 @@ solana-client = {version = "1.7.11", optional = true}
 
 ## Cashier Bitcoin Dependencies
 bitcoin = {version = "0.27.0", optional = true }
-secp256k1 = {version = "0.20.3", optional = true}
+secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std"], optional = true}
 electrum-client = {version = "0.8.0", optional = true }
 
 [dependencies.rusqlite]
