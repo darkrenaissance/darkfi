@@ -44,7 +44,7 @@ pub fn parse_id(token: &Value) -> Result<jubjub::Fr> {
     let tkn_str = token.as_str().unwrap();
     if bs58::decode(tkn_str).into_vec().is_err() {
         // TODO: make this an error
-        debug!(target: "CASHIER", "COULD NOT DECODE STR");
+        debug!(target: "PARSE ID", "COULD NOT DECODE STR");
     }
     let mut data = bs58::decode(tkn_str).into_vec().unwrap();
     let token_id = deserialize::<jubjub::Fr>(&data);

@@ -1,19 +1,22 @@
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use log::debug;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::sync::Arc;
+//use std::sync::Arc;
 
 use drk::{
+    blockchain::Rocks,
     cli::{Config, DarkfidConfig},
+    client::Client,
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    serial::serialize,
-    util::{expand_path, join_config_path},
+    serial::{deserialize, serialize},
+    util::{expand_path, join_config_path, parse_id},
     wallet::WalletDb,
     Error, Result,
 };
@@ -23,6 +26,7 @@ struct Darkfid {
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
     tokenlist: Value,
+    client: Arc<Mutex<Client>>,
 }
 
 #[async_trait]
@@ -61,11 +65,27 @@ impl Darkfid {
         // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
         let tokenlist: Value = serde_json::from_str(&file_contents)?;
+        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
+
+        let client = Client::new(
+            rocks,
+            (
+                config.gateway_protocol_url.parse()?,
+                config.gateway_publisher_url.parse()?,
+            ),
+            (
+                expand_path(&config.mint_params_path.clone())?,
+                expand_path(&config.spend_params_path.clone())?,
+            ),
+            wallet.clone(),
+        )?;
+        let client = Arc::new(Mutex::new(client));
 
         Ok(Self {
             config,
             wallet,
             tokenlist,
+            client,
         })
     }
 
@@ -238,39 +258,6 @@ impl Darkfid {
         }
     }
 
-    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
-        match network.as_str() {
-            Some("solana") | Some("sol") => match token.as_str() {
-                Some("solana") | Some("sol") => {
-                    let token_id = "So11111111111111111111111111111111111111112";
-                    Ok(json!(token_id))
-                }
-                Some(tkn) => {
-                    let id = self.parse_token(tkn)?;
-                    Ok(id)
-                }
-                None => Err(Error::TokenParseError),
-            },
-            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
-            Some(_) | None => Err(Error::NetworkParseError),
-        }
-    }
-
-    fn parse_token(&self, token: &str) -> Result<Value> {
-        let vec: Vec<char> = token.chars().collect();
-        let mut counter = 0;
-        for c in vec {
-            if c.is_alphabetic() {
-                counter += 1;
-            }
-        }
-        if counter == token.len() {
-            self.search_id(token)
-        } else {
-            Ok(json!(token))
-        }
-    }
-
     // --> {"method": "withdraw", "params": [network, token, publickey, amount]}
     // The publickey sent here is the address where the caller wants to receive
     // the tokens they plan to withdraw.
@@ -310,12 +297,102 @@ impl Darkfid {
 
     // --> {"method": "transfer", [dToken, address, amount]}
     // <-- {"result": "txID"}
-    async fn transfer(&self, id: Value, _params: Value) -> JsonResult {
-        return JsonResult::Err(jsonerr(
-            ServerError(-32006),
-            Some("failed to transfer".to_string()),
-            id,
-        ));
+    async fn transfer(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array();
+
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let args = args.unwrap();
+
+        if args.len() != 3 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let token = &args[0];
+        let address = &args[1];
+        let amount = &args[2];
+
+        if address.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let address = address.as_str().unwrap();
+
+        if amount.as_f64().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let amount = amount.as_f64().unwrap();
+
+        let result: Result<()> = async {
+            let token_id = self.parse_wrapped_token(token)?;
+            let address = bs58::decode(&address).into_vec()?;
+            let address: jubjub::SubgroupPoint = deserialize(&address)?;
+            self.client
+                .lock()
+                .await
+                .transfer(token_id, address, amount)
+                .await?;
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
+    }
+
+    fn parse_wrapped_token(&self, token: &Value) -> Result<jubjub::Fr> {
+        match token.as_str() {
+            Some("sol") | Some("SOL") => {
+                let id = "So11111111111111111111111111111111111111112";
+                let token_id = parse_id(&json!(id))?;
+                Ok(token_id)
+            }
+            Some("btc") | Some("BTC") => Err(Error::TokenParseError),
+            Some(tkn) => {
+                let id = self.parse_token(tkn)?;
+                let token_id = parse_id(&id)?;
+                Ok(token_id)
+            }
+            None => Err(Error::TokenParseError),
+        }
+    }
+
+    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
+        match network.as_str() {
+            Some("solana") | Some("sol") => match token.as_str() {
+                Some("solana") | Some("sol") => {
+                    let token_id = "So11111111111111111111111111111111111111112";
+                    Ok(json!(token_id))
+                }
+                Some(tkn) => {
+                    let id = self.parse_token(tkn)?;
+                    Ok(id)
+                }
+                None => Err(Error::TokenParseError),
+            },
+            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
+            Some(_) | None => Err(Error::NetworkParseError),
+        }
+    }
+
+    fn parse_token(&self, token: &str) -> Result<Value> {
+        let vec: Vec<char> = token.chars().collect();
+        let mut counter = 0;
+        for c in vec {
+            if c.is_alphabetic() {
+                counter += 1;
+            }
+        }
+        if counter == token.len() {
+            self.search_id(token)
+        } else {
+            Ok(json!(token))
+        }
     }
 }
 
