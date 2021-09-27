@@ -50,6 +50,14 @@ pub struct DarkfidConfig {
     pub tls_identity_password: String,
     /// The RPC endpoint for a selected cashier
     pub cashier_rpc_url: String,
+    /// The endpoint to a gatewayd protocol API
+    pub gateway_protocol_url: String,
+    /// The endpoint to a gatewayd publisher API
+    pub gateway_publisher_url: String,
+    /// Path to mint.params
+    pub mint_params_path: String,
+    /// Path to spend.params
+    pub spend_params_path: String,
     /// Path to the client database
     pub database_path: String,
     /// Path to the wallet database
