@@ -1,14 +1,14 @@
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::serial::{serialize, Decodable, Encodable};
-use crate::Result;
+use crate::{Error, Result};
 
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
-use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
+use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
-use electrum_client::{Client as ElectrumClient, ElectrumApi};
+use electrum_client::Client as ElectrumClient;
 use log::*;
 
 use secp256k1::key::{PublicKey, SecretKey};
@@ -59,6 +59,45 @@ impl BitcoinKeys {
     pub fn btc_privkey(&self) -> &BtcPrivKey {
         &self.btc_privkey
     }
+
+    //pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
+    //    debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
+    //    let client = &self.btc_client;
+    //    // Check if script is already subscribed
+    //    if let Some(status_start) = client.script_subscribe(&self.script)? {
+    //        loop {
+    //            match client.script_pop(&self.script)? {
+    //                Some(status) => {
+    //                    // Script has a notification update
+    //                    if status != status_start {
+    //                        let balance = client.script_get_balance(&self.script)?;
+    //                        if balance.confirmed > 0 {
+    //                            debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
+    //                            let history = client.script_get_history(&self.script)?;
+    //                            //return tx_hash of latest tx that created balance
+    //                            return Ok((history[0].tx_hash, balance.confirmed));
+    //                        } else {
+    //                            debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
+    //                            continue;
+    //                        }
+    //                    } else {
+    //                        debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
+    //                        continue;
+    //                    }
+    //                }
+    //                None => {
+    //                    debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
+    //                    continue;
+    //                }
+    //            };
+    //        } // Endloop
+    //    } else {
+    //        return Err(BtcFailed::ElectrumError(
+    //            "Did not subscribe to scriptpubkey".to_string(),
+    //        ));
+    //    }
+    //}
+
     pub fn btc_pubkey(&self) -> &BtcPubKey {
         &self.btc_pubkey
     }
@@ -74,20 +113,26 @@ impl BitcoinKeys {
 }
 
 pub struct BtcClient {
-    _client: Arc<ElectrumClient>,
-    _network: Network,
-    _keypair: BitcoinKeys,
+    client: Arc<ElectrumClient>,
+    network: Network,
+    keypair: BitcoinKeys,
 }
 
 impl BtcClient {
-    pub fn new(keypair: BitcoinKeys) -> Result<Arc<Self>> {
-        let network = bitcoin::network::constants::Network::Testnet;
-        let client = ElectrumClient::new(ELECTRUM_SERVER)
+    pub fn new(network: &str, keypair: BitcoinKeys) -> Result<Arc<Self>> {
+        let (network, url) = match network {
+            "mainnet" => (Network::Bitcoin, "https://api.testnet.solana.com"),
+            "testnet" => (Network::Testnet, "wss://api.testnet.solana.com"),
+            _ => return Err(Error::NotSupportedNetwork),
+        };
+
+        let electrum_client = ElectrumClient::new(&url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+
         Ok(Arc::new(Self {
-            _client: Arc::new(client),
-            _network: network,
-            _keypair: keypair,
+            client: Arc::new(electrum_client),
+            network,
+            keypair,
         }))
     }
 
@@ -226,7 +271,7 @@ impl Decodable for bitcoin::PublicKey {
 
 impl Encodable for bitcoin::PrivateKey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key = self.to_bytes();
+        let key: String = self.to_string();
         let len = key.encode(s)?;
         Ok(len)
     }
@@ -234,8 +279,8 @@ impl Encodable for bitcoin::PrivateKey {
 
 impl Decodable for bitcoin::PrivateKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-        let key: Vec<u8> = Decodable::decode(&mut d)?;
-        let key = bitcoin::PrivateKey::from_slice(&key, Network::Testnet)
+        let key: String = Decodable::decode(&mut d)?;
+        let key = bitcoin::PrivateKey::from_str(&key)
             .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
         Ok(key)
     }

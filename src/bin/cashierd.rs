@@ -403,8 +403,11 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 "btc" | "bitcoin" => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
-                    use drk::service::btc::{BtcClient, BitcoinKeys};
-                    let _main_keypair: BitcoinKeys;
+                    //use drk::service::btc::{BtcClient, BitcoinKeys};
+
+                    //let _btc_client = BtcClient::new("testnet")?;
+                    // NOTE bitcoin is not implemented yet
+                    //let _main_keypair: BitcoinKeys;
 
                     let _main_keypairs = self.cashier_wallet.get_main_keys(&"btc".into())?;
                     // if main_keypairs.is_empty() {
@@ -412,10 +415,11 @@ impl Cashierd {
                     // } else {
                     //     //main_keypair = deserialize(&main_keypairs[0].0)?;
                     // }
-
-                    // let btc_client = BtcClient::new(main_keypair)?;
-
-                    // bridge2.add_clients("btc".into(), btc_client).await?;
+                    //
+                    // TODO check if there is main_keypair inside
+                    // cashierdb before generating new one
+                    //
+                    //bridge2.add_clients("btc".into(), btc_client).await?;
                 }
 
                 _ => {
