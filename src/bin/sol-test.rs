@@ -24,7 +24,7 @@ async fn run() -> Result<()> {
 
     let network = String::from("sol");
 
-    let sol_client = SolClient::new(serialize(&main_keypair)).await?;
+    let sol_client = SolClient::new(serialize(&main_keypair), "devnet").await?;
 
     bridge
         .clone()

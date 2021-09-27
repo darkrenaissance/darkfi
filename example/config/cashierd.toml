@@ -47,7 +47,7 @@ database_path = "~/.config/darkfi/cashier_database.db"
 # The configured networks to use.
 [[networks]]
 name = "sol"
-blockchain = "testnet"
+blockchain = "devnet"
 
 [[networks]]
 name = "btc"

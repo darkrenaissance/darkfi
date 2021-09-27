@@ -111,98 +111,6 @@ impl Cashierd {
         })
     }
 
-    async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
-        self.cashier_wallet.init_db().await?;
-
-        for (feature_name, _) in self.features.iter() {
-            let bridge2 = self.bridge.clone();
-            match feature_name.as_str() {
-                #[cfg(feature = "sol")]
-                "sol" | "solana" => {
-                    debug!(target: "CASHIER DAEMON", "Add sol network");
-                    use drk::service::SolClient;
-                    use solana_sdk::signer::keypair::Keypair;
-                    let main_keypair: Keypair;
-
-                    let main_keypairs = self.cashier_wallet.get_main_keys(&"sol".into())?;
-                    if main_keypairs.is_empty() {
-                        main_keypair = Keypair::new();
-                    } else {
-                        main_keypair = deserialize(&main_keypairs[0].0)?;
-                    }
-
-                    let sol_client = SolClient::new(serialize(&main_keypair)).await?;
-
-                    bridge2.add_clients("sol".into(), sol_client).await?;
-                }
-                #[cfg(feature = "btc")]
-                "btc" | "bitcoin" => {
-                    debug!(target: "CASHIER DAEMON", "Add btc network");
-                    let btc_endpoint: (bitcoin::network::constants::Network, String) = (
-                        bitcoin::network::constants::Network::Bitcoin,
-                        String::from("ssl://blockstream.info:993"),
-                    );
-                    use drk::service::btc::BtcClient;
-                    let _btc_client = BtcClient::new(btc_endpoint)?;
-                    // NOTE bitcoin is not implemented yet
-                    //
-                    // TODO check if there is main_keypair inside
-                    // cashierdb before generating new one
-                    //
-                    //bridge2.add_clients("btc".into(), btc_client).await?;
-                }
-                _ => {
-                    warn!("No feature enabled for {} network", feature_name);
-                }
-            }
-        }
-
-        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
-            self.bridge.clone(),
-            self.cashier_wallet.clone(),
-            self.features.clone(),
-        ));
-
-        self.client.lock().await.start().await?;
-
-        let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
-        let cashier_client_subscriber_task =
-            smol::spawn(Client::connect_to_subscriber_from_cashier(
-                self.client.clone(),
-                executor.clone(),
-                self.cashier_wallet.clone(),
-                notify.clone(),
-            ));
-
-        let cashier_wallet = self.cashier_wallet.clone();
-        let bridge = self.bridge.clone();
-        let listen_for_receiving_coins_task = smol::spawn(async move {
-            loop {
-                Self::listen_for_receiving_coins(
-                    bridge.clone(),
-                    cashier_wallet.clone(),
-                    recv_coin.clone(),
-                )
-                .await
-                .expect(" listen for receiving coins");
-            }
-        });
-
-        let cfg = RpcServerConfig {
-            socket_addr: self.config.rpc_listen_address.clone(),
-            use_tls: self.config.serve_tls,
-            identity_path: expand_path(&self.config.clone().tls_identity_path)?,
-            identity_pass: self.config.tls_identity_password.clone(),
-        };
-
-        listen_and_serve(cfg, self.clone()).await?;
-
-        resume_watch_deposit_keys_task.cancel().await;
-        listen_for_receiving_coins_task.cancel().await;
-        cashier_client_subscriber_task.cancel().await;
-        Ok(())
-    }
-
     async fn resume_watch_deposit_keys(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
@@ -432,21 +340,24 @@ impl Cashierd {
         JsonResult::Resp(jsonresp(json!(self.features), id))
     }
 
-    fn check_token_id(network: &str, _token_id: &str) -> Result<()> {
+    fn check_token_id(network: &str, token_id: &str) -> Result<()> {
         match network {
             #[cfg(feature = "sol")]
             "sol" | "solana" => {
-                if _token_id != "So11111111111111111111111111111111111111112" {
+                if token_id != "So11111111111111111111111111111111111111112" {
                     // This is supposed to be a token mint account now
                     use drk::service::sol::account_is_initialized_mint;
                     use drk::service::sol::SolFailed::BadSolAddress;
                     use solana_sdk::pubkey::Pubkey;
                     use std::str::FromStr;
 
-                    if !account_is_initialized_mint(
-                        &Pubkey::from_str(_token_id)
-                            .map_err(|err| Error::from(BadSolAddress(err.to_string())))?,
-                    ) {
+                    let pubkey = match Pubkey::from_str(token_id) {
+                        Ok(v) => v,
+                        Err(e) => return Err(Error::from(BadSolAddress(e.to_string()))),
+                    };
+
+                    // FIXME: Use network name from variable
+                    if !account_is_initialized_mint("devnet".to_string(), &pubkey) {
                         return Err(Error::CashierInvalidTokenId(
                             "Given address is not a valid token mint".into(),
                         ));
@@ -459,6 +370,102 @@ impl Cashierd {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
+        self.cashier_wallet.init_db().await?;
+
+        for (feature_name, chain) in self.features.iter() {
+            let bridge2 = self.bridge.clone();
+
+            match feature_name.as_str() {
+                #[cfg(feature = "sol")]
+                "sol" | "solana" => {
+                    debug!(target: "CASHIER DAEMON", "Add sol network");
+                    use drk::service::SolClient;
+                    use solana_sdk::signer::keypair::Keypair;
+
+                    let main_keypair: Keypair;
+
+                    let main_keypairs = self.cashier_wallet.get_main_keys(&"sol".into())?;
+                    if main_keypairs.is_empty() {
+                        main_keypair = Keypair::new();
+                    } else {
+                        main_keypair = deserialize(&main_keypairs[0].0)?;
+                    }
+
+                    let sol_client = SolClient::new(serialize(&main_keypair), &chain).await?;
+
+                    bridge2.add_clients("sol".into(), sol_client).await?;
+                }
+
+                #[cfg(feature = "btc")]
+                "btc" | "bitcoin" => {
+                    debug!(target: "CASHIER DAEMON", "Add btc network");
+                    let btc_endpoint: (bitcoin::network::constants::Network, String) = (
+                        bitcoin::network::constants::Network::Bitcoin,
+                        String::from("ssl://blockstream.info:993"),
+                    );
+                    use drk::service::btc::BtcClient;
+                    let _btc_client = BtcClient::new(btc_endpoint)?;
+                    // NOTE bitcoin is not implemented yet
+                    //
+                    // TODO check if there is main_keypair inside
+                    // cashierdb before generating new one
+                    //
+                    //bridge2.add_clients("btc".into(), btc_client).await?;
+                }
+
+                _ => {
+                    warn!("No feature enabled for {} network", feature_name);
+                }
+            }
+        }
+
+        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
+            self.bridge.clone(),
+            self.cashier_wallet.clone(),
+            self.features.clone(),
+        ));
+
+        self.client.lock().await.start().await?;
+
+        let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+        let cashier_client_subscriber_task =
+            smol::spawn(Client::connect_to_subscriber_from_cashier(
+                self.client.clone(),
+                executor.clone(),
+                self.cashier_wallet.clone(),
+                notify.clone(),
+            ));
+
+        let cashier_wallet = self.cashier_wallet.clone();
+        let bridge = self.bridge.clone();
+        let listen_for_receiving_coins_task = smol::spawn(async move {
+            loop {
+                Self::listen_for_receiving_coins(
+                    bridge.clone(),
+                    cashier_wallet.clone(),
+                    recv_coin.clone(),
+                )
+                .await
+                .expect(" listen for receiving coins");
+            }
+        });
+
+        let cfg = RpcServerConfig {
+            socket_addr: self.config.rpc_listen_address.clone(),
+            use_tls: self.config.serve_tls,
+            identity_path: expand_path(&self.config.clone().tls_identity_path)?,
+            identity_pass: self.config.tls_identity_password.clone(),
+        };
+
+        listen_and_serve(cfg, self.clone()).await?;
+
+        resume_watch_deposit_keys_task.cancel().await;
+        listen_for_receiving_coins_task.cancel().await;
+        cashier_client_subscriber_task.cancel().await;
         Ok(())
     }
 }

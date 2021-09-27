@@ -24,13 +24,6 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use tungstenite::Message;
 
-//const RPC_SERVER: &str = "https://api.mainnet-beta.solana.com";
-//const WSS_SERVER: &str = "wss://api.mainnet-beta.solana.com";
-const RPC_SERVER: &str = "https://api.devnet.solana.com";
-const WSS_SERVER: &str = "wss://api.devnet.solana.com";
-//const RPC_SERVER: &str = "http://localhost:8899";
-//const WSS_SERVER: &str = "ws://localhost:8900";
-
 #[derive(Serialize)]
 struct SubscribeParams {
     encoding: Value,
@@ -39,24 +32,44 @@ struct SubscribeParams {
 
 pub struct SolClient {
     keypair: Keypair,
-    // subscriptions vecotr of puykey
+    // Subscriptions vector of pubkey
     subscriptions: Arc<Mutex<Vec<Pubkey>>>,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
+    rpc_server: &'static str,
+    wss_server: &'static str,
 }
 
 impl SolClient {
-    pub async fn new(keypair: Vec<u8>) -> Result<Arc<Self>> {
+    pub async fn new(keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
         let keypair: Keypair = deserialize(&keypair)?;
-
         let notify_channel = async_channel::unbounded();
+
+        let (rpc_server, wss_server) = match network {
+            "mainnet" => (
+                "https://api.mainnet-beta.solana.com",
+                "wss://api.devnet.solana.com",
+            ),
+            "devnet" => (
+                "https://api.devnet.solana.com",
+                "wss://api.devnet.solana.com",
+            ),
+            "testnet" => (
+                "https://api.testnet.solana.com",
+                "wss://api.testnet.solana.com",
+            ),
+            "localhost" => ("http://localhost:8899", "ws://localhost:8900"),
+            _ => return Err(Error::NotSupportedNetwork),
+        };
 
         Ok(Arc::new(Self {
             keypair,
             subscriptions: Arc::new(Mutex::new(Vec::new())),
             notify_channel,
+            rpc_server,
+            wss_server,
         }))
     }
 
@@ -66,7 +79,7 @@ impl SolClient {
             "sending received token to main account"
         );
 
-        let rpc = RpcClient::new(RPC_SERVER.to_string());
+        let rpc = RpcClient::new(self.rpc_server.to_string());
 
         let fee = rpc
             .get_fees()
@@ -122,7 +135,7 @@ impl SolClient {
             json!([json!(keypair.pubkey().to_string()), json!(sub_params)]),
         );
 
-        let rpc = RpcClient::new(RPC_SERVER.to_string());
+        let rpc = RpcClient::new(self.rpc_server.to_string());
         let old_balance = rpc
             .get_balance(&keypair.pubkey())
             .map_err(|err| SolFailed::from(err))?;
@@ -130,8 +143,7 @@ impl SolClient {
         // WebSocket handshake/connect
         let builder = native_tls::TlsConnector::builder();
         let tls = TlsConnector::from(builder);
-        let (stream, _) = connect(WSS_SERVER, tls).await?;
-
+        let (stream, _) = connect(self.wss_server, tls).await?;
 
         let (mut write, mut read) = stream.split();
 
@@ -139,7 +151,8 @@ impl SolClient {
 
         let unsubscribe_channel_rv2 = unsubscribe_channel_rv.clone();
         let ws_write_task: smol::Task<Result<()>> = smol::spawn(async move {
-            write.send(Message::text(serde_json::to_string(&sub_msg)?))
+            write
+                .send(Message::text(serde_json::to_string(&sub_msg)?))
                 .await
                 .map_err(|err| SolFailed::from(err))?;
 
@@ -362,7 +375,7 @@ impl NetworkClient for SolClient {
     }
 
     async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
-        let rpc = RpcClient::new(RPC_SERVER.to_string());
+        let rpc = RpcClient::new(self.rpc_server.to_string());
         let address: Pubkey = deserialize(&address)?;
         let instruction = system_instruction::transfer(&self.keypair.pubkey(), &address, amount);
 
@@ -397,8 +410,8 @@ pub fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u
 }
 
 /// Check if given account is a valid token mint
-pub fn account_is_initialized_mint(mint: &Pubkey) -> bool {
-    let rpc = RpcClient::new(RPC_SERVER.to_string());
+pub fn account_is_initialized_mint(rpc_server: String, mint: &Pubkey) -> bool {
+    let rpc = RpcClient::new(rpc_server);
     match rpc.get_token_supply(mint) {
         Ok(_) => return true,
         Err(_) => return false,
