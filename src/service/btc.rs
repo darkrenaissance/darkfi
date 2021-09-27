@@ -4,176 +4,169 @@ use crate::Result;
 
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
-use bitcoin::hash_types::Txid;
+use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
-use bitcoin::util::ecdsa::{PrivateKey, PublicKey};
+use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use secp256k1::key::SecretKey;
+
+use secp256k1::key::{PublicKey, SecretKey};
+use secp256k1::{rand::rngs::OsRng, Secp256k1};
 
 use async_std::sync::Arc;
 use std::str::FromStr;
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
-pub type PubKey = PublicKey;
-pub type PrivKey = PrivateKey;
+pub type PubKey = BtcPubKey;
+pub type PrivKey = BtcPrivKey;
+
+const ELECTRUM_SERVER: &str = "ssl://blockstream.info:993";
 
 pub struct BitcoinKeys {
-    _secret_key: SecretKey,
-    bitcoin_private_key: PrivateKey,
-    btc_client: Arc<ElectrumClient>,
-    pub bitcoin_public_key: PublicKey,
-    pub pub_address: Address,
-    pub script: Script,
+    secret_key: SecretKey,
+    public_key: PublicKey,
+    _context: Secp256k1<secp256k1::All>,
+    btc_privkey: BtcPrivKey,
+    pub btc_pubkey: BtcPubKey,
     pub network: Network,
 }
 
 impl BitcoinKeys {
-    pub fn new(btc_client: Arc<ElectrumClient>, network: Network) -> Result<Arc<BitcoinKeys>> {
-        let context = secp256k1::Secp256k1::new();
+    pub fn new(network: Network) -> Result<Arc<BitcoinKeys>> {
+        let secp = Secp256k1::new();
+        let mut rng = OsRng::new().expect("OsRng");
 
-        // Probably not good enough for release
-        let rand: String = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(32)
-            .map(char::from)
-            .collect();
+        let (secret_key, public_key) = secp.generate_keypair(&mut rng);
 
-        let rand_hex = hex::encode(rand);
-
-        // Generate simple byte array from rand
-        let data_slice: &[u8] = rand_hex.as_bytes();
-
-        let secret_key = SecretKey::from_slice(&hex::decode(data_slice).unwrap()).unwrap();
-
-        // Use Testnet
-        let bitcoin_private_key = PrivateKey::new(secret_key, network);
-
-        let bitcoin_public_key = PublicKey::from_private_key(&context, &bitcoin_private_key);
-        //let pubkey_serialized = bitcoin_public_key.to_bytes();
-
-        let pub_address = Address::p2pkh(&bitcoin_public_key, network);
-
-        let script = Script::new_p2pk(&bitcoin_public_key);
+        let btc_privkey = BtcPrivKey::new(secret_key, network);
+        let btc_pubkey = btc_privkey.public_key(&secp);
 
         Ok(Arc::new(BitcoinKeys {
-            _secret_key: secret_key,
-            bitcoin_private_key,
-            btc_client,
-            bitcoin_public_key,
-            pub_address,
-            script,
+            secret_key,
+            public_key,
+            _context: secp,
+            btc_privkey,
+            btc_pubkey,
             network,
         }))
     }
 
-    pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
-        debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
-        let client = &self.btc_client;
-        // Check if script is already subscribed
-        if let Some(status_start) = client.script_subscribe(&self.script)? {
-            loop {
-                match client.script_pop(&self.script)? {
-                    Some(status) => {
-                        // Script has a notification update
-                        if status != status_start {
-                            let balance = client.script_get_balance(&self.script)?;
-                            if balance.confirmed > 0 {
-                                debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
-                                let history = client.script_get_history(&self.script)?;
-                                //return tx_hash of latest tx that created balance
-                                return Ok((history[0].tx_hash, balance.confirmed));
-                            } else {
-                                debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
-                                continue;
-                            }
-                        } else {
-                            debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
-                            continue;
-                        }
-                    }
-                    None => {
-                        debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
-                        continue;
-                    }
-                };
-            } // Endloop
-        } else {
-            return Err(BtcFailed::ElectrumError(
-                "Did not subscribe to scriptpubkey".to_string(),
-            ));
-        }
+    pub fn pubkey(&self) -> &PublicKey {
+        &self.public_key
     }
-
-    // This should do a db lookup to return the same obj
-    pub fn address_from_slice(key: &[u8]) -> Result<Address> {
-        let pub_key = PublicKey::from_slice(key).unwrap();
-        let address = Address::p2pkh(&pub_key, Network::Testnet);
-
-        Ok(address)
+    pub fn btc_privkey(&self) -> &BtcPrivKey {
+        &self.btc_privkey
     }
-
-    // This should do a db lookup to return the same obj
-    pub fn private_key_from_slice(key: &[u8]) -> Result<PrivKey> {
-        let key = PrivKey::from_slice(key, Network::Testnet).unwrap();
-        Ok(key)
+    pub fn btc_pubkey(&self) -> &BtcPubKey {
+        &self.btc_pubkey
     }
-
-    pub fn get_deposit_address(&self) -> Result<&Address> {
-        Ok(&self.pub_address)
+    pub fn btc_pubkey_hash(&self) -> BtcPubKeyHash {
+        self.btc_pubkey.pubkey_hash()
     }
-    pub fn get_pubkey(&self) -> &PublicKey {
-        &self.bitcoin_public_key
+    pub fn derive_btc_address(btc_pubkey: BtcPubKey, network: Network) -> Address {
+        Address::p2pkh(&btc_pubkey, network)
     }
-    pub fn get_privkey(&self) -> &PrivateKey {
-        &self.bitcoin_private_key
-    }
-    pub fn get_script(&self) -> &Script {
-        &self.script
+    pub fn derive_script(btc_pubkey_hash: BtcPubKeyHash) -> Script {
+        Script::new_p2pkh(&btc_pubkey_hash)
     }
 }
 
 pub struct BtcClient {
-    client: Arc<ElectrumClient>,
-    network: Network,
+    _client: Arc<ElectrumClient>,
+    _network: Network,
+    _keypair: BitcoinKeys,
 }
 
 impl BtcClient {
-    pub fn new(btc_endpoint: (Network, String)) -> Result<Arc<Self>> {
-        let (network, client_address) = btc_endpoint;
-        let client = ElectrumClient::new(&client_address)
+    pub fn new(keypair: BitcoinKeys) -> Result<Arc<Self>> {
+        let network = bitcoin::network::constants::Network::Testnet;
+        let client = ElectrumClient::new(ELECTRUM_SERVER)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
         Ok(Arc::new(Self {
-            client: Arc::new(client),
-            network,
+            _client: Arc::new(client),
+            _network: network,
+            _keypair: keypair,
         }))
+    }
+
+    // pub async fn start_subscribe(self: Arc<Self>) -> BtcResult<(Txid, u64)> {
+    //     debug!(target: "BTC CLIENT", "Subscribe to scriptpubkey");
+    //     let client = &self.btc_client;
+    //     // Check if script is already subscribed
+    //     if let Some(status_start) = client.script_subscribe(&self.script)? {
+    //         loop {
+    //             match client.script_pop(&self.script)? {
+    //                 Some(status) => {
+    //                     // Script has a notification update
+    //                     if status != status_start {
+    //                         let balance = client.script_get_balance(&self.script)?;
+    //                         if balance.confirmed > 0 {
+    //                             debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
+    //                             let history = client.script_get_history(&self.script)?;
+    //                             //return tx_hash of latest tx that created balance
+    //                             return Ok((history[0].tx_hash, balance.confirmed));
+    //                         } else {
+    //                             debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
+    //                             continue;
+    //                         }
+    //                     } else {
+    //                         debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
+    //                         continue;
+    //                     }
+    //                 }
+    //                 None => {
+    //                     debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
+    //                     continue;
+    //                 }
+    //             };
+    //         } // Endloop
+    //     } else {
+    //         return Err(BtcFailed::ElectrumError(
+    //             "Did not subscribe to scriptpubkey".to_string(),
+    //         ));
+    //     }
+    // }
+
+    async fn handle_subscribe_request(self: Arc<Self>, keypair: Arc<BitcoinKeys>) -> Result<()> {
+        debug!(
+            target: "BTC BRIDGE",
+            "Handle subscribe request"
+        );
+
+        // p2pkh script
+        let _script = BitcoinKeys::derive_script(keypair.btc_pubkey_hash());
+
+        //if self.client.script_subscribe(&script)?
+
+        //let keypair = serialize(&keypair);
+
+        Ok(())
     }
 }
 
 #[async_trait]
 impl NetworkClient for BtcClient {
     async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
-        //// Generate bitcoin Address
-        let btc_keys = BitcoinKeys::new(self.client.clone(), self.network)?;
-
-        let btc_pub = btc_keys.clone();
-        let btc_pub = btc_pub.get_pubkey();
-        let btc_priv = btc_keys.clone();
-        let btc_priv = btc_priv.get_privkey();
+        // Generate bitcoin keys
+        let btc_keys = BitcoinKeys::new(Network::Testnet)?;
+        let btc_privkey = btc_keys.clone();
+        let btc_privkey = btc_privkey.btc_privkey();
+        let btc_pubkey = btc_keys.clone();
+        let btc_pubkey = btc_pubkey.btc_pubkey();
 
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        let (_txid, _balance) = btc_keys.start_subscribe().await?;
-        //let _script = btc_keys.get_script();
+        //let (_txid, _balance) = btc_keys.start_subscribe().await?;
+
+        let self2 = self.clone();
+        smol::spawn(self2.handle_subscribe_request(btc_keys)).detach();
 
         Ok(TokenSubscribtion {
-            secret_key: serialize(&btc_priv.to_bytes()),
-            public_key: btc_pub.to_string(),
+            secret_key: serialize(&btc_privkey.to_bytes()),
+            public_key: btc_pubkey.to_string(),
         })
     }
 
