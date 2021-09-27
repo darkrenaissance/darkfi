@@ -354,7 +354,7 @@ impl Darkfid {
             }
             Some("btc") | Some("BTC") => Err(Error::TokenParseError),
             Some(tkn) => {
-                let id = self.parse_token(tkn)?;
+                let id = self.symbol_to_id(tkn)?;
                 let token_id = generate_id(&id)?;
                 Ok(token_id)
             }
@@ -370,7 +370,7 @@ impl Darkfid {
                     Ok(json!(token_id))
                 }
                 Some(tkn) => {
-                    let id = self.parse_token(tkn)?;
+                    let id = self.symbol_to_id(tkn)?;
                     Ok(id)
                 }
                 None => Err(Error::TokenParseError),
@@ -380,8 +380,7 @@ impl Darkfid {
         }
     }
 
-    // symbol to id
-    fn parse_token(&self, token: &str) -> Result<Value> {
+    fn symbol_to_id(&self, token: &str) -> Result<Value> {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
         for c in vec {
