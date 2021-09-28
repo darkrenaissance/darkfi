@@ -11,8 +11,8 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
 use solana_sdk::{
-    native_token::lamports_to_sol, pubkey::Pubkey, signature::Signer, signer::keypair::Keypair,
-    system_instruction, transaction::Transaction,
+    native_token::lamports_to_sol, program_pack::Pack, pubkey::Pubkey, signature::Signer,
+    signer::keypair::Keypair, system_instruction, transaction::Transaction,
 };
 use tungstenite::Message;
 
@@ -326,6 +326,23 @@ pub fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u
     )
 }
 
+/// Gets account token balance for given mint.
+/// Returns: (amount, decimals)
+pub fn get_account_token_balance(
+    rpc_server: String,
+    address: &Pubkey,
+    mint: &Pubkey,
+) -> SolResult<(u64, u64)> {
+    let rpc = RpcClient::new(rpc_server);
+
+    let mint_account = rpc.get_account(mint)?;
+    let token_account = rpc.get_account(address)?;
+    let mint_data = spl_token::state::Mint::unpack_from_slice(&mint_account.data)?;
+    let token_data = spl_token::state::Account::unpack_from_slice(&token_account.data)?;
+
+    Ok((token_data.amount, mint_data.decimals as u64))
+}
+
 /// Check if given account is a valid token mint
 pub fn account_is_initialized_mint(rpc_server: String, mint: &Pubkey) -> bool {
     let rpc = RpcClient::new(rpc_server);
@@ -430,6 +447,12 @@ impl From<tungstenite::Error> for SolFailed {
 
 impl From<solana_client::client_error::ClientError> for SolFailed {
     fn from(err: solana_client::client_error::ClientError) -> SolFailed {
+        SolFailed::SolError(err.to_string())
+    }
+}
+
+impl From<solana_sdk::program_error::ProgramError> for SolFailed {
+    fn from(err: solana_sdk::program_error::ProgramError) -> SolFailed {
         SolFailed::SolError(err.to_string())
     }
 }
