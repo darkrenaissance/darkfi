@@ -349,13 +349,13 @@ impl Darkfid {
         match token.as_str() {
             Some("sol") | Some("SOL") => {
                 let id = "So11111111111111111111111111111111111111112";
-                let token_id = generate_id(&json!(id))?;
+                let token_id = generate_id(id)?;
                 Ok(token_id)
             }
             Some("btc") | Some("BTC") => Err(Error::TokenParseError),
             Some(tkn) => {
                 let id = self.symbol_to_id(tkn)?;
-                let token_id = generate_id(&id)?;
+                let token_id = generate_id(id.as_str().unwrap())?;
                 Ok(token_id)
             }
             None => Err(Error::TokenParseError),

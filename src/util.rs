@@ -1,5 +1,4 @@
 use log::debug;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
@@ -40,8 +39,7 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
 
 // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
 // again, and keep repeating until it works.
-pub fn generate_id(token: &Value) -> Result<jubjub::Fr> {
-    let tkn_str = token.as_str().unwrap();
+pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
     if bs58::decode(tkn_str).into_vec().is_err() {
         // TODO: make this an error
         debug!(target: "PARSE ID", "COULD NOT DECODE STR");
