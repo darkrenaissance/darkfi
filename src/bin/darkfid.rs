@@ -214,7 +214,7 @@ impl Darkfid {
         let network = &args[0];
         let token = &args[1];
 
-        let token_id = match self.parse_network(&network, &token) {
+        let token_id = match self.parse_params(&network, &token) {
             Ok(t) => t,
             Err(_e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -362,7 +362,7 @@ impl Darkfid {
         }
     }
 
-    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
+    fn parse_params(&self, network: &Value, token: &Value) -> Result<Value> {
         match network.as_str() {
             Some("solana") | Some("sol") => match token.as_str() {
                 Some("solana") | Some("sol") => {
