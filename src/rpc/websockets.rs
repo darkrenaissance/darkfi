@@ -62,20 +62,15 @@ impl Stream for WsStream {
 /// Connects to a WebSocket address (optionally secured by TLS).
 pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Response)> {
     let url = Url::parse(addr)?;
-    let host = url
-        .host_str()
-        .ok_or_else(|| Error::UrlParseError)?
-        .to_string();
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| Error::UrlParseError)?;
+    let host = url.host_str().ok_or(Error::UrlParseError)?.to_string();
+    let port = url.port_or_known_default().ok_or(Error::UrlParseError)?;
 
     let socket_addr = {
         let host = host.clone();
         smol::unblock(move || (host.as_str(), port).to_socket_addrs())
             .await?
             .next()
-            .ok_or_else(|| Error::UrlParseError)?
+            .ok_or(Error::UrlParseError)?
     };
 
     match url.scheme() {

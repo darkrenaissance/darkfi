@@ -150,7 +150,7 @@ pub async fn send_request(url: &str, data: Value) -> Result<JsonResult, Error> {
         smol::unblock(move || (host.as_str(), port).to_socket_addrs())
             .await?
             .next()
-            .ok_or_else(|| Error::UrlParseError)?
+            .ok_or(Error::UrlParseError)?
     };
 
     let mut buf = [0; 2048];

@@ -5,7 +5,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, warn};
+use log::{debug, error};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -185,7 +185,7 @@ impl SolClient {
             .await?;
 
         if cur_balance < prev_balance {
-            warn!("New balance is less than previous balance");
+            error!("New balance is less than previous balance");
             return Err(Error::ServicesError(
                 "New balance is less than previous balance",
             ));
@@ -205,9 +205,9 @@ impl SolClient {
     // TODO
     fn send_tok_to_main_wallet(
         self: Arc<Self>,
-        mint: &Pubkey,
-        amount: u64,
-        keypair: &Keypair,
+        _mint: &Pubkey,
+        _amount: u64,
+        _keypair: &Keypair,
     ) -> Result<()> {
         debug!(target: "SOL BRIDGE", "Sending tokens to main wallet");
         Ok(())
@@ -218,34 +218,22 @@ impl SolClient {
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
 
-        let fee = rpc
-            .get_fees()
-            .unwrap()
-            .fee_calculator
-            .lamports_per_signature;
+        let ix = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
 
-        if fee >= amount {
-            warn!(target: "SOL BRIDGE", "Insufficient funds on {:?} to send tx", &keypair.pubkey());
-            return Ok(());
-        }
+        let mut tx = Transaction::new_with_payer(&[ix], Some(&self.keypair.pubkey()));
 
-        let amnt_to_transfer = amount - fee;
-
-        let ix = system_instruction::transfer(
-            &keypair.pubkey(),
-            &self.keypair.pubkey(),
-            amnt_to_transfer,
-        );
-
-        let mut tx = Transaction::new_with_payer(&[ix], Some(&keypair.pubkey()));
         let bhq = BlockhashQuery::default();
         match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
-            Err(_) => panic!("Couldn't connect to RPC"),
-            Ok(v) => tx.sign(&[keypair], v.0),
+            Err(_) => return Err(Error::ServicesError("Couldn't connect to RPC")),
+            Ok(v) => tx.sign(&[keypair, &self.keypair], v.0),
         }
 
-        let signature = rpc.send_and_confirm_transaction(&tx);
-        debug!(target: "SOL BRIDGE", "Sent to main wallet: {}", signature.unwrap());
+        let signature = match rpc.send_and_confirm_transaction(&tx) {
+            Ok(s) => s,
+            Err(_) => return Err(Error::ServicesError("Failed to send transaction")),
+        };
+
+        debug!(target: "SOL BRIDGE", "Sent to main wallet: {}", signature);
 
         Ok(())
     }
@@ -346,8 +334,8 @@ pub fn get_account_token_balance(
 pub fn account_is_initialized_mint(rpc_server: String, mint: &Pubkey) -> bool {
     let rpc = RpcClient::new(rpc_server);
     match rpc.get_token_supply(mint) {
-        Ok(_) => return true,
-        Err(_) => return false,
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
