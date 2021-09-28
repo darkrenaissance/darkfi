@@ -3,11 +3,12 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use ff::Field;
-use log::{debug, warn};
+use log::debug;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use drk::{
     blockchain::Rocks,
@@ -19,7 +20,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    service::{bridge, bridge::Bridge},
+    service::{bridge, bridge::Bridge, NetworkName},
     util::{expand_path, generate_id, join_config_path},
     wallet::{CashierDb, WalletDb},
     Error, Result,
@@ -37,7 +38,7 @@ struct Cashierd {
     config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
-    features: HashMap<String, String>,
+    features: HashMap<NetworkName, String>,
     client: Arc<Mutex<Client>>,
 }
 
@@ -97,7 +98,7 @@ impl Cashierd {
         let mut features = HashMap::new();
 
         for network in config.clone().networks {
-            features.insert(network.name, network.blockchain);
+            features.insert(NetworkName::from_str(&network.name)?, network.blockchain);
         }
 
         let bridge = bridge::Bridge::new();
@@ -114,7 +115,7 @@ impl Cashierd {
     async fn resume_watch_deposit_keys(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
-        features: HashMap<String, String>,
+        features: HashMap<NetworkName, String>,
     ) -> Result<()> {
         for (network, _) in features.iter() {
             let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
@@ -125,7 +126,7 @@ impl Cashierd {
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
-                        network: network.to_owned(),
+                        network: network.clone(),
                         payload: bridge::BridgeRequestsPayload::Watch(Some((keypair.0, keypair.1))),
                     })
                     .await?;
@@ -156,7 +157,7 @@ impl Cashierd {
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
-                    network: network.to_string(),
+                    network: network.clone(),
                     payload: bridge::BridgeRequestsPayload::Send(addr.clone(), amount),
                 })
                 .await?;
@@ -190,8 +191,7 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0].as_str().unwrap();
-        let network = network.to_string();
+        let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
         let token_id = &args[1].as_str().unwrap();
         let drk_pub_key = &args[2].as_str().unwrap();
 
@@ -284,8 +284,7 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0].as_str().unwrap();
-        let network = network.to_string();
+        let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
         let token = &args[1].as_str().unwrap();
         let address = &args[2].as_str().unwrap();
         let _amount = &args[3];
@@ -320,7 +319,7 @@ impl Cashierd {
                     &address,
                     &cashier_public,
                     &cashier_secret,
-                    &network.to_string(),
+                    &network,
                     &asset_id,
                 )?;
             }
@@ -337,19 +336,25 @@ impl Cashierd {
     }
 
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!(self.features), id))
+        JsonResult::Resp(jsonresp(
+            json!(self
+                .features
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_owned()))
+                .collect::<HashMap<String, String>>()),
+            id,
+        ))
     }
 
-    fn check_token_id(network: &str, token_id: &str) -> Result<()> {
+    fn check_token_id(network: &NetworkName, token_id: &str) -> Result<()> {
         match network {
             #[cfg(feature = "sol")]
-            "sol" | "solana" => {
+            NetworkName::Solana => {
                 if token_id != "So11111111111111111111111111111111111111112" {
                     // This is supposed to be a token mint account now
                     use drk::service::sol::account_is_initialized_mint;
                     use drk::service::sol::SolFailed::BadSolAddress;
                     use solana_sdk::pubkey::Pubkey;
-                    use std::str::FromStr;
 
                     let pubkey = match Pubkey::from_str(token_id) {
                         Ok(v) => v,
@@ -365,10 +370,9 @@ impl Cashierd {
                 }
             }
             #[cfg(feature = "btc")]
-            "btc" | "bitcoin" => {
+            NetworkName::Bitcoin => {
                 // Handle bitcoin address here if needed
             }
-            _ => {}
         }
         Ok(())
     }
@@ -379,9 +383,9 @@ impl Cashierd {
         for (feature_name, chain) in self.features.iter() {
             let bridge2 = self.bridge.clone();
 
-            match feature_name.as_str() {
+            match feature_name {
                 #[cfg(feature = "sol")]
-                "sol" | "solana" => {
+                NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
                     use solana_sdk::signer::keypair::Keypair;
@@ -392,7 +396,7 @@ impl Cashierd {
                     let native_sol_token_id = generate_id(native_sol_token_id)?;
                     let main_keypairs = self
                         .cashier_wallet
-                        .get_main_keys(&"sol".into(), &native_sol_token_id)?;
+                        .get_main_keys(&NetworkName::Solana, &native_sol_token_id)?;
 
                     if main_keypairs.is_empty() {
                         main_keypair = Keypair::new();
@@ -402,11 +406,11 @@ impl Cashierd {
 
                     let sol_client = SolClient::new(serialize(&main_keypair), &chain).await?;
 
-                    bridge2.add_clients("sol".into(), sol_client).await?;
+                    bridge2.add_clients(NetworkName::Solana, sol_client).await?;
                 }
 
                 #[cfg(feature = "btc")]
-                "btc" | "bitcoin" => {
+                NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
                     //use drk::service::btc::{BtcClient, BitcoinKeys};
 
@@ -417,7 +421,7 @@ impl Cashierd {
                     let native_btc_token_id = generate_id("btc")?;
                     let _main_keypairs = self
                         .cashier_wallet
-                        .get_main_keys(&"btc".into(), &native_btc_token_id)?;
+                        .get_main_keys(&NetworkName::Bitcoin, &native_btc_token_id)?;
                     // if main_keypairs.is_empty() {
                     //     //main_keypair = BitcoinKeys::new(bitcoin::network::constants::Network::Testnet)?;
                     // } else {
@@ -428,10 +432,6 @@ impl Cashierd {
                     // cashierdb before generating new one
                     //
                     //bridge2.add_clients("btc".into(), btc_client).await?;
-                }
-
-                _ => {
-                    warn!("No feature enabled for {} network", feature_name);
                 }
             }
         }
@@ -477,7 +477,6 @@ impl Cashierd {
                     debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
 
                     // TODO should send drk coins
-                
                 }
             }
         });

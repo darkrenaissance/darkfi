@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+use super::NetworkName;
 
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
@@ -9,7 +10,7 @@ use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 pub struct BridgeRequests {
-    pub network: String,
+    pub network: NetworkName,
     pub payload: BridgeRequestsPayload,
 }
 
@@ -48,14 +49,14 @@ pub struct TokenSubscribtion {
 
 #[derive(Debug)]
 pub struct TokenNotification {
-    pub network: String,
+    pub network: NetworkName,
     pub asset_id: jubjub::Fr,
     pub secret_key: Vec<u8>,
     pub received_balance: u64,
 }
 
 pub struct Bridge {
-    clients: Mutex<HashMap<String, Arc<dyn NetworkClient + Send + Sync>>>,
+    clients: Mutex<HashMap<NetworkName, Arc<dyn NetworkClient + Send + Sync>>>,
     notifiers: FuturesUnordered<async_channel::Receiver<TokenNotification>>,
 }
 
@@ -69,7 +70,7 @@ impl Bridge {
 
     pub async fn add_clients(
         self: Arc<Self>,
-        network: String,
+        network: NetworkName,
         client: Arc<dyn NetworkClient + Send + Sync>,
     ) -> Result<()> {
         let client2 = client.clone();
@@ -78,7 +79,7 @@ impl Bridge {
         self.clients
             .lock()
             .await
-            .insert(network.clone(), client.clone());
+            .insert(network, client.clone());
 
         self.notifiers.push(notifier.clone());
         Ok(())

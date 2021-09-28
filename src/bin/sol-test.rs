@@ -22,7 +22,7 @@ async fn run() -> Result<()> {
     println!("main keypair {:?}", main_keypair.to_bytes());
     println!("main pubkey {}", main_keypair.pubkey().to_string());
 
-    let network = String::from("sol");
+    let network = drk::service::NetworkName::Solana;
 
     let sol_client = SolClient::new(serialize(&main_keypair), "devnet").await?;
 

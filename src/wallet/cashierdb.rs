@@ -1,6 +1,7 @@
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
 use crate::{Error, Result};
+use crate::service::NetworkName;
 
 use async_std::sync::{Arc, Mutex};
 use log::*;
@@ -62,7 +63,7 @@ impl CashierDb {
         &self,
         token_key_private: &Vec<u8>,
         token_key_public: &Vec<u8>,
-        network: &String,
+        network: &NetworkName,
         token_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
@@ -92,7 +93,7 @@ impl CashierDb {
 
     pub fn get_main_keys(
         &self,
-        network: &String,
+        network: &NetworkName,
         token_id: &jubjub::Fr,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Get main keys");
@@ -129,7 +130,7 @@ impl CashierDb {
         token_key_public: &Vec<u8>,
         d_key_public: &jubjub::SubgroupPoint,
         d_key_private: &jubjub::Fr,
-        network: &String,
+        network: &NetworkName,
         token_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
@@ -167,7 +168,7 @@ impl CashierDb {
         d_key_public: &jubjub::SubgroupPoint,
         token_key_private: &Vec<u8>,
         token_key_public: &Vec<u8>,
-        network: &String,
+        network: &NetworkName,
         token_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
@@ -230,7 +231,7 @@ impl CashierDb {
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-    ) -> Result<Option<(Vec<u8>, String, jubjub::Fr)>> {
+    ) -> Result<Option<(Vec<u8>, NetworkName, jubjub::Fr)>> {
         debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -256,7 +257,7 @@ impl CashierDb {
         for addr in addr_iter {
             let addr = addr?;
             let token_key_public = addr.0;
-            let network: String = self.get_value_deserialized(addr.1)?;
+            let network: NetworkName = self.get_value_deserialized(addr.1)?;
             let token_id: jubjub::Fr = self.get_value_deserialized(addr.2)?;
             token_addresses.push((token_key_public, network, token_id));
         }
@@ -268,7 +269,7 @@ impl CashierDb {
     pub fn get_deposit_token_keys_by_dkey_public(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
-        network: &String,
+        network: &NetworkName,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         let d_key_public = self.get_value_serialized(d_key_public)?;
@@ -308,7 +309,7 @@ impl CashierDb {
     // return private and public keys as a tuple
     pub fn get_deposit_token_keys_by_network(
         &self,
-        network: &String,
+        network: &NetworkName,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         // open connection
@@ -342,7 +343,7 @@ impl CashierDb {
     pub fn get_withdraw_keys_by_token_public_key(
         &self,
         token_key_public: &Vec<u8>,
-        network: &String,
+        network: &NetworkName,
     ) -> Result<Option<Keypair>> {
         debug!(target: "CASHIERDB", "Check for existing token address");
         // open connection
@@ -386,7 +387,7 @@ impl CashierDb {
     pub fn confirm_withdraw_key_record(
         &self,
         token_address: &Vec<u8>,
-        network: &String,
+        network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");
 
@@ -412,7 +413,7 @@ impl CashierDb {
     pub fn confirm_deposit_key_record(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
-        network: &String,
+        network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");
 
@@ -474,7 +475,7 @@ mod tests {
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
         let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
 
-        let network = String::from("btc");
+        let network = NetworkName::Bitcoin;
         let token_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
         wallet.put_main_keys(&token_addr_private, &token_addr, &network, &token_id)?;
@@ -502,7 +503,7 @@ mod tests {
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
         let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
 
-        let network = String::from("btc");
+        let network = NetworkName::Bitcoin;
 
         let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
@@ -548,7 +549,7 @@ mod tests {
         // btc addr testnet
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
 
-        let network = String::from("btc");
+        let network = NetworkName::Bitcoin;
 
         wallet.put_withdraw_keys(&token_addr, &public2, &secret2, &network, &token_id)?;
 
