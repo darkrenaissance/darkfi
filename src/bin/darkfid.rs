@@ -1,9 +1,11 @@
-use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use log::debug;
 use serde_json::{json, Value};
+
+use async_std::sync::{Arc, Mutex};
 use std::path::PathBuf;
+use std::str::FromStr;
 //use std::sync::Arc;
 
 use drk::{
@@ -16,6 +18,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
+    service::NetworkName,
     util::{expand_path, generate_id, join_config_path},
     wallet::WalletDb,
     Error, Result,
@@ -214,6 +217,18 @@ impl Darkfid {
         let network = &args[0];
         let token = &args[1];
 
+        if token.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let token = token.as_str().unwrap();
+
+        if network.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let network = network.as_str().unwrap();
+
         let token_id = match self.parse_network(&network, &token) {
             Ok(t) => t,
             Err(_e) => {
@@ -314,6 +329,12 @@ impl Darkfid {
         let address = &args[1];
         let amount = &args[2];
 
+        if token.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let token = address.as_str().unwrap();
+
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
@@ -345,38 +366,35 @@ impl Darkfid {
         }
     }
 
-    fn parse_wrapped_token(&self, token: &Value) -> Result<jubjub::Fr> {
-        match token.as_str() {
-            Some("sol") | Some("SOL") => {
+    fn parse_wrapped_token(&self, token: &str) -> Result<jubjub::Fr> {
+        match token.to_lowercase().as_str() {
+            "sol" => {
                 let id = "So11111111111111111111111111111111111111112";
                 let token_id = generate_id(id)?;
                 Ok(token_id)
             }
-            Some("btc") | Some("BTC") => Err(Error::TokenParseError),
-            Some(tkn) => {
+            "btc" => Err(Error::TokenParseError),
+            tkn => {
                 let id = self.symbol_to_id(tkn)?;
                 let token_id = generate_id(id.as_str().unwrap())?;
                 Ok(token_id)
             }
-            None => Err(Error::TokenParseError),
         }
     }
 
-    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
-        match network.as_str() {
-            Some("solana") | Some("sol") => match token.as_str() {
-                Some("solana") | Some("sol") => {
+    fn parse_network(&self, network: &str, token: &str) -> Result<Value> {
+        match NetworkName::from_str(network)? {
+            NetworkName::Solana => match token.to_lowercase().as_str() {
+                "solana" | "sol" => {
                     let token_id = "So11111111111111111111111111111111111111112";
                     Ok(json!(token_id))
                 }
-                Some(tkn) => {
+                tkn => {
                     let id = self.symbol_to_id(tkn)?;
                     Ok(id)
                 }
-                None => Err(Error::TokenParseError),
             },
-            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
-            Some(_) | None => Err(Error::NetworkParseError),
+            NetworkName::Bitcoin => Err(Error::NetworkParseError),
         }
     }
 
@@ -384,25 +402,21 @@ impl Darkfid {
     // SOL uses conversion function soltolamport()
     // or there are decimals in the token info
     // TODO: how to organize these functions more logically w less repetition?
-    fn parse_params(&self, network: &Value, token: &Value, amount: &Value) -> Result<Value> {
-        match network.as_str() {
-            Some("solana") | Some("sol") => match token.as_str() {
-                Some("solana") | Some("sol") => {
+    fn parse_params(&self, network: &str, token: &str, amount: u64 ) -> Result<Value> {
+        match NetworkName::from_str(network)? {
+            NetworkName::Solana => match token {
+                "solana" | "sol" => {
                     let token_id = "So11111111111111111111111111111111111111112";
-                    let amount = amount.as_u64().unwrap();
                     let amount_in_apo: u64 = amount * 10 ^ 8;
                     Ok(json![(token_id, amount_in_apo)])
                 }
-                Some(tkn) => {
+                tkn => {
                     let token_id = self.symbol_to_id(tkn)?;
-                    let amount = amount.as_u64().unwrap();
                     let amount_in_apo: u64 = amount * 10 ^ 8;
                     Ok(json![(token_id, amount_in_apo)])
                 }
-                None => Err(Error::TokenParseError),
             },
-            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
-            Some(_) | None => Err(Error::NetworkParseError),
+            NetworkName::Bitcoin => Err(Error::NetworkParseError),
         }
     }
 
