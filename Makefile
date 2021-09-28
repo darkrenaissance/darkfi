@@ -1,5 +1,17 @@
+.POSIX:
+
+CARGO = cargo
+
 all:
-	cargo build --release --all-features
+	$(CARGO) build --release --all-features
 
 test:
-	cargo test --release --all-features
+	$(CARGO) test --release --all-features
+
+fix:
+	$(CARGO) fix --release --all-features --allow-dirty
+
+clippy:
+	$(CARGO) clippy --release --all-features
+
+.PHONY: all test fix clippy
