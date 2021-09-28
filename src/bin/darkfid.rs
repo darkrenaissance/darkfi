@@ -214,7 +214,7 @@ impl Darkfid {
         let network = &args[0];
         let token = &args[1];
 
-        let token_id = match self.parse_params(&network, &token) {
+        let token_id = match self.parse_network(&network, &token) {
             Ok(t) => t,
             Err(_e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -362,7 +362,7 @@ impl Darkfid {
         }
     }
 
-    fn parse_params(&self, network: &Value, token: &Value) -> Result<Value> {
+    fn parse_network(&self, network: &Value, token: &Value) -> Result<Value> {
         match network.as_str() {
             Some("solana") | Some("sol") => match token.as_str() {
                 Some("solana") | Some("sol") => {
@@ -372,6 +372,32 @@ impl Darkfid {
                 Some(tkn) => {
                     let id = self.symbol_to_id(tkn)?;
                     Ok(id)
+                }
+                None => Err(Error::TokenParseError),
+            },
+            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
+            Some(_) | None => Err(Error::NetworkParseError),
+        }
+    }
+
+    // BTC has 8 decimals
+    // SOL uses conversion function soltolamport()
+    // or there are decimals in the token info
+    // TODO: how to organize these functions more logically w less repetition?
+    fn parse_params(&self, network: &Value, token: &Value, amount: &Value) -> Result<Value> {
+        match network.as_str() {
+            Some("solana") | Some("sol") => match token.as_str() {
+                Some("solana") | Some("sol") => {
+                    let token_id = "So11111111111111111111111111111111111111112";
+                    let amount = amount.as_u64().unwrap();
+                    let amount_in_apo: u64 = amount * 10 ^ 8;
+                    Ok(json![(token_id, amount_in_apo)])
+                }
+                Some(tkn) => {
+                    let token_id = self.symbol_to_id(tkn)?;
+                    let amount = amount.as_u64().unwrap();
+                    let amount_in_apo: u64 = amount * 10 ^ 8;
+                    Ok(json![(token_id, amount_in_apo)])
                 }
                 None => Err(Error::TokenParseError),
             },
@@ -432,20 +458,20 @@ async fn main() -> Result<()> {
 
 mod tests {
 
-    #[test]
-    fn test_token_parsing() {
-        let token = "usdc";
+    //#[test]
+    //fn test_token_parsing() {
+    //    let token = "usdc";
 
-        let vec: Vec<char> = token.chars().collect();
-        let mut counter = 0;
-        for c in vec {
-            if c.is_alphabetic() {
-                counter += 1;
-                println!("Found letter: {}", c)
-            }
-        }
-        if counter == token.len() {
-            println!("Every character is a letter");
-        }
-    }
+    //    let vec: Vec<char> = token.chars().collect();
+    //    let mut counter = 0;
+    //    for c in vec {
+    //        if c.is_alphabetic() {
+    //            counter += 1;
+    //            println!("Found letter: {}", c)
+    //        }
+    //    }
+    //    if counter == token.len() {
+    //        println!("Every character is a letter");
+    //    }
+    //}
 }
