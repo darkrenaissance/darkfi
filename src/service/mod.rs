@@ -42,9 +42,9 @@ impl FromStr for NetworkName {
     type Err = crate::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "sol" | "Sol" | "solana" | "Solana" | "SOLANA" => Ok(NetworkName::Solana),
-            "btc" | "Btc" | "bitcoin" | "Bitcoin" | "BITCOIN" => Ok(NetworkName::Bitcoin),
+        match s.to_lowercase().as_str() {
+            "sol" | "solana" => Ok(NetworkName::Solana),
+            "btc" | "bitcoin" => Ok(NetworkName::Bitcoin),
             _ => Err(crate::Error::NotSupportedNetwork),
         }
     }
