@@ -467,6 +467,21 @@ impl Cashierd {
             }
         });
 
+        let bridge2 = self.bridge.clone();
+        let listen_for_notification_from_bridge_task = smol::spawn(async move {
+            loop {
+                if let Some(token_notification) = bridge2.clone().listen().await {
+                    let token_notification =
+                        token_notification.expect("listen for notification from bridge");
+
+                    debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
+
+                    // TODO should send drk coins
+                
+                }
+            }
+        });
+
         let cfg = RpcServerConfig {
             socket_addr: self.config.rpc_listen_address.clone(),
             use_tls: self.config.serve_tls,
@@ -478,6 +493,7 @@ impl Cashierd {
 
         resume_watch_deposit_keys_task.cancel().await;
         listen_for_receiving_coins_task.cancel().await;
+        listen_for_notification_from_bridge_task.cancel().await;
         cashier_client_subscriber_task.cancel().await;
         Ok(())
     }
