@@ -20,8 +20,8 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    service::{bridge, bridge::Bridge, NetworkName},
-    util::{expand_path, generate_id, join_config_path},
+    service::{bridge, bridge::Bridge},
+    util::{expand_path, generate_id, join_config_path, NetworkName},
     wallet::{CashierDb, WalletDb},
     Error, Result,
 };
@@ -392,9 +392,7 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let main_keypairs = self
-                        .cashier_wallet
-                        .get_main_keys(&NetworkName::Solana)?;
+                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Solana)?;
 
                     if main_keypairs.is_empty() {
                         main_keypair = Keypair::new();
@@ -416,9 +414,8 @@ impl Cashierd {
                     // NOTE bitcoin is not implemented yet
                     //let _main_keypair: BitcoinKeys;
 
-                    let _main_keypairs = self
-                        .cashier_wallet
-                        .get_main_keys(&NetworkName::Bitcoin)?;
+                    let _main_keypairs =
+                        self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
                     // if main_keypairs.is_empty() {
                     //     //main_keypair = BitcoinKeys::new(bitcoin::network::constants::Network::Testnet)?;
                     // } else {

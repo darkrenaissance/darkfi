@@ -5,7 +5,6 @@ use serde_json::{json, Value};
 
 use async_std::sync::{Arc, Mutex};
 use std::path::PathBuf;
-use std::str::FromStr;
 //use std::sync::Arc;
 
 use drk::{
@@ -18,17 +17,15 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    service::NetworkName,
-    util::{expand_path, generate_id, join_config_path},
+    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, search_id},
     wallet::WalletDb,
-    Error, Result,
+    Result,
 };
 
 #[derive(Clone)]
 struct Darkfid {
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
-    tokenlist: Value,
     client: Arc<Mutex<Client>>,
 }
 
@@ -65,9 +62,7 @@ impl Darkfid {
             config.wallet_password.clone(),
         )?;
         debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
-        // TODO: FIXME
-        let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
-        let tokenlist: Value = serde_json::from_str(&file_contents)?;
+
         let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
         let client = Client::new(
@@ -87,7 +82,6 @@ impl Darkfid {
         Ok(Self {
             config,
             wallet,
-            tokenlist,
             client,
         })
     }
@@ -153,8 +147,8 @@ impl Darkfid {
         let symbol = symbol.unwrap();
 
         let result: Result<Value> = async {
-            let token_id = self.search_id(symbol)?;
-            Ok(token_id)
+            let token_id = search_id(symbol)?;
+            Ok(json!(token_id))
         }
         .await;
 
@@ -162,20 +156,6 @@ impl Darkfid {
             Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
         }
-    }
-
-    fn search_id(&self, symbol: &str) -> Result<Value> {
-        debug!(target: "DARKFID", "SEARCHING FOR {}", symbol);
-        let tokens = self.tokenlist["tokens"]
-            .as_array()
-            .ok_or_else(|| Error::TokenParseError)?;
-        for item in tokens {
-            if item["symbol"] == symbol.to_uppercase() {
-                let address = item["address"].clone();
-                return Ok(address);
-            }
-        }
-        unreachable!();
     }
 
     // --> {""method": "features", "params": []}
@@ -229,7 +209,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match self.parse_network(&network, &token) {
+        let token_id = match parse_network(&network, &token) {
             Ok(t) => t,
             Err(_e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -348,7 +328,7 @@ impl Darkfid {
         let amount = amount.as_f64().unwrap();
 
         let result: Result<()> = async {
-            let token_id = self.parse_wrapped_token(token)?;
+            let token_id = parse_wrapped_token(token)?;
             let address = bs58::decode(&address).into_vec()?;
             let address: jubjub::SubgroupPoint = deserialize(&address)?;
             self.client
@@ -363,75 +343,6 @@ impl Darkfid {
         match result {
             Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
-        }
-    }
-
-    fn parse_wrapped_token(&self, token: &str) -> Result<jubjub::Fr> {
-        match token.to_lowercase().as_str() {
-            "sol" => {
-                let id = "So11111111111111111111111111111111111111112";
-                let token_id = generate_id(id)?;
-                Ok(token_id)
-            }
-            "btc" => Err(Error::TokenParseError),
-            tkn => {
-                let id = self.symbol_to_id(tkn)?;
-                let token_id = generate_id(id.as_str().unwrap())?;
-                Ok(token_id)
-            }
-        }
-    }
-
-    fn parse_network(&self, network: &str, token: &str) -> Result<Value> {
-        match NetworkName::from_str(network)? {
-            NetworkName::Solana => match token.to_lowercase().as_str() {
-                "solana" | "sol" => {
-                    let token_id = "So11111111111111111111111111111111111111112";
-                    Ok(json!(token_id))
-                }
-                tkn => {
-                    let id = self.symbol_to_id(tkn)?;
-                    Ok(id)
-                }
-            },
-            NetworkName::Bitcoin => Err(Error::NetworkParseError),
-        }
-    }
-
-    // BTC has 8 decimals
-    // SOL uses conversion function soltolamport()
-    // or there are decimals in the token info
-    // TODO: how to organize these functions more logically w less repetition?
-    fn parse_params(&self, network: &str, token: &str, amount: u64 ) -> Result<Value> {
-        match NetworkName::from_str(network)? {
-            NetworkName::Solana => match token {
-                "solana" | "sol" => {
-                    let token_id = "So11111111111111111111111111111111111111112";
-                    let amount_in_apo: u64 = amount * 10 ^ 8;
-                    Ok(json![(token_id, amount_in_apo)])
-                }
-                tkn => {
-                    let token_id = self.symbol_to_id(tkn)?;
-                    let amount_in_apo: u64 = amount * 10 ^ 8;
-                    Ok(json![(token_id, amount_in_apo)])
-                }
-            },
-            NetworkName::Bitcoin => Err(Error::NetworkParseError),
-        }
-    }
-
-    fn symbol_to_id(&self, token: &str) -> Result<Value> {
-        let vec: Vec<char> = token.chars().collect();
-        let mut counter = 0;
-        for c in vec {
-            if c.is_alphabetic() {
-                counter += 1;
-            }
-        }
-        if counter == token.len() {
-            self.search_id(token)
-        } else {
-            Ok(json!(token))
         }
     }
 }

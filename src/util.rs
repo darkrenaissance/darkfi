@@ -1,11 +1,13 @@
+use crate::{
+    serial::{deserialize, serialize, Decodable, Encodable},
+    Error, Result,
+};
+
 use log::debug;
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
 
-use crate::{
-    serial::{deserialize, serialize},
-    Result,
-};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let ret: PathBuf;
@@ -35,6 +37,54 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
     path.push(file);
 
     Ok(path)
+}
+
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum NetworkName {
+    Solana,
+    Bitcoin,
+}
+
+impl std::fmt::Display for NetworkName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Solana => {
+                write!(f, "Solana")
+            }
+            Self::Bitcoin => {
+                write!(f, "Bitcoin")
+            }
+        }
+    }
+}
+
+impl FromStr for NetworkName {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "sol" | "solana" => Ok(NetworkName::Solana),
+            "btc" | "bitcoin" => Ok(NetworkName::Bitcoin),
+            _ => Err(crate::Error::NotSupportedNetwork),
+        }
+    }
+}
+
+impl Encodable for NetworkName {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let name = self.to_string();
+        let len = name.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for NetworkName {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let name: String = Decodable::decode(&mut d)?;
+        let name = NetworkName::from_str(&name)?;
+        Ok(name)
+    }
 }
 
 // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
@@ -67,6 +117,92 @@ pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
     } else {
         Ok(token_id.unwrap())
     }
+}
+
+pub fn parse_wrapped_token(token: &str) -> Result<jubjub::Fr> {
+    match token.to_lowercase().as_str() {
+        "sol" => {
+            let id = "So11111111111111111111111111111111111111112";
+            let token_id = generate_id(id)?;
+            Ok(token_id)
+        }
+        "btc" => Err(Error::TokenParseError),
+        tkn => {
+            let id = symbol_to_id(tkn)?;
+            let token_id = generate_id(&id)?;
+            Ok(token_id)
+        }
+    }
+}
+
+pub fn parse_network(network: &str, token: &str) -> Result<String> {
+    match NetworkName::from_str(network)? {
+        NetworkName::Solana => match token.to_lowercase().as_str() {
+            "solana" | "sol" => {
+                let token_id = "So11111111111111111111111111111111111111112";
+                Ok(token_id.to_string())
+            }
+            tkn => {
+                let id = symbol_to_id(tkn)?;
+                Ok(id)
+            }
+        },
+        NetworkName::Bitcoin => Err(Error::NetworkParseError),
+    }
+}
+
+// BTC has 8 decimals
+// SOL uses conversion function soltolamport()
+// or there are decimals in the token info
+// TODO: how to organize these functions more logically w less repetition?
+pub fn parse_params(network: &str, token: &str, amount: u64) -> Result<(String, u64)> {
+    match NetworkName::from_str(network)? {
+        NetworkName::Solana => match token {
+            "solana" | "sol" => {
+                let token_id = "So11111111111111111111111111111111111111112";
+                let amount_in_apo: u64 = amount * 10 ^ 8;
+                Ok((token_id.to_string(), amount_in_apo))
+            }
+            tkn => {
+                let token_id = symbol_to_id(tkn)?;
+                let amount_in_apo: u64 = amount * 10 ^ 8;
+                Ok((token_id.to_string(), amount_in_apo))
+            }
+        },
+        NetworkName::Bitcoin => Err(Error::NetworkParseError),
+    }
+}
+
+pub fn symbol_to_id(token: &str) -> Result<String> {
+    let vec: Vec<char> = token.chars().collect();
+    let mut counter = 0;
+    for c in vec {
+        if c.is_alphabetic() {
+            counter += 1;
+        }
+    }
+    if counter == token.len() {
+        search_id(token)
+    } else {
+        Ok(token.to_string())
+    }
+}
+
+pub fn search_id(symbol: &str) -> Result<String> {
+    // TODO: FIXME
+    let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
+    let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
+    let tokens = tokenlist["tokens"]
+        .as_array()
+        .ok_or_else(|| Error::TokenParseError)?;
+    for item in tokens {
+        if item["symbol"] == symbol.to_uppercase() {
+            let address = item["address"].clone();
+            let address = address.as_str().ok_or_else(|| Error::TokenParseError)?;
+            return Ok(address.to_string());
+        }
+    }
+    unreachable!();
 }
 
 #[cfg(test)]

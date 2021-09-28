@@ -1,7 +1,7 @@
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
 use crate::{Error, Result};
-use crate::service::NetworkName;
+use crate::util::NetworkName;
 
 use async_std::sync::{Arc, Mutex};
 use log::*;

@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use super::NetworkName;
+use crate::util::NetworkName;
 
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
