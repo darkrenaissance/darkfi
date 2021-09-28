@@ -380,6 +380,32 @@ impl Darkfid {
         }
     }
 
+    // BTC has 8 decimals
+    // SOL uses conversion function soltolamport()
+    // or there are decimals in the token info
+    // TODO: how to organize these functions more logically w less repetition?
+    fn parse_params(&self, network: &Value, token: &Value, amount: &Value) -> Result<Value> {
+        match network.as_str() {
+            Some("solana") | Some("sol") => match token.as_str() {
+                Some("solana") | Some("sol") => {
+                    let token_id = "So11111111111111111111111111111111111111112";
+                    let amount = amount.as_u64().unwrap();
+                    let amount_in_apo: u64 = amount * 10 ^ 8;
+                    Ok(json![(token_id, amount_in_apo)])
+                }
+                Some(tkn) => {
+                    let token_id = self.symbol_to_id(tkn)?;
+                    let amount = amount.as_u64().unwrap();
+                    let amount_in_apo: u64 = amount * 10 ^ 8;
+                    Ok(json![(token_id, amount_in_apo)])
+                }
+                None => Err(Error::TokenParseError),
+            },
+            Some("bitcoin") | Some("btc") => Err(Error::NetworkParseError),
+            Some(_) | None => Err(Error::NetworkParseError),
+        }
+    }
+
     fn symbol_to_id(&self, token: &str) -> Result<Value> {
         let vec: Vec<char> = token.chars().collect();
         let mut counter = 0;
@@ -448,31 +474,4 @@ mod tests {
     //        println!("Every character is a letter");
     //    }
     //}
-
-    // using byte repr produces this u64: 4592670019360778722
-    //
-    //let float_bytes = float.to_ne_bytes();
-    //let u64_bytes = u64::from_ne_bytes(float_bytes);
-    //println!("U64 FROM NE BYTES {:?}", u64_bytes);
-    #[test]
-    fn test_float_transform() {
-        println!("TEST FLOAT TRANSFORM");
-        let float: f64 = 0.1111;
-        let mut float_str = float.to_string();
-        println!("FLOAT TO STRING: {}", float_str);
-        match float_str.find(".") {
-            Some(v) => {
-                float_str.remove(v);
-                print!("FLOAT WITH DECIMAL REMOVED: {} \n", float_str);
-                const RADIX: u32 = 10;
-                for i in float_str.chars() {
-                    let digit = i.to_digit(RADIX).unwrap();
-                    println!("TO RADIX CONVERSION: {}", digit);
-                }
-            }
-            None => {
-                print!("NO FLOAT DETECTED");
-            }
-        }
-    }
 }
