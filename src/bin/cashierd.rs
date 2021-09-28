@@ -192,7 +192,7 @@ impl Cashierd {
 
         let network = &args[0].as_str().unwrap();
         let network = network.to_string();
-        let token_id = &args[1];
+        let token_id = &args[1].as_str().unwrap();
         let drk_pub_key = &args[2].as_str().unwrap();
 
         if !self.features.contains_key(&network.clone()) {
@@ -204,7 +204,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token_id.as_str().unwrap())?;
+            Self::check_token_id(&network, token_id)?;
 
             let asset_id = generate_id(token_id)?;
 
@@ -286,7 +286,7 @@ impl Cashierd {
 
         let network = &args[0].as_str().unwrap();
         let network = network.to_string();
-        let token = &args[1];
+        let token = &args[1].as_str().unwrap();
         let address = &args[2].as_str().unwrap();
         let _amount = &args[3];
 
@@ -299,7 +299,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token.as_str().unwrap())?;
+            Self::check_token_id(&network, token)?;
 
             let asset_id = generate_id(&token)?;
             let address = serialize(&address.to_string());
@@ -388,7 +388,12 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let main_keypairs = self.cashier_wallet.get_main_keys(&"sol".into())?;
+                    let native_sol_token_id = "So11111111111111111111111111111111111111112";
+                    let native_sol_token_id = generate_id(native_sol_token_id)?;
+                    let main_keypairs = self
+                        .cashier_wallet
+                        .get_main_keys(&"sol".into(), &native_sol_token_id)?;
+
                     if main_keypairs.is_empty() {
                         main_keypair = Keypair::new();
                     } else {
@@ -409,7 +414,10 @@ impl Cashierd {
                     // NOTE bitcoin is not implemented yet
                     //let _main_keypair: BitcoinKeys;
 
-                    let _main_keypairs = self.cashier_wallet.get_main_keys(&"btc".into())?;
+                    let native_btc_token_id = generate_id("btc")?;
+                    let _main_keypairs = self
+                        .cashier_wallet
+                        .get_main_keys(&"btc".into(), &native_btc_token_id)?;
                     // if main_keypairs.is_empty() {
                     //     //main_keypair = BitcoinKeys::new(bitcoin::network::constants::Network::Testnet)?;
                     // } else {
