@@ -94,7 +94,7 @@ async fn serve(
 
                 let reply = rh.handle_request(r).await;
                 let j = serde_json::to_string(&reply).unwrap();
-                debug!(target: "RPC", "<-- {:?}", j);
+                debug!(target: "RPC", "<-- {}", j);
 
                 if let Err(e) = stream.write_all(j.as_bytes()).await {
                     debug!(target: "RPC SERVER", "Failed to write to socket: {:#?}", e);

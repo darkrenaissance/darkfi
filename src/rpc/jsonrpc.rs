@@ -44,14 +44,15 @@ impl ErrorCode {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum JsonResult {
     Resp(JsonResponse),
     Err(JsonError),
     Notif(JsonNotification),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonRequest {
     pub jsonrpc: Value,
     pub method: Value,
@@ -59,27 +60,27 @@ pub struct JsonRequest {
     pub id: Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonErrorVal {
     pub code: Value,
     pub message: Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonError {
     pub jsonrpc: Value,
     pub error: JsonErrorVal,
     pub id: Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonResponse {
     pub jsonrpc: Value,
     pub result: Value,
     pub id: Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonNotification {
     pub jsonrpc: Value,
     pub method: Value,
