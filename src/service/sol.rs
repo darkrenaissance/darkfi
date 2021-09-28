@@ -77,7 +77,7 @@ impl SolClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
-        is_token: bool,
+        mint: Option<Pubkey>,
     ) -> Result<()> {
         debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
 
@@ -86,19 +86,22 @@ impl SolClient {
             return Ok(());
         }
 
-        let rpc = RpcClient::new(self.rpc_server.to_string());
-
         // Fetch the current balance.
-        let prev_balance = if !is_token {
-            rpc.get_balance(&keypair.pubkey())
-                .map_err(|err| SolFailed::from(err))?
+        let (prev_balance, decimals) = if mint.is_none() {
+            let rpc = RpcClient::new(self.rpc_server.to_string());
+            (
+                rpc.get_balance(&keypair.pubkey())
+                    .map_err(|err| SolFailed::from(err))?,
+                9,
+            )
         } else {
-            // TODO: SPL Token balance
-            0
+            get_account_token_balance(
+                self.rpc_server.to_string(),
+                &keypair.pubkey(),
+                &mint.unwrap(),
+            )
+            .map_err(|err| SolFailed::from(err))?
         };
-        let mut cur_balance = prev_balance;
-        let mut decimals: Option<u64> = None;
-        let mut mint: Option<&str> = None;
 
         // WebSocket connection
         let builder = native_tls::TlsConnector::builder();
@@ -127,8 +130,11 @@ impl SolClient {
         // Subscription ID used for unsubscribing later.
         let mut sub_id: i64 = 0;
 
+        // The balance we are going to receive from the JSONRPC notification
+        let cur_balance: u64;
+
         loop {
-            let message = stream.next().await.ok_or_else(|| Error::TungsteniteError)?;
+            let message = stream.next().await.ok_or(Error::TungsteniteError)?;
             let message = message.unwrap();
             debug!(target: "SOLANA SUBSCRIPTION", "<-- {}", message.clone().into_text()?);
 
@@ -149,22 +155,12 @@ impl SolClient {
                     debug!(target: "SOLANA RPC", "Got WebSocket notification");
                     params = n.params["result"]["value"].clone();
 
-                    if is_token {
+                    if mint.is_some() {
                         cur_balance = params["data"]["info"]["tokenAmount"]["amount"]
                             .as_u64()
                             .unwrap();
-
-                        decimals = Some(
-                            params["data"]["info"]["tokenAmount"]["decimals"]
-                                .as_u64()
-                                .unwrap(),
-                        );
-
-                        mint = Some(params["data"]["info"]["mint"].as_str().unwrap());
                     } else {
                         cur_balance = params["lamports"].as_u64().unwrap();
-                        decimals = None;
-                        mint = None;
                     }
                     break;
                 }
@@ -188,27 +184,30 @@ impl SolClient {
             .send(Message::text(serde_json::to_string(&unsubscription)?))
             .await?;
 
-        if cur_balance - prev_balance <= 0 {
-            error!("Current balance is not positive");
-            return Err(Error::ServicesError("Current balance is not positive"));
+        if cur_balance < prev_balance {
+            warn!("New balance is less than previous balance");
+            return Err(Error::ServicesError(
+                "New balance is less than previous balance",
+            ));
         }
 
-        if is_token {
-            debug!(target: "SOL BRIDGE", "Received {} {:?} tokens",
-                (cur_balance - prev_balance) * decimals.unwrap(), mint.unwrap());
-            self.send_tok_to_main_wallet(mint.unwrap(), cur_balance, keypair)
+        if mint.is_some() {
+            let ui_amnt = (cur_balance - prev_balance) * decimals;
+            debug!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
+            self.send_tok_to_main_wallet(&mint.unwrap(), cur_balance - prev_balance, &keypair)
         } else {
-            debug!(target: "SOL BRIDGE", "Received {} SOL", lamports_to_sol(cur_balance - prev_balance));
-            self.send_sol_to_main_wallet(cur_balance, &keypair)
+            let ui_amnt = lamports_to_sol(cur_balance - prev_balance);
+            debug!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
+            self.send_sol_to_main_wallet(cur_balance - prev_balance, &keypair)
         }
     }
 
     // TODO
     fn send_tok_to_main_wallet(
         self: Arc<Self>,
-        mint: &str,
+        mint: &Pubkey,
         amount: u64,
-        keypair: Keypair,
+        keypair: &Keypair,
     ) -> Result<()> {
         debug!(target: "SOL BRIDGE", "Sending tokens to main wallet");
         Ok(())
@@ -261,8 +260,8 @@ impl NetworkClient for SolClient {
         let secret_key = serialize(&keypair);
 
         let self2 = self.clone();
-        // TODO: true/false depending on is_token
-        smol::spawn(self2.handle_subscribe_request(keypair, false)).detach();
+        // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
+        smol::spawn(self2.handle_subscribe_request(keypair, None)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -281,8 +280,8 @@ impl NetworkClient for SolClient {
         let public_key = keypair.pubkey().to_string();
 
         let self2 = self.clone();
-        // TODO: true/false depending on is_token
-        smol::spawn(self2.handle_subscribe_request(keypair, false)).detach();
+        // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
+        smol::spawn(self2.handle_subscribe_request(keypair, None)).detach();
 
         Ok(public_key)
     }
