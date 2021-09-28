@@ -432,47 +432,20 @@ async fn main() -> Result<()> {
 
 mod tests {
 
-    //#[test]
-    //fn test_token_parsing() {
-    //    let token = "usdc";
-
-    //    let vec: Vec<char> = token.chars().collect();
-    //    let mut counter = 0;
-    //    for c in vec {
-    //        if c.is_alphabetic() {
-    //            counter += 1;
-    //            println!("Found letter: {}", c)
-    //        }
-    //    }
-    //    if counter == token.len() {
-    //        println!("Every character is a letter");
-    //    }
-    //}
-
-    // using byte repr produces this u64: 4592670019360778722
-    //
-    //let float_bytes = float.to_ne_bytes();
-    //let u64_bytes = u64::from_ne_bytes(float_bytes);
-    //println!("U64 FROM NE BYTES {:?}", u64_bytes);
     #[test]
-    fn test_float_transform() {
-        println!("TEST FLOAT TRANSFORM");
-        let float: f64 = 0.1111;
-        let mut float_str = float.to_string();
-        println!("FLOAT TO STRING: {}", float_str);
-        match float_str.find(".") {
-            Some(v) => {
-                float_str.remove(v);
-                print!("FLOAT WITH DECIMAL REMOVED: {} \n", float_str);
-                const RADIX: u32 = 10;
-                for i in float_str.chars() {
-                    let digit = i.to_digit(RADIX).unwrap();
-                    println!("TO RADIX CONVERSION: {}", digit);
-                }
+    fn test_token_parsing() {
+        let token = "usdc";
+
+        let vec: Vec<char> = token.chars().collect();
+        let mut counter = 0;
+        for c in vec {
+            if c.is_alphabetic() {
+                counter += 1;
+                println!("Found letter: {}", c)
             }
-            None => {
-                print!("NO FLOAT DETECTED");
-            }
+        }
+        if counter == token.len() {
+            println!("Every character is a letter");
         }
     }
 }
