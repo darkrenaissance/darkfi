@@ -64,7 +64,6 @@ impl CashierDb {
         token_key_private: &Vec<u8>,
         token_key_public: &Vec<u8>,
         network: &NetworkName,
-        token_id: &jubjub::Fr,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
 
@@ -74,18 +73,16 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let network = self.get_value_serialized(network)?;
-        let token_id = self.get_value_serialized(token_id)?;
 
         conn.execute(
             "INSERT INTO main_keypairs
-            (token_key_private, token_key_public, network, token_id)
+            (token_key_private, token_key_public, network)
             VALUES
-            (:token_key_private, :token_key_public, :network, :token_id)",
+            (:token_key_private, :token_key_public, :network)",
             named_params! {
                 ":token_key_private": token_key_private,
                 ":token_key_public": token_key_public,
                 ":network": &network,
-                ":token_id": &token_id,
             },
         )?;
         Ok(())
@@ -94,7 +91,6 @@ impl CashierDb {
     pub fn get_main_keys(
         &self,
         network: &NetworkName,
-        token_id: &jubjub::Fr,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Get main keys");
         // open connection
@@ -103,16 +99,14 @@ impl CashierDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let network = self.get_value_serialized(network)?;
-        let token_id = self.get_value_serialized(token_id)?;
 
         let mut stmt = conn.prepare(
             "SELECT token_key_private, token_key_public
             FROM main_keypairs
-            WHERE network = :network
-            AND token_id = :token_id ;",
+            WHERE network = :network ;",
         )?;
         let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
-            &[(":network", &network), (":token_id", &token_id)],
+            &[(":network", &network)],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
@@ -476,11 +470,10 @@ mod tests {
         let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
 
         let network = NetworkName::Bitcoin;
-        let token_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
 
-        wallet.put_main_keys(&token_addr_private, &token_addr, &network, &token_id)?;
+        wallet.put_main_keys(&token_addr_private, &token_addr, &network)?;
 
-        let keys = wallet.get_main_keys(&network, &token_id)?;
+        let keys = wallet.get_main_keys(&network)?;
 
         assert_eq!(keys.len(), 1);
 

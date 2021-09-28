@@ -392,11 +392,9 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let native_sol_token_id = "So11111111111111111111111111111111111111112";
-                    let native_sol_token_id = generate_id(native_sol_token_id)?;
                     let main_keypairs = self
                         .cashier_wallet
-                        .get_main_keys(&NetworkName::Solana, &native_sol_token_id)?;
+                        .get_main_keys(&NetworkName::Solana)?;
 
                     if main_keypairs.is_empty() {
                         main_keypair = Keypair::new();
@@ -418,10 +416,9 @@ impl Cashierd {
                     // NOTE bitcoin is not implemented yet
                     //let _main_keypair: BitcoinKeys;
 
-                    let native_btc_token_id = generate_id("btc")?;
                     let _main_keypairs = self
                         .cashier_wallet
-                        .get_main_keys(&NetworkName::Bitcoin, &native_btc_token_id)?;
+                        .get_main_keys(&NetworkName::Bitcoin)?;
                     // if main_keypairs.is_empty() {
                     //     //main_keypair = BitcoinKeys::new(bitcoin::network::constants::Network::Testnet)?;
                     // } else {
