@@ -49,7 +49,7 @@ impl WalletDb {
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        if *self.initialized.lock().await == false {
+        if !*self.initialized.lock().await {
             if !self.password.trim().is_empty() {
                 let contents = include_str!("../../sql/schema.sql");
                 let conn = Connection::open(&self.path)?;
@@ -77,12 +77,12 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
         let key_check = stmt.exists(&[(":id", &"0")])?;
-        if key_check == false {
+        if !key_check {
             let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
             let pubkey = serial::serialize(&public);
             let privkey = serial::serialize(&secret);
-            self.put_keypair(pubkey.clone(), privkey.clone())?;
+            self.put_keypair(pubkey, privkey)?;
         } else {
             debug!(target: "WALLETDB", "Keys already exist.");
             return Err(Error::from(ClientFailed::KeyExists));

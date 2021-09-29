@@ -167,14 +167,14 @@ pub fn parse_params(network: &str, token: &str, amount: u64) -> Result<(String, 
             "solana" | "sol" => {
                 let token_id = "So11111111111111111111111111111111111111112";
                 let decimals = 9;
-                let amount_in_apo: u64 = amount * 10 ^ decimals;
+                let amount_in_apo = amount * u64::pow(10, decimals as u32);
                 Ok((token_id.to_string(), amount_in_apo))
             }
             tkn => {
                 let token_id = symbol_to_id(tkn)?;
                 let decimals = search_decimal(tkn)?;
-                let amount_in_apo: u64 = amount * 10 ^ decimals;
-                Ok((token_id.to_string(), amount_in_apo))
+                let amount_in_apo = amount * u64::pow(10, decimals as u32);
+                Ok((token_id, amount_in_apo))
             }
         },
         NetworkName::Bitcoin => Err(Error::NetworkParseError),
@@ -202,11 +202,11 @@ pub fn search_id(symbol: &str) -> Result<String> {
     let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
     let tokens = tokenlist["tokens"]
         .as_array()
-        .ok_or_else(|| Error::TokenParseError)?;
+        .ok_or(Error::TokenParseError)?;
     for item in tokens {
         if item["symbol"] == symbol.to_uppercase() {
             let address = item["address"].clone();
-            let address = address.as_str().ok_or_else(|| Error::TokenParseError)?;
+            let address = address.as_str().ok_or(Error::TokenParseError)?;
             return Ok(address.to_string());
         }
     }
@@ -219,11 +219,11 @@ pub fn search_decimal(symbol: &str) -> Result<u64> {
     let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
     let tokens = tokenlist["tokens"]
         .as_array()
-        .ok_or_else(|| Error::TokenParseError)?;
+        .ok_or(Error::TokenParseError)?;
     for item in tokens {
         if item["symbol"] == symbol.to_uppercase() {
             let decimals = item["decimals"].clone();
-            let decimals = decimals.as_u64().ok_or_else(|| Error::TokenParseError)?;
+            let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
             return Ok(decimals);
         }
     }

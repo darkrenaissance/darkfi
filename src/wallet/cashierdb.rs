@@ -1,7 +1,7 @@
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
-use crate::{Error, Result};
 use crate::util::NetworkName;
+use crate::{Error, Result};
 
 use async_std::sync::{Arc, Mutex};
 use log::*;
@@ -37,7 +37,7 @@ impl CashierDb {
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        if *self.initialized.lock().await == false {
+        if !*self.initialized.lock().await {
             if !self.password.trim().is_empty() {
                 let contents = include_str!("../../sql/cashier.sql");
                 let conn = Connection::open(&self.path)?;
@@ -88,10 +88,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_main_keys(
-        &self,
-        network: &NetworkName,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         debug!(target: "CASHIERDB", "Get main keys");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -105,10 +102,10 @@ impl CashierDb {
             FROM main_keypairs
             WHERE network = :network ;",
         )?;
-        let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
-            &[(":network", &network)],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        let keys_iter = stmt
+            .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":network", &network)], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
 
         let mut keys = vec![];
 
