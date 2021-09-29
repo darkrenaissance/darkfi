@@ -35,7 +35,7 @@ struct SubscribeParams {
 }
 
 pub struct SolClient {
-    keypair: Keypair,
+    main_keypair: Keypair,
     // Subscriptions vector of pubkey
     subscriptions: Arc<Mutex<Vec<Pubkey>>>,
     notify_channel: (
@@ -47,11 +47,11 @@ pub struct SolClient {
 }
 
 impl SolClient {
-    pub async fn new(keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
-        let keypair: Keypair = deserialize(&keypair)?;
+    pub async fn new(main_keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
+        let main_keypair: Keypair = deserialize(&main_keypair)?;
         let notify_channel = async_channel::unbounded();
 
-        debug!("Main SOL wallet pubkey: {:?}", &keypair.pubkey());
+        debug!("Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
         let (rpc_server, wss_server) = match network {
             "mainnet" => (
@@ -71,7 +71,7 @@ impl SolClient {
         };
 
         Ok(Arc::new(Self {
-            keypair,
+            main_keypair,
             subscriptions: Arc::new(Mutex::new(Vec::new())),
             notify_channel,
             rpc_server,
@@ -228,7 +228,7 @@ impl SolClient {
         }
 
         // The token account from our main wallet
-        let main_tok_pk = get_associated_token_address(&self.keypair.pubkey(), mint);
+        let main_tok_pk = get_associated_token_address(&self.main_keypair.pubkey(), mint);
         // The token account from the deposit wallet
         let temp_tok_pk = get_associated_token_address(&keypair.pubkey(), mint);
 
@@ -251,8 +251,8 @@ impl SolClient {
                 // Unitinialized, so we add a creation instruction
                 debug!("Main wallet token account is uninitialized. Adding init instruction.");
                 let init_ix = create_associated_token_account(
-                    &self.keypair.pubkey(), // fee payer
-                    &self.keypair.pubkey(), // wallet
+                    &self.main_keypair.pubkey(), // fee payer
+                    &self.main_keypair.pubkey(), // wallet
                     mint,
                 );
                 instructions.push(init_ix);
@@ -279,15 +279,15 @@ impl SolClient {
             let close_ix = spl_token::instruction::close_account(
                 &spl_token::id(),
                 &temp_tok_pk,
-                &self.keypair.pubkey(),
+                &self.main_keypair.pubkey(),
                 &keypair.pubkey(),
                 &[],
             )?;
             instructions.push(close_ix);
         }
 
-        let tx = Transaction::new_with_payer(&instructions, Some(&self.keypair.pubkey()));
-        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.keypair, keypair])?;
+        let tx = Transaction::new_with_payer(&instructions, Some(&self.main_keypair.pubkey()));
+        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent tokens to main wallet: {}", signature);
 
@@ -302,9 +302,9 @@ impl SolClient {
     ) -> SolResult<Signature> {
         debug!(target: "SOL BRIDGE", "Sending {} SOL to main wallet", lamports_to_sol(amount));
 
-        let ix = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
-        let tx = Transaction::new_with_payer(&[ix], Some(&self.keypair.pubkey()));
-        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.keypair, keypair])?;
+        let ix = system_instruction::transfer(&keypair.pubkey(), &self.main_keypair.pubkey(), amount);
+        let tx = Transaction::new_with_payer(&[ix], Some(&self.main_keypair.pubkey()));
+        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent SOL to main wallet: {}", signature);
         Ok(signature)
@@ -355,13 +355,13 @@ impl NetworkClient for SolClient {
     async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
         let rpc = RpcClient::new(self.rpc_server.to_string());
         let address: Pubkey = deserialize(&address)?;
-        let instruction = system_instruction::transfer(&self.keypair.pubkey(), &address, amount);
+        let instruction = system_instruction::transfer(&self.main_keypair.pubkey(), &address, amount);
 
-        let mut tx = Transaction::new_with_payer(&[instruction], Some(&self.keypair.pubkey()));
+        let mut tx = Transaction::new_with_payer(&[instruction], Some(&self.main_keypair.pubkey()));
         let bhq = BlockhashQuery::default();
         match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
             Err(_) => panic!("Couldn't connect to RPC"),
-            Ok(v) => tx.sign(&[&self.keypair], v.0),
+            Ok(v) => tx.sign(&[&self.main_keypair], v.0),
         }
 
         let _signature = rpc
