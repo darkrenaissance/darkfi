@@ -270,16 +270,28 @@ impl SolClient {
             amount,
             decimals as u8,
         )?;
-
         instructions.push(transfer_ix);
+
+        // Close the account and reap the rent if there's no more tokens on it.
+        let (tok_balance, _) = get_account_token_balance(&rpc, &temp_tok_pk, mint)?;
+        if tok_balance - amount == 0 {
+            debug!(target: "SOL BRIDGE", "Adding account close instruction because resulting balance is 0");
+            let close_ix = spl_token::instruction::close_account(
+                &spl_token::id(),
+                &temp_tok_pk,
+                &self.keypair.pubkey(),
+                &keypair.pubkey(),
+                &[],
+            )?;
+            instructions.push(close_ix);
+        }
 
         let tx = Transaction::new_with_payer(&instructions, Some(&self.keypair.pubkey()));
         let signature = sign_and_send_transaction(&rpc, tx, vec![&self.keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent tokens to main wallet: {}", signature);
-        Ok(signature)
 
-        // TODO: Close deposit account?
+        Ok(signature)
     }
 
     fn send_sol_to_main_wallet(
