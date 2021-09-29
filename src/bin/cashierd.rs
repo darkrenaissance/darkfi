@@ -354,6 +354,7 @@ impl Cashierd {
                     // This is supposed to be a token mint account now
                     use drk::service::sol::account_is_initialized_mint;
                     use drk::service::sol::SolFailed::BadSolAddress;
+                    use solana_client::rpc_client::RpcClient;
                     use solana_sdk::pubkey::Pubkey;
 
                     let pubkey = match Pubkey::from_str(token_id) {
@@ -362,7 +363,8 @@ impl Cashierd {
                     };
 
                     // FIXME: Use network name from variable
-                    if !account_is_initialized_mint("devnet".to_string(), &pubkey) {
+                    let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
+                    if !account_is_initialized_mint(&rpc, &pubkey) {
                         return Err(Error::CashierInvalidTokenId(
                             "Given address is not a valid token mint".into(),
                         ));

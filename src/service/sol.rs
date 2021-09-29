@@ -11,8 +11,14 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
 use solana_sdk::{
-    native_token::lamports_to_sol, program_pack::Pack, pubkey::Pubkey, signature::Signer,
-    signer::keypair::Keypair, system_instruction, transaction::Transaction,
+    instruction::Instruction,
+    native_token::lamports_to_sol,
+    program_pack::Pack,
+    pubkey::Pubkey,
+    signature::{Signature, Signer},
+    signer::keypair::Keypair,
+    system_instruction,
+    transaction::Transaction,
 };
 use tungstenite::Message;
 
@@ -81,26 +87,30 @@ impl SolClient {
     ) -> Result<()> {
         debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
 
+        // Derive token pubkey if mint was provided.
+        let pubkey = if mint.is_some() {
+            get_associated_token_account(&keypair.pubkey(), &mint.unwrap()).0
+        } else {
+            keypair.pubkey()
+        };
+
         // Check if we're already subscribed
-        if self.subscriptions.lock().await.contains(&keypair.pubkey()) {
+        if self.subscriptions.lock().await.contains(&pubkey) {
             return Ok(());
         }
 
+        let rpc = RpcClient::new(self.rpc_server.to_string());
+
         // Fetch the current balance.
         let (prev_balance, decimals) = if mint.is_none() {
-            let rpc = RpcClient::new(self.rpc_server.to_string());
             (
-                rpc.get_balance(&keypair.pubkey())
+                rpc.get_balance(&pubkey)
                     .map_err(|err| SolFailed::from(err))?,
                 9,
             )
         } else {
-            get_account_token_balance(
-                self.rpc_server.to_string(),
-                &keypair.pubkey(),
-                &mint.unwrap(),
-            )
-            .map_err(|err| SolFailed::from(err))?
+            get_account_token_balance(&rpc, &pubkey, &mint.unwrap())
+                .map_err(|err| SolFailed::from(err))?
         };
 
         // WebSocket connection
@@ -116,16 +126,13 @@ impl SolClient {
 
         let subscription = jsonrpc::request(
             json!("accountSubscribe"),
-            json!([json!(keypair.pubkey().to_string()), json!(sub_params)]),
+            json!([json!(pubkey.to_string()), json!(sub_params)]),
         );
 
         debug!(target: "SOLANA RPC", "--> {}", serde_json::to_string(&subscription)?);
         stream
             .send(Message::text(serde_json::to_string(&subscription)?))
             .await?;
-
-        // Declare params here for longer variable lifetime.
-        let params: Value;
 
         // Subscription ID used for unsubscribing later.
         let mut sub_id: i64 = 0;
@@ -142,7 +149,7 @@ impl SolClient {
                 JsonResult::Resp(r) => {
                     // ACK
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&r)?);
-                    self.subscriptions.lock().await.push(keypair.pubkey());
+                    self.subscriptions.lock().await.push(pubkey);
                     sub_id = r.result.as_i64().unwrap();
                 }
                 JsonResult::Err(e) => {
@@ -153,7 +160,7 @@ impl SolClient {
                 JsonResult::Notif(n) => {
                     // Account updated
                     debug!(target: "SOLANA RPC", "Got WebSocket notification");
-                    params = n.params["result"]["value"].clone();
+                    let params = n.params["result"]["value"].clone();
 
                     if mint.is_some() {
                         cur_balance = params["data"]["info"]["tokenAmount"]["amount"]
@@ -173,7 +180,7 @@ impl SolClient {
             .lock()
             .await
             .iter()
-            .position(|p| p == &keypair.pubkey());
+            .position(|p| p == &pubkey);
         if let Some(ind) = index {
             debug!("Removing subscription from list");
             self.subscriptions.lock().await.remove(ind);
@@ -192,50 +199,119 @@ impl SolClient {
         }
 
         if mint.is_some() {
-            let ui_amnt = (cur_balance - prev_balance) * decimals;
+            let amnt = cur_balance - prev_balance;
+            let ui_amnt = amnt * decimals;
             debug!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
-            self.send_tok_to_main_wallet(&mint.unwrap(), cur_balance - prev_balance, &keypair)
+            let _ = self.send_tok_to_main_wallet(&rpc, &mint.unwrap(), amnt, decimals, &keypair)?;
         } else {
-            let ui_amnt = lamports_to_sol(cur_balance - prev_balance);
+            let amnt = cur_balance - prev_balance;
+            let ui_amnt = lamports_to_sol(amnt);
             debug!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
-            self.send_sol_to_main_wallet(cur_balance - prev_balance, &keypair)
+            let _ = self.send_sol_to_main_wallet(&rpc, amnt, &keypair)?;
         }
+
+        Ok(())
     }
 
-    // TODO
     fn send_tok_to_main_wallet(
         self: Arc<Self>,
-        _mint: &Pubkey,
-        _amount: u64,
-        _keypair: &Keypair,
-    ) -> Result<()> {
-        debug!(target: "SOL BRIDGE", "Sending tokens to main wallet");
-        Ok(())
-    }
+        rpc: &RpcClient,
+        mint: &Pubkey,
+        amount: u64,
+        decimals: u64,
+        keypair: &Keypair,
+    ) -> Result<Signature> {
+        debug!(target: "SOL BRIDGE", "Sending {} {:?} tokens to main wallet", amount * decimals, mint);
 
-    fn send_sol_to_main_wallet(self: Arc<Self>, amount: u64, keypair: &Keypair) -> Result<()> {
-        debug!(target: "SOL BRIDGE", "Sending {} SOL to main wallet", lamports_to_sol(amount));
-
-        let rpc = RpcClient::new(self.rpc_server.to_string());
-
-        let ix = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
-
-        let mut tx = Transaction::new_with_payer(&[ix], Some(&self.keypair.pubkey()));
-
-        let bhq = BlockhashQuery::default();
-        match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
-            Err(_) => return Err(Error::ServicesError("Couldn't connect to RPC")),
-            Ok(v) => tx.sign(&[keypair, &self.keypair], v.0),
+        if !account_is_initialized_mint(rpc, mint) {
+            return Err(Error::ServicesError("Given mint is not valid"));
         }
 
-        let signature = match rpc.send_and_confirm_transaction(&tx) {
-            Ok(s) => s,
-            Err(_) => return Err(Error::ServicesError("Failed to send transaction")),
+        // The token account from our main wallet
+        let (main_tok_pk, _) = get_associated_token_account(&self.keypair.pubkey(), mint);
+        // The token account from the deposit wallet
+        let (temp_tok_pk, _) = get_associated_token_account(&keypair.pubkey(), mint);
+
+        // Account initialize instruction
+        let init_ix: Option<Instruction>;
+
+        match rpc.get_account_data(&main_tok_pk) {
+            Ok(v) => {
+                match spl_token::state::Account::unpack_from_slice(&v) {
+                    // It's valid token data, and we consider account initialized.
+                    Ok(_) => init_ix = None,
+                    // Some other unexpected data.
+                    Err(_) => return Err(Error::ServicesError("Invalid data on derived account")),
+                }
+            }
+            Err(_) => {
+                // Create an initialize instruction.
+                init_ix = Some(
+                    spl_token::instruction::initialize_account(
+                        &spl_token::id(),
+                        &main_tok_pk,
+                        mint,
+                        &self.keypair.pubkey(),
+                    )
+                    .unwrap(),
+                );
+            }
+        }
+
+        // Transfer tokens from the deposit wallet to the main wallet
+        let tok_transfer_ix = spl_token::instruction::transfer(
+            &spl_token::id(),
+            &temp_tok_pk,
+            &main_tok_pk,
+            &keypair.pubkey(),
+            &[&keypair.pubkey(), &self.keypair.pubkey()],
+            amount,
+        )
+        .unwrap();
+
+        // Transfer the remanining balance from the deposit account, resulting
+        // in account close.
+        /*
+        let rent_balance = rpc
+            .get_balance(&keypair.pubkey())
+            .map_err(|err| SolFailed::from(err))?;
+
+        let lmp_transfer_ix = solana_sdk::system_instruction::transfer(
+            &keypair.pubkey(),
+            &self.keypair.pubkey(),
+            rent_balance,
+        );
+        */
+
+        let tx = if init_ix.is_some() {
+            Transaction::new_with_payer(
+                &[init_ix.unwrap(), tok_transfer_ix],
+                Some(&self.keypair.pubkey()),
+            )
+        } else {
+            Transaction::new_with_payer(&[tok_transfer_ix], Some(&self.keypair.pubkey()))
         };
 
-        debug!(target: "SOL BRIDGE", "Sent to main wallet: {}", signature);
+        let signature = sign_and_send_transaction(&rpc, tx, vec![keypair, &self.keypair])?;
 
-        Ok(())
+        debug!(target: "SOL BRIDGE", "Sent tokens to main wallet: {}", signature);
+        Ok(signature)
+    }
+
+    fn send_sol_to_main_wallet(
+        self: Arc<Self>,
+        rpc: &RpcClient,
+        amount: u64,
+        keypair: &Keypair,
+    ) -> Result<Signature> {
+        debug!(target: "SOL BRIDGE", "Sending {} SOL to main wallet", lamports_to_sol(amount));
+
+        let ix = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
+        let tx = Transaction::new_with_payer(&[ix], Some(&self.keypair.pubkey()));
+        let signature = sign_and_send_transaction(&rpc, tx, vec![keypair, &self.keypair])?;
+
+        debug!(target: "SOL BRIDGE", "Sent SOL to main wallet: {}", signature);
+        Ok(signature)
     }
 }
 
@@ -316,12 +392,10 @@ pub fn get_associated_token_account(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u
 /// Gets account token balance for given mint.
 /// Returns: (amount, decimals)
 pub fn get_account_token_balance(
-    rpc_server: String,
+    rpc: &RpcClient,
     address: &Pubkey,
     mint: &Pubkey,
 ) -> SolResult<(u64, u64)> {
-    let rpc = RpcClient::new(rpc_server);
-
     let mint_account = rpc.get_account(mint)?;
     let token_account = rpc.get_account(address)?;
     let mint_data = spl_token::state::Mint::unpack_from_slice(&mint_account.data)?;
@@ -331,11 +405,27 @@ pub fn get_account_token_balance(
 }
 
 /// Check if given account is a valid token mint
-pub fn account_is_initialized_mint(rpc_server: String, mint: &Pubkey) -> bool {
-    let rpc = RpcClient::new(rpc_server);
+pub fn account_is_initialized_mint(rpc: &RpcClient, mint: &Pubkey) -> bool {
     match rpc.get_token_supply(mint) {
         Ok(_) => true,
         Err(_) => false,
+    }
+}
+
+pub fn sign_and_send_transaction(
+    rpc: &RpcClient,
+    mut tx: Transaction,
+    signers: Vec<&Keypair>,
+) -> Result<Signature> {
+    let bhq = BlockhashQuery::default();
+    match bhq.get_blockhash_and_fee_calculator(rpc, rpc.commitment()) {
+        Err(_) => return Err(Error::ServicesError("Couldn't connect to RPC")),
+        Ok(v) => tx.sign(&signers, v.0),
+    }
+
+    match rpc.send_and_confirm_transaction(&tx) {
+        Ok(s) => Ok(s),
+        Err(_) => Err(Error::ServicesError("Failed to send transaction")),
     }
 }
 
