@@ -17,7 +17,9 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, search_id},
+    util::{
+        expand_path, join_config_path, parse_network, parse_wrapped_token, search_id, TokenList,
+    },
     wallet::WalletDb,
     Result,
 };
@@ -349,6 +351,8 @@ impl Darkfid {
 
 #[async_std::main]
 async fn main() -> Result<()> {
+    let _tokens = TokenList::new()?;
+
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
