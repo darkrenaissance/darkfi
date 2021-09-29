@@ -6,21 +6,8 @@ use crate::{
 use log::debug;
 use sha2::{Digest, Sha256};
 
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-
-pub struct TokenList {
-    tokenlist: Value,
-}
-
-impl TokenList {
-    pub fn new() -> Result<Self> {
-        let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
-        let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
-        Ok(Self { tokenlist })
-    }
-}
 
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let ret: PathBuf;
@@ -51,6 +38,7 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
 
     Ok(path)
 }
+
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum NetworkName {
@@ -216,25 +204,6 @@ pub fn search_id(symbol: &str) -> Result<String> {
     }
     unreachable!();
 }
-
-// TODO: implement this
-
-//pub fn search_decimals(symbol: &str) -> Result<String> {
-//    // TODO: FIXME
-//    let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
-//    let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
-//    let tokens = tokenlist["tokens"]
-//        .as_array()
-//        .ok_or_else(|| Error::TokenParseError)?;
-//    for item in tokens {
-//        if item["symbol"] == symbol.to_uppercase() {
-//            let address = item["address"].clone();
-//            let address = address.as_str().ok_or_else(|| Error::TokenParseError)?;
-//            return Ok(address.to_string());
-//        }
-//    }
-//    unreachable!();
-//}
 
 #[cfg(test)]
 mod tests {
