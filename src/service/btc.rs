@@ -95,7 +95,10 @@ impl BtcClient {
         }))
     }
 
-    async fn handle_subscribe_request(self: Arc<Self>, keypair: Arc<BitcoinKeys>) -> BtcResult<(Txid, u64)> {
+    async fn handle_subscribe_request(
+        self: Arc<Self>,
+        keypair: Arc<BitcoinKeys>,
+    ) -> BtcResult<(Txid, u64)> {
         debug!(
             target: "BTC BRIDGE",
             "Handle subscribe request"
@@ -159,8 +162,7 @@ impl NetworkClient for BtcClient {
 
         //let (_txid, _balance) = btc_keys.start_subscribe().await?;
 
-        let self2 = self.clone();
-        smol::spawn(self2.handle_subscribe_request(btc_keys)).detach();
+        smol::spawn(self.handle_subscribe_request(btc_keys)).detach();
 
         Ok(TokenSubscribtion {
             secret_key: serialize(&btc_privkey.to_bytes()),

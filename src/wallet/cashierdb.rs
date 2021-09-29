@@ -61,8 +61,8 @@ impl CashierDb {
 
     pub fn put_main_keys(
         &self,
-        token_key_private: &Vec<u8>,
-        token_key_public: &Vec<u8>,
+        token_key_private: &[u8],
+        token_key_public: &[u8],
         network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
@@ -118,7 +118,7 @@ impl CashierDb {
 
     pub fn put_withdraw_keys(
         &self,
-        token_key_public: &Vec<u8>,
+        token_key_public: &[u8],
         d_key_public: &jubjub::SubgroupPoint,
         d_key_private: &jubjub::Fr,
         network: &NetworkName,
@@ -157,8 +157,8 @@ impl CashierDb {
     pub fn put_deposit_keys(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
-        token_key_private: &Vec<u8>,
-        token_key_public: &Vec<u8>,
+        token_key_private: &[u8],
+        token_key_public: &[u8],
         network: &NetworkName,
         token_id: &jubjub::Fr,
     ) -> Result<()> {
@@ -206,12 +206,12 @@ impl CashierDb {
                 WHERE confirm = :confirm",
         )?;
 
-        let keys = stmt.query_map(&[(":confirm", &confirm)], |row| Ok(row.get(0)?))?;
+        let keys = stmt.query_map(&[(":confirm", &confirm)], |row| Ok(row.get(0)))?;
 
         let mut private_keys: Vec<jubjub::Fr> = vec![];
 
         for k in keys {
-            let private_key: jubjub::Fr = self.get_value_deserialized(k?)?;
+            let private_key: jubjub::Fr = self.get_value_deserialized(k??)?;
             private_keys.push(private_key);
         }
 
@@ -333,7 +333,7 @@ impl CashierDb {
 
     pub fn get_withdraw_keys_by_token_public_key(
         &self,
-        token_key_public: &Vec<u8>,
+        token_key_public: &[u8],
         network: &NetworkName,
     ) -> Result<Option<Keypair>> {
         debug!(target: "CASHIERDB", "Check for existing token address");
@@ -356,8 +356,8 @@ impl CashierDb {
         let keypair_iter = stmt.query_map(
             &[
                 (":token_key_public", &token_key_public),
-                (":network", &&network),
-                (":confirm", &&confirm),
+                (":network", &network.as_ref()),
+                (":confirm", &confirm.as_ref()),
             ],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
@@ -377,7 +377,7 @@ impl CashierDb {
 
     pub fn confirm_withdraw_key_record(
         &self,
-        token_address: &Vec<u8>,
+        token_address: &[u8],
         network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");

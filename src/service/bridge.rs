@@ -1,5 +1,5 @@
-use crate::{Error, Result};
 use crate::util::NetworkName;
+use crate::{Error, Result};
 
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
@@ -76,10 +76,7 @@ impl Bridge {
         let client2 = client.clone();
         let notifier = client2.get_notifier().await?;
 
-        self.clients
-            .lock()
-            .await
-            .insert(network, client.clone());
+        self.clients.lock().await.insert(network, client.clone());
 
         self.notifiers.push(notifier.clone());
         Ok(())
@@ -101,7 +98,7 @@ impl Bridge {
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
 
-        smol::spawn(self.listen_for_new_subscription(req.clone(), rep.clone())).detach();
+        smol::spawn(self.listen_for_new_subscription(req, rep)).detach();
 
         BridgeSubscribtion { sender, receiver }
     }

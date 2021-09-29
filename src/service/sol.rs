@@ -312,11 +312,10 @@ impl NetworkClient for SolClient {
         let public_key = keypair.pubkey().to_string();
         let secret_key = serialize(&keypair);
 
-        let self2 = self.clone();
         // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
         let mint = Pubkey::from_str("F4wkXLN5n1ckejfnJoahGpgW3ffRsrvS9GGVME6ckxS9").unwrap();
-        smol::spawn(self2.handle_subscribe_request(keypair, Some(mint))).detach();
-        //smol::spawn(self2.handle_subscribe_request(keypair, None)).detach();
+        smol::spawn(self.handle_subscribe_request(keypair, Some(mint))).detach();
+        //smol::spawn(self.handle_subscribe_request(keypair, None)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -334,11 +333,10 @@ impl NetworkClient for SolClient {
 
         let public_key = keypair.pubkey().to_string();
 
-        let self2 = self.clone();
         // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
         let mint = Pubkey::from_str("F4wkXLN5n1ckejfnJoahGpgW3ffRsrvS9GGVME6ckxS9").unwrap();
-        smol::spawn(self2.handle_subscribe_request(keypair, Some(mint))).detach();
-        //smol::spawn(self2.handle_subscribe_request(keypair, None)).detach();
+        smol::spawn(self.handle_subscribe_request(keypair, Some(mint))).detach();
+        //smol::spawn(self.handle_subscribe_request(keypair, None)).detach();
 
         Ok(public_key)
     }
