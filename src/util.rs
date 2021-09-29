@@ -112,7 +112,7 @@ pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
                     continue;
                 }
                 debug!(target: "CASHIER", "DESERIALIZATION SUCCESSFUL");
-                token_id.unwrap();
+                return Ok(token_id.unwrap());
             }
         }
     };
