@@ -18,12 +18,12 @@
 
 ## bridge
 
-- [ ] implement listen function
-- [ ] solana: Check if given token mint is valid and initialized on deposito/withdraw
+- [ ] pass Option of mint address to subscribe function in NetworkClient trait 
 
 ## withdraw
 
 - [ ] cashierd: send the received coins to the main address of cashierd
+- [ ] cashierd: send drk coins once received a notification from bridge 
 
 ## drk -> drk
 
