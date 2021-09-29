@@ -17,7 +17,9 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, search_id},
+    util::{
+        expand_path, join_config_path, parse_network, parse_params, parse_wrapped_token, search_id,
+    },
     wallet::WalletDb,
     Result,
 };

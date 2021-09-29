@@ -39,7 +39,6 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
     Ok(path)
 }
 
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum NetworkName {
     Solana,
@@ -151,21 +150,19 @@ pub fn parse_network(network: &str, token: &str) -> Result<String> {
     }
 }
 
-// BTC has 8 decimals
-// SOL uses conversion function soltolamport()
-// or there are decimals in the token info
-// TODO: how to organize these functions more logically w less repetition?
 pub fn parse_params(network: &str, token: &str, amount: u64) -> Result<(String, u64)> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token {
             "solana" | "sol" => {
                 let token_id = "So11111111111111111111111111111111111111112";
-                let amount_in_apo: u64 = amount * 10 ^ 8;
+                let decimals = 9;
+                let amount_in_apo: u64 = amount * 10 ^ decimals;
                 Ok((token_id.to_string(), amount_in_apo))
             }
             tkn => {
                 let token_id = symbol_to_id(tkn)?;
-                let amount_in_apo: u64 = amount * 10 ^ 8;
+                let decimals = search_decimal(tkn)?;
+                let amount_in_apo: u64 = amount * 10 ^ decimals;
                 Ok((token_id.to_string(), amount_in_apo))
             }
         },
@@ -200,6 +197,23 @@ pub fn search_id(symbol: &str) -> Result<String> {
             let address = item["address"].clone();
             let address = address.as_str().ok_or_else(|| Error::TokenParseError)?;
             return Ok(address.to_string());
+        }
+    }
+    unreachable!();
+}
+
+pub fn search_decimal(symbol: &str) -> Result<u64> {
+    // TODO: FIXME
+    let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
+    let tokenlist: serde_json::Value = serde_json::from_str(&file_contents)?;
+    let tokens = tokenlist["tokens"]
+        .as_array()
+        .ok_or_else(|| Error::TokenParseError)?;
+    for item in tokens {
+        if item["symbol"] == symbol.to_uppercase() {
+            let decimals = item["decimals"].clone();
+            let decimals = decimals.as_u64().ok_or_else(|| Error::TokenParseError)?;
+            return Ok(decimals);
         }
     }
     unreachable!();
