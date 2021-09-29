@@ -18,7 +18,7 @@ use drk::{
     },
     serial::{deserialize, serialize},
     util::{
-        expand_path, join_config_path, parse_network, parse_params, parse_wrapped_token, search_id,
+        expand_path, join_config_path, parse_network, parse_wrapped_token, search_id,
     },
     wallet::WalletDb,
     Result,
@@ -57,7 +57,7 @@ impl RequestHandler for Darkfid {
 }
 
 impl Darkfid {
-    fn new(config_path: PathBuf) -> Result<Self> {
+    async fn new(config_path: PathBuf) -> Result<Self> {
         let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
         let wallet = WalletDb::new(
             expand_path(&config.wallet_path)?.as_path(),
@@ -78,7 +78,8 @@ impl Darkfid {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             wallet.clone(),
-        )?;
+        ).await?;
+
         let client = Arc::new(Mutex::new(client));
 
         Ok(Self {
@@ -371,7 +372,7 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
 
-    let darkfid = Darkfid::new(config_path)?;
+    let darkfid = Darkfid::new(config_path).await?;
 
     let server_config = RpcServerConfig {
         socket_addr: darkfid.config.rpc_listen_address.clone(),

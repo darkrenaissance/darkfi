@@ -1,18 +1,20 @@
-use crate::blockchain::{rocks::columns, Rocks, RocksColumn, Slab};
-use crate::crypto::{
-    load_params,
-    merkle::{CommitmentTree, IncrementalWitness},
-    merkle_node::MerkleNode,
-    note::{EncryptedNote, Note},
-    nullifier::Nullifier,
-    save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
+use crate::{
+    blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
+    crypto::{
+        load_params,
+        merkle::{CommitmentTree, IncrementalWitness},
+        merkle_node::MerkleNode,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
+        save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
+    },
+    serial::{Decodable, Encodable},
+    service::{GatewayClient, GatewaySlabsSubscriber},
+    state::{state_transition, ProgramState, StateUpdate},
+    tx,
+    wallet::{CashierDbPtr, Keypair, WalletPtr},
+    Result,
 };
-use crate::serial::Decodable;
-use crate::serial::Encodable;
-use crate::service::{GatewayClient, GatewaySlabsSubscriber};
-use crate::state::{state_transition, ProgramState, StateUpdate};
-use crate::wallet::{CashierDbPtr, WalletPtr};
-use crate::{tx, Result};
 
 use super::ClientFailed;
 
@@ -30,10 +32,11 @@ pub struct Client {
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
+    pub main_keypair: Keypair
 }
 
 impl Client {
-    pub fn new(
+    pub async fn new(
         rocks: Arc<Rocks>,
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
@@ -45,6 +48,15 @@ impl Client {
 
         let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
         let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
+
+
+        wallet.init_db().await?;
+
+        if wallet.get_keypairs()?.len() == 0 {
+            wallet.key_gen()?;
+        }
+
+        let main_keypair = wallet.get_keypairs()?[0].clone();
 
         // Auto create trusted ceremony parameters if they don't exist
         if !params_paths.0.exists() {
@@ -78,6 +90,7 @@ impl Client {
             mint_params,
             spend_params,
             gateway,
+            main_keypair,
         })
     }
 

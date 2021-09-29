@@ -44,7 +44,6 @@ struct Cashierd {
 
 #[async_trait]
 impl RequestHandler for Cashierd {
-    // TODO: ServerError codes should be part of the lib.
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
@@ -65,7 +64,7 @@ impl RequestHandler for Cashierd {
 }
 
 impl Cashierd {
-    fn new(config_path: PathBuf) -> Result<Self> {
+    async fn new(config_path: PathBuf) -> Result<Self> {
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
         let cashier_wallet = CashierDb::new(
@@ -91,7 +90,7 @@ impl Cashierd {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             client_wallet.clone(),
-        )?;
+        ).await?;
 
         let client = Arc::new(Mutex::new(client));
 
@@ -521,6 +520,6 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
     let ex = Arc::new(Executor::new());
-    let cashierd = Cashierd::new(config_path)?;
+    let cashierd = Cashierd::new(config_path).await?;
     cashierd.start(ex.clone()).await
 }
