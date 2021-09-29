@@ -90,8 +90,7 @@ impl ZkContract {
         }
 
         // execute
-        //let params = std::mem::take(&mut self.params);
-        let params = std::mem::replace(&mut self.params, HashMap::default());
+        let params = std::mem::take(&mut self.params);
         self.vm.initialize(&params.into_iter().collect())?;
 
         // prove

@@ -90,7 +90,7 @@ impl Bridge {
             .collect::<FuturesUnordered<async_channel::Recv<TokenNotification>>>()
             .next()
             .await
-            .map(|o| o.map_err(|e| Error::from(e)))
+            .map(|o| o.map_err(Error::from))
     }
 
     pub async fn subscribe(self: Arc<Self>) -> BridgeSubscribtion {

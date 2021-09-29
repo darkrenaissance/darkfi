@@ -105,14 +105,9 @@ impl SolClient {
 
         // Fetch the current balance.
         let (prev_balance, decimals) = if mint.is_none() {
-            (
-                rpc.get_balance(&pubkey)
-                    .map_err(|err| SolFailed::from(err))?,
-                9,
-            )
+            (rpc.get_balance(&pubkey).map_err(SolFailed::from)?, 9)
         } else {
-            get_account_token_balance(&rpc, &pubkey, &mint.unwrap())
-                .map_err(|err| SolFailed::from(err))?
+            get_account_token_balance(&rpc, &pubkey, &mint.unwrap()).map_err(SolFailed::from)?
         };
 
         // WebSocket connection
@@ -359,7 +354,7 @@ impl NetworkClient for SolClient {
 
         let _signature = rpc
             .send_and_confirm_transaction(&tx)
-            .map_err(|err| SolFailed::from(err))?;
+            .map_err(SolFailed::from)?;
 
         Ok(())
     }

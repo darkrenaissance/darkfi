@@ -94,28 +94,30 @@ pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
         debug!(target: "PARSE ID", "COULD NOT DECODE STR");
     }
     let mut data = bs58::decode(tkn_str).into_vec().unwrap();
-    let token_id = deserialize::<jubjub::Fr>(&data);
-    if token_id.is_err() {
-        let mut counter = 0;
-        loop {
-            data.truncate(28);
-            let serialized_counter = serialize(&counter);
-            data.extend(serialized_counter.iter());
-            let mut hasher = Sha256::new();
-            hasher.update(&data);
-            let hash = hasher.finalize();
-            let token_id = deserialize::<jubjub::Fr>(&hash);
-            if token_id.is_err() {
-                counter += 1;
-                continue;
+
+    let token_id = match deserialize::<jubjub::Fr>(&data) {
+        Ok(v) => v,
+        Err(_) => {
+            let mut counter = 0;
+            loop {
+                data.truncate(28);
+                let serialized_counter = serialize(&counter);
+                data.extend(serialized_counter.iter());
+                let mut hasher = Sha256::new();
+                hasher.update(&data);
+                let hash = hasher.finalize();
+                let token_id = deserialize::<jubjub::Fr>(&hash);
+                if token_id.is_err() {
+                    counter += 1;
+                    continue;
+                }
+                debug!(target: "CASHIER", "DESERIALIZATION SUCCESSFUL");
+                token_id.unwrap();
             }
-            debug!(target: "CASHIER", "DESERIALIZATION SUCCESSFUL");
-            let tkn = token_id.unwrap();
-            return Ok(tkn);
         }
-    } else {
-        Ok(token_id.unwrap())
-    }
+    };
+
+    Ok(token_id)
 }
 
 pub fn parse_wrapped_token(token: &str) -> Result<jubjub::Fr> {
