@@ -86,7 +86,7 @@ impl SolClient {
         self: Arc<Self>,
         keypair: Keypair,
         mint: Option<Pubkey>,
-    ) -> Result<()> {
+    ) -> SolResult<()> {
         debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
 
         // Derive token pubkey if mint was provided.
@@ -157,7 +157,7 @@ impl SolClient {
                 JsonResult::Err(e) => {
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&e)?);
                     // TODO: Try removing pubkey from subscriptions here?
-                    return Err(Error::JsonRpcError(e.error.message.to_string()));
+                    return Err(SolFailed::RpcError(e.error.message.to_string()));
                 }
                 JsonResult::Notif(n) => {
                     // Account updated
@@ -168,7 +168,8 @@ impl SolClient {
                         cur_balance = params["data"]["parsed"]["info"]["tokenAmount"]["amount"]
                             .as_str()
                             .unwrap()
-                            .parse()?;
+                            .parse()
+                            .map_err(|e| SolFailed::from(Error::from(e)))?;
                     } else {
                         cur_balance = params["lamports"].as_u64().unwrap();
                     }
@@ -196,8 +197,8 @@ impl SolClient {
 
         if cur_balance < prev_balance {
             error!("New balance is less than previous balance");
-            return Err(Error::ServicesError(
-                "New balance is less than previous balance",
+            return Err(SolFailed::Notification(
+                "New balance is less than previous balance".into(),
             ));
         }
 
@@ -223,12 +224,12 @@ impl SolClient {
         amount: u64,
         decimals: u64,
         keypair: &Keypair,
-    ) -> Result<Signature> {
+    ) -> SolResult<Signature> {
         debug!(target: "SOL BRIDGE", "Sending {} {:?} tokens to main wallet",
                 amount / u64::pow(10, decimals as u32), mint);
 
         if !account_is_initialized_mint(rpc, mint) {
-            return Err(Error::ServicesError("Given mint is not valid"));
+            return Err(SolFailed::MintIsNotValid(mint.to_string()));
         }
 
         // The token account from our main wallet
@@ -244,7 +245,11 @@ impl SolClient {
                     // It's valid token data, and we consider account initialized.
                     Ok(_) => {}
                     // Some other unexpected data.
-                    Err(_) => return Err(Error::ServicesError("Invalid data on derived account")),
+                    Err(_) => {
+                        return Err(SolFailed::SolClientError(
+                            "Invalid data on derived account".into(),
+                        ));
+                    }
                 }
             }
             Err(_) => {
@@ -269,8 +274,7 @@ impl SolClient {
             &[],
             amount,
             decimals as u8,
-        )
-        .unwrap();
+        )?;
 
         instructions.push(transfer_ix);
 
@@ -288,7 +292,7 @@ impl SolClient {
         rpc: &RpcClient,
         amount: u64,
         keypair: &Keypair,
-    ) -> Result<Signature> {
+    ) -> SolResult<Signature> {
         debug!(target: "SOL BRIDGE", "Sending {} SOL to main wallet", lamports_to_sol(amount));
 
         let ix = system_instruction::transfer(&keypair.pubkey(), &self.keypair.pubkey(), amount);
@@ -387,16 +391,16 @@ pub fn sign_and_send_transaction(
     rpc: &RpcClient,
     mut tx: Transaction,
     signers: Vec<&Keypair>,
-) -> Result<Signature> {
+) -> SolResult<Signature> {
     let bhq = BlockhashQuery::default();
     match bhq.get_blockhash_and_fee_calculator(rpc, rpc.commitment()) {
-        Err(_) => return Err(Error::ServicesError("Couldn't connect to RPC")),
+        Err(_) => return Err(SolFailed::RpcError("Couldn't connect to RPC".into())),
         Ok(v) => tx.sign(&signers, v.0),
     }
 
     match rpc.send_and_confirm_transaction(&tx) {
         Ok(s) => Ok(s),
-        Err(_) => Err(Error::ServicesError("Failed to send transaction")),
+        Err(_) => Err(SolFailed::RpcError("Failed to send transaction".into())),
     }
 }
 
@@ -446,7 +450,12 @@ pub enum SolFailed {
     BadSolAddress(String),
     DecodeAndEncodeError(String),
     WebSocketError(String),
+    RpcError(String),
     SolClientError(String),
+    Notification(String),
+    ProgramError(String),
+    MintIsNotValid(String),
+    JsonError(String),
     ParseError(String),
     SolError(String),
 }
@@ -468,11 +477,26 @@ impl std::fmt::Display for SolFailed {
             SolFailed::WebSocketError(i) => {
                 write!(f, "WebSocket Error: {}", i)
             }
+            SolFailed::RpcError(i) => {
+                write!(f, "Rpc Error: {}", i)
+            }
             SolFailed::ParseError(i) => {
                 write!(f, "Parse Error: {}", i)
             }
             SolFailed::SolClientError(i) => {
                 write!(f, "Solana Client Error: {}", i)
+            }
+            SolFailed::Notification(i) => {
+                write!(f, "Received Notification Error: {}", i)
+            }
+            SolFailed::ProgramError(i) => {
+                write!(f, "ProgramError Error: {}", i)
+            }
+            SolFailed::MintIsNotValid(i) => {
+                write!(f, "Given mint is not valid: {}", i)
+            }
+            SolFailed::JsonError(i) => {
+                write!(f, "JsonError: {}", i)
             }
             SolFailed::SolError(i) => {
                 write!(f, "SolFailed: {}", i)
@@ -501,13 +525,18 @@ impl From<solana_client::client_error::ClientError> for SolFailed {
 
 impl From<solana_sdk::program_error::ProgramError> for SolFailed {
     fn from(err: solana_sdk::program_error::ProgramError) -> SolFailed {
-        SolFailed::SolError(err.to_string())
+        SolFailed::ProgramError(err.to_string())
     }
 }
 
 impl From<crate::error::Error> for SolFailed {
     fn from(err: crate::error::Error) -> SolFailed {
         SolFailed::SolError(err.to_string())
+    }
+}
+impl From<serde_json::Error> for SolFailed {
+    fn from(err: serde_json::Error) -> SolFailed {
+        SolFailed::JsonError(err.to_string())
     }
 }
 
