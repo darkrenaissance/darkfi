@@ -127,7 +127,13 @@ pub fn parse_wrapped_token(token: &str) -> Result<jubjub::Fr> {
         }
         "btc" => Err(Error::TokenParseError),
         tkn => {
-            let id = symbol_to_id(tkn)?;
+            // (== 44) can represent a Solana base58 token mint address
+            let id = if token.len() == 44 {
+                token.to_string()
+            } else {
+                symbol_to_id(tkn)?
+            };
+
             let token_id = generate_id(&id)?;
             Ok(token_id)
         }
@@ -142,7 +148,12 @@ pub fn parse_network(network: &str, token: &str) -> Result<String> {
                 Ok(token_id.to_string())
             }
             tkn => {
-                let id = symbol_to_id(tkn)?;
+                // (== 44) can represent a Solana base58 token mint address
+                let id = if token.len() == 44 {
+                    token.to_string()
+                } else {
+                    symbol_to_id(tkn)?
+                };
                 Ok(id)
             }
         },
