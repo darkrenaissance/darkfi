@@ -390,7 +390,10 @@ impl Cashierd {
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
-                    use solana_sdk::signer::keypair::Keypair;
+                    use solana_sdk::{
+                        signature::Signer,
+                        signer::keypair::Keypair,
+                    };
 
                     let main_keypair: Keypair;
 
@@ -398,6 +401,11 @@ impl Cashierd {
 
                     if main_keypairs.is_empty() {
                         main_keypair = Keypair::new();
+                        self.cashier_wallet.put_main_keys(
+                            &serialize(&main_keypair),
+                            &serialize(&main_keypair.pubkey()),
+                            &NetworkName::Solana,
+                        )?;
                     } else {
                         main_keypair = deserialize(&main_keypairs[0].0)?;
                     }
