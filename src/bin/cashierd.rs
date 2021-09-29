@@ -276,7 +276,7 @@ impl Cashierd {
     }
 
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
-        debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
+        debug!(target: "CASHIER DAEMON", "RECEIVED WITHDRAW REQUEST");
 
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
@@ -390,10 +390,7 @@ impl Cashierd {
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
-                    use solana_sdk::{
-                        signature::Signer,
-                        signer::keypair::Keypair,
-                    };
+                    use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
                     let main_keypair: Keypair;
 
