@@ -1225,6 +1225,7 @@ dependencies = [
  "smol",
  "solana-client",
  "solana-sdk",
+ "spl-associated-token-account",
  "spl-token",
  "toml",
  "tungstenite 0.15.0",
