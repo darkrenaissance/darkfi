@@ -17,7 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, TokenList},
+    util::{assign_id, expand_path, join_config_path, parse_wrapped_token, TokenList},
     wallet::WalletDb,
     Result,
 };
@@ -213,7 +213,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match parse_network(&network, &token, self.tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
             Err(_e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
