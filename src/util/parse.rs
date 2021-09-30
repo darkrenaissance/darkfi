@@ -8,53 +8,8 @@ use log::debug;
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
-//1. deposit(network, asset)
-//
-//internal ID = hash(externalID, NetworkName)
-//deposit(internalID)
-
-//2. withdraw(network, asset, amount)
-//internal ID = hash(externalID, NetworkName)
-//amountu64 = amount.to_u64()
-//withdraw(internalID, amount)
-
-//3. transfer(asset, amount, address)
-//asset = { match [SOL, BTC, TOKEN]
-//        return token-id from wallet.db }
-//amountu64 = amount.to_u64()
-//address = jubjub::SubgroupPoint
-//transfer(token_id, amountu64, address)
-//
-//
-//
-//
-//
-// extern_tokenID
-// tokenID
-//
-
-//pub fn create_id(extern_tokenID, NetworkName) -> Result<jubjub::Fr> {
-//}
-
-// DEPOSIT
-// parse_network
-// parse_id
-
-// generate_id
-//
-// WITHDRAW
-// parse_network
-// parse_id
-//
-// generate_id
-// amount.to_u64()
-//
-// TRANSFER
-// get_id
-// amount.to_u64()
-
-// here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
-// again, and keep repeating until it works.
+// hash the external token ID and NetworkName param.
+// if fails, change the last 4 bytes and hash it again. keep repeating until it works.
 pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     let mut id_string = network.to_string();
     id_string.push_str(tkn_str);
@@ -89,28 +44,6 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-//pub fn parse_wrapped_token(token: &str, tokenlist: TokenList) -> Result<jubjub::Fr> {
-//    match token.to_lowercase().as_str() {
-//        "sol" => {
-//            let id = "So11111111111111111111111111111111111111112";
-//            let token_id = generate_id(id)?;
-//            Ok(token_id)
-//        }
-//        "btc" => Err(Error::TokenParseError),
-//        tkn => {
-//            // (== 44) can represent a Solana base58 token mint address
-//            let id = if token.len() == 44 {
-//                token.to_string()
-//            } else {
-//                symbol_to_id(tkn, tokenlist)?
-//            };
-//
-//            let token_id = generate_id(&id)?;
-//            Ok(token_id)
-//        }
-//    }
-//}
-
 pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<String> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token.to_lowercase().as_str() {
@@ -132,31 +65,6 @@ pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<Str
     }
 }
 
-//pub fn parse_params(
-//    network: &str,
-//    token: &str,
-//    amount: u64,
-//    tokenlist: TokenList,
-//) -> Result<(String, u64)> {
-//    match NetworkName::from_str(network)? {
-//        NetworkName::Solana => match token {
-//            "solana" | "sol" => {
-//                let token_id = "So11111111111111111111111111111111111111112";
-//                let decimals = 9;
-//                let amount_in_apo = amount * u64::pow(10, decimals as u32);
-//                Ok((token_id.to_string(), amount_in_apo))
-//            }
-//            tkn => {
-//                let token_id = symbol_to_id(tkn, tokenlist.clone())?;
-//                let decimals = tokenlist.search_decimal(tkn)?;
-//                let amount_in_apo = amount * u64::pow(10, decimals as u32);
-//                Ok((token_id, amount_in_apo))
-//            }
-//        },
-//        NetworkName::Bitcoin => Err(Error::NetworkParseError),
-//    }
-//}
-//
 pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<u64> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token {
