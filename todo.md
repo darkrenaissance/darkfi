@@ -18,7 +18,7 @@
 
 ## bridge
 
-- [ ] pass Option of mint address to subscribe function in NetworkClient trait 
+- [ ] ...
 
 ## withdraw
 
