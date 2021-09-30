@@ -112,14 +112,13 @@ impl Client {
         &mut self,
         asset_id: jubjub::Fr,
         pub_key: jubjub::SubgroupPoint,
-        // TODO: FIX THIS
-        amount: f64,
+        amount: u64,
     ) -> Result<()> {
-        if amount <= 0.0 {
+        if amount <= 0 {
             return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
-        self.send(pub_key, amount as u64, asset_id, false).await?;
+        self.send(pub_key, amount, asset_id, false).await?;
 
         Ok(())
     }
@@ -150,7 +149,7 @@ impl Client {
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
 
         if clear_input {
-            let signature_secret = self.state.wallet.get_keypairs()?[0].private;
+            let signature_secret = self.main_keypair.private;
             let input = tx::TransactionBuilderClearInputInfo {
                 value,
                 asset_id,

@@ -305,11 +305,11 @@ impl CashierDb {
         Ok(keys)
     }
 
-    // return private key, public key, token_id, and mint_address as a tuple
+    // return drk_pub_key, private key, public key, token_id, and mint_address as a tuple
     pub fn get_deposit_token_keys_by_network(
         &self,
         network: &NetworkName,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>, jubjub::Fr, String)>> {
+    ) -> Result<Vec<(jubjub::SubgroupPoint, Vec<u8>, Vec<u8>, jubjub::Fr, String)>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -320,25 +320,26 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public, token_id, mint_address
+            "SELECT d_pub_key, token_key_private, token_key_public, token_id, mint_address
             FROM deposit_keypairs
             WHERE network = :network
             AND confirm = :confirm ;",
         )?;
         let keys_iter = stmt
             .query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
             })?;
 
         let mut keys = vec![];
 
         for key in keys_iter {
             let key = key?;
-            let private_key = key.0;
-            let pub_key = key.1;
-            let token_id: jubjub::Fr = self.get_value_deserialized(key.2)?;
-            let mint_address: String = self.get_value_deserialized(key.3)?;
-            keys.push((private_key, pub_key, token_id, mint_address));
+            let drk_pub_key: jubjub::SubgroupPoint = self.get_value_deserialized(key.0)?;
+            let private_key = key.1;
+            let pub_key = key.2;
+            let token_id: jubjub::Fr = self.get_value_deserialized(key.3)?;
+            let mint_address: String = self.get_value_deserialized(key.4)?;
+            keys.push((drk_pub_key, private_key, pub_key, token_id, mint_address));
         }
 
         Ok(keys)

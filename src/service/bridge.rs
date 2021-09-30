@@ -50,8 +50,8 @@ pub struct TokenSubscribtion {
 #[derive(Debug)]
 pub struct TokenNotification {
     pub network: NetworkName,
-    pub asset_id: jubjub::Fr,
-    pub secret_key: Vec<u8>,
+    pub token_id: jubjub::Fr,
+    pub drk_pub_key: jubjub::SubgroupPoint,
     pub received_balance: u64,
 }
 
@@ -93,12 +93,12 @@ impl Bridge {
             .map(|o| o.map_err(Error::from))
     }
 
-    pub async fn subscribe(self: Arc<Self>, mint: Option<String>) -> BridgeSubscribtion {
+    pub async fn subscribe(self: Arc<Self>, drk_pub_key: jubjub::SubgroupPoint, mint: Option<String>) -> BridgeSubscribtion {
         debug!(target: "BRIDGE", "Start new subscription");
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
 
-        smol::spawn(self.listen_for_new_subscription(req, rep, mint)).detach();
+        smol::spawn(self.listen_for_new_subscription(req, rep, drk_pub_key, mint)).detach();
 
         BridgeSubscribtion { sender, receiver }
     }
@@ -107,6 +107,7 @@ impl Bridge {
         self: Arc<Self>,
         req: async_channel::Receiver<BridgeRequests>,
         rep: async_channel::Sender<BridgeResponse>,
+        drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
     ) -> Result<()> {
         debug!(target: "BRIDGE", "Listen for new subscription");
@@ -142,7 +143,7 @@ impl Bridge {
             BridgeRequestsPayload::Watch(val) => match val {
                 Some((private_key, public_key)) => {
                     let pub_key = client
-                        .subscribe_with_keypair(private_key, public_key, mint_address)
+                        .subscribe_with_keypair(private_key, public_key, drk_pub_key, mint_address)
                         .await?;
                     let res = BridgeResponse {
                         error: BridgeResponseError::NoError,
@@ -151,7 +152,7 @@ impl Bridge {
                     rep.send(res).await?;
                 }
                 None => {
-                    let sub = client.subscribe(mint_address).await?;
+                    let sub = client.subscribe(drk_pub_key, mint_address).await?;
                     let res = BridgeResponse {
                         error: BridgeResponseError::NoError,
                         payload: BridgeResponsePayload::Watch(sub.secret_key, sub.public_key),
@@ -175,13 +176,14 @@ impl Bridge {
 
 #[async_trait]
 pub trait NetworkClient {
-    async fn subscribe(self: Arc<Self>, mint: Option<String>) -> Result<TokenSubscribtion>;
+    async fn subscribe(self: Arc<Self>, drk_pub_key: jubjub::SubgroupPoint, mint: Option<String>) -> Result<TokenSubscribtion>;
 
     // should check if the keypair in not already subscribed
     async fn subscribe_with_keypair(
         self: Arc<Self>,
         private_key: Vec<u8>,
         public_key: Vec<u8>,
+        drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
     ) -> Result<String>;
 

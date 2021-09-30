@@ -24,9 +24,12 @@ use tungstenite::Message;
 
 use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
+use crate::util::{generate_id, NetworkName};
 use crate::{Error, Result};
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
+
+pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
 
 #[derive(Serialize)]
 struct SubscribeParams {
@@ -85,6 +88,7 @@ impl SolClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
+        drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<Pubkey>,
     ) -> SolResult<()> {
         debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
@@ -200,11 +204,35 @@ impl SolClient {
         if mint.is_some() {
             let amnt = cur_balance - prev_balance;
             let ui_amnt = amnt / u64::pow(10, decimals as u32);
+
+            self.notify_channel
+                .0
+                .send(TokenNotification {
+                    network: NetworkName::Solana,
+                    token_id: generate_id(&mint.unwrap().to_string())?,
+                    drk_pub_key,
+                    received_balance: amnt,
+                })
+                .await
+                .map_err(Error::from)?;
+
             debug!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
             let _ = self.send_tok_to_main_wallet(&rpc, &mint.unwrap(), amnt, decimals, &keypair)?;
         } else {
             let amnt = cur_balance - prev_balance;
             let ui_amnt = lamports_to_sol(amnt);
+
+            self.notify_channel
+                .0
+                .send(TokenNotification {
+                    network: NetworkName::Solana,
+                    token_id: generate_id(SOL_NATIVE_TOKEN_ID)?,
+                    drk_pub_key,
+                    received_balance: amnt,
+                })
+                .await
+                .map_err(Error::from)?;
+
             debug!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
             let _ = self.send_sol_to_main_wallet(&rpc, amnt, &keypair)?;
         }
@@ -329,7 +357,11 @@ impl SolClient {
 
 #[async_trait]
 impl NetworkClient for SolClient {
-    async fn subscribe(self: Arc<Self>, mint_address: Option<String>) -> Result<TokenSubscribtion> {
+    async fn subscribe(
+        self: Arc<Self>,
+        drk_pub_key: jubjub::SubgroupPoint,
+        mint_address: Option<String>,
+    ) -> Result<TokenSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
         let public_key = keypair.pubkey().to_string();
@@ -337,7 +369,7 @@ impl NetworkClient for SolClient {
 
         let mint = self.check_mint_address(mint_address)?;
 
-        smol::spawn(self.handle_subscribe_request(keypair, mint)).detach();
+        smol::spawn(self.handle_subscribe_request(keypair, drk_pub_key, mint)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -350,6 +382,7 @@ impl NetworkClient for SolClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         _public_key: Vec<u8>,
+        drk_pub_key: jubjub::SubgroupPoint,
         mint_address: Option<String>,
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
@@ -358,7 +391,7 @@ impl NetworkClient for SolClient {
 
         let mint = self.check_mint_address(mint_address)?;
 
-        smol::spawn(self.handle_subscribe_request(keypair, mint)).detach();
+        smol::spawn(self.handle_subscribe_request(keypair, drk_pub_key, mint)).detach();
 
         Ok(public_key)
     }

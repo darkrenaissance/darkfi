@@ -17,9 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{
-        expand_path, join_config_path, parse_network, parse_wrapped_token, search_id,
-    },
+    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, search_id},
     wallet::WalletDb,
     Result,
 };
@@ -78,7 +76,8 @@ impl Darkfid {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             wallet.clone(),
-        ).await?;
+        )
+        .await?;
 
         let client = Arc::new(Mutex::new(client));
 
@@ -334,10 +333,11 @@ impl Darkfid {
             let token_id = parse_wrapped_token(token)?;
             let address = bs58::decode(&address).into_vec()?;
             let address: jubjub::SubgroupPoint = deserialize(&address)?;
+            // TODO FIX THE AMOUNT
             self.client
                 .lock()
                 .await
-                .transfer(token_id, address, amount)
+                .transfer(token_id, address, amount as u64)
                 .await?;
             Ok(())
         }

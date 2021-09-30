@@ -120,10 +120,11 @@ impl Cashierd {
         for (network, _) in features.iter() {
             let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
 
-            for (private_key, public_key, _token_id, mint_address) in keypairs_to_watch {
+            for (drk_pub_key, private_key, public_key, _token_id, mint_address) in keypairs_to_watch
+            {
                 let bridge = bridge.clone();
 
-                let bridge_subscribtion = bridge.subscribe(Some(mint_address)).await;
+                let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
 
                 bridge_subscribtion
                     .sender
@@ -157,8 +158,7 @@ impl Cashierd {
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
         if let Some((addr, network, _token_id, mint_address)) = token {
-
-            let bridge_subscribtion = bridge.subscribe(Some(mint_address)).await;
+            let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
 
             bridge_subscribtion
                 .sender
@@ -175,7 +175,6 @@ impl Cashierd {
             if error_code == 0 {
                 match res.payload {
                     bridge::BridgeResponsePayload::Send => {
-                        // TODO Send the received coins to the main address
                         cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
                     }
                     _ => {}
@@ -227,7 +226,7 @@ impl Cashierd {
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
 
             let bridge = self.bridge.clone();
-            let bridge_subscribtion = bridge.subscribe(mint_address_opt).await;
+            let bridge_subscribtion = bridge.subscribe(drk_pub_key, mint_address_opt).await;
 
             if check.is_empty() {
                 bridge_subscribtion
@@ -458,31 +457,41 @@ impl Cashierd {
 
         let cashier_wallet = self.cashier_wallet.clone();
         let bridge = self.bridge.clone();
-        let listen_for_receiving_coins_task = smol::spawn(async move {
+        let listen_for_receiving_coins_task: smol::Task<Result<()>> = smol::spawn(async move {
             loop {
                 Self::listen_for_receiving_coins(
                     bridge.clone(),
                     cashier_wallet.clone(),
                     recv_coin.clone(),
                 )
-                .await
-                .expect(" listen for receiving coins");
+                .await?;
             }
         });
 
         let bridge2 = self.bridge.clone();
-        let listen_for_notification_from_bridge_task = smol::spawn(async move {
-            loop {
-                if let Some(token_notification) = bridge2.clone().listen().await {
-                    let token_notification =
-                        token_notification.expect("listen for notification from bridge");
+        let client2 = self.client.clone();
+        let listen_for_notification_from_bridge_task: smol::Task<Result<()>> = smol::spawn(
+            async move {
+                loop {
+                    if let Some(token_notification) = bridge2.clone().listen().await {
+                        let token_notification = token_notification?;
 
-                    debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
+                        debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
 
-                    // TODO should send drk coins
+                        client2
+                            .lock()
+                            .await
+                            .send(
+                                token_notification.drk_pub_key,
+                                token_notification.received_balance,
+                                token_notification.token_id,
+                                true,
+                            )
+                            .await?;
+                    }
                 }
-            }
-        });
+            },
+        );
 
         let cfg = RpcServerConfig {
             socket_addr: self.config.rpc_listen_address.clone(),
