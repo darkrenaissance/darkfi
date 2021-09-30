@@ -22,8 +22,7 @@
 
 ## withdraw
 
-- [ ] cashierd: send the received coins to the main address of cashierd
-- [ ] cashierd: send drk coins once received a notification from bridge 
+- [ ] ...
 
 ## drk -> drk
 
