@@ -55,12 +55,14 @@ use std::str::FromStr;
 
 // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
 // again, and keep repeating until it works.
-pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
-    if bs58::decode(tkn_str).into_vec().is_err() {
+pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
+    let mut id_string = network.to_string();
+    id_string.push_str(tkn_str);
+    if bs58::decode(id_string.clone()).into_vec().is_err() {
         // TODO: make this an error
         debug!(target: "PARSE ID", "COULD NOT DECODE STR");
     }
-    let mut data = bs58::decode(tkn_str).into_vec().unwrap();
+    let mut data = bs58::decode(id_string).into_vec().unwrap();
 
     let token_id = match deserialize::<jubjub::Fr>(&data) {
         Ok(v) => v,
@@ -87,27 +89,27 @@ pub fn generate_id(tkn_str: &str) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn parse_wrapped_token(token: &str, tokenlist: TokenList) -> Result<jubjub::Fr> {
-    match token.to_lowercase().as_str() {
-        "sol" => {
-            let id = "So11111111111111111111111111111111111111112";
-            let token_id = generate_id(id)?;
-            Ok(token_id)
-        }
-        "btc" => Err(Error::TokenParseError),
-        tkn => {
-            // (== 44) can represent a Solana base58 token mint address
-            let id = if token.len() == 44 {
-                token.to_string()
-            } else {
-                symbol_to_id(tkn, tokenlist)?
-            };
-
-            let token_id = generate_id(&id)?;
-            Ok(token_id)
-        }
-    }
-}
+//pub fn parse_wrapped_token(token: &str, tokenlist: TokenList) -> Result<jubjub::Fr> {
+//    match token.to_lowercase().as_str() {
+//        "sol" => {
+//            let id = "So11111111111111111111111111111111111111112";
+//            let token_id = generate_id(id)?;
+//            Ok(token_id)
+//        }
+//        "btc" => Err(Error::TokenParseError),
+//        tkn => {
+//            // (== 44) can represent a Solana base58 token mint address
+//            let id = if token.len() == 44 {
+//                token.to_string()
+//            } else {
+//                symbol_to_id(tkn, tokenlist)?
+//            };
+//
+//            let token_id = generate_id(&id)?;
+//            Ok(token_id)
+//        }
+//    }
+//}
 
 pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<String> {
     match NetworkName::from_str(network)? {

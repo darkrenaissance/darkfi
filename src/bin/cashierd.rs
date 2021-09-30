@@ -206,7 +206,7 @@ impl Cashierd {
         let result: Result<String> = async {
             Self::validate_token_id(&network, token_id)?;
 
-            let asset_id = generate_id(token_id)?;
+            let asset_id = generate_id(token_id, &network)?;
 
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
@@ -300,7 +300,7 @@ impl Cashierd {
         let result: Result<String> = async {
             Self::validate_token_id(&network, token)?;
 
-            let asset_id = generate_id(&token)?;
+            let asset_id = generate_id(&token, &network)?;
             let address = serialize(&address.to_string());
 
             let cashier_public: jubjub::SubgroupPoint;
