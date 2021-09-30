@@ -204,7 +204,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token_id)?;
+            Self::validate_token_id(&network, token_id)?;
 
             let asset_id = generate_id(token_id)?;
 
@@ -298,7 +298,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token)?;
+            Self::validate_token_id(&network, token)?;
 
             let asset_id = generate_id(&token)?;
             let address = serialize(&address.to_string());
@@ -346,7 +346,7 @@ impl Cashierd {
         ))
     }
 
-    fn check_token_id(network: &NetworkName, token_id: &str) -> Result<()> {
+    fn validate_token_id(network: &NetworkName, token_id: &str) -> Result<()> {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
@@ -390,10 +390,7 @@ impl Cashierd {
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
-                    use solana_sdk::{
-                        signature::Signer,
-                        signer::keypair::Keypair,
-                    };
+                    use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
                     let main_keypair: Keypair;
 
