@@ -37,6 +37,7 @@ impl TokenList {
             if item["symbol"] == symbol.to_uppercase() {
                 let decimals = item["decimals"].clone();
                 let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
+                let decimals = decimals as usize;
                 return Ok(decimals);
             }
         }
