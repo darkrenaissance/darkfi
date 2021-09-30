@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
 //1. deposit(network, asset)
+//
 //internal ID = hash(externalID, NetworkName)
 //deposit(internalID)
 
@@ -25,6 +26,32 @@ use std::str::FromStr;
 //transfer(token_id, amountu64, address)
 //
 //
+//
+//
+//
+// extern_tokenID
+// tokenID
+//
+
+//pub fn create_id(extern_tokenID, NetworkName) -> Result<jubjub::Fr> {
+//}
+
+// DEPOSIT
+// parse_network
+// parse_id
+
+// generate_id
+//
+// WITHDRAW
+// parse_network
+// parse_id
+//
+// generate_id
+// amount.to_u64()
+//
+// TRANSFER
+// get_id
+// amount.to_u64()
 
 // here we hash the alphanumeric token ID. if it fails, we change the last 4 bytes and hash it
 // again, and keep repeating until it works.
@@ -82,7 +109,7 @@ pub fn parse_wrapped_token(token: &str, tokenlist: TokenList) -> Result<jubjub::
     }
 }
 
-pub fn parse_network(network: &str, token: &str, tokenlist: TokenList) -> Result<String> {
+pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<String> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token.to_lowercase().as_str() {
             "solana" | "sol" => {
