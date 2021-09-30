@@ -29,7 +29,7 @@ impl TokenList {
         unreachable!();
     }
 
-    pub fn search_decimal(self, symbol: &str) -> Result<u64> {
+    pub fn search_decimal(self, symbol: &str) -> Result<usize> {
         let tokens = self.tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?;

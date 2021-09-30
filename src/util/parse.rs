@@ -65,7 +65,7 @@ pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<Str
     }
 }
 
-pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<u64> {
+pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<usize> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token {
             "solana" | "sol" => {
@@ -101,6 +101,65 @@ pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
     }
 }
 
+//pub fn decode_base10(amount: &str, decimals: usize) -> Result<u64> {
+//    const RADIX: u32 = 10;
+//
+//    let mut input_str = amount.to_string();
+//
+//    // remove the decimal point
+//    let mut amount: String = match input_str.find(".") {
+//        Some(v) => {
+//            input_str.remove(v);
+//            input_str
+//        }
+//        None => input_str,
+//    };
+//
+//    // only digits should remain:
+//    for c in amount.chars() {
+//        if c.is_digit(RADIX) == false {
+//            // TODO: Make this an error
+//            println!("Amount is not valid digits!")
+//        }
+//    }
+//
+//    // add digits to the end if there are too few
+//    if amount.len() < decimals {
+//        loop {
+//            amount.push('0');
+//
+//            if amount.len() == decimals {
+//                break;
+//            }
+//            continue;
+//        }
+//    }
+//
+//    // remove digits from the end if there are too many
+//    if amount.len() > decimals {
+//        loop {
+//            amount.pop();
+//
+//            if amount.len() == decimals {
+//                break;
+//            }
+//            continue;
+//        }
+//    }
+//
+//    println!("Resized amount: {}", amount);
+//
+//    let amount_vec: Vec<u32> = vec![0; decimals];
+//
+//    // convert to an integer
+//    for i in amount.chars() {
+//        let digit = i.to_digit(RADIX).unwrap();
+//        amount_vec.push(digit);
+//    }
+//
+//    Ok(amount_vec.drain())
+//}
+
 mod tests {
     #[test]
     fn decode_base10() {
@@ -110,6 +169,7 @@ mod tests {
 
         let input = "2.5";
         println!("Initial input: {}", input);
+
         let mut input_str = input.to_string();
 
         // remove the decimal point
