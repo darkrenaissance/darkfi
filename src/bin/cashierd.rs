@@ -90,7 +90,8 @@ impl Cashierd {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             client_wallet.clone(),
-        ).await?;
+        )
+        .await?;
 
         let client = Arc::new(Mutex::new(client));
 
@@ -119,14 +120,19 @@ impl Cashierd {
         for (network, _) in features.iter() {
             let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
 
-            for keypair in keypairs_to_watch {
+            for (private_key, public_key, _token_id, mint_address) in keypairs_to_watch {
                 let bridge = bridge.clone();
-                let bridge_subscribtion = bridge.subscribe().await;
+
+                let bridge_subscribtion = bridge.subscribe(Some(mint_address)).await;
+
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
                         network: network.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some((keypair.0, keypair.1))),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some((
+                            private_key,
+                            public_key,
+                        ))),
                     })
                     .await?;
             }
@@ -139,20 +145,21 @@ impl Cashierd {
         cashier_wallet: Arc<CashierDb>,
         recv_coin: async_channel::Receiver<(jubjub::SubgroupPoint, u64)>,
     ) -> Result<()> {
-        let bridge_subscribtion = bridge.subscribe().await;
-
         // received drk coin
         let (drk_pub_key, amount) = recv_coin.recv().await?;
 
         debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}"
             , drk_pub_key, amount);
 
-        // get public key, and asset_id of the token
+        // get public key, and token_id of the token
         let token = cashier_wallet.get_withdraw_token_public_key_by_dkey_public(&drk_pub_key)?;
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
-        if let Some((addr, network, _asset_id)) = token {
+        if let Some((addr, network, _token_id, mint_address)) = token {
+
+            let bridge_subscribtion = bridge.subscribe(Some(mint_address)).await;
+
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
@@ -191,7 +198,7 @@ impl Cashierd {
         }
 
         let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
-        let token_id = &args[1].as_str().unwrap();
+        let mut mint_address: String = args[1].as_str().unwrap().to_string();
         let drk_pub_key = &args[2].as_str().unwrap();
 
         if !self.features.contains_key(&network.clone()) {
@@ -203,9 +210,13 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token_id)?;
+            let token_id = generate_id(&mint_address)?;
 
-            let asset_id = generate_id(token_id)?;
+            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
+
+            if mint_address_opt.is_none() {
+                mint_address = String::new();
+            }
 
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
@@ -216,7 +227,7 @@ impl Cashierd {
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
 
             let bridge = self.bridge.clone();
-            let bridge_subscribtion = bridge.subscribe().await;
+            let bridge_subscribtion = bridge.subscribe(mint_address_opt).await;
 
             if check.is_empty() {
                 bridge_subscribtion
@@ -253,7 +264,8 @@ impl Cashierd {
                         &token_priv,
                         &serialize(&token_pub),
                         &network,
-                        &asset_id,
+                        &token_id,
+                        &mint_address,
                     )?;
 
                     return Ok(token_pub);
@@ -284,7 +296,7 @@ impl Cashierd {
         }
 
         let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
-        let token = &args[1].as_str().unwrap();
+        let mut mint_address: String = args[1].as_str().unwrap().to_string();
         let address = &args[2].as_str().unwrap();
         let _amount = &args[3];
 
@@ -297,9 +309,15 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            Self::check_token_id(&network, token)?;
+            let token_id = generate_id(&mint_address)?;
 
-            let asset_id = generate_id(&token)?;
+            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
+
+            if mint_address_opt.is_none() {
+                // empty string
+                mint_address = String::new();
+            }
+
             let address = serialize(&address.to_string());
 
             let cashier_public: jubjub::SubgroupPoint;
@@ -319,7 +337,8 @@ impl Cashierd {
                     &cashier_public,
                     &cashier_secret,
                     &network,
-                    &asset_id,
+                    &token_id,
+                    &mint_address,
                 )?;
             }
 
@@ -345,37 +364,21 @@ impl Cashierd {
         ))
     }
 
-    fn check_token_id(network: &NetworkName, token_id: &str) -> Result<()> {
+    fn check_token_id(network: &NetworkName, token_id: &str) -> Result<Option<String>> {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
                 if token_id != "So11111111111111111111111111111111111111112" {
-                    // This is supposed to be a token mint account now
-                    use drk::service::sol::account_is_initialized_mint;
-                    use drk::service::sol::SolFailed::BadSolAddress;
-                    use solana_client::rpc_client::RpcClient;
-                    use solana_sdk::pubkey::Pubkey;
-
-                    let pubkey = match Pubkey::from_str(token_id) {
-                        Ok(v) => v,
-                        Err(e) => return Err(Error::from(BadSolAddress(e.to_string()))),
-                    };
-
-                    // FIXME: Use network name from variable
-                    let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
-                    if !account_is_initialized_mint(&rpc, &pubkey) {
-                        return Err(Error::CashierInvalidTokenId(
-                            "Given address is not a valid token mint".into(),
-                        ));
-                    }
+                    return Ok(Some(token_id.to_string()));
                 }
+                return Ok(None);
             }
             #[cfg(feature = "btc")]
             NetworkName::Bitcoin => {
                 // Handle bitcoin address here if needed
+                Ok(None)
             }
         }
-        Ok(())
     }
 
     async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {

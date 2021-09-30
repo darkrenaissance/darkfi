@@ -32,7 +32,7 @@ async fn run() -> Result<()> {
         .await?;
 
     let bridge2 = bridge.clone();
-    let bridge_subscribtion = bridge2.subscribe().await;
+    let bridge_subscribtion = bridge2.subscribe(None).await;
 
     bridge_subscribtion
         .sender
@@ -51,7 +51,7 @@ async fn run() -> Result<()> {
         _ => {}
     }
 
-    let bridge_subscribtion = bridge.subscribe().await;
+    let bridge_subscribtion = bridge.subscribe(None).await;
 
     bridge_subscribtion
         .sender

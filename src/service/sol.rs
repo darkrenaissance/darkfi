@@ -223,10 +223,6 @@ impl SolClient {
         debug!(target: "SOL BRIDGE", "Sending {} {:?} tokens to main wallet",
                 amount / u64::pow(10, decimals as u32), mint);
 
-        if !account_is_initialized_mint(rpc, mint) {
-            return Err(SolFailed::MintIsNotValid(mint.to_string()));
-        }
-
         // The token account from our main wallet
         let main_tok_pk = get_associated_token_address(&self.main_keypair.pubkey(), mint);
         // The token account from the deposit wallet
@@ -302,27 +298,46 @@ impl SolClient {
     ) -> SolResult<Signature> {
         debug!(target: "SOL BRIDGE", "Sending {} SOL to main wallet", lamports_to_sol(amount));
 
-        let ix = system_instruction::transfer(&keypair.pubkey(), &self.main_keypair.pubkey(), amount);
+        let ix =
+            system_instruction::transfer(&keypair.pubkey(), &self.main_keypair.pubkey(), amount);
         let tx = Transaction::new_with_payer(&[ix], Some(&self.main_keypair.pubkey()));
         let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent SOL to main wallet: {}", signature);
         Ok(signature)
     }
+
+    fn check_mint_address(&self, mint_address: Option<String>) -> SolResult<Option<Pubkey>> {
+        if let Some(mint_addr) = mint_address {
+            let pubkey = match Pubkey::from_str(&mint_addr) {
+                Ok(v) => v,
+                Err(e) => return Err(SolFailed::BadSolAddress(e.to_string())),
+            };
+
+            let rpc = RpcClient::new(self.rpc_server.to_string());
+
+            if !account_is_initialized_mint(&rpc, &pubkey) {
+                return Err(SolFailed::MintIsNotValid(mint_addr.to_string()));
+            }
+
+            return Ok(Some(pubkey));
+        } else {
+            return Ok(None);
+        }
+    }
 }
 
 #[async_trait]
 impl NetworkClient for SolClient {
-    async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
+    async fn subscribe(self: Arc<Self>, mint_address: Option<String>) -> Result<TokenSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
         let public_key = keypair.pubkey().to_string();
         let secret_key = serialize(&keypair);
 
-        // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
-        let mint = Pubkey::from_str("F4wkXLN5n1ckejfnJoahGpgW3ffRsrvS9GGVME6ckxS9").unwrap();
-        smol::spawn(self.handle_subscribe_request(keypair, Some(mint))).detach();
-        //smol::spawn(self.handle_subscribe_request(keypair, None)).detach();
+        let mint = self.check_mint_address(mint_address)?;
+
+        smol::spawn(self.handle_subscribe_request(keypair, mint)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -335,15 +350,15 @@ impl NetworkClient for SolClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         _public_key: Vec<u8>,
+        mint_address: Option<String>,
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
 
         let public_key = keypair.pubkey().to_string();
 
-        // TODO: Option<Pubkey> for 2nd arg representing Token Mint account
-        let mint = Pubkey::from_str("F4wkXLN5n1ckejfnJoahGpgW3ffRsrvS9GGVME6ckxS9").unwrap();
-        smol::spawn(self.handle_subscribe_request(keypair, Some(mint))).detach();
-        //smol::spawn(self.handle_subscribe_request(keypair, None)).detach();
+        let mint = self.check_mint_address(mint_address)?;
+
+        smol::spawn(self.handle_subscribe_request(keypair, mint)).detach();
 
         Ok(public_key)
     }
@@ -355,7 +370,8 @@ impl NetworkClient for SolClient {
     async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
         let rpc = RpcClient::new(self.rpc_server.to_string());
         let address: Pubkey = deserialize(&address)?;
-        let instruction = system_instruction::transfer(&self.main_keypair.pubkey(), &address, amount);
+        let instruction =
+            system_instruction::transfer(&self.main_keypair.pubkey(), &address, amount);
 
         let mut tx = Transaction::new_with_payer(&[instruction], Some(&self.main_keypair.pubkey()));
         let bhq = BlockhashQuery::default();

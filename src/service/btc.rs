@@ -149,7 +149,7 @@ impl BtcClient {
 
 #[async_trait]
 impl NetworkClient for BtcClient {
-    async fn subscribe(self: Arc<Self>) -> Result<TokenSubscribtion> {
+    async fn subscribe(self: Arc<Self>, _mint: Option<String>) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
         let btc_keys = BitcoinKeys::new(self.network)?;
         let btc_privkey = btc_keys.clone();
@@ -174,6 +174,7 @@ impl NetworkClient for BtcClient {
         self: Arc<Self>,
         _private_key: Vec<u8>,
         _public_key: Vec<u8>,
+        _mint: Option<String>,
     ) -> Result<String> {
         // TODO this not implemented yet
         Ok(String::new())
