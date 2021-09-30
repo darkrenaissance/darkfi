@@ -100,3 +100,79 @@ pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
         Ok(token.to_string())
     }
 }
+
+mod tests {
+    #[test]
+    fn decode_base10() {
+        const RADIX: u32 = 10;
+        // TODO: this number varies per token
+        let decimal_places = 10;
+
+        let input = "0.1111";
+        println!("Initial input: {}", input);
+        let mut input_str = input.to_string();
+
+        // remove the decimal point
+        let mut amount: String = match input_str.find(".") {
+            Some(v) => {
+                input_str.remove(v);
+                input_str
+            }
+            None => {
+                print!("Number isn't a float");
+                input_str
+            }
+        };
+
+        println!("Removed decimal point: {}", amount);
+        // only digits should remain:
+        for c in amount.chars() {
+            if c.is_digit(RADIX) == false {
+                println!("Amount is not valid digits!")
+            }
+        }
+
+        // add digits to the end if there are too few
+        if amount.len() < decimal_places {
+            loop {
+                amount.push('0');
+
+                if amount.len() == decimal_places {
+                    break;
+                }
+                continue;
+            }
+        }
+
+        // remove digits from the end if there are too many
+        if amount.len() > decimal_places {
+            loop {
+                amount.pop();
+
+                if amount.len() == decimal_places {
+                    break;
+                }
+                continue;
+            }
+        }
+
+        println!("Resized amount: {}", amount);
+
+        // convert to an integer
+        for i in amount.chars() {
+            let digit = i.to_digit(RADIX).unwrap();
+            println!("Converted to integer: {}", digit);
+        }
+    }
+
+    #[test]
+    fn encode_base10() {
+        let input = 1000000000;
+        println!("Original input: {}", input);
+        let mut input_str = input.to_string();
+
+        input_str.insert(1, '.');
+        let amount = input_str.trim();
+        println!("Encoded output: {}", amount);
+    }
+}
