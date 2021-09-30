@@ -17,7 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{assign_id, decimals, expand_path, join_config_path, to_apo, TokenList},
+    util::{assign_id, decimals, decode_base10, expand_path, join_config_path, TokenList},
     wallet::WalletDb,
     Result,
 };
@@ -298,11 +298,11 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let amount = amount.as_f64().unwrap();
+        let amount = amount.as_str().unwrap();
 
         // TODO: get rid of these unwraps
         let decimals = decimals(network, token, self.tokenlist.clone()).unwrap();
-        let amount_in_apo = to_apo(amount, decimals as u32).unwrap();
+        let amount_in_apo = decode_base10(amount, decimals).unwrap();
 
         let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,

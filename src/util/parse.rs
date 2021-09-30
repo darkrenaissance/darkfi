@@ -81,10 +81,10 @@ pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<usiz
     }
 }
 
-pub fn to_apo(amount: f64, decimals: u32) -> Result<u64> {
-    let apo = amount as u64 * u64::pow(10, decimals as u32);
-    Ok(apo)
-}
+//pub fn to_apo(amount: f64, decimals: u32) -> Result<u64> {
+//    let apo = amount as u64 * u64::pow(10, decimals as u32);
+//    Ok(apo)
+//}
 
 pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
     let vec: Vec<char> = token.chars().collect();
@@ -101,64 +101,79 @@ pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
     }
 }
 
-//pub fn decode_base10(amount: &str, decimals: usize) -> Result<u64> {
-//    const RADIX: u32 = 10;
+pub fn decode_base10(amount: &str, decimals: usize) -> Result<u64> {
+    const RADIX: u32 = 10;
+
+    let mut input_str = amount.to_string();
+
+    // remove the decimal point
+    let mut amount: String = match input_str.find(".") {
+        Some(v) => {
+            input_str.remove(v);
+            input_str
+        }
+        None => input_str,
+    };
+
+    // only digits should remain:
+    for c in amount.chars() {
+        if c.is_digit(RADIX) == false {
+            // TODO: Make this an error
+            println!("Amount is not valid digits!")
+        }
+    }
+
+    // add digits to the end if there are too few
+    if amount.len() < decimals {
+        loop {
+            amount.push('0');
+
+            if amount.len() == decimals {
+                break;
+            }
+            continue;
+        }
+    }
+
+    // remove digits from the end if there are too many
+    if amount.len() > decimals {
+        loop {
+            amount.pop();
+
+            if amount.len() == decimals {
+                break;
+            }
+            continue;
+        }
+    }
+
+    println!("Resized amount: {}", amount);
+
+    // convert to an integer
+    let number = amount.parse::<u64>().unwrap();
+
+    Ok(number)
+}
+
+// TODO: implement this
+
+//fn encode_base10() {
+//    let input = 100000000;
+//    println!("Original input: {}", input);
+//    let mut input_str = input.to_string();
 //
-//    let mut input_str = amount.to_string();
+//    input_str.insert(1, '.');
 //
-//    // remove the decimal point
-//    let mut amount: String = match input_str.find(".") {
-//        Some(v) => {
-//            input_str.remove(v);
-//            input_str
-//        }
-//        None => input_str,
+//    let amount = input_str.trim_end_matches('0');
+//
+//    let amount = if amount.ends_with('.') == true {
+//        let amount = amount.trim_end_matches('.');
+//        amount
+//    } else {
+//        amount
 //    };
 //
-//    // only digits should remain:
-//    for c in amount.chars() {
-//        if c.is_digit(RADIX) == false {
-//            // TODO: Make this an error
-//            println!("Amount is not valid digits!")
-//        }
-//    }
-//
-//    // add digits to the end if there are too few
-//    if amount.len() < decimals {
-//        loop {
-//            amount.push('0');
-//
-//            if amount.len() == decimals {
-//                break;
-//            }
-//            continue;
-//        }
-//    }
-//
-//    // remove digits from the end if there are too many
-//    if amount.len() > decimals {
-//        loop {
-//            amount.pop();
-//
-//            if amount.len() == decimals {
-//                break;
-//            }
-//            continue;
-//        }
-//    }
-//
-//    println!("Resized amount: {}", amount);
-//
-//    let amount_vec: Vec<u32> = vec![0; decimals];
-//
-//    // convert to an integer
-//    for i in amount.chars() {
-//        let digit = i.to_digit(RADIX).unwrap();
-//        amount_vec.push(digit);
-//    }
-//
-//    let amount: u64 = amount_vec.drain();
-//    Ok(amount)
+//    println!("Encoded output: {}", amount);
 //}
 
 mod tests {
