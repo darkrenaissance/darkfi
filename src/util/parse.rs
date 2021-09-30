@@ -132,29 +132,50 @@ pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<Str
     }
 }
 
-pub fn parse_params(
-    network: &str,
-    token: &str,
-    amount: u64,
-    tokenlist: TokenList,
-) -> Result<(String, u64)> {
+//pub fn parse_params(
+//    network: &str,
+//    token: &str,
+//    amount: u64,
+//    tokenlist: TokenList,
+//) -> Result<(String, u64)> {
+//    match NetworkName::from_str(network)? {
+//        NetworkName::Solana => match token {
+//            "solana" | "sol" => {
+//                let token_id = "So11111111111111111111111111111111111111112";
+//                let decimals = 9;
+//                let amount_in_apo = amount * u64::pow(10, decimals as u32);
+//                Ok((token_id.to_string(), amount_in_apo))
+//            }
+//            tkn => {
+//                let token_id = symbol_to_id(tkn, tokenlist.clone())?;
+//                let decimals = tokenlist.search_decimal(tkn)?;
+//                let amount_in_apo = amount * u64::pow(10, decimals as u32);
+//                Ok((token_id, amount_in_apo))
+//            }
+//        },
+//        NetworkName::Bitcoin => Err(Error::NetworkParseError),
+//    }
+//}
+//
+pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<u64> {
     match NetworkName::from_str(network)? {
         NetworkName::Solana => match token {
             "solana" | "sol" => {
-                let token_id = "So11111111111111111111111111111111111111112";
                 let decimals = 9;
-                let amount_in_apo = amount * u64::pow(10, decimals as u32);
-                Ok((token_id.to_string(), amount_in_apo))
+                Ok(decimals)
             }
             tkn => {
-                let token_id = symbol_to_id(tkn, tokenlist.clone())?;
                 let decimals = tokenlist.search_decimal(tkn)?;
-                let amount_in_apo = amount * u64::pow(10, decimals as u32);
-                Ok((token_id, amount_in_apo))
+                Ok(decimals)
             }
         },
         NetworkName::Bitcoin => Err(Error::NetworkParseError),
     }
+}
+
+pub fn to_apo(amount: f64, decimals: u32) -> Result<u64> {
+    let apo = amount as u64 * u64::pow(10, decimals as u32);
+    Ok(apo)
 }
 
 pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
