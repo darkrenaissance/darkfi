@@ -17,7 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, search_id},
+    util::{expand_path, join_config_path, parse_network, parse_wrapped_token, TokenList},
     wallet::WalletDb,
     Result,
 };
@@ -27,6 +27,7 @@ struct Darkfid {
     config: DarkfidConfig,
     wallet: Arc<WalletDb>,
     client: Arc<Mutex<Client>>,
+    tokenlist: TokenList,
 }
 
 #[async_trait]
@@ -81,10 +82,13 @@ impl Darkfid {
 
         let client = Arc::new(Mutex::new(client));
 
+        let tokenlist = TokenList::new()?;
+
         Ok(Self {
             config,
             wallet,
             client,
+            tokenlist,
         })
     }
 
@@ -149,7 +153,7 @@ impl Darkfid {
         let symbol = symbol.unwrap();
 
         let result: Result<Value> = async {
-            let token_id = search_id(symbol)?;
+            let token_id = self.tokenlist.clone().search_id(symbol)?;
             Ok(json!(token_id))
         }
         .await;
@@ -211,7 +215,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match parse_network(&network, &token) {
+        let token_id = match parse_network(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
             Err(_e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -330,7 +334,7 @@ impl Darkfid {
         let amount = amount.as_f64().unwrap();
 
         let result: Result<()> = async {
-            let token_id = parse_wrapped_token(token)?;
+            let token_id = parse_wrapped_token(token, self.tokenlist.clone())?;
             let address = bs58::decode(&address).into_vec()?;
             let address: jubjub::SubgroupPoint = deserialize(&address)?;
             // TODO FIX THE AMOUNT
