@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS deposit_keypairs(
     token_key_public BLOB NOT NULL,
 	network BLOB NOT NULL,
 	token_id BLOB NOT NULL,
+	mint_address BLOB NOT NULL,
 	confirm BLOB NOT NULL
 );
 
@@ -22,5 +23,6 @@ CREATE TABLE IF NOT EXISTS withdraw_keypairs(
     d_key_public BLOB NOT NULL,
 	network BLOB NOT NULL,
 	token_id BLOB NOT NULL,
+	mint_address BLOB NOT NULL,
 	confirm BLOB NOT NULL
 );
