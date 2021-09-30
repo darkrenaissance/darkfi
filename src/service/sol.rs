@@ -209,7 +209,7 @@ impl SolClient {
                 .0
                 .send(TokenNotification {
                     network: NetworkName::Solana,
-                    token_id: generate_id(&mint.unwrap().to_string())?,
+                    token_id: generate_id(&mint.unwrap().to_string(), &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
                 })
@@ -226,7 +226,7 @@ impl SolClient {
                 .0
                 .send(TokenNotification {
                     network: NetworkName::Solana,
-                    token_id: generate_id(SOL_NATIVE_TOKEN_ID)?,
+                    token_id: generate_id(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
                 })
