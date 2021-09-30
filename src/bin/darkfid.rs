@@ -17,7 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{assign_id, expand_path, join_config_path, TokenList},
+    util::{assign_id, decimals, expand_path, join_config_path, to_apo, TokenList},
     wallet::WalletDb,
     Result,
 };
@@ -279,21 +279,61 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let _network = &args[0];
-        let _token = &args[1];
-        let _address = &args[2];
-        let _amount = &args[3];
+        let network = &args[0];
+        let token = &args[1];
+        let address = &args[2];
+        let amount = &args[3];
 
-        // 1. Send request to cashier.
-        // 2. Cashier checks if they support the network, and if so,
-        //    return adeposit address.
-        // 3. We issue a transfer of $amount to the given address.
+        if token.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
 
-        return JsonResult::Err(jsonerr(
-            ServerError(-32005),
-            Some("failed to withdraw".to_string()),
-            id,
-        ));
+        let token = token.as_str().unwrap();
+
+        if network.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let network = network.as_str().unwrap();
+
+        if amount.as_f64().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+
+        let amount = amount.as_f64().unwrap();
+
+        // TODO: get rid of these unwraps
+        let decimals = decimals(network, token, self.tokenlist.clone()).unwrap();
+        let amount_in_apo = to_apo(amount, decimals as u32).unwrap();
+
+        let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
+            Ok(t) => t,
+            Err(_e) => {
+                debug!(target: "DARKFID", "TOKEN ID IS ERR");
+                // TODO: this should return the relevant drk error
+                // right now it just flattens it into ParseError
+                return JsonResult::Err(jsonerr(ParseError, None, id));
+            }
+        };
+
+        let req = jsonreq(
+            json!("withdraw"),
+            json!([network, token_id, address, amount_in_apo]),
+        );
+        let rep: JsonResult;
+        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
+            Ok(v) => rep = v,
+            Err(e) => {
+                debug!(target: "DARKFID", "REQUEST IS ERR");
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
+            }
+        }
+
+        match rep {
+            JsonResult::Resp(r) => return JsonResult::Resp(r),
+            JsonResult::Err(e) => return JsonResult::Err(e),
+            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+        }
     }
 
     // --> {"method": "transfer", [dToken, address, amount]}
@@ -333,6 +373,7 @@ impl Darkfid {
 
         let amount = amount.as_f64().unwrap();
 
+        // TODO: get tokenID from walletdb
         //let result: Result<()> = async {
         //    let token_id = parse_wrapped_token(token, self.tokenlist.clone())?;
         //    let address = bs58::decode(&address).into_vec()?;
