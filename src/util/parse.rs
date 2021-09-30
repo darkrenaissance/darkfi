@@ -157,7 +157,8 @@ pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
 //        amount_vec.push(digit);
 //    }
 //
-//    Ok(amount_vec.drain())
+//    let amount: u64 = amount_vec.drain();
+//    Ok(amount)
 //}
 
 mod tests {
@@ -185,6 +186,7 @@ mod tests {
         };
 
         println!("Removed decimal point: {}", amount);
+
         // only digits should remain:
         for c in amount.chars() {
             if c.is_digit(RADIX) == false {
@@ -222,6 +224,7 @@ mod tests {
         for i in amount.chars() {
             let digit = i.to_digit(RADIX).unwrap();
             println!("Converted to integer: {}", digit);
+            let u = u64::from(digit);
         }
     }
 
