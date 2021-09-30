@@ -167,12 +167,21 @@ mod tests {
 
     #[test]
     fn encode_base10() {
-        let input = 1500000000;
+        let input = 100000000;
         println!("Original input: {}", input);
         let mut input_str = input.to_string();
 
         input_str.insert(1, '.');
+
         let amount = input_str.trim_end_matches('0');
+
+        let amount = if amount.ends_with('.') == true {
+            let amount = amount.trim_end_matches('.');
+            amount
+        } else {
+            amount
+        };
+
         println!("Encoded output: {}", amount);
     }
 }
