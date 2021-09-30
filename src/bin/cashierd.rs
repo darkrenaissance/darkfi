@@ -216,7 +216,6 @@ impl Cashierd {
             if mint_address_opt.is_none() {
                 mint_address = String::new();
             }
-
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
 

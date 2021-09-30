@@ -304,7 +304,7 @@ impl Darkfid {
 
         // TODO: get rid of these unwraps
         let decimals = decimals(network, token, self.tokenlist.clone()).unwrap();
-        let amount_in_apo = decode_base10(amount, decimals).unwrap();
+        let amount_in_apo = decode_base10(amount, decimals, true).unwrap();
 
         let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
