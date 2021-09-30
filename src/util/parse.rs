@@ -108,7 +108,7 @@ mod tests {
         // TODO: this number varies per token
         let decimal_places = 10;
 
-        let input = "0.1111";
+        let input = "2.5";
         println!("Initial input: {}", input);
         let mut input_str = input.to_string();
 
@@ -167,12 +167,12 @@ mod tests {
 
     #[test]
     fn encode_base10() {
-        let input = 1000000000;
+        let input = 1500000000;
         println!("Original input: {}", input);
         let mut input_str = input.to_string();
 
         input_str.insert(1, '.');
-        let amount = input_str.trim();
+        let amount = input_str.trim_end_matches('0');
         println!("Encoded output: {}", amount);
     }
 }
