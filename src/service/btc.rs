@@ -1,7 +1,7 @@
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::serial::{serialize, Decodable, Encodable};
+use crate::serial::{serialize, deserialize, Decodable, Encodable};
 use crate::{Error, Result};
-
+use std::convert::From;
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
 use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
@@ -12,6 +12,7 @@ use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
 
 use secp256k1::key::{PublicKey, SecretKey};
+use secp256k1::constants::{SECRET_KEY_SIZE, PUBLIC_KEY_SIZE};
 use secp256k1::{rand::rngs::OsRng, Secp256k1};
 
 use async_std::sync::Arc;
@@ -22,8 +23,47 @@ pub type PubAddress = Address;
 pub type PubKey = BtcPubKey;
 pub type PrivKey = BtcPrivKey;
 
+const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
+
+pub struct Keypair {
+    secret: SecretKey,
+    public: PublicKey,
+}
+impl Keypair {
+    pub fn new() -> Self {
+        let secp = Secp256k1::new();
+        let mut rng = OsRng::new().expect("OsRng");
+
+        let (secret, public) = secp.generate_keypair(&mut rng);
+        Self {
+            secret,
+            public,
+        }
+    }
+    pub fn to_bytes(&self) -> [u8; KEYPAIR_LENGTH] {
+        let mut bytes: [u8; KEYPAIR_LENGTH] = [0u8; KEYPAIR_LENGTH];
+
+        bytes[..SECRET_KEY_SIZE].copy_from_slice(self.secret.as_ref());
+        bytes[SECRET_KEY_SIZE..].copy_from_slice(&self.public.serialize());
+        bytes
+
+    }
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Keypair> {
+        if bytes.len() != KEYPAIR_LENGTH {
+            return Err(Error::BtcFailed("Not right size".to_string()));
+        }
+        //TODO: Map to errors properly
+        let secret = SecretKey::from_slice(&bytes[..SECRET_KEY_SIZE]).unwrap();
+        let public = PublicKey::from_slice(&bytes[SECRET_KEY_SIZE..]).unwrap();
+
+        Ok(Keypair{ secret: secret, public: public })
+    }
+    pub fn pubkey(&self) -> PublicKey {
+        self.public
+    }
+}
 pub struct BitcoinKeys {
-    secret_key: SecretKey,
+    _secret_key: SecretKey,
     public_key: PublicKey,
     _context: Secp256k1<secp256k1::All>,
     btc_privkey: BtcPrivKey,
@@ -42,7 +82,7 @@ impl BitcoinKeys {
         let btc_pubkey = btc_privkey.public_key(&secp);
 
         Ok(Arc::new(BitcoinKeys {
-            secret_key,
+            _secret_key: secret_key,
             public_key,
             _context: secp,
             btc_privkey,
@@ -74,11 +114,13 @@ impl BitcoinKeys {
 pub struct BtcClient {
     client: Arc<ElectrumClient>,
     network: Network,
-    keypair: BitcoinKeys,
+    keypair: Keypair,
 }
 
 impl BtcClient {
-    pub fn new(network: &str, keypair: BitcoinKeys) -> Result<Arc<Self>> {
+    pub async fn new(keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
+        let keypair: Keypair = deserialize(&keypair)?;
+
         let (network, url) = match network {
             "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
             "testnet" => (Network::Testnet, "ssl://electrum.blockstream.info:60002"),
@@ -246,6 +288,40 @@ impl Decodable for bitcoin::PrivateKey {
         Ok(key)
     }
 }
+impl Encodable for secp256k1::key::PublicKey {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let key: Vec<u8> = self.serialize().to_vec();
+        let len = key.encode(s)?;
+        Ok(len)
+    }
+}
+impl Decodable for secp256k1::key::PublicKey {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let key: Vec<u8> = Decodable::decode(&mut d)?;
+        let key = secp256k1::key::PublicKey::from_slice(&key)
+            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+        Ok(key)
+    }
+}
+impl Encodable for Keypair {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let key: Vec<u8> = self.to_bytes().to_vec();
+        let len = key.encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Keypair {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        let key: Vec<u8> = Decodable::decode(&mut d)?;
+        let key = Keypair::from_bytes(key.as_slice()).map_err(|_| {
+            crate::Error::from(BtcFailed::DecodeAndEncodeError(
+                "load keypair from slice".into(),
+            ))
+        })?;
+        Ok(key)
+    }
+}
 
 #[derive(Debug)]
 pub enum BtcFailed {
@@ -254,6 +330,7 @@ pub enum BtcFailed {
     ElectrumError(String),
     BtcError(String),
     DecodeAndEncodeError(String),
+    KeypairError(String)
 }
 
 impl std::error::Error for BtcFailed {}
@@ -271,6 +348,9 @@ impl std::fmt::Display for BtcFailed {
             BtcFailed::DecodeAndEncodeError(ref err) => {
                 write!(f, "Decode and decode keys error: {}", err)
             }
+            BtcFailed::KeypairError(ref err) => {
+                write!(f, "Keypair error from Secp256k1: {}", err)
+            }
             BtcFailed::BtcError(i) => {
                 write!(f, "BtcFailed: {}", i)
             }
@@ -283,7 +363,11 @@ impl From<crate::error::Error> for BtcFailed {
         BtcFailed::BtcError(err.to_string())
     }
 }
-
+impl From<secp256k1::Error> for BtcFailed {
+    fn from(err: secp256k1::Error) -> BtcFailed {
+        BtcFailed::KeypairError(err.to_string())
+    }
+}
 impl From<bitcoin::util::address::Error> for BtcFailed {
     fn from(err: bitcoin::util::address::Error) -> BtcFailed {
         BtcFailed::BadBtcAddress(err.to_string())

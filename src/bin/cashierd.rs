@@ -415,24 +415,27 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
-                    //use drk::service::btc::{BtcClient, BitcoinKeys};
+                    use drk::service::btc::{BtcClient, Keypair};
 
-                    //let _btc_client = BtcClient::new("testnet")?;
-                    // NOTE bitcoin is not implemented yet
-                    //let _main_keypair: BitcoinKeys;
+                    let main_keypair: Keypair;
 
-                    let _main_keypairs =
-                        self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
-                    // if main_keypairs.is_empty() {
-                    //     //main_keypair = BitcoinKeys::new(bitcoin::network::constants::Network::Testnet)?;
-                    // } else {
-                    //     //main_keypair = deserialize(&main_keypairs[0].0)?;
-                    // }
-                    //
-                    // TODO check if there is main_keypair inside
-                    // cashierdb before generating new one
-                    //
-                    //bridge2.add_clients("btc".into(), btc_client).await?;
+                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
+
+                    if main_keypairs.is_empty() {
+                        main_keypair = Keypair::new();
+                        self.cashier_wallet.put_main_keys(
+                            &serialize(&main_keypair),
+                            &serialize(&main_keypair.pubkey()),
+                            &NetworkName::Bitcoin,
+                        )?;
+
+                    } else {
+                        main_keypair = deserialize(&main_keypairs[0].0)?;
+                    }
+
+                    let btc_client = BtcClient::new(serialize(&main_keypair), &chain).await?;
+
+                    bridge2.add_clients(NetworkName::Bitcoin, btc_client).await?;
                 }
             }
         }
