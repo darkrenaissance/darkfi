@@ -221,11 +221,9 @@ mod tests {
         println!("Resized amount: {}", amount);
 
         // convert to an integer
-        for i in amount.chars() {
-            let digit = i.to_digit(RADIX).unwrap();
-            println!("Converted to integer: {}", digit);
-            let u = u64::from(digit);
-        }
+        let number = amount.parse::<u64>().unwrap();
+
+        println!("The final number: {:?}", number);
     }
 
     #[test]
