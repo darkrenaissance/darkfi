@@ -17,7 +17,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    util::{assign_id, expand_path, join_config_path, parse_wrapped_token, TokenList},
+    util::{assign_id, expand_path, join_config_path, TokenList},
     wallet::WalletDb,
     Result,
 };
@@ -333,24 +333,28 @@ impl Darkfid {
 
         let amount = amount.as_f64().unwrap();
 
-        let result: Result<()> = async {
-            let token_id = parse_wrapped_token(token, self.tokenlist.clone())?;
-            let address = bs58::decode(&address).into_vec()?;
-            let address: jubjub::SubgroupPoint = deserialize(&address)?;
-            // TODO FIX THE AMOUNT
-            self.client
-                .lock()
-                .await
-                .transfer(token_id, address, amount as u64)
-                .await?;
-            Ok(())
-        }
-        .await;
+        //let result: Result<()> = async {
+        //    let token_id = parse_wrapped_token(token, self.tokenlist.clone())?;
+        //    let address = bs58::decode(&address).into_vec()?;
+        //    let address: jubjub::SubgroupPoint = deserialize(&address)?;
+        //    self.client
+        //        .lock()
+        //        .await
+        //        .transfer(token_id, address, amount)
+        //        .await?;
+        //    Ok(())
+        //}
+        //.await;
 
-        match result {
-            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
-            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
-        }
+        //match result {
+        //    Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+        //    Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        //}
+        return JsonResult::Err(jsonerr(
+            ServerError(-32005),
+            Some("failed to withdraw".to_string()),
+            id,
+        ));
     }
 }
 
