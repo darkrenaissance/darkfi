@@ -527,7 +527,7 @@ mod tests {
             &token_addr,
             &network,
             &token_id,
-            &String::new(),
+            String::new(),
         )?;
 
         let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;
@@ -570,7 +570,7 @@ mod tests {
             &secret2,
             &network,
             &token_id,
-            &String::new(),
+            String::new(),
         )?;
 
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
