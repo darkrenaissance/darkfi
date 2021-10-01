@@ -14,7 +14,7 @@ use drk::{
     client::Client,
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
-        jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
+        jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::serialize,
@@ -143,7 +143,7 @@ impl Darkfid {
         let symbol = args[0].as_str();
 
         if symbol.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id));
         }
         let symbol = symbol.unwrap();
 
@@ -162,7 +162,6 @@ impl Darkfid {
     // --> {""method": "features", "params": []}
     // <-- {"result": { "network": ["btc", "sol"] } }
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
-        // TODO: return a dictionary of features
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
         match send_request(&self.config.cashier_rpc_url, json!(req)).await {
@@ -199,13 +198,13 @@ impl Darkfid {
         let token = &args[1];
 
         if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
 
         let token = token.as_str().unwrap();
 
         if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
         }
 
         let network = network.as_str().unwrap();
@@ -271,26 +270,36 @@ impl Darkfid {
         let amount = &args[3];
 
         if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
 
         let token = token.as_str().unwrap();
 
         if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
         }
 
         let network = network.as_str().unwrap();
 
         if amount.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
 
         let amount = amount.as_str().unwrap();
 
-        // TODO: get rid of these unwraps
-        let decimals = decimals(network, token, self.tokenlist.clone()).unwrap();
-        let amount_in_apo = decode_base10(amount, decimals, true).unwrap();
+        let decimals = match decimals(network, token, self.tokenlist.clone()) {
+            Ok(d) => d,
+            Err(e) => {
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
+            }
+        };
+
+        let amount_in_apo = match decode_base10(amount, decimals, true) {
+            Ok(a) => a,
+            Err(e) => {
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
+            }
+        };
 
         let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
@@ -342,19 +351,19 @@ impl Darkfid {
         let amount = &args[2];
 
         if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
 
         let _token = address.as_str().unwrap();
 
         if address.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
         }
 
         let _address = address.as_str().unwrap();
 
         if amount.as_f64().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
 
         let _amount = amount.as_f64().unwrap();

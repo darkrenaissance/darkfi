@@ -16,6 +16,11 @@ pub enum ErrorCode {
     MethodNotFound,
     InvalidParams,
     InternalError,
+    InvalidAmountParam,
+    InvalidNetworkParam,
+    InvalidTokenIdParam,
+    InvalidAddressParam,
+    InvalidSymbolParam,
     ServerError(i64),
 }
 
@@ -27,6 +32,11 @@ impl ErrorCode {
             ErrorCode::MethodNotFound => -32601,
             ErrorCode::InvalidParams => -32602,
             ErrorCode::InternalError => -32603,
+            ErrorCode::InvalidAmountParam => -32604,
+            ErrorCode::InvalidNetworkParam => -32605,
+            ErrorCode::InvalidTokenIdParam => -32606,
+            ErrorCode::InvalidAddressParam => -32607,
+            ErrorCode::InvalidSymbolParam => -32608,
             ErrorCode::ServerError(c) => c,
         }
     }
@@ -38,6 +48,11 @@ impl ErrorCode {
             ErrorCode::MethodNotFound => "Method not found",
             ErrorCode::InvalidParams => "Invalid params",
             ErrorCode::InternalError => "Internal error",
+            ErrorCode::InvalidAmountParam => "Invalid amount param",
+            ErrorCode::InvalidNetworkParam => "Invalid network param",
+            ErrorCode::InvalidTokenIdParam => "Invalid token id param",
+            ErrorCode::InvalidAddressParam => "Invalid address param",
+            ErrorCode::InvalidSymbolParam => "Invalid symbol param",
             ErrorCode::ServerError(_) => "Server error",
         };
         desc.to_string()

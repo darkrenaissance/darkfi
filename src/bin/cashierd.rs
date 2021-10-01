@@ -170,9 +170,34 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
-        let mut mint_address: String = args[1].as_str().unwrap().to_string();
-        let drk_pub_key = &args[2].as_str().unwrap();
+        let network = &args[0];
+        let mint_address = &args[1];
+        let drk_pub_key = &args[2];
+
+        if network.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+        }
+
+        let network = network.as_str().unwrap();
+
+        let network = match NetworkName::from_str(network) {
+            Ok(d) => d,
+            Err(e) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, Some(e.to_string()), id));
+            }
+        };
+
+        if mint_address.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+        }
+
+        let mut mint_address = mint_address.as_str().unwrap().to_string();
+
+        if drk_pub_key.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+        }
+
+        let drk_pub_key = drk_pub_key.as_str().unwrap();
 
         if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
@@ -267,10 +292,36 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
+        let network = &args[0];
+        let mint_address = &args[1];
+        let address = &args[2];
+        let amount = &args[3];
+
+        if network.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+        }
+
         let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
-        let mut mint_address: String = args[1].as_str().unwrap().to_string();
-        let address = &args[2].as_str().unwrap();
-        let _amount = &args[3];
+
+
+        if mint_address.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+        }
+
+        let mut mint_address = mint_address.as_str().unwrap().to_string();
+
+        if address.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+        }
+
+        let address = address.as_str().unwrap();
+
+
+        if amount.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+        }
+
+        let _amount = amount.as_str().unwrap();
 
         if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
@@ -410,14 +461,15 @@ impl Cashierd {
                             &serialize(&main_keypair.pubkey()),
                             &NetworkName::Bitcoin,
                         )?;
-
                     } else {
                         main_keypair = deserialize(&main_keypairs[0].0)?;
                     }
 
                     let btc_client = BtcClient::new(serialize(&main_keypair), &chain).await?;
 
-                    bridge2.add_clients(NetworkName::Bitcoin, btc_client).await?;
+                    bridge2
+                        .add_clients(NetworkName::Bitcoin, btc_client)
+                        .await?;
                 }
             }
         }
@@ -541,6 +593,6 @@ async fn main() -> Result<()> {
     t1.cancel().await;
     t2.cancel().await;
     t3.cancel().await;
-    
+
     Ok(())
 }
