@@ -281,11 +281,11 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        if amount.as_str().is_none() {
+        if amount.as_f64().is_none() {
             return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
 
-        let amount = amount.as_str().unwrap();
+        let amount = amount.as_f64().unwrap();
 
         let decimals = match decimals(network, token, self.tokenlist.clone()) {
             Ok(d) => d,
@@ -294,7 +294,7 @@ impl Darkfid {
             }
         };
 
-        let amount_in_apo = match decode_base10(amount, decimals, true) {
+        let amount_in_apo = match decode_base10(&amount.to_string(), decimals, true) {
             Ok(a) => a,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));

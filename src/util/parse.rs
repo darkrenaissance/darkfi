@@ -17,7 +17,7 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
 
     id_string.push_str(tkn_str);
 
-    let mut data = bs58::decode(serialize(&id_string)).into_vec()?;
+    let mut data: Vec<u8> = serialize(&id_string);
 
     let token_id = match deserialize::<jubjub::Fr>(&data) {
         Ok(v) => v,

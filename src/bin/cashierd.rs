@@ -317,11 +317,11 @@ impl Cashierd {
         let address = address.as_str().unwrap();
 
 
-        if amount.as_str().is_none() {
+        if amount.as_u64().is_none() {
             return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
 
-        let _amount = amount.as_str().unwrap();
+        let _amount = amount.as_u64().unwrap();
 
         if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
