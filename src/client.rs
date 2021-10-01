@@ -1,3 +1,11 @@
+use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
+use bellman::groth16;
+use bls12_381::Bls12;
+use log::*;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
@@ -16,16 +24,20 @@ use crate::{
     Result,
 };
 
-use super::ClientFailed;
-
-use async_executor::Executor;
-use bellman::groth16;
-use bls12_381::Bls12;
-
-use async_std::sync::{Arc, Mutex};
-use log::*;
-use std::net::SocketAddr;
-use std::path::PathBuf;
+#[derive(Debug)]
+pub enum ClientFailed {
+    NotEnoughValue(u64),
+    InvalidAddress(String),
+    InvalidAmount(u64),
+    UnableToGetDepositAddress,
+    UnableToGetWithdrawAddress,
+    DoesNotHaveCashierPublicKey,
+    DoesNotHaveKeypair,
+    EmptyPassword,
+    WalletInitialized,
+    KeyExists,
+    ClientError(String),
+}
 
 pub struct Client {
     pub state: Arc<Mutex<State>>,
@@ -413,3 +425,43 @@ impl State {
         }
     }
 }
+
+impl std::error::Error for ClientFailed {}
+
+impl std::fmt::Display for ClientFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ClientFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            ClientFailed::InvalidAddress(i) => {
+                write!(f, "Invalid Address {}", i)
+            }
+            ClientFailed::InvalidAmount(i) => {
+                write!(f, "Invalid Amount {}", i)
+            }
+            ClientFailed::UnableToGetDepositAddress => f.write_str("Unable to get deposit address"),
+            ClientFailed::UnableToGetWithdrawAddress => {
+                f.write_str("Unable to get withdraw address")
+            }
+            ClientFailed::DoesNotHaveCashierPublicKey => {
+                f.write_str("Does not have cashier public key")
+            }
+            ClientFailed::DoesNotHaveKeypair => f.write_str("Does not have keypair"),
+            ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
+            ClientFailed::WalletInitialized => f.write_str("Wallet already initalized"),
+            ClientFailed::KeyExists => f.write_str("Keypair already exists"),
+            ClientFailed::ClientError(i) => {
+                write!(f, "ClientError: {}", i)
+            }
+        }
+    }
+}
+
+impl From<super::error::Error> for ClientFailed {
+    fn from(err: super::error::Error) -> ClientFailed {
+        ClientFailed::ClientError(err.to_string())
+    }
+}
+
+pub type ClientResult<T> = std::result::Result<T, ClientFailed>;

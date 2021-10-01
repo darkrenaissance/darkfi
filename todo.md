@@ -3,6 +3,7 @@
 ## misc
 
 - [ ] sqlcipher: better document install process or otherwise remove friction of using bundled version
+- [ ] git grep TODO
 
 ## v0-release
 
