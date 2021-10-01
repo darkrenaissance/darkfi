@@ -11,8 +11,8 @@ pub enum ClientFailed {
     InvalidAmount(u64),
     UnableToGetDepositAddress,
     UnableToGetWithdrawAddress,
-    DoNotHaveCashierPublicKey,
-    DoNotHaveKeypair,
+    DoesNotHaveCashierPublicKey,
+    DoesNotHaveKeypair,
     EmptyPassword,
     WalletInitialized,
     KeyExists,
@@ -37,8 +37,8 @@ impl fmt::Display for ClientFailed {
             ClientFailed::UnableToGetWithdrawAddress => {
                 f.write_str("Unable to get withdraw address")
             }
-            ClientFailed::DoNotHaveCashierPublicKey => f.write_str("Don't have cashier public key"),
-            ClientFailed::DoNotHaveKeypair => f.write_str("Don't have keypair"),
+            ClientFailed::DoesNotHaveCashierPublicKey => f.write_str("Does not have cashier public key"),
+            ClientFailed::DoesNotHaveKeypair => f.write_str("Does not have keypair"),
             ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             ClientFailed::WalletInitialized => f.write_str("Wallet already initalized"),
             ClientFailed::KeyExists => f.write_str("Keypair already exists"),

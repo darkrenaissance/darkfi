@@ -68,7 +68,7 @@ impl fmt::Display for VerifyFailed {
 }
 
 pub fn state_transition<S: ProgramState>(
-    state: &S,
+    state: &async_std::sync::MutexGuard<S>,
     tx: tx::Transaction,
 ) -> VerifyResult<StateUpdate> {
     // Check deposits are legit

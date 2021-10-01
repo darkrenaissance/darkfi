@@ -99,6 +99,7 @@ impl WalletDb {
         )?;
         Ok(())
     }
+
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         debug!(target: "WALLETDB", "Returning keys...");
         let conn = Connection::open(&self.path)?;
@@ -115,10 +116,6 @@ impl WalletDb {
                 self.get_value_deserialized::<jubjub::SubgroupPoint>(public)?;
             let private: jubjub::Fr = self.get_value_deserialized::<jubjub::Fr>(private)?;
             keypairs.push(Keypair { public, private });
-        }
-
-        if keypairs.is_empty() {
-            return Err(Error::from(ClientFailed::DoNotHaveKeypair));
         }
 
         Ok(keypairs)
@@ -291,7 +288,7 @@ impl WalletDb {
         }
 
         if pub_keys.is_empty() {
-            return Err(Error::from(ClientFailed::DoNotHaveCashierPublicKey));
+            return Err(Error::from(ClientFailed::DoesNotHaveCashierPublicKey));
         }
 
         Ok(pub_keys)

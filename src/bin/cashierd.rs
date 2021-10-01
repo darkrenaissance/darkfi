@@ -1,5 +1,5 @@
 use async_executor::Executor;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use clap::clap_app;
 use ff::Field;
@@ -33,13 +33,11 @@ fn handle_bridge_error(error_code: u32) -> Result<()> {
     }
 }
 
-#[derive(Clone)]
 struct Cashierd {
     config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
     features: HashMap<NetworkName, String>,
-    client: Arc<Mutex<Client>>,
 }
 
 #[async_trait]
@@ -72,29 +70,6 @@ impl Cashierd {
             config.cashier_wallet_password.clone(),
         )?;
 
-        let client_wallet = WalletDb::new(
-            expand_path(&config.client_wallet_path.clone())?.as_path(),
-            config.client_wallet_password.clone(),
-        )?;
-
-        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
-
-        let client = Client::new(
-            rocks,
-            (
-                config.gateway_protocol_url.parse()?,
-                config.gateway_publisher_url.parse()?,
-            ),
-            (
-                expand_path(&config.mint_params_path.clone())?,
-                expand_path(&config.spend_params_path.clone())?,
-            ),
-            client_wallet.clone(),
-        )
-        .await?;
-
-        let client = Arc::new(Mutex::new(client));
-
         let mut features = HashMap::new();
 
         for network in config.clone().networks {
@@ -108,7 +83,6 @@ impl Cashierd {
             bridge,
             cashier_wallet,
             features,
-            client: client.clone(),
         })
     }
 
@@ -379,7 +353,15 @@ impl Cashierd {
         }
     }
 
-    async fn start(&self, executor: Arc<Executor<'static>>) -> Result<()> {
+    async fn start(
+        &mut self,
+        mut client: Client,
+        executor: Arc<Executor<'static>>,
+    ) -> Result<(
+        smol::Task<Result<()>>,
+        smol::Task<Result<()>>,
+        smol::Task<Result<()>>,
+    )> {
         self.cashier_wallet.init_db().await?;
 
         for (feature_name, chain) in self.features.iter() {
@@ -446,16 +428,17 @@ impl Cashierd {
             self.features.clone(),
         ));
 
-        self.client.lock().await.start().await?;
+        client.start().await?;
 
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
-        let cashier_client_subscriber_task =
-            smol::spawn(Client::connect_to_subscriber_from_cashier(
-                self.client.clone(),
-                executor.clone(),
+
+        client
+            .connect_to_subscriber_from_cashier(
                 self.cashier_wallet.clone(),
                 notify.clone(),
-            ));
+                executor.clone(),
+            )
+            .await?;
 
         let cashier_wallet = self.cashier_wallet.clone();
         let bridge = self.bridge.clone();
@@ -471,7 +454,6 @@ impl Cashierd {
         });
 
         let bridge2 = self.bridge.clone();
-        let client2 = self.client.clone();
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> = smol::spawn(
             async move {
                 loop {
@@ -480,9 +462,7 @@ impl Cashierd {
 
                         debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
 
-                        client2
-                            .lock()
-                            .await
+                        client
                             .send(
                                 token_notification.drk_pub_key,
                                 token_notification.received_balance,
@@ -495,20 +475,11 @@ impl Cashierd {
             },
         );
 
-        let cfg = RpcServerConfig {
-            socket_addr: self.config.rpc_listen_address.clone(),
-            use_tls: self.config.serve_tls,
-            identity_path: expand_path(&self.config.clone().tls_identity_path)?,
-            identity_pass: self.config.tls_identity_password.clone(),
-        };
-
-        listen_and_serve(cfg, self.clone()).await?;
-
-        resume_watch_deposit_keys_task.cancel().await;
-        listen_for_receiving_coins_task.cancel().await;
-        listen_for_notification_from_bridge_task.cancel().await;
-        cashier_client_subscriber_task.cancel().await;
-        Ok(())
+        Ok((
+            resume_watch_deposit_keys_task,
+            listen_for_receiving_coins_task,
+            listen_for_notification_from_bridge_task,
+        ))
     }
 }
 
@@ -534,6 +505,42 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
     let ex = Arc::new(Executor::new());
-    let cashierd = Cashierd::new(config_path).await?;
-    cashierd.start(ex.clone()).await
+    let mut cashierd = Cashierd::new(config_path).await?;
+
+    let client_wallet = WalletDb::new(
+        expand_path(&cashierd.config.client_wallet_path.clone())?.as_path(),
+        cashierd.config.client_wallet_password.clone(),
+    )?;
+
+    let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
+
+    let client = Client::new(
+        rocks,
+        (
+            cashierd.config.gateway_protocol_url.parse()?,
+            cashierd.config.gateway_publisher_url.parse()?,
+        ),
+        (
+            expand_path(&cashierd.config.mint_params_path.clone())?,
+            expand_path(&cashierd.config.spend_params_path.clone())?,
+        ),
+        client_wallet.clone(),
+    )
+    .await?;
+
+    let cfg = RpcServerConfig {
+        socket_addr: cashierd.config.rpc_listen_address.clone(),
+        use_tls: cashierd.config.serve_tls,
+        identity_path: expand_path(&cashierd.config.clone().tls_identity_path)?,
+        identity_pass: cashierd.config.tls_identity_password.clone(),
+    };
+
+    let (t1, t2, t3) = cashierd.start(client, ex.clone()).await?;
+    listen_and_serve(cfg, Arc::new(cashierd)).await?;
+
+    t1.cancel().await;
+    t2.cancel().await;
+    t3.cancel().await;
+    
+    Ok(())
 }

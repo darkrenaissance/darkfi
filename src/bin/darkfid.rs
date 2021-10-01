@@ -1,9 +1,10 @@
+use async_executor::Executor;
 use async_trait::async_trait;
 use clap::clap_app;
 use log::debug;
 use serde_json::{json, Value};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use std::path::PathBuf;
 //use std::sync::Arc;
 
@@ -16,23 +17,20 @@ use drk::{
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    serial::{deserialize, serialize},
+    serial::serialize,
     util::{assign_id, decimals, decode_base10, expand_path, join_config_path, TokenList},
     wallet::WalletDb,
     Result,
 };
 
-#[derive(Clone)]
 struct Darkfid {
     config: DarkfidConfig,
-    wallet: Arc<WalletDb>,
-    client: Arc<Mutex<Client>>,
+    client: Client,
     tokenlist: TokenList,
 }
 
 #[async_trait]
 impl RequestHandler for Darkfid {
-    // TODO: ServerError codes should be part of the lib.
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
@@ -80,16 +78,20 @@ impl Darkfid {
         )
         .await?;
 
-        let client = Arc::new(Mutex::new(client));
-
         let tokenlist = TokenList::new()?;
 
         Ok(Self {
             config,
-            wallet,
             client,
             tokenlist,
         })
+    }
+
+    async fn start(&mut self, executor: Arc<Executor<'static>>) -> Result<()> {
+        self.client.start().await?;
+        self.client.connect_to_subscriber(executor).await?;
+
+        Ok(())
     }
 
     // --> {"method": "say_hello", "params": []}
@@ -101,7 +103,7 @@ impl Darkfid {
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
-        match self.wallet.init_db().await {
+        match self.client.init_db().await {
             Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id))
@@ -112,7 +114,7 @@ impl Darkfid {
     // --> {"method": "key_gen", "params": []}
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
-        match self.wallet.key_gen() {
+        match self.client.key_gen().await {
             Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
@@ -123,16 +125,9 @@ impl Darkfid {
     // --> {"method": "get_key", "params": []}
     // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
     async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
-        match self.wallet.get_keypairs() {
-            Ok(v) => {
-                let pk = v[0].public;
-                let b58 = bs58::encode(serialize(&pk)).into_string();
-                return JsonResult::Resp(jsonresp(json!(b58), id));
-            }
-            Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32003), Some(e.to_string()), id))
-            }
-        }
+        let pk = self.client.main_keypair.public;
+        let b58 = bs58::encode(serialize(&pk)).into_string();
+        return JsonResult::Resp(jsonresp(json!(b58), id));
     }
 
     // --> {"method": "get_token_id", "params": [token]}
@@ -227,17 +222,8 @@ impl Darkfid {
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
 
-        let pubkey: String;
-        match self.wallet.get_keypairs() {
-            Ok(v) => {
-                let pk = v[0].public;
-                let pk = serialize(&pk);
-                pubkey = bs58::encode(pk).into_string();
-            }
-            Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32003), Some(e.to_string()), id))
-            }
-        }
+        let pk = self.client.main_keypair.public;
+        let pubkey = bs58::encode(serialize(&pk)).into_string();
 
         // Send request to cashier. If the cashier supports the requested network
         // (and token), it shall return a valid address where assets can be deposited.
@@ -296,7 +282,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        if amount.as_f64().is_none() {
+        if amount.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
@@ -359,19 +345,19 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let token = address.as_str().unwrap();
+        let _token = address.as_str().unwrap();
 
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let address = address.as_str().unwrap();
+        let _address = address.as_str().unwrap();
 
         if amount.as_f64().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let amount = amount.as_f64().unwrap();
+        let _amount = amount.as_f64().unwrap();
 
         // TODO: get tokenID from walletdb
         //let result: Result<()> = async {
@@ -421,7 +407,9 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
 
-    let darkfid = Darkfid::new(config_path).await?;
+    let ex = Arc::new(Executor::new());
+
+    let mut darkfid = Darkfid::new(config_path).await?;
 
     let server_config = RpcServerConfig {
         socket_addr: darkfid.config.rpc_listen_address.clone(),
@@ -430,25 +418,6 @@ async fn main() -> Result<()> {
         identity_pass: darkfid.config.tls_identity_password.clone(),
     };
 
-    listen_and_serve(server_config, darkfid).await
-}
-
-mod tests {
-
-    //#[test]
-    //fn test_token_parsing() {
-    //    let token = "usdc";
-
-    //    let vec: Vec<char> = token.chars().collect();
-    //    let mut counter = 0;
-    //    for c in vec {
-    //        if c.is_alphabetic() {
-    //            counter += 1;
-    //            println!("Found letter: {}", c)
-    //        }
-    //    }
-    //    if counter == token.len() {
-    //        println!("Every character is a letter");
-    //    }
-    //}
+    darkfid.start(ex.clone()).await?;
+    listen_and_serve(server_config, Arc::new(darkfid)).await
 }

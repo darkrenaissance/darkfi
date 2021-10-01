@@ -139,7 +139,7 @@ async fn listen(
 
 pub async fn listen_and_serve(
     cfg: RpcServerConfig,
-    rh: impl RequestHandler + 'static,
+    rh: Arc<impl RequestHandler + 'static>,
 ) -> Result<()> {
     let tls: Option<TlsAcceptor>;
 
@@ -151,7 +151,6 @@ pub async fn listen_and_serve(
         tls = None;
     }
 
-    let rh = Arc::new(rh);
     let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh);
     listener.await
 }

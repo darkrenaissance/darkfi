@@ -28,11 +28,11 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 pub struct Client {
-    pub state: State,
+    pub state: Arc<Mutex<State>>,
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
-    pub main_keypair: Keypair
+    pub main_keypair: Keypair,
 }
 
 impl Client {
@@ -48,7 +48,6 @@ impl Client {
 
         let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
         let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
-
 
         wallet.init_db().await?;
 
@@ -72,14 +71,14 @@ impl Client {
         let (mint_params, mint_pvk) = load_params(mint_params_path)?;
         let (spend_params, spend_pvk) = load_params(spend_params_path)?;
 
-        let state = State {
+        let state = Arc::new(Mutex::new(State {
             tree: CommitmentTree::empty(),
             merkle_roots,
             nullifiers,
             mint_pvk,
             spend_pvk,
             wallet,
-        };
+        }));
 
         // create gateway client
         debug!(target: "CLIENT", "Creating GatewayClient");
@@ -96,15 +95,6 @@ impl Client {
 
     pub async fn start(&mut self) -> Result<()> {
         self.gateway.start().await?;
-        Ok(())
-    }
-
-    pub async fn connect_to_cashier(client: Client, executor: Arc<Executor<'_>>) -> Result<()> {
-        let client_mutex = Arc::new(Mutex::new(client));
-
-        // start subscriber
-        Client::connect_to_subscriber(client_mutex.clone(), executor.clone()).await?;
-
         Ok(())
     }
 
@@ -130,14 +120,16 @@ impl Client {
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<()> {
-        let slab = self.build_slab_from_tx(pub_key, amount, asset_id, clear_input)?;
+        let slab = self
+            .build_slab_from_tx(pub_key, amount, asset_id, clear_input)
+            .await?;
 
         self.gateway.put_slab(slab).await?;
 
         Ok(())
     }
 
-    fn build_slab_from_tx(
+    async fn build_slab_from_tx(
         &self,
         pub_key: jubjub::SubgroupPoint,
         value: u64,
@@ -157,7 +149,7 @@ impl Client {
             };
             clear_inputs.push(input);
         } else {
-            inputs = self.build_inputs(value, asset_id, &mut outputs)?;
+            inputs = self.build_inputs(value, asset_id, &mut outputs).await?;
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo {
@@ -182,7 +174,7 @@ impl Client {
         Ok(slab)
     }
 
-    fn build_inputs(
+    async fn build_inputs(
         &self,
         amount: u64,
         asset_id: jubjub::Fr,
@@ -191,7 +183,7 @@ impl Client {
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut inputs_value: u64 = 0;
 
-        let own_coins = self.state.wallet.get_own_coins()?;
+        let own_coins = self.state.lock().await.wallet.get_own_coins()?;
 
         for own_coin in own_coins.iter() {
             if inputs_value >= amount {
@@ -231,82 +223,83 @@ impl Client {
     }
 
     pub async fn connect_to_subscriber_from_cashier(
-        client: Arc<Mutex<Client>>,
-        executor: Arc<Executor<'_>>,
+        &self,
         cashier_wallet: CashierDbPtr,
         notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
-    ) -> Result<()> {
-        // start subscribing
-        debug!(target: "CLIENT", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber = client
-            .lock()
-            .await
-            .gateway
-            .start_subscriber(executor.clone())
-            .await?;
-
-        loop {
-            let slab = gateway_slabs_sub.recv().await?;
-            let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
-            let mut client = client.lock().await;
-            let update = state_transition(&client.state, tx)?;
-            let mut secret_keys: Vec<jubjub::Fr> = client
-                .state
-                .wallet
-                .get_keypairs()?
-                .iter()
-                .map(|k| k.private)
-                .collect();
-            let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
-            secret_keys.append(&mut withdraw_keys);
-            client
-                .state
-                .apply(update, secret_keys.clone(), notify.clone())
-                .await?;
-        }
-    }
-
-    pub async fn connect_to_subscriber(
-        client: Arc<Mutex<Client>>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber = client
-            .lock()
-            .await
-            .gateway
-            .start_subscriber(executor.clone())
-            .await?;
+        let gateway_slabs_sub: GatewaySlabsSubscriber =
+            self.gateway.start_subscriber(executor.clone()).await?;
 
-        let (notify, recv_queue) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+        let secret_key = self.main_keypair.private;
+        let state = self.state.clone();
 
-        executor.spawn(async move {
+        let task: smol::Task<Result<()>> = smol::spawn(async move {
             loop {
-                let (pub_key, amount) = recv_queue.recv().await.expect("Receive Own Coin");
-                debug!(target: "CLIENT", "Receive coin with following address and amount: {}, {}", pub_key, amount);
+                let slab = gateway_slabs_sub.recv().await?;
+                let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+
+                let mut state = state.lock().await;
+
+                let update = state_transition(&state, tx)?;
+
+                let mut secret_keys: Vec<jubjub::Fr> = vec![secret_key];
+                let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
+                secret_keys.append(&mut withdraw_keys);
+
+                state
+                    .apply(update, secret_keys.clone(), notify.clone())
+                    .await?;
             }
-        }).detach();
+        });
 
-        loop {
-            let slab = gateway_slabs_sub.recv().await?;
-            let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
-            let mut client = client.lock().await;
-            let update = state_transition(&client.state, tx)?;
+        task.detach();
 
-            let secret_keys: Vec<jubjub::Fr> = client
-                .state
-                .wallet
-                .get_keypairs()?
-                .iter()
-                .map(|k| k.private)
-                .collect();
+        Ok(())
+    }
 
-            client
-                .state
-                .apply(update, secret_keys.clone(), notify.clone())
-                .await?;
-        }
+    pub async fn connect_to_subscriber(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+        // start subscribing
+        debug!(target: "CLIENT", "Start subscriber");
+        let gateway_slabs_sub: GatewaySlabsSubscriber =
+            self.gateway.start_subscriber(executor.clone()).await?;
+
+        let (notify, _) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+
+
+        let secret_key = self.main_keypair.private;
+        let state = self.state.clone();
+
+        let task: smol::Task<Result<()>> = smol::spawn(async move {
+            loop {
+                let slab = gateway_slabs_sub.recv().await?;
+                let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+
+                let mut state = state.lock().await;
+
+                let update = state_transition(&state, tx)?;
+
+                let secret_keys: Vec<jubjub::Fr> = vec![secret_key];
+
+                state
+                    .apply(update, secret_keys.clone(), notify.clone())
+                    .await?;
+            }
+        });
+
+        task.detach();
+
+        Ok(())
+    }
+
+    pub async fn init_db(&self) -> Result<()> {
+        self.state.lock().await.wallet.init_db().await
+    }
+
+    pub async fn key_gen(&self) -> Result<()> {
+        self.state.lock().await.wallet.key_gen()
     }
 }
 
