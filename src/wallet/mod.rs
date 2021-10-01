@@ -4,4 +4,4 @@ pub mod walletdb;
 
 pub use cashierdb::{CashierDb, CashierDbPtr};
 pub use wallet_api::WalletApi;
-pub use walletdb::{WalletDb, WalletPtr, Keypair};
+pub use walletdb::{Keypair, WalletDb, WalletPtr};

@@ -14,7 +14,7 @@ use drk::{
     client::Client,
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
-        jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResult},
+        jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::serialize,

@@ -1,7 +1,6 @@
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::serial::{serialize, deserialize, Decodable, Encodable};
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
-use std::convert::From;
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
 use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
@@ -10,9 +9,10 @@ use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi};
 use log::*;
+use std::convert::From;
 
+use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
 use secp256k1::key::{PublicKey, SecretKey};
-use secp256k1::constants::{SECRET_KEY_SIZE, PUBLIC_KEY_SIZE};
 use secp256k1::{rand::rngs::OsRng, Secp256k1};
 
 use async_std::sync::Arc;
@@ -35,20 +35,18 @@ impl Keypair {
         let mut rng = OsRng::new().expect("OsRng");
 
         let (secret, public) = secp.generate_keypair(&mut rng);
-        Self {
-            secret,
-            public,
-        }
+        Self { secret, public }
     }
+
     pub fn to_bytes(&self) -> [u8; KEYPAIR_LENGTH] {
         let mut bytes: [u8; KEYPAIR_LENGTH] = [0u8; KEYPAIR_LENGTH];
 
         bytes[..SECRET_KEY_SIZE].copy_from_slice(self.secret.as_ref());
         bytes[SECRET_KEY_SIZE..].copy_from_slice(&self.public.serialize());
         bytes
-
     }
-    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Keypair> {
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Keypair> {
         if bytes.len() != KEYPAIR_LENGTH {
             return Err(Error::BtcFailed("Not right size".to_string()));
         }
@@ -56,12 +54,20 @@ impl Keypair {
         let secret = SecretKey::from_slice(&bytes[..SECRET_KEY_SIZE]).unwrap();
         let public = PublicKey::from_slice(&bytes[SECRET_KEY_SIZE..]).unwrap();
 
-        Ok(Keypair{ secret: secret, public: public })
+        Ok(Keypair { secret, public })
     }
+
     pub fn pubkey(&self) -> PublicKey {
         self.public
     }
 }
+
+impl Default for Keypair {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct BitcoinKeys {
     _secret_key: SecretKey,
     public_key: PublicKey,
@@ -94,18 +100,23 @@ impl BitcoinKeys {
     pub fn pubkey(&self) -> &PublicKey {
         &self.public_key
     }
+
     pub fn btc_privkey(&self) -> &BtcPrivKey {
         &self.btc_privkey
     }
+
     pub fn btc_pubkey(&self) -> &BtcPubKey {
         &self.btc_pubkey
     }
+
     pub fn btc_pubkey_hash(&self) -> BtcPubKeyHash {
         self.btc_pubkey.pubkey_hash()
     }
+
     pub fn derive_btc_address(btc_pubkey: BtcPubKey, network: Network) -> Address {
         Address::p2pkh(&btc_pubkey, network)
     }
+
     pub fn derive_script(btc_pubkey_hash: BtcPubKeyHash) -> Script {
         Script::new_p2pkh(&btc_pubkey_hash)
     }
@@ -330,7 +341,7 @@ pub enum BtcFailed {
     ElectrumError(String),
     BtcError(String),
     DecodeAndEncodeError(String),
-    KeypairError(String)
+    KeypairError(String),
 }
 
 impl std::error::Error for BtcFailed {}

@@ -7,12 +7,11 @@ use super::diffie_hellman::{kdf_sapling, sapling_ka_agree};
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
-pub const NOTE_PLAINTEXT_SIZE: usize =
-    32 +    // serial
+pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
     8 +     // value
     32 +    // asset_id
     32 +    // coin_blind
-    32;     // valcom_blind
+    32; // valcom_blind
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 

@@ -345,12 +345,12 @@ impl SolClient {
             let rpc = RpcClient::new(self.rpc_server.to_string());
 
             if !account_is_initialized_mint(&rpc, &pubkey) {
-                return Err(SolFailed::MintIsNotValid(mint_addr.to_string()));
+                return Err(SolFailed::MintIsNotValid(mint_addr));
             }
 
-            return Ok(Some(pubkey));
+            Ok(Some(pubkey))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 }

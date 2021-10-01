@@ -93,7 +93,11 @@ impl Bridge {
             .map(|o| o.map_err(Error::from))
     }
 
-    pub async fn subscribe(self: Arc<Self>, drk_pub_key: jubjub::SubgroupPoint, mint: Option<String>) -> BridgeSubscribtion {
+    pub async fn subscribe(
+        self: Arc<Self>,
+        drk_pub_key: jubjub::SubgroupPoint,
+        mint: Option<String>,
+    ) -> BridgeSubscribtion {
         debug!(target: "BRIDGE", "Start new subscription");
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
@@ -126,10 +130,8 @@ impl Bridge {
 
         let mut mint_address: Option<String> = mint.clone();
 
-        if mint.is_some() {
-            if mint.unwrap().is_empty() {
-                mint_address = None;
-            }
+        if mint.is_some() && mint.unwrap().is_empty() {
+            mint_address = None;
         }
 
         let client: Arc<dyn NetworkClient + Send + Sync>;
@@ -176,7 +178,11 @@ impl Bridge {
 
 #[async_trait]
 pub trait NetworkClient {
-    async fn subscribe(self: Arc<Self>, drk_pub_key: jubjub::SubgroupPoint, mint: Option<String>) -> Result<TokenSubscribtion>;
+    async fn subscribe(
+        self: Arc<Self>,
+        drk_pub_key: jubjub::SubgroupPoint,
+        mint: Option<String>,
+    ) -> Result<TokenSubscribtion>;
 
     // should check if the keypair in not already subscribed
     async fn subscribe_with_keypair(

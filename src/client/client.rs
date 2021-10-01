@@ -51,7 +51,7 @@ impl Client {
 
         wallet.init_db().await?;
 
-        if wallet.get_keypairs()?.len() == 0 {
+        if wallet.get_keypairs()?.is_empty() {
             wallet.key_gen()?;
         }
 
@@ -104,7 +104,7 @@ impl Client {
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
     ) -> Result<()> {
-        if amount <= 0 {
+        if amount == 0 {
             return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
@@ -267,7 +267,6 @@ impl Client {
             self.gateway.start_subscriber(executor.clone()).await?;
 
         let (notify, _) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
-
 
         let secret_key = self.main_keypair.private;
         let state = self.state.clone();

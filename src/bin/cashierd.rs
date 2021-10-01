@@ -262,7 +262,7 @@ impl Cashierd {
                         &serialize(&token_pub),
                         &network,
                         &token_id,
-                        &mint_address,
+                        mint_address,
                     )?;
 
                     return Ok(token_pub);
@@ -303,7 +303,6 @@ impl Cashierd {
 
         let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
 
-
         if mint_address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
@@ -315,7 +314,6 @@ impl Cashierd {
         }
 
         let address = address.as_str().unwrap();
-
 
         if amount.as_u64().is_none() {
             return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
@@ -361,7 +359,7 @@ impl Cashierd {
                     &cashier_secret,
                     &network,
                     &token_id,
-                    &mint_address,
+                    mint_address,
                 )?;
             }
 

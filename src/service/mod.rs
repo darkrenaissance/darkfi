@@ -14,6 +14,3 @@ pub mod sol;
 pub use sol::{SolClient, SolFailed, SolResult};
 
 pub use gateway::{GatewayClient, GatewayService, GatewaySlabsSubscriber};
-
-
-

@@ -16,6 +16,11 @@ use zeromq::*;
 
 pub type PeerId = Vec<u8>;
 
+pub type Channels = (
+    async_channel::Sender<(PeerId, Reply)>,
+    async_channel::Receiver<(PeerId, Request)>,
+);
+
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
     Send((PeerId, Reply)),
@@ -31,10 +36,7 @@ pub struct RepProtocol {
     socket: zeromq::RouterSocket,
     recv_queue: async_channel::Receiver<(PeerId, Reply)>,
     send_queue: async_channel::Sender<(PeerId, Request)>,
-    channels: (
-        async_channel::Sender<(PeerId, Reply)>,
-        async_channel::Receiver<(PeerId, Request)>,
-    ),
+    channels: Channels,
     service_name: String,
 }
 

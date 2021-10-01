@@ -67,7 +67,9 @@ impl ProtocolVersion {
         let send = executor.spawn(self.clone().send_version());
         let recv = executor.spawn(self.recv_version());
 
-        send.await.and(recv.await)?;
+        send.await?;
+        recv.await?;
+
         debug!(target: "net", "ProtocolVersion::exchange_versions() [END]");
         Ok(())
     }

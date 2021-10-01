@@ -123,7 +123,7 @@ impl CashierDb {
         d_key_private: &jubjub::Fr,
         network: &NetworkName,
         token_id: &jubjub::Fr,
-        mint_address: &String,
+        mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
 
@@ -132,7 +132,7 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
         let token_id = self.get_value_serialized(token_id)?;
         let confirm = self.get_value_serialized(&false)?;
-        let mint_address = self.get_value_serialized(mint_address)?;
+        let mint_address = self.get_value_serialized(&mint_address)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -164,7 +164,7 @@ impl CashierDb {
         token_key_public: &[u8],
         network: &NetworkName,
         token_id: &jubjub::Fr,
-        mint_address: &String,
+        mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
 
@@ -178,7 +178,7 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let mint_address = self.get_value_serialized(mint_address)?;
+        let mint_address = self.get_value_serialized(&mint_address)?;
 
         conn.execute(
             "INSERT INTO deposit_keypairs
@@ -226,6 +226,7 @@ impl CashierDb {
     }
 
     // return token public key, network name, and token_id as tuple
+    #[allow(clippy::type_complexity)]
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
@@ -306,6 +307,7 @@ impl CashierDb {
     }
 
     // return drk_pub_key, private key, public key, token_id, and mint_address as a tuple
+    #[allow(clippy::type_complexity)]
     pub fn get_deposit_token_keys_by_network(
         &self,
         network: &NetworkName,
@@ -325,9 +327,15 @@ impl CashierDb {
             WHERE network = :network
             AND confirm = :confirm ;",
         )?;
-        let keys_iter = stmt
-            .query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        let keys_iter =
+            stmt.query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
             })?;
 
         let mut keys = vec![];

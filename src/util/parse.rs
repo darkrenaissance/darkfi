@@ -12,7 +12,6 @@ use crate::{
 // hash the external token ID and NetworkName param.
 // if fails, change the last 4 bytes and hash it again. keep repeating until it works.
 pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
-
     let mut id_string = network.to_string();
 
     id_string.push_str(tkn_str);
