@@ -218,7 +218,7 @@ impl Cashierd {
         let result: Result<String> = async {
             let token_id = generate_id(&mint_address, &network)?;
 
-            let mint_address_opt = Self::validate_token_id(&network, &mint_address)?;
+            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
 
             if mint_address_opt.is_none() {
                 mint_address = String::new();
@@ -354,7 +354,7 @@ impl Cashierd {
         let result: Result<String> = async {
             let token_id = generate_id(&mint_address, &network)?;
 
-            let mint_address_opt = Self::validate_token_id(&network, &mint_address)?;
+            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
 
             if mint_address_opt.is_none() {
                 // empty string
@@ -407,7 +407,7 @@ impl Cashierd {
         ))
     }
 
-    fn validate_token_id(network: &NetworkName, _token_id: &str) -> Result<Option<String>> {
+    fn check_token_id(network: &NetworkName, _token_id: &str) -> Result<Option<String>> {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
