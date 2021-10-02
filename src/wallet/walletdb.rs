@@ -364,33 +364,37 @@ mod tests {
 
     #[test]
     pub fn test_token_table() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test1.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        test_coin_exist()?;
+        wallet.test_wallet()?;
+        //test_coin_exist()?;
         test_put_and_get_own_coins()?;
 
-        test_coin_exist()?;
+        //test_coin_exist()?;
         test_put_and_get_own_coins()?;
 
         let table_vec = wallet.get_token_table()?;
-        println!("THIS IS THE TABLE VEC {:?}", table_vec);
+        //println!("THIS IS THE TABLE VEC {:?}", table_vec);
         Ok(())
     }
 
+    #[test]
     fn test_coin_exist() -> Result<()> {
-        let path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let path = join_config_path(&PathBuf::from("test2.db"))?;
         let password: String = "darkfi".into();
         let contents = include_str!("../../sql/schema.sql");
         let conn = Connection::open(&path)?;
         conn.pragma_update(None, "key", &password)?;
         conn.execute_batch(&contents)?;
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE coin_id > :id")?;
-        let boolean = stmt.exists(&[(":id", &"0")])?;
 
-        println!("Test coin exists. Result is the following: {}", boolean);
+        let mut stmt = conn.prepare("SELECT * FROM coins")?;
+        let _rows = stmt.query([])?;
+        //let boolean = stmt.exists(&[(":id", &"0")])?;
+
+        //println!("Test coin exists. Result is the following: {}", boolean);
 
         std::fs::remove_file(path)?;
         Ok(())
@@ -398,7 +402,7 @@ mod tests {
 
     #[test]
     pub fn test_token_id() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test2.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
@@ -407,14 +411,14 @@ mod tests {
         test_put_and_get_own_coins()?;
         test_put_and_get_own_coins()?;
 
-        let token_id = wallet.get_token_id()?;
-        println!("THIS IS THE ID VEC {:?}", token_id);
+        //let token_id = wallet.get_token_id()?;
+        //println!("THIS IS THE ID VEC {:?}", token_id);
         Ok(())
     }
 
     #[test]
     fn test_key_exist() -> Result<()> {
-        let path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let path = join_config_path(&PathBuf::from("test.db"))?;
         let password: String = "darkfi".into();
         let contents = include_str!("../../sql/schema.sql");
         let conn = Connection::open(&path)?;
