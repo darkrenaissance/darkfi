@@ -188,7 +188,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         let reply = client.withdraw(&network, &token, &address, amount).await?;
 
-        println!("Transaction ID: {}", &reply.to_string());
+        println!("{}", &reply.to_string());
 
         return Ok(());
     }

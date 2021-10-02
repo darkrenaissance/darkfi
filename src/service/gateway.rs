@@ -282,19 +282,15 @@ impl GatewayClient {
         self.slabstore.clone()
     }
 
-    pub async fn start_subscriber(
-        &self,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<GatewaySlabsSubscriber> {
+    pub async fn start_subscriber(&self) -> Result<GatewaySlabsSubscriber> {
         let mut subscriber = Subscriber::new(self.sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
-        executor
-            .spawn(Self::subscribe_loop(
-                subscriber,
-                self.slabstore.clone(),
-                self.gateway_slabs_sub_s.clone(),
-            ))
-            .detach();
+        smol::spawn(Self::subscribe_loop(
+            subscriber,
+            self.slabstore.clone(),
+            self.gateway_slabs_sub_s.clone(),
+        ))
+        .detach();
         Ok(self.gateway_slabs_sub_rv.clone())
     }
 

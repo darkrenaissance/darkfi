@@ -1,4 +1,3 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use clap::clap_app;
@@ -408,7 +407,6 @@ impl Cashierd {
     async fn start(
         &mut self,
         mut client: Client,
-        executor: Arc<Executor<'static>>,
     ) -> Result<(
         smol::Task<Result<()>>,
         smol::Task<Result<()>>,
@@ -479,7 +477,7 @@ impl Cashierd {
             }
         }
 
-        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
+        let resume_watch_deposit_keys_task = smol::spawn(Self::resume_watch_deposit_keys(
             self.bridge.clone(),
             self.cashier_wallet.clone(),
             self.features.clone(),
@@ -493,7 +491,6 @@ impl Cashierd {
             .connect_to_subscriber_from_cashier(
                 self.cashier_wallet.clone(),
                 notify.clone(),
-                executor.clone(),
             )
             .await?;
 
@@ -561,7 +558,6 @@ async fn main() -> Result<()> {
     };
 
     simple_logger::init_with_level(loglevel)?;
-    let ex = Arc::new(Executor::new());
     let mut cashierd = Cashierd::new(config_path).await?;
 
     let client_wallet = WalletDb::new(
@@ -592,7 +588,7 @@ async fn main() -> Result<()> {
         identity_pass: cashierd.config.tls_identity_password.clone(),
     };
 
-    let (t1, t2, t3) = cashierd.start(client, ex.clone()).await?;
+    let (t1, t2, t3) = cashierd.start(client).await?;
     listen_and_serve(cfg, Arc::new(cashierd)).await?;
 
     t1.cancel().await;
