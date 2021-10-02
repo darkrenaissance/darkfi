@@ -309,8 +309,8 @@ impl WalletDb {
         let mut stmt = conn.prepare("SELECT coin_id, asset_id, value FROM coins")?;
         let rows = stmt.query_map([], |row| {
             let coin_id: u64 = row.get(0)?;
-            let value: u64 = row.get(5)?;
-            let token_id = self.get_value_deserialized(row.get(6)?).unwrap();
+            let value: u64 = row.get(1)?;
+            let token_id = self.get_value_deserialized(row.get(3)?).unwrap();
             Ok(TokenTable {
                 coin_id,
                 value,
@@ -333,7 +333,7 @@ impl WalletDb {
         let mut stmt = conn.prepare("SELECT coin_id, asset_id FROM coins")?;
         let rows = stmt.query_map([], |row| {
             let _coin_id: u64 = row.get(0)?;
-            let token_id = self.get_value_deserialized(row.get(6)?).unwrap();
+            let token_id = self.get_value_deserialized(row.get(1)?).unwrap();
             Ok(token_id)
         })?;
 
