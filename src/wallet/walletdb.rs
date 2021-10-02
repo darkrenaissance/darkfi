@@ -282,10 +282,13 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn put_cashier_pub(&self, key_public: Vec<u8>) -> Result<()> {
+    pub fn put_cashier_pub(&self, key_public: &jubjub::SubgroupPoint) -> Result<()> {
         debug!(target: "WALLETDB", "Save cashier keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
+
+        let key_public = self.get_value_serialized(key_public)?;
+
         conn.execute(
             "INSERT INTO cashier(key_public) VALUES (?1)",
             params![key_public],
