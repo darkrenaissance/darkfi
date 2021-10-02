@@ -56,12 +56,7 @@ impl RequestHandler for Darkfid {
 }
 
 impl Darkfid {
-    async fn new(config_path: PathBuf) -> Result<Self> {
-        let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-        let wallet = WalletDb::new(
-            expand_path(&config.wallet_path)?.as_path(),
-            config.wallet_password.clone(),
-        )?;
+    async fn new(config: DarkfidConfig, wallet: Arc<WalletDb>) -> Result<Self> {
         debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
 
         let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
@@ -93,11 +88,7 @@ impl Darkfid {
 
     async fn start(&mut self) -> Result<()> {
         self.client.lock().await.start().await?;
-        self.client
-            .lock()
-            .await
-            .connect_to_subscriber()
-            .await?;
+        self.client.lock().await.connect_to_subscriber().await?;
 
         Ok(())
     }
@@ -443,6 +434,7 @@ impl Darkfid {
 async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg CASHIERKEY: --cashier-key +takes_value "Sets cashier public key")
         (@arg verbose: -v --verbose "Increase verbosity")
     )
     .get_matches();
@@ -461,13 +453,28 @@ async fn main() -> Result<()> {
 
     simple_logger::init_with_level(loglevel)?;
 
-    let mut darkfid = Darkfid::new(config_path).await?;
+    let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
+
+    let wallet = WalletDb::new(
+        expand_path(&config.wallet_path)?.as_path(),
+        config.wallet_password.clone(),
+    )?;
+
+    if let Some(cashier_public) = args.value_of("CASHIERKEY") {
+        let cashier_public: jubjub::SubgroupPoint =
+            deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+        wallet.put_cashier_pub(&cashier_public)?;
+        println!("Cashier public key set successfully");
+        return Ok(());
+    }
+
+    let mut darkfid = Darkfid::new(config.clone(), wallet.clone()).await?;
 
     let server_config = RpcServerConfig {
-        socket_addr: darkfid.config.rpc_listen_address.clone(),
-        use_tls: darkfid.config.serve_tls,
-        identity_path: expand_path(&darkfid.config.tls_identity_path.clone())?,
-        identity_pass: darkfid.config.tls_identity_password.clone(),
+        socket_addr: config.rpc_listen_address.clone(),
+        use_tls: config.serve_tls,
+        identity_path: expand_path(&config.tls_identity_path.clone())?,
+        identity_pass: config.tls_identity_password.clone(),
     };
 
     darkfid.start().await?;
