@@ -83,14 +83,18 @@ impl Bridge {
     }
 
     pub async fn listen(self: Arc<Self>) -> Option<Result<TokenNotification>> {
-        debug!(target: "BRIDGE", "Start listening to new notification");
-        self.notifiers
-            .iter()
-            .map(|n| n.recv())
-            .collect::<FuturesUnordered<async_channel::Recv<TokenNotification>>>()
-            .next()
-            .await
-            .map(|o| o.map_err(Error::from))
+        if !self.notifiers.is_empty() {
+            debug!(target: "BRIDGE", "Start listening to new notification");
+            self.notifiers
+                .iter()
+                .map(|n| n.recv())
+                .collect::<FuturesUnordered<async_channel::Recv<TokenNotification>>>()
+                .next()
+                .await
+                .map(|o| o.map_err(Error::from))
+        } else {
+            None
+        }
     }
 
     pub async fn subscribe(

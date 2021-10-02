@@ -43,40 +43,47 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, token: &str, tokenlist: TokenList) -> Result<String> {
+pub fn assign_id(network: &str, _token: &str, _tokenlist: TokenList) -> Result<String> {
     match NetworkName::from_str(network)? {
-        NetworkName::Solana => match token.to_lowercase().as_str() {
+        #[cfg(feature = "sol")]
+        NetworkName::Solana => match _token.to_lowercase().as_str() {
             "solana" | "sol" => {
-                let token_id = "So11111111111111111111111111111111111111112";
+                use crate::service::sol::SOL_NATIVE_TOKEN_ID;
+                let token_id = SOL_NATIVE_TOKEN_ID;
                 Ok(token_id.to_string())
             }
             tkn => {
                 // (== 44) can represent a Solana base58 token mint address
-                let id = if token.len() == 44 {
-                    token.to_string()
+                let id = if _token.len() == 44 {
+                    _token.to_string()
                 } else {
-                    symbol_to_id(tkn, tokenlist)?
+                    symbol_to_id(tkn, _tokenlist)?
                 };
                 Ok(id)
             }
         },
+        #[cfg(feature = "btc")]
         NetworkName::Bitcoin => Err(Error::NetworkParseError),
+        _ => Err(Error::NotSupportedNetwork),
     }
 }
 
-pub fn decimals(network: &str, token: &str, tokenlist: TokenList) -> Result<usize> {
+pub fn decimals(network: &str, _token: &str, _tokenlist: TokenList) -> Result<usize> {
     match NetworkName::from_str(network)? {
-        NetworkName::Solana => match token {
+        #[cfg(feature = "sol")]
+        NetworkName::Solana => match _token {
             "solana" | "sol" => {
                 let decimals = 9;
                 Ok(decimals)
             }
             tkn => {
-                let decimals = tokenlist.search_decimal(tkn)?;
+                let decimals = _tokenlist.search_decimal(tkn)?;
                 Ok(decimals)
             }
         },
+        #[cfg(feature = "btc")]
         NetworkName::Bitcoin => Err(Error::NetworkParseError),
+        _ => Err(Error::NotSupportedNetwork),
     }
 }
 

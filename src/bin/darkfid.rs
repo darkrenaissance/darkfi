@@ -211,11 +211,9 @@ impl Darkfid {
 
         let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
-            Err(_e) => {
+            Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
-                // TODO: this should return the relevant drk error
-                // right now it just flattens it into ParseError
-                return JsonResult::Err(jsonerr(ParseError, None, id));
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
             }
         };
 
@@ -303,11 +301,9 @@ impl Darkfid {
 
         let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
             Ok(t) => t,
-            Err(_e) => {
+            Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
-                // TODO: this should return the relevant drk error
-                // right now it just flattens it into ParseError
-                return JsonResult::Err(jsonerr(ParseError, None, id));
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
             }
         };
 

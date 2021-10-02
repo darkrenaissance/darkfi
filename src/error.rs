@@ -118,7 +118,7 @@ impl fmt::Display for Error {
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::NotSupportedNetwork => {
-                f.write_str("Not supported network inside cashierd config file")
+                f.write_str("Not supported network")
             }
             Error::BridgeError(ref err) => write!(f, "Bridge error: {}", err),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),

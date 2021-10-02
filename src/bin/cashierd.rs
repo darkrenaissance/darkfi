@@ -385,12 +385,13 @@ impl Cashierd {
         ))
     }
 
-    fn validate_token_id(network: &NetworkName, token_id: &str) -> Result<Option<String>> {
+    fn validate_token_id(network: &NetworkName, _token_id: &str) -> Result<Option<String>> {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
-                if token_id != "So11111111111111111111111111111111111111112" {
-                    return Ok(Some(token_id.to_string()));
+                use drk::service::sol::SOL_NATIVE_TOKEN_ID;
+                if _token_id != SOL_NATIVE_TOKEN_ID {
+                    return Ok(Some(_token_id.to_string()));
                 }
                 return Ok(None);
             }
@@ -399,6 +400,8 @@ impl Cashierd {
                 // Handle bitcoin address here if needed
                 Ok(None)
             }
+
+            _ => Err(Error::NotSupportedNetwork),
         }
     }
 
@@ -413,8 +416,7 @@ impl Cashierd {
     )> {
         self.cashier_wallet.init_db().await?;
 
-        for (feature_name, chain) in self.features.iter() {
-            let bridge2 = self.bridge.clone();
+        for (feature_name, _chain) in self.features.iter() {
 
             match feature_name {
                 #[cfg(feature = "sol")]
@@ -422,6 +424,8 @@ impl Cashierd {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
                     use drk::service::SolClient;
                     use solana_sdk::{signature::Signer, signer::keypair::Keypair};
+
+                    let bridge2 = self.bridge.clone();
 
                     let main_keypair: Keypair;
 
@@ -438,7 +442,7 @@ impl Cashierd {
                         main_keypair = deserialize(&main_keypairs[0].0)?;
                     }
 
-                    let sol_client = SolClient::new(serialize(&main_keypair), &chain).await?;
+                    let sol_client = SolClient::new(serialize(&main_keypair), &_chain).await?;
 
                     bridge2.add_clients(NetworkName::Solana, sol_client).await?;
                 }
@@ -447,6 +451,8 @@ impl Cashierd {
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
                     use drk::service::btc::{BtcClient, Keypair};
+
+                    let bridge2 = self.bridge.clone();
 
                     let main_keypair: Keypair;
 
@@ -463,12 +469,13 @@ impl Cashierd {
                         main_keypair = deserialize(&main_keypairs[0].0)?;
                     }
 
-                    let btc_client = BtcClient::new(serialize(&main_keypair), &chain).await?;
+                    let btc_client = BtcClient::new(serialize(&main_keypair), &_chain).await?;
 
                     bridge2
                         .add_clients(NetworkName::Bitcoin, btc_client)
                         .await?;
                 }
+                _ => {},
             }
         }
 

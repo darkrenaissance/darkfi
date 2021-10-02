@@ -8,6 +8,7 @@ use std::str::FromStr;
 pub enum NetworkName {
     Solana,
     Bitcoin,
+    Empty 
 }
 
 impl std::fmt::Display for NetworkName {
@@ -18,6 +19,9 @@ impl std::fmt::Display for NetworkName {
             }
             Self::Bitcoin => {
                 write!(f, "Bitcoin")
+            }
+            Self::Empty => {
+                write!(f, "No Supported Network")
             }
         }
     }
