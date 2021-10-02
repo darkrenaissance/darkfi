@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
+use std::time::Duration;
 
 use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
@@ -127,7 +128,8 @@ impl SolClient {
         // WebSocket connection
         let builder = native_tls::TlsConnector::builder();
         let tls = TlsConnector::from(builder);
-        let (mut stream, _) = websockets::connect(self.wss_server, tls).await?;
+        let (stream, _) = websockets::connect(self.wss_server, tls).await?;
+        let (mut write, mut read) = stream.split();
 
         // Subscription request build
         let sub_params = SubscribeParams {
@@ -141,7 +143,7 @@ impl SolClient {
         );
 
         debug!(target: "SOLANA RPC", "--> {}", serde_json::to_string(&subscription)?);
-        stream
+        write
             .send(Message::text(serde_json::to_string(&subscription)?))
             .await?;
 
@@ -151,10 +153,21 @@ impl SolClient {
         // The balance we are going to receive from the JSONRPC notification
         let cur_balance: u64;
 
+        let ping_payload: Vec<u8> = vec![42, 33, 31, 42];
+
         loop {
-            let message = stream.next().await.ok_or(Error::TungsteniteError)?;
+            // TODO: Might be a bit fragile
+            let message = read.next().await.ok_or(Error::TungsteniteError)?;
             let message = message.unwrap();
-            debug!(target: "SOLANA SUBSCRIPTION", "<-- {}", message.clone().into_text()?);
+
+            match message.clone() {
+                Message::Pong(_) => {
+                    async_std::task::sleep(Duration::from_secs(1)).await;
+                    write.send(Message::Ping(ping_payload.clone())).await?;
+                    continue;
+                }
+                _ => {}
+            }
 
             match serde_json::from_slice(&message.into_data())? {
                 JsonResult::Resp(r) => {
@@ -162,6 +175,9 @@ impl SolClient {
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&r)?);
                     self.subscriptions.lock().await.push(pubkey);
                     sub_id = r.result.as_i64().unwrap();
+
+                    // Start sending pings
+                    write.send(Message::Ping(ping_payload.clone())).await?;
                 }
                 JsonResult::Err(e) => {
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&e)?);
@@ -200,7 +216,7 @@ impl SolClient {
         }
 
         let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
-        stream
+        write
             .send(Message::text(serde_json::to_string(&unsubscription)?))
             .await?;
 
