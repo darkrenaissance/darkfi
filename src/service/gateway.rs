@@ -314,10 +314,10 @@ impl GatewayClient {
 fn handle_error(status_code: u32) {
     match status_code {
         1 => {
-            warn!("Reply has an Error: Index is not updated");
+            debug!(target: "GATEWAY SERVICE", "Reply has an Error: Index is not updated");
         }
         2 => {
-            warn!("Reply has an Error: Index Not Exist");
+            debug!(target: "GATEWAY SERVICE", "Reply has an Error: Index Not Exist");
         }
         _ => {}
     }

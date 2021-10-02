@@ -62,6 +62,8 @@ impl RequestHandler for Cashierd {
 
 impl Cashierd {
     async fn new(config_path: PathBuf) -> Result<Self> {
+        debug!(target: "CASHIER DAEMON", "Initialize");
+
         let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
         let cashier_wallet = CashierDb::new(
@@ -90,6 +92,8 @@ impl Cashierd {
         cashier_wallet: Arc<CashierDb>,
         features: HashMap<NetworkName, String>,
     ) -> Result<()> {
+        debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
+
         for (network, _) in features.iter() {
             let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
 
@@ -111,6 +115,7 @@ impl Cashierd {
                     .await?;
             }
         }
+
         Ok(())
     }
 
@@ -133,6 +138,8 @@ impl Cashierd {
         if let Some((addr, network, _token_id, mint_address)) = token {
             let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
 
+            // send a request to the bridge to send amount of token 
+            // equivalent to the received drk
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
@@ -141,9 +148,10 @@ impl Cashierd {
                 })
                 .await?;
 
-            // receive a response
+            // receive a response 
             let res = bridge_subscribtion.receiver.recv().await?;
 
+            // check the response's error 
             let error_code = res.error as u32;
             if error_code == 0 {
                 match res.payload {
@@ -198,6 +206,7 @@ impl Cashierd {
 
         let drk_pub_key = drk_pub_key.as_str().unwrap();
 
+        // Check if the features list contains this network
         if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
@@ -221,6 +230,21 @@ impl Cashierd {
             let check = self
                 .cashier_wallet
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
+
+
+
+            // start new subscription from the bridge and then cashierd will 
+            // send a request to the bridge to generate keypair for the desired token
+            // and start watch this token's keypair 
+            // once a bridge receive an update for this token's address
+            // cashierd will get notification from bridge.listen() function
+            //
+            // The "if statement" check from the cashierdb if the node's drk_pub_key already exist
+            // in this case it will not generate new keypair but it will 
+            // retrieve the old generated keypair 
+            //
+            // Once receive a response from the bridge, the cashierd then save a deposit  
+            // record in cashierdb with the network name and token id 
 
             let bridge = self.bridge.clone();
             let bridge_subscribtion = bridge.subscribe(drk_pub_key, mint_address_opt).await;
@@ -320,6 +344,7 @@ impl Cashierd {
 
         let _amount = amount.as_u64().unwrap();
 
+        // Check if the features list contains this network
         if !self.features.contains_key(&network.clone()) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
@@ -415,7 +440,6 @@ impl Cashierd {
         self.cashier_wallet.init_db().await?;
 
         for (feature_name, _chain) in self.features.iter() {
-
             match feature_name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
@@ -473,7 +497,7 @@ impl Cashierd {
                         .add_clients(NetworkName::Bitcoin, btc_client)
                         .await?;
                 }
-                _ => {},
+                _ => {}
             }
         }
 
@@ -488,10 +512,7 @@ impl Cashierd {
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
         client
-            .connect_to_subscriber_from_cashier(
-                self.cashier_wallet.clone(),
-                notify.clone(),
-            )
+            .connect_to_subscriber_from_cashier(self.cashier_wallet.clone(), notify.clone())
             .await?;
 
         let cashier_wallet = self.cashier_wallet.clone();

@@ -73,6 +73,7 @@ impl Bridge {
         network: NetworkName,
         client: Arc<dyn NetworkClient + Send + Sync>,
     ) -> Result<()> {
+        debug!(target: "BRIDGE", "Add new client");
         let client2 = client.clone();
         let notifier = client2.get_notifier().await?;
 
