@@ -111,7 +111,17 @@ impl SolClient {
         let (prev_balance, decimals) = if mint.is_none() {
             (rpc.get_balance(&pubkey).map_err(SolFailed::from)?, 9)
         } else {
-            get_account_token_balance(&rpc, &pubkey, &mint.unwrap()).map_err(SolFailed::from)?
+            match get_account_token_balance(&rpc, &pubkey, &mint.unwrap()) {
+                Ok(v) => v,
+                Err(_) => {
+                    let (exists, decimals) = account_is_initialized_mint(&rpc, &mint.unwrap());
+                    if !exists {
+                        debug!("Could not figure out the number of decimals in SPL token");
+                        return Err(SolFailed::MintIsNotValid(mint.unwrap().to_string()));
+                    }
+                    (0, decimals)
+                }
+            }
         };
 
         // WebSocket connection
@@ -331,7 +341,7 @@ impl SolClient {
         let tx = Transaction::new_with_payer(&[ix], Some(&self.main_keypair.pubkey()));
         let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
 
-        debug!(target: "SOL BRIDGE", "Sent SOL to main wallet: {}", signature);
+        debug!(target: "SOL BRIDGE", "Sent {} SOL to main wallet: {}", lamports_to_sol(amount), signature);
         Ok(signature)
     }
 
@@ -344,7 +354,7 @@ impl SolClient {
 
             let rpc = RpcClient::new(self.rpc_server.to_string());
 
-            if !account_is_initialized_mint(&rpc, &pubkey) {
+            if !account_is_initialized_mint(&rpc, &pubkey).0 {
                 return Err(SolFailed::MintIsNotValid(mint_addr));
             }
 
@@ -437,8 +447,11 @@ pub fn get_account_token_balance(
 }
 
 /// Check if given account is a valid token mint
-pub fn account_is_initialized_mint(rpc: &RpcClient, mint: &Pubkey) -> bool {
-    rpc.get_token_supply(mint).is_ok()
+pub fn account_is_initialized_mint(rpc: &RpcClient, mint: &Pubkey) -> (bool, u64) {
+    match rpc.get_token_supply(mint) {
+        Ok(v) => (true, v.decimals as u64),
+        Err(_) => (false, 0),
+    }
 }
 
 pub fn sign_and_send_transaction(
