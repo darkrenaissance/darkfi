@@ -370,6 +370,8 @@ impl Darkfid {
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
         //let token_vec = self.wallet.get_token_ids();
 
+        //for (network_name, token_id) in self.tokenlist.drk_tokenlist.iter() {}
+
         let args = params.as_array();
 
         if args.is_none() {
@@ -390,7 +392,7 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
 
-        let _token = address.as_str().unwrap();
+        let _token = token.as_str().unwrap();
 
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));

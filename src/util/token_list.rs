@@ -8,7 +8,6 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct TokenList {
     sol_tokenlist: Value,
-    drk_tokenlist: HashMap<NetworkName, jubjub::Fr>,
 }
 
 impl TokenList {
@@ -16,7 +15,6 @@ impl TokenList {
         // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
         let sol_tokenlist: Value = serde_json::from_str(&file_contents)?;
-        let mut drk_tokenlist = HashMap::new();
 
         let tokens = sol_tokenlist["tokens"]
             .as_array()
@@ -27,17 +25,7 @@ impl TokenList {
             symbols.push(symbol.to_string());
         }
 
-        for symbol in symbols {
-            let id = generate_id(&symbol, &NetworkName::Solana)?;
-            drk_tokenlist.insert(NetworkName::Solana, id);
-        }
-
-        // TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
-
-        Ok(Self {
-            sol_tokenlist,
-            drk_tokenlist,
-        })
+        Ok(Self { sol_tokenlist })
     }
 
     pub fn get_symbols(self) -> Result<Vec<String>> {
@@ -52,7 +40,7 @@ impl TokenList {
         return Ok(symbols);
     }
 
-    pub fn search_id(self, symbol: &str) -> Result<String> {
+    pub fn search_id(&self, symbol: &str) -> Result<String> {
         let tokens = self.sol_tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?;
@@ -79,6 +67,24 @@ impl TokenList {
             }
         }
         unreachable!();
+    }
+}
+
+pub struct DrkTokenList {
+    drk_tokenlist: HashMap<String, jubjub::Fr>,
+}
+
+impl DrkTokenList {
+    pub fn new(list: TokenList) -> Result<Self> {
+        let mut drk_tokenlist = HashMap::new();
+        let symbols = list.clone().get_symbols()?;
+        for symbol in symbols {
+            let id = list.clone().search_id(&symbol)?;
+            let drk_id = generate_id(&id, &NetworkName::Solana)?;
+            drk_tokenlist.insert(symbol, drk_id);
+        }
+        // TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
+        Ok(Self { drk_tokenlist })
     }
 }
 
