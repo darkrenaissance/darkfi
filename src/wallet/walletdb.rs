@@ -306,11 +306,11 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT coin_id, asset_id, value FROM coins")?;
+        let mut stmt = conn.prepare("SELECT coin_id, value, asset_id FROM coins ;")?;
         let rows = stmt.query_map([], |row| {
             let coin_id: u64 = row.get(0)?;
             let value: u64 = row.get(1)?;
-            let token_id = self.get_value_deserialized(row.get(2)?).unwrap();
+            let token_id: jubjub::Fr = self.get_value_deserialized(row.get(2)?).unwrap();
             Ok(TokenTable {
                 coin_id,
                 value,
@@ -362,102 +362,6 @@ mod tests {
     use crate::util::join_config_path;
     use ff::PrimeField;
 
-    #[test]
-    pub fn test_token_table() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test1.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        wallet.test_wallet()?;
-        //test_coin_exist()?;
-        test_put_and_get_own_coins()?;
-
-        //test_coin_exist()?;
-        test_put_and_get_own_coins()?;
-
-        let table_vec = wallet.get_token_table()?;
-        //println!("THIS IS THE TABLE VEC {:?}", table_vec);
-        Ok(())
-    }
-
-    #[test]
-    fn test_coin_exist() -> Result<()> {
-        let path = join_config_path(&PathBuf::from("test2.db"))?;
-        let password: String = "darkfi".into();
-        let contents = include_str!("../../sql/schema.sql");
-        let conn = Connection::open(&path)?;
-        conn.pragma_update(None, "key", &password)?;
-        conn.execute_batch(&contents)?;
-
-        let mut stmt = conn.prepare("SELECT * FROM coins")?;
-        let _rows = stmt.query([])?;
-        //let boolean = stmt.exists(&[(":id", &"0")])?;
-
-        //println!("Test coin exists. Result is the following: {}", boolean);
-
-        std::fs::remove_file(path)?;
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_token_id() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test2.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        test_put_and_get_own_coins()?;
-        test_put_and_get_own_coins()?;
-        test_put_and_get_own_coins()?;
-
-        //let token_id = wallet.get_token_id()?;
-        //println!("THIS IS THE ID VEC {:?}", token_id);
-        Ok(())
-    }
-
-    #[test]
-    fn test_key_exist() -> Result<()> {
-        let path = join_config_path(&PathBuf::from("test.db"))?;
-        let password: String = "darkfi".into();
-        let contents = include_str!("../../sql/schema.sql");
-        let conn = Connection::open(&path)?;
-        conn.pragma_update(None, "key", &password)?;
-        conn.execute_batch(&contents)?;
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
-        let boolean = stmt.exists(&[(":id", &"0")])?;
-
-        println!("Attempt 1. Result is the following: {}", boolean);
-
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
-
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
-
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
-        let boolean = stmt.exists(&[(":id", &"0")])?;
-
-        println!("Wrote keys, result is the following: {}", boolean);
-
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
-
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
-        let boolean = stmt.exists(&[(":id", &"0")])?;
-
-        println!("Third time, result is the following: {}", boolean);
-
-        std::fs::remove_file(path)?;
-        Ok(())
-    }
-
     pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
         if !password.trim().is_empty() {
             let contents = include_str!("../../sql/schema.sql");
@@ -475,8 +379,118 @@ mod tests {
     }
 
     #[test]
+    pub fn test_get_token_id() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+
+        wallet.put_keypair(key_public, key_private)?;
+
+        let asset_id = jubjub::Fr::random(&mut OsRng);
+
+        let note = Note {
+            serial: jubjub::Fr::random(&mut OsRng),
+            value: 110,
+            asset_id,
+            coin_blind: jubjub::Fr::random(&mut OsRng),
+            valcom_blind: jubjub::Fr::random(&mut OsRng),
+        };
+
+        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+
+        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
+        tree.append(MerkleNode::from_coin(&coin))?;
+
+        let witness = IncrementalWitness::from_tree(&tree);
+
+        let own_coin = OwnCoin {
+            coin,
+            note: note.clone(),
+            secret,
+            witness: witness.clone(),
+        };
+
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+
+        let token_id = wallet.get_token_id()?;
+
+        assert_eq!(token_id.len(), 4);
+        assert_eq!(token_id[0], asset_id);
+        assert_eq!(token_id[2], asset_id);
+
+        std::fs::remove_file(walletdb_path)?;
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_get_token_table() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let key_public = serial::serialize(&public);
+        let key_private = serial::serialize(&secret);
+
+        wallet.put_keypair(key_public, key_private)?;
+
+        let asset_id = jubjub::Fr::random(&mut OsRng);
+
+        let note = Note {
+            serial: jubjub::Fr::random(&mut OsRng),
+            value: 110,
+            asset_id,
+            coin_blind: jubjub::Fr::random(&mut OsRng),
+            valcom_blind: jubjub::Fr::random(&mut OsRng),
+        };
+
+        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+
+        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
+        tree.append(MerkleNode::from_coin(&coin))?;
+
+        let witness = IncrementalWitness::from_tree(&tree);
+
+        let own_coin = OwnCoin {
+            coin,
+            note: note.clone(),
+            secret,
+            witness: witness.clone(),
+        };
+
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin.clone())?;
+
+        let table_vec = wallet.get_token_table()?;
+
+        assert_eq!(table_vec.len(), 4);
+        assert_eq!(table_vec[0].value, 110);
+        assert_eq!(table_vec[0].token_id, asset_id); 
+        assert_eq!(table_vec[2].value, 110);
+        assert_eq!(table_vec[2].token_id, asset_id); 
+
+        std::fs::remove_file(walletdb_path)?;
+
+        Ok(())
+    }
+
+    #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test4_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test3_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
@@ -500,7 +514,7 @@ mod tests {
 
     #[test]
     pub fn test_put_and_get_own_coins() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test4_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
@@ -535,22 +549,22 @@ mod tests {
         };
         wallet.put_own_coins(own_coin.clone())?;
 
-        //let own_coin = wallet.get_own_coins()?[0].clone();
+        let own_coin = wallet.get_own_coins()?[0].clone();
 
-        //assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
-        //assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
-        //assert_eq!(own_coin.secret, secret);
-        //assert_eq!(own_coin.witness.root(), witness.root());
-        //assert_eq!(own_coin.witness.path(), witness.path());
+        assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
+        assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
+        assert_eq!(own_coin.secret, secret);
+        assert_eq!(own_coin.witness.root(), witness.root());
+        assert_eq!(own_coin.witness.path(), witness.path());
 
-        //std::fs::remove_file(walletdb_path)?;
+        std::fs::remove_file(walletdb_path)?;
 
         Ok(())
     }
 
     #[test]
     pub fn test_get_witnesses_and_update_them() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test3_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test5_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
