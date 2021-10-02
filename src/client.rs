@@ -1,4 +1,3 @@
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -238,12 +237,11 @@ impl Client {
         &self,
         cashier_wallet: CashierDbPtr,
         notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
-        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // start subscribing
-        debug!(target: "CLIENT", "Start subscriber");
+        debug!(target: "CLIENT", "Start subscriber for cashier");
         let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber(executor.clone()).await?;
+            self.gateway.start_subscriber().await?;
 
         let secret_key = self.main_keypair.private;
         let state = self.state.clone();
@@ -269,14 +267,16 @@ impl Client {
 
         task.detach();
 
+        debug!(target: "CLIENT", "End subscriber for cashier");
+
         Ok(())
     }
 
-    pub async fn connect_to_subscriber(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn connect_to_subscriber(&self) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
         let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber(executor.clone()).await?;
+            self.gateway.start_subscriber().await?;
 
         let (notify, _) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
