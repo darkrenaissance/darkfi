@@ -317,9 +317,9 @@ impl Client {
     //    self.state.lock().await.wallet.get_token_ids()
     //}
 
-    //pub async fn get_token_ids(&self) -> Result<()> {
-    //    self.state.lock().await.wallet.get_token_ids()
-    //}
+    pub async fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
+        self.state.lock().await.wallet.get_token_id()
+    }
 }
 
 pub struct State {
