@@ -138,7 +138,7 @@ impl Cashierd {
         if let Some((addr, network, _token_id, mint_address)) = token {
             let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
 
-            // send a request to the bridge to send amount of token 
+            // send a request to the bridge to send amount of token
             // equivalent to the received drk
             bridge_subscribtion
                 .sender
@@ -148,10 +148,10 @@ impl Cashierd {
                 })
                 .await?;
 
-            // receive a response 
+            // receive a response
             let res = bridge_subscribtion.receiver.recv().await?;
 
-            // check the response's error 
+            // check the response's error
             let error_code = res.error as u32;
             if error_code == 0 {
                 match res.payload {
@@ -231,20 +231,18 @@ impl Cashierd {
                 .cashier_wallet
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
 
-
-
-            // start new subscription from the bridge and then cashierd will 
+            // start new subscription from the bridge and then cashierd will
             // send a request to the bridge to generate keypair for the desired token
-            // and start watch this token's keypair 
+            // and start watch this token's keypair
             // once a bridge receive an update for this token's address
             // cashierd will get notification from bridge.listen() function
             //
             // The "if statement" check from the cashierdb if the node's drk_pub_key already exist
-            // in this case it will not generate new keypair but it will 
-            // retrieve the old generated keypair 
+            // in this case it will not generate new keypair but it will
+            // retrieve the old generated keypair
             //
-            // Once receive a response from the bridge, the cashierd then save a deposit  
-            // record in cashierdb with the network name and token id 
+            // Once receive a response from the bridge, the cashierd then save a deposit
+            // record in cashierdb with the network name and token id
 
             let bridge = self.bridge.clone();
             let bridge_subscribtion = bridge.subscribe(drk_pub_key, mint_address_opt).await;
@@ -562,6 +560,7 @@ impl Cashierd {
 async fn main() -> Result<()> {
     let args = clap_app!(cashierd =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg ADDRESS: -a --address "Get Cashier Public key")
         (@arg verbose: -v --verbose "Increase verbosity")
     )
     .get_matches();
@@ -601,6 +600,19 @@ async fn main() -> Result<()> {
         client_wallet.clone(),
     )
     .await?;
+
+    // must add cashier public key to the client wallet, which in this case it's the same
+    // as main_keypair
+    if client_wallet.get_cashier_public_keys()?.is_empty() {
+        client_wallet.put_cashier_pub(&client.main_keypair.public)?;
+    }
+
+    if args.is_present("ADDRESS") {
+        let cashier_public = client.main_keypair.public;
+        let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
+        println!("Public Key: {}", cashier_public);
+        return Ok(());
+    };
 
     let cfg = RpcServerConfig {
         socket_addr: cashierd.config.rpc_listen_address.clone(),
