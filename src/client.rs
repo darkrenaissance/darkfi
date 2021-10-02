@@ -312,6 +312,14 @@ impl Client {
     pub async fn key_gen(&self) -> Result<()> {
         self.state.lock().await.wallet.key_gen()
     }
+
+    //pub async fn token_and_balances(&self) -> Result<()> {
+    //    self.state.lock().await.wallet.get_token_ids()
+    //}
+
+    //pub async fn get_token_ids(&self) -> Result<()> {
+    //    self.state.lock().await.wallet.get_token_ids()
+    //}
 }
 
 pub struct State {
