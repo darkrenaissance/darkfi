@@ -639,4 +639,24 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    pub fn test_put_and_get_cashier_public_key() -> Result<()> {
+        let walletdb_path = join_config_path(&PathBuf::from("test6_wallet.db"))?;
+        let password: String = "darkfi".into();
+        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+        init_db(&walletdb_path, password)?;
+
+        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+
+        wallet.put_cashier_pub(&public)?;
+        let cashier_public = wallet.get_cashier_public_keys()?[0];
+
+        assert_eq!(cashier_public, public);
+
+        std::fs::remove_file(walletdb_path)?;
+
+        Ok(())
+    }
 }
