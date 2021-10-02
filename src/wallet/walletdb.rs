@@ -310,7 +310,7 @@ impl WalletDb {
         let rows = stmt.query_map([], |row| {
             let coin_id: u64 = row.get(0)?;
             let value: u64 = row.get(1)?;
-            let token_id = self.get_value_deserialized(row.get(3)?).unwrap();
+            let token_id = self.get_value_deserialized(row.get(2)?).unwrap();
             Ok(TokenTable {
                 coin_id,
                 value,
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     pub fn test_token_table() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("testtable_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     pub fn test_token_id() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("testtable_wallet.db"))?;
+        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
         let password: String = "darkfi".into();
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
