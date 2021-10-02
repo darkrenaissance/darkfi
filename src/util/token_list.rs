@@ -1,22 +1,45 @@
-use crate::{Error, Result};
+use crate::{util::NetworkName, Error, Result};
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct TokenList {
-    tokenlist: Value,
+    sol_tokenlist: Value,
+    drk_tokenlist: HashMap<NetworkName, jubjub::Fr>,
 }
 
 impl TokenList {
     pub fn new() -> Result<Self> {
         // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
-        let tokenlist: Value = serde_json::from_str(&file_contents)?;
+        let sol_tokenlist: Value = serde_json::from_str(&file_contents)?;
+        let mut drk_tokenlist = HashMap::new();
 
-        Ok(Self { tokenlist })
+        // for tkn in sol_tokenlist:
+        //          generate_id(tkn, Solana)
+        // let btc = generate_id(tkn, BTC)
+        //
+        // let tokenid = generate_id(
+        Ok(Self {
+            sol_tokenlist,
+            drk_tokenlist,
+        })
+    }
+
+    pub fn get_symbols(self) -> Result<Vec<String>> {
+        let tokens = self.sol_tokenlist["tokens"]
+            .as_array()
+            .ok_or(Error::TokenParseError)?;
+        let mut symbols = Vec::new();
+        for item in tokens {
+            let symbol = item["symbol"].as_str().unwrap();
+            symbols.push(symbol.to_string());
+        }
+        return Ok(symbols);
     }
 
     pub fn search_id(self, symbol: &str) -> Result<String> {
-        let tokens = self.tokenlist["tokens"]
+        let tokens = self.sol_tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?;
         for item in tokens {
@@ -30,7 +53,7 @@ impl TokenList {
     }
 
     pub fn search_decimal(self, symbol: &str) -> Result<usize> {
-        let tokens = self.tokenlist["tokens"]
+        let tokens = self.sol_tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?;
         for item in tokens {
@@ -42,5 +65,22 @@ impl TokenList {
             }
         }
         unreachable!();
+    }
+}
+
+mod tests {
+
+    use super::*;
+    use crate::util::TokenList;
+    use crate::Result;
+
+    #[test]
+    pub fn test_get_symbols() -> Result<()> {
+        let token = TokenList::new()?;
+        let symbols = token.get_symbols()?;
+        for symbol in symbols {
+            println!("{}", symbol)
+        }
+        Ok(())
     }
 }
