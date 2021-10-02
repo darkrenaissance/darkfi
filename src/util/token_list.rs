@@ -1,4 +1,7 @@
-use crate::{util::NetworkName, Error, Result};
+use crate::{
+    util::{generate_id, NetworkName},
+    Error, Result,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -15,11 +18,22 @@ impl TokenList {
         let sol_tokenlist: Value = serde_json::from_str(&file_contents)?;
         let mut drk_tokenlist = HashMap::new();
 
-        // for tkn in sol_tokenlist:
-        //          generate_id(tkn, Solana)
-        // let btc = generate_id(tkn, BTC)
-        //
-        // let tokenid = generate_id(
+        let tokens = sol_tokenlist["tokens"]
+            .as_array()
+            .ok_or(Error::TokenParseError)?;
+        let mut symbols = Vec::new();
+        for item in tokens {
+            let symbol = item["symbol"].as_str().unwrap();
+            symbols.push(symbol.to_string());
+        }
+
+        for symbol in symbols {
+            let id = generate_id(&symbol, &NetworkName::Solana)?;
+            drk_tokenlist.insert(NetworkName::Solana, id);
+        }
+
+        // TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
+
         Ok(Self {
             sol_tokenlist,
             drk_tokenlist,
