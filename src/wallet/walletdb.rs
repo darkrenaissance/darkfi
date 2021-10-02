@@ -66,8 +66,8 @@ impl WalletDb {
                 *self.initialized.lock().await = true;
             } else {
                 debug!(
-                target: "WALLETDB",
-                "Password is empty. You must set a password to use the wallet."
+                    target: "WALLETDB",
+                    "Password is empty. You must set a password to use the wallet."
                 );
                 return Err(Error::from(ClientFailed::EmptyPassword));
             }
@@ -115,6 +115,7 @@ impl WalletDb {
         // this just gets the first key. maybe we should randomize this
         let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
         let mut keypairs = Vec::new();
+
         for key in key_iter {
             let key = key?;
             let public = key.0;
@@ -136,14 +137,30 @@ impl WalletDb {
 
         let mut coins = conn.prepare("SELECT * FROM coins")?;
         let rows = coins.query_map([], |row| {
-            let coin = self.get_value_deserialized(row.get(1)?).unwrap();
+            Ok((
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        })?;
+
+        let mut own_coins = Vec::new();
+
+        for row in rows {
+            let row = row?;
+            let coin = self.get_value_deserialized(row.0)?;
 
             // note
-            let serial = self.get_value_deserialized(row.get(2)?).unwrap();
-            let coin_blind = self.get_value_deserialized(row.get(3)?).unwrap();
-            let valcom_blind = self.get_value_deserialized(row.get(4)?).unwrap();
-            let value: u64 = row.get(5)?;
-            let asset_id = self.get_value_deserialized(row.get(6)?).unwrap();
+            let serial = self.get_value_deserialized(row.1)?;
+            let coin_blind = self.get_value_deserialized(row.2)?;
+            let valcom_blind = self.get_value_deserialized(row.3)?;
+            let value: u64 = row.4;
+            let asset_id = self.get_value_deserialized(row.5)?;
 
             let note = Note {
                 serial,
@@ -153,8 +170,8 @@ impl WalletDb {
                 valcom_blind,
             };
 
-            let witness = self.get_value_deserialized(row.get(7)?).unwrap();
-            let key_id: u64 = row.get(8)?;
+            let witness = self.get_value_deserialized(row.6)?;
+            let key_id: u64 = row.7;
 
             // return key_private from key_id
             let mut get_private_key =
@@ -167,21 +184,17 @@ impl WalletDb {
                 secret.push(id?)
             }
 
-            let secret: jubjub::Fr = self
-                .get_value_deserialized(secret.pop().expect("Load public_key from walletdb"))
-                .unwrap();
+            let secret: jubjub::Fr =
+                self.get_value_deserialized(secret.pop().expect("Load public_key from walletdb"))?;
 
-            Ok(OwnCoin {
+            let oc = OwnCoin {
                 coin,
                 note,
                 secret,
                 witness,
-            })
-        })?;
+            };
 
-        let mut own_coins = Vec::new();
-        for id in rows {
-            own_coins.push(id?)
+            own_coins.push(oc)
         }
 
         Ok(own_coins)
@@ -216,7 +229,7 @@ impl WalletDb {
         conn.execute(
             "INSERT INTO coins
             (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
-            VALUES 
+            VALUES
             (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id);",
             named_params! {
                 ":coin": coin,
@@ -238,16 +251,14 @@ impl WalletDb {
 
         let mut witnesses = conn.prepare("SELECT coin_id, witness FROM coins;")?;
 
-        let rows = witnesses.query_map([], |row| {
-            let coin_id: u64 = row.get(0)?;
-            let witness: IncrementalWitness<MerkleNode> =
-                self.get_value_deserialized(row.get(1)?).unwrap();
-            Ok((coin_id, witness))
-        })?;
+        let rows = witnesses.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
         let mut witnesses = Vec::new();
         for i in rows {
-            witnesses.push(i?)
+            let i = i?;
+            let coin_id: u64 = i.0;
+            let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(i.1)?;
+            witnesses.push((coin_id, witness))
         }
 
         Ok(witnesses)
@@ -287,15 +298,14 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
+
         let key_iter = stmt.query_map([], |row| row.get(0))?;
+
         let mut pub_keys = Vec::new();
+
         for key in key_iter {
             let public: jubjub::SubgroupPoint = self.get_value_deserialized(key?)?;
             pub_keys.push(public);
-        }
-
-        if pub_keys.is_empty() {
-            return Err(Error::from(ClientFailed::DoesNotHaveCashierPublicKey));
         }
 
         Ok(pub_keys)
@@ -307,20 +317,21 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let mut stmt = conn.prepare("SELECT coin_id, value, asset_id FROM coins ;")?;
-        let rows = stmt.query_map([], |row| {
-            let coin_id: u64 = row.get(0)?;
-            let value: u64 = row.get(1)?;
-            let token_id: jubjub::Fr = self.get_value_deserialized(row.get(2)?).unwrap();
-            Ok(TokenTable {
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+
+        let mut token_table = Vec::new();
+
+        for row in rows {
+            let row = row?;
+            let coin_id: u64 = row.0;
+            let value: u64 = row.1;
+            let token_id: jubjub::Fr = self.get_value_deserialized(row.2)?;
+
+            token_table.push(TokenTable {
                 coin_id,
                 value,
                 token_id,
-            })
-        })?;
-
-        let mut token_table = Vec::new();
-        for coin_id in rows {
-            token_table.push(coin_id?);
+            });
         }
         Ok(token_table)
     }
@@ -330,19 +341,18 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT coin_id, asset_id FROM coins")?;
-        let rows = stmt.query_map([], |row| {
-            let _coin_id: u64 = row.get(0)?;
-            let token_id = self.get_value_deserialized(row.get(1)?).unwrap();
-            Ok(token_id)
-        })?;
+        let mut stmt = conn.prepare("SELECT asset_id FROM coins")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
 
-        let mut token_id = Vec::new();
-        for coin_id in rows {
-            token_id.push(coin_id?);
+        let mut token_ids = Vec::new();
+        for row in rows {
+            let row = row?;
+            let token_id = self.get_value_deserialized(row).unwrap();
+
+            token_ids.push(token_id);
         }
 
-        Ok(token_id)
+        Ok(token_ids)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
@@ -371,7 +381,7 @@ mod tests {
             conn.execute_batch(&contents)?;
         } else {
             debug!(
-            target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
+                target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
             );
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
@@ -479,9 +489,9 @@ mod tests {
 
         assert_eq!(table_vec.len(), 4);
         assert_eq!(table_vec[0].value, 110);
-        assert_eq!(table_vec[0].token_id, asset_id); 
+        assert_eq!(table_vec[0].token_id, asset_id);
         assert_eq!(table_vec[2].value, 110);
-        assert_eq!(table_vec[2].token_id, asset_id); 
+        assert_eq!(table_vec[2].token_id, asset_id);
 
         std::fs::remove_file(walletdb_path)?;
 
