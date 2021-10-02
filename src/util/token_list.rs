@@ -6,11 +6,11 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub struct TokenList {
+pub struct SolTokenList {
     sol_tokenlist: Value,
 }
 
-impl TokenList {
+impl SolTokenList {
     pub fn new() -> Result<Self> {
         // TODO: FIXME
         let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
@@ -75,7 +75,7 @@ pub struct DrkTokenList {
 }
 
 impl DrkTokenList {
-    pub fn new(list: TokenList) -> Result<Self> {
+    pub fn new(list: SolTokenList) -> Result<Self> {
         let mut drk_tokenlist = HashMap::new();
         let symbols = list.clone().get_symbols()?;
         for symbol in symbols {
@@ -91,12 +91,12 @@ impl DrkTokenList {
 mod tests {
 
     use super::*;
-    use crate::util::TokenList;
+    use crate::util::SolTokenList;
     use crate::Result;
 
     #[test]
     pub fn test_get_symbols() -> Result<()> {
-        let token = TokenList::new()?;
+        let token = SolTokenList::new()?;
         let symbols = token.get_symbols()?;
         for symbol in symbols {
             println!("{}", symbol)

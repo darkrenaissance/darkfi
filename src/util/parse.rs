@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::{
     serial::{deserialize, serialize},
-    util::{NetworkName, TokenList},
+    util::{NetworkName, SolTokenList},
     Error, Result,
 };
 
@@ -43,7 +43,7 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, _token: &str, _tokenlist: TokenList) -> Result<String> {
+pub fn assign_id(network: &str, _token: &str, _tokenlist: SolTokenList) -> Result<String> {
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
         NetworkName::Solana => match _token.to_lowercase().as_str() {
@@ -68,7 +68,7 @@ pub fn assign_id(network: &str, _token: &str, _tokenlist: TokenList) -> Result<S
     }
 }
 
-pub fn decimals(network: &str, _token: &str, _tokenlist: TokenList) -> Result<usize> {
+pub fn decimals(network: &str, _token: &str, _tokenlist: SolTokenList) -> Result<usize> {
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
         NetworkName::Solana => match _token {
@@ -92,7 +92,7 @@ pub fn decimals(network: &str, _token: &str, _tokenlist: TokenList) -> Result<us
 //    Ok(apo)
 //}
 
-pub fn symbol_to_id(token: &str, tokenlist: TokenList) -> Result<String> {
+pub fn symbol_to_id(token: &str, tokenlist: SolTokenList) -> Result<String> {
     let vec: Vec<char> = token.chars().collect();
     let mut counter = 0;
     for c in vec {

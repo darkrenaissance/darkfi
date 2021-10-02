@@ -19,7 +19,7 @@ use drk::{
     serial::{deserialize, serialize},
     util::{
         assign_id, decimals, decode_base10, expand_path, generate_id, join_config_path,
-        NetworkName, TokenList,
+        DrkTokenList, NetworkName, SolTokenList,
     },
     wallet::WalletDb,
     Result,
@@ -28,7 +28,7 @@ use drk::{
 struct Darkfid {
     config: DarkfidConfig,
     client: Arc<Mutex<Client>>,
-    tokenlist: TokenList,
+    tokenlist: SolTokenList,
 }
 
 #[async_trait]
@@ -77,7 +77,8 @@ impl Darkfid {
 
         let client = Arc::new(Mutex::new(client));
 
-        let tokenlist = TokenList::new()?;
+        let tokenlist = SolTokenList::new()?;
+        let drk_tokenlist = DrkTokenList::new(tokenlist.clone())?;
 
         Ok(Self {
             config,
@@ -368,10 +369,6 @@ impl Darkfid {
     // --> {"method": "transfer", [dToken, address, amount]}
     // <-- {"result": "txID"}
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
-        //let token_vec = self.wallet.get_token_ids();
-
-        //for (network_name, token_id) in self.tokenlist.drk_tokenlist.iter() {}
-
         let args = params.as_array();
 
         if args.is_none() {
@@ -393,6 +390,10 @@ impl Darkfid {
         }
 
         let _token = token.as_str().unwrap();
+
+        //let token_vec = self.wallet.get_token_ids();
+
+        //for (network_name, token_id) in self.tokenlist.drk_tokenlist.iter() {}
 
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
