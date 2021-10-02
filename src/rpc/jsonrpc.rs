@@ -32,11 +32,11 @@ impl ErrorCode {
             ErrorCode::MethodNotFound => -32601,
             ErrorCode::InvalidParams => -32602,
             ErrorCode::InternalError => -32603,
-            ErrorCode::InvalidAmountParam => -32604,
-            ErrorCode::InvalidNetworkParam => -32605,
-            ErrorCode::InvalidTokenIdParam => -32606,
-            ErrorCode::InvalidAddressParam => -32607,
-            ErrorCode::InvalidSymbolParam => -32608,
+            ErrorCode::InvalidAmountParam => -32010,
+            ErrorCode::InvalidNetworkParam => -32011,
+            ErrorCode::InvalidTokenIdParam => -32012,
+            ErrorCode::InvalidAddressParam => -32013,
+            ErrorCode::InvalidSymbolParam => -32014,
             ErrorCode::ServerError(c) => c,
         }
     }
