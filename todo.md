@@ -12,7 +12,8 @@
 - [ ] drk2: retrieve cashier features and error if don't support the network
 - [ ] darkfid: match 'bitcoin' to 'btc'
 - [ ] change amount type to u64 across project
-- [ ] darkfid.transfer: match token input and return token_id from wallet 
+- [X] darkfid.transfer: match token input and return token_id from wallet 
+- [ ] drk/ darkfid: return pretty table of assets and balances
 
 ## deposit
 
