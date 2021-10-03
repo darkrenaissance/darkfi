@@ -4,6 +4,7 @@ use crate::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 #[derive(Debug, Clone)]
 pub struct SolTokenList {
@@ -91,15 +92,22 @@ pub struct DrkTokenList {
 
 impl DrkTokenList {
     pub fn new(list: SolTokenList) -> Result<Self> {
-        let mut drk_tokenlist = HashMap::new();
+        // get symbols
         let symbols = list.clone().get_symbols()?;
 
-        for symbol in symbols {
-            let id = list.clone().search_id(&symbol)?;
-            let drk_id = generate_id(&id, &NetworkName::Solana)?;
-            drk_tokenlist.insert(symbol, drk_id);
-        }
-        //TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
+        // get ids
+        let ids: Vec<jubjub::Fr> = symbols
+            .iter()
+            .map(|sym| generate_id(sym, &NetworkName::Solana).unwrap())
+            .collect();
+
+        // create the hashmap
+        let drk_tokenlist: HashMap<String, jubjub::Fr> = symbols
+            .iter()
+            .zip(ids.iter())
+            .map(|(key, value)| return (key.clone(), value.clone()))
+            .collect();
+
         Ok(Self { drk_tokenlist })
     }
 }
@@ -107,7 +115,7 @@ impl DrkTokenList {
 mod tests {
 
     use super::*;
-    use crate::util::SolTokenList;
+    use crate::util::{DrkTokenList, SolTokenList};
     use crate::Result;
 
     #[test]
@@ -126,6 +134,13 @@ mod tests {
         for symbol in symbols {
             token.clone().search_all_id(&symbol)?;
         }
+        Ok(())
+    }
+    #[test]
+    pub fn test_hashmap() -> Result<()> {
+        let token = SolTokenList::new()?;
+        let drk_token = DrkTokenList::new(token)?;
+        println!("{:?}", drk_token.drk_tokenlist);
         Ok(())
     }
 }
