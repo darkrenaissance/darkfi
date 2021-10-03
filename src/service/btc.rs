@@ -126,11 +126,18 @@ pub struct BtcClient {
     client: Arc<ElectrumClient>,
     network: Network,
     keypair: Keypair,
+    notify_channel: (
+        async_channel::Sender<TokenNotification>,
+        async_channel::Receiver<TokenNotification>,
+    ),
+    
 }
 
 impl BtcClient {
     pub async fn new(keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
         let keypair: Keypair = deserialize(&keypair)?;
+
+        let notify_channel = async_channel::unbounded();
 
         let (network, url) = match network {
             "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
@@ -145,6 +152,7 @@ impl BtcClient {
             client: Arc::new(electrum_client),
             network,
             keypair,
+            notify_channel
         }))
     }
 

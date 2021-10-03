@@ -529,22 +529,22 @@ impl Cashierd {
         let bridge2 = self.bridge.clone();
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> = smol::spawn(
             async move {
-                loop {
-                    if let Some(token_notification) = bridge2.clone().listen().await {
-                        let token_notification = token_notification?;
+                while let Some(token_notification) = bridge2.clone().listen().await
+                {
+                    debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
 
-                        debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
+                    let token_notification = token_notification?;
 
-                        client
-                            .send(
-                                token_notification.drk_pub_key,
-                                token_notification.received_balance,
-                                token_notification.token_id,
-                                true,
-                            )
-                            .await?;
-                    }
+                    client
+                        .send(
+                            token_notification.drk_pub_key,
+                            token_notification.received_balance,
+                            token_notification.token_id,
+                            true,
+                        )
+                        .await?;
                 }
+                Ok(())
             },
         );
 

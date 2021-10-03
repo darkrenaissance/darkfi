@@ -6,7 +6,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -55,7 +55,9 @@ impl SolClient {
         let main_keypair: Keypair = deserialize(&main_keypair)?;
         let notify_channel = async_channel::unbounded();
 
-        debug!("Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
+        warn!(target: "SOL BRIDGE", "Main SOL wallet: {:?}", main_keypair.to_bytes());
+
+        debug!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
         let (rpc_server, wss_server) = match network {
             "mainnet" => (
@@ -227,12 +229,13 @@ impl SolClient {
             ));
         }
 
+        let send_notification = self.notify_channel.0.clone();
+
         if mint.is_some() {
             let amnt = cur_balance - prev_balance;
             let ui_amnt = amnt / u64::pow(10, decimals as u32);
 
-            self.notify_channel
-                .0
+            send_notification
                 .send(TokenNotification {
                     network: NetworkName::Solana,
                     token_id: generate_id(&mint.unwrap().to_string(), &NetworkName::Solana)?,
@@ -248,8 +251,7 @@ impl SolClient {
             let amnt = cur_balance - prev_balance;
             let ui_amnt = lamports_to_sol(amnt);
 
-            self.notify_channel
-                .0
+            send_notification
                 .send(TokenNotification {
                     network: NetworkName::Solana,
                     token_id: generate_id(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,

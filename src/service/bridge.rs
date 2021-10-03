@@ -74,26 +74,36 @@ impl Bridge {
         client: Arc<dyn NetworkClient + Send + Sync>,
     ) -> Result<()> {
         debug!(target: "BRIDGE", "Add new client");
+
         let client2 = client.clone();
         let notifier = client2.get_notifier().await?;
 
+        if !notifier.is_closed() {
+            self.notifiers.push(notifier);
+        }
+
         self.clients.lock().await.insert(network, client.clone());
 
-        self.notifiers.push(notifier.clone());
         Ok(())
     }
 
     pub async fn listen(self: Arc<Self>) -> Option<Result<TokenNotification>> {
         if !self.notifiers.is_empty() {
             debug!(target: "BRIDGE", "Start listening to new notification");
-            self.notifiers
+            let notification = self
+                .notifiers
                 .iter()
                 .map(|n| n.recv())
                 .collect::<FuturesUnordered<async_channel::Recv<TokenNotification>>>()
                 .next()
                 .await
-                .map(|o| o.map_err(Error::from))
+                .map(|o| o.map_err(Error::from));
+
+            debug!(target: "BRIDGE", "End listening to new notification");
+
+            notification
         } else {
+            debug!(target: "BRIDGE", "TEST");
             None
         }
     }

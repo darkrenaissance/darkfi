@@ -108,7 +108,7 @@ impl WalletDb {
     }
 
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
-        debug!(target: "WALLETDB", "Returning keys...");
+        debug!(target: "WALLETDB", "Returning keypairs...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT * FROM keys")?;
@@ -130,7 +130,9 @@ impl WalletDb {
     }
 
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
-        // open connection
+
+        debug!(target: "WALLETDB", "Get own coins");
+
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
@@ -202,6 +204,9 @@ impl WalletDb {
 
     pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
         // prepare the values
+
+        debug!(target: "WALLETDB", "Put own coins");
+
         let coin = self.get_value_serialized(&own_coin.coin.repr)?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
@@ -269,6 +274,9 @@ impl WalletDb {
         coin_id: u64,
         witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
+
+        debug!(target: "WALLETDB", "Updating witness");
+
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
@@ -297,7 +305,7 @@ impl WalletDb {
     }
 
     pub fn get_cashier_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
-        debug!(target: "WALLETDB", "Returning keys...");
+        debug!(target: "WALLETDB", "Returning Cashier Public key...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;

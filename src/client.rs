@@ -115,11 +115,16 @@ impl Client {
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
     ) -> Result<()> {
+
+        debug!(target: "CLIENT", "Start transfer {}", amount);
+
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
         self.send(pub_key, amount, asset_id, false).await?;
+
+        debug!(target: "CLIENT", "End transfer {}", amount);
 
         Ok(())
     }
@@ -131,11 +136,17 @@ impl Client {
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<()> {
+
+        debug!(target: "CLIENT", "Start send {}", amount);
+
         let slab = self
             .build_slab_from_tx(pub_key, amount, asset_id, clear_input)
             .await?;
 
         self.gateway.put_slab(slab).await?;
+
+        
+        debug!(target: "CLIENT", "End send {}", amount);
 
         Ok(())
     }
@@ -147,6 +158,9 @@ impl Client {
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<Slab> {
+
+        debug!(target: "CLIENT", "Start build slab from tx");
+
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
@@ -182,6 +196,9 @@ impl Client {
         }
 
         let slab = Slab::new(tx_data);
+
+        debug!(target: "CLIENT", "End build slab from tx");
+
         Ok(slab)
     }
 
@@ -191,6 +208,9 @@ impl Client {
         asset_id: jubjub::Fr,
         outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
     ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
+
+        debug!(target: "CLIENT", "Start build inputs");
+        
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut inputs_value: u64 = 0;
 
@@ -213,7 +233,7 @@ impl Client {
         }
 
         if inputs_value < amount {
-            return Err(ClientFailed::NotEnoughValue(0).into());
+            return Err(ClientFailed::NotEnoughValue(inputs_value).into());
         }
 
         if inputs_value > amount {
@@ -230,7 +250,10 @@ impl Client {
                 public: own_pub_key,
             });
         }
-        Ok(vec![])
+
+        debug!(target: "CLIENT", "End build inputs");
+
+        Ok(inputs)
     }
 
     pub async fn connect_to_subscriber_from_cashier(
@@ -375,10 +398,13 @@ impl State {
         notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
     ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
+
+        debug!(target: "CLIENT STATE", "Extend nullifiers");
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
         }
 
+        debug!(target: "CLIENT STATE", "Update merkle tree and witness ");
         // Update merkle tree and witnesses
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the merkle tree
@@ -415,8 +441,14 @@ impl State {
                         witness: witness.clone(),
                     };
 
+
                     self.wallet.put_own_coins(own_coin)?;
                     let pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+
+                    debug!(target: "CLIENT STATE", "Received a coin: amount {} from {}", note.value, pub_key);
+
+                    debug!(target: "CLIENT STATE", "Send a notification");
+
                     notify.send((pub_key, note.value)).await?;
                 }
             }
