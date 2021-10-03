@@ -28,7 +28,8 @@ use drk::{
 struct Darkfid {
     config: DarkfidConfig,
     client: Arc<Mutex<Client>>,
-    tokenlist: SolTokenList,
+    sol_tokenlist: SolTokenList,
+    drk_tokenlist: DrkTokenList,
 }
 
 #[async_trait]
@@ -77,13 +78,14 @@ impl Darkfid {
 
         let client = Arc::new(Mutex::new(client));
 
-        let tokenlist = SolTokenList::new()?;
-        let drk_tokenlist = DrkTokenList::new(tokenlist.clone())?;
+        let sol_tokenlist = SolTokenList::new()?;
+        let drk_tokenlist = DrkTokenList::new(sol_tokenlist.clone())?;
 
         Ok(Self {
             config,
             client,
-            tokenlist,
+            sol_tokenlist,
+            drk_tokenlist,
         })
     }
 
@@ -148,7 +150,7 @@ impl Darkfid {
         let symbol = symbol.unwrap();
 
         let result: Result<Value> = async {
-            let token_id = self.tokenlist.clone().search_id(symbol)?;
+            let token_id = self.sol_tokenlist.clone().search_id(symbol)?;
             Ok(json!(token_id))
         }
         .await;
@@ -209,7 +211,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, self.sol_tokenlist.clone()) {
             Ok(t) => t,
             Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -285,7 +287,7 @@ impl Darkfid {
 
         let amount = amount.as_f64().unwrap();
 
-        let decimals = match decimals(network, token, self.tokenlist.clone()) {
+        let decimals = match decimals(network, token, self.sol_tokenlist.clone()) {
             Ok(d) => d,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -299,7 +301,7 @@ impl Darkfid {
             }
         };
 
-        let token_id = match assign_id(&network, &token, self.tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, self.sol_tokenlist.clone()) {
             Ok(t) => t,
             Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -393,7 +395,7 @@ impl Darkfid {
 
         //let token_vec = self.wallet.get_token_ids();
 
-        //for (network_name, token_id) in self.tokenlist.drk_tokenlist.iter() {}
+        //for (network_name, token_id) in self.drk_tokenlist.iter() {}
 
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));

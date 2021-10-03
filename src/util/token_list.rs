@@ -78,6 +78,7 @@ impl DrkTokenList {
     pub fn new(list: SolTokenList) -> Result<Self> {
         let mut drk_tokenlist = HashMap::new();
         let symbols = list.clone().get_symbols()?;
+
         for symbol in symbols {
             let id = list.clone().search_id(&symbol)?;
             let drk_id = generate_id(&id, &NetworkName::Solana)?;
