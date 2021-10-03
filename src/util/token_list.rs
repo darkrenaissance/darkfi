@@ -54,6 +54,21 @@ impl SolTokenList {
         unreachable!();
     }
 
+    pub fn search_all_id(&self, symbol: &str) -> Result<Vec<String>> {
+        let tokens = self.sol_tokenlist["tokens"]
+            .as_array()
+            .ok_or(Error::TokenParseError)?;
+        let mut ids = Vec::new();
+        for item in tokens {
+            if item["symbol"] == symbol.to_uppercase() {
+                let address = item["address"].clone();
+                let address = address.as_str().ok_or(Error::TokenParseError)?;
+                ids.push(address.to_string());
+            }
+        }
+        return Ok(ids);
+    }
+
     pub fn search_decimal(self, symbol: &str) -> Result<usize> {
         let tokens = self.sol_tokenlist["tokens"]
             .as_array()
@@ -77,14 +92,14 @@ pub struct DrkTokenList {
 impl DrkTokenList {
     pub fn new(list: SolTokenList) -> Result<Self> {
         let mut drk_tokenlist = HashMap::new();
-        //let symbols = list.clone().get_symbols()?;
+        let symbols = list.clone().get_symbols()?;
 
-        //for symbol in symbols {
-        //    let id = list.clone().search_id(&symbol)?;
-        //    let drk_id = generate_id(&id, &NetworkName::Solana)?;
-        //    drk_tokenlist.insert(symbol, drk_id);
-        //}
-        // TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
+        for symbol in symbols {
+            let id = list.clone().search_id(&symbol)?;
+            let drk_id = generate_id(&id, &NetworkName::Solana)?;
+            drk_tokenlist.insert(symbol, drk_id);
+        }
+        //TODO: add btc_id, NetworkName::Bitcoin to drk_tokenlist
         Ok(Self { drk_tokenlist })
     }
 }
@@ -101,6 +116,15 @@ mod tests {
         let symbols = token.get_symbols()?;
         for symbol in symbols {
             println!("{}", symbol)
+        }
+        Ok(())
+    }
+    #[test]
+    pub fn test_get_id_from_symbols() -> Result<()> {
+        let token = SolTokenList::new()?;
+        let symbols = token.clone().get_symbols()?;
+        for symbol in symbols {
+            token.clone().search_all_id(&symbol)?;
         }
         Ok(())
     }
