@@ -393,9 +393,9 @@ impl Darkfid {
 
         let _token = token.as_str().unwrap();
 
-        //let token_vec = self.wallet.get_token_ids();
+        let token_vec = self.client.lock().await.get_token_id().await;
 
-        //for (network_name, token_id) in self.drk_tokenlist.iter() {}
+        //for (symbol, token_id) in self.drk_tokenlist.iter() {}
 
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
