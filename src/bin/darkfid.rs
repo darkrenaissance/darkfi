@@ -372,13 +372,10 @@ impl Darkfid {
     // <-- {"result": "txID"}
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
-
         if args.is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-
         let args = args.unwrap();
-
         if args.len() != 3 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
@@ -390,48 +387,58 @@ impl Darkfid {
         if token.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
-
-        let _token = token.as_str().unwrap();
-
-        let token_vec = self.client.lock().await.get_token_id().await;
-
-        //for (symbol, token_id) in self.drk_tokenlist.iter() {}
-
+        let token = token.as_str().unwrap();
         if address.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
         }
 
-        let _address = address.as_str().unwrap();
-
-        if amount.as_f64().is_none() {
+        let address = address.as_str().unwrap();
+        if amount.as_str().is_none() {
             return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
+        let amount = amount.as_str().unwrap();
 
-        let _amount = amount.as_f64().unwrap();
+        let hashmap = self.drk_tokenlist.drk_tokenlist.clone();
 
-        // TODO: get tokenID from walletdb
-        //let result: Result<()> = async {
-        //    let token_id = parse_wrapped_token(token, self.tokenlist.clone())?;
-        //    let address = bs58::decode(&address).into_vec()?;
-        //    let address: jubjub::SubgroupPoint = deserialize(&address)?;
-        //    self.client
-        //        .lock()
-        //        .await
-        //        .transfer(token_id, address, amount)
-        //        .await?;
-        //    Ok(())
-        //}
-        //.await;
+        if hashmap.get(token).is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+        // get the id for the token
+        let token_id = hashmap.get(token).unwrap();
 
-        //match result {
-        //    Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
-        //    Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
-        //}
-        return JsonResult::Err(jsonerr(
-            ServerError(-32005),
-            Some("failed to withdraw".to_string()),
-            id,
-        ));
+        let result: Result<()> = async {
+            // check if it's in the database
+            if self
+                .client
+                .lock()
+                .await
+                .token_id_exists(token_id)
+                .await
+                .unwrap()
+                == true
+            {
+                let own_token_id = token_id;
+                let drk_address = bs58::decode(&address).into_vec()?;
+                let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
+
+                let decimals: usize = 8;
+                let amount = decode_base10(amount, decimals, true)?;
+
+                self.client
+                    .lock()
+                    .await
+                    .transfer(*own_token_id, drk_address, amount)
+                    .await?;
+            }
+
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
     }
 }
 

@@ -87,7 +87,7 @@ impl SolTokenList {
 }
 
 pub struct DrkTokenList {
-    drk_tokenlist: HashMap<String, jubjub::Fr>,
+    pub drk_tokenlist: HashMap<String, jubjub::Fr>,
 }
 
 impl DrkTokenList {

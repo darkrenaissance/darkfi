@@ -115,7 +115,6 @@ impl Client {
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
     ) -> Result<()> {
-
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
         if amount == 0 {
@@ -136,7 +135,6 @@ impl Client {
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<()> {
-
         debug!(target: "CLIENT", "Start send {}", amount);
 
         let slab = self
@@ -145,7 +143,6 @@ impl Client {
 
         self.gateway.put_slab(slab).await?;
 
-        
         debug!(target: "CLIENT", "End send {}", amount);
 
         Ok(())
@@ -158,7 +155,6 @@ impl Client {
         asset_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<Slab> {
-
         debug!(target: "CLIENT", "Start build slab from tx");
 
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
@@ -208,9 +204,8 @@ impl Client {
         asset_id: jubjub::Fr,
         outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
     ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
-
         debug!(target: "CLIENT", "Start build inputs");
-        
+
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut inputs_value: u64 = 0;
 
@@ -263,8 +258,7 @@ impl Client {
     ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber for cashier");
-        let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber().await?;
+        let gateway_slabs_sub: GatewaySlabsSubscriber = self.gateway.start_subscriber().await?;
 
         let secret_key = self.main_keypair.private;
         let state = self.state.clone();
@@ -298,8 +292,7 @@ impl Client {
     pub async fn connect_to_subscriber(&self) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber().await?;
+        let gateway_slabs_sub: GatewaySlabsSubscriber = self.gateway.start_subscriber().await?;
 
         let (notify, _) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
@@ -339,6 +332,10 @@ impl Client {
     //pub async fn token_and_balances(&self) -> Result<()> {
     //    self.state.lock().await.wallet.get_token_ids()
     //}
+
+    pub async fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
+        self.state.lock().await.wallet.token_id_exists(token_id)
+    }
 
     pub async fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
         self.state.lock().await.wallet.get_token_id()
@@ -440,7 +437,6 @@ impl State {
                         secret: *secret,
                         witness: witness.clone(),
                     };
-
 
                     self.wallet.put_own_coins(own_coin)?;
                     let pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;

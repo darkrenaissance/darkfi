@@ -130,7 +130,6 @@ impl WalletDb {
     }
 
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
-
         debug!(target: "WALLETDB", "Get own coins");
 
         let conn = Connection::open(&self.path)?;
@@ -274,7 +273,6 @@ impl WalletDb {
         coin_id: u64,
         witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
-
         debug!(target: "WALLETDB", "Updating witness");
 
         let conn = Connection::open(&self.path)?;
@@ -364,6 +362,16 @@ impl WalletDb {
         }
 
         Ok(token_ids)
+    }
+
+    pub fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
+        debug!(target: "WALLETDB", "Check tokenID exists");
+        let conn = Connection::open(&self.path)?;
+        conn.pragma_update(None, "key", &self.password)?;
+        let id = self.get_value_serialized(token_id)?;
+        let mut stmt = conn.prepare("SELECT * FROM coins WHERE asset_id > :id")?;
+        let id_check = stmt.exists([id])?;
+        Ok(id_check)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
