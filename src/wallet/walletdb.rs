@@ -671,6 +671,8 @@ mod tests {
 
         assert_eq!(cashier_public, public);
 
+        assert_eq!(wallet.get_cashier_public_keys()?.contains(&public), true);
+
         std::fs::remove_file(walletdb_path)?;
 
         Ok(())

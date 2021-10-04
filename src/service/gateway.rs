@@ -226,6 +226,8 @@ impl GatewayClient {
     }
 
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Slab>> {
+        debug!(target: "GATEWAY CLIENT","Get slab");
+
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
@@ -242,10 +244,13 @@ impl GatewayClient {
             self.slabstore.put(slab.clone())?;
             return Ok(Some(slab));
         }
+
         Ok(None)
     }
 
     pub async fn put_slab(&mut self, mut slab: Slab) -> Result<()> {
+        debug!(target: "GATEWAY CLIENT","Put slab");
+
         loop {
             let last_index = self.sync().await?;
             slab.set_index(last_index + 1);
@@ -266,6 +271,8 @@ impl GatewayClient {
     }
 
     pub async fn get_last_index(&mut self) -> Result<u64> {
+        debug!(target: "GATEWAY CLIENT","Get last index");
+
         let handle_error = Arc::new(handle_error);
 
         let rep = self
@@ -283,6 +290,8 @@ impl GatewayClient {
     }
 
     pub async fn start_subscriber(&self) -> Result<GatewaySlabsSubscriber> {
+        debug!(target: "GATEWAY CLIENT","Start subscriber");
+
         let mut subscriber = Subscriber::new(self.sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
         smol::spawn(Self::subscribe_loop(
@@ -299,8 +308,11 @@ impl GatewayClient {
         slabstore: Arc<SlabStore>,
         gateway_slabs_sub_s: async_channel::Sender<Slab>,
     ) -> Result<()> {
+        debug!(target: "GATEWAY CLIENT","Start subscribe loop");
+
         loop {
             let slab = subscriber.fetch::<Slab>().await?;
+            debug!(target: "GATEWAY CLIENT","Received new slab");
             gateway_slabs_sub_s.send(slab.clone()).await?;
             slabstore.put(slab)?;
         }

@@ -5,7 +5,6 @@ use serde_json::{json, Value};
 
 use async_std::sync::{Arc, Mutex};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use drk::{
     blockchain::Rocks,
@@ -18,8 +17,8 @@ use drk::{
     },
     serial::{deserialize, serialize},
     util::{
-        assign_id, decimals, decode_base10, expand_path, generate_id, join_config_path,
-        DrkTokenList, NetworkName, SolTokenList,
+        assign_id, decimals, decode_base10, expand_path, join_config_path,
+        DrkTokenList,  SolTokenList,
     },
     wallet::WalletDb,
     Result,
@@ -322,24 +321,34 @@ impl Darkfid {
             }
         }
 
+        let hashmap = self.drk_tokenlist.drk_tokenlist.clone();
+
+        if hashmap.get(token).is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+        }
+        // get the id for the token
+        let token_id = hashmap.get(token).unwrap();
+
         // send drk to cashier_public
         if let JsonResult::Resp(cashier_public) = &rep {
             let result: Result<()> = async {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
-                let cashier_public: jubjub::SubgroupPoint =
-                    deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+                if self.client.lock().await.token_id_exists(token_id).await? == true {
+                    let own_token_id = token_id;
 
-                self.client
-                    .lock()
-                    .await
-                    .send(
-                        cashier_public,
-                        amount_in_apo,
-                        generate_id(&token_id, &NetworkName::from_str(network)?)?,
-                        true,
-                    )
-                    .await?;
+                    let cashier_public: jubjub::SubgroupPoint =
+                        deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+
+                    let decimals: usize = 8;
+                    let amount = decode_base10(&amount.to_string(), decimals, true)?;
+
+                    self.client
+                        .lock()
+                        .await
+                        .transfer(*own_token_id, cashier_public, amount)
+                        .await?;
+                }
 
                 Ok(())
             }
@@ -446,8 +455,12 @@ impl Darkfid {
 async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg CASHIERKEY: --cashier-key +takes_value "Sets cashier public key")
         (@arg verbose: -v --verbose "Increase verbosity")
+        (@subcommand cashier =>
+            (about: "Manage cashier public key")
+            (@arg GETCASHIERKEY: --get "Get cashier public key")
+            (@arg SETCASHIERKEY: --set +takes_value "Sets cashier public key")
+        )
     )
     .get_matches();
 
@@ -472,12 +485,23 @@ async fn main() -> Result<()> {
         config.wallet_password.clone(),
     )?;
 
-    if let Some(cashier_public) = args.value_of("CASHIERKEY") {
-        let cashier_public: jubjub::SubgroupPoint =
-            deserialize(&bs58::decode(cashier_public).into_vec()?)?;
-        wallet.put_cashier_pub(&cashier_public)?;
-        println!("Cashier public key set successfully");
-        return Ok(());
+    if let Some(matches) = args.subcommand_matches("cashier") {
+        if matches.is_present("GETCASHIERKEY") {
+            let cashier_public = wallet.get_cashier_public_keys()?[0];
+            let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
+            println!("Cashier Public Key: {}", cashier_public);
+            return Ok(());
+        }
+
+        if matches.is_present("SETCASHIERKEY") {
+            let cashier_public = matches.value_of("SETCASHIERKEY").unwrap();
+
+            let cashier_public: jubjub::SubgroupPoint =
+                deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+            wallet.put_cashier_pub(&cashier_public)?;
+            println!("Cashier public key set successfully");
+            return Ok(());
+        }
     }
 
     let mut darkfid = Darkfid::new(config.clone(), wallet.clone()).await?;

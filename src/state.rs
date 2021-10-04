@@ -1,5 +1,6 @@
 use bellman::groth16;
 use bls12_381::Bls12;
+use log::debug;
 use std::fmt;
 
 use crate::{
@@ -72,13 +73,21 @@ pub fn state_transition<S: ProgramState>(
     tx: tx::Transaction,
 ) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
+
+    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
+
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
+
+
         if !state.is_valid_cashier_public_key(&input.signature_public) {
+            log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
             return Err(VerifyFailed::InvalidCashierKey(i));
         }
     }
+
+    debug!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
         // Check merkle roots
@@ -99,6 +108,7 @@ pub fn state_transition<S: ProgramState>(
         }
     }
 
+    debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
     // Check the tx verifies correctly
     tx.verify(state.mint_pvk(), state.spend_pvk())?;
 

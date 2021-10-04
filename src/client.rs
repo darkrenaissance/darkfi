@@ -266,18 +266,30 @@ impl Client {
         let task: smol::Task<Result<()>> = smol::spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
-                let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+
+                debug!(target: "CLIENT", "Received new slab");
+
+                debug!(target: "CLIENT", "Starting build tx from slab");
+                let tx = tx::Transaction::decode(&slab.get_payload()[..]);
+
+                if tx.is_err() {
+                    continue;
+                }
 
                 let mut state = state.lock().await;
 
-                let update = state_transition(&state, tx)?;
+                let update = state_transition(&state, tx?);
+
+                if update.is_err() {
+                    continue;
+                }
 
                 let mut secret_keys: Vec<jubjub::Fr> = vec![secret_key];
                 let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
                 secret_keys.append(&mut withdraw_keys);
 
                 state
-                    .apply(update, secret_keys.clone(), notify.clone())
+                    .apply(update?, secret_keys.clone(), notify.clone())
                     .await?;
             }
         });
@@ -302,16 +314,29 @@ impl Client {
         let task: smol::Task<Result<()>> = smol::spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
-                let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+
+                debug!(target: "CLIENT", "Received new slab");
+
+                debug!(target: "CLIENT", "Starting build tx from slab");
+
+                let tx = tx::Transaction::decode(&slab.get_payload()[..]);
+
+                if tx.is_err() {
+                    continue;
+                }
 
                 let mut state = state.lock().await;
 
-                let update = state_transition(&state, tx)?;
+                let update = state_transition(&state, tx?);
+
+                if update.is_err() {
+                    continue;
+                }
 
                 let secret_keys: Vec<jubjub::Fr> = vec![secret_key];
 
                 state
-                    .apply(update, secret_keys.clone(), notify.clone())
+                    .apply(update?, secret_keys.clone(), notify.clone())
                     .await?;
             }
         });
@@ -359,22 +384,34 @@ pub struct State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        self.wallet
-            .get_cashier_public_keys()
-            .expect("Get cashier public keys")
-            .contains(public)
+        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
+
+        if let Ok(pub_keys) = self.wallet.get_cashier_public_keys() {
+            if pub_keys.is_empty() {
+                error!(target: "State", "No cashier public key");
+                return false;
+            }
+            return pub_keys.contains(public);
+        }
+        false
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        self.merkle_roots
-            .key_exist(*merkle_root)
-            .expect("Check if the merkle_root valid")
+        debug!(target: "CLIENT STATE", "Check if it is valid merkle");
+
+        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
+            return mr;
+        }
+        false
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.nullifiers
-            .key_exist(nullifier.repr)
-            .expect("Check if nullifier exists")
+        debug!(target: "CLIENT STATE", "Check if nullifier exists");
+
+        if let Ok(nl) = self.nullifiers.key_exist(nullifier.repr) {
+            return nl;
+        }
+        false
     }
 
     // load from disk
@@ -408,14 +445,20 @@ impl State {
             let node = MerkleNode::from_coin(&coin);
             self.tree.append(node).expect("Append to merkle tree");
 
+            debug!(target: "CLIENT STATE", "Keep track of all merkle roots");
+
             // Keep track of all merkle roots that have existed
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
+
+            debug!(target: "CLIENT STATE", "Update witness");
 
             // Also update all the coin witnesses
             for (coin_id, witness) in self.wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
                 self.wallet.update_witness(*coin_id, witness.clone())?;
             }
+
+            debug!(target: "CLIENT STATE", "iterate over secret_keys to decrypt note");
 
             for secret in secret_keys.iter() {
                 if let Some(note) = Self::try_decrypt_note(enc_note, *secret) {
