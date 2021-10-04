@@ -7,13 +7,11 @@
 
 ## v0-release
 
-- [ ] cashierd config has explicit mainnet and testnet configurations, simplify this and have a single endpoint
 - [ ] change assetID and asset to tokenID and token across project
-- [ ] drk2: retrieve cashier features and error if don't support the network
-- [ ] darkfid: match 'bitcoin' to 'btc'
 - [ ] change amount type to u64 across project
-- [X] darkfid.transfer: match token input and return token_id from wallet 
 - [ ] drk/ darkfid: return pretty table of assets and balances
+- [ ] finish btc bridge and enable btc across project
+- [ ] debug mint proof
 
 ## deposit
 
