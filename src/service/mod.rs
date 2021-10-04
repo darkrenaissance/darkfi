@@ -6,7 +6,7 @@ pub mod reqrep;
 #[cfg(feature = "btc")]
 pub mod btc;
 #[cfg(feature = "btc")]
-pub use btc::{BitcoinKeys, BtcFailed, BtcResult, PubAddress};
+pub use btc::{Keypair, BtcKeys, BtcFailed, BtcResult, PubAddress};
 
 #[cfg(feature = "sol")]
 pub mod sol;

@@ -25,6 +25,7 @@ pub type PrivKey = BtcPrivKey;
 
 const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
+#[derive(Copy, Clone)]
 pub struct Keypair {
     secret: SecretKey,
     public: PublicKey,
@@ -56,9 +57,14 @@ impl Keypair {
 
         Ok(Keypair { secret, public })
     }
-
+    pub fn secret(&self) -> SecretKey {
+        self.secret
+    }
     pub fn pubkey(&self) -> PublicKey {
         self.public
+    }
+    pub fn as_tuple(&self) -> (SecretKey, PublicKey) {
+        (self.secret, self.public)
     }
 }
 
@@ -68,74 +74,65 @@ impl Default for Keypair {
     }
 }
 
-pub struct BitcoinKeys {
-    _secret_key: SecretKey,
-    public_key: PublicKey,
-    _context: Secp256k1<secp256k1::All>,
+pub struct BtcKeys {
+    _keypair: Arc<Keypair>,
     btc_privkey: BtcPrivKey,
     pub btc_pubkey: BtcPubKey,
     pub network: Network,
 }
 
-impl BitcoinKeys {
-    pub fn new(network: Network) -> Result<Arc<BitcoinKeys>> {
-        let secp = Secp256k1::new();
-        let mut rng = OsRng::new().expect("OsRng");
+impl BtcKeys {
+    pub fn new(keypair: Keypair, network: Network) -> Self {
 
-        let (secret_key, public_key) = secp.generate_keypair(&mut rng);
+        let (secret_key, public_key) = keypair.as_tuple();
 
         let btc_privkey = BtcPrivKey::new(secret_key, network);
-        let btc_pubkey = btc_privkey.public_key(&secp);
+        let btc_pubkey = BtcPubKey::new(public_key);
 
-        Ok(Arc::new(BitcoinKeys {
-            _secret_key: secret_key,
-            public_key,
-            _context: secp,
+        Self {
+            _keypair: Arc::new(keypair),
             btc_privkey,
             btc_pubkey,
             network,
-        }))
+        }
     }
-
-    pub fn pubkey(&self) -> &PublicKey {
-        &self.public_key
+    pub fn priv_from_secret(keypair: &Keypair, network: Network) -> BtcPrivKey {
+        BtcPrivKey::new(keypair.secret(), network)
     }
-
+    pub fn btcpub_from_pubkey(keypair: &Keypair) -> BtcPubKey {
+        BtcPubKey::new(keypair.public)
+    }
     pub fn btc_privkey(&self) -> &BtcPrivKey {
         &self.btc_privkey
     }
-
     pub fn btc_pubkey(&self) -> &BtcPubKey {
         &self.btc_pubkey
     }
-
     pub fn btc_pubkey_hash(&self) -> BtcPubKeyHash {
         self.btc_pubkey.pubkey_hash()
     }
-
     pub fn derive_btc_address(btc_pubkey: BtcPubKey, network: Network) -> Address {
         Address::p2pkh(&btc_pubkey, network)
     }
-
     pub fn derive_script(btc_pubkey_hash: BtcPubKeyHash) -> Script {
         Script::new_p2pkh(&btc_pubkey_hash)
     }
 }
 
 pub struct BtcClient {
-    client: Arc<ElectrumClient>,
-    network: Network,
-    keypair: Keypair,
+    _main_keypair: Keypair,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
-    
+    client: Arc<ElectrumClient>,
+    _network: Network,
+
 }
 
 impl BtcClient {
-    pub async fn new(keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
-        let keypair: Keypair = deserialize(&keypair)?;
+    pub async fn new(main_keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
+        let main_keypair: Keypair = deserialize(&main_keypair)?;
 
         let notify_channel = async_channel::unbounded();
 
@@ -149,16 +146,16 @@ impl BtcClient {
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
         Ok(Arc::new(Self {
+            _main_keypair: main_keypair,
+            notify_channel,
             client: Arc::new(electrum_client),
-            network,
-            keypair,
-            notify_channel
+            _network: network,
         }))
     }
 
-    async fn handle_subscribe_request(
+    async fn _handle_subscribe_request(
         self: Arc<Self>,
-        keypair: Arc<BitcoinKeys>,
+        keypair: BtcKeys,
     ) -> BtcResult<(Txid, u64)> {
         debug!(
             target: "BTC BRIDGE",
@@ -167,7 +164,7 @@ impl BtcClient {
         let client = &self.client;
 
         // p2pkh script
-        let script = BitcoinKeys::derive_script(keypair.btc_pubkey_hash());
+        let script = BtcKeys::derive_script(keypair.btc_pubkey_hash());
 
         if let Some(status_start) = client.script_subscribe(&script)? {
             loop {
@@ -216,22 +213,21 @@ impl NetworkClient for BtcClient {
         _mint: Option<String>,
     ) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
-        let btc_keys = BitcoinKeys::new(self.network)?;
-        let btc_privkey = btc_keys.clone();
-        let btc_privkey = btc_privkey.btc_privkey();
-        let btc_pubkey = btc_keys.clone();
-        let btc_pubkey = btc_pubkey.btc_pubkey();
+        let keypair = Keypair::new();
+
+        let secret_key = serialize(&keypair);
+        let public_key = BtcKeys::btcpub_from_pubkey(&keypair).to_string();
 
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
         //let (_txid, _balance) = btc_keys.start_subscribe().await?;
 
-        smol::spawn(self.handle_subscribe_request(btc_keys)).detach();
+        //smol::spawn(self.handle_subscribe_request(btc_keys)).detach();
 
         Ok(TokenSubscribtion {
-            secret_key: serialize(&btc_privkey.to_bytes()),
-            public_key: btc_pubkey.to_string(),
+            secret_key,
+            public_key
         })
     }
 
@@ -245,11 +241,8 @@ impl NetworkClient for BtcClient {
         // TODO this not implemented yet
         Ok(String::new())
     }
-
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
-        // TODO this not implemented yet
-        let (_, notifier) = async_channel::unbounded();
-        Ok(notifier)
+        Ok(self.notify_channel.1.clone())
     }
     async fn send(self: Arc<Self>, _address: Vec<u8>, _amount: u64) -> Result<()> {
         // TODO this not implemented yet
@@ -322,6 +315,7 @@ impl Decodable for secp256k1::key::PublicKey {
         Ok(key)
     }
 }
+// TODO: add secret + public keys together for Encodable
 impl Encodable for Keypair {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
         let key: Vec<u8> = self.to_bytes().to_vec();
