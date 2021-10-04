@@ -272,7 +272,8 @@ impl Client {
                 debug!(target: "CLIENT", "Starting build tx from slab");
                 let tx = tx::Transaction::decode(&slab.get_payload()[..]);
 
-                if tx.is_err() {
+                if let Err(e) = tx {
+                    error!("TX: {}", e.to_string());
                     continue;
                 }
 
@@ -280,7 +281,8 @@ impl Client {
 
                 let update = state_transition(&state, tx?);
 
-                if update.is_err() {
+                if let Err(e) = update {
+                    error!("state transition: {}", e.to_string());
                     continue;
                 }
 
@@ -321,7 +323,8 @@ impl Client {
 
                 let tx = tx::Transaction::decode(&slab.get_payload()[..]);
 
-                if tx.is_err() {
+                if let Err(e) = tx {
+                    error!("TX: {}", e.to_string());
                     continue;
                 }
 
@@ -329,7 +332,8 @@ impl Client {
 
                 let update = state_transition(&state, tx?);
 
-                if update.is_err() {
+                if let Err(e) = update {
+                    error!("state transition: {}", e.to_string());
                     continue;
                 }
 
