@@ -6,7 +6,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, warn};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -55,9 +55,7 @@ impl SolClient {
         let main_keypair: Keypair = deserialize(&main_keypair)?;
         let notify_channel = async_channel::unbounded();
 
-        warn!(target: "SOL BRIDGE", "Main SOL wallet: {:?}", main_keypair.to_bytes());
-
-        debug!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
+        info!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
         let (rpc_server, wss_server) = match network {
             "mainnet" => (

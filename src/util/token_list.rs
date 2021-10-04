@@ -1,10 +1,10 @@
+use serde_json::Value;
+use std::collections::HashMap;
+
 use crate::{
     util::{generate_id, NetworkName},
     Error, Result,
 };
-use serde_json::Value;
-use std::collections::HashMap;
-use std::iter::FromIterator;
 
 #[derive(Debug, Clone)]
 pub struct SolTokenList {
@@ -13,9 +13,8 @@ pub struct SolTokenList {
 
 impl SolTokenList {
     pub fn new() -> Result<Self> {
-        // TODO: FIXME
-        let file_contents = std::fs::read_to_string("token/solanatokenlist.json")?;
-        let sol_tokenlist: Value = serde_json::from_str(&file_contents)?;
+        let file_contents = include_bytes!("../../token/solanatokenlist.json");
+        let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
         let tokens = sol_tokenlist["tokens"]
             .as_array()
@@ -112,8 +111,8 @@ impl DrkTokenList {
     }
 }
 
+#[allow(unused_imports)]
 mod tests {
-
     use super::*;
     use crate::util::{DrkTokenList, SolTokenList};
     use crate::Result;
@@ -127,6 +126,7 @@ mod tests {
         }
         Ok(())
     }
+
     #[test]
     pub fn test_get_id_from_symbols() -> Result<()> {
         let token = SolTokenList::new()?;
@@ -136,6 +136,7 @@ mod tests {
         }
         Ok(())
     }
+
     #[test]
     pub fn test_hashmap() -> Result<()> {
         let token = SolTokenList::new()?;
