@@ -180,7 +180,6 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("deposit") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        //  TODO: check that it's a tokenID and not a symbol
         let token = matches.value_of("TOKENID").unwrap();
 
         client.check_network(&NetworkName::from_str(&network)?).await?;
@@ -197,7 +196,6 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("withdraw") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        //  TODO: check that it's a tokenID and not a symbol
         let token = matches.value_of("TOKENID").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
