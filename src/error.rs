@@ -9,19 +9,29 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Clone)]
 pub enum Error {
     Io(std::io::ErrorKind),
+
     /// VarInt was encoded in a non-minimal way
     PathNotFound,
     NonMinimalVarInt,
-    /// Parsing error
+
+    /// Parsing And Encode/Decode errors
     ParseFailed(&'static str),
     ParseIntError,
     ParseFloatError,
     UrlParseError,
-    AsyncChannelSenderError,
-    AsyncChannelReceiverError,
-    AsyncNativeTlsError,
     MalformedPacket,
     AddrParseError,
+    Base58EncodeError(String),
+    Base58DecodeError(String),
+    Utf8Error,
+    StrUtf8Error(String),
+    TryIntoError,
+    TryFromError,
+    SerdeJsonError(String),
+    TomlDeserializeError(String),
+    TomlSerializeError(String),
+
+    /// Contract
     BadVariableRefType,
     BadOperationType,
     BadConstraintType,
@@ -30,44 +40,46 @@ pub enum Error {
     VmError,
     BadContract,
     Groth16Error,
-    RusqliteError(String),
     OperationFailed,
-    ConnectFailed,
-    ConnectTimeout,
-    ChannelStopped,
-    ChannelTimeout,
-    ServiceStopped,
-    Utf8Error,
-    StrUtf8Error(String),
     NoteDecryptionFailed,
-    ServicesError(&'static str),
-    ZmqError(String),
     VerifyFailed,
+    TreeFull,
+
+    /// Service
+    ServicesError(&'static str),
     ClientFailed(String),
     #[cfg(feature = "btc")]
     BtcFailed(String),
     #[cfg(feature = "sol")]
     SolFailed(String),
-    TryIntoError,
-    TryFromError,
-    JsonRpcError(String),
-    RocksdbError(String),
-    TreeFull,
     BridgeError(String),
+    ZmqError(String),
+
+    /// Database/Sql errors
+    RocksdbError(String),
+    RusqliteError(String),
+
+    /// RPC errors
+    JsonRpcError(String),
     NotSupportedNetwork,
     NotSupportedToken,
-    SerdeJsonError(String),
-    TomlDeserializeError(String),
-    TomlSerializeError(String),
-    CashierNoReply,
-    CashierInvalidTokenId(String),
-    Base58EncodeError(String),
-    Base58DecodeError(String),
-    ConfigNotFound,
-    SetLoggerError,
     TokenParseError,
     NetworkParseError,
+    AsyncNativeTlsError,
     TungsteniteError,
+
+    /// Network
+    ConnectFailed,
+    ConnectTimeout,
+    ChannelStopped,
+    ChannelTimeout,
+    ServiceStopped,
+
+    /// Util
+    ConfigNotFound,
+    SetLoggerError,
+    AsyncChannelSenderError,
+    AsyncChannelReceiverError,
 }
 
 impl std::error::Error for Error {}
@@ -118,20 +130,14 @@ impl fmt::Display for Error {
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
-            Error::NotSupportedNetwork => {
-                f.write_str("Not supported network")
-            }
-            Error::NotSupportedToken => {
-                f.write_str("Not supported token")
-            }
+            Error::NotSupportedNetwork => f.write_str("Not supported network"),
+            Error::NotSupportedToken => f.write_str("Not supported token"),
             Error::BridgeError(ref err) => write!(f, "Bridge error: {}", err),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
             Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
-            Error::CashierInvalidTokenId(ref err) => write!(f, "Cashier invalid token id: {}", err),
-            Error::CashierNoReply => f.write_str("Cashier did not reply with token address"),
             Error::ConfigNotFound => {
                 f.write_str("No config file detected. Please create a config file")
             }
