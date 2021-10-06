@@ -210,7 +210,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match assign_id(&network, &token, self.sol_tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, &self.sol_tokenlist.clone()) {
             Ok(t) => t,
             Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");
@@ -286,7 +286,7 @@ impl Darkfid {
 
         let amount = amount.as_f64().unwrap();
 
-        let decimals = match decimals(network, token, self.sol_tokenlist.clone()) {
+        let decimals = match decimals(network, token, &self.sol_tokenlist.clone()) {
             Ok(d) => d,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -300,7 +300,7 @@ impl Darkfid {
             }
         };
 
-        let token_id = match assign_id(&network, &token, self.sol_tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, &self.sol_tokenlist.clone()) {
             Ok(t) => t,
             Err(e) => {
                 debug!(target: "DARKFID", "TOKEN ID IS ERR");

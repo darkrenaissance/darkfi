@@ -23,9 +23,9 @@ impl SolTokenList {
         Ok(Self { tokens })
     }
 
-    pub fn get_symbols(self) -> Result<Vec<String>> {
+    pub fn get_symbols(&self) -> Result<Vec<String>> {
         let mut symbols = Vec::new();
-        for item in self.tokens {
+        for item in self.tokens.iter() {
             let symbol = item["symbol"].as_str().unwrap();
             symbols.push(symbol.to_string());
         }
@@ -33,7 +33,7 @@ impl SolTokenList {
     }
 
     pub fn search_id(&self, symbol: &str) -> Result<Option<String>> {
-        for item in self.tokens.clone() {
+        for item in self.tokens.iter() {
             if item["symbol"] == symbol.to_uppercase() {
                 let address = item["address"].clone();
                 let address = address.as_str().ok_or(Error::TokenParseError)?;
@@ -58,8 +58,8 @@ impl SolTokenList {
     //     return Ok(ids);
     // }
 
-    pub fn search_decimal(self, symbol: &str) -> Result<Option<usize>> {
-        for item in self.tokens {
+    pub fn search_decimal(&self, symbol: &str) -> Result<Option<usize>> {
+        for item in self.tokens.iter() {
             if item["symbol"] == symbol.to_uppercase() {
                 let decimals = item["decimals"].clone();
                 let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
