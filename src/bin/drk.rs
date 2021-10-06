@@ -1,11 +1,13 @@
+use drk::cli::{Config, DrkConfig};
+use drk::util::{NetworkName, join_config_path};
+use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
+
 use clap::{clap_app, ArgMatches};
 use log::debug;
 use serde_json::{json, Value};
-use std::path::PathBuf;
 
-use drk::cli::{Config, DrkConfig};
-use drk::util::join_config_path;
-use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
+use std::path::PathBuf;
+use std::str::FromStr;
 
 struct Drk {
     url: String,
@@ -14,6 +16,24 @@ struct Drk {
 impl Drk {
     pub fn new(url: String) -> Self {
         Self { url }
+    }
+
+    // Retrieve cashier features and error if they
+    // don't support the network
+    async fn check_network(&self, network: &NetworkName) -> Result<()> {
+        let features = self.features().await?;
+
+        if features.as_object().is_none() {
+            return Err(Error::NotSupportedNetwork);
+        }
+
+        for (net, _) in features.as_object().unwrap() {
+            if network == &NetworkName::from_str(&net.as_str().to_lowercase())? {
+                return Ok(());
+            }
+        }
+
+        Err(Error::NotSupportedNetwork)
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
@@ -163,8 +183,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         //  TODO: check that it's a tokenID and not a symbol
         let token = matches.value_of("TOKENID").unwrap();
 
-        // TODO: Retrieve cashier features and error if they
-        // don't support the network.
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
         let reply = client.deposit(&network, &token).await?;
 
@@ -183,8 +202,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
-        // TODO: Retrieve cashier features and error if they
-        // don't support the network.
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
         let reply = client.withdraw(&network, &token, &address, amount).await?;
 
@@ -212,46 +230,46 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = clap_app!(drk =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg verbose: -v --verbose "Increase verbosity")
-        (@subcommand hello =>
-            (about: "Say hello to the RPC")
-        )
-        (@subcommand wallet =>
-            (about: "Wallet operations")
-            (@arg create: --create "Initialize a new wallet")
-            (@arg keygen: --keygen "Generate wallet keypair")
-            (@arg address: --address "Get wallet address")
-        )
-        (@subcommand id =>
-            (about: "Get hexidecimal ID for token symbol")
-            (@arg TOKEN: +required
-                    "Which token to query (BTC/SOL/USDC/...)")
-        )
-        (@subcommand features =>
-            (about: "Show what features the cashier supports")
-        )
-        (@subcommand deposit =>
-            (about: "Deposit clear assets for Dark assets")
-            (@arg network: +required +takes_value --network
-                    "Which network to use (bitcoin/solana/...)")
-            (@arg TOKENID: +required
-                    "Which tokenID to deposit (alphanumeric string)")
-        )
-        (@subcommand transfer =>
-            (about: "Transfer Dark assets to address")
-            (@arg ASSET_TYPE: +required "Desired asset")
-            (@arg ADDRESS: +required "Recipient address")
-            (@arg AMOUNT: +required "Amount to send")
-        )
-        (@subcommand withdraw =>
-            (about: "Withdraw Dark assets for clear assets")
-            (@arg network: +required +takes_value --network
-                "Which network to use (bitcoin/solana/...)")
-            (@arg TOKENID: +required "Which tokenID to receive (alphanumeric string)")
-            (@arg ADDRESS: +required "Recipient address")
-            (@arg AMOUNT: +required "Amount to send")
-        )
+    (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+    (@arg verbose: -v --verbose "Increase verbosity")
+    (@subcommand hello =>
+     (about: "Say hello to the RPC")
+    )
+    (@subcommand wallet =>
+     (about: "Wallet operations")
+     (@arg create: --create "Initialize a new wallet")
+     (@arg keygen: --keygen "Generate wallet keypair")
+     (@arg address: --address "Get wallet address")
+    )
+    (@subcommand id =>
+     (about: "Get hexidecimal ID for token symbol")
+     (@arg TOKEN: +required
+      "Which token to query (BTC/SOL/USDC/...)")
+    )
+    (@subcommand features =>
+     (about: "Show what features the cashier supports")
+    )
+    (@subcommand deposit =>
+     (about: "Deposit clear assets for Dark assets")
+     (@arg network: +required +takes_value --network
+      "Which network to use (bitcoin/solana/...)")
+     (@arg TOKENID: +required
+      "Which tokenID to deposit (alphanumeric string)")
+    )
+    (@subcommand transfer =>
+     (about: "Transfer Dark assets to address")
+     (@arg ASSET_TYPE: +required "Desired asset")
+     (@arg ADDRESS: +required "Recipient address")
+     (@arg AMOUNT: +required "Amount to send")
+    )
+    (@subcommand withdraw =>
+     (about: "Withdraw Dark assets for clear assets")
+     (@arg network: +required +takes_value --network
+      "Which network to use (bitcoin/solana/...)")
+     (@arg TOKENID: +required "Which tokenID to receive (alphanumeric string)")
+     (@arg ADDRESS: +required "Recipient address")
+     (@arg AMOUNT: +required "Amount to send")
+    )
     )
     .get_matches();
 
