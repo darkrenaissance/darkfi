@@ -1,11 +1,3 @@
-use async_trait::async_trait;
-use clap::clap_app;
-use log::debug;
-use serde_json::{json, Value};
-
-use async_std::sync::{Arc, Mutex};
-use std::path::PathBuf;
-
 use drk::{
     blockchain::Rocks,
     cli::{Config, DarkfidConfig},
@@ -18,11 +10,20 @@ use drk::{
     serial::{deserialize, serialize},
     util::{
         assign_id, decimals, decode_base10, expand_path, join_config_path, DrkTokenList,
-        SolTokenList,
+        NetworkName, SolTokenList,
     },
     wallet::WalletDb,
-    Result,
+    Error, Result,
 };
+
+use async_trait::async_trait;
+use clap::clap_app;
+use log::debug;
+use serde_json::{json, Value};
+
+use async_std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::str::FromStr;
 
 struct Darkfid {
     config: DarkfidConfig,
@@ -131,7 +132,7 @@ impl Darkfid {
         return JsonResult::Resp(jsonresp(json!(b58), id));
     }
 
-    // --> {"method": "get_token_id", "params": [token]}
+    // --> {"method": "get_token_id", "params": [network, token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
@@ -141,7 +142,13 @@ impl Darkfid {
         }
 
         let args = args.unwrap();
-        let symbol = args[0].as_str();
+
+        let network = args[0].as_str();
+        let symbol = args[1].as_str();
+
+        if network.is_none() {
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+        }
 
         if symbol.is_none() {
             return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id));
@@ -149,8 +156,19 @@ impl Darkfid {
         let symbol = symbol.unwrap();
 
         let result: Result<Value> = async {
-            let token_id = self.sol_tokenlist.clone().search_id(symbol)?;
-            Ok(json!(token_id))
+            let network = NetworkName::from_str(&network.unwrap())?;
+            match network {
+                #[cfg(feature = "sol")]
+                NetworkName::Solana => {
+                    let token_id = self.sol_tokenlist.clone().search_id(symbol)?;
+                    Ok(json!(token_id))
+                }
+                #[cfg(feature = "btc")]
+                NetworkName::Bitcoin => {
+                    return Err(Error::NotSupportedToken);
+                }
+                _ => Err(Error::NotSupportedNetwork),
+            }
         }
         .await;
 
