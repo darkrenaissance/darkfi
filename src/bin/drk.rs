@@ -167,6 +167,10 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let token = matches.value_of("TOKEN").unwrap();
         let network = matches.value_of("network").unwrap().to_lowercase();
 
+        client
+            .check_network(&NetworkName::from_str(&network)?)
+            .await?;
+
         let reply = client.get_token_id(&network, &token).await?;
 
         println!("Server replied: {}", &reply.to_string());
