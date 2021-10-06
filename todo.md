@@ -27,7 +27,7 @@
 
 ## drk -> drk
 
-- [ ] withdraw/deposit request check that it's a tokenID and not a symbol
+- [ ] ... 
 
 # research
 
