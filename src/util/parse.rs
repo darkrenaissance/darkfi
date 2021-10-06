@@ -63,7 +63,7 @@ pub fn assign_id(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Resu
             }
         },
         #[cfg(feature = "btc")]
-        NetworkName::Bitcoin => Err(Error::NetworkParseError),
+        NetworkName::Bitcoin => Err(Error::NotSupportedToken),
         _ => Err(Error::NotSupportedNetwork),
     }
 }
@@ -81,12 +81,12 @@ pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Resul
                 if let Some(decimals) = decimals {
                     return Ok(decimals);
                 } else {
-                    return Err(Error::TokenParseError);
+                    return Err(Error::NotSupportedToken);
                 }
             }
         },
         #[cfg(feature = "btc")]
-        NetworkName::Bitcoin => Err(Error::NetworkParseError),
+        NetworkName::Bitcoin => Err(Error::NotSupportedToken),
         _ => Err(Error::NotSupportedNetwork),
     }
 }
