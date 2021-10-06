@@ -197,11 +197,6 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             self.randomness_coin,
         )?;
 
-        // Line 110: fr_as_binary_le asset_id param:asset_id
-        let asset_id = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 109: fr_as_binary_le asset_id param:asset_id"),
-            self.randomness_coin,
-        )?;
         // Line 113: alloc_binary preimage
         let mut preimage = vec![];
 
