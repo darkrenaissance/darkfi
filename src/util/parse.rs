@@ -78,7 +78,11 @@ pub fn decimals(network: &str, _token: &str, _tokenlist: SolTokenList) -> Result
             }
             tkn => {
                 let decimals = _tokenlist.search_decimal(tkn)?;
-                Ok(decimals)
+                if let Some(decimals) = decimals {
+                    return Ok(decimals);
+                } else {
+                    return Err(Error::TokenParseError);
+                }
             }
         },
         #[cfg(feature = "btc")]
@@ -101,7 +105,11 @@ pub fn symbol_to_id(token: &str, tokenlist: SolTokenList) -> Result<String> {
         }
     }
     if counter == token.len() {
-        tokenlist.search_id(token)
+        if let Some(id) = tokenlist.search_id(token)? {
+            return Ok(id);
+        } else {
+            return Err(Error::TokenParseError);
+        }
     } else {
         Ok(token.to_string())
     }

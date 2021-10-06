@@ -321,7 +321,7 @@ impl Darkfid {
             }
         }
 
-        let hashmap = self.drk_tokenlist.drk_tokenlist.clone();
+        let hashmap = self.drk_tokenlist.tokens.clone();
 
         if hashmap.get(token).is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -407,7 +407,7 @@ impl Darkfid {
         }
         let amount = amount.as_str().unwrap();
 
-        let hashmap = self.drk_tokenlist.drk_tokenlist.clone();
+        let hashmap = self.drk_tokenlist.tokens.clone();
 
         if hashmap.get(token).is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));

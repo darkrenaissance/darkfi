@@ -8,106 +8,84 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct SolTokenList {
-    sol_tokenlist: Value,
+    tokens: Vec<Value>,
 }
 
 impl SolTokenList {
     pub fn new() -> Result<Self> {
         let file_contents = include_bytes!("../../token/solanatokenlist.json");
         let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
-
         let tokens = sol_tokenlist["tokens"]
             .as_array()
-            .ok_or(Error::TokenParseError)?;
-        let mut symbols = Vec::new();
-        for item in tokens {
-            let symbol = item["symbol"].as_str().unwrap();
-            symbols.push(symbol.to_string());
-        }
+            .ok_or(Error::TokenParseError)?
+            .clone();
 
-        Ok(Self { sol_tokenlist })
+        Ok(Self { tokens })
     }
 
     pub fn get_symbols(self) -> Result<Vec<String>> {
-        let tokens = self.sol_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?;
         let mut symbols = Vec::new();
-        for item in tokens {
+        for item in self.tokens {
             let symbol = item["symbol"].as_str().unwrap();
             symbols.push(symbol.to_string());
         }
         return Ok(symbols);
     }
 
-    pub fn search_id(&self, symbol: &str) -> Result<String> {
-        let tokens = self.sol_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?;
-        for item in tokens {
+    pub fn search_id(&self, symbol: &str) -> Result<Option<String>> {
+        for item in self.tokens.clone() {
             if item["symbol"] == symbol.to_uppercase() {
                 let address = item["address"].clone();
                 let address = address.as_str().ok_or(Error::TokenParseError)?;
-                return Ok(address.to_string());
+                return Ok(Some(address.to_string()));
             }
         }
-        unreachable!();
+        Ok(None)
     }
 
-    pub fn search_all_id(&self, symbol: &str) -> Result<Vec<String>> {
-        let tokens = self.sol_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?;
-        let mut ids = Vec::new();
-        for item in tokens {
-            if item["symbol"] == symbol.to_uppercase() {
-                let address = item["address"].clone();
-                let address = address.as_str().ok_or(Error::TokenParseError)?;
-                ids.push(address.to_string());
-            }
-        }
-        return Ok(ids);
-    }
+    // pub fn search_all_id(&self, symbol: &str) -> Result<Vec<String>> {
+    //     let tokens = self.sol_tokenlist["tokens"]
+    //         .as_array()
+    //         .ok_or(Error::TokenParseError)?;
+    //     let mut ids = Vec::new();
+    //     for item in tokens {
+    //         if item["symbol"] == symbol.to_uppercase() {
+    //             let address = item["address"].clone();
+    //             let address = address.as_str().ok_or(Error::TokenParseError)?;
+    //             ids.push(address.to_string());
+    //         }
+    //     }
+    //     return Ok(ids);
+    // }
 
-    pub fn search_decimal(self, symbol: &str) -> Result<usize> {
-        let tokens = self.sol_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?;
-        for item in tokens {
+    pub fn search_decimal(self, symbol: &str) -> Result<Option<usize>> {
+        for item in self.tokens {
             if item["symbol"] == symbol.to_uppercase() {
                 let decimals = item["decimals"].clone();
                 let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
                 let decimals = decimals as usize;
-                return Ok(decimals);
+                return Ok(Some(decimals));
             }
         }
-        unreachable!();
+        Ok(None)
     }
 }
 
 pub struct DrkTokenList {
-    pub drk_tokenlist: HashMap<String, jubjub::Fr>,
+    pub tokens: HashMap<String, jubjub::Fr>,
 }
 
 impl DrkTokenList {
-    pub fn new(list: SolTokenList) -> Result<Self> {
+    pub fn new(sol_list: SolTokenList) -> Result<Self> {
         // get symbols
-        let symbols = list.clone().get_symbols()?;
+        let sol_symbols = sol_list.clone().get_symbols()?;
 
-        // get ids
-        let ids: Vec<jubjub::Fr> = symbols
+        let tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
-            .map(|sym| generate_id(sym, &NetworkName::Solana).unwrap())
+            .map(|sym| return (sym.clone(), generate_id(sym, &NetworkName::Solana).unwrap()))
             .collect();
 
-        // create the hashmap
-        let drk_tokenlist: HashMap<String, jubjub::Fr> = symbols
-            .iter()
-            .zip(ids.iter())
-            .map(|(key, value)| return (key.clone(), value.clone()))
-            .collect();
-
-        Ok(Self { drk_tokenlist })
+        Ok(Self { tokens })
     }
 }
 
@@ -117,31 +95,51 @@ mod tests {
     use crate::util::{DrkTokenList, SolTokenList};
     use crate::Result;
 
+    fn _get_tokens() -> Result<SolTokenList> {
+        let file_contents = include_bytes!("../../token/solanatokenlisttest.json");
+        let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
+
+        let tokens = sol_tokenlist["tokens"]
+            .as_array()
+            .ok_or(Error::TokenParseError)?
+            .clone();
+
+        let sol_tokenlist = SolTokenList { tokens };
+        Ok(sol_tokenlist)
+    }
+
     #[test]
     pub fn test_get_symbols() -> Result<()> {
-        let token = SolTokenList::new()?;
-        let symbols = token.get_symbols()?;
-        for symbol in symbols {
-            println!("{}", symbol)
-        }
+        let tokens = _get_tokens()?;
+        let symbols = tokens.get_symbols()?;
+        assert_eq!(symbols.len(), 5);
+        assert_eq!("MILLI", symbols[0]);
+        assert_eq!("ZI", symbols[1]);
+        assert_eq!("SOLA", symbols[2]);
+        assert_eq!("SOL", symbols[3]);
+        assert_eq!("USDC", symbols[4]);
         Ok(())
     }
 
     #[test]
     pub fn test_get_id_from_symbols() -> Result<()> {
-        let token = SolTokenList::new()?;
-        let symbols = token.clone().get_symbols()?;
-        for symbol in symbols {
-            token.clone().search_all_id(&symbol)?;
-        }
+        let tokens = _get_tokens()?;
+        let symbol = &tokens.clone().get_symbols()?[3];
+        let id = tokens.search_id(symbol)?;
+        assert!(id.is_some());
+        assert_eq!(id.unwrap(), "So11111111111111111111111111111111111111112");
         Ok(())
     }
 
     #[test]
     pub fn test_hashmap() -> Result<()> {
-        let token = SolTokenList::new()?;
-        let drk_token = DrkTokenList::new(token)?;
-        println!("{:?}", drk_token.drk_tokenlist);
+        let tokens = _get_tokens()?;
+        let drk_token = DrkTokenList::new(tokens)?;
+        assert_eq!(drk_token.tokens.len(), 5);
+        assert_eq!(
+            drk_token.tokens["SOL"],
+            generate_id("SOL", &NetworkName::Solana)?
+        );
         Ok(())
     }
 }
