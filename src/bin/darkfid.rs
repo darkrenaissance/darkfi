@@ -17,8 +17,8 @@ use drk::{
     },
     serial::{deserialize, serialize},
     util::{
-        assign_id, decimals, decode_base10, expand_path, join_config_path,
-        DrkTokenList,  SolTokenList,
+        assign_id, decimals, decode_base10, expand_path, join_config_path, DrkTokenList,
+        SolTokenList,
     },
     wallet::WalletDb,
     Result,
@@ -417,15 +417,8 @@ impl Darkfid {
 
         let result: Result<()> = async {
             // check if it's in the database
-            if self
-                .client
-                .lock()
-                .await
-                .token_id_exists(token_id)
-                .await
-                .unwrap()
-                == true
-            {
+            let mut client = self.client.lock().await;
+            if client.token_id_exists(token_id).await? == true {
                 let own_token_id = token_id;
                 let drk_address = bs58::decode(&address).into_vec()?;
                 let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
@@ -433,11 +426,7 @@ impl Darkfid {
                 let decimals: usize = 8;
                 let amount = decode_base10(amount, decimals, true)?;
 
-                self.client
-                    .lock()
-                    .await
-                    .transfer(*own_token_id, drk_address, amount)
-                    .await?;
+                client.transfer(*own_token_id, drk_address, amount).await?;
             }
 
             Ok(())

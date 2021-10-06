@@ -83,10 +83,7 @@ impl SolClient {
         }))
     }
 
-    // TODO: Make this function more robust. Currently we just call it
-    // and put it in the background. This means no errors are actually
-    // handled, and it just fails silently.
-    async fn handle_subscribe_request(
+   async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
         drk_pub_key: jubjub::SubgroupPoint,
