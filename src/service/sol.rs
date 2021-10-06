@@ -23,7 +23,7 @@ use solana_sdk::{
 use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
 use tungstenite::Message;
 
-use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets};
+use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, NetworkName};
 use crate::{Error, Result};
@@ -112,13 +112,14 @@ impl SolClient {
         let (prev_balance, decimals) = if mint.is_none() {
             (rpc.get_balance(&pubkey).map_err(SolFailed::from)?, 9)
         } else {
-            match get_account_token_balance(&rpc, &pubkey, &mint.unwrap()) {
+            let mint = mint.unwrap();
+            match get_account_token_balance(&rpc, &pubkey, &mint) {
                 Ok(v) => v,
                 Err(_) => {
-                    let (exists, decimals) = account_is_initialized_mint(&rpc, &mint.unwrap());
+                    let (exists, decimals) = account_is_initialized_mint(&rpc, &mint);
                     if !exists {
                         debug!("Could not figure out the number of decimals in SPL token");
-                        return Err(SolFailed::MintIsNotValid(mint.unwrap().to_string()));
+                        return Err(SolFailed::MintIsNotValid(mint.to_string()));
                     }
                     (0, decimals)
                 }
@@ -156,9 +157,8 @@ impl SolClient {
         let ping_payload: Vec<u8> = vec![42, 33, 31, 42];
 
         loop {
-            // TODO: Might be a bit fragile
             let message = read.next().await.ok_or(Error::TungsteniteError)?;
-            let message = message.unwrap();
+            let message = message?;
 
             match message.clone() {
                 Message::Pong(_) => {
@@ -181,7 +181,8 @@ impl SolClient {
                 }
                 JsonResult::Err(e) => {
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&e)?);
-                    // TODO: Try removing pubkey from subscriptions here?
+
+                    self.unsubscribe(&mut write, &pubkey, &sub_id).await?;
                     return Err(SolFailed::RpcError(e.error.message.to_string()));
                 }
                 JsonResult::Notif(n) => {
@@ -194,7 +195,7 @@ impl SolClient {
                             .as_str()
                             .unwrap()
                             .parse()
-                            .map_err(|e| SolFailed::from(Error::from(e)))?;
+                            .map_err(Error::from)?;
                     } else {
                         cur_balance = params["lamports"].as_u64().unwrap();
                     }
@@ -203,31 +204,16 @@ impl SolClient {
             }
         }
 
-        // I miss goto/defer.
-        let index = self
-            .subscriptions
-            .lock()
-            .await
-            .iter()
-            .position(|p| p == &pubkey);
-        if let Some(ind) = index {
-            debug!("Removing subscription from list");
-            self.subscriptions.lock().await.remove(ind);
-        }
+        let send_notification = self.notify_channel.0.clone();
 
-        let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
-        write
-            .send(Message::text(serde_json::to_string(&unsubscription)?))
-            .await?;
+        let self2 = self.clone();
+        self2.unsubscribe(&mut write, &pubkey, &sub_id).await?;
 
         if cur_balance < prev_balance {
-            error!("New balance is less than previous balance");
             return Err(SolFailed::Notification(
                 "New balance is less than previous balance".into(),
             ));
         }
-
-        let send_notification = self.notify_channel.0.clone();
 
         if mint.is_some() {
             let amnt = cur_balance - prev_balance;
@@ -262,6 +248,30 @@ impl SolClient {
             debug!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
             let _ = self.send_sol_to_main_wallet(&rpc, amnt, &keypair)?;
         }
+
+        Ok(())
+    }
+
+    async fn unsubscribe(
+        self: Arc<Self>,
+        write: &mut futures::stream::SplitSink<WsStream, tungstenite::Message>,
+        pubkey: &Pubkey,
+        sub_id: &i64,
+    ) -> Result<()> {
+        {
+            let mut subscriptions = self.subscriptions.lock().await;
+            let index = subscriptions.iter().position(|p| p == pubkey);
+            if let Some(ind) = index {
+                debug!("Removing subscription from list");
+                subscriptions.remove(ind);
+            }
+        }
+
+        let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
+
+        write
+            .send(Message::text(serde_json::to_string(&unsubscription)?))
+            .await?;
 
         Ok(())
     }
@@ -395,7 +405,15 @@ impl NetworkClient for SolClient {
 
         let mint = self.check_mint_address(mint_address)?;
 
-        smol::spawn(self.handle_subscribe_request(keypair, drk_pub_key, mint)).detach();
+        smol::spawn(async move {
+            let result = self
+                .handle_subscribe_request(keypair, drk_pub_key, mint)
+                .await;
+            if let Err(e) = result {
+                error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
+            }
+        })
+        .detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -417,7 +435,15 @@ impl NetworkClient for SolClient {
 
         let mint = self.check_mint_address(mint_address)?;
 
-        smol::spawn(self.handle_subscribe_request(keypair, drk_pub_key, mint)).detach();
+        smol::spawn(async move {
+            let result = self
+                .handle_subscribe_request(keypair, drk_pub_key, mint)
+                .await;
+            if let Err(e) = result {
+                error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
+            }
+        })
+        .detach();
 
         Ok(public_key)
     }
