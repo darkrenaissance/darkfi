@@ -55,6 +55,7 @@ pub enum Error {
     TreeFull,
     BridgeError(String),
     NotSupportedNetwork,
+    NotSupportedToken,
     SerdeJsonError(String),
     TomlDeserializeError(String),
     TomlSerializeError(String),
@@ -119,6 +120,9 @@ impl fmt::Display for Error {
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::NotSupportedNetwork => {
                 f.write_str("Not supported network")
+            }
+            Error::NotSupportedToken => {
+                f.write_str("Not supported token")
             }
             Error::BridgeError(ref err) => write!(f, "Bridge error: {}", err),
             Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
