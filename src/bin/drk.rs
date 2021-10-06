@@ -1,5 +1,5 @@
 use drk::cli::{Config, DrkConfig};
-use drk::util::{NetworkName, join_config_path};
+use drk::util::{join_config_path, NetworkName};
 use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 
 use clap::{clap_app, ArgMatches};
@@ -90,10 +90,10 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
-    // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["usdc"], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
-    async fn get_token_id(&self, token: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_token_id"), json!([token]));
+    async fn get_token_id(&self, network: &str, token: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_token_id"), json!([network, token]));
         Ok(self.request(req).await?)
     }
 
@@ -165,8 +165,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("id") {
         let token = matches.value_of("TOKEN").unwrap();
+        let network = matches.value_of("network").unwrap().to_lowercase();
 
-        let reply = client.get_token_id(&token).await?;
+        let reply = client.get_token_id(&network, &token).await?;
 
         println!("Server replied: {}", &reply.to_string());
         return Ok(());
@@ -182,7 +183,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let network = matches.value_of("network").unwrap().to_lowercase();
         let token = matches.value_of("TOKENID").unwrap();
 
-        client.check_network(&NetworkName::from_str(&network)?).await?;
+        client
+            .check_network(&NetworkName::from_str(&network)?)
+            .await?;
 
         let reply = client.deposit(&network, &token).await?;
 
@@ -200,7 +203,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
-        client.check_network(&NetworkName::from_str(&network)?).await?;
+        client
+            .check_network(&NetworkName::from_str(&network)?)
+            .await?;
 
         let reply = client.withdraw(&network, &token, &address, amount).await?;
 
@@ -241,6 +246,8 @@ async fn main() -> Result<()> {
     )
     (@subcommand id =>
      (about: "Get hexidecimal ID for token symbol")
+     (@arg network: +required +takes_value --network
+      "Which network to use (bitcoin/solana/...)")
      (@arg TOKEN: +required
       "Which token to query (BTC/SOL/USDC/...)")
     )
@@ -266,7 +273,7 @@ async fn main() -> Result<()> {
       "Which network to use (bitcoin/solana/...)")
      (@arg TOKENID: +required "Which tokenID to receive (alphanumeric string)")
      (@arg ADDRESS: +required "Recipient address")
-     (@arg AMOUNT: +required "Amount to send")
+     (@arg AMOUNT: +required "Amount to withdraw")
     )
     )
     .get_matches();
