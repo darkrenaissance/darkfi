@@ -155,56 +155,25 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         // Line 83: binary_extend preimage randomness_coin
         preimage.extend(randomness_coin);
 
-        // Line 85: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
+        // add 4 zero bits
+        for _ in 0..4 {
+            // Line 71: alloc_const_bit zero_bit false
+            let zero_bit = Boolean::constant(false);
 
-        // Line 86: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 88: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 89: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 91: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 92: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 94: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 95: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
+            // Line 72: binary_push preimage zero_bit
+            preimage.push(zero_bit);
+        }
         // Line 99: binary_extend preimage asset_id
         preimage.extend(asset_id);
 
-        // Line 101: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
+        // add 4 zero bits
+        for _ in 0..4 {
+            // Line 71: alloc_const_bit zero_bit false
+            let zero_bit = Boolean::constant(false);
 
-        // Line 102: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 104: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 105: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 107: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 108: binary_push preimage zero_bit
-        preimage.push(zero_bit);
-
-        // Line 110: alloc_const_bit zero_bit false
-        let zero_bit = Boolean::constant(false);
-
-        // Line 111: binary_push preimage zero_bit
-        preimage.push(zero_bit);
+            // Line 72: binary_push preimage zero_bit
+            preimage.push(zero_bit);
+        }
 
         // Line 120: static_assert_binary_size preimage 1088
         assert_eq!(preimage.len(), 1088);
