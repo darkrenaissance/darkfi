@@ -13,7 +13,7 @@ $ make
 The daemons can be configured using TOML files. Find examples in
 this repo: [example/config](example/config) and copy them over to
 `~/.config/darkfi`. The defaults should be safe to use for demo
-purpose.
+purposes.
 
 ## Usage
 
