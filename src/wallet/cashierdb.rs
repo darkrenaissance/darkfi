@@ -461,8 +461,6 @@ mod tests {
     use ff::Field;
     use rand::rngs::OsRng;
 
-    // TODO add more tests
-
     pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
         if !password.trim().is_empty() {
             let contents = include_str!("../../sql/cashier.sql");

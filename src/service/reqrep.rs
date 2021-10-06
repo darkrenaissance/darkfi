@@ -179,8 +179,6 @@ impl ReqProtocol {
                 );
 
             if reply.has_error() {
-                // TODO return error status code instead of None
-                // this is temporary
                 handle_error(reply.get_error());
                 return Ok(None);
             }
