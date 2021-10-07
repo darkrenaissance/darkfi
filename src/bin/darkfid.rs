@@ -22,6 +22,7 @@ use log::debug;
 use serde_json::{json, Value};
 
 use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -46,7 +47,7 @@ impl RequestHandler for Darkfid {
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
-            //Some("get_balances") => return self.get_balances(req.id, req.params).await,
+            Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
@@ -133,26 +134,29 @@ impl Darkfid {
         return JsonResult::Resp(jsonresp(json!(b58), id));
     }
 
+    // TODO: clean up these upwraps
+    //
     // --> {"method": "get_key", "params": []}
     // <-- {"result": "balances": "[value: 0, token: btc]"}
-    //async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
-    //    let mut symbols = Vec::new();
-    //    let balances = self.client.lock().await.get_balances().await.unwrap();
-    //    for id in balances.values() {
-    //        let symbol = self
-    //            .drk_tokenlist
-    //            .clone()
-    //            .symbol_from_id(id.clone())
-    //            .unwrap();
-    //        symbols.push(symbol.unwrap().to_string());
-    //    }
-    //    for amount in balances.keys() {
-    //        if let Some(x) = balances.get_mut(amount) {
-    //            id = symbols;
-    //        }
-    //    }
-    //    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
-    //}
+    async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
+        let balances = self.client.lock().await.get_balances().await.unwrap();
+        let mut symbols = Vec::new();
+        for id in balances.values() {
+            let symbol = self
+                .drk_tokenlist
+                .clone()
+                .symbol_from_id(id.clone())
+                .unwrap();
+            symbols.push(symbol.unwrap().to_string());
+        }
+        let mut amounts = Vec::new();
+        for amount in balances.keys() {
+            amounts.push(amount);
+        }
+        let mut new_balances = HashMap::new();
+        new_balances.insert(symbols, amounts);
+        return JsonResult::Resp(jsonresp(json!(new_balances), id));
+    }
 
     // --> {"method": "get_token_id", "params": [network, token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
