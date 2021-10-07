@@ -452,61 +452,61 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    pub fn test_get_token_table() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
+    //#[test]
+    //pub fn test_get_token_table() -> Result<()> {
+    //    let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
+    //    let password: String = "darkfi".into();
+    //    let wallet = WalletDb::new(&walletdb_path, password.clone())?;
+    //    init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
+    //    let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+    //    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    //    let key_public = serial::serialize(&public);
+    //    let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+    //    wallet.put_keypair(key_public, key_private)?;
 
-        let asset_id = jubjub::Fr::random(&mut OsRng);
+    //    let asset_id = jubjub::Fr::random(&mut OsRng);
 
-        let note = Note {
-            serial: jubjub::Fr::random(&mut OsRng),
-            value: 110,
-            asset_id,
-            coin_blind: jubjub::Fr::random(&mut OsRng),
-            valcom_blind: jubjub::Fr::random(&mut OsRng),
-        };
+    //    let note = Note {
+    //        serial: jubjub::Fr::random(&mut OsRng),
+    //        value: 110,
+    //        asset_id,
+    //        coin_blind: jubjub::Fr::random(&mut OsRng),
+    //        valcom_blind: jubjub::Fr::random(&mut OsRng),
+    //    };
 
-        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+    //    let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
 
-        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
-        tree.append(MerkleNode::from_coin(&coin))?;
+    //    let mut tree = crate::crypto::merkle::CommitmentTree::empty();
+    //    tree.append(MerkleNode::from_coin(&coin))?;
 
-        let witness = IncrementalWitness::from_tree(&tree);
+    //    let witness = IncrementalWitness::from_tree(&tree);
 
-        let own_coin = OwnCoin {
-            coin,
-            note: note.clone(),
-            secret,
-            witness: witness.clone(),
-        };
+    //    let own_coin = OwnCoin {
+    //        coin,
+    //        note: note.clone(),
+    //        secret,
+    //        witness: witness.clone(),
+    //    };
 
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
+    //    wallet.put_own_coins(own_coin.clone())?;
+    //    wallet.put_own_coins(own_coin.clone())?;
+    //    wallet.put_own_coins(own_coin.clone())?;
+    //    wallet.put_own_coins(own_coin.clone())?;
 
-        let table_vec = wallet.get_balances()?;
+    //    let table_vec = wallet.get_balances()?;
 
-        assert_eq!(table_vec.len(), 4);
-        assert_eq!(table_vec[0].value, 110);
-        assert_eq!(table_vec[0].token_id, asset_id);
-        assert_eq!(table_vec[2].value, 110);
-        assert_eq!(table_vec[2].token_id, asset_id);
+    //    assert_eq!(table_vec.len(), 4);
+    //    assert_eq!(table_vec[0].value, 110);
+    //    assert_eq!(table_vec[0].token_id, asset_id);
+    //    assert_eq!(table_vec[2].value, 110);
+    //    assert_eq!(table_vec[2].token_id, asset_id);
 
-        std::fs::remove_file(walletdb_path)?;
+    //    std::fs::remove_file(walletdb_path)?;
 
-        Ok(())
-    }
+    //    Ok(())
+    //}
 
     #[test]
     pub fn test_save_and_load_keypair() -> Result<()> {
