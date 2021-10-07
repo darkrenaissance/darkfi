@@ -42,16 +42,6 @@ $ ./target/release/darkfid -v
 Now using the command line interface to the `darkfid` daemon, we can
 make use of the system:
 
-
-1. Initialize the wallet and generate a keypair:
-
-```
-$ ./target/release/drk -v wallet --create
-$ ./target/release/drk -v wallet --keygen
-```
-
-2. Play.
-
 ```
 $ ./target/release/drk help
 ```
