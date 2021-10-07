@@ -24,10 +24,10 @@ gateway_protocol_url = "127.0.0.1:3333"
 gateway_publisher_url = "127.0.0.1:4444"
 
 # Path to mint.params
-mint_params_path = "~/.config/darkfi/cashierd_mint.params"
+mint_params_path = "~/.config/darkfi/mint.params"
 
 # Path to spend.params
-spend_params_path = "~/.config/darkfi/cashierd_spend.params"
+spend_params_path = "~/.config/darkfi/spend.params"
 
 # Path to cashierd wallet
 cashier_wallet_path = "~/.config/darkfi/cashier_wallet.db"
