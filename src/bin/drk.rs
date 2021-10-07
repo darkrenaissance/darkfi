@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate prettytable;
+use prettytable::{Cell, Row, Table};
 
 use drk::cli::{Config, DrkConfig};
 use drk::util::{join_config_path, NetworkName};
@@ -173,8 +174,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         if matches.is_present("balances") {
             let reply = client.get_balances().await?;
-            let _table = ptable!([reply]);
-            println!("Server replied: {}", &reply.to_string());
+            let mut table = Table::new();
+            table.add_row(row!["TOKEN", "AMOUNT"]);
+            table.add_row(row![reply]);
             return Ok(());
         }
     }
