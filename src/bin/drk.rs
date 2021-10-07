@@ -97,6 +97,11 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    async fn get_tokens(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_tokens"), json![()]);
+        Ok(self.request(req).await?)
+    }
+
     // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
     async fn features(&self) -> Result<Value> {
@@ -161,6 +166,12 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             println!("Server replied: {}", &reply.to_string());
             return Ok(());
         }
+
+        if matches.is_present("tokens") {
+            let reply = client.get_tokens().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(());
+        }
     }
 
     if let Some(matches) = options.subcommand_matches("id") {
@@ -211,7 +222,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             .check_network(&NetworkName::from_str(&network)?)
             .await?;
 
-        let reply = client.withdraw(&network, &token_sym, &address, amount).await?;
+        let reply = client
+            .withdraw(&network, &token_sym, &address, amount)
+            .await?;
 
         println!("{}", &reply.to_string());
 

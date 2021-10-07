@@ -345,7 +345,7 @@ impl WalletDb {
     }
 
     pub fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
-        debug!(target: "WALLETDB", "Get token and balances...");
+        debug!(target: "WALLETDB", "Get token ID...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
