@@ -134,8 +134,8 @@ impl Darkfid {
         return JsonResult::Resp(jsonresp(json!(b58), id));
     }
 
-    // --> {"method": "get_key", "params": []}
-    // <-- {"result": "balances": "[value: 0, token: btc]"}
+    // --> {"method": "get_balances", "params": []}
+    // <-- {"result": "get_balances": "[token: btc, value: 0]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, u64>> = async {
             let balances = self.client.lock().await.get_balances().await?;

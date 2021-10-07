@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate prettytable;
+
 use drk::cli::{Config, DrkConfig};
 use drk::util::{join_config_path, NetworkName};
 use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
@@ -38,7 +41,6 @@ impl Drk {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
         let reply: JsonResult;
-        debug!(target: "RPC", "--> {}", serde_json::to_string(&r)?);
         match jsonrpc::send_request(&self.url, json!(r)).await {
             Ok(v) => reply = v,
             Err(e) => return Err(e),
@@ -97,8 +99,10 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    // --> {"method": "get_balances", "params": []}
+    // <-- {"result": "get_balances": "[token: btc, value: 0]"}
     async fn get_balances(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_balances"), json![()]);
+        let req = jsonrpc::request(json!("get_balances"), json!([]));
         Ok(self.request(req).await?)
     }
 
@@ -169,6 +173,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         if matches.is_present("balances") {
             let reply = client.get_balances().await?;
+            let _table = ptable!([reply]);
             println!("Server replied: {}", &reply.to_string());
             return Ok(());
         }
@@ -260,6 +265,7 @@ async fn main() -> Result<()> {
      (@arg create: --create "Initialize a new wallet")
      (@arg keygen: --keygen "Generate wallet keypair")
      (@arg address: --address "Get wallet address")
+     (@arg balances: --balances "Get wallet balances")
     )
     (@subcommand id =>
      (about: "Get hexidecimal ID for token symbol")
