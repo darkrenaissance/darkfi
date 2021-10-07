@@ -111,17 +111,23 @@ impl Client {
 
     pub async fn transfer(
         &mut self,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
-    ) -> Result<()> {
+    ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(amount as u64).into());
         }
 
-        self.send(pub_key, amount, asset_id, false).await?;
+        let token_id_exists = self.state.lock().await.wallet.token_id_exists(&token_id)?;
+
+        if token_id_exists {
+            self.send(pub_key, amount, token_id, false).await?;
+        } else {
+            return Err(ClientFailed::NotEnoughValue(amount));
+        }
 
         debug!(target: "CLIENT", "End transfer {}", amount);
 
@@ -134,7 +140,7 @@ impl Client {
         amount: u64,
         asset_id: jubjub::Fr,
         clear_input: bool,
-    ) -> Result<()> {
+    ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start send {}", amount);
 
         let slab = self
