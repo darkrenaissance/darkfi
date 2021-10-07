@@ -495,7 +495,7 @@ mod tests {
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
 
-        let table_vec = wallet.get_token_table()?;
+        let table_vec = wallet.get_balances()?;
 
         assert_eq!(table_vec.len(), 4);
         assert_eq!(table_vec[0].value, 110);
