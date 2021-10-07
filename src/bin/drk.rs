@@ -185,13 +185,13 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("deposit") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKENID").unwrap();
+        let token_sym = matches.value_of("TOKENSYM").unwrap();
 
         client
             .check_network(&NetworkName::from_str(&network)?)
             .await?;
 
-        let reply = client.deposit(&network, &token).await?;
+        let reply = client.deposit(&network, &token_sym).await?;
 
         println!(
             "Deposit your coins to the following address: {}",
@@ -203,7 +203,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
     if let Some(matches) = options.subcommand_matches("withdraw") {
         let network = matches.value_of("network").unwrap().to_lowercase();
-        let token = matches.value_of("TOKENID").unwrap();
+        let token_sym = matches.value_of("TOKENSYM").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
@@ -211,7 +211,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             .check_network(&NetworkName::from_str(&network)?)
             .await?;
 
-        let reply = client.withdraw(&network, &token, &address, amount).await?;
+        let reply = client.withdraw(&network, &token_sym, &address, amount).await?;
 
         println!("{}", &reply.to_string());
 
@@ -219,11 +219,11 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     }
 
     if let Some(matches) = options.subcommand_matches("transfer") {
-        let asset_type = matches.value_of("ASSET_TYPE").unwrap();
+        let token_sym = matches.value_of("TOKENSYM").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
 
-        let reply = client.transfer(&asset_type, &address, amount).await?;
+        let reply = client.transfer(&token_sym, &address, amount).await?;
 
         println!("Transaction ID: {}", &reply.to_string());
 
@@ -253,7 +253,7 @@ async fn main() -> Result<()> {
      (@arg network: +required +takes_value --network
       "Which network to use (bitcoin/solana/...)")
      (@arg TOKEN: +required
-      "Which token to query (BTC/SOL/USDC/...)")
+      "Which token to query (btc/sol/usdc/...)")
     )
     (@subcommand features =>
      (about: "Show what features the cashier supports")
@@ -262,12 +262,12 @@ async fn main() -> Result<()> {
      (about: "Deposit clear assets for Dark assets")
      (@arg network: +required +takes_value --network
       "Which network to use (bitcoin/solana/...)")
-     (@arg TOKENID: +required
-      "Which tokenID to deposit (alphanumeric string)")
+     (@arg TOKENSYM: +required
+      "Which token symbol to deposit (btc/sol/usdc...)")
     )
     (@subcommand transfer =>
      (about: "Transfer Dark assets to address")
-     (@arg ASSET_TYPE: +required "Desired asset")
+     (@arg TOKENSYM: +required "Desired token (btc/sol/usdc...)")
      (@arg ADDRESS: +required "Recipient address")
      (@arg AMOUNT: +required "Amount to send")
     )
@@ -275,7 +275,7 @@ async fn main() -> Result<()> {
      (about: "Withdraw Dark assets for clear assets")
      (@arg network: +required +takes_value --network
       "Which network to use (bitcoin/solana/...)")
-     (@arg TOKENID: +required "Which tokenID to receive (alphanumeric string)")
+     (@arg TOKENSYM: +required "Which token to receive (btc/sol/usdc...)")
      (@arg ADDRESS: +required "Recipient address")
      (@arg AMOUNT: +required "Amount to withdraw")
     )
