@@ -339,7 +339,7 @@ impl Darkfid {
         let token_id: &jubjub::Fr;
 
         // get the id for the token
-        if let Some(tk_id) = self.drk_tokenlist.tokens.get(token) {
+        if let Some(tk_id) = self.drk_tokenlist.tokens.get(&token.to_uppercase()) {
             token_id = tk_id;
         } else {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -350,21 +350,17 @@ impl Darkfid {
             let result: Result<()> = async {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
-                if self.client.lock().await.token_id_exists(token_id).await? == true {
-                    let own_token_id = token_id;
+                let cashier_public: jubjub::SubgroupPoint =
+                    deserialize(&bs58::decode(cashier_public).into_vec()?)?;
 
-                    let cashier_public: jubjub::SubgroupPoint =
-                        deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+                let decimals: usize = 8;
+                let amount = decode_base10(&amount.to_string(), decimals, true)?;
 
-                    let decimals: usize = 8;
-                    let amount = decode_base10(&amount.to_string(), decimals, true)?;
-
-                    self.client
-                        .lock()
-                        .await
-                        .transfer(*own_token_id, cashier_public, amount)
-                        .await?;
-                }
+                self.client
+                    .lock()
+                    .await
+                    .transfer(token_id.clone(), cashier_public, amount)
+                    .await?;
 
                 Ok(())
             }
@@ -436,18 +432,13 @@ impl Darkfid {
         }
 
         let result: Result<()> = async {
-            // check if it's in the database
-            let mut client = self.client.lock().await;
-            if client.token_id_exists(token_id).await? == true {
-                let own_token_id = token_id;
-                let drk_address = bs58::decode(&address).into_vec()?;
-                let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
+            let drk_address = bs58::decode(&address).into_vec()?;
+            let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
 
-                let decimals: usize = 8;
-                let amount = decode_base10(&amount.to_string(), decimals, true)?;
+            let decimals: usize = 8;
+            let amount = decode_base10(&amount.to_string(), decimals, true)?;
 
-                client.transfer(*own_token_id, drk_address, amount).await?;
-            }
+            self.client.lock().await.transfer(token_id.clone(), drk_address, amount).await?;
 
             Ok(())
         }
