@@ -82,10 +82,21 @@ impl DrkTokenList {
 
         let tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
-            .map(|sym| return (sym.clone(), generate_id(sym, &NetworkName::Solana).unwrap()))
+            .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
             .collect();
 
         Ok(Self { tokens })
+    }
+
+    fn generate_hash_pair(sol_list: &SolTokenList, symbol: &str) -> Result<(String, jubjub::Fr)> {
+        if let Some(token_id) = &sol_list.search_id(symbol)? {
+            Ok((
+                symbol.to_string(),
+                generate_id(token_id, &NetworkName::Solana)?,
+            ))
+        } else {
+            Err(Error::NotSupportedToken)
+        }
     }
 }
 
@@ -134,11 +145,12 @@ mod tests {
     #[test]
     pub fn test_hashmap() -> Result<()> {
         let tokens = _get_tokens()?;
+        let tokens2 = _get_tokens()?;
         let drk_token = DrkTokenList::new(tokens)?;
         assert_eq!(drk_token.tokens.len(), 5);
         assert_eq!(
             drk_token.tokens["SOL"],
-            generate_id("SOL", &NetworkName::Solana)?
+            generate_id(&tokens2.search_id("SOL")?.unwrap(), &NetworkName::Solana)?
         );
         Ok(())
     }
