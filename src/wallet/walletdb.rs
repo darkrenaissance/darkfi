@@ -313,7 +313,7 @@ impl WalletDb {
         Ok(pub_keys)
     }
 
-    pub fn get_balances(&self) -> Result<HashMap<String, u64>> {
+    pub fn get_balances(&self) -> Result<HashMap<Vec<u8>, u64>> {
         debug!(target: "WALLETDB", "Get token and balances...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -327,7 +327,7 @@ impl WalletDb {
             let row = row?;
             let _coin_id: u64 = row.0;
             let value: u64 = row.1;
-            let token_id: String = row.2;
+            let token_id: Vec<u8> = row.2;
 
             balances.insert(token_id, value);
         }

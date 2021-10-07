@@ -366,7 +366,7 @@ impl Client {
         self.state.lock().await.wallet.key_gen()
     }
 
-    pub async fn get_balances(&self) -> Result<HashMap<String, u64>> {
+    pub async fn get_balances(&self) -> Result<HashMap<Vec<u8>, u64>> {
         self.state.lock().await.wallet.get_balances()
     }
 

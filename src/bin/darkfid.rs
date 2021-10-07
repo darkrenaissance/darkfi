@@ -144,14 +144,15 @@ impl Darkfid {
     //        let mut symbols = Vec::new();
     //        let mut amounts = Vec::new();
     //        let mut new_balances = HashMap::new();
-    //        for id in balances.values() {
-    //            if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id.clone())? {
-    //                symbols.push(symbol);
-    //            }
+    //        for id in balances.keys() {
+    //            let id: jubjub::Fr = deserialize(&id)?;
+    //            //if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id.clone())? {
+    //            //    symbols.push(symbol);
+    //            //}
 
-    //            for amount in balances.keys() {
-    //                amounts.push(amount);
-    //            }
+    //            //for amount in balances.keys() {
+    //            //    amounts.push(amount);
+    //            //}
     //        }
     //        let mut new_balances = HashMap::new();
     //        new_balances.insert(symbols, amounts);
