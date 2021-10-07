@@ -2,6 +2,8 @@ use async_std::sync::{Arc, Mutex};
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::*;
+
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -364,9 +366,9 @@ impl Client {
         self.state.lock().await.wallet.key_gen()
     }
 
-    //pub async fn token_and_balances(&self) -> Result<()> {
-    //    self.state.lock().await.wallet.get_token_ids()
-    //}
+    pub async fn get_balances(&self) -> Result<HashMap<u64, jubjub::Fr>> {
+        self.state.lock().await.wallet.get_balances()
+    }
 
     pub async fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
         self.state.lock().await.wallet.token_id_exists(token_id)
