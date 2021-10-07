@@ -4,7 +4,6 @@ use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
 use std::path::Path;
 
-use async_std::sync::{Arc, Mutex};
 use drk::crypto::{
     coin::Coin,
     load_params,
@@ -15,7 +14,7 @@ use drk::crypto::{
     save_params, setup_mint_prover, setup_spend_prover,
 };
 use drk::serial::{Decodable, Encodable};
-use drk::state::{state_transition, ProgramState, StateUpdate};
+use drk::state::{ProgramState, StateUpdate};
 use drk::tx;
 
 struct MemoryState {
@@ -203,8 +202,6 @@ async fn main() {
         }
     }
 
-    let state = Mutex::new(state);
-    let mut state = state.lock().await;
     // Now we receive the tx data
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
@@ -221,47 +218,47 @@ async fn main() {
     assert_eq!(state.own_coins.len(), 1);
     ////let (coin, note, secret, witness) = &mut state.own_coins[0];
 
-    //let merkle_path = {
-    //    let tree = &mut state.tree;
-    //    let (coin, _, _, witness) = &mut state.own_coins[0];
-    //    // Check this is the 6th coin we added
-    //    assert_eq!(witness.position(), 5);
-    //    assert_eq!(tree.root(), witness.root());
+    let merkle_path = {
+        let tree = &mut state.tree;
+        let (coin, _, _, witness) = &mut state.own_coins[0];
+        // Check this is the 6th coin we added
+        assert_eq!(witness.position(), 5);
+        assert_eq!(tree.root(), witness.root());
 
-    //    // Add some more random coins in
-    //    for _i in 0..10 {
-    //        // Don't worry about any of the code in this block
-    //        // We're just filling the tree with fake coins
-    //        let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-    //        tree.append(cmu).unwrap();
-    //        witness.append(cmu).unwrap();
-    //        assert_eq!(tree.root(), witness.root());
+        // Add some more random coins in
+        for _i in 0..10 {
+            // Don't worry about any of the code in this block
+            // We're just filling the tree with fake coins
+            let cmu = MerkleNode::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+            tree.append(cmu).unwrap();
+            witness.append(cmu).unwrap();
+            assert_eq!(tree.root(), witness.root());
 
-    //        let root = tree.root();
-    //        state.merkle_roots.push(root.into());
-    //    }
+            let root = tree.root();
+            state.merkle_roots.push(root.into());
+        }
 
-    //    assert_eq!(state.merkle_roots.len(), 16);
+        assert_eq!(state.merkle_roots.len(), 16);
 
-    //    // This is the value we need to spend the coin
-    //    // We use the witness and the merkle root (both in sync with each other)
-    //    // to prove our coin exists inside the tree.
-    //    // The coin is not revealed publicly but is proved to exist inside
-    //    // a merkle tree. Only the root will be revealed, and then the
-    //    // verifier checks that merkle root actually existed before.
-    //    let merkle_path = witness.path().unwrap();
+        // This is the value we need to spend the coin
+        // We use the witness and the merkle root (both in sync with each other)
+        // to prove our coin exists inside the tree.
+        // The coin is not revealed publicly but is proved to exist inside
+        // a merkle tree. Only the root will be revealed, and then the
+        // verifier checks that merkle root actually existed before.
+        let merkle_path = witness.path().unwrap();
 
-    //    // Just test the path is good because we just added a bunch of fake coins
-    //    let node = MerkleNode::from_coin(&coin);
-    //    let root = tree.root();
-    //    drop(tree);
-    //    drop(witness);
-    //    assert_eq!(merkle_path.root(node), root);
-    //    let root = root.into();
-    //    assert!(state.is_valid_merkle(&root));
+        // Just test the path is good because we just added a bunch of fake coins
+        let node = MerkleNode::from_coin(&coin);
+        let root = tree.root();
+        drop(tree);
+        drop(witness);
+        assert_eq!(merkle_path.root(node), root);
+        let root = root.into();
+        assert!(state.is_valid_merkle(&root));
 
-    //    merkle_path
-    //};
+        merkle_path
+    };
 
     // Step 3: wallet1 sends payment to wallet2
 
@@ -279,12 +276,11 @@ async fn main() {
     // We need the decrypted note and our private key
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
-        inputs: vec![],
-        //inputs: vec![tx::TransactionBuilderInputInfo {
-        //    merkle_path,
-        //    secret: secret.clone(),
-        //    note: state.own_coins[0].1.clone(),
-        //}],
+        inputs: vec![tx::TransactionBuilderInputInfo {
+            merkle_path,
+            secret: secret.clone(),
+            note: state.own_coins[0].1.clone(),
+        }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
         outputs: vec![tx::TransactionBuilderOutputInfo {
@@ -302,8 +298,76 @@ async fn main() {
     // Verify it's valid
     {
         let tx = tx::Transaction::decode(&tx_data[..]).unwrap();
-        //let state = state.lock().await;
-        //let update = state_transition(&state, tx).expect("step 3 state transition failed");
-        //state.apply(update);
+        let update = state_transition(&state, tx).expect("step 3 state transition failed");
+        state.apply(update);
     }
+}
+
+
+use log::*;
+use drk::state::{VerifyResult, VerifyFailed};
+
+pub fn state_transition<S: ProgramState>(
+    state: &S,
+    tx: tx::Transaction,
+) -> VerifyResult<StateUpdate> {
+    // Check deposits are legit
+
+    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
+
+    for (i, input) in tx.clear_inputs.iter().enumerate() {
+        // Check the public key in the clear inputs
+        // It should be a valid public key for the cashier
+
+
+        if !state.is_valid_cashier_public_key(&input.signature_public) {
+            log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
+            return Err(VerifyFailed::InvalidCashierKey(i));
+        }
+    }
+
+    debug!(target: "STATE TRANSITION", "iterate inputs");
+
+    for (i, input) in tx.inputs.iter().enumerate() {
+        // Check merkle roots
+        let merkle = &input.revealed.merkle_root;
+
+        // Merkle is used to know whether this is a coin that existed
+        // in a previous state.
+        if !state.is_valid_merkle(merkle) {
+            return Err(VerifyFailed::InvalidMerkle(i));
+        }
+
+        // The nullifiers should not already exist
+        // It is double spend protection.
+        let nullifier = &input.revealed.nullifier;
+
+        if state.nullifier_exists(nullifier) {
+            return Err(VerifyFailed::DuplicateNullifier(i));
+        }
+    }
+
+    debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
+    // Check the tx verifies correctly
+    tx.verify(state.mint_pvk(), state.spend_pvk())?;
+
+    let mut nullifiers = vec![];
+    for input in tx.inputs {
+        nullifiers.push(input.revealed.nullifier);
+    }
+
+    // Newly created coins for this tx
+    let mut coins = vec![];
+    let mut enc_notes = vec![];
+    for output in tx.outputs {
+        // Gather all the coins
+        coins.push(Coin::new(output.revealed.coin));
+        enc_notes.push(output.enc_note);
+    }
+
+    Ok(StateUpdate {
+        nullifiers,
+        coins,
+        enc_notes,
+    })
 }
