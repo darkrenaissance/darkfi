@@ -531,7 +531,7 @@ impl Cashierd {
             async move {
                 while let Some(token_notification) = bridge2.clone().listen().await
                 {
-                    debug!(target: "CASHIER DAEMON", "Notification from birdge: {:?}", token_notification);
+                    debug!(target: "CASHIER DAEMON", "Notification from birdge");
 
                     let token_notification = token_notification?;
 

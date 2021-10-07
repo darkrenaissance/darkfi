@@ -273,7 +273,7 @@ impl Client {
                 let tx = tx::Transaction::decode(&slab.get_payload()[..]);
 
                 if let Err(e) = tx {
-                    error!("TX: {}", e.to_string());
+                    warn!("TX: {}", e.to_string());
                     continue;
                 }
 
@@ -282,7 +282,7 @@ impl Client {
                 let update = state_transition(&state, tx?);
 
                 if let Err(e) = update {
-                    error!("state transition: {}", e.to_string());
+                    warn!("state transition: {}", e.to_string());
                     continue;
                 }
 
@@ -324,7 +324,7 @@ impl Client {
                 let tx = tx::Transaction::decode(&slab.get_payload()[..]);
 
                 if let Err(e) = tx {
-                    error!("TX: {}", e.to_string());
+                    warn!("TX: {}", e.to_string());
                     continue;
                 }
 
@@ -333,7 +333,7 @@ impl Client {
                 let update = state_transition(&state, tx?);
 
                 if let Err(e) = update {
-                    error!("state transition: {}", e.to_string());
+                    warn!("state transition: {}", e.to_string());
                     continue;
                 }
 
