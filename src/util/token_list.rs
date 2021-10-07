@@ -56,6 +56,7 @@ impl SolTokenList {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct DrkTokenList {
     pub tokens: HashMap<String, jubjub::Fr>,
 }
