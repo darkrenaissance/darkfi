@@ -488,7 +488,7 @@ impl State {
                     self.wallet.put_own_coins(own_coin)?;
                     let pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
 
-                    debug!(target: "CLIENT STATE", "Received a coin: amount {} from {}", note.value, pub_key);
+                    debug!(target: "CLIENT STATE", "Received a coin: amount {} ", note.value);
 
                     debug!(target: "CLIENT STATE", "Send a notification");
 

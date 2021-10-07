@@ -320,7 +320,6 @@ impl Darkfid {
         let token_id = match assign_id(&network, &token, &self.sol_tokenlist.clone()) {
             Ok(t) => t,
             Err(e) => {
-                debug!(target: "DARKFID", "TOKEN ID IS ERR");
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
             }
         };
@@ -333,7 +332,6 @@ impl Darkfid {
         match send_request(&self.config.cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
-                debug!(target: "DARKFID", "REQUEST IS ERR");
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
             }
         }
