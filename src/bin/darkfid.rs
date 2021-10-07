@@ -405,28 +405,31 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let token = &args[0];
-        let address = &args[1];
-        let amount = &args[2];
+        let token = &args[0].as_str();
+        let address = &args[1].as_str();
+        let amount = &args[2].as_f64();
 
-        if token.as_str().is_none() {
+        if token.is_none() {
             return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
         }
-        let token = token.as_str().unwrap();
-        if address.as_str().is_none() {
+
+        let token = token.unwrap();
+
+        if address.is_none() {
             return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
         }
 
-        let address = address.as_str().unwrap();
-        if amount.as_str().is_none() {
+        let address = address.unwrap();
+
+        if amount.is_none() {
             return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
         }
-        let amount = amount.as_str().unwrap();
+        let amount = amount.unwrap();
 
         let token_id: &jubjub::Fr;
 
         // get the id for the token
-        if let Some(tk_id) = self.drk_tokenlist.tokens.get(token) {
+        if let Some(tk_id) = self.drk_tokenlist.tokens.get(&token.to_uppercase()) {
             token_id = tk_id;
         } else {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
@@ -441,7 +444,7 @@ impl Darkfid {
                 let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
 
                 let decimals: usize = 8;
-                let amount = decode_base10(amount, decimals, true)?;
+                let amount = decode_base10(&amount.to_string(), decimals, true)?;
 
                 client.transfer(*own_token_id, drk_address, amount).await?;
             }
@@ -451,7 +454,7 @@ impl Darkfid {
         .await;
 
         match result {
-            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(id))),
+            Ok(msg) => JsonResult::Resp(jsonresp(json!(msg), json!(id))),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
         }
     }
