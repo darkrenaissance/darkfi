@@ -13,7 +13,11 @@ $ make
 The daemons can be configured using TOML files. Find examples in
 this repo: [example/config](example/config) and copy them over to
 `~/.config/darkfi`. The defaults should be safe to use for demo
-purpose.
+purposes.
+
+The cashier daemon must have enough testnet coins to cover fees.
+Testnet SOL can be acquired by calling `solana airdrop` on devnet.
+Testnet BTC can be acquired from a faucet.
 
 ## Usage
 
@@ -45,7 +49,6 @@ make use of the system:
 ```
 $ ./target/release/drk help
 ```
-
 
 ## Go Dark
 
