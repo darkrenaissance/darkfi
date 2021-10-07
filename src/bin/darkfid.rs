@@ -160,7 +160,7 @@ impl Darkfid {
             match network {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
-                    let token_id = self.sol_tokenlist.clone().search_id(symbol)?;
+                    let token_id = self.sol_tokenlist.search_id(symbol)?;
                     Ok(json!(token_id))
                 }
                 #[cfg(feature = "btc")]
@@ -228,7 +228,7 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        let token_id = match assign_id(&network, &token, &self.sol_tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, &self.sol_tokenlist) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -303,7 +303,7 @@ impl Darkfid {
 
         let amount = amount.as_f64().unwrap();
 
-        let decimals = match decimals(network, token, &self.sol_tokenlist.clone()) {
+        let decimals = match decimals(network, token, &self.sol_tokenlist) {
             Ok(d) => d,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -317,7 +317,7 @@ impl Darkfid {
             }
         };
 
-        let token_id = match assign_id(&network, &token, &self.sol_tokenlist.clone()) {
+        let token_id = match assign_id(&network, &token, &self.sol_tokenlist) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -336,13 +336,14 @@ impl Darkfid {
             }
         }
 
-        let hashmap = self.drk_tokenlist.tokens.clone();
+        let token_id: &jubjub::Fr;
 
-        if hashmap.get(token).is_none() {
+        // get the id for the token
+        if let Some(tk_id) = self.drk_tokenlist.tokens.get(token) {
+            token_id = tk_id;
+        } else {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-        // get the id for the token
-        let token_id = hashmap.get(token).unwrap();
 
         // send drk to cashier_public
         if let JsonResult::Resp(cashier_public) = &rep {
@@ -422,13 +423,14 @@ impl Darkfid {
         }
         let amount = amount.as_str().unwrap();
 
-        let hashmap = self.drk_tokenlist.tokens.clone();
+        let token_id: &jubjub::Fr;
 
-        if hashmap.get(token).is_none() {
+        // get the id for the token
+        if let Some(tk_id) = self.drk_tokenlist.tokens.get(token) {
+            token_id = tk_id;
+        } else {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
-        // get the id for the token
-        let token_id = hashmap.get(token).unwrap();
 
         let result: Result<()> = async {
             // check if it's in the database
