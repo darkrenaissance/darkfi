@@ -82,8 +82,8 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > :id")?;
-        let key_check = stmt.exists(&[(":id", &"0")])?;
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
+        let key_check = stmt.exists(params!["0"])?;
         if !key_check {
             let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
@@ -368,8 +368,8 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
         let id = self.get_value_serialized(token_id)?;
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE asset_id > :id")?;
-        let id_check = stmt.exists([id])?;
+        let mut stmt = conn.prepare("SELECT * FROM coins WHERE asset_id = ?")?;
+        let id_check = stmt.exists(params![id])?;
         Ok(id_check)
     }
 
@@ -454,6 +454,8 @@ mod tests {
         assert_eq!(token_id.len(), 4);
         assert_eq!(token_id[0], asset_id);
         assert_eq!(token_id[2], asset_id);
+
+        assert!(wallet.token_id_exists(&asset_id)?);
 
         std::fs::remove_file(walletdb_path)?;
 
