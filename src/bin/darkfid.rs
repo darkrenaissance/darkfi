@@ -46,6 +46,7 @@ impl RequestHandler for Darkfid {
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
+            Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
@@ -130,6 +131,10 @@ impl Darkfid {
         let pk = self.client.lock().await.main_keypair.public;
         let b58 = bs58::encode(serialize(&pk)).into_string();
         return JsonResult::Resp(jsonresp(json!(b58), id));
+    }
+
+    async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
+        return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
     }
 
     // --> {"method": "get_token_id", "params": [network, token]}
@@ -438,7 +443,11 @@ impl Darkfid {
             let decimals: usize = 8;
             let amount = decode_base10(&amount.to_string(), decimals, true)?;
 
-            self.client.lock().await.transfer(token_id.clone(), drk_address, amount).await?;
+            self.client
+                .lock()
+                .await
+                .transfer(token_id.clone(), drk_address, amount)
+                .await?;
 
             Ok(())
         }

@@ -97,8 +97,8 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
-    async fn get_tokens(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_tokens"), json![()]);
+    async fn get_balances(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_balances"), json![()]);
         Ok(self.request(req).await?)
     }
 
@@ -167,8 +167,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             return Ok(());
         }
 
-        if matches.is_present("tokens") {
-            let reply = client.get_tokens().await?;
+        if matches.is_present("balances") {
+            let reply = client.get_balances().await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(());
         }

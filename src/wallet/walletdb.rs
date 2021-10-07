@@ -12,6 +12,7 @@ use log::*;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, params, Connection};
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub type WalletPtr = Arc<WalletDb>;
@@ -20,13 +21,6 @@ pub type WalletPtr = Arc<WalletDb>;
 pub struct Keypair {
     pub public: jubjub::SubgroupPoint,
     pub private: jubjub::Fr,
-}
-
-#[derive(Debug, Clone)]
-pub struct TokenTable {
-    pub coin_id: u64,
-    pub token_id: jubjub::Fr,
-    pub value: u64,
 }
 
 //#[derive(Clone)]
@@ -319,7 +313,7 @@ impl WalletDb {
         Ok(pub_keys)
     }
 
-    pub fn get_token_table(&self) -> Result<Vec<TokenTable>> {
+    pub fn get_balances(&self) -> Result<HashMap<u64, jubjub::Fr>> {
         debug!(target: "WALLETDB", "Get token and balances...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -327,21 +321,17 @@ impl WalletDb {
         let mut stmt = conn.prepare("SELECT coin_id, value, asset_id FROM coins ;")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
 
-        let mut token_table = Vec::new();
+        let mut balances = HashMap::new();
 
         for row in rows {
             let row = row?;
-            let coin_id: u64 = row.0;
+            let _coin_id: u64 = row.0;
             let value: u64 = row.1;
             let token_id: jubjub::Fr = self.get_value_deserialized(&row.2)?;
 
-            token_table.push(TokenTable {
-                coin_id,
-                value,
-                token_id,
-            });
+            balances.insert(value, token_id);
         }
-        Ok(token_table)
+        Ok(balances)
     }
 
     pub fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
