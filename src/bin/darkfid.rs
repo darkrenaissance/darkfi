@@ -47,7 +47,7 @@ impl RequestHandler for Darkfid {
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
-            //Some("get_balances") => return self.get_balances(req.id, req.params).await,
+            Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
             Some("deposit") => return self.deposit(req.id, req.params).await,
@@ -134,40 +134,39 @@ impl Darkfid {
         return JsonResult::Resp(jsonresp(json!(b58), id));
     }
 
-    // TODO: clean up these upwraps
-    //
     // --> {"method": "get_key", "params": []}
     // <-- {"result": "balances": "[value: 0, token: btc]"}
-    //async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
-    //    let result: Result<HashMap<String, u64>> = async {
-    //        let balances = self.client.lock().await.get_balances().await?;
-    //        let mut symbols = Vec::new();
-    //        let mut amounts = Vec::new();
-    //        let mut new_balances = HashMap::new();
-    //        for id in balances.keys() {
-    //            let id: jubjub::Fr = deserialize(&id)?;
-    //            //if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id.clone())? {
-    //            //    symbols.push(symbol);
-    //            //}
+    async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
+        let result: Result<HashMap<String, u64>> = async {
+            let balances = self.client.lock().await.get_balances().await?;
+            let mut symbols = Vec::new();
+            let mut amounts = Vec::new();
 
-    //            //for amount in balances.keys() {
-    //            //    amounts.push(amount);
-    //            //}
-    //        }
-    //        let mut new_balances = HashMap::new();
-    //        new_balances.insert(symbols, amounts);
-    //        let new_balances: HashMap<String, u64> = symbols
-    //            .iter()
-    //            .filter_map(|symbol| Some(amounts.iter()))
-    //            .collect();
-    //        Ok(new_balances)
-    //    }
-    //    .await;
-    //    match result {
-    //        Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
-    //        Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
-    //    }
-    //}
+            for id in balances.keys() {
+                let id: jubjub::Fr = deserialize(&id)?;
+                if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
+                    symbols.push(symbol);
+                }
+
+                for amount in balances.values() {
+                    amounts.push(amount);
+                }
+            }
+
+            let new_balances: HashMap<String, u64> = symbols
+                .into_iter()
+                .zip(amounts.into_iter())
+                .map(|(key, value)| return (key.clone(), value.clone()))
+                .collect();
+
+            Ok(new_balances)
+        }
+        .await;
+        match result {
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
+            Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
+        }
+    }
 
     // --> {"method": "get_token_id", "params": [network, token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
