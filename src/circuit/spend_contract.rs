@@ -209,6 +209,10 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 120: binary_extend preimage value
         preimage.extend(value);
 
+
+        // Line 109: binary_extend preimage asset_id
+        preimage.extend(asset_id);
+
         // add 4 zero bits
         for _ in 0..4 {
             // Line 71: alloc_const_bit zero_bit false
@@ -217,9 +221,6 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             // Line 72: binary_push preimage zero_bit
             preimage.push(zero_bit);
         }
-
-        // Line 109: binary_extend preimage asset_id
-        preimage.extend(asset_id);
 
         // Line 123: binary_extend preimage serial
         preimage.extend(serial);
