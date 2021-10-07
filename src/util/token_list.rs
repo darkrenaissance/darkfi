@@ -43,21 +43,6 @@ impl SolTokenList {
         Ok(None)
     }
 
-    // pub fn search_all_id(&self, symbol: &str) -> Result<Vec<String>> {
-    //     let tokens = self.sol_tokenlist["tokens"]
-    //         .as_array()
-    //         .ok_or(Error::TokenParseError)?;
-    //     let mut ids = Vec::new();
-    //     for item in tokens {
-    //         if item["symbol"] == symbol.to_uppercase() {
-    //             let address = item["address"].clone();
-    //             let address = address.as_str().ok_or(Error::TokenParseError)?;
-    //             ids.push(address.to_string());
-    //         }
-    //     }
-    //     return Ok(ids);
-    // }
-
     pub fn search_decimal(&self, symbol: &str) -> Result<Option<usize>> {
         for item in self.tokens.iter() {
             if item["symbol"] == symbol.to_uppercase() {
@@ -77,7 +62,6 @@ pub struct DrkTokenList {
 
 impl DrkTokenList {
     pub fn new(sol_list: SolTokenList) -> Result<Self> {
-        // get symbols
         let sol_symbols = sol_list.clone().get_symbols()?;
 
         let tokens: HashMap<String, jubjub::Fr> = sol_symbols
@@ -97,6 +81,13 @@ impl DrkTokenList {
         } else {
             Err(Error::NotSupportedToken)
         }
+    }
+
+    pub fn symbol_from_id(self, id: jubjub::Fr) -> Result<Option<String>> {
+        Ok(self
+            .tokens
+            .iter()
+            .find_map(|(key, &val)| if val == id { Some(key.clone()) } else { None }))
     }
 }
 
