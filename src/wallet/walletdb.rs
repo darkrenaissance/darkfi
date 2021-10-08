@@ -125,13 +125,16 @@ impl WalletDb {
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         debug!(target: "WALLETDB", "Get own coins");
 
+        let is_spent = self.get_value_serialized(&false)?;
+
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut coins = conn.prepare("SELECT * FROM coins")?;
-        let rows = coins.query_map([], |row| {
+        let mut coins = conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+        let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((
+                row.get(0)?,
                 row.get(1)?,
                 row.get(2)?,
                 row.get(3)?,
@@ -147,14 +150,15 @@ impl WalletDb {
 
         for row in rows {
             let row = row?;
-            let coin = self.get_value_deserialized(&row.0)?;
+            let coin_id: u64 = row.0;
+            let coin = self.get_value_deserialized(&row.1)?;
 
             // note
-            let serial = self.get_value_deserialized(&row.1)?;
-            let coin_blind = self.get_value_deserialized(&row.2)?;
-            let valcom_blind = self.get_value_deserialized(&row.3)?;
-            let value: u64 = row.4;
-            let asset_id = self.get_value_deserialized(&row.5)?;
+            let serial = self.get_value_deserialized(&row.2)?;
+            let coin_blind = self.get_value_deserialized(&row.3)?;
+            let valcom_blind = self.get_value_deserialized(&row.4)?;
+            let value: u64 = row.5;
+            let asset_id = self.get_value_deserialized(&row.6)?;
 
             let note = Note {
                 serial,
@@ -164,8 +168,8 @@ impl WalletDb {
                 valcom_blind,
             };
 
-            let witness = self.get_value_deserialized(&row.6)?;
-            let secret: jubjub::Fr = self.get_value_deserialized(&row.7)?;
+            let witness = self.get_value_deserialized(&row.7)?;
+            let secret: jubjub::Fr = self.get_value_deserialized(&row.8)?;
 
             let oc = OwnCoin {
                 coin,
@@ -174,7 +178,7 @@ impl WalletDb {
                 witness,
             };
 
-            own_coins.push(oc)
+            own_coins.push((coin_id, oc))
         }
 
         Ok(own_coins)
@@ -193,7 +197,8 @@ impl WalletDb {
         let asset_id = self.get_value_serialized(&own_coin.note.asset_id)?;
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
-        
+        let is_spent = self.get_value_serialized(&false)?;
+
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -201,9 +206,9 @@ impl WalletDb {
 
         conn.execute(
             "INSERT INTO coins
-            (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, secret)
+            (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, secret, is_spent)
             VALUES
-            (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :secret);",
+            (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :secret, :is_spent);",
             named_params! {
                 ":coin": coin,
                 ":serial": serial,
@@ -213,8 +218,32 @@ impl WalletDb {
                 ":valcom_blind": valcom_blind,
                 ":witness": witness,
                 ":secret": secret,
+                ":is_spent": is_spent,
             },
         )?;
+        Ok(())
+    }
+
+    pub fn confirm_spend_coin(
+        &self,
+        coin_id: &u64,
+    ) -> Result<()> {
+        debug!(target: "WALLETDB", "Confirm spend coin");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        let is_spent = self.get_value_serialized(&true)?;
+
+        conn.execute(
+            "UPDATE coins 
+            SET is_spent = ?1
+            WHERE coin_id = ?2 ;",
+            params![is_spent, coin_id],
+        )?;
+
         Ok(())
     }
 
@@ -222,9 +251,11 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut witnesses = conn.prepare("SELECT coin_id, witness FROM coins;")?;
+        let is_spent = self.get_value_serialized(&false)?;
 
-        let rows = witnesses.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut witnesses = conn.prepare("SELECT coin_id, witness FROM coins WHERE is_spent = :is_spent;")?;
+
+        let rows = witnesses.query_map(&[(":is_spent", &is_spent)], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
         let mut witnesses = Vec::new();
         for i in rows {
@@ -248,10 +279,11 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let witness = self.get_value_serialized(&witness)?;
+        let is_spent = self.get_value_serialized(&false)?;
 
         conn.execute(
-            "UPDATE coins SET witness = ?1  WHERE coin_id = ?2;",
-            params![witness, coin_id],
+            "UPDATE coins SET witness = ?1  WHERE coin_id = ?2 AND is_spent = ?3",
+            params![witness, coin_id, is_spent],
         )?;
 
         Ok(())
@@ -275,6 +307,7 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Returning Cashier Public key...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
+
         let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
 
         let key_iter = stmt.query_map([], |row| row.get(0))?;
@@ -294,8 +327,13 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT coin_id, value, asset_id FROM coins ;")?;
-        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let is_spent = self.get_value_serialized(&false)?;
+
+        let mut stmt = conn
+            .prepare("SELECT coin_id, value, asset_id FROM coins  WHERE is_spent = :is_spent ;")?;
+        let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
 
         let mut balances = HashMap::new();
 
@@ -315,8 +353,10 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT asset_id FROM coins")?;
-        let rows = stmt.query_map([], |row| row.get(0))?;
+        let is_spent = self.get_value_serialized(&false)?;
+
+        let mut stmt = conn.prepare("SELECT asset_id FROM coins WHERE is_spent = :is_spent ;")?;
+        let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
 
         let mut token_ids = Vec::new();
         for row in rows {
@@ -333,9 +373,12 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Check tokenID exists");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
+
         let id = self.get_value_serialized(token_id)?;
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE asset_id = ?")?;
-        let id_check = stmt.exists(params![id])?;
+        let is_spent = self.get_value_serialized(&false)?;
+
+        let mut stmt = conn.prepare("SELECT * FROM coins WHERE asset_id = ? AND is_spent = ? ;")?;
+        let id_check = stmt.exists(params![id, is_spent])?;
         Ok(id_check)
     }
 
@@ -546,11 +589,18 @@ mod tests {
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
-        assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
-        assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
-        assert_eq!(own_coin.secret, secret);
-        assert_eq!(own_coin.witness.root(), witness.root());
-        assert_eq!(own_coin.witness.path(), witness.path());
+        assert_eq!(&own_coin.1.note.valcom_blind, &note.valcom_blind);
+        assert_eq!(&own_coin.1.note.coin_blind, &note.coin_blind);
+        assert_eq!(own_coin.1.secret, secret);
+        assert_eq!(own_coin.1.witness.root(), witness.root());
+        assert_eq!(own_coin.1.witness.path(), witness.path());
+        
+
+        wallet.confirm_spend_coin(&own_coin.0)?;
+
+        let own_coins = wallet.get_own_coins()?.clone();
+
+        assert_eq!(own_coins.len(), 0);
 
         std::fs::remove_file(walletdb_path)?;
 

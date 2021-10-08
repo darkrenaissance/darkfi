@@ -224,10 +224,11 @@ impl Client {
 
         let own_coins = self.state.lock().await.wallet.get_own_coins()?;
 
-        for own_coin in own_coins.iter() {
+        for (coin_id, own_coin) in own_coins.iter() {
             if inputs_value >= amount {
                 break;
             }
+            self.state.lock().await.wallet.confirm_spend_coin(coin_id)?;
             let witness = &own_coin.witness;
             let merkle_path = witness.path().unwrap();
             inputs_value += own_coin.note.value;

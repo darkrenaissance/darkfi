@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS coins(
     value INT NOT NULL,
     asset_id INT NOT NULL,
     witness BLOB NOT NULL,
-   	secret BLOB NOT NULL
+   	secret BLOB NOT NULL,
+	is_spent BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cashier(
     key_id INTEGER PRIMARY KEY NOT NULL,
