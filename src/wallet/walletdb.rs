@@ -165,21 +165,7 @@ impl WalletDb {
             };
 
             let witness = self.get_value_deserialized(&row.6)?;
-            let key_id: u64 = row.7;
-
-            // return key_private from key_id
-            let mut get_private_key =
-                conn.prepare("SELECT key_private FROM keys WHERE key_id = :key_id")?;
-
-            let rows = get_private_key.query_map(&[(":key_id", &key_id)], |row| row.get(0))?;
-
-            let mut secret = Vec::new();
-            for id in rows {
-                secret.push(id?)
-            }
-
-            let secret: jubjub::Fr =
-                self.get_value_deserialized(&secret.pop().expect("Load public_key from walletdb"))?;
+            let secret: jubjub::Fr = self.get_value_deserialized(&row.7)?;
 
             let oc = OwnCoin {
                 coin,
@@ -207,27 +193,17 @@ impl WalletDb {
         let asset_id = self.get_value_serialized(&own_coin.note.asset_id)?;
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
+        
         // open connection
         let conn = Connection::open(&self.path)?;
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        // return key_id from key_private
-        let mut get_id =
-            conn.prepare("SELECT key_id FROM keys WHERE key_private = :key_private")?;
-
-        let rows = get_id.query_map::<u64, _, _>(&[(":key_private", &secret)], |row| row.get(0))?;
-
-        let mut key_id = Vec::new();
-        for id in rows {
-            key_id.push(id?)
-        }
-
         conn.execute(
             "INSERT INTO coins
-            (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, key_id)
+            (coin, serial, value, asset_id, coin_blind, valcom_blind, witness, secret)
             VALUES
-            (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :key_id);",
+            (:coin, :serial, :value, :asset_id, :coin_blind, :valcom_blind, :witness, :secret);",
             named_params! {
                 ":coin": coin,
                 ":serial": serial,
@@ -236,7 +212,7 @@ impl WalletDb {
                 ":coin_blind": coin_blind,
                 ":valcom_blind": valcom_blind,
                 ":witness": witness,
-                ":key_id": key_id.pop().expect("Get key_id"),
+                ":secret": secret,
             },
         )?;
         Ok(())
@@ -377,8 +353,8 @@ mod tests {
 
     use super::*;
     use crate::crypto::{coin::Coin, OwnCoin};
-    use crate::serial::{deserialize, serialize};
-    use crate::util::{join_config_path, DrkTokenList, SolTokenList};
+    use crate::serial::serialize;
+    use crate::util::join_config_path;
     use ff::PrimeField;
 
     pub fn init_db(path: &PathBuf, password: String) -> Result<()> {

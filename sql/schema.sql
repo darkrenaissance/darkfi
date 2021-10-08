@@ -13,10 +13,7 @@ CREATE TABLE IF NOT EXISTS coins(
     value INT NOT NULL,
     asset_id INT NOT NULL,
     witness BLOB NOT NULL,
-    key_id INTEGER NOT NULL,
-    FOREIGN KEY (key_id)
-        REFERENCES keys (key_id)
-        ON UPDATE CASCADE
+   	secret BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cashier(
     key_id INTEGER PRIMARY KEY NOT NULL,
