@@ -177,6 +177,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             let mut table = Table::new();
             table.add_row(row!["TOKEN", "AMOUNT"]);
             table.add_row(row![reply]);
+            //ptable!([reply]);
+            table.printstd();
             return Ok(());
         }
     }
