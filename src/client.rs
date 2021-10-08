@@ -17,7 +17,7 @@ use crate::{
         nullifier::Nullifier,
         save_params, setup_mint_prover, setup_spend_prover, OwnCoin,
     },
-    serial::{Decodable, Encodable},
+    serial::{serialize, Decodable, Encodable},
     service::{GatewayClient, GatewaySlabsSubscriber},
     state::{state_transition, ProgramState, StateUpdate},
     tx,
@@ -69,6 +69,11 @@ impl Client {
         }
 
         let main_keypair = wallet.get_keypairs()?[0].clone();
+
+        info!(
+        target: "CLIENT", "Main Keypair: {}",
+        bs58::encode(&serialize(&main_keypair.public)).into_string()
+        );
 
         // Auto create trusted ceremony parameters if they don't exist
         if !params_paths.0.exists() {
