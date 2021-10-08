@@ -246,17 +246,12 @@ impl Client {
         }
 
         if inputs_value > amount {
-            let inputs_len = inputs.len();
-            let input = &inputs[inputs_len - 1];
-
             let return_value: u64 = inputs_value - amount;
-
-            let own_pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * input.secret;
 
             outputs.push(tx::TransactionBuilderOutputInfo {
                 value: return_value,
                 asset_id,
-                public: own_pub_key,
+                public: self.main_keypair.public,
             });
         }
 

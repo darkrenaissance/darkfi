@@ -127,8 +127,7 @@ impl Cashierd {
         // received drk coin
         let (drk_pub_key, amount) = recv_coin.recv().await?;
 
-        debug!(target: "CASHIER DAEMON", "Receive coin with following address and amount: {}, {}"
-            , drk_pub_key, amount);
+        debug!(target: "CASHIER DAEMON", "Receive coin with amount: {}", amount);
 
         // get public key, and token_id of the token
         let token = cashier_wallet.get_withdraw_token_public_key_by_dkey_public(&drk_pub_key)?;
