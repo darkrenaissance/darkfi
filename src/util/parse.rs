@@ -43,25 +43,20 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Result<String> {
+pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Result<String> {
+    let token = token.to_lowercase().clone();
+    let _token = token.as_str();
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
-        NetworkName::Solana => match _token.to_lowercase().as_str() {
-            "solana" | "sol" => {
-                use crate::service::sol::SOL_NATIVE_TOKEN_ID;
-                let token_id = SOL_NATIVE_TOKEN_ID;
-                Ok(token_id.to_string())
-            }
-            tkn => {
-                // (== 44) can represent a Solana base58 token mint address
-                let id = if _token.len() == 44 {
-                    _token.to_string()
-                } else {
-                    symbol_to_id(tkn, _tokenlist)?
-                };
-                Ok(id)
-            }
-        },
+        NetworkName::Solana => {
+            // (== 44) can represent a Solana base58 token mint address
+            let id = if _token.len() == 44 {
+                _token.to_string()
+            } else {
+                symbol_to_id(_token, _tokenlist)?
+            };
+            Ok(id)
+        }
         #[cfg(feature = "btc")]
         NetworkName::Bitcoin => Err(Error::NotSupportedToken),
         _ => Err(Error::NotSupportedNetwork),
@@ -71,20 +66,14 @@ pub fn assign_id(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Resu
 pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Result<usize> {
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
-        NetworkName::Solana => match _token {
-            "solana" | "sol" => {
-                let decimals = 9;
-                Ok(decimals)
+        NetworkName::Solana => {
+            let decimals = _tokenlist.search_decimal(_token)?;
+            if let Some(decimals) = decimals {
+                return Ok(decimals);
+            } else {
+                return Err(Error::NotSupportedToken);
             }
-            tkn => {
-                let decimals = _tokenlist.search_decimal(tkn)?;
-                if let Some(decimals) = decimals {
-                    return Ok(decimals);
-                } else {
-                    return Err(Error::NotSupportedToken);
-                }
-            }
-        },
+        }
         #[cfg(feature = "btc")]
         NetworkName::Bitcoin => Err(Error::NotSupportedToken),
         _ => Err(Error::NotSupportedNetwork),
