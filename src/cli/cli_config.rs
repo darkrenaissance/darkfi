@@ -10,6 +10,17 @@ use std::{
 
 use crate::{Error, Result};
 
+pub fn load_keypair_to_str(path: PathBuf) -> Result<String> {
+    if Path::new(&path).exists() {
+        let key = fs::read(&path)?;
+        let str_buff = str::from_utf8(&key)?;
+        Ok(str_buff.to_string())
+    } else {
+        println!("Could not parse keypair path");
+        Err(Error::KeypairPathNotFound)
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Config<T> {
     config: PhantomData<T>,
