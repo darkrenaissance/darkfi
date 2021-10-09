@@ -299,15 +299,18 @@ impl Client {
                 let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
                 secret_keys.append(&mut withdraw_keys);
 
-                state
-                    .apply(update?, secret_keys.clone(), notify.clone())
-                    .await?;
+                let state_apply = state
+                    .apply(update?, secret_keys.clone(), Some(notify.clone()))
+                    .await;
+
+                if let Err(e) = state_apply {
+                    warn!("apply state: {}", e.to_string());
+                    continue;
+                }
             }
         });
 
         task.detach();
-
-        debug!(target: "CLIENT", "End subscriber for cashier");
 
         Ok(())
     }
@@ -316,8 +319,6 @@ impl Client {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
         let gateway_slabs_sub: GatewaySlabsSubscriber = self.gateway.start_subscriber().await?;
-
-        let (notify, _) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
         let secret_key = self.main_keypair.private;
         let state = self.state.clone();
@@ -348,9 +349,14 @@ impl Client {
 
                 let secret_keys: Vec<jubjub::Fr> = vec![secret_key];
 
-                state
-                    .apply(update?, secret_keys.clone(), notify.clone())
-                    .await?;
+                let state_apply = state
+                    .apply(update?, secret_keys.clone(), None)
+                    .await;
+
+                if let Err(e) = state_apply {
+                    warn!("apply state: {}", e.to_string());
+                    continue;
+                }
             }
         });
 
@@ -442,7 +448,7 @@ impl State {
         &mut self,
         update: StateUpdate,
         secret_keys: Vec<jubjub::Fr>,
-        notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
+        notify: Option<async_channel::Sender<(jubjub::SubgroupPoint, u64)>>,
     ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update
 
@@ -501,7 +507,9 @@ impl State {
 
                     debug!(target: "CLIENT STATE", "Send a notification");
 
-                    notify.send((pub_key, note.value)).await?;
+                    if let Some(ch) = notify.clone() {
+                        ch.send((pub_key, note.value)).await?
+                    }
                 }
             }
         }
