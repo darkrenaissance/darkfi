@@ -181,9 +181,11 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
                 for (tkn, value) in reply.as_object().unwrap() {
                     table.add_row(row![tkn, value]);
                 }
+                table.printstd();
+            } else {
+                println!("Balances: {}", "0".to_string());
             }
 
-            table.printstd();
             return Ok(());
         }
     }
