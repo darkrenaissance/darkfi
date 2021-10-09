@@ -224,10 +224,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn confirm_spend_coin(
-        &self,
-        coin_id: &u64,
-    ) -> Result<()> {
+    pub fn confirm_spend_coin(&self, coin_id: &u64) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
 
         // open connection
@@ -253,9 +250,12 @@ impl WalletDb {
 
         let is_spent = self.get_value_serialized(&false)?;
 
-        let mut witnesses = conn.prepare("SELECT coin_id, witness FROM coins WHERE is_spent = :is_spent;")?;
+        let mut witnesses =
+            conn.prepare("SELECT coin_id, witness FROM coins WHERE is_spent = :is_spent;")?;
 
-        let rows = witnesses.query_map(&[(":is_spent", &is_spent)], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let rows = witnesses.query_map(&[(":is_spent", &is_spent)], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
 
         let mut witnesses = Vec::new();
         for i in rows {
@@ -329,21 +329,24 @@ impl WalletDb {
 
         let is_spent = self.get_value_serialized(&false)?;
 
-        let mut stmt = conn
-            .prepare("SELECT coin_id, value, asset_id FROM coins  WHERE is_spent = :is_spent ;")?;
+        let mut stmt =
+            conn.prepare("SELECT value, asset_id FROM coins  WHERE is_spent = :is_spent ;")?;
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok((row.get(0)?, row.get(1)?))
         })?;
 
         let mut balances = HashMap::new();
 
         for row in rows {
             let row = row?;
-            let _coin_id: u64 = row.0;
-            let value: u64 = row.1;
-            let token_id: Vec<u8> = row.2;
+            let value: u64 = row.0;
+            let token_id: Vec<u8> = row.1;
 
-            balances.insert(token_id, value);
+            if let Some(val) = balances.get_mut(&token_id) {
+                *val += value;
+            } else {
+                balances.insert(token_id, value);
+            }
         }
         Ok(balances)
     }
@@ -519,7 +522,7 @@ mod tests {
 
         let asset_id = serialize(&asset_id);
 
-        assert_eq!(balances[&asset_id], 110);
+        assert_eq!(balances[&asset_id], 440);
 
         std::fs::remove_file(walletdb_path)?;
 
@@ -594,7 +597,6 @@ mod tests {
         assert_eq!(own_coin.1.secret, secret);
         assert_eq!(own_coin.1.witness.root(), witness.root());
         assert_eq!(own_coin.1.witness.path(), witness.path());
-        
 
         wallet.confirm_spend_coin(&own_coin.0)?;
 
