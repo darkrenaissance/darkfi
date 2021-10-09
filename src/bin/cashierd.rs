@@ -485,15 +485,12 @@ impl Cashierd {
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(
-                            PathBuf::from(network.keypair.clone()),
+                            PathBuf::from(expand_path(&network.keypair.clone())?),
                         )?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
                             .map_err(|e| SolFailed::ParseError(e.to_string()))?;
                     }
-
-
-                    println!("main_keypair {:?}", main_keypair.to_bytes());
 
                     let sol_client =
                         SolClient::new(serialize(&main_keypair), &network.blockchain).await?;
