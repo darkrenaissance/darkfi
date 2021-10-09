@@ -77,6 +77,7 @@ pub enum Error {
 
     /// Util
     ConfigNotFound,
+    KeypairPathNotFound,
     SetLoggerError,
     AsyncChannelSenderError,
     AsyncChannelReceiverError,
@@ -141,6 +142,7 @@ impl fmt::Display for Error {
             Error::ConfigNotFound => {
                 f.write_str("No config file detected. Please create a config file")
             }
+            Error::KeypairPathNotFound => f.write_str("No keypair file detected."),
             Error::SetLoggerError => f.write_str("SetLoggerError"),
             Error::TokenParseError => f.write_str("Could not parse token parameter"),
             Error::TungsteniteError => f.write_str("TungsteniteError"),
