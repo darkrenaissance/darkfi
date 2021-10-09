@@ -89,6 +89,8 @@ pub struct FeatureNetwork {
     pub name: String,
     /// Blockchain (mainnet/testnet/etc.)
     pub blockchain: String,
+    /// Keypair
+    pub keypair: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
