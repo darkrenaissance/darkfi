@@ -463,7 +463,7 @@ impl Cashierd {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
-                    use drk::service::SolClient;
+                    use drk::service::{sol::SolFailed, SolClient};
                     use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
                     let bridge2 = self.bridge.clone();
@@ -472,16 +472,28 @@ impl Cashierd {
 
                     let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Solana)?;
 
-                    if main_keypairs.is_empty() {
-                        main_keypair = Keypair::new();
-                        self.cashier_wallet.put_main_keys(
-                            &serialize(&main_keypair),
-                            &serialize(&main_keypair.pubkey()),
-                            &NetworkName::Solana,
-                        )?;
+                    if network.keypair.is_empty() {
+                        if main_keypairs.is_empty() {
+                            main_keypair = Keypair::new();
+                            self.cashier_wallet.put_main_keys(
+                                &serialize(&main_keypair),
+                                &serialize(&main_keypair.pubkey()),
+                                &NetworkName::Solana,
+                            )?;
+                        } else {
+                            main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                        }
                     } else {
-                        main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(
+                            PathBuf::from(network.keypair.clone()),
+                        )?;
+                        let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
+                        main_keypair = Keypair::from_bytes(&keypair_bytes)
+                            .map_err(|e| SolFailed::ParseError(e.to_string()))?;
                     }
+
+
+                    println!("main_keypair {:?}", main_keypair.to_bytes());
 
                     let sol_client =
                         SolClient::new(serialize(&main_keypair), &network.blockchain).await?;
