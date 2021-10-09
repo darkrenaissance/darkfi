@@ -32,11 +32,18 @@ fn handle_bridge_error(error_code: u32) -> Result<()> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Network {
+    pub name: NetworkName,
+    pub blockchain: String,
+    pub keypair: String,
+}
+
 struct Cashierd {
     config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
-    features: HashMap<NetworkName, String>,
+    networks: Vec<Network>,
 }
 
 #[async_trait]
@@ -71,10 +78,14 @@ impl Cashierd {
             config.cashier_wallet_password.clone(),
         )?;
 
-        let mut features = HashMap::new();
+        let mut networks = Vec::new();
 
         for network in config.clone().networks {
-            features.insert(NetworkName::from_str(&network.name)?, network.blockchain);
+            networks.push(Network {
+                name: NetworkName::from_str(&network.name)?,
+                blockchain: network.blockchain,
+                keypair: network.keypair,
+            });
         }
 
         let bridge = bridge::Bridge::new();
@@ -83,19 +94,20 @@ impl Cashierd {
             config: config.clone(),
             bridge,
             cashier_wallet,
-            features,
+            networks,
         })
     }
 
     async fn resume_watch_deposit_keys(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
-        features: HashMap<NetworkName, String>,
+        networks: Vec<Network>,
     ) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
 
-        for (network, _) in features.iter() {
-            let keypairs_to_watch = cashier_wallet.get_deposit_token_keys_by_network(&network)?;
+        for network in networks.iter() {
+            let keypairs_to_watch =
+                cashier_wallet.get_deposit_token_keys_by_network(&network.name)?;
 
             for (drk_pub_key, private_key, public_key, _token_id, mint_address) in keypairs_to_watch
             {
@@ -106,7 +118,7 @@ impl Cashierd {
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
-                        network: network.clone(),
+                        network: network.name.clone(),
                         payload: bridge::BridgeRequestsPayload::Watch(Some((
                             private_key,
                             public_key,
@@ -206,7 +218,12 @@ impl Cashierd {
         let drk_pub_key = drk_pub_key.as_str().unwrap();
 
         // Check if the features list contains this network
-        if !self.features.contains_key(&network.clone()) {
+        if self
+            .networks
+            .iter()
+            .find(|net| net.name == network)
+            .is_none()
+        {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -342,7 +359,12 @@ impl Cashierd {
         let _amount = amount.as_u64().unwrap();
 
         // Check if the features list contains this network
-        if !self.features.contains_key(&network.clone()) {
+        if self
+            .networks
+            .iter()
+            .find(|net| net.name == network)
+            .is_none()
+        {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -398,9 +420,9 @@ impl Cashierd {
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(
             json!(self
-                .features
+                .networks
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.to_owned()))
+                .map(|net| (net.name.to_string(), net.blockchain.to_owned()))
                 .collect::<HashMap<String, String>>()),
             id,
         ))
@@ -436,8 +458,8 @@ impl Cashierd {
     )> {
         self.cashier_wallet.init_db().await?;
 
-        for (feature_name, _chain) in self.features.iter() {
-            match feature_name {
+        for network in self.networks.iter() {
+            match network.name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Add sol network");
@@ -458,10 +480,11 @@ impl Cashierd {
                             &NetworkName::Solana,
                         )?;
                     } else {
-                        main_keypair = deserialize(&main_keypairs[0].0)?;
+                        main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
                     }
 
-                    let sol_client = SolClient::new(serialize(&main_keypair), &_chain).await?;
+                    let sol_client =
+                        SolClient::new(serialize(&main_keypair), &network.blockchain).await?;
 
                     bridge2.add_clients(NetworkName::Solana, sol_client).await?;
                 }
@@ -485,10 +508,11 @@ impl Cashierd {
                             &NetworkName::Bitcoin,
                         )?;
                     } else {
-                        main_keypair = deserialize(&main_keypairs[0].0)?;
+                        main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
                     }
 
-                    let btc_client = BtcClient::new(serialize(&main_keypair), &_chain).await?;
+                    let btc_client =
+                        BtcClient::new(serialize(&main_keypair), &network.blockchain).await?;
 
                     bridge2
                         .add_clients(NetworkName::Bitcoin, btc_client)
@@ -501,7 +525,7 @@ impl Cashierd {
         let resume_watch_deposit_keys_task = smol::spawn(Self::resume_watch_deposit_keys(
             self.bridge.clone(),
             self.cashier_wallet.clone(),
-            self.features.clone(),
+            self.networks.clone(),
         ));
 
         client.start().await?;
@@ -526,10 +550,9 @@ impl Cashierd {
         });
 
         let bridge2 = self.bridge.clone();
-        let listen_for_notification_from_bridge_task: smol::Task<Result<()>> = smol::spawn(
-            async move {
-                while let Some(token_notification) = bridge2.clone().listen().await
-                {
+        let listen_for_notification_from_bridge_task: smol::Task<Result<()>> =
+            smol::spawn(async move {
+                while let Some(token_notification) = bridge2.clone().listen().await {
                     debug!(target: "CASHIER DAEMON", "Notification from birdge");
 
                     let token_notification = token_notification?;
@@ -544,8 +567,7 @@ impl Cashierd {
                         .await?;
                 }
                 Ok(())
-            },
-        );
+            });
 
         Ok((
             resume_watch_deposit_keys_task,
