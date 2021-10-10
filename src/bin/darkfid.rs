@@ -137,10 +137,10 @@ impl Darkfid {
     // --> {"method": "get_balances", "params": []}
     // <-- {"result": "get_balances": "[token: btc, value: 0]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
-        let result: Result<HashMap<String, String>> = async {
+        let result: Result<HashMap<String, Vec<String>>> = async {
             let balances = self.client.lock().await.get_balances().await?;
-            let mut symbols = Vec::new();
-            let mut amounts = Vec::new();
+            let mut symbols: Vec<String> = Vec::new();
+            let mut data: Vec<Vec<String>> = Vec::new();
 
             for id in balances.keys() {
                 let id: jubjub::Fr = deserialize(&id)?;
@@ -152,22 +152,25 @@ impl Darkfid {
                 //          network = solana
 
                 let network = "solana";
+                let mut data_vec: Vec<String> = Vec::new();
 
                 if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
                     let decimals = decimals(network, &symbol, &self.sol_tokenlist)?;
                     for amount in balances.values() {
-                        let amount = encode_base10(*amount, decimals);
-                        amounts.push(amount);
+                        let amount = encode_base10(amount.clone(), decimals);
+                        data_vec.push(amount);
                     }
+                    data_vec.push(network.to_string());
+                    data.push(data_vec);
                     symbols.push(symbol);
                 }
             }
 
-            let new_balances: HashMap<String, String> = symbols
+            let new_balances: HashMap<String, Vec<String>> = symbols
                 .into_iter()
-                .zip(amounts.into_iter())
+                .zip(data.into_iter())
                 .map(|(key, value)| return (key.clone(), value.clone()))
-                .collect();
+                .collect::<HashMap<String, Vec<String>>>();
 
             Ok(new_balances)
         }
