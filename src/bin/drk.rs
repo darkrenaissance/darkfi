@@ -179,7 +179,11 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
             if reply.as_object().is_some() {
                 for (tkn, data) in reply.as_object().unwrap() {
-                    table.add_row(row![tkn, data[0], data[1]]);
+                    table.add_row(row![
+                        tkn,
+                        data[0].as_str().unwrap(),
+                        data[1].as_str().unwrap()
+                    ]);
                 }
                 table.printstd();
             } else {
