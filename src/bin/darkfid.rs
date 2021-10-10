@@ -9,8 +9,8 @@ use drk::{
     },
     serial::{deserialize, serialize},
     util::{
-        assign_id, decimals, decode_base10, expand_path, join_config_path, DrkTokenList,
-        NetworkName, SolTokenList,
+        assign_id, decimals, decode_base10, encode_base10, expand_path, join_config_path,
+        DrkTokenList, NetworkName, SolTokenList,
     },
     wallet::WalletDb,
     Error, Result,
@@ -137,23 +137,33 @@ impl Darkfid {
     // --> {"method": "get_balances", "params": []}
     // <-- {"result": "get_balances": "[token: btc, value: 0]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
-        let result: Result<HashMap<String, u64>> = async {
+        let result: Result<HashMap<String, String>> = async {
             let balances = self.client.lock().await.get_balances().await?;
             let mut symbols = Vec::new();
             let mut amounts = Vec::new();
 
             for id in balances.keys() {
                 let id: jubjub::Fr = deserialize(&id)?;
-                if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
-                    symbols.push(symbol);
-                }
 
-                for amount in balances.values() {
-                    amounts.push(amount);
+                // this is hardcoded for SOL
+                // TODO: if id == btc_id:
+                //          network = bitcoin
+                //      else
+                //          network = solana
+
+                let network = "solana";
+
+                if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
+                    let decimals = decimals(network, &symbol, &self.sol_tokenlist)?;
+                    for amount in balances.values() {
+                        let amount = encode_base10(*amount, decimals);
+                        amounts.push(amount);
+                    }
+                    symbols.push(symbol);
                 }
             }
 
-            let new_balances: HashMap<String, u64> = symbols
+            let new_balances: HashMap<String, String> = symbols
                 .into_iter()
                 .zip(amounts.into_iter())
                 .map(|(key, value)| return (key.clone(), value.clone()))

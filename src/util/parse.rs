@@ -80,11 +80,6 @@ pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Resul
     }
 }
 
-//pub fn to_apo(amount: f64, decimals: u32) -> Result<u64> {
-//    let apo = amount as u64 * u64::pow(10, decimals as u32);
-//    Ok(apo)
-//}
-
 pub fn symbol_to_id(token: &str, tokenlist: &SolTokenList) -> Result<String> {
     let vec: Vec<char> = token.chars().collect();
     let mut counter = 0;
