@@ -19,6 +19,20 @@ The cashier daemon must have enough testnet coins to cover fees.
 Testnet SOL can be acquired by calling `solana airdrop` on devnet.
 Testnet BTC can be acquired from a faucet.
 
+The darkfid daemon must be manually configured with the cashier
+public key. To get the cashier public key, run:
+
+```
+$ ./target/release/cashierd -a
+```
+
+To update darkfid, run:
+
+```
+$ ./target/release/darkfid cashier --set [PUBLIC KEY]
+```
+
+
 ## Usage
 
 For demo purposes we have to run three daemons. It is best practice to
