@@ -34,7 +34,6 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
                     counter += 1;
                     continue;
                 }
-                debug!(target: "CASHIER", "DESERIALIZATION SUCCESSFUL");
                 return Ok(token_id.unwrap());
             }
         }
