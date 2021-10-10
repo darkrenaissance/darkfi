@@ -9,12 +9,10 @@
 
 - [ ] change assetID and asset to tokenID and token across project
 - [ ] change amount type to u64 across project
-- [ ] prettytable: encode amounts as floats
 - [ ] finish btc bridge and enable btc across project
 - [ ] add cashier public key to darkfid.toml, remove from sql schema and make user-facing errors
 - [ ] readme: cashier public key user flow
 - [ ] drk: change 'server replies' to something more legible
-- [ ] drk: print new balance after deposit
 
 ## deposit
 
