@@ -1,13 +1,14 @@
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
+use crate::util::{generate_id, NetworkName};
 use async_trait::async_trait;
 use bitcoin::blockdata::script::Script;
-use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
+use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash};
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
-use electrum_client::{Client as ElectrumClient, ElectrumApi};
+use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use std::convert::From;
 
@@ -75,14 +76,14 @@ impl Default for Keypair {
 }
 
 pub struct BtcKeys {
-    _keypair: Arc<Keypair>,
+    keypair: Arc<Keypair>,
     btc_privkey: BtcPrivKey,
     pub btc_pubkey: BtcPubKey,
     pub network: Network,
 }
 
 impl BtcKeys {
-    pub fn new(keypair: Keypair, network: Network) -> Self {
+    pub fn new(keypair: &Keypair, network: Network) -> Self {
 
         let (secret_key, public_key) = keypair.as_tuple();
 
@@ -90,7 +91,7 @@ impl BtcKeys {
         let btc_pubkey = BtcPubKey::new(public_key);
 
         Self {
-            _keypair: Arc::new(keypair),
+            keypair: Arc::new(*keypair),
             btc_privkey,
             btc_pubkey,
             network,
@@ -99,7 +100,7 @@ impl BtcKeys {
     pub fn priv_from_secret(keypair: &Keypair, network: Network) -> BtcPrivKey {
         BtcPrivKey::new(keypair.secret(), network)
     }
-    pub fn btcpub_from_pubkey(keypair: &Keypair) -> BtcPubKey {
+    pub fn btcpub_from_keypair(keypair: &Keypair) -> BtcPubKey {
         BtcPubKey::new(keypair.public)
     }
     pub fn btc_privkey(&self) -> &BtcPrivKey {
@@ -120,13 +121,13 @@ impl BtcKeys {
 }
 
 pub struct BtcClient {
-    _main_keypair: Keypair,
+    main_keypair: Keypair,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
     client: Arc<ElectrumClient>,
-    _network: Network,
+    network: Network,
 
 }
 
@@ -146,17 +147,18 @@ impl BtcClient {
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
         Ok(Arc::new(Self {
-            _main_keypair: main_keypair,
+            main_keypair,
             notify_channel,
             client: Arc::new(electrum_client),
-            _network: network,
+            network,
         }))
     }
 
-    async fn _handle_subscribe_request(
+    async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: BtcKeys,
-    ) -> BtcResult<(Txid, u64)> {
+        drk_pub_key: jubjub::SubgroupPoint,
+    ) -> BtcResult<()> {
         debug!(
             target: "BTC BRIDGE",
             "Handle subscribe request"
@@ -165,43 +167,60 @@ impl BtcClient {
 
         // p2pkh script
         let script = BtcKeys::derive_script(keypair.btc_pubkey_hash());
+        //Subscribe to script, returns Error::AlreadySubscribed otherwise
+        let status = client.script_subscribe(&script)?;
 
-        if let Some(status_start) = client.script_subscribe(&script)? {
-            loop {
-                match client.script_pop(&script)? {
-                    Some(status) => {
-                        // Script has a notification update
-                        if status != status_start {
-                            let balance = client.script_get_balance(&script)?;
-                            if balance.confirmed > 0 {
-                                debug!(target: "BTC CLIENT", "BTC Balance: Confirmed!");
-                                let history = client.script_get_history(&script)?;
-                                //return tx_hash of latest tx that created balance
-                                return Ok((history[0].tx_hash, balance.confirmed));
-                            } else {
-                                debug!(target: "BTC CLIENT", "BTC Balance: Unconfirmed!");
-                                continue;
-                            }
-                        } else {
-                            debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
-                            continue;
-                        }
-                    }
-                    None => {
-                        debug!(target: "BTC CLIENT", "Scriptpubkey does not yet exist in script notifications!");
-                        continue;
-                    }
-                };
-            } // Endloop
-        } else {
-            return Err(BtcFailed::ElectrumError(
-                "Did not subscribe to scriptpubkey".to_string(),
+        //Fetch any current balance
+        let prev_balance = client.script_get_balance(&script)?;
+
+        let cur_balance: GetBalanceRes;
+
+        loop {
+            let current_status = client.script_pop(&script)?;
+            if current_status != status {
+                debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
+                continue
+            }
+            match current_status {
+                // Script has a notification update
+                Some(_status_update) => {
+                    cur_balance = client.script_get_balance(&script)?;
+                    break;
+                }
+                // No items in the queue
+                None => {
+                    debug!(target: "BTC CLIENT",
+                           "Scriptpubkey does not yet exist in script notifications!");
+                    continue;
+                }
+            }
+        }
+
+        let send_notification = self.notify_channel.0.clone();
+
+        if cur_balance.confirmed < prev_balance.confirmed {
+            return Err(BtcFailed::Notification(
+                "New balance is less than previous balance".into(),
             ));
         }
 
-        //let keypair = serialize(&keypair);
+        let amnt = cur_balance.confirmed - prev_balance.confirmed;
+        let ui_amnt = amnt;
 
-        //Ok(())
+        send_notification
+            .send(TokenNotification {
+                network: NetworkName::Bitcoin,
+                // is btc an acceptable token name?
+                token_id: generate_id("btc", &NetworkName::Bitcoin)?,
+                drk_pub_key,
+                received_balance: amnt,
+            })
+            .await
+            .map_err(Error::from)?;
+
+        debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
+
+        Ok(())
     }
 }
 
@@ -209,21 +228,19 @@ impl BtcClient {
 impl NetworkClient for BtcClient {
     async fn subscribe(
         self: Arc<Self>,
-        _drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: jubjub::SubgroupPoint,
         _mint: Option<String>,
     ) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
         let keypair = Keypair::new();
-
+        let btc_keys = BtcKeys::new(&keypair, self.network);
         let secret_key = serialize(&keypair);
-        let public_key = BtcKeys::btcpub_from_pubkey(&keypair).to_string();
+        let public_key = BtcKeys::btcpub_from_keypair(&keypair).to_string();
 
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        //let (_txid, _balance) = btc_keys.start_subscribe().await?;
-
-        //smol::spawn(self.handle_subscribe_request(btc_keys)).detach();
+        smol::spawn(self.handle_subscribe_request(btc_keys, drk_pub_key)).detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -344,6 +361,7 @@ pub enum BtcFailed {
     BtcError(String),
     DecodeAndEncodeError(String),
     KeypairError(String),
+    Notification(String),
 }
 
 impl std::error::Error for BtcFailed {}
@@ -363,6 +381,9 @@ impl std::fmt::Display for BtcFailed {
             }
             BtcFailed::KeypairError(ref err) => {
                 write!(f, "Keypair error from Secp256k1: {}", err)
+            }
+            BtcFailed::Notification(i) => {
+                write!(f, "Received Notification Error: {}", i)
             }
             BtcFailed::BtcError(i) => {
                 write!(f, "BtcFailed: {}", i)
