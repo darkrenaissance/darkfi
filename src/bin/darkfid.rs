@@ -346,11 +346,11 @@ impl Darkfid {
 
         let network = network.as_str().unwrap();
 
-        if amount.as_f64().is_none() {
-            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+        if amount.as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
         }
 
-        let amount = amount.as_f64().unwrap();
+        let amount = amount.as_str().unwrap();
 
         let decimals = match decimals(network, token, &self.sol_tokenlist) {
             Ok(d) => d,
@@ -359,7 +359,7 @@ impl Darkfid {
             }
         };
 
-        let amount_in_apo = match decode_base10(&amount.to_string(), decimals, true) {
+        let amount_in_apo = match decode_base10(&amount, decimals, true) {
             Ok(a) => a,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -452,7 +452,7 @@ impl Darkfid {
 
         let token = &args[0].as_str();
         let address = &args[1].as_str();
-        let amount = &args[2].as_f64();
+        let amount = &args[2].as_str();
 
         if token.is_none() {
             return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
@@ -485,7 +485,7 @@ impl Darkfid {
             let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
 
             let decimals: usize = 8;
-            let amount = decode_base10(&amount.to_string(), decimals, true)?;
+            let amount = decode_base10(&amount, decimals, true)?;
 
             self.client
                 .lock()

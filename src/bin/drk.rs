@@ -129,7 +129,7 @@ impl Drk {
         network: &str,
         asset: &str,
         address: &str,
-        amount: f64,
+        amount: &str,
     ) -> Result<Value> {
         let req = jsonrpc::request(json!("withdraw"), json!([network, asset, address, amount]));
         Ok(self.request(req).await?)
@@ -138,7 +138,7 @@ impl Drk {
     // --> {"jsonrpc": "2.0", "method": "transfer",
     //      "params": ["dusdc", "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", 13.37], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
-    async fn transfer(&self, asset: &str, address: &str, amount: f64) -> Result<Value> {
+    async fn transfer(&self, asset: &str, address: &str, amount: &str) -> Result<Value> {
         let req = jsonrpc::request(json!("transfer"), json!([asset, address, amount]));
         Ok(self.request(req).await?)
     }
@@ -236,7 +236,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let network = matches.value_of("network").unwrap().to_lowercase();
         let token_sym = matches.value_of("TOKENSYM").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
-        let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
+        let amount = matches.value_of("AMOUNT").unwrap();
 
         client
             .check_network(&NetworkName::from_str(&network)?)
@@ -254,7 +254,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     if let Some(matches) = options.subcommand_matches("transfer") {
         let token_sym = matches.value_of("TOKENSYM").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
-        let amount = matches.value_of("AMOUNT").unwrap().parse::<f64>()?;
+        let amount = matches.value_of("AMOUNT").unwrap();
 
         let reply = client.transfer(&token_sym, &address, amount).await?;
 
