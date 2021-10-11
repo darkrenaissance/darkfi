@@ -9,8 +9,8 @@ readme = "README.md"
 license = "AGPL-3.0-only"
 edition = "2018"
 
-[profile.release]
-debug = 1
+#[profile.release]
+#debug = 1
 
 [lib]
 name = "drk"
