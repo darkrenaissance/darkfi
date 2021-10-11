@@ -156,19 +156,27 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     if let Some(matches) = options.subcommand_matches("wallet") {
         if matches.is_present("create") {
             let reply = client.create_wallet().await?;
-            println!("Server replied: {}", &reply.to_string());
+            if reply.as_bool().unwrap() == true {
+                println!("Wallet created successfully.")
+            } else {
+                println!("Server replied: {}", &reply.to_string());
+            }
             return Ok(());
         }
 
         if matches.is_present("keygen") {
             let reply = client.key_gen().await?;
-            println!("Server replied: {}", &reply.to_string());
+            if reply.as_bool().unwrap() == true {
+                println!("Key generation successful.")
+            } else {
+                println!("Server replied: {}", &reply.to_string());
+            }
             return Ok(());
         }
 
         if matches.is_present("address") {
             let reply = client.get_key().await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("Wallet address: {}", &reply.to_string());
             return Ok(());
         }
 
@@ -204,13 +212,13 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         let reply = client.get_token_id(&network, &token).await?;
 
-        println!("Server replied: {}", &reply.to_string());
+        println!("Token ID: {}", &reply.to_string());
         return Ok(());
     }
 
     if options.is_present("features") {
         let reply = client.features().await?;
-        println!("Server replied: {}", &reply.to_string());
+        println!("Features: {}", &reply.to_string());
         return Ok(());
     }
 
