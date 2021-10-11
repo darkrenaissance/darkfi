@@ -11,7 +11,10 @@ use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use std::convert::From;
-
+use serde_json::{json, Value};
+use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
+use tungstenite::Message;
+use futures::{SinkExt, StreamExt};
 use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{rand::rngs::OsRng, Secp256k1};
@@ -111,6 +114,10 @@ impl BtcKeys {
     }
     pub fn btc_pubkey_hash(&self) -> BtcPubKeyHash {
         self.btc_pubkey.pubkey_hash()
+    }
+    pub fn derive_btc_pubkey_hash(pubkey: &PublicKey) -> BtcPubKeyHash {
+        let btc_pubkey = BtcPubKey::new(*pubkey);
+        btc_pubkey.pubkey_hash()
     }
     pub fn derive_btc_address(btc_pubkey: BtcPubKey, network: Network) -> Address {
         Address::p2pkh(&btc_pubkey, network)
@@ -219,9 +226,35 @@ impl BtcClient {
             .map_err(Error::from)?;
 
         debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
+        //let _ = self.send_btc_to_main_wallet(amnt, &keypair)?;
+        Ok(())
+    }
+
+    async fn unsubscribe(
+        self: Arc<Self>,
+        write: &mut futures::stream::SplitSink<WsStream, tungstenite::Message>,
+        pubkey: &PublicKey,
+        sub_id: &i64,
+    ) -> Result<()> {
+        {
+            let client = &self.client;
+
+            let pubkey_hash = BtcKeys::derive_btc_pubkey_hash(pubkey);
+
+            let script = BtcKeys::derive_script(pubkey_hash);
+
+            client.script_unsubscribe(&script);
+        }
+
+        let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
+
+        write
+            .send(Message::text(serde_json::to_string(&unsubscription)?))
+            .await?;
 
         Ok(())
     }
+
 }
 
 #[async_trait]
