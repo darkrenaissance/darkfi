@@ -83,7 +83,7 @@ impl SolClient {
         }))
     }
 
-   async fn handle_subscribe_request(
+    async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
         drk_pub_key: jubjub::SubgroupPoint,
@@ -157,14 +157,11 @@ impl SolClient {
             let message = read.next().await.ok_or(Error::TungsteniteError)?;
             let message = message?;
 
-            match message.clone() {
-                Message::Pong(_) => {
-                    async_std::task::sleep(Duration::from_secs(1)).await;
-                    write.send(Message::Ping(ping_payload.clone())).await?;
-                    continue;
-                }
-                _ => {}
-            }
+            if let Message::Pong(_) = message.clone() {
+                async_std::task::sleep(Duration::from_secs(1)).await;
+                write.send(Message::Ping(ping_payload.clone())).await?;
+                continue;
+            };
 
             match serde_json::from_slice(&message.into_data())? {
                 JsonResult::Resp(r) => {

@@ -125,7 +125,7 @@ impl Client {
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
         if amount == 0 {
-            return Err(ClientFailed::InvalidAmount(amount as u64).into());
+            return Err(ClientFailed::InvalidAmount(amount as u64));
         }
 
         let token_id_exists = self.state.lock().await.wallet.token_id_exists(&token_id)?;
@@ -349,9 +349,7 @@ impl Client {
 
                 let secret_keys: Vec<jubjub::Fr> = vec![secret_key];
 
-                let state_apply = state
-                    .apply(update?, secret_keys.clone(), None)
-                    .await;
+                let state_apply = state.apply(update?, secret_keys.clone(), None).await;
 
                 if let Err(e) = state_apply {
                     warn!("apply state: {}", e.to_string());

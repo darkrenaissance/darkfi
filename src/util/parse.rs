@@ -1,4 +1,3 @@
-use log::debug;
 use sha2::{Digest, Sha256};
 use std::iter::FromIterator;
 use std::str::FromStr;
@@ -43,7 +42,7 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
 }
 
 pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Result<String> {
-    let token = token.to_lowercase().clone();
+    let token = token.to_lowercase();
     let _token = token.as_str();
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
@@ -68,9 +67,9 @@ pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Resul
         NetworkName::Solana => {
             let decimals = _tokenlist.search_decimal(_token)?;
             if let Some(decimals) = decimals {
-                return Ok(decimals);
+                Ok(decimals)
             } else {
-                return Err(Error::NotSupportedToken);
+                Err(Error::NotSupportedToken)
             }
         }
         #[cfg(feature = "btc")]
@@ -89,9 +88,9 @@ pub fn symbol_to_id(token: &str, tokenlist: &SolTokenList) -> Result<String> {
     }
     if counter == token.len() {
         if let Some(id) = tokenlist.search_id(token)? {
-            return Ok(id);
+            Ok(id)
         } else {
-            return Err(Error::TokenParseError);
+            Err(Error::TokenParseError)
         }
     } else {
         Ok(token.to_string())

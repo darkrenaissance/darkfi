@@ -29,7 +29,7 @@ impl SolTokenList {
             let symbol = item["symbol"].as_str().unwrap();
             symbols.push(symbol.to_string());
         }
-        return Ok(symbols);
+        Ok(symbols)
     }
 
     pub fn search_id(&self, symbol: &str) -> Result<Option<String>> {
@@ -63,7 +63,7 @@ pub struct DrkTokenList {
 
 impl DrkTokenList {
     pub fn new(sol_list: SolTokenList) -> Result<Self> {
-        let sol_symbols = sol_list.clone().get_symbols()?;
+        let sol_symbols = sol_list.get_symbols()?;
 
         let tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
