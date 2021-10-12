@@ -303,24 +303,24 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn get_cashier_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
-        debug!(target: "WALLETDB", "Returning Cashier Public key...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+    //pub fn get_cashier_public_keys(&self) -> Result<Vec<jubjub::SubgroupPoint>> {
+    //    debug!(target: "WALLETDB", "Returning Cashier Public key...");
+    //    let conn = Connection::open(&self.path)?;
+    //    conn.pragma_update(None, "key", &self.password)?;
 
-        let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
+    //    let mut stmt = conn.prepare("SELECT key_public FROM cashier")?;
 
-        let key_iter = stmt.query_map([], |row| row.get(0))?;
+    //    let key_iter = stmt.query_map([], |row| row.get(0))?;
 
-        let mut pub_keys = Vec::new();
+    //    let mut pub_keys = Vec::new();
 
-        for key in key_iter {
-            let public: jubjub::SubgroupPoint = self.get_value_deserialized(&key?)?;
-            pub_keys.push(public);
-        }
+    //    for key in key_iter {
+    //        let public: jubjub::SubgroupPoint = self.get_value_deserialized(&key?)?;
+    //        pub_keys.push(public);
+    //    }
 
-        Ok(pub_keys)
-    }
+    //    Ok(pub_keys)
+    //}
 
     pub fn get_balances(&self) -> Result<HashMap<Vec<u8>, u64>> {
         debug!(target: "WALLETDB", "Get token and balances...");
