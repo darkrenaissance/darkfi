@@ -18,7 +18,7 @@ pub struct PartialTransactionClearInput {
     pub value: u64,
     pub token_id: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
-    pub asset_commit_blind: jubjub::Fr,
+    pub token_commit_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,
 }
 
@@ -53,7 +53,7 @@ impl Encodable for PartialTransactionClearInput {
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
-        len += self.asset_commit_blind.encode(&mut s)?;
+        len += self.token_commit_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         Ok(len)
     }
@@ -64,7 +64,7 @@ impl Decodable for PartialTransactionClearInput {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
             valcom_blind: Decodable::decode(&mut d)?,
-            asset_commit_blind: Decodable::decode(&mut d)?,
+            token_commit_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
         })
     }

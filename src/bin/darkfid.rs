@@ -248,7 +248,7 @@ impl Darkfid {
 
     // --> {"method": "deposit", "params": [network, token, publickey]}
     // The publickey sent here is used so the cashier can know where to send
-    // assets once the deposit is received.
+    // tokens once the deposit is received.
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn deposit(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
@@ -290,7 +290,7 @@ impl Darkfid {
         let pubkey = bs58::encode(serialize(&pk)).into_string();
 
         // Send request to cashier. If the cashier supports the requested network
-        // (and token), it shall return a valid address where assets can be deposited.
+        // (and token), it shall return a valid address where tokens can be deposited.
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
         let rep: JsonResult;
@@ -313,7 +313,7 @@ impl Darkfid {
     // The publickey sent here is the address where the caller wants to receive
     // the tokens they plan to withdraw.
     // On request, send request to cashier to get deposit address, and then transfer
-    // dark assets to the cashier's wallet. Following that, the cashier should return
+    // dark tokens to the cashier's wallet. Following that, the cashier should return
     // a transaction ID of them sending the funds that are requested for withdrawal.
     // <-- {"result": "txID"}
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {

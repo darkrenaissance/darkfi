@@ -116,8 +116,8 @@ impl Drk {
 
     // --> {"jsonrpc": "2.0", "method": "deposit", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 42}
-    async fn deposit(&self, network: &str, asset: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("deposit"), json!([network, asset]));
+    async fn deposit(&self, network: &str, token: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("deposit"), json!([network, token]));
         Ok(self.request(req).await?)
     }
 
@@ -127,19 +127,19 @@ impl Drk {
     async fn withdraw(
         &self,
         network: &str,
-        asset: &str,
+        token: &str,
         address: &str,
         amount: &str,
     ) -> Result<Value> {
-        let req = jsonrpc::request(json!("withdraw"), json!([network, asset, address, amount]));
+        let req = jsonrpc::request(json!("withdraw"), json!([network, token, address, amount]));
         Ok(self.request(req).await?)
     }
 
     // --> {"jsonrpc": "2.0", "method": "transfer",
     //      "params": ["dusdc", "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", 13.37], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
-    async fn transfer(&self, asset: &str, address: &str, amount: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("transfer"), json!([asset, address, amount]));
+    async fn transfer(&self, token: &str, address: &str, amount: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("transfer"), json!([token, address, amount]));
         Ok(self.request(req).await?)
     }
 }
@@ -301,20 +301,20 @@ async fn main() -> Result<()> {
      (about: "Show what features the cashier supports")
     )
     (@subcommand deposit =>
-     (about: "Deposit clear assets for Dark assets")
+     (about: "Deposit clear tokens for Dark tokens")
      (@arg network: +required +takes_value --network
       "Which network to use (bitcoin/solana/...)")
      (@arg TOKENSYM: +required
       "Which token symbol to deposit (btc/sol/usdc...)")
     )
     (@subcommand transfer =>
-     (about: "Transfer Dark assets to address")
+     (about: "Transfer Dark tokens to address")
      (@arg TOKENSYM: +required "Desired token (btc/sol/usdc...)")
      (@arg ADDRESS: +required "Recipient address")
      (@arg AMOUNT: +required "Amount to send")
     )
     (@subcommand withdraw =>
-     (about: "Withdraw Dark assets for clear assets")
+     (about: "Withdraw Dark tokens for clear tokens")
      (@arg network: +required +takes_value --network
       "Which network to use (bitcoin/solana/...)")
      (@arg TOKENSYM: +required "Which token to receive (btc/sol/usdc...)")

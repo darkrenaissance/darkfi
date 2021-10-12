@@ -62,7 +62,7 @@ impl fmt::Display for VerifyFailed {
                 f.write_str("Money in does not match money out (value commits)")
             }
             VerifyFailed::AssetMismatch => {
-                f.write_str("Assets don't match some inputs or outputs (asset commits)")
+                f.write_str("Assets don't match some inputs or outputs (token commits)")
             }
         }
     }
@@ -79,7 +79,6 @@ pub fn state_transition<S: ProgramState>(
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
-
 
         if !state.is_valid_cashier_public_key(&input.signature_public) {
             log::error!(target: "STATE TRANSITION", "Not valid cashier public key");

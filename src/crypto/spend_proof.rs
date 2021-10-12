@@ -16,7 +16,7 @@ use crate::serial::{Decodable, Encodable};
 
 pub struct SpendRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
-    pub asset_commit: jubjub::SubgroupPoint,
+    pub token_commit: jubjub::SubgroupPoint,
     pub nullifier: Nullifier,
     // This should not be here, we just have it for debugging
     //coin: [u8; 32],
@@ -30,7 +30,7 @@ impl SpendRevealedValues {
         value: u64,
         token_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
-        randomness_asset: &jubjub::Fr,
+        randomness_token: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         secret: &jubjub::Fr,
@@ -42,10 +42,10 @@ impl SpendRevealedValues {
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_value);
 
-        let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
+        let token_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * token_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_asset);
+                * randomness_token);
 
         let mut nullifier = [0; 32];
         nullifier.copy_from_slice(
@@ -99,7 +99,7 @@ impl SpendRevealedValues {
 
         SpendRevealedValues {
             value_commit,
-            asset_commit,
+            token_commit,
             nullifier,
             merkle_root,
             signature_public,
@@ -122,7 +122,7 @@ impl SpendRevealedValues {
 
         // CA
         {
-            let result = jubjub::ExtendedPoint::from(self.asset_commit);
+            let result = jubjub::ExtendedPoint::from(self.token_commit);
             let affine = result.to_affine();
             //let (u, v) = (affine.get_u(), affine.get_v());
             let u = affine.get_u();
@@ -178,7 +178,7 @@ impl Encodable for SpendRevealedValues {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value_commit.encode(&mut s)?;
-        len += self.asset_commit.encode(&mut s)?;
+        len += self.token_commit.encode(&mut s)?;
         len += self.nullifier.encode(&mut s)?;
         len += self.merkle_root.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
@@ -190,7 +190,7 @@ impl Decodable for SpendRevealedValues {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value_commit: Decodable::decode(&mut d)?,
-            asset_commit: Decodable::decode(&mut d)?,
+            token_commit: Decodable::decode(&mut d)?,
             nullifier: Decodable::decode(&mut d)?,
             merkle_root: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(d)?,
@@ -206,7 +206,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
             value: None,
             token_id: None,
             randomness_value: None,
-            randomness_asset: None,
+            randomness_token: None,
             serial: None,
             randomness_coin: None,
             secret: None,
@@ -228,7 +228,7 @@ pub fn create_spend_proof(
     value: u64,
     token_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
-    randomness_asset: jubjub::Fr,
+    randomness_token: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     secret: jubjub::Fr,
@@ -246,7 +246,7 @@ pub fn create_spend_proof(
         value: Some(value),
         token_id: Some(token_id),
         randomness_value: Some(randomness_value),
-        randomness_asset: Some(randomness_asset),
+        randomness_token: Some(randomness_token),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
         secret: Some(secret),
@@ -265,7 +265,7 @@ pub fn create_spend_proof(
         value,
         token_id,
         &randomness_value,
-        &randomness_asset,
+        &randomness_token,
         &serial,
         &randomness_coin,
         &secret,

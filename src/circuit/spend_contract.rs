@@ -19,7 +19,7 @@ pub struct SpendContract {
     pub value: Option<u64>,
     pub token_id: Option<jubjub::Fr>,
     pub randomness_value: Option<jubjub::Fr>,
-    pub randomness_asset: Option<jubjub::Fr>,
+    pub randomness_token: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
     pub randomness_coin: Option<jubjub::Fr>,
     pub secret: Option<jubjub::Fr>,
@@ -50,10 +50,10 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             self.randomness_value,
         )?;
 
-        // Line 41: fr_as_binary_le randomness_asset param:randomness_asset
-        let randomness_asset = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 41: fr_as_binary_le randomness_asset param:randomness_asset"),
-            self.randomness_asset,
+        // Line 41: fr_as_binary_le randomness_token param:randomness_token
+        let randomness_token = boolean::field_into_boolean_vec_le(
+            cs.namespace(|| "Line 41: fr_as_binary_le randomness_token param:randomness_token"),
+            self.randomness_token,
         )?;
 
         // Line 46: ec_mul_const vcv value G_VCV
@@ -83,11 +83,11 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             &token_id,
         )?;
 
-        // Line 47: ec_mul_const rca randomness_asset G_VCR
+        // Line 47: ec_mul_const rca randomness_token G_VCR
         let rca = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 47: ec_mul_const rca randomness_asset G_VCR"),
+            cs.namespace(|| "Line 47: ec_mul_const rca randomness_token G_VCR"),
             &zcash_proofs::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR,
-            &randomness_asset,
+            &randomness_token,
         )?;
 
         // Line 48: ec_add ca vca rca

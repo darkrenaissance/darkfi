@@ -11,7 +11,7 @@ contract mint_contract
     param value U64
     param token_id Fr
     param randomness_value Fr
-    param randomness_asset Fr
+    param randomness_token Fr
 
     param serial Fr
     param randomness_coin Fr
@@ -21,7 +21,7 @@ start
     u64_as_binary_le value param:value
     fr_as_binary_le token_id param:token_id
     fr_as_binary_le randomness_value param:randomness_value
-    fr_as_binary_le randomness_asset param:randomness_asset
+    fr_as_binary_le randomness_token param:randomness_token
     fr_as_binary_le serial param:serial
     fr_as_binary_le randomness_coin param:randomness_coin
 
@@ -41,7 +41,7 @@ start
     # A = a * G_VCV + r_a * G_VCR
 
     ec_mul_const vca token_id G_VCV
-    ec_mul_const rca randomness_asset G_VCR
+    ec_mul_const rca randomness_token G_VCR
     ec_add ca vca rca
     # emit ca
     emit_ec ca

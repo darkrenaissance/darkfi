@@ -13,7 +13,7 @@ use crate::serial::{Decodable, Encodable};
 
 pub struct MintRevealedValues {
     pub value_commit: jubjub::SubgroupPoint,
-    pub asset_commit: jubjub::SubgroupPoint,
+    pub token_commit: jubjub::SubgroupPoint,
     pub coin: [u8; 32],
 }
 
@@ -22,7 +22,7 @@ impl MintRevealedValues {
         value: u64,
         token_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
-        randomness_asset: &jubjub::Fr,
+        randomness_token: &jubjub::Fr,
         serial: &jubjub::Fr,
         randomness_coin: &jubjub::Fr,
         public: &jubjub::SubgroupPoint,
@@ -32,10 +32,10 @@ impl MintRevealedValues {
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_value);
 
-        let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
+        let token_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
             * token_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_asset);
+                * randomness_token);
 
         let mut coin = [0; 32];
         coin.copy_from_slice(
@@ -54,7 +54,7 @@ impl MintRevealedValues {
 
         MintRevealedValues {
             value_commit,
-            asset_commit,
+            token_commit,
             coin,
         }
     }
@@ -73,7 +73,7 @@ impl MintRevealedValues {
         }
 
         {
-            let result = jubjub::ExtendedPoint::from(self.asset_commit);
+            let result = jubjub::ExtendedPoint::from(self.token_commit);
             let affine = result.to_affine();
             let u = affine.get_u();
             let v = affine.get_v();
@@ -101,7 +101,7 @@ impl Encodable for MintRevealedValues {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.value_commit.encode(&mut s)?;
-        len += self.asset_commit.encode(&mut s)?;
+        len += self.token_commit.encode(&mut s)?;
         len += self.coin.encode(&mut s)?;
         Ok(len)
     }
@@ -111,7 +111,7 @@ impl Decodable for MintRevealedValues {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             value_commit: Decodable::decode(&mut d)?,
-            asset_commit: Decodable::decode(&mut d)?,
+            token_commit: Decodable::decode(&mut d)?,
             coin: Decodable::decode(d)?,
         })
     }
@@ -125,7 +125,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
             value: None,
             token_id: None,
             randomness_value: None,
-            randomness_asset: None,
+            randomness_token: None,
             serial: None,
             randomness_coin: None,
             public: None,
@@ -142,7 +142,7 @@ pub fn create_mint_proof(
     value: u64,
     token_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
-    randomness_asset: jubjub::Fr,
+    randomness_token: jubjub::Fr,
     serial: jubjub::Fr,
     randomness_coin: jubjub::Fr,
     public: jubjub::SubgroupPoint,
@@ -151,7 +151,7 @@ pub fn create_mint_proof(
         value,
         token_id,
         &randomness_value,
-        &randomness_asset,
+        &randomness_token,
         &serial,
         &randomness_coin,
         &public,
@@ -161,7 +161,7 @@ pub fn create_mint_proof(
         value: Some(value),
         token_id: Some(token_id),
         randomness_value: Some(randomness_value),
-        randomness_asset: Some(randomness_asset),
+        randomness_token: Some(randomness_token),
         serial: Some(serial),
         randomness_coin: Some(randomness_coin),
         public: Some(public),

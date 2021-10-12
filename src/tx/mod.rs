@@ -31,7 +31,7 @@ pub struct TransactionClearInput {
     pub value: u64,
     pub token_id: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
-    pub asset_commit_blind: jubjub::Fr,
+    pub token_commit_blind: jubjub::Fr,
     pub signature_public: jubjub::SubgroupPoint,
     pub signature: schnorr::Signature,
 }
@@ -62,23 +62,23 @@ impl Transaction {
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind)
     }
 
-    fn verify_asset_commitments(&self) -> bool {
+    fn verify_token_commitments(&self) -> bool {
         assert_ne!(self.outputs.len(), 0);
-        let asset_commit_value = self.outputs[0].revealed.asset_commit;
+        let token_commit_value = self.outputs[0].revealed.token_commit;
 
         let mut failed = self
             .inputs
             .iter()
-            .any(|input| input.revealed.asset_commit != asset_commit_value);
+            .any(|input| input.revealed.token_commit != token_commit_value);
         failed = failed
             || self
                 .outputs
                 .iter()
-                .any(|output| output.revealed.asset_commit != asset_commit_value);
+                .any(|output| output.revealed.token_commit != token_commit_value);
         failed = failed
             || self.clear_inputs.iter().any(|input| {
-                Self::compute_pedersen_commit(input.token_id, &input.asset_commit_blind)
-                    != asset_commit_value
+                Self::compute_pedersen_commit(input.token_id, &input.token_commit_blind)
+                    != token_commit_value
             });
         !failed
     }
@@ -110,8 +110,8 @@ impl Transaction {
             return Err(state::VerifyFailed::MissingFunds);
         }
 
-        // Verify asset commitments match
-        if !self.verify_asset_commitments() {
+        // Verify token commitments match
+        if !self.verify_token_commitments() {
             return Err(state::VerifyFailed::AssetMismatch);
         }
 
@@ -142,7 +142,7 @@ impl TransactionClearInput {
             value: partial.value,
             token_id: partial.token_id,
             valcom_blind: partial.valcom_blind,
-            asset_commit_blind: partial.asset_commit_blind,
+            token_commit_blind: partial.token_commit_blind,
             signature_public: partial.signature_public,
             signature,
         }
@@ -153,7 +153,7 @@ impl TransactionClearInput {
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
-        len += self.asset_commit_blind.encode(&mut s)?;
+        len += self.token_commit_blind.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
         Ok(len)
     }
@@ -202,7 +202,7 @@ impl Encodable for TransactionClearInput {
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
-        len += self.asset_commit_blind.encode(&mut s)?;
+        len += self.token_commit_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         len += self.signature.encode(s)?;
         Ok(len)
@@ -215,7 +215,7 @@ impl Decodable for TransactionClearInput {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
             valcom_blind: Decodable::decode(&mut d)?,
-            asset_commit_blind: Decodable::decode(&mut d)?,
+            token_commit_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
             signature: Decodable::decode(d)?,
         })
