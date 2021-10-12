@@ -101,7 +101,7 @@ impl Drk {
     }
 
     // --> {"method": "get_balances", "params": []}
-    // <-- {"result": "get_balances": "[token: btc, value: 0]"}
+    // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
     async fn get_balances(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("get_balances"), json!([]));
         Ok(self.request(req).await?)
