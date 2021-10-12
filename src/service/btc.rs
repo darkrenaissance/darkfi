@@ -316,7 +316,7 @@ impl BtcClient {
             lock_time: 0,
             version: 2,
         };
-
+        //TODO: Sign and send transaction
         debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet:", amount,/* signature*/);
         Ok(())
     }
@@ -339,7 +339,15 @@ impl NetworkClient for BtcClient {
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        smol::spawn(self.handle_subscribe_request(btc_keys, drk_pub_key)).detach();
+        smol::spawn( async move {
+            let result = self
+                .handle_subscribe_request(btc_keys, drk_pub_key)
+                .await;
+            if let Err(e) = result {
+                error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
+            }
+        })
+            .detach();
 
         Ok(TokenSubscribtion {
             secret_key,
@@ -349,13 +357,26 @@ impl NetworkClient for BtcClient {
 
     async fn subscribe_with_keypair(
         self: Arc<Self>,
-        _private_key: Vec<u8>,
+        private_key: Vec<u8>,
         _public_key: Vec<u8>,
-        _drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: jubjub::SubgroupPoint,
         _mint: Option<String>,
     ) -> Result<String> {
-        // TODO this not implemented yet
-        Ok(String::new())
+        let keypair: Keypair = deserialize(&private_key)?;
+        let btc_keys = BtcKeys::new(&keypair, self.network);
+        let public_key = keypair.pubkey().to_string();
+
+        smol::spawn(async move {
+            let result = self
+                .handle_subscribe_request(btc_keys, drk_pub_key)
+                .await;
+            if let Err(e) = result {
+                error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
+            }
+        })
+        .detach();
+
+        Ok(public_key)
     }
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
@@ -399,7 +420,7 @@ impl NetworkClient for BtcClient {
             lock_time: 0,
             version: 2,
         };
-
+        //TODO: Sign and send tx
         Ok(())
     }
 }
