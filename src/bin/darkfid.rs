@@ -26,11 +26,19 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+#[derive(Clone, Debug)]
+pub struct Cashiers {
+    pub cashier_name: String,
+    pub cashier_rpc_url: String,
+    pub cashier_public_key: String,
+}
+
 struct Darkfid {
     config: DarkfidConfig,
     client: Arc<Mutex<Client>>,
     sol_tokenlist: SolTokenList,
     drk_tokenlist: DrkTokenList,
+    cashiers: Vec<Cashiers>,
 }
 
 #[async_trait]
@@ -78,6 +86,15 @@ impl Darkfid {
         )
         .await?;
 
+        let mut cashiers = Vec::new();
+
+        for cashier in config.clone().cashiers {
+            cashiers.push(Cashiers {
+                cashier_name: cashier.cashier_name,
+                cashier_rpc_url: cashier.cashier_rpc_url,
+                cashier_public_key: cashier.cashier_public_key,
+            });
+        }
         let client = Arc::new(Mutex::new(client));
 
         let sol_tokenlist = SolTokenList::new()?;
@@ -88,6 +105,7 @@ impl Darkfid {
             client,
             sol_tokenlist,
             drk_tokenlist,
+            cashiers,
         })
     }
 
@@ -232,7 +250,8 @@ impl Darkfid {
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
-        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
+        // TODO which cashier to send the request to?
+        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -294,7 +313,7 @@ impl Darkfid {
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
         let rep: JsonResult;
-        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
+        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 debug!(target: "DARKFID", "REQUEST IS ERR");
@@ -378,7 +397,7 @@ impl Darkfid {
             json!([network, token_id, address, amount_in_apo]),
         );
         let mut rep: JsonResult;
-        match send_request(&self.config.cashier_rpc_url, json!(req)).await {
+        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
@@ -509,11 +528,11 @@ async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
-        (@subcommand cashier =>
-            (about: "Manage cashier public key")
-            (@arg GETCASHIERKEY: --get "Get cashier public key")
-            (@arg SETCASHIERKEY: --set +takes_value "Sets cashier public key")
-        )
+        //(@subcommand cashier =>
+        //    (about: "Manage cashier public key")
+        //    (@arg GETCASHIERKEY: --get "Get cashier public key")
+        //    (@arg SETCASHIERKEY: --set +takes_value "Sets cashier public key")
+        //)
     )
     .get_matches();
 
@@ -538,24 +557,24 @@ async fn main() -> Result<()> {
         config.wallet_password.clone(),
     )?;
 
-    if let Some(matches) = args.subcommand_matches("cashier") {
-        if matches.is_present("GETCASHIERKEY") {
-            let cashier_public = wallet.get_cashier_public_keys()?[0];
-            let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
-            println!("Cashier Public Key: {}", cashier_public);
-            return Ok(());
-        }
+    //if let Some(matches) = args.subcommand_matches("cashier") {
+    //    if matches.is_present("GETCASHIERKEY") {
+    //        let cashier_public = wallet.get_cashier_public_keys()?[0];
+    //        let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
+    //        println!("Cashier Public Key: {}", cashier_public);
+    //        return Ok(());
+    //    }
 
-        if matches.is_present("SETCASHIERKEY") {
-            let cashier_public = matches.value_of("SETCASHIERKEY").unwrap();
+    //    if matches.is_present("SETCASHIERKEY") {
+    //        let cashier_public = matches.value_of("SETCASHIERKEY").unwrap();
 
-            let cashier_public: jubjub::SubgroupPoint =
-                deserialize(&bs58::decode(cashier_public).into_vec()?)?;
-            wallet.put_cashier_pub(&cashier_public)?;
-            println!("Cashier public key set successfully");
-            return Ok(());
-        }
-    }
+    //        let cashier_public: jubjub::SubgroupPoint =
+    //            deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+    //        wallet.put_cashier_pub(&cashier_public)?;
+    //        println!("Cashier public key set successfully");
+    //        return Ok(());
+    //    }
+    //}
 
     let mut darkfid = Darkfid::new(config.clone(), wallet.clone()).await?;
 

@@ -69,8 +69,6 @@ pub struct DarkfidConfig {
     pub tls_identity_path: String,
     /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
-    /// The RPC endpoint for a selected cashier
-    pub cashier_rpc_url: String,
     /// The endpoint to a gatewayd protocol API
     pub gateway_protocol_url: String,
     /// The endpoint to a gatewayd publisher API
