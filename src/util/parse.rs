@@ -61,23 +61,6 @@ pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Resul
     }
 }
 
-pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Result<usize> {
-    match NetworkName::from_str(network)? {
-        #[cfg(feature = "sol")]
-        NetworkName::Solana => {
-            let decimals = _tokenlist.search_decimal(_token)?;
-            if let Some(decimals) = decimals {
-                Ok(decimals)
-            } else {
-                Err(Error::NotSupportedToken)
-            }
-        }
-        #[cfg(feature = "btc")]
-        NetworkName::Bitcoin => Err(Error::NotSupportedToken),
-        _ => Err(Error::NotSupportedNetwork),
-    }
-}
-
 pub fn symbol_to_id(token: &str, tokenlist: &SolTokenList) -> Result<String> {
     let vec: Vec<char> = token.chars().collect();
     let mut counter = 0;
