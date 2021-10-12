@@ -7,7 +7,6 @@
 
 ## v0-release
 
-- [ ] change assetID and asset to tokenID and token across project
 - [ ] finish btc bridge and enable btc across project
 - [ ] add cashier public key to darkfid.toml, remove from sql schema and make user-facing errors
 
