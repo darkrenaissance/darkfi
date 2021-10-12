@@ -61,17 +61,20 @@ pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Resul
     }
 }
 
-pub fn decimals(token: &str, tokenlist: &SolTokenList) -> Result<usize> {
-    match token.to_lowercase().as_str() {
-        "btc" => Err(Error::NotSupportedToken),
-        _ => {
-            let decimals = tokenlist.search_decimal(token)?;
+pub fn decimals(network: &str, _token: &str, _tokenlist: &SolTokenList) -> Result<usize> {
+    match NetworkName::from_str(network)? {
+        #[cfg(feature = "sol")]
+        NetworkName::Solana => {
+            let decimals = _tokenlist.search_decimal(_token)?;
             if let Some(decimals) = decimals {
                 Ok(decimals)
             } else {
                 Err(Error::NotSupportedToken)
             }
         }
+        #[cfg(feature = "btc")]
+        NetworkName::Bitcoin => Err(Error::NotSupportedToken),
+        _ => Err(Error::NotSupportedNetwork),
     }
 }
 
