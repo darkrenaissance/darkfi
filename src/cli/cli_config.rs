@@ -48,6 +48,16 @@ pub struct DrkConfig {
     pub darkfid_rpc_url: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Cashier {
+    /// Cashier name
+    pub cashier_name: String,
+    /// The RPC endpoint for a selected cashier
+    pub cashier_rpc_url: String,
+    /// The selected cashier public key
+    pub cashier_public_key: String,
+}
+
 /// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
@@ -75,6 +85,8 @@ pub struct DarkfidConfig {
     pub wallet_path: String,
     /// The wallet password
     pub wallet_password: String,
+    /// The configured cashiers to use
+    pub cashiers: Vec<Cashier>,
 }
 
 /// The configuration for gatewayd
