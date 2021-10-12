@@ -30,7 +30,7 @@ use std::str::FromStr;
 pub struct Cashiers {
     pub cashier_name: String,
     pub cashier_rpc_url: String,
-    pub cashier_public_key: String,
+    pub cashier_public_key: jubjub::SubgroupPoint,
 }
 
 struct Darkfid {
@@ -70,6 +70,20 @@ impl Darkfid {
     async fn new(config: DarkfidConfig, wallet: Arc<WalletDb>) -> Result<Self> {
         debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
 
+        let mut cashiers = Vec::new();
+        let mut cashier_public_keys = Vec::new();
+
+        for cashier in config.clone().cashiers {
+            let cashier_public: jubjub::SubgroupPoint =
+                deserialize(&bs58::decode(cashier.cashier_public_key).into_vec()?)?;
+            cashiers.push(Cashiers {
+                cashier_name: cashier.cashier_name,
+                cashier_rpc_url: cashier.cashier_rpc_url,
+                cashier_public_key: cashier_public,
+            });
+            cashier_public_keys.push(cashier_public);
+        }
+
         let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
         let client = Client::new(
@@ -83,18 +97,10 @@ impl Darkfid {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             wallet.clone(),
+            cashier_public_keys,
         )
         .await?;
 
-        let mut cashiers = Vec::new();
-
-        for cashier in config.clone().cashiers {
-            cashiers.push(Cashiers {
-                cashier_name: cashier.cashier_name,
-                cashier_rpc_url: cashier.cashier_rpc_url,
-                cashier_public_key: cashier.cashier_public_key,
-            });
-        }
         let client = Arc::new(Mutex::new(client));
 
         let sol_tokenlist = SolTokenList::new()?;

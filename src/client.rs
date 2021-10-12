@@ -46,6 +46,7 @@ pub struct Client {
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
     pub main_keypair: Keypair,
+    pub cashier_public_keys: Vec<jubjub::SubgroupPoint>,
 }
 
 impl Client {
@@ -54,6 +55,7 @@ impl Client {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
         wallet: WalletPtr,
+        cashier_public_keys: Vec<jubjub::SubgroupPoint>,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
@@ -108,6 +110,7 @@ impl Client {
             spend_params,
             gateway,
             main_keypair,
+            cashier_public_keys,
         })
     }
 
@@ -400,18 +403,18 @@ pub struct State {
 }
 
 impl ProgramState for State {
-    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
+    //fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
+    //    debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
 
-        if let Ok(pub_keys) = self.wallet.get_cashier_public_keys() {
-            if pub_keys.is_empty() {
-                error!(target: "State", "No cashier public key");
-                return false;
-            }
-            return pub_keys.contains(public);
-        }
-        false
-    }
+    //    if let Ok(pub_keys) = self.wallet.get_cashier_public_keys() {
+    //        if pub_keys.is_empty() {
+    //            error!(target: "State", "No cashier public key");
+    //            return false;
+    //        }
+    //        return pub_keys.contains(public);
+    //    }
+    //    false
+    //}
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         debug!(target: "CLIENT STATE", "Check if it is valid merkle");
