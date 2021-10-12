@@ -84,7 +84,7 @@ impl DrkTokenList {
         }
     }
 
-    pub fn symbol_from_id(self, id: jubjub::Fr) -> Result<Option<String>> {
+    pub fn symbol_from_id(&self, id: jubjub::Fr) -> Result<Option<String>> {
         Ok(self
             .tokens
             .iter()

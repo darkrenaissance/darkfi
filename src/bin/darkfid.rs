@@ -154,7 +154,7 @@ impl Darkfid {
                 let network = "solana";
                 let mut data_vec: Vec<String> = Vec::new();
 
-                if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
+                if let Some(symbol) = self.drk_tokenlist.symbol_from_id(id)? {
                     let amount = encode_base10(*value, 8);
                     data_vec.push(amount);
                     data_vec.push(network.to_string());
