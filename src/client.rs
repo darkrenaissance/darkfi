@@ -124,10 +124,6 @@ impl Client {
     ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
-        if amount == 0 {
-            return Err(ClientFailed::InvalidAmount(amount as u64));
-        }
-
         let token_id_exists = self.state.lock().await.wallet.token_id_exists(&token_id)?;
 
         if token_id_exists {
@@ -149,6 +145,10 @@ impl Client {
         clear_input: bool,
     ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start send {}", amount);
+
+        if amount == 0 {
+            return Err(ClientFailed::InvalidAmount(amount as u64));
+        }
 
         let slab = self
             .build_slab_from_tx(pub_key, amount, token_id, clear_input)

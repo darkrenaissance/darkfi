@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::iter::FromIterator;
 
 use drk::{
     blockchain::Rocks,
@@ -566,10 +567,16 @@ impl Cashierd {
 
                     let token_notification = token_notification?;
 
+                    // truncate received_balance to 8 digits
+                    let received_balance = token_notification.received_balance;
+                    let mut rv: Vec<char> = received_balance.to_string().chars().collect();
+                    rv.truncate(8);
+                    let received_balance = u64::from_str(&String::from_iter(rv))?;
+
                     client
                         .send(
                             token_notification.drk_pub_key,
-                            token_notification.received_balance,
+                            received_balance,
                             token_notification.token_id,
                             true,
                         )
