@@ -155,7 +155,7 @@ impl Darkfid {
                 let mut data_vec: Vec<String> = Vec::new();
 
                 if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
-                    let decimals = decimals(&symbol, &self.sol_tokenlist)?;
+                    let decimals = decimals(network, &symbol, &self.sol_tokenlist)?;
                     for amount in balances.values() {
                         let amount = encode_base10(amount.clone(), decimals);
                         data_vec.push(amount);
@@ -352,7 +352,7 @@ impl Darkfid {
 
         let amount = amount.as_str().unwrap();
 
-        let decimals = match decimals(token, &self.sol_tokenlist) {
+        let decimals = match decimals(network, token, &self.sol_tokenlist) {
             Ok(d) => d,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -402,10 +402,13 @@ impl Darkfid {
                 let cashier_public: jubjub::SubgroupPoint =
                     deserialize(&bs58::decode(cashier_public).into_vec()?)?;
 
+                let decimals: usize = 8;
+                let amount = decode_base10(&amount.to_string(), decimals, true)?;
+
                 self.client
                     .lock()
                     .await
-                    .transfer(token_id.clone(), cashier_public, amount_in_apo)
+                    .transfer(token_id.clone(), cashier_public, amount)
                     .await?;
 
                 Ok(())
@@ -468,20 +471,6 @@ impl Darkfid {
         }
         let amount = amount.unwrap();
 
-        let decimals = match decimals(token, &self.sol_tokenlist) {
-            Ok(d) => d,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
-            }
-        };
-
-        let amount_in_apo = match decode_base10(&amount, decimals, true) {
-            Ok(a) => a,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
-            }
-        };
-
         let token_id: &jubjub::Fr;
 
         // get the id for the token
@@ -495,10 +484,13 @@ impl Darkfid {
             let drk_address = bs58::decode(&address).into_vec()?;
             let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
 
+            let decimals: usize = 8;
+            let amount = decode_base10(&amount, decimals, true)?;
+
             self.client
                 .lock()
                 .await
-                .transfer(token_id.clone(), drk_address, amount_in_apo)
+                .transfer(token_id.clone(), drk_address, amount)
                 .await?;
 
             Ok(())
