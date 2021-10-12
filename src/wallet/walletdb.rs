@@ -462,13 +462,14 @@ mod tests {
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
 
-        let token_id = wallet.get_token_id()?;
+        let id = wallet.get_token_id()?;
 
-        assert_eq!(token_id.len(), 4);
-        //assert_eq!(token_id[0], token_id);
-        //assert_eq!(token_id[2], token_id);
+        assert_eq!(id.len(), 4);
 
-        //assert!(wallet.token_id_exists(&token_id)?);
+        for i in id {
+            assert_eq!(i, token_id);
+            assert!(wallet.token_id_exists(&i)?);
+        }
 
         std::fs::remove_file(walletdb_path)?;
 
