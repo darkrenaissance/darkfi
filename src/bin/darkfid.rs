@@ -9,8 +9,8 @@ use drk::{
     },
     serial::{deserialize, serialize},
     util::{
-        assign_id, decimals, decode_base10, encode_base10, expand_path, join_config_path,
-        DrkTokenList, NetworkName, SolTokenList,
+        assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
+        NetworkName, SolTokenList,
     },
     wallet::WalletDb,
     Error, Result,
@@ -142,7 +142,7 @@ impl Darkfid {
             let mut symbols: Vec<String> = Vec::new();
             let mut data: Vec<Vec<String>> = Vec::new();
 
-            for id in balances.keys() {
+            for (id, value) in balances.iter() {
                 let id: jubjub::Fr = deserialize(&id)?;
 
                 // this is hardcoded for SOL
@@ -155,11 +155,8 @@ impl Darkfid {
                 let mut data_vec: Vec<String> = Vec::new();
 
                 if let Some(symbol) = self.drk_tokenlist.clone().symbol_from_id(id)? {
-                    let decimals = decimals(network, &symbol, &self.sol_tokenlist)?;
-                    for amount in balances.values() {
-                        let amount = encode_base10(amount.clone(), decimals);
-                        data_vec.push(amount);
-                    }
+                    let amount = encode_base10(*value, 8);
+                    data_vec.push(amount);
                     data_vec.push(network.to_string());
                     data.push(data_vec);
                     symbols.push(symbol);
@@ -352,17 +349,10 @@ impl Darkfid {
 
         let amount = amount.as_str().unwrap();
 
-        let decimals = match decimals(network, token, &self.sol_tokenlist) {
-            Ok(d) => d,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
-            }
-        };
-
-        let amount_in_apo = match decode_base10(&amount, decimals, true) {
+        let amount_in_apo = match decode_base10(&amount, 8, true) {
             Ok(a) => a,
             Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id));
             }
         };
 
@@ -402,13 +392,10 @@ impl Darkfid {
                 let cashier_public: jubjub::SubgroupPoint =
                     deserialize(&bs58::decode(cashier_public).into_vec()?)?;
 
-                let decimals: usize = 8;
-                let amount = decode_base10(&amount.to_string(), decimals, true)?;
-
                 self.client
                     .lock()
                     .await
-                    .transfer(token_id.clone(), cashier_public, amount)
+                    .transfer(token_id.clone(), cashier_public, amount_in_apo)
                     .await?;
 
                 Ok(())
