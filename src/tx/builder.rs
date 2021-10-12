@@ -21,7 +21,7 @@ pub struct TransactionBuilder {
 
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
-    pub asset_id: jubjub::Fr,
+    pub token_id: jubjub::Fr,
     pub signature_secret: jubjub::Fr,
 }
 
@@ -33,7 +33,7 @@ pub struct TransactionBuilderInputInfo {
 
 pub struct TransactionBuilderOutputInfo {
     pub value: u64,
-    pub asset_id: jubjub::Fr,
+    pub token_id: jubjub::Fr,
     pub public: jubjub::SubgroupPoint,
 }
 
@@ -74,7 +74,7 @@ impl TransactionBuilder {
             let valcom_blind: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let clear_input = PartialTransactionClearInput {
                 value: input.value,
-                asset_id: input.asset_id,
+                token_id: input.token_id,
                 valcom_blind,
                 asset_commit_blind,
                 signature_public,
@@ -103,7 +103,7 @@ impl TransactionBuilder {
             let (proof, revealed) = create_spend_proof(
                 &spend_params,
                 input.note.value,
-                input.note.asset_id,
+                input.note.token_id,
                 input.note.valcom_blind,
                 asset_commit_blind,
                 input.note.serial,
@@ -141,7 +141,7 @@ impl TransactionBuilder {
             let (mint_proof, revealed) = create_mint_proof(
                 mint_params,
                 output.value,
-                output.asset_id,
+                output.token_id,
                 valcom_blind,
                 asset_commit_blind,
                 serial,
@@ -154,7 +154,7 @@ impl TransactionBuilder {
             let note = Note {
                 serial,
                 value: output.value,
-                asset_id: output.asset_id,
+                token_id: output.token_id,
                 coin_blind,
                 valcom_blind,
             };

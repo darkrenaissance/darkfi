@@ -157,17 +157,17 @@ async fn main() {
     // Create the deposit for 110 BTC
     // Clear inputs are visible to everyone on the network
 
-    let asset_id = jubjub::Fr::random(&mut OsRng);
+    let token_id = jubjub::Fr::random(&mut OsRng);
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
             value: 110,
-            asset_id: asset_id,
+            token_id: token_id,
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
-            asset_id: asset_id,
+            token_id: token_id,
             public,
         }],
     };
@@ -285,7 +285,7 @@ async fn main() {
         // The only constraint is that sum(value in) == sum(value out)
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
-            asset_id: asset_id,
+            token_id: token_id,
             public: public2,
         }],
     };
@@ -303,9 +303,8 @@ async fn main() {
     }
 }
 
-
+use drk::state::{VerifyFailed, VerifyResult};
 use log::*;
-use drk::state::{VerifyResult, VerifyFailed};
 
 pub fn state_transition<S: ProgramState>(
     state: &S,
@@ -318,7 +317,6 @@ pub fn state_transition<S: ProgramState>(
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
-
 
         if !state.is_valid_cashier_public_key(&input.signature_public) {
             log::error!(target: "STATE TRANSITION", "Not valid cashier public key");

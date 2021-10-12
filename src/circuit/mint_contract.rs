@@ -16,7 +16,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
 
 pub struct MintContract {
     pub value: Option<u64>,
-    pub asset_id: Option<jubjub::Fr>,
+    pub token_id: Option<jubjub::Fr>,
     pub randomness_value: Option<jubjub::Fr>,
     pub randomness_asset: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
@@ -34,10 +34,10 @@ impl Circuit<bls12_381::Scalar> for MintContract {
             self.value,
         )?;
 
-        // Line 21: fr_as_binary_le asset_id param:asset_id
-        let asset_id = boolean::field_into_boolean_vec_le(
-            cs.namespace(|| "Line 21: fr_as_binary_le asset_id param:asset_id"),
-            self.asset_id,
+        // Line 21: fr_as_binary_le token_id param:token_id
+        let token_id = boolean::field_into_boolean_vec_le(
+            cs.namespace(|| "Line 21: fr_as_binary_le token_id param:token_id"),
+            self.token_id,
         )?;
 
         // Line 22: fr_as_binary_le randomness_value param:randomness_value
@@ -93,11 +93,11 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         // Line 37: emit_ec cv
         cv.inputize(cs.namespace(|| "Line 37: emit_ec cv"))?;
 
-        // Line 42: ec_mul_const vca asset_id G_VCV
+        // Line 42: ec_mul_const vca token_id G_VCV
         let vca = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 42: ec_mul_const vca asset_id G_VCV"),
+            cs.namespace(|| "Line 42: ec_mul_const vca token_id G_VCV"),
             &zcash_proofs::constants::VALUE_COMMITMENT_VALUE_GENERATOR,
-            &asset_id,
+            &token_id,
         )?;
 
         // Line 43: ec_mul_const rca randomness_asset G_VCR
@@ -125,8 +125,8 @@ impl Circuit<bls12_381::Scalar> for MintContract {
         // Line 60: binary_extend preimage value
         preimage.extend(value);
 
-        // Line 99: binary_extend preimage asset_id
-        preimage.extend(asset_id);
+        // Line 99: binary_extend preimage token_id
+        preimage.extend(token_id);
 
         // add 4 zero bits
         for _ in 0..4 {

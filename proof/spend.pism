@@ -11,7 +11,7 @@ constant NOTE_COMMIT PedersenPersonalization
 contract spend_contract
     # Value commitment
     param value U64
-    param asset_id Fr
+    param token_id Fr
     param randomness_value Fr
     param randomness_asset Fr
 
@@ -27,7 +27,7 @@ contract spend_contract
 start
     # Witness input values
     u64_as_binary_le value param:value
-    fr_as_binary_le asset_id param:asset_id
+    fr_as_binary_le token_id param:token_id
     fr_as_binary_le randomness_value param:randomness_value
     fr_as_binary_le randomness_asset param:randomness_asset
 
@@ -40,10 +40,10 @@ start
     # emit cv
     emit_ec cv
 
-    # Make asset_id commitment
+    # Make token_id commitment
     # A = a * G_VCV + r * G_VCR
 
-    ec_mul_const vca asset_id G_VCV
+    ec_mul_const vca token_id G_VCV
     ec_mul_const rca randomness_asset G_VCR
     ec_add ca vca rca
     # emit ca
@@ -86,7 +86,7 @@ start
     ec_mul_const public secret G_SPEND
 
     # Make the coin (same as mint contract)
-    # C = Hash(public_key, value, asset_id, serial, randomness_coin)
+    # C = Hash(public_key, value, token_id, serial, randomness_coin)
     fr_as_binary_le randomness_coin param:randomness_coin
 
     # Build the preimage to hash
@@ -105,8 +105,8 @@ start
     # randomness_coin
     {{ binary_put_fr("preimage", "randomness_coin") }}
 
-    # asset_id
-    {{ binary_put_fr("preimage", "asset_id") }}
+    # token_id
+    {{ binary_put_fr("preimage", "token_id") }}
 
     # Public key:       SubgroupPoint   = 256 bits
     # Value:            u64             = 64 bits

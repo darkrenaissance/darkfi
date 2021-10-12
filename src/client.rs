@@ -145,13 +145,13 @@ impl Client {
         &mut self,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         clear_input: bool,
     ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start send {}", amount);
 
         let slab = self
-            .build_slab_from_tx(pub_key, amount, asset_id, clear_input)
+            .build_slab_from_tx(pub_key, amount, token_id, clear_input)
             .await?;
 
         self.gateway.put_slab(slab).await?;
@@ -165,7 +165,7 @@ impl Client {
         &self,
         pub_key: jubjub::SubgroupPoint,
         value: u64,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         clear_input: bool,
     ) -> Result<Slab> {
         debug!(target: "CLIENT", "Start build slab from tx");
@@ -178,17 +178,17 @@ impl Client {
             let signature_secret = self.main_keypair.private;
             let input = tx::TransactionBuilderClearInputInfo {
                 value,
-                asset_id,
+                token_id,
                 signature_secret,
             };
             clear_inputs.push(input);
         } else {
-            inputs = self.build_inputs(value, asset_id, &mut outputs).await?;
+            inputs = self.build_inputs(value, token_id, &mut outputs).await?;
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo {
             value,
-            asset_id,
+            token_id,
             public: pub_key,
         });
 
@@ -214,7 +214,7 @@ impl Client {
     async fn build_inputs(
         &self,
         amount: u64,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
     ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
         debug!(target: "CLIENT", "Start build inputs");
@@ -250,7 +250,7 @@ impl Client {
 
             outputs.push(tx::TransactionBuilderOutputInfo {
                 value: return_value,
-                asset_id,
+                token_id,
                 public: self.main_keypair.public,
             });
         }

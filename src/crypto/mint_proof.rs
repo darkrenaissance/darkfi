@@ -20,7 +20,7 @@ pub struct MintRevealedValues {
 impl MintRevealedValues {
     fn compute(
         value: u64,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
         randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
@@ -33,7 +33,7 @@ impl MintRevealedValues {
                 * randomness_value);
 
         let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * asset_id)
+            * token_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_asset);
 
@@ -45,7 +45,7 @@ impl MintRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
-                .update(&asset_id.to_bytes())
+                .update(&token_id.to_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -123,7 +123,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
     let params = {
         let c = MintContract {
             value: None,
-            asset_id: None,
+            token_id: None,
             randomness_value: None,
             randomness_asset: None,
             serial: None,
@@ -140,7 +140,7 @@ pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
 pub fn create_mint_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
-    asset_id: jubjub::Fr,
+    token_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
     randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,
@@ -149,7 +149,7 @@ pub fn create_mint_proof(
 ) -> (groth16::Proof<Bls12>, MintRevealedValues) {
     let revealed = MintRevealedValues::compute(
         value,
-        asset_id,
+        token_id,
         &randomness_value,
         &randomness_asset,
         &serial,
@@ -159,7 +159,7 @@ pub fn create_mint_proof(
 
     let c = MintContract {
         value: Some(value),
-        asset_id: Some(asset_id),
+        token_id: Some(token_id),
         randomness_value: Some(randomness_value),
         randomness_asset: Some(randomness_asset),
         serial: Some(serial),

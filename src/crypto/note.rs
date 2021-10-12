@@ -9,7 +9,7 @@ use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
 pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
     8 +     // value
-    32 +    // asset_id
+    32 +    // token_id
     32 +    // coin_blind
     32; // valcom_blind
 pub const AEAD_TAG_SIZE: usize = 16;
@@ -19,7 +19,7 @@ pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 pub struct Note {
     pub serial: jubjub::Fr,
     pub value: u64,
-    pub asset_id: jubjub::Fr,
+    pub token_id: jubjub::Fr,
     pub coin_blind: jubjub::Fr,
     pub valcom_blind: jubjub::Fr,
 }
@@ -29,7 +29,7 @@ impl Encodable for Note {
         let mut len = 0;
         len += self.serial.encode(&mut s)?;
         len += self.value.encode(&mut s)?;
-        len += self.asset_id.encode(&mut s)?;
+        len += self.token_id.encode(&mut s)?;
         len += self.coin_blind.encode(&mut s)?;
         len += self.valcom_blind.encode(&mut s)?;
         Ok(len)
@@ -41,7 +41,7 @@ impl Decodable for Note {
         Ok(Self {
             serial: Decodable::decode(&mut d)?,
             value: Decodable::decode(&mut d)?,
-            asset_id: Decodable::decode(&mut d)?,
+            token_id: Decodable::decode(&mut d)?,
             coin_blind: Decodable::decode(&mut d)?,
             valcom_blind: Decodable::decode(d)?,
         })
@@ -127,7 +127,7 @@ fn test_note_encdec() {
     let note = Note {
         serial: jubjub::Fr::random(&mut OsRng),
         value: 110,
-        asset_id: jubjub::Fr::random(&mut OsRng),
+        token_id: jubjub::Fr::random(&mut OsRng),
         coin_blind: jubjub::Fr::random(&mut OsRng),
         valcom_blind: jubjub::Fr::random(&mut OsRng),
     };
@@ -138,5 +138,5 @@ fn test_note_encdec() {
     let encrypted_note = note.encrypt(&public).unwrap();
     let note2 = encrypted_note.decrypt(&secret).unwrap();
     assert_eq!(note.value, note2.value);
-    assert_eq!(note.asset_id, note2.asset_id);
+    assert_eq!(note.token_id, note2.token_id);
 }

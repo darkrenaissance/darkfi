@@ -17,7 +17,7 @@ use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
 pub struct SpendContract {
     pub value: Option<u64>,
-    pub asset_id: Option<jubjub::Fr>,
+    pub token_id: Option<jubjub::Fr>,
     pub randomness_value: Option<jubjub::Fr>,
     pub randomness_asset: Option<jubjub::Fr>,
     pub serial: Option<jubjub::Fr>,
@@ -38,10 +38,10 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
             self.value,
         )?;
 
-        // Line 41: u64_as_binary_le asset_id param:asset_id
-        let asset_id = boolean::field_into_boolean_vec_le(
+        // Line 41: u64_as_binary_le token_id param:token_id
+        let token_id = boolean::field_into_boolean_vec_le(
             cs.namespace(|| "Line 41: u64_as_binary_le value param:value"),
-            self.asset_id,
+            self.token_id,
         )?;
 
         // Line 41: fr_as_binary_le randomness_value param:randomness_value
@@ -76,11 +76,11 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 50: emit_ec cv
         cv.inputize(cs.namespace(|| "Line 50: emit_ec cv"))?;
 
-        // Line 46: ec_mul_const vca asset_id G_VCV
+        // Line 46: ec_mul_const vca token_id G_VCV
         let vca = ecc::fixed_base_multiplication(
-            cs.namespace(|| "Line 46: ec_mul_const vca asset_id G_VCV"),
+            cs.namespace(|| "Line 46: ec_mul_const vca token_id G_VCV"),
             &zcash_proofs::constants::VALUE_COMMITMENT_VALUE_GENERATOR,
-            &asset_id,
+            &token_id,
         )?;
 
         // Line 47: ec_mul_const rca randomness_asset G_VCR
@@ -209,9 +209,8 @@ impl Circuit<bls12_381::Scalar> for SpendContract {
         // Line 120: binary_extend preimage value
         preimage.extend(value);
 
-
-        // Line 109: binary_extend preimage asset_id
-        preimage.extend(asset_id);
+        // Line 109: binary_extend preimage token_id
+        preimage.extend(token_id);
 
         // add 4 zero bits
         for _ in 0..4 {

@@ -100,7 +100,6 @@ async fn main() -> Result<()> {
 
     wallet.put_cashier_pub(&cashier_main_keypair.public)?;
 
-
     // Load trusted setup parameters
     let (_, mint_pvk) = load_params(mint_params_path)?;
     let (_, spend_pvk) = load_params(spend_params_path)?;
@@ -112,7 +111,7 @@ async fn main() -> Result<()> {
     //
     //
     //
-    // user's state 
+    // user's state
     //
     //
     //
@@ -125,7 +124,6 @@ async fn main() -> Result<()> {
         wallet,
     }));
 
-
     //
     //
     //
@@ -137,13 +135,13 @@ async fn main() -> Result<()> {
     let inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
     let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
 
-    let asset_id = jubjub::Fr::random(&mut OsRng);
+    let token_id = jubjub::Fr::random(&mut OsRng);
     let value = 10;
 
     let signature_secret = cashier_main_keypair.private;
     let input = tx::TransactionBuilderClearInputInfo {
         value,
-        asset_id,
+        token_id,
         signature_secret,
     };
 
@@ -151,7 +149,7 @@ async fn main() -> Result<()> {
 
     outputs.push(tx::TransactionBuilderOutputInfo {
         value,
-        asset_id,
+        token_id,
         public: user_main_keypair.public,
     });
 

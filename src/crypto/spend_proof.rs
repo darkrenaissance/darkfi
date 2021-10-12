@@ -28,7 +28,7 @@ impl SpendRevealedValues {
     #[allow(clippy::too_many_arguments)]
     fn compute(
         value: u64,
-        asset_id: jubjub::Fr,
+        token_id: jubjub::Fr,
         randomness_value: &jubjub::Fr,
         randomness_asset: &jubjub::Fr,
         serial: &jubjub::Fr,
@@ -43,7 +43,7 @@ impl SpendRevealedValues {
                 * randomness_value);
 
         let asset_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * asset_id)
+            * token_id)
             + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
                 * randomness_asset);
 
@@ -72,7 +72,7 @@ impl SpendRevealedValues {
                 .to_state()
                 .update(&public.to_bytes())
                 .update(&value.to_le_bytes())
-                .update(&asset_id.to_bytes())
+                .update(&token_id.to_bytes())
                 .update(&serial.to_bytes())
                 .update(&randomness_coin.to_bytes())
                 .finalize()
@@ -204,7 +204,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
     let params = {
         let c = SpendContract {
             value: None,
-            asset_id: None,
+            token_id: None,
             randomness_value: None,
             randomness_asset: None,
             serial: None,
@@ -226,7 +226,7 @@ pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
 pub fn create_spend_proof(
     params: &groth16::Parameters<Bls12>,
     value: u64,
-    asset_id: jubjub::Fr,
+    token_id: jubjub::Fr,
     randomness_value: jubjub::Fr,
     randomness_asset: jubjub::Fr,
     serial: jubjub::Fr,
@@ -244,7 +244,7 @@ pub fn create_spend_proof(
     }
     let c = SpendContract {
         value: Some(value),
-        asset_id: Some(asset_id),
+        token_id: Some(token_id),
         randomness_value: Some(randomness_value),
         randomness_asset: Some(randomness_asset),
         serial: Some(serial),
@@ -263,7 +263,7 @@ pub fn create_spend_proof(
 
     let revealed = SpendRevealedValues::compute(
         value,
-        asset_id,
+        token_id,
         &randomness_value,
         &randomness_asset,
         &serial,

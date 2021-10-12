@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS coins(
     coin_blind BLOB NOT NULL,
     valcom_blind BLOB NOT NULL,
     value INT NOT NULL,
-    asset_id INT NOT NULL,
+    token_id INT NOT NULL,
     witness BLOB NOT NULL,
    	secret BLOB NOT NULL,
 	is_spent BLOB NOT NULL
