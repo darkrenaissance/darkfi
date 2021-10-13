@@ -5,6 +5,7 @@ use drk::{
     crypto::{
         load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
     },
+    serial::deserialize,
     state::state_transition,
     tx,
     util::{expand_path, join_config_path},
@@ -26,6 +27,14 @@ async fn main() -> Result<()> {
 
     let config_cashier: CashierdConfig =
         Config::<CashierdConfig>::load(join_config_path(&PathBuf::from("cashierd.toml"))?)?;
+
+    let mut public_keys = Vec::new();
+
+    for cashier in config.clone().cashiers {
+        let cashier_public: jubjub::SubgroupPoint =
+            deserialize(&bs58::decode(cashier.cashier_public_key).into_vec()?)?;
+        public_keys.push(cashier_public);
+    }
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -122,6 +131,7 @@ async fn main() -> Result<()> {
         mint_pvk,
         spend_pvk,
         wallet,
+        public_keys,
     }));
 
     //

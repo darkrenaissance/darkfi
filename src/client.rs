@@ -402,7 +402,9 @@ pub struct State {
     pub mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // Spend verifying key used by ZK
     pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
+    // Pointer to sql database
     pub wallet: WalletPtr,
+    // List of cashier public keys
     pub public_keys: Vec<jubjub::SubgroupPoint>,
 }
 
