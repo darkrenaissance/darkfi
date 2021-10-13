@@ -513,25 +513,22 @@ async fn main() -> Result<()> {
     let mut cashiers = Vec::new();
     let mut cashier_keys = Vec::new();
 
-    // If is empty, warn!
     for cashier in config.clone().cashiers {
+
         if cashier.public_key.is_empty() {
-            // TODO: this is just a random error, need proper error
-            debug!(target: "DARKFID", "Public key field is empty");
-            return Err(Error::PathNotFound);
+            return Err(Error::CashierKeysNotFound);
         }
-        debug!(target: "DARKFID", "Found public key");
+
         let cashier_public: jubjub::SubgroupPoint =
             deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
-        debug!(target: "DARKFID", "push to Cashier");
+
         cashiers.push(Cashier {
             name: cashier.name,
             rpc_url: cashier.rpc_url,
             public_key: cashier_public,
         });
-        debug!(target: "DARKFID", "push cashier_public to cashier_keys");
+
         cashier_keys.push(cashier_public);
-        debug!(target: "DARKFID", "CASHIER KEYS {:?}", cashier_keys);
     }
 
     let params_paths = (
