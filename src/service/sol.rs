@@ -110,7 +110,9 @@ impl SolClient {
         };
 
         // Check if we're already subscribed
-        if self.subscriptions.lock().await.contains(&pubkey) {}
+        if self.subscriptions.lock().await.contains(&pubkey) {
+            return Ok(());
+        }
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
 
