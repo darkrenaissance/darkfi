@@ -6,7 +6,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -104,6 +104,14 @@ impl SolClient {
         }
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
+
+        let main_sol_balance = rpc
+            .get_balance(&self.main_keypair.pubkey())
+            .map_err(SolFailed::from)?;
+
+        if main_sol_balance == 0 {
+            warn!(target: "SOL BRIDGE", "No enough funds in the main keypair");
+        }
 
         // Fetch the current balance.
         let (prev_balance, decimals) = if mint.is_none() {
