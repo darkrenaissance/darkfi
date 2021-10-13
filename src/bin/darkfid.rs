@@ -27,7 +27,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(Clone, Debug)]
-pub struct Cashiers {
+pub struct Cashier {
     pub name: String,
     pub rpc_url: String,
     pub public_key: jubjub::SubgroupPoint,
@@ -38,7 +38,7 @@ struct Darkfid {
     client: Arc<Mutex<Client>>,
     sol_tokenlist: SolTokenList,
     drk_tokenlist: DrkTokenList,
-    cashiers: Vec<Cashiers>,
+    cashiers: Vec<Cashier>,
 }
 
 #[async_trait]
@@ -70,21 +70,31 @@ impl Darkfid {
     async fn new(config: DarkfidConfig, wallet: Arc<WalletDb>) -> Result<Self> {
         debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
 
+        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
+
         let mut cashiers = Vec::new();
         let mut cashier_keys = Vec::new();
 
+        // If is empty, warn!
         for cashier in config.clone().cashiers {
+            if cashier.public_key.is_empty() {
+                // TODO: this is just a random error, need proper error
+                debug!(target: "DARKFID", "Public key field is empty");
+                return Err(Error::PathNotFound);
+            }
+            debug!(target: "DARKFID", "Found public key");
             let cashier_public: jubjub::SubgroupPoint =
                 deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
-            cashiers.push(Cashiers {
+            debug!(target: "DARKFID", "push to Cashier");
+            cashiers.push(Cashier {
                 name: cashier.name,
                 rpc_url: cashier.rpc_url,
                 public_key: cashier_public,
             });
+            debug!(target: "DARKFID", "push cashier_public to cashier_keys");
             cashier_keys.push(cashier_public);
+            debug!(target: "DARKFID", "CASHIER KEYS {:?}", cashier_keys);
         }
-
-        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
         let client = Client::new(
             rocks,
