@@ -17,10 +17,6 @@ tls_identity_path = "~/.config/darkfi/darkfid_identity.pfx"
 # Password for the created TLS identity. (Unused if serve_tls=false)
 tls_identity_password = "FOOBAR"
 
-# The RPC endpoint for a selected cashier
-cashier_rpc_url = "tcp://127.0.0.1:9000"
-#cashier_rpc_url = "tls://127.0.0.1:9000"
-
 # The endpoint to a gatewayd protocol API
 gateway_protocol_url = "127.0.0.1:3333"
 
@@ -41,3 +37,17 @@ wallet_path = "~/.config/darkfi/darkfid_wallet.db"
 
 # The wallet password
 wallet_password = "TEST_PASSWORD"
+
+# The configured cashiers to use.
+[[cashiers]]
+
+# Cashier name
+name = "cashier.dark.fi"
+
+# The RPC endpoint for a selected cashier
+rpc_url = "tcp://127.0.0.1:9000"
+#cashier_rpc_url = "tls://127.0.0.1:9000"
+
+# The selected cashier public key
+public_key = ""
+

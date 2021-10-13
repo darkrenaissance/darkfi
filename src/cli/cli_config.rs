@@ -48,6 +48,16 @@ pub struct DrkConfig {
     pub darkfid_rpc_url: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Cashier {
+    /// Cashier name
+    pub name: String,
+    /// The RPC endpoint for a selected cashier
+    pub rpc_url: String,
+    /// The selected cashier public key
+    pub public_key: String,
+}
+
 /// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
@@ -59,8 +69,6 @@ pub struct DarkfidConfig {
     pub tls_identity_path: String,
     /// Password for the TLS identity. (Unused if serve_tls=false)
     pub tls_identity_password: String,
-    /// The RPC endpoint for a selected cashier
-    pub cashier_rpc_url: String,
     /// The endpoint to a gatewayd protocol API
     pub gateway_protocol_url: String,
     /// The endpoint to a gatewayd publisher API
@@ -75,6 +83,8 @@ pub struct DarkfidConfig {
     pub wallet_path: String,
     /// The wallet password
     pub wallet_password: String,
+    /// The configured cashiers to use
+    pub cashiers: Vec<Cashier>,
 }
 
 /// The configuration for gatewayd

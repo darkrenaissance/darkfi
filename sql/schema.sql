@@ -16,7 +16,3 @@ CREATE TABLE IF NOT EXISTS coins(
    	secret BLOB NOT NULL,
 	is_spent BLOB NOT NULL
 );
-CREATE TABLE IF NOT EXISTS cashier(
-    key_id INTEGER PRIMARY KEY NOT NULL,
-    key_public BLOB NOT NULL
-);

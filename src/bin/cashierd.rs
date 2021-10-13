@@ -1,4 +1,4 @@
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use ff::Field;
@@ -6,14 +6,17 @@ use log::debug;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::iter::FromIterator;
 
 use drk::{
-    blockchain::Rocks,
+    blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CashierdConfig, Config},
-    client::Client,
+    client::{Client, State},
+    crypto::{
+        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
+    },
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
@@ -452,6 +455,7 @@ impl Cashierd {
     async fn start(
         &mut self,
         mut client: Client,
+        state: Arc<Mutex<State>>,
     ) -> Result<(
         smol::Task<Result<()>>,
         smol::Task<Result<()>>,
@@ -543,7 +547,7 @@ impl Cashierd {
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
         client
-            .connect_to_subscriber_from_cashier(self.cashier_wallet.clone(), notify.clone())
+            .connect_to_subscriber_from_cashier(state, self.cashier_wallet.clone(), notify.clone())
             .await?;
 
         let cashier_wallet = self.cashier_wallet.clone();
@@ -624,25 +628,55 @@ async fn main() -> Result<()> {
 
     let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
 
+    // this is just an empty vector
+    let mut cashier_public_keys: Vec<jubjub::SubgroupPoint> = Vec::new();
+
+    let params_paths = (
+        expand_path(&cashierd.config.mint_params_path.clone())?,
+        expand_path(&cashierd.config.spend_params_path.clone())?,
+    );
+
+    let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
+    let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
+    // Auto create trusted ceremony parameters if they don't exist
+    if !params_paths.0.exists() {
+        let params = setup_mint_prover();
+        save_params(mint_params_path, &params)?;
+    }
+    if !params_paths.1.exists() {
+        let params = setup_spend_prover();
+        save_params(spend_params_path, &params)?;
+    }
+
+    // Load trusted setup parameters
+    let (mint_params, mint_pvk) = load_params(mint_params_path)?;
+    let (spend_params, spend_pvk) = load_params(spend_params_path)?;
+
     let client = Client::new(
-        rocks,
+        rocks.clone(),
         (
             cashierd.config.gateway_protocol_url.parse()?,
             cashierd.config.gateway_publisher_url.parse()?,
         ),
-        (
-            expand_path(&cashierd.config.mint_params_path.clone())?,
-            expand_path(&cashierd.config.spend_params_path.clone())?,
-        ),
         client_wallet.clone(),
+        mint_params,
+        spend_params,
     )
     .await?;
 
-    // must add cashier public key to the client wallet, which in this case it's the same
-    // as main_keypair
-    if client_wallet.get_cashier_public_keys()?.is_empty() {
-        client_wallet.put_cashier_pub(&client.main_keypair.public)?;
-    }
+    let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
+    let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
+
+    cashier_public_keys.push(client.main_keypair.public);
+
+    let state = Arc::new(Mutex::new(State {
+        tree: CommitmentTree::empty(),
+        merkle_roots,
+        nullifiers,
+        mint_pvk,
+        spend_pvk,
+        public_keys: cashier_public_keys,
+    }));
 
     if args.is_present("ADDRESS") {
         let cashier_public = client.main_keypair.public;
@@ -658,7 +692,7 @@ async fn main() -> Result<()> {
         identity_pass: cashierd.config.tls_identity_password.clone(),
     };
 
-    let (t1, t2, t3) = cashierd.start(client).await?;
+    let (t1, t2, t3) = cashierd.start(client, state).await?;
     listen_and_serve(cfg, Arc::new(cashierd)).await?;
 
     t1.cancel().await;
