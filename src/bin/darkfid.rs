@@ -1,7 +1,10 @@
 use drk::{
-    blockchain::Rocks,
+    blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{Config, DarkfidConfig},
-    client::Client,
+    client::{Client, State},
+    crypto::{
+        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
+    },
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
@@ -33,14 +36,6 @@ pub struct Cashier {
     pub public_key: jubjub::SubgroupPoint,
 }
 
-struct Darkfid {
-    config: DarkfidConfig,
-    client: Arc<Mutex<Client>>,
-    sol_tokenlist: SolTokenList,
-    drk_tokenlist: DrkTokenList,
-    cashiers: Vec<Cashier>,
-}
-
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
@@ -66,58 +61,19 @@ impl RequestHandler for Darkfid {
     }
 }
 
+struct Darkfid {
+    client: Arc<Mutex<Client>>,
+    sol_tokenlist: SolTokenList,
+    drk_tokenlist: DrkTokenList,
+    cashiers: Vec<Cashier>,
+}
+
 impl Darkfid {
-    async fn new(config: DarkfidConfig, wallet: Arc<WalletDb>) -> Result<Self> {
-        debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
-
-        let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
-
-        let mut cashiers = Vec::new();
-        let mut cashier_keys = Vec::new();
-
-        // If is empty, warn!
-        for cashier in config.clone().cashiers {
-            if cashier.public_key.is_empty() {
-                // TODO: this is just a random error, need proper error
-                debug!(target: "DARKFID", "Public key field is empty");
-                return Err(Error::PathNotFound);
-            }
-            debug!(target: "DARKFID", "Found public key");
-            let cashier_public: jubjub::SubgroupPoint =
-                deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
-            debug!(target: "DARKFID", "push to Cashier");
-            cashiers.push(Cashier {
-                name: cashier.name,
-                rpc_url: cashier.rpc_url,
-                public_key: cashier_public,
-            });
-            debug!(target: "DARKFID", "push cashier_public to cashier_keys");
-            cashier_keys.push(cashier_public);
-            debug!(target: "DARKFID", "CASHIER KEYS {:?}", cashier_keys);
-        }
-
-        let client = Client::new(
-            rocks,
-            (
-                config.gateway_protocol_url.parse()?,
-                config.gateway_publisher_url.parse()?,
-            ),
-            (
-                expand_path(&config.mint_params_path.clone())?,
-                expand_path(&config.spend_params_path.clone())?,
-            ),
-            wallet.clone(),
-            cashier_keys,
-        )
-        .await?;
-
-        let client = Arc::new(Mutex::new(client));
-
+    async fn new(client: Arc<Mutex<Client>>, cashiers: Vec<Cashier>) -> Result<Self> {
         let sol_tokenlist = SolTokenList::new()?;
         let drk_tokenlist = DrkTokenList::new(sol_tokenlist.clone())?;
 
         Ok(Self {
-            config,
             client,
             sol_tokenlist,
             drk_tokenlist,
@@ -125,9 +81,13 @@ impl Darkfid {
         })
     }
 
-    async fn start(&mut self) -> Result<()> {
+    async fn start(&mut self, state: Arc<Mutex<State>>) -> Result<()> {
         self.client.lock().await.start().await?;
-        self.client.lock().await.connect_to_subscriber().await?;
+        self.client
+            .lock()
+            .await
+            .connect_to_subscriber(state)
+            .await?;
 
         Ok(())
     }
@@ -573,26 +533,80 @@ async fn main() -> Result<()> {
         config.wallet_password.clone(),
     )?;
 
-    //if let Some(matches) = args.subcommand_matches("cashier") {
-    //    if matches.is_present("GETCASHIERKEY") {
-    //        let cashier_public = wallet.get_cashier_public_keys()?[0];
-    //        let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
-    //        println!("Cashier Public Key: {}", cashier_public);
-    //        return Ok(());
-    //    }
+    let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
-    //    if matches.is_present("SETCASHIERKEY") {
-    //        let cashier_public = matches.value_of("SETCASHIERKEY").unwrap();
+    let mut cashiers = Vec::new();
+    let mut cashier_keys = Vec::new();
 
-    //        let cashier_public: jubjub::SubgroupPoint =
-    //            deserialize(&bs58::decode(cashier_public).into_vec()?)?;
-    //        wallet.put_cashier_pub(&cashier_public)?;
-    //        println!("Cashier public key set successfully");
-    //        return Ok(());
-    //    }
-    //}
+    // If is empty, warn!
+    for cashier in config.clone().cashiers {
+        if cashier.public_key.is_empty() {
+            // TODO: this is just a random error, need proper error
+            debug!(target: "DARKFID", "Public key field is empty");
+            return Err(Error::PathNotFound);
+        }
+        debug!(target: "DARKFID", "Found public key");
+        let cashier_public: jubjub::SubgroupPoint =
+            deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
+        debug!(target: "DARKFID", "push to Cashier");
+        cashiers.push(Cashier {
+            name: cashier.name,
+            rpc_url: cashier.rpc_url,
+            public_key: cashier_public,
+        });
+        debug!(target: "DARKFID", "push cashier_public to cashier_keys");
+        cashier_keys.push(cashier_public);
+        debug!(target: "DARKFID", "CASHIER KEYS {:?}", cashier_keys);
+    }
 
-    let mut darkfid = Darkfid::new(config.clone(), wallet.clone()).await?;
+    let params_paths = (
+        expand_path(&config.mint_params_path.clone())?,
+        expand_path(&config.spend_params_path.clone())?,
+    );
+
+    let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
+    let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
+    // Auto create trusted ceremony parameters if they don't exist
+    if !params_paths.0.exists() {
+        let params = setup_mint_prover();
+        save_params(mint_params_path, &params)?;
+    }
+    if !params_paths.1.exists() {
+        let params = setup_spend_prover();
+        save_params(spend_params_path, &params)?;
+    }
+
+    // Load trusted setup parameters
+    let (mint_params, mint_pvk) = load_params(mint_params_path)?;
+    let (spend_params, spend_pvk) = load_params(spend_params_path)?;
+
+    let client = Client::new(
+        rocks.clone(),
+        (
+            config.gateway_protocol_url.parse()?,
+            config.gateway_publisher_url.parse()?,
+        ),
+        wallet.clone(),
+        mint_params,
+        spend_params,
+    )
+    .await?;
+
+    let client = Arc::new(Mutex::new(client));
+
+    let mut darkfid = Darkfid::new(client, cashiers).await?;
+
+    let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
+    let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
+
+    let state = Arc::new(Mutex::new(State {
+        tree: CommitmentTree::empty(),
+        merkle_roots,
+        nullifiers,
+        mint_pvk,
+        spend_pvk,
+        public_keys: cashier_keys,
+    }));
 
     let server_config = RpcServerConfig {
         socket_addr: config.rpc_listen_address.clone(),
@@ -601,6 +615,6 @@ async fn main() -> Result<()> {
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    darkfid.start().await?;
+    darkfid.start(state).await?;
     listen_and_serve(server_config, Arc::new(darkfid)).await
 }
