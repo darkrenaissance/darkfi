@@ -8,7 +8,6 @@
 ## v0-release
 
 - [ ] finish btc bridge and enable btc across project
-- [ ] add cashier public key to darkfid.toml, remove from sql schema and make user-facing errors
 
 ## deposit
 
