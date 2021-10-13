@@ -1,31 +1,29 @@
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
+use crate::rpc::{jsonrpc, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::{Error, Result};
 use crate::util::{generate_id, NetworkName};
+use crate::{Error, Result};
 use async_trait::async_trait;
 use bitcoin::blockdata::{
-    script::Script,
-    transaction::{
-        OutPoint,
-        Transaction,
-        TxIn,
-        TxOut,
-    }
+    script::{Builder, Script},
+    transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
 };
-use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash};
+use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
-use log::*;
-use std::convert::From;
-use serde_json::json;
-use crate::rpc::{jsonrpc, websockets::WsStream};
-use tungstenite::Message;
 use futures::{SinkExt, StreamExt};
-use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
-use secp256k1::key::{PublicKey, SecretKey};
-use secp256k1::{rand::rngs::OsRng, Secp256k1};
+use log::*;
+use secp256k1::{
+    constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
+    key::{PublicKey, SecretKey},
+    {rand::rngs::OsRng, Secp256k1},
+    {All, Message as BtcMessage, /*Secp256k1,*/},
+};
+use serde_json::json;
+use std::convert::From;
+use tungstenite::Message;
 
 use async_std::sync::Arc;
 use std::str::FromStr;
@@ -37,10 +35,11 @@ pub type PrivKey = BtcPrivKey;
 
 const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Keypair {
     secret: SecretKey,
     public: PublicKey,
+    context: Secp256k1<All>,
 }
 impl Keypair {
     pub fn new() -> Self {
@@ -48,7 +47,11 @@ impl Keypair {
         let mut rng = OsRng::new().expect("OsRng");
 
         let (secret, public) = secp.generate_keypair(&mut rng);
-        Self { secret, public }
+        Self {
+            secret,
+            public,
+            context: secp,
+        }
     }
 
     pub fn to_bytes(&self) -> [u8; KEYPAIR_LENGTH] {
@@ -63,11 +66,17 @@ impl Keypair {
         if bytes.len() != KEYPAIR_LENGTH {
             return Err(Error::BtcFailed("Not right size".to_string()));
         }
-        //TODO: Map to errors properly
+        let secp = Secp256k1::new();
+
+        //TODO: Map to errors properly, use context for public gen
         let secret = SecretKey::from_slice(&bytes[..SECRET_KEY_SIZE]).unwrap();
         let public = PublicKey::from_slice(&bytes[SECRET_KEY_SIZE..]).unwrap();
 
-        Ok(Keypair { secret, public })
+        Ok(Keypair {
+            secret,
+            public,
+            context: secp,
+        })
     }
     fn secret(&self) -> SecretKey {
         self.secret
@@ -85,7 +94,7 @@ impl Default for Keypair {
         Self::new()
     }
 }
-
+#[derive(Clone)]
 pub struct BtcKeys {
     keypair: Arc<Keypair>,
     btc_privkey: BtcPrivKey,
@@ -96,18 +105,14 @@ pub struct BtcKeys {
 
 impl BtcKeys {
     pub fn new(keypair: &Keypair, network: Network) -> Self {
-
         let (secret_key, public_key) = keypair.as_tuple();
 
         let btc_privkey = BtcPrivKey::new(secret_key, network);
         let btc_pubkey = BtcPubKey::new(public_key);
-        let script_pubkey = BtcKeys::derive_btc_script_pubkey(
-            public_key,
-            network
-        );
+        let script_pubkey = BtcKeys::derive_btc_script_pubkey(public_key, network);
 
         Self {
-            keypair: Arc::new(*keypair),
+            keypair: Arc::new(keypair.clone()),
             btc_privkey,
             btc_pubkey,
             script_pubkey,
@@ -129,10 +134,7 @@ impl BtcKeys {
     pub fn btc_pubkey_hash(&self) -> BtcPubKeyHash {
         self.btc_pubkey.pubkey_hash()
     }
-    pub fn derive_btc_script_pubkey(
-        pubkey: PublicKey,
-        network: Network
-    ) -> Script {
+    pub fn derive_btc_script_pubkey(pubkey: PublicKey, network: Network) -> Script {
         let btc_pubkey = BtcPubKey::new(pubkey);
         let address = Address::p2pkh(&btc_pubkey, network);
         address.script_pubkey()
@@ -149,14 +151,13 @@ impl BtcKeys {
 }
 
 pub struct BtcClient {
-    main_keypair: Keypair,
+    main_account: BtcKeys,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
     client: Arc<ElectrumClient>,
     network: Network,
-
 }
 
 impl BtcClient {
@@ -171,11 +172,13 @@ impl BtcClient {
             _ => return Err(Error::NotSupportedNetwork),
         };
 
+        let main_account = BtcKeys::new(&main_keypair, network);
+
         let electrum_client = ElectrumClient::new(&url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
         Ok(Arc::new(Self {
-            main_keypair,
+            main_account,
             notify_channel,
             client: Arc::new(electrum_client),
             network,
@@ -193,8 +196,9 @@ impl BtcClient {
         );
         let client = &self.client;
 
+        let keys_clone = btc_keys.clone();
         // p2pkh script
-        let script = btc_keys.script_pubkey;
+        let script = keys_clone.script_pubkey;
 
         //Subscribe to script, returns Error::AlreadySubscribed otherwise
         let status = client.script_subscribe(&script)?;
@@ -208,7 +212,7 @@ impl BtcClient {
             let current_status = client.script_pop(&script)?;
             if current_status != status {
                 debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
-                continue
+                continue;
             }
             match current_status {
                 // Script has a notification update
@@ -248,7 +252,8 @@ impl BtcClient {
             .map_err(Error::from)?;
 
         debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
-        let _ = self.send_btc_to_main_wallet(amnt, script)?;
+        let _ = self.send_btc_to_main_wallet(amnt, btc_keys)?;
+
         Ok(())
     }
 
@@ -261,10 +266,10 @@ impl BtcClient {
         {
             let client = &self.client;
 
-            let script_pubkey =
-                BtcKeys::derive_btc_script_pubkey(*pubkey, self.network);
+            let script_pubkey = BtcKeys::derive_btc_script_pubkey(*pubkey, self.network);
 
-            client.script_unsubscribe(&script_pubkey);
+            let _ = client.script_unsubscribe(&script_pubkey).unwrap();
+
         }
 
         let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
@@ -275,16 +280,12 @@ impl BtcClient {
 
         Ok(())
     }
-    // fn create_transaction(self: Arc<Self>, script: Script) -> Transaction {
 
-    // }
-    fn send_btc_to_main_wallet(
-        self: Arc<Self>,
-        amount: u64,
-        script: Script,
-    ) -> BtcResult<()> {
+    fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: BtcKeys) -> BtcResult<()> {
         debug!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
         let client = &self.client;
+        let keys_clone = btc_keys.clone();
+        let script = keys_clone.script_pubkey;
         let utxo = client.script_list_unspent(&script)?;
 
         let mut inputs = Vec::new();
@@ -302,25 +303,38 @@ impl BtcClient {
             inputs.push(tx_in);
             amounts += tx.value;
         }
-        let main_script_pubkey = BtcKeys::derive_btc_script_pubkey(
-            self.main_keypair.pubkey(),
-            self.network
-        );
+        let main_script_pubkey = self.main_account.script_pubkey.clone();
+
+        //Estimate fee for getting in 2 blocks ahead
+        let estimated_fee = client.estimate_fee(2)?;
+
+        //TODO: Better handling of fees, don't cast to u64
+        let value = amounts - estimated_fee as u64;
 
         let transaction = Transaction {
             input: inputs,
             output: vec![TxOut {
                 script_pubkey: main_script_pubkey,
-                value: amounts,
+                value: value,
             }],
             lock_time: 0,
             version: 2,
         };
-        //TODO: Sign and send transaction
-        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet:", amount,/* signature*/);
+
+        let _signed_tx = sign_transaction(
+            transaction,
+            script,
+            btc_keys.keypair.secret,
+            btc_keys.btc_pubkey,
+            &btc_keys.keypair.context,
+        );
+
+        //TODO: Serialize and send tx
+        //let txid = client.transaction_broadcast_raw(serialize(&signed_tx))?;
+
+        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet:", amount, /*txid*/);
         Ok(())
     }
-
 }
 
 #[async_trait]
@@ -339,19 +353,17 @@ impl NetworkClient for BtcClient {
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        smol::spawn( async move {
-            let result = self
-                .handle_subscribe_request(btc_keys, drk_pub_key)
-                .await;
+        smol::spawn(async move {
+            let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
             if let Err(e) = result {
                 error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
             }
         })
-            .detach();
+        .detach();
 
         Ok(TokenSubscribtion {
             secret_key,
-            public_key
+            public_key,
         })
     }
 
@@ -367,9 +379,7 @@ impl NetworkClient for BtcClient {
         let public_key = keypair.pubkey().to_string();
 
         smol::spawn(async move {
-            let result = self
-                .handle_subscribe_request(btc_keys, drk_pub_key)
-                .await;
+            let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
             if let Err(e) = result {
                 error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
             }
@@ -385,46 +395,84 @@ impl NetworkClient for BtcClient {
         // address is not a btc address, so derive the btc address
         let client = &self.client;
         let public_key = deserialize(&address)?;
+        let script_pubkey = BtcKeys::derive_btc_script_pubkey(public_key, self.network);
 
-        let script_pubkey = BtcKeys::derive_btc_script_pubkey(
-            public_key,
-            self.network
-        );
-
-        let main_script_pubkey = BtcKeys::derive_btc_script_pubkey(
-            self.main_keypair.pubkey(),
-            self.network
-        );
+        let main_script_pubkey = &self.main_account.script_pubkey;
 
         //TODO: Map to errors properly
         let main_utxo = client.script_list_unspent(&main_script_pubkey).unwrap();
 
         let transaction = Transaction {
-            input: vec![
-                TxIn {
-                    previous_output: OutPoint {
+            input: vec![TxIn {
+                previous_output: OutPoint {
                     txid: main_utxo[0].tx_hash,
                     vout: main_utxo[0].tx_pos as u32,
                 },
                 sequence: 0xffffffff,
                 witness: Vec::new(),
                 script_sig: Script::new(),
-                }
-            ],
-            output: vec![
-                TxOut {
-                    script_pubkey: script_pubkey,
-                    value: amount,
-                }
-            ],
+            }],
+            output: vec![TxOut {
+                script_pubkey: script_pubkey.clone(),
+                value: amount,
+            }],
             lock_time: 0,
             version: 2,
         };
-        //TODO: Sign and send tx
+
+        let _signed_tx = sign_transaction(
+            transaction,
+            script_pubkey,
+            self.main_account.keypair.secret,
+            self.main_account.btc_pubkey,
+            &self.main_account.keypair.context,
+        );
+
+        //TODO: Serialize and send tx
+        //let txid = client.transaction_broadcast_raw(serialize(&signed_tx))?;
+
         Ok(())
     }
 }
 
+pub fn sign_transaction(
+    tx: Transaction,
+    script_pubkey: Script,
+    priv_key: SecretKey,
+    pub_key: BtcPubKey,
+    curve: &Secp256k1<All>,
+) -> Transaction {
+    let mut signed_inputs: Vec<TxIn> = Vec::new();
+
+    for (i, unsigned_input) in tx.input.iter().enumerate() {
+        let sighash = tx.signature_hash(i, &script_pubkey, SigHashType::All as u32);
+        //TODO: replace unwrap
+        let msg = BtcMessage::from_slice(&sighash.as_ref()).unwrap();
+
+        let signature = curve.sign(&msg, &priv_key);
+        let byte_signature = &signature.serialize_der();
+        let mut with_hashtype = byte_signature.to_vec();
+        with_hashtype.push(SigHashType::All as u8);
+
+        let redeem_script = Builder::new()
+            .push_slice(with_hashtype.as_slice())
+            .push_key(&pub_key)
+            .into_script();
+        signed_inputs.push(TxIn {
+            previous_output: unsigned_input.previous_output,
+            script_sig: redeem_script,
+            sequence: unsigned_input.sequence,
+            witness: unsigned_input.witness.clone(),
+        });
+    }
+
+    Transaction {
+        version: tx.version,
+        lock_time: tx.lock_time,
+        input: signed_inputs,
+        output: tx.output,
+    }
+}
 impl Encodable for bitcoin::Address {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
         let addr = self.to_string();
