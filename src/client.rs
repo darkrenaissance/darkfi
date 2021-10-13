@@ -46,7 +46,7 @@ pub struct Client {
     spend_params: bellman::groth16::Parameters<Bls12>,
     gateway: GatewayClient,
     pub main_keypair: Keypair,
-    pub cashier_public_keys: Vec<jubjub::SubgroupPoint>,
+    pub cashier_keys: Vec<jubjub::SubgroupPoint>,
 }
 
 impl Client {
@@ -55,7 +55,7 @@ impl Client {
         gateway_addrs: (SocketAddr, SocketAddr),
         params_paths: (PathBuf, PathBuf),
         wallet: WalletPtr,
-        cashier_public_keys: Vec<jubjub::SubgroupPoint>,
+        cashier_keys: Vec<jubjub::SubgroupPoint>,
     ) -> Result<Self> {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
         let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
@@ -64,7 +64,7 @@ impl Client {
         let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
         let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
 
-        let public_keys = cashier_public_keys.clone();
+        let public_keys = cashier_keys.clone();
 
         wallet.init_db().await?;
 
@@ -113,7 +113,7 @@ impl Client {
             spend_params,
             gateway,
             main_keypair,
-            cashier_public_keys,
+            cashier_keys,
         })
     }
 

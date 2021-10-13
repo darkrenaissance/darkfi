@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
 
     for cashier in config.clone().cashiers {
         let cashier_public: jubjub::SubgroupPoint =
-            deserialize(&bs58::decode(cashier.cashier_public_key).into_vec()?)?;
+            deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
         public_keys.push(cashier_public);
     }
 

@@ -42,12 +42,12 @@ wallet_password = "TEST_PASSWORD"
 [[cashiers]]
 
 # Cashier name
-cashier_name = "cashier.dark.fi"
+name = "cashier.dark.fi"
 
 # The RPC endpoint for a selected cashier
-cashier_rpc_url = "tcp://127.0.0.1:9000"
+rpc_url = "tcp://127.0.0.1:9000"
 #cashier_rpc_url = "tls://127.0.0.1:9000"
 
 # The selected cashier public key
-cashier_public_key = ""
+public_key = ""
 

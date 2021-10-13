@@ -51,11 +51,11 @@ pub struct DrkConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Cashier {
     /// Cashier name
-    pub cashier_name: String,
+    pub name: String,
     /// The RPC endpoint for a selected cashier
-    pub cashier_rpc_url: String,
+    pub rpc_url: String,
     /// The selected cashier public key
-    pub cashier_public_key: String,
+    pub public_key: String,
 }
 
 /// The configuration for darkfid

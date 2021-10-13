@@ -28,9 +28,9 @@ use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub struct Cashiers {
-    pub cashier_name: String,
-    pub cashier_rpc_url: String,
-    pub cashier_public_key: jubjub::SubgroupPoint,
+    pub name: String,
+    pub rpc_url: String,
+    pub public_key: jubjub::SubgroupPoint,
 }
 
 struct Darkfid {
@@ -71,17 +71,17 @@ impl Darkfid {
         debug!(target: "DARKFID", "INIT WALLET WITH PATH {}", config.wallet_path);
 
         let mut cashiers = Vec::new();
-        let mut cashier_public_keys = Vec::new();
+        let mut cashier_keys = Vec::new();
 
         for cashier in config.clone().cashiers {
             let cashier_public: jubjub::SubgroupPoint =
-                deserialize(&bs58::decode(cashier.cashier_public_key).into_vec()?)?;
+                deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
             cashiers.push(Cashiers {
-                cashier_name: cashier.cashier_name,
-                cashier_rpc_url: cashier.cashier_rpc_url,
-                cashier_public_key: cashier_public,
+                name: cashier.name,
+                rpc_url: cashier.rpc_url,
+                public_key: cashier_public,
             });
-            cashier_public_keys.push(cashier_public);
+            cashier_keys.push(cashier_public);
         }
 
         let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
@@ -97,7 +97,7 @@ impl Darkfid {
                 expand_path(&config.spend_params_path.clone())?,
             ),
             wallet.clone(),
-            cashier_public_keys,
+            cashier_keys,
         )
         .await?;
 
@@ -256,8 +256,8 @@ impl Darkfid {
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
-        // TODO which cashier to send the request to?
-        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
+        // TODO: this just selects the first cashier in the list
+        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -319,7 +319,7 @@ impl Darkfid {
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
         let rep: JsonResult;
-        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
+        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 debug!(target: "DARKFID", "REQUEST IS ERR");
@@ -403,7 +403,7 @@ impl Darkfid {
             json!([network, token_id, address, amount_in_apo]),
         );
         let mut rep: JsonResult;
-        match send_request(&self.cashiers[0].cashier_rpc_url, json!(req)).await {
+        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
