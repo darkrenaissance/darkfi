@@ -575,7 +575,7 @@ impl Cashierd {
                     // truncate received_balance to 8 digits
                     let received_balance = token_notification.received_balance;
                     let mut rv: Vec<char> = received_balance.to_string().chars().collect();
-                    rv.truncate(8);
+                    rv.truncate(9);
                     let received_balance = u64::from_str(&String::from_iter(rv))?;
 
                     client
