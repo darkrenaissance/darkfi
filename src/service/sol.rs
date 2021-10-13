@@ -23,11 +23,11 @@ use solana_sdk::{
 use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
 use tungstenite::Message;
 
+use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, NetworkName};
 use crate::{Error, Result};
-use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
 
@@ -82,6 +82,18 @@ impl SolClient {
         }))
     }
 
+    fn check_main_account_balance(&self, rpc: &RpcClient) -> SolResult<bool> {
+        let main_sol_balance = rpc
+            .get_balance(&self.main_keypair.pubkey())
+            .map_err(SolFailed::from)?;
+
+        let fees = rpc.get_fees()?;
+        let lamports_per_signature = fees.fee_calculator.lamports_per_signature;
+        let required_funds = lamports_per_signature * 3;
+
+        Ok(main_sol_balance > required_funds)
+    }
+
     async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
@@ -98,18 +110,13 @@ impl SolClient {
         };
 
         // Check if we're already subscribed
-        if self.subscriptions.lock().await.contains(&pubkey) {
-            return Ok(());
-        }
+        if self.subscriptions.lock().await.contains(&pubkey) {}
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
 
-        let main_sol_balance = rpc
-            .get_balance(&self.main_keypair.pubkey())
-            .map_err(SolFailed::from)?;
-
-        if main_sol_balance == 0 {
+        if !self.check_main_account_balance(&rpc)? {
             warn!(target: "SOL BRIDGE", "No enough funds in the main keypair");
+            return Ok(());
         }
 
         // Fetch the current balance.
