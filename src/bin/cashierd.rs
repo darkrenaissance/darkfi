@@ -625,7 +625,7 @@ async fn main() -> Result<()> {
     let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
 
     // this is just an empty vector
-    let cashier_public_key: Vec<jubjub::SubgroupPoint> = Vec::new();
+    let mut cashier_public_key: Vec<jubjub::SubgroupPoint> = Vec::new();
 
     let client = Client::new(
         rocks,
@@ -638,15 +638,16 @@ async fn main() -> Result<()> {
             expand_path(&cashierd.config.spend_params_path.clone())?,
         ),
         client_wallet.clone(),
-        cashier_public_key,
+        cashier_public_key.clone(),
     )
     .await?;
 
     // must add cashier public key to the client wallet, which in this case it's the same
     // as main_keypair
-    //if client_wallet.get_cashier_public_keys()?.is_empty() {
-    //    client_wallet.put_cashier_pub(&client.main_keypair.public)?;
-    //}
+    if cashier_public_key.clone().is_empty() {
+        cashier_public_key.push(client.main_keypair.public);
+        client_wallet.put_cashier_pub(&client.main_keypair.public)?;
+    }
 
     if args.is_present("ADDRESS") {
         let cashier_public = client.main_keypair.public;
