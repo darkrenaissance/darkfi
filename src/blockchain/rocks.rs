@@ -2,10 +2,10 @@ use async_std::sync::Arc;
 use std::marker::PhantomData;
 use std::path::Path;
 
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
+
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::{Error, Result};
-
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 
 pub enum IteratorMode {
     Start,

@@ -1,17 +1,16 @@
+use std::path::PathBuf;
+use std::str::FromStr;
+
 #[macro_use]
 extern crate prettytable;
+use clap::{clap_app, ArgMatches};
+use log::debug;
 use prettytable::Table;
+use serde_json::{json, Value};
 
 use drk::cli::{Config, DrkConfig};
 use drk::util::{join_config_path, NetworkName};
 use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
-
-use clap::{clap_app, ArgMatches};
-use log::debug;
-use serde_json::{json, Value};
-
-use std::path::PathBuf;
-use std::str::FromStr;
 
 struct Drk {
     url: String,

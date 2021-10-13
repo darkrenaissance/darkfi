@@ -1,7 +1,7 @@
+use std::path::PathBuf;
+
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::Result;
-
-use std::path::PathBuf;
 
 pub trait WalletApi {
     fn get_password(&self) -> String;

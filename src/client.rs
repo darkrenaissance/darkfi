@@ -1,10 +1,10 @@
+use std::collections::HashMap;
+use std::net::SocketAddr;
+
 use async_std::sync::{Arc, Mutex};
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::*;
-
-use std::collections::HashMap;
-use std::net::SocketAddr;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},

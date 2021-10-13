@@ -1,6 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
 use bellman::groth16;
 use bls12_381::{Bls12, Scalar};
-use std::collections::{HashMap, HashSet};
 
 pub mod async_serial;
 pub mod blockchain;

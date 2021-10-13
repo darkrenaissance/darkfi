@@ -1,8 +1,9 @@
+use std::str::FromStr;
+
 use crate::{
     serial::{Decodable, Encodable},
     Result,
 };
-use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum NetworkName {

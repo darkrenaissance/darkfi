@@ -1,9 +1,9 @@
+use async_std::sync::{Arc, Mutex};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::Duration;
 
 use async_native_tls::TlsConnector;
-use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
@@ -27,7 +27,6 @@ use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream}
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, NetworkName};
 use crate::{Error, Result};
-
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";

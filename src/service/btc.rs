@@ -1,8 +1,8 @@
-use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::rpc::{jsonrpc, websockets::WsStream};
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::util::{generate_id, NetworkName};
-use crate::{Error, Result};
+use async_std::sync::Arc;
+use serde_json::json;
+use std::convert::From;
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use bitcoin::blockdata::{
     script::{Builder, Script},
@@ -19,14 +19,15 @@ use secp256k1::{
     constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
     key::{PublicKey, SecretKey},
     {rand::rngs::OsRng, Secp256k1},
-    {All, Message as BtcMessage, /*Secp256k1,*/},
+    {All, Message as BtcMessage /*Secp256k1,*/},
 };
-use serde_json::json;
-use std::convert::From;
 use tungstenite::Message;
 
-use async_std::sync::Arc;
-use std::str::FromStr;
+use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
+use crate::rpc::{jsonrpc, websockets::WsStream};
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
+use crate::util::{generate_id, NetworkName};
+use crate::{Error, Result};
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -269,7 +270,6 @@ impl BtcClient {
             let script_pubkey = BtcKeys::derive_btc_script_pubkey(*pubkey, self.network);
 
             let _ = client.script_unsubscribe(&script_pubkey).unwrap();
-
         }
 
         let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));

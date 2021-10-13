@@ -1,10 +1,11 @@
+use std::net::{TcpStream, ToSocketAddrs};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use async_native_tls::{TlsConnector, TlsStream};
 use async_tungstenite::WebSocketStream;
 use futures::sink::Sink;
 use smol::{prelude::*, Async};
-use std::net::{TcpStream, ToSocketAddrs};
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use tungstenite::handshake::client::Response;
 use tungstenite::Message;
 use url::Url;

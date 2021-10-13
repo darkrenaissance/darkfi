@@ -1,8 +1,9 @@
-use bls12_381 as bls;
 use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::{io, mem};
+
+use bls12_381 as bls;
 
 use crate::endian;
 use crate::error::{Error, Result};

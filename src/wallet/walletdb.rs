@@ -1,3 +1,12 @@
+use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use ff::Field;
+use log::*;
+use rand::rngs::OsRng;
+use rusqlite::{named_params, params, Connection};
+
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
@@ -5,15 +14,6 @@ use crate::crypto::{
 };
 use crate::serial;
 use crate::{Error, Result};
-
-use async_std::sync::{Arc, Mutex};
-use ff::Field;
-use log::*;
-use rand::rngs::OsRng;
-use rusqlite::{named_params, params, Connection};
-
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -674,5 +674,4 @@ mod tests {
 
         Ok(())
     }
-
 }

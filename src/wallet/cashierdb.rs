@@ -1,13 +1,13 @@
+use async_std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+
+use log::*;
+use rusqlite::{named_params, params, Connection};
+
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
 use crate::util::NetworkName;
 use crate::{Error, Result};
-
-use async_std::sync::{Arc, Mutex};
-use log::*;
-use rusqlite::{named_params, params, Connection};
-
-use std::path::{Path, PathBuf};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 

@@ -2,11 +2,12 @@ use async_std::sync::Arc;
 use std::convert::From;
 use std::net::SocketAddr;
 
+use async_executor::Executor;
+use log::*;
+
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::blockchain::{rocks::columns, RocksColumn, Slab, SlabStore};
 use crate::{serial::deserialize, serial::serialize, Error, Result};
-use async_executor::Executor;
-use log::*;
 
 pub type GatewaySlabsSubscriber = async_channel::Receiver<Slab>;
 

@@ -1,5 +1,3 @@
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::{
     fs,
     marker::PhantomData,
@@ -7,6 +5,9 @@ use std::{
     path::{Path, PathBuf},
     str,
 };
+
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
 

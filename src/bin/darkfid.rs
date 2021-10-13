@@ -1,3 +1,13 @@
+use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr;
+
+use async_trait::async_trait;
+use clap::clap_app;
+use log::debug;
+use serde_json::{json, Value};
+
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{Config, DarkfidConfig},
@@ -18,16 +28,6 @@ use drk::{
     wallet::WalletDb,
     Error, Result,
 };
-
-use async_trait::async_trait;
-use clap::clap_app;
-use log::debug;
-use serde_json::{json, Value};
-
-use async_std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub struct Cashier {
@@ -509,7 +509,6 @@ async fn main() -> Result<()> {
     let mut cashier_keys = Vec::new();
 
     for cashier in config.clone().cashiers {
-
         if cashier.public_key.is_empty() {
             return Err(Error::CashierKeysNotFound);
         }
@@ -544,7 +543,6 @@ async fn main() -> Result<()> {
     }
     let (mint_params, mint_pvk) = load_params(mint_params_path)?;
     let (spend_params, spend_pvk) = load_params(spend_params_path)?;
-
 
     let client = Client::new(
         rocks.clone(),

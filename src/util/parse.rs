@@ -1,6 +1,7 @@
-use sha2::{Digest, Sha256};
-use std::iter::FromIterator;
 use std::str::FromStr;
+use std::iter::FromIterator;
+
+use sha2::{Digest, Sha256};
 
 use crate::{
     serial::{deserialize, serialize},

@@ -1,14 +1,15 @@
 use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::iter::FromIterator;
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use clap::clap_app;
 use ff::Field;
 use log::debug;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::iter::FromIterator;
-use std::path::PathBuf;
-use std::str::FromStr;
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},

@@ -1,13 +1,13 @@
-use crate::util::NetworkName;
-use crate::{Error, Result};
+use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
 use log::*;
 
-use async_std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use crate::util::NetworkName;
+use crate::{Error, Result};
 
 pub struct BridgeRequests {
     pub network: NetworkName,

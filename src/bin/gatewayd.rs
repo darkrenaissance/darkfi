@@ -1,8 +1,9 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use async_executor::Executor;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},

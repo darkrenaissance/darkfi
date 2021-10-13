@@ -1,7 +1,8 @@
+use std::fmt;
+
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::debug;
-use std::fmt;
 
 use crate::{
     crypto::{coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier},

@@ -3,9 +3,6 @@ use std::convert::TryFrom;
 use std::io;
 use std::net::SocketAddr;
 
-use crate::serial::{deserialize, serialize};
-use crate::{Decodable, Encodable, Result};
-
 use async_executor::Executor;
 use bytes::Bytes;
 use futures::FutureExt;
@@ -13,6 +10,9 @@ use log::*;
 use rand::Rng;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use zeromq::*;
+
+use crate::serial::{deserialize, serialize};
+use crate::{Decodable, Encodable, Result};
 
 pub type PeerId = Vec<u8>;
 
