@@ -26,12 +26,7 @@ public key. To get the cashier public key, run:
 $ ./target/release/cashierd -a
 ```
 
-To update darkfid, run:
-
-```
-$ ./target/release/darkfid cashier --set [PUBLIC KEY]
-```
-
+Then add the cashier public key to `darkfid.toml`
 
 ## Usage
 
