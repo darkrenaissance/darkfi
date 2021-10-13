@@ -7,7 +7,10 @@
 
 ## v0-release
 
-- [ ] finish btc bridge and enable btc across project
+- [ ] serialize signed btc transactions
+- [ ] post btc tx to electrum server
+- [ ] add genesis btc coinbase addr as token id
+- [ ] serialize/encode btc keypairs
 
 ## deposit
 
@@ -23,7 +26,7 @@
 
 ## drk -> drk
 
-- [ ] ... 
+- [ ] ...
 
 # research
 
