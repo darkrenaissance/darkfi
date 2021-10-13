@@ -628,9 +628,6 @@ async fn main() -> Result<()> {
 
     let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
 
-    // this is just an empty vector
-    let mut cashier_public_keys: Vec<jubjub::SubgroupPoint> = Vec::new();
-
     let params_paths = (
         expand_path(&cashierd.config.mint_params_path.clone())?,
         expand_path(&cashierd.config.spend_params_path.clone())?,
@@ -667,7 +664,7 @@ async fn main() -> Result<()> {
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    cashier_public_keys.push(client.main_keypair.public);
+    let cashier_public_keys = vec![client.main_keypair.public];
 
     let state = Arc::new(Mutex::new(State {
         tree: CommitmentTree::empty(),

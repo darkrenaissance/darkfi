@@ -479,11 +479,6 @@ async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
-        //(@subcommand cashier =>
-        //    (about: "Manage cashier public key")
-        //    (@arg GETCASHIERKEY: --get "Get cashier public key")
-        //    (@arg SETCASHIERKEY: --set +takes_value "Sets cashier public key")
-        //)
     )
     .get_matches();
 
@@ -531,11 +526,11 @@ async fn main() -> Result<()> {
         cashier_keys.push(cashier_public);
     }
 
+    // Load trusted setup parameters
     let params_paths = (
         expand_path(&config.mint_params_path.clone())?,
         expand_path(&config.spend_params_path.clone())?,
     );
-
     let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
     let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
     // Auto create trusted ceremony parameters if they don't exist
@@ -547,10 +542,9 @@ async fn main() -> Result<()> {
         let params = setup_spend_prover();
         save_params(spend_params_path, &params)?;
     }
-
-    // Load trusted setup parameters
     let (mint_params, mint_pvk) = load_params(mint_params_path)?;
     let (spend_params, spend_pvk) = load_params(spend_params_path)?;
+
 
     let client = Client::new(
         rocks.clone(),
