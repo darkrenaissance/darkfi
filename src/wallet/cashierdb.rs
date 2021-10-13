@@ -322,7 +322,7 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
 
         let mut stmt = conn.prepare(
-            "SELECT d_pub_key, token_key_private, token_key_public, token_id, mint_address
+            "SELECT d_key_public, token_key_private, token_key_public, token_id, mint_address
             FROM deposit_keypairs
             WHERE network = :network
             AND confirm = :confirm ;",
@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_put_deposit_keys_and_load_them_with_() -> Result<()> {
+    pub fn test_put_deposit_keys_and_load_them() -> Result<()> {
         let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test3.db"))?;
         let password: String = "darkfi".into();
         let wallet = CashierDb::new(&walletdb_path, password.clone())?;
@@ -535,6 +535,13 @@ mod tests {
         assert_eq!(keys[0].0, token_addr_private);
         assert_eq!(keys[0].1, token_addr);
 
+        let resumed_keys = wallet.get_deposit_token_keys_by_network(&network)?;
+
+        assert_eq!(resumed_keys[0].0, public2);
+        assert_eq!(resumed_keys[0].1, token_addr_private);
+        assert_eq!(resumed_keys[0].2, token_addr);
+        assert_eq!(resumed_keys[0].3, token_id);
+        
         wallet.confirm_deposit_key_record(&public2, &network)?;
 
         let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;
