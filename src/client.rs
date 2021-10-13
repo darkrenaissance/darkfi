@@ -64,6 +64,8 @@ impl Client {
         let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
         let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
 
+        let public_keys = cashier_public_keys.clone();
+
         wallet.init_db().await?;
 
         if wallet.get_keypairs()?.is_empty() {
@@ -98,6 +100,7 @@ impl Client {
             mint_pvk,
             spend_pvk,
             wallet,
+            public_keys,
         }));
 
         // create gateway client
@@ -400,21 +403,20 @@ pub struct State {
     // Spend verifying key used by ZK
     pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     pub wallet: WalletPtr,
+    pub public_keys: Vec<jubjub::SubgroupPoint>,
 }
 
 impl ProgramState for State {
-    //fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-    //    debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
+    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
+        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
 
-    //    if let Ok(pub_keys) = self.wallet.get_cashier_public_keys() {
-    //        if pub_keys.is_empty() {
-    //            error!(target: "State", "No cashier public key");
-    //            return false;
-    //        }
-    //        return pub_keys.contains(public);
-    //    }
-    //    false
-    //}
+        if self.public_keys.is_empty() {
+            error!(target: "State", "No cashier public key");
+            return false;
+        } else {
+            return self.public_keys.contains(public);
+        }
+    }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         debug!(target: "CLIENT STATE", "Check if it is valid merkle");
