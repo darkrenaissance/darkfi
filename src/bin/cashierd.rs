@@ -6,9 +6,9 @@ use log::debug;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::iter::FromIterator;
 
 use drk::{
     blockchain::Rocks,
@@ -624,6 +624,9 @@ async fn main() -> Result<()> {
 
     let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
 
+    // this is just an empty vector
+    let cashier_public_key: Vec<jubjub::SubgroupPoint> = Vec::new();
+
     let client = Client::new(
         rocks,
         (
@@ -635,14 +638,15 @@ async fn main() -> Result<()> {
             expand_path(&cashierd.config.spend_params_path.clone())?,
         ),
         client_wallet.clone(),
+        cashier_public_key,
     )
     .await?;
 
     // must add cashier public key to the client wallet, which in this case it's the same
     // as main_keypair
-    if client_wallet.get_cashier_public_keys()?.is_empty() {
-        client_wallet.put_cashier_pub(&client.main_keypair.public)?;
-    }
+    //if client_wallet.get_cashier_public_keys()?.is_empty() {
+    //    client_wallet.put_cashier_pub(&client.main_keypair.public)?;
+    //}
 
     if args.is_present("ADDRESS") {
         let cashier_public = client.main_keypair.public;
