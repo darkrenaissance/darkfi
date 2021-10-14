@@ -248,6 +248,7 @@ impl BtcClient {
                 token_id: generate_id("btc", &NetworkName::Bitcoin)?,
                 drk_pub_key,
                 received_balance: amnt,
+                decimals: 8,
             })
             .await
             .map_err(Error::from)?;

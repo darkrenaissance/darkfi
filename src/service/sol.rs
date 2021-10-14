@@ -235,6 +235,7 @@ impl SolClient {
                     token_id: generate_id(&mint.unwrap().to_string(), &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
+                    decimals: decimals as u16
                 })
                 .await
                 .map_err(Error::from)?;
@@ -251,6 +252,7 @@ impl SolClient {
                     token_id: generate_id(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
+                    decimals: decimals as u16
                 })
                 .await
                 .map_err(Error::from)?;

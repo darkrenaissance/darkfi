@@ -53,6 +53,7 @@ pub struct TokenNotification {
     pub token_id: jubjub::Fr,
     pub drk_pub_key: jubjub::SubgroupPoint,
     pub received_balance: u64,
+    pub decimals: u16
 }
 
 pub struct Bridge {
@@ -103,7 +104,6 @@ impl Bridge {
 
             notification
         } else {
-            debug!(target: "BRIDGE", "TEST");
             None
         }
     }
