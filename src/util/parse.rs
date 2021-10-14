@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use std::iter::FromIterator;
+use std::str::FromStr;
 
 use sha2::{Digest, Sha256};
 
@@ -154,10 +154,30 @@ pub fn encode_base10(amount: u64, decimal_places: usize) -> String {
         .to_string()
 }
 
+pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> {
+    let mut amount: Vec<char> = amount.to_string().chars().collect();
+
+    if token_decimals > decimals {
+        if amount.len() <= (token_decimals - decimals) as usize {
+            return Ok(0);
+        }
+        amount.truncate(amount.len() - (token_decimals - decimals) as usize);
+    }
+
+    if token_decimals < decimals {
+        for _ in 0..(decimals - token_decimals) {
+            amount.push('0');
+        }
+    }
+
+    let amount = u64::from_str(&String::from_iter(amount))?;
+    Ok(amount)
+}
+
 #[allow(unused_imports)]
 mod tests {
-    use crate::util::decode_base10;
-    use crate::util::encode_base10;
+    use super::{decode_base10, encode_base10, truncate};
+
     #[test]
     fn test_decode_base10() {
         assert_eq!(124, decode_base10("12.33", 1, false).unwrap());
@@ -174,5 +194,28 @@ mod tests {
         assert_eq!("234321.1", &encode_base10(2343211, 1));
         assert_eq!("2343211", &encode_base10(2343211, 0));
         assert_eq!("0.00002343", &encode_base10(2343, 8));
+    }
+
+    #[test]
+    fn test_truncate() {
+        // Token decimals is equal to 8
+        assert_eq!(100, truncate(100, 8, 8).unwrap());
+        assert_eq!(12, truncate(12, 8, 8).unwrap());
+
+        // Token decimals is bigger than 8
+        assert_eq!(100000000, truncate(1000000000, 8, 9).unwrap());
+        assert_eq!(10, truncate(100, 8, 9).unwrap());
+        assert_eq!(1, truncate(12, 8, 9).unwrap());
+        assert_eq!(10, truncate(102, 8, 9).unwrap());
+        assert_eq!(0, truncate(1, 8, 9).unwrap());
+        assert_eq!(1, truncate(100000000, 8, 16).unwrap());
+        assert_eq!(10, truncate(100000000, 8, 15).unwrap());
+        assert_eq!(0, truncate(100000000, 8, 17).unwrap());
+        assert_eq!(0, truncate(10, 8, 16).unwrap());
+
+        // Token decimals is less than 8
+        assert_eq!(1000, truncate(100, 8, 7).unwrap());
+        assert_eq!(12000, truncate(120, 8, 6).unwrap());
+        assert_eq!(1000000, truncate(100, 8, 4).unwrap());
     }
 }
