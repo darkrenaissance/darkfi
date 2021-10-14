@@ -10,6 +10,7 @@ use bitcoin::blockdata::{
 };
 use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
+use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
@@ -322,18 +323,19 @@ impl BtcClient {
             version: 2,
         };
 
-        let _signed_tx = sign_transaction(
+        let signed_tx = sign_transaction(
             transaction,
             script,
             btc_keys.keypair.secret,
             btc_keys.btc_pubkey,
             &btc_keys.keypair.context,
         );
+        let serialized_tx = serialize(&signed_tx);
 
-        //TODO: Serialize and send tx
-        //let txid = client.transaction_broadcast_raw(serialize(&signed_tx))?;
+        //TODO: Replace unwrap with error matchin
+        let txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
 
-        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet:", amount, /*txid*/);
+        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet: {}", amount, txid);
         Ok(())
     }
 }
@@ -421,7 +423,7 @@ impl NetworkClient for BtcClient {
             version: 2,
         };
 
-        let _signed_tx = sign_transaction(
+        let signed_tx = sign_transaction(
             transaction,
             script_pubkey,
             self.main_account.keypair.secret,
@@ -429,9 +431,11 @@ impl NetworkClient for BtcClient {
             &self.main_account.keypair.context,
         );
 
-        //TODO: Serialize and send tx
-        //let txid = client.transaction_broadcast_raw(serialize(&signed_tx))?;
+        let serialized_tx = serialize(&signed_tx);
 
+        //TODO: Replace unwrap with error matchin
+        let txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
+        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet: {}", amount, txid);
         Ok(())
     }
 }
@@ -472,6 +476,13 @@ pub fn sign_transaction(
         lock_time: tx.lock_time,
         input: signed_inputs,
         output: tx.output,
+    }
+}
+impl Encodable for bitcoin::Transaction {
+    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+        let tx = self.serialize();
+        let len = tx.encode(s)?;
+        Ok(len)
     }
 }
 impl Encodable for bitcoin::Address {
