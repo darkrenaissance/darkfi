@@ -54,6 +54,14 @@ Open research questions.
 - [ ] research polygon design
 - [ ] code up a simple demo
 
+## token
+
+- [ ] simple amm script
+- [ ] bonded curve script
+- [ ] quadratic funding script
+- [ ] write up DRK tokenomics
+- [ ] simulate in CADCAD
+
 ## product
 
 - [ ] move DRK in and out of contracts from the root chain
