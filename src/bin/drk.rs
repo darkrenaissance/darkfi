@@ -263,9 +263,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap();
 
-        let reply = client.transfer(&token_sym, &address, amount).await?;
+        client.transfer(&token_sym, &address, amount).await?;
 
-        println!("Transaction: {}", &reply.to_string());
+        println!("Transfer successfully");
 
         return Ok(());
     }
