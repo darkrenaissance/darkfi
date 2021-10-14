@@ -1,5 +1,4 @@
 use async_std::sync::Arc;
-use serde_json::json;
 use std::convert::From;
 use std::str::FromStr;
 use std::time::Duration;
@@ -15,7 +14,6 @@ use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
-use futures::{SinkExt, StreamExt};
 use log::*;
 use secp256k1::{
     constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
@@ -23,10 +21,8 @@ use secp256k1::{
     {rand::rngs::OsRng, Secp256k1},
     {All, Message as BtcMessage /*Secp256k1,*/},
 };
-use tungstenite::Message;
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::rpc::{jsonrpc, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, NetworkName};
 use crate::{Error, Result};
@@ -238,6 +234,9 @@ impl BtcClient {
                 }
             };
         } // Endloop
+
+        let _ = client.script_unsubscribe(&script)?;
+
         cur_balance = client.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
@@ -265,29 +264,6 @@ impl BtcClient {
 
         debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
         let _ = self.send_btc_to_main_wallet(amnt as u64, btc_keys)?;
-
-        Ok(())
-    }
-
-    async fn unsubscribe(
-        self: Arc<Self>,
-        write: &mut futures::stream::SplitSink<WsStream, tungstenite::Message>,
-        pubkey: &PublicKey,
-        sub_id: &i64,
-    ) -> Result<()> {
-        {
-            let client = &self.client;
-
-            let script_pubkey = BtcKeys::derive_btc_script_pubkey(*pubkey, self.network);
-
-            let _ = client.script_unsubscribe(&script_pubkey).unwrap();
-        }
-
-        let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
-
-        write
-            .send(Message::text(serde_json::to_string(&unsubscription)?))
-            .await?;
 
         Ok(())
     }
