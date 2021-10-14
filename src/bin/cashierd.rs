@@ -32,6 +32,8 @@ use drk::{
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
         1 => Err(Error::BridgeError("Not Supported Client".into())),
+        2 => Err(Error::BridgeError("Unable to watch the deposit address".into())),
+        3 => Err(Error::BridgeError("Unable to send the token".into())),
         _ => Err(Error::BridgeError("Unknown error_code".into())),
     }
 }
@@ -168,15 +170,20 @@ impl Cashierd {
 
             // check the response's error
             let error_code = res.error as u32;
-            if error_code == 0 {
-                match res.payload {
-                    bridge::BridgeResponsePayload::Send => {
-                        cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
-                    }
-                    _ => {}
-                }
-            } else {
+
+            if error_code != 0 {
                 return handle_bridge_error(error_code);
+            }
+
+            match res.payload {
+                bridge::BridgeResponsePayload::Send => {
+                    cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
+                }
+                _ => {
+                    return Err(Error::BridgeError(
+                        "Receive unknown value from Subscription".into(),
+                    ));
+                }
             }
         }
 

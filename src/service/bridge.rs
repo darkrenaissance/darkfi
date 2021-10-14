@@ -35,6 +35,8 @@ pub enum BridgeResponsePayload {
 pub enum BridgeResponseError {
     NoError,
     NotSupportedClient,
+    BridgeWatchSubscribtionError,
+    BridgeSendSubscribtionError,
 }
 
 pub struct BridgeSubscribtion {
@@ -42,6 +44,7 @@ pub struct BridgeSubscribtion {
     pub receiver: async_channel::Receiver<BridgeResponse>,
 }
 
+#[derive(Debug)]
 pub struct TokenSubscribtion {
     pub secret_key: Vec<u8>,
     pub public_key: String,
@@ -156,36 +159,64 @@ impl Bridge {
             client = c.clone();
         }
 
+        let res: BridgeResponse;
+
         match req.payload {
             BridgeRequestsPayload::Watch(val) => match val {
                 Some((private_key, public_key)) => {
                     let pub_key = client
                         .subscribe_with_keypair(private_key, public_key, drk_pub_key, mint_address)
-                        .await?;
-                    let res = BridgeResponse {
-                        error: BridgeResponseError::NoError,
-                        payload: BridgeResponsePayload::Address(pub_key),
-                    };
-                    rep.send(res).await?;
+                        .await;
+
+                    if pub_key.is_err() {
+                        error!(target: "BRIDGE", "{}", pub_key.unwrap_err().to_string());
+                        res = BridgeResponse {
+                            error: BridgeResponseError::BridgeWatchSubscribtionError,
+                            payload: BridgeResponsePayload::Empty,
+                        };
+                    } else {
+                        res = BridgeResponse {
+                            error: BridgeResponseError::NoError,
+                            payload: BridgeResponsePayload::Address(pub_key?),
+                        };
+                    }
                 }
                 None => {
-                    let sub = client.subscribe(drk_pub_key, mint_address).await?;
-                    let res = BridgeResponse {
-                        error: BridgeResponseError::NoError,
-                        payload: BridgeResponsePayload::Watch(sub.secret_key, sub.public_key),
-                    };
-                    rep.send(res).await?;
+                    let sub = client.subscribe(drk_pub_key, mint_address).await;
+                    if sub.is_err() {
+                        error!(target: "BRIDGE", "{}", sub.unwrap_err().to_string());
+                        res = BridgeResponse {
+                            error: BridgeResponseError::BridgeWatchSubscribtionError,
+                            payload: BridgeResponsePayload::Empty,
+                        };
+                    } else {
+                        let sub = sub?;
+                        res = BridgeResponse {
+                            error: BridgeResponseError::NoError,
+                            payload: BridgeResponsePayload::Watch(sub.secret_key, sub.public_key),
+                        };
+                    }
                 }
             },
             BridgeRequestsPayload::Send(addr, amount) => {
-                client.send(addr, mint_address, amount).await?;
-                let res = BridgeResponse {
-                    error: BridgeResponseError::NoError,
-                    payload: BridgeResponsePayload::Send,
-                };
-                rep.send(res).await?;
+                let result = client.send(addr, mint_address, amount).await;
+
+                if result.is_err() {
+                    error!(target: "BRIDGE", "{}", result.unwrap_err().to_string());
+                    res = BridgeResponse {
+                        error: BridgeResponseError::BridgeSendSubscribtionError,
+                        payload: BridgeResponsePayload::Empty,
+                    };
+                } else {
+                    res = BridgeResponse {
+                        error: BridgeResponseError::NoError,
+                        payload: BridgeResponsePayload::Send,
+                    };
+                }
             }
         }
+
+        rep.send(res).await?;
 
         Ok(())
     }
