@@ -26,7 +26,7 @@ use tungstenite::Message;
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::util::{generate_id, NetworkName, parse::truncate};
+use crate::util::{generate_id, parse::truncate, NetworkName};
 use crate::{Error, Result};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
@@ -115,11 +115,6 @@ impl SolClient {
         }
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
-
-        if !self.check_main_account_balance(&rpc)? {
-            warn!(target: "SOL BRIDGE", "No enough funds in the main keypair");
-            return Ok(());
-        }
 
         // Fetch the current balance.
         let (prev_balance, decimals) = if mint.is_none() {
@@ -417,6 +412,13 @@ impl NetworkClient for SolClient {
 
         let mint = self.check_mint_address(mint_address)?;
 
+        let rpc = RpcClient::new(self.rpc_server.to_string());
+
+        if !self.check_main_account_balance(&rpc)? {
+            warn!(target: "SOL BRIDGE", "Main account has no enough funds");
+            return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
+        }
+
         smol::spawn(async move {
             let result = self
                 .handle_subscribe_request(keypair, drk_pub_key, mint)
@@ -446,6 +448,12 @@ impl NetworkClient for SolClient {
         let public_key = keypair.pubkey().to_string();
 
         let mint = self.check_mint_address(mint_address)?;
+
+        let rpc = RpcClient::new(self.rpc_server.to_string());
+
+        if !self.check_main_account_balance(&rpc)? {
+            return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
+        }
 
         smol::spawn(async move {
             let result = self
@@ -482,7 +490,7 @@ impl NetworkClient for SolClient {
                 decimals = tkn.decimals;
             };
         }
-        
+
         // reverse truncate
         truncate(amount, decimals as u16, 8)?;
 
@@ -587,6 +595,7 @@ impl Decodable for Pubkey {
 #[derive(Debug)]
 pub enum SolFailed {
     NotEnoughValue(u64),
+    MainAccountNotEnoughValue,
     BadSolAddress(String),
     DecodeAndEncodeError(String),
     WebSocketError(String),
@@ -607,6 +616,9 @@ impl std::fmt::Display for SolFailed {
         match self {
             SolFailed::NotEnoughValue(i) => {
                 write!(f, "There is no enough value {}", i)
+            }
+            SolFailed::MainAccountNotEnoughValue => {
+                write!(f, "Main Account Has no enough value")
             }
             SolFailed::BadSolAddress(ref err) => {
                 write!(f, "Bad Sol Address: {}", err)
