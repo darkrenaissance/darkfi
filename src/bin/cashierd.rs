@@ -1,6 +1,5 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -25,7 +24,7 @@ use drk::{
     },
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
-    util::{expand_path, generate_id, join_config_path, NetworkName},
+    util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
     wallet::{CashierDb, WalletDb},
     Error, Result,
 };
@@ -572,11 +571,11 @@ impl Cashierd {
 
                     let token_notification = token_notification?;
 
-                    // truncate received_balance to 8 digits
-                    let received_balance = token_notification.received_balance;
-                    let mut rv: Vec<char> = received_balance.to_string().chars().collect();
-                    rv.truncate(9);
-                    let received_balance = u64::from_str(&String::from_iter(rv))?;
+                    let received_balance = truncate(
+                        token_notification.received_balance,
+                        8,
+                        token_notification.decimals,
+                    )?;
 
                     client
                         .send(
