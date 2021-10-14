@@ -53,7 +53,7 @@ pub struct TokenNotification {
     pub token_id: jubjub::Fr,
     pub drk_pub_key: jubjub::SubgroupPoint,
     pub received_balance: u64,
-    pub decimals: u16
+    pub decimals: u16,
 }
 
 pub struct Bridge {
@@ -178,7 +178,7 @@ impl Bridge {
                 }
             },
             BridgeRequestsPayload::Send(addr, amount) => {
-                client.send(addr, amount).await?;
+                client.send(addr, mint_address, amount).await?;
                 let res = BridgeResponse {
                     error: BridgeResponseError::NoError,
                     payload: BridgeResponsePayload::Send,
@@ -210,5 +210,10 @@ pub trait NetworkClient {
 
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>>;
 
-    async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()>;
+    async fn send(
+        self: Arc<Self>,
+        address: Vec<u8>,
+        mint: Option<String>,
+        amount: u64,
+    ) -> Result<()>;
 }

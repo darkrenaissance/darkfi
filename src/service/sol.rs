@@ -26,7 +26,7 @@ use tungstenite::Message;
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::util::{generate_id, NetworkName};
+use crate::util::{generate_id, NetworkName, parse::truncate};
 use crate::{Error, Result};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
@@ -235,7 +235,7 @@ impl SolClient {
                     token_id: generate_id(&mint.unwrap().to_string(), &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
-                    decimals: decimals as u16
+                    decimals: decimals as u16,
                 })
                 .await
                 .map_err(Error::from)?;
@@ -252,7 +252,7 @@ impl SolClient {
                     token_id: generate_id(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
-                    decimals: decimals as u16
+                    decimals: decimals as u16,
                 })
                 .await
                 .map_err(Error::from)?;
@@ -297,7 +297,7 @@ impl SolClient {
         keypair: &Keypair,
     ) -> SolResult<Signature> {
         debug!(target: "SOL BRIDGE", "Sending {} {:?} tokens to main wallet",
-                amount / u64::pow(10, decimals as u32), mint);
+            amount / u64::pow(10, decimals as u32), mint);
 
         // The token account from our main wallet
         let main_tok_pk = get_associated_token_address(&self.main_keypair.pubkey(), mint);
@@ -464,9 +464,28 @@ impl NetworkClient for SolClient {
         Ok(self.notify_channel.1.clone())
     }
 
-    async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
+    async fn send(
+        self: Arc<Self>,
+        address: Vec<u8>,
+        mint: Option<String>,
+        amount: u64,
+    ) -> Result<()> {
         let rpc = RpcClient::new(self.rpc_server.to_string());
         let address: Pubkey = deserialize(&address)?;
+
+        let mut decimals = 9;
+
+        if mint.is_some() {
+            let mint_address: Option<Pubkey> = self.check_mint_address(mint)?;
+            if let Some(mint_addr) = mint_address {
+                let tkn = rpc.get_token_supply(&mint_addr).map_err(SolFailed::from)?;
+                decimals = tkn.decimals;
+            };
+        }
+        
+        // reverse truncate
+        truncate(amount, decimals as u16, 8)?;
+
         let instruction =
             system_instruction::transfer(&self.main_keypair.pubkey(), &address, amount);
 

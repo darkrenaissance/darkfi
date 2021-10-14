@@ -392,7 +392,7 @@ impl NetworkClient for BtcClient {
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
     }
-    async fn send(self: Arc<Self>, address: Vec<u8>, amount: u64) -> Result<()> {
+    async fn send(self: Arc<Self>, address: Vec<u8>, _mint: Option<String>, amount: u64) -> Result<()> {
         // address is not a btc address, so derive the btc address
         let client = &self.client;
         let public_key = deserialize(&address)?;
