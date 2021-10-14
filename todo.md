@@ -7,9 +7,9 @@
 
 ## v0-release
 
-- [ ] serialize signed btc transactions
-- [ ] post btc tx to electrum server
-- [ ] add genesis btc coinbase addr as token id
+- [x] serialize signed btc transactions
+- [x] add genesis btc coinbase addr as token id
+- [ ] fix electrum rpc error: sendrawtransaction: TX decode failed
 - [ ] serialize/encode btc keypairs
 
 ## deposit
