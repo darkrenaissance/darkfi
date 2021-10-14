@@ -217,5 +217,24 @@ mod tests {
         assert_eq!(1000, truncate(100, 8, 7).unwrap());
         assert_eq!(12000, truncate(120, 8, 6).unwrap());
         assert_eq!(1000000, truncate(100, 8, 4).unwrap());
+
+        //        
+        // reverse truncate
+        //
+    
+        // Token decimals is less than decimals
+        assert_eq!(1000000000, truncate(100000000, 9, 8).unwrap());
+        assert_eq!(100, truncate(10, 9, 8).unwrap());
+        assert_eq!(10, truncate(1, 9, 8).unwrap());
+        assert_eq!(100, truncate(10, 9, 8).unwrap());
+        assert_eq!(0, truncate(0, 9, 8).unwrap());
+        assert_eq!(100000000, truncate(1, 16, 8).unwrap());
+        assert_eq!(100000000, truncate(10, 15, 8).unwrap());
+        assert_eq!(0, truncate(0, 17, 8).unwrap());
+
+        // Token decimals is bigger than decimals
+        assert_eq!(100, truncate(1000, 7, 8).unwrap());
+        assert_eq!(120, truncate(12000, 6, 8).unwrap());
+        assert_eq!(100, truncate(1000000, 4, 8).unwrap());
     }
 }
