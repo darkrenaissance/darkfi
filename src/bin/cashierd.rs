@@ -253,7 +253,7 @@ impl Cashierd {
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
 
-            // check if the drk public key is already exist
+            // check if the drk public key already exist
             let check = self
                 .cashier_wallet
                 .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
@@ -452,7 +452,7 @@ impl Cashierd {
             #[cfg(feature = "btc")]
             NetworkName::Bitcoin => {
                 // Handle bitcoin address here if needed
-                Ok(None)
+                Ok(Some("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string()))
             }
 
             _ => Err(Error::NotSupportedNetwork),

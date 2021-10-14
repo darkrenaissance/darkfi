@@ -193,7 +193,9 @@ impl Darkfid {
                 }
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
-                    return Err(Error::NotSupportedToken);
+                    //hardcoded genesis coinbase address
+                    let token_id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
+                    Ok(json!(token_id))
                 }
                 _ => Err(Error::NotSupportedNetwork),
             }

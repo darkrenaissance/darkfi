@@ -57,7 +57,10 @@ pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Resul
             Ok(id)
         }
         #[cfg(feature = "btc")]
-        NetworkName::Bitcoin => Err(Error::NotSupportedToken),
+        NetworkName::Bitcoin => {
+            let id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
+            Ok(id)
+        },
         _ => Err(Error::NotSupportedNetwork),
     }
 }
