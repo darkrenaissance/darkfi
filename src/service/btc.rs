@@ -2,6 +2,7 @@ use async_std::sync::Arc;
 use serde_json::json;
 use std::convert::From;
 use std::str::FromStr;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::blockdata::{
@@ -101,22 +102,25 @@ pub struct BtcKeys {
     keypair: Arc<Keypair>,
     btc_privkey: BtcPrivKey,
     pub btc_pubkey: BtcPubKey,
+    pub address: Address,
     pub script_pubkey: Script,
     pub network: Network,
 }
 
 impl BtcKeys {
     pub fn new(keypair: &Keypair, network: Network) -> Self {
-        let (secret_key, public_key) = keypair.as_tuple();
+        let (secret_key, _public_key) = keypair.as_tuple();
 
         let btc_privkey = BtcPrivKey::new(secret_key, network);
-        let btc_pubkey = BtcPubKey::new(public_key);
-        let script_pubkey = BtcKeys::derive_btc_script_pubkey(public_key, network);
+        let btc_pubkey = btc_privkey.public_key(&keypair.context);
+        let address = BtcKeys::derive_btc_address(btc_pubkey, network);
+        let script_pubkey = address.script_pubkey();
 
         Self {
             keypair: Arc::new(keypair.clone()),
             btc_privkey,
             btc_pubkey,
+            address,
             script_pubkey,
             network,
         }
@@ -202,44 +206,49 @@ impl BtcClient {
         // p2pkh script
         let script = keys_clone.script_pubkey;
 
-        //Subscribe to script, returns Error::AlreadySubscribed otherwise
-        let status = client.script_subscribe(&script)?;
-
         //Fetch any current balance
         let prev_balance = client.script_get_balance(&script)?;
 
         let cur_balance: GetBalanceRes;
 
+        let status = client.script_subscribe(&script)?;
+
         loop {
             let current_status = client.script_pop(&script)?;
-            if current_status != status {
-                debug!(target: "BTC CLIENT", "ScriptPubKey status has not changed");
+            if current_status == status {
+                async_std::task::sleep(Duration::from_secs(5)).await;
+                debug!(
+                    target: "BTC CLIENT",
+                    "ScriptPubKey status has not changed, amtucfd: {}, amtcfd: {}",
+                    client.script_get_balance(&script)?.unconfirmed,
+                    client.script_get_balance(&script)?.confirmed
+                );
                 continue;
             }
             match current_status {
-                // Script has a notification update
-                Some(_status_update) => {
-                    cur_balance = client.script_get_balance(&script)?;
+                Some(_) => {
+                    // Script has a notification update
+                    debug!(target: "BTC CLIENT", "ScripPubKey notify update");
                     break;
                 }
-                // No items in the queue
                 None => {
-                    debug!(target: "BTC CLIENT",
-                           "Scriptpubkey does not yet exist in script notifications!");
-                    continue;
+                    return Err(BtcFailed::ElectrumError(
+                        "ScriptPubKey was not found".to_string(),
+                    ));
                 }
-            }
-        }
+            };
+        } // Endloop
+        cur_balance = client.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
 
-        if cur_balance.confirmed < prev_balance.confirmed {
+        if cur_balance.unconfirmed < prev_balance.unconfirmed {
             return Err(BtcFailed::Notification(
                 "New balance is less than previous balance".into(),
             ));
         }
-
-        let amnt = cur_balance.confirmed - prev_balance.confirmed;
+        //TODO: Wait until they're confirmed balances above
+        let amnt = cur_balance.unconfirmed - prev_balance.unconfirmed;
         let ui_amnt = amnt;
 
         send_notification
@@ -248,14 +257,14 @@ impl BtcClient {
                 // is btc an acceptable token name?
                 token_id: generate_id("btc", &NetworkName::Bitcoin)?,
                 drk_pub_key,
-                received_balance: amnt,
+                received_balance: amnt as u64,
                 decimals: 8,
             })
             .await
             .map_err(Error::from)?;
 
         debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
-        let _ = self.send_btc_to_main_wallet(amnt, btc_keys)?;
+        let _ = self.send_btc_to_main_wallet(amnt as u64, btc_keys)?;
 
         Ok(())
     }
@@ -332,10 +341,12 @@ impl BtcClient {
         );
         let serialized_tx = serialize(&signed_tx);
 
-        //TODO: Replace unwrap with error matchin
-        let txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
+        debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
+               signed_tx);
+        //TODO: Replace unwrap with error matching
+        let _txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
 
-        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet: {}", amount, txid);
+        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet", amount);
         Ok(())
     }
 }
@@ -351,7 +362,7 @@ impl NetworkClient for BtcClient {
         let keypair = Keypair::new();
         let btc_keys = BtcKeys::new(&keypair, self.network);
         let secret_key = serialize(&keypair);
-        let public_key = BtcKeys::btcpub_from_keypair(&keypair).to_string();
+        let public_key = btc_keys.address.to_string();
 
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
