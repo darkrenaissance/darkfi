@@ -218,6 +218,10 @@ mod tests {
         assert_eq!(12000, truncate(120, 8, 6).unwrap());
         assert_eq!(1000000, truncate(100, 8, 4).unwrap());
 
+        // token decimals is 0
+        assert_eq!(00000000, truncate(0, 8, 0).unwrap());
+        assert_eq!(100000000, truncate(1, 8, 0).unwrap());
+
         //        
         // reverse truncate
         //
@@ -236,5 +240,9 @@ mod tests {
         assert_eq!(100, truncate(1000, 7, 8).unwrap());
         assert_eq!(120, truncate(12000, 6, 8).unwrap());
         assert_eq!(100, truncate(1000000, 4, 8).unwrap());
+        
+        // token decimals is 0
+        assert_eq!(0, truncate(00000000, 0, 8).unwrap());
+        assert_eq!(1, truncate(100000000, 0, 8).unwrap());
     }
 }
