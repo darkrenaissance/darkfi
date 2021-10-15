@@ -99,7 +99,7 @@ impl Default for Keypair {
     }
 }
 #[derive(Clone)]
-pub struct BtcKeys {
+pub struct Account {
     keypair: Arc<Keypair>,
     btc_privkey: BtcPrivKey,
     pub btc_pubkey: BtcPubKey,
@@ -108,13 +108,13 @@ pub struct BtcKeys {
     pub network: Network,
 }
 
-impl BtcKeys {
+impl Account {
     pub fn new(keypair: &Keypair, network: Network) -> Self {
         let (secret_key, _public_key) = keypair.as_tuple();
 
         let btc_privkey = BtcPrivKey::new(secret_key, network);
         let btc_pubkey = btc_privkey.public_key(&keypair.context);
-        let address = BtcKeys::derive_btc_address(btc_pubkey, network);
+        let address = Account::derive_btc_address(btc_pubkey, network);
         let script_pubkey = address.script_pubkey();
 
         Self {
@@ -158,7 +158,7 @@ impl BtcKeys {
 }
 
 pub struct BtcClient {
-    main_account: BtcKeys,
+    main_account: Account,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
@@ -178,7 +178,7 @@ impl BtcClient {
             _ => return Err(Error::NotSupportedNetwork),
         };
 
-        let main_account = BtcKeys::new(&main_keypair, network);
+        let main_account = Account::new(&main_keypair, network);
 
         let electrum_client = ElectrumClient::new(&url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
@@ -193,7 +193,7 @@ impl BtcClient {
 
     async fn handle_subscribe_request(
         self: Arc<Self>,
-        btc_keys: BtcKeys,
+        btc_keys: Account,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> BtcResult<()> {
         debug!(
@@ -212,7 +212,6 @@ impl BtcClient {
         let cur_balance: GetBalanceRes;
 
         let status = client.script_subscribe(&script)?;
-
 
         loop {
             let current_status = client.script_pop(&script)?;
@@ -233,6 +232,7 @@ impl BtcClient {
                 Some(_) => {
                     // Script has a notification update
                     debug!(target: "BTC CLIENT", "ScripPubKey notify update");
+                    let _ = client.script_unsubscribe(&script)?;
                     break;
                 }
                 None => {
@@ -276,7 +276,7 @@ impl BtcClient {
         Ok(())
     }
 
-    fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: BtcKeys) -> BtcResult<()> {
+    fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: Account) -> BtcResult<()> {
         debug!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
         let client = &self.client;
         let keys_clone = btc_keys.clone();
@@ -315,6 +315,10 @@ impl BtcClient {
             lock_time: 0,
             version: 2,
         };
+        let txid = transaction.txid();
+        debug!(target: "BTC BRIDGE", "unSigned tx: {:?}",
+               &txid.to_hex());
+
 
         let signed_tx = sign_transaction(
             transaction,
@@ -346,7 +350,7 @@ impl NetworkClient for BtcClient {
     ) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
         let keypair = Keypair::new();
-        let btc_keys = BtcKeys::new(&keypair, self.network);
+        let btc_keys = Account::new(&keypair, self.network);
         let secret_key = serialize(&keypair);
         let public_key = btc_keys.address.to_string();
 
@@ -375,7 +379,7 @@ impl NetworkClient for BtcClient {
         _mint: Option<String>,
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
-        let btc_keys = BtcKeys::new(&keypair, self.network);
+        let btc_keys = Account::new(&keypair, self.network);
         let public_key = keypair.pubkey().to_string();
 
         smol::spawn(async move {
@@ -395,7 +399,7 @@ impl NetworkClient for BtcClient {
         // address is not a btc address, so derive the btc address
         let client = &self.client;
         let public_key = deserialize(&address)?;
-        let script_pubkey = BtcKeys::derive_btc_script_pubkey(public_key, self.network);
+        let script_pubkey = Account::derive_btc_script_pubkey(public_key, self.network);
 
         let main_script_pubkey = &self.main_account.script_pubkey;
 
