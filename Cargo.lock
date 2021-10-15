@@ -1227,6 +1227,7 @@ dependencies = [
  "bellman",
  "bimap",
  "bitcoin",
+ "bitcoin_hashes",
  "bitvec 0.18.5",
  "blake2b_simd",
  "blake2s_simd",

@@ -4,6 +4,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use async_trait::async_trait;
+
+use bitcoin_hashes::hex::ToHex;
 use bitcoin::blockdata::{
     script::{Builder, Script},
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
@@ -34,12 +36,13 @@ pub type PrivKey = BtcPrivKey;
 
 const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Keypair {
     secret: SecretKey,
     public: PublicKey,
     context: Secp256k1<All>,
 }
+
 impl Keypair {
     pub fn new() -> Self {
         let secp = Secp256k1::new();
@@ -58,6 +61,8 @@ impl Keypair {
 
         bytes[..SECRET_KEY_SIZE].copy_from_slice(self.secret.as_ref());
         bytes[SECRET_KEY_SIZE..].copy_from_slice(&self.public.serialize());
+        debug!(target: "BTC CLIENT", "Keypair to bytes: {:?}", bytes);
+
         bytes
     }
 
@@ -209,8 +214,11 @@ impl BtcClient {
 
         let status = client.script_subscribe(&script)?;
 
+
         loop {
             let current_status = client.script_pop(&script)?;
+            debug!(target: "BTC CLIENT", "script status: {:?}", status);
+            debug!(target: "BTC CLIENT", "current_script status: {:?}", current_status);
             if current_status == status {
                 async_std::task::sleep(Duration::from_secs(5)).await;
                 debug!(
@@ -221,6 +229,7 @@ impl BtcClient {
                 );
                 continue;
             }
+
             match current_status {
                 Some(_) => {
                     // Script has a notification update
@@ -235,7 +244,7 @@ impl BtcClient {
             };
         } // Endloop
 
-        let _ = client.script_unsubscribe(&script)?;
+        //let _ = client.script_unsubscribe(&script)?;
 
         cur_balance = client.script_get_balance(&script)?;
 
@@ -315,12 +324,14 @@ impl BtcClient {
             btc_keys.btc_pubkey,
             &btc_keys.keypair.context,
         );
-        let serialized_tx = serialize(&signed_tx);
+        let txid = signed_tx.txid();
+        //let serialized_tx = serialize(&signed_tx);
 
         debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
-               signed_tx);
+               &txid.to_hex());
+
         //TODO: Replace unwrap with error matching
-        let _txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
+        let txid = client.transaction_broadcast_raw(&txid.to_vec()).unwrap();
 
         debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet", amount);
         Ok(())
@@ -631,6 +642,10 @@ mod tests {
 
     use crate::serial::{deserialize, serialize};
     use std::str::FromStr;
+    use super::Keypair;
+    use secp256k1::{constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE}};
+
+    const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
     #[test]
     pub fn test_serialize_btc_address() -> super::BtcResult<()> {
@@ -641,6 +656,19 @@ mod tests {
         let btc_dser = deserialize(&btc_ser)?;
 
         assert_eq!(btc_addr, btc_dser);
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_serialize_and_deserialize_keypair() -> super::BtcResult<()> {
+
+        let keypair = Keypair::new();
+
+        let bytes: [u8; KEYPAIR_LENGTH] = keypair.to_bytes();
+        let keys = Keypair::from_bytes(&bytes)?;
+
+        assert_eq!(keypair, keys);
 
         Ok(())
     }
