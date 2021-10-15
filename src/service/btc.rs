@@ -170,6 +170,9 @@ pub struct BtcClient {
 impl BtcClient {
     pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
 
+        //TODO
+        // info!(target: "SOL BRIDGE", "Main BTC wallet pubkey: {:?}", &main_keypair.pubkey());
+
         let notify_channel = async_channel::unbounded();
 
         let (network, url) = match network {
@@ -262,7 +265,7 @@ impl BtcClient {
             .send(TokenNotification {
                 network: NetworkName::Bitcoin,
                 // is btc an acceptable token name?
-                token_id: generate_id("btc", &NetworkName::Bitcoin)?,
+                token_id: generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
                 drk_pub_key,
                 received_balance: amnt as u64,
                 decimals: 8,
