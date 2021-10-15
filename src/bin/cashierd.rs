@@ -113,19 +113,23 @@ impl Cashierd {
             let keypairs_to_watch =
                 cashier_wallet.get_deposit_token_keys_by_network(&network.name)?;
 
-            for (drk_pub_key, private_key, public_key, _token_id, mint_address) in keypairs_to_watch
-            {
+            for deposit_token in keypairs_to_watch {
                 let bridge = bridge.clone();
 
-                let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
+                let bridge_subscribtion = bridge
+                    .subscribe(
+                        deposit_token.drk_public_key,
+                        Some(deposit_token.mint_address),
+                    )
+                    .await;
 
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
                         network: network.name.clone(),
                         payload: bridge::BridgeRequestsPayload::Watch(Some((
-                            private_key,
-                            public_key,
+                            deposit_token.token_private_key,
+                            deposit_token.token_public_key,
                         ))),
                     })
                     .await?;
@@ -150,16 +154,21 @@ impl Cashierd {
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
-        if let Some((addr, network, _token_id, mint_address)) = token {
-            let bridge_subscribtion = bridge.subscribe(drk_pub_key, Some(mint_address)).await;
+        if let Some(withdraw_token) = token {
+            let bridge_subscribtion = bridge
+                .subscribe(drk_pub_key, Some(withdraw_token.mint_address))
+                .await;
 
             // send a request to the bridge to send amount of token
             // equivalent to the received drk
             bridge_subscribtion
                 .sender
                 .send(bridge::BridgeRequests {
-                    network: network.clone(),
-                    payload: bridge::BridgeRequestsPayload::Send(addr.clone(), amount),
+                    network: withdraw_token.network.clone(),
+                    payload: bridge::BridgeRequestsPayload::Send(
+                        withdraw_token.token_public_key.clone(),
+                        amount,
+                    ),
                 })
                 .await?;
 
@@ -175,7 +184,10 @@ impl Cashierd {
 
             match res.payload {
                 bridge::BridgeResponsePayload::Send => {
-                    cashier_wallet.confirm_withdraw_key_record(&addr, &network)?;
+                    cashier_wallet.confirm_withdraw_key_record(
+                        &withdraw_token.token_public_key,
+                        &withdraw_token.network,
+                    )?;
                 }
                 _ => {
                     return Err(Error::BridgeError(
@@ -281,12 +293,15 @@ impl Cashierd {
                     })
                     .await?;
             } else {
-                let keypair = check[0].to_owned();
+                let keypair = check[0].clone();
                 bridge_subscribtion
                     .sender
                     .send(bridge::BridgeRequests {
                         network: network.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some((keypair.0, keypair.1))),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some((
+                            keypair.private_key,
+                            keypair.public_key,
+                        ))),
                     })
                     .await?;
             }

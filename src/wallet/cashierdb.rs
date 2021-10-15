@@ -17,9 +17,25 @@ pub struct CashierDb {
     pub initialized: Mutex<bool>,
 }
 
+#[derive(Debug, Clone)]
 pub struct MainTokenKey {
     pub public_key: Vec<u8>,
     pub private_key: Vec<u8>,
+}
+
+pub struct WithdrawToken {
+    pub token_public_key: Vec<u8>,
+    pub network: NetworkName,
+    pub token_id: jubjub::Fr,
+    pub mint_address: String,
+}
+
+pub struct DepositToken {
+    pub drk_public_key: jubjub::SubgroupPoint,
+    pub token_public_key: Vec<u8>,
+    pub token_private_key: Vec<u8>,
+    pub token_id: jubjub::Fr,
+    pub mint_address: String,
 }
 
 impl WalletApi for CashierDb {
@@ -229,12 +245,10 @@ impl CashierDb {
         Ok(private_keys)
     }
 
-    // return token public key, network name, and token_id as tuple
-    #[allow(clippy::type_complexity)]
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &jubjub::SubgroupPoint,
-    ) -> Result<Option<(Vec<u8>, NetworkName, jubjub::Fr, String)>> {
+    ) -> Result<Option<WithdrawToken>> {
         debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -259,22 +273,26 @@ impl CashierDb {
 
         for addr in addr_iter {
             let addr = addr?;
-            let token_key_public = addr.0;
+            let token_public_key = addr.0;
             let network: NetworkName = self.get_value_deserialized(&addr.1)?;
             let token_id: jubjub::Fr = self.get_value_deserialized(&addr.2)?;
             let mint_address: String = self.get_value_deserialized(&addr.3)?;
-            token_addresses.push((token_key_public, network, token_id, mint_address));
+            token_addresses.push(WithdrawToken {
+                token_public_key,
+                network,
+                token_id,
+                mint_address,
+            });
         }
 
         Ok(token_addresses.pop())
     }
 
-    // return private and public keys as a tuple
     pub fn get_deposit_token_keys_by_dkey_public(
         &self,
         d_key_public: &jubjub::SubgroupPoint,
         network: &NetworkName,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+    ) -> Result<Vec<MainTokenKey>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         // open connection
@@ -304,18 +322,20 @@ impl CashierDb {
         let mut keys = vec![];
 
         for k in keys_iter {
-            keys.push(k?);
+            let k = k?;
+            keys.push(MainTokenKey {
+                private_key: k.0,
+                public_key: k.1,
+            });
         }
 
         Ok(keys)
     }
 
-    // return drk_pub_key, private key, public key, token_id, and mint_address as a tuple
-    #[allow(clippy::type_complexity)]
     pub fn get_deposit_token_keys_by_network(
         &self,
         network: &NetworkName,
-    ) -> Result<Vec<(jubjub::SubgroupPoint, Vec<u8>, Vec<u8>, jubjub::Fr, String)>> {
+    ) -> Result<Vec<DepositToken>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -346,12 +366,18 @@ impl CashierDb {
 
         for key in keys_iter {
             let key = key?;
-            let drk_pub_key: jubjub::SubgroupPoint = self.get_value_deserialized(&key.0)?;
-            let private_key = key.1;
-            let pub_key = key.2;
+            let drk_public_key: jubjub::SubgroupPoint = self.get_value_deserialized(&key.0)?;
+            let token_private_key = key.1;
+            let token_public_key = key.2;
             let token_id: jubjub::Fr = self.get_value_deserialized(&key.3)?;
             let mint_address: String = self.get_value_deserialized(&key.4)?;
-            keys.push((drk_pub_key, private_key, pub_key, token_id, mint_address));
+            keys.push(DepositToken {
+                drk_public_key,
+                token_private_key,
+                token_public_key,
+                token_id,
+                mint_address,
+            });
         }
 
         Ok(keys)
@@ -542,15 +568,15 @@ mod tests {
 
         assert_eq!(keys.len(), 1);
 
-        assert_eq!(keys[0].0, token_addr_private);
-        assert_eq!(keys[0].1, token_addr);
+        assert_eq!(keys[0].private_key, token_addr_private);
+        assert_eq!(keys[0].public_key, token_addr);
 
         let resumed_keys = wallet.get_deposit_token_keys_by_network(&network)?;
 
-        assert_eq!(resumed_keys[0].0, public2);
-        assert_eq!(resumed_keys[0].1, token_addr_private);
-        assert_eq!(resumed_keys[0].2, token_addr);
-        assert_eq!(resumed_keys[0].3, token_id);
+        assert_eq!(resumed_keys[0].drk_public_key, public2);
+        assert_eq!(resumed_keys[0].token_private_key, token_addr_private);
+        assert_eq!(resumed_keys[0].token_public_key, token_addr);
+        assert_eq!(resumed_keys[0].token_id, token_id);
 
         wallet.confirm_deposit_key_record(&public2, &network)?;
 
