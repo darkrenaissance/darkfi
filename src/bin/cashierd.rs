@@ -48,7 +48,6 @@ pub struct Network {
 }
 
 struct Cashierd {
-    config: CashierdConfig,
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
     networks: Vec<Network>,
@@ -76,10 +75,8 @@ impl RequestHandler for Cashierd {
 }
 
 impl Cashierd {
-    async fn new(config_path: PathBuf) -> Result<Self> {
+    async fn new(config: CashierdConfig) -> Result<Self> {
         debug!(target: "CASHIER DAEMON", "Initialize");
-
-        let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
         let cashier_wallet = CashierDb::new(
             expand_path(&config.cashier_wallet_path.clone())?.as_path(),
@@ -99,7 +96,6 @@ impl Cashierd {
         let bridge = bridge::Bridge::new();
 
         Ok(Self {
-            config: config.clone(),
             bridge,
             cashier_wallet,
             networks,
@@ -631,18 +627,21 @@ async fn main() -> Result<()> {
     };
 
     simple_logger::init_with_level(loglevel)?;
-    let mut cashierd = Cashierd::new(config_path).await?;
+
+    let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
+
+    let mut cashierd = Cashierd::new(config.clone()).await?;
 
     let client_wallet = WalletDb::new(
-        expand_path(&cashierd.config.client_wallet_path.clone())?.as_path(),
-        cashierd.config.client_wallet_password.clone(),
+        expand_path(&config.client_wallet_path.clone())?.as_path(),
+        config.client_wallet_password.clone(),
     )?;
 
-    let rocks = Rocks::new(expand_path(&cashierd.config.database_path.clone())?.as_path())?;
+    let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
     let params_paths = (
-        expand_path(&cashierd.config.mint_params_path.clone())?,
-        expand_path(&cashierd.config.spend_params_path.clone())?,
+        expand_path(&config.mint_params_path.clone())?,
+        expand_path(&config.spend_params_path.clone())?,
     );
 
     let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
@@ -664,8 +663,8 @@ async fn main() -> Result<()> {
     let client = Client::new(
         rocks.clone(),
         (
-            cashierd.config.gateway_protocol_url.parse()?,
-            cashierd.config.gateway_publisher_url.parse()?,
+            config.gateway_protocol_url.parse()?,
+            config.gateway_publisher_url.parse()?,
         ),
         client_wallet.clone(),
         mint_params,
@@ -695,10 +694,10 @@ async fn main() -> Result<()> {
     };
 
     let cfg = RpcServerConfig {
-        socket_addr: cashierd.config.rpc_listen_address.clone(),
-        use_tls: cashierd.config.serve_tls,
-        identity_path: expand_path(&cashierd.config.clone().tls_identity_path)?,
-        identity_pass: cashierd.config.tls_identity_password.clone(),
+        socket_addr: config.rpc_listen_address.clone(),
+        use_tls: config.serve_tls,
+        identity_path: expand_path(&config.clone().tls_identity_path)?,
+        identity_pass: config.tls_identity_password.clone(),
     };
 
     let (t1, t2, t3) = cashierd.start(client, state).await?;
