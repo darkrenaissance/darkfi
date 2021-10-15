@@ -23,6 +23,7 @@ pub struct Keypair {
     pub private: jubjub::Fr,
 }
 
+
 //#[derive(Clone)]
 pub struct WalletDb {
     pub path: PathBuf,
@@ -81,9 +82,7 @@ impl WalletDb {
         if !key_check {
             let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
             let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-            let pubkey = serial::serialize(&public);
-            let privkey = serial::serialize(&secret);
-            self.put_keypair(pubkey, privkey)?;
+            self.put_keypair(&public, &secret)?;
         } else {
             debug!(target: "WALLETDB", "Keys already exist.");
             return Err(Error::from(ClientFailed::KeyExists));
@@ -91,9 +90,18 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn put_keypair(&self, key_public: Vec<u8>, key_private: Vec<u8>) -> Result<()> {
+    pub fn put_keypair(
+        &self,
+        key_public: &jubjub::SubgroupPoint,
+        key_private: &jubjub::Fr,
+    ) -> Result<()> {
         let conn = Connection::open(&self.path)?;
+
         conn.pragma_update(None, "key", &self.password)?;
+
+        let key_public = serial::serialize(key_public);
+        let key_private = serial::serialize(key_private);
+
         conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
             params![key_public, key_private],
@@ -244,7 +252,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn get_witnesses(&self) -> Result<Vec<(u64, IncrementalWitness<MerkleNode>)>> {
+    pub fn get_witnesses(&self) -> Result<HashMap<u64, IncrementalWitness<MerkleNode>>> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
@@ -257,12 +265,12 @@ impl WalletDb {
             Ok((row.get(0)?, row.get(1)?))
         })?;
 
-        let mut witnesses = Vec::new();
+        let mut witnesses = HashMap::new();
         for i in rows {
             let i = i?;
             let coin_id: u64 = i.0;
             let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(&i.1)?;
-            witnesses.push((coin_id, witness))
+            witnesses.insert(coin_id, witness);
         }
 
         Ok(witnesses)
@@ -395,10 +403,8 @@ mod tests {
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+        wallet.put_keypair(&public, &secret)?;
 
         let token_id = jubjub::Fr::random(&mut OsRng);
 
@@ -452,10 +458,8 @@ mod tests {
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+        wallet.put_keypair(&public, &secret)?;
 
         let token_id = jubjub::Fr::random(&mut OsRng);
 
@@ -506,10 +510,8 @@ mod tests {
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+        wallet.put_keypair(&public, &secret)?;
 
         let keypair = wallet.get_keypairs()?[0].clone();
 
@@ -530,10 +532,8 @@ mod tests {
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+        wallet.put_keypair(&public, &secret)?;
 
         let note = Note {
             serial: jubjub::Fr::random(&mut OsRng),
@@ -586,10 +586,8 @@ mod tests {
 
         let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
         let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let key_public = serial::serialize(&public);
-        let key_private = serial::serialize(&secret);
 
-        wallet.put_keypair(key_public, key_private)?;
+        wallet.put_keypair(&public, &secret)?;
 
         let mut tree = crate::crypto::merkle::CommitmentTree::empty();
 
