@@ -23,6 +23,29 @@ pub struct Keypair {
     pub private: jubjub::Fr,
 }
 
+#[derive(Debug, Clone)]
+pub struct Balance {
+    pub token_id: jubjub::Fr,
+    pub value: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct Balances {
+    pub list: Vec<Balance>,
+}
+impl Balances {
+    pub fn add(&mut self, balance: &Balance) {
+        if let Some(mut saved_balance) = self
+            .list
+            .iter_mut()
+            .find(|b| b.token_id == balance.token_id)
+        {
+            saved_balance.value += balance.value;
+        } else {
+            self.list.push(balance.clone());
+        }
+    }
+}
 
 //#[derive(Clone)]
 pub struct WalletDb {
@@ -297,7 +320,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn get_balances(&self) -> Result<HashMap<Vec<u8>, u64>> {
+    pub fn get_balances(&self) -> Result<Balances> {
         debug!(target: "WALLETDB", "Get token and balances...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -310,19 +333,15 @@ impl WalletDb {
             Ok((row.get(0)?, row.get(1)?))
         })?;
 
-        let mut balances = HashMap::new();
+        let mut balances = Balances { list: Vec::new() };
 
         for row in rows {
             let row = row?;
             let value: u64 = row.0;
-            let token_id: Vec<u8> = row.1;
-
-            if let Some(val) = balances.get_mut(&token_id) {
-                *val += value;
-            } else {
-                balances.insert(token_id, value);
-            }
+            let token_id: jubjub::Fr = self.get_value_deserialized(&row.1)?;
+            balances.add(&Balance { token_id, value });
         }
+
         Ok(balances)
     }
 
@@ -374,7 +393,6 @@ mod tests {
 
     use super::*;
     use crate::crypto::{coin::Coin, OwnCoin};
-    use crate::serial::serialize;
     use crate::util::join_config_path;
     use ff::PrimeField;
 
@@ -492,9 +510,10 @@ mod tests {
 
         let balances = wallet.get_balances()?;
 
-        let token_id = serialize(&token_id);
 
-        assert_eq!(balances[&token_id], 440);
+        assert_eq!(balances.list.len(), 1);
+        assert_eq!(balances.list[0].value, 440);
+        assert_eq!(balances.list[0].token_id, token_id);
 
         std::fs::remove_file(walletdb_path)?;
 

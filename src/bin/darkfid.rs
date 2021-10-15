@@ -135,9 +135,7 @@ impl Darkfid {
             let balances = self.client.lock().await.get_balances().await?;
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
-            for (id, value) in balances.iter() {
-                let id: jubjub::Fr = deserialize(&id)?;
-
+            for balance in balances.list.iter() {
                 // this is hardcoded for SOL
                 // TODO: if id == btc_id:
                 //          network = bitcoin
@@ -146,8 +144,8 @@ impl Darkfid {
 
                 let network = "solana";
 
-                if let Some(symbol) = self.drk_tokenlist.symbol_from_id(id)? {
-                    let amount = encode_base10(*value, 8);
+                if let Some(symbol) = self.drk_tokenlist.symbol_from_id(balance.token_id)? {
+                    let amount = encode_base10(balance.value, 8);
                     symbols.insert(symbol, (amount, network.to_string()));
                 }
             }

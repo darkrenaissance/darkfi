@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use async_std::sync::{Arc, Mutex};
@@ -19,7 +18,7 @@ use crate::{
     service::{GatewayClient, GatewaySlabsSubscriber},
     state::{state_transition, ProgramState, StateUpdate},
     tx,
-    wallet::{CashierDbPtr, Keypair, WalletPtr},
+    wallet::{CashierDbPtr, Keypair, WalletPtr, walletdb::Balances},
     Result,
 };
 
@@ -350,7 +349,7 @@ impl Client {
         self.wallet.key_gen()
     }
 
-    pub async fn get_balances(&self) -> Result<HashMap<Vec<u8>, u64>> {
+    pub async fn get_balances(&self) -> Result<Balances> {
         self.wallet.get_balances()
     }
 
