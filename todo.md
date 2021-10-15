@@ -9,8 +9,10 @@
 
 - [x] serialize signed btc transactions
 - [x] add genesis btc coinbase addr as token id
+- [x] serialize/encode btc keypairs
 - [ ] fix electrum rpc error: sendrawtransaction: TX decode failed
-- [ ] serialize/encode btc keypairs
+- [ ] fix unsubscribe generating errors from electrum rpc
+
 
 ## deposit
 
