@@ -452,11 +452,7 @@ impl Cashierd {
                 return Ok(None);
             }
             #[cfg(feature = "btc")]
-            NetworkName::Bitcoin => {
-                // Handle bitcoin address here if needed
-                Ok(Some("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string()))
-            }
-
+            NetworkName::Bitcoin => Ok(None),
             _ => Err(Error::NotSupportedNetwork),
         }
     }
@@ -506,8 +502,7 @@ impl Cashierd {
                             .map_err(|e| SolFailed::ParseError(e.to_string()))?;
                     }
 
-                    let sol_client =
-                        SolClient::new(main_keypair, &network.blockchain).await?;
+                    let sol_client = SolClient::new(main_keypair, &network.blockchain).await?;
 
                     bridge2.add_clients(NetworkName::Solana, sol_client).await?;
                 }
@@ -515,7 +510,7 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
-                    use drk::service::btc::{BtcClient, Keypair, BtcFailed};
+                    use drk::service::btc::{BtcClient, BtcFailed, Keypair};
 
                     let bridge2 = self.bridge.clone();
 
@@ -543,8 +538,7 @@ impl Cashierd {
                             .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
                     }
 
-                    let btc_client =
-                        BtcClient::new(main_keypair, &network.blockchain).await?;
+                    let btc_client = BtcClient::new(main_keypair, &network.blockchain).await?;
 
                     bridge2
                         .add_clients(NetworkName::Bitcoin, btc_client)
