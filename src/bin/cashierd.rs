@@ -32,7 +32,9 @@ use drk::{
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
         1 => Err(Error::BridgeError("Not Supported Client".into())),
-        2 => Err(Error::BridgeError("Unable to watch the deposit address".into())),
+        2 => Err(Error::BridgeError(
+            "Unable to watch the deposit address".into(),
+        )),
         3 => Err(Error::BridgeError("Unable to send the token".into())),
         _ => Err(Error::BridgeError("Unknown error_code".into())),
     }
@@ -505,7 +507,7 @@ impl Cashierd {
                     }
 
                     let sol_client =
-                        SolClient::new(serialize(&main_keypair), &network.blockchain).await?;
+                        SolClient::new(main_keypair, &network.blockchain).await?;
 
                     bridge2.add_clients(NetworkName::Solana, sol_client).await?;
                 }
@@ -513,7 +515,7 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
-                    use drk::service::btc::{BtcClient, Keypair};
+                    use drk::service::btc::{BtcClient, Keypair, BtcFailed};
 
                     let bridge2 = self.bridge.clone();
 
@@ -521,19 +523,28 @@ impl Cashierd {
 
                     let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
 
-                    if main_keypairs.is_empty() {
-                        main_keypair = Keypair::new();
-                        self.cashier_wallet.put_main_keys(
-                            &serialize(&main_keypair),
-                            &serialize(&main_keypair.pubkey()),
-                            &NetworkName::Bitcoin,
-                        )?;
+                    if network.keypair.is_empty() {
+                        if main_keypairs.is_empty() {
+                            main_keypair = Keypair::new();
+                            self.cashier_wallet.put_main_keys(
+                                &serialize(&main_keypair),
+                                &serialize(&main_keypair.pubkey()),
+                                &NetworkName::Bitcoin,
+                            )?;
+                        } else {
+                            main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                        }
                     } else {
-                        main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(
+                            PathBuf::from(expand_path(&network.keypair.clone())?),
+                        )?;
+                        let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
+                        main_keypair = Keypair::from_bytes(&keypair_bytes)
+                            .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
                     }
 
                     let btc_client =
-                        BtcClient::new(serialize(&main_keypair), &network.blockchain).await?;
+                        BtcClient::new(main_keypair, &network.blockchain).await?;
 
                     bridge2
                         .add_clients(NetworkName::Bitcoin, btc_client)

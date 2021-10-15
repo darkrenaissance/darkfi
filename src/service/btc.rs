@@ -168,8 +168,7 @@ pub struct BtcClient {
 }
 
 impl BtcClient {
-    pub async fn new(main_keypair: Vec<u8>, network: &str) -> Result<Arc<Self>> {
-        let main_keypair: Keypair = deserialize(&main_keypair)?;
+    pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
 
         let notify_channel = async_channel::unbounded();
 

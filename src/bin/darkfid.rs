@@ -213,7 +213,7 @@ impl Darkfid {
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
-        // TODO: this just selects the first cashier in the list
+        // NOTE: this just selects the first cashier in the list
         match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
