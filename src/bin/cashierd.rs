@@ -25,7 +25,7 @@ use drk::{
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
     util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
-    wallet::{cashierdb::MainTokenKey, CashierDb, WalletDb},
+    wallet::{cashierdb::TokenKey, CashierDb, WalletDb},
     Error, Result,
 };
 
@@ -127,10 +127,9 @@ impl Cashierd {
                     .sender
                     .send(bridge::BridgeRequests {
                         network: network.name.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some((
-                            deposit_token.token_private_key,
-                            deposit_token.token_public_key,
-                        ))),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some(
+                            deposit_token.token_key,
+                        )),
                     })
                     .await?;
             }
@@ -298,10 +297,7 @@ impl Cashierd {
                     .sender
                     .send(bridge::BridgeRequests {
                         network: network.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some((
-                            keypair.private_key,
-                            keypair.public_key,
-                        ))),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some(keypair)),
                     })
                     .await?;
             }
@@ -315,18 +311,18 @@ impl Cashierd {
             }
 
             match bridge_res.payload {
-                bridge::BridgeResponsePayload::Watch(token_priv, token_pub) => {
+                bridge::BridgeResponsePayload::Watch(token_key) => {
                     // add pairings to db
                     self.cashier_wallet.put_deposit_keys(
                         &drk_pub_key,
-                        &token_priv,
-                        &serialize(&token_pub),
+                        &token_key.private_key,
+                        &serialize(&token_key.public_key),
                         &network,
                         &token_id,
                         mint_address,
                     )?;
 
-                    return Ok(token_pub);
+                    return Ok(token_key.public_key);
                 }
                 bridge::BridgeResponsePayload::Address(token_pub) => {
                     return Ok(token_pub);
@@ -497,7 +493,7 @@ impl Cashierd {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
-                                &MainTokenKey {
+                                &TokenKey {
                                     private_key: serialize(&main_keypair),
                                     public_key: serialize(&main_keypair.pubkey()),
                                 },
@@ -536,7 +532,7 @@ impl Cashierd {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
-                                &MainTokenKey {
+                                &TokenKey {
                                     private_key: serialize(&main_keypair),
                                     public_key: serialize(&main_keypair.pubkey()),
                                 },

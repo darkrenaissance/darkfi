@@ -7,6 +7,7 @@ use futures::stream::StreamExt;
 use log::*;
 
 use crate::util::NetworkName;
+use crate::wallet::cashierdb::TokenKey;
 use crate::{Error, Result};
 
 pub struct BridgeRequests {
@@ -20,12 +21,12 @@ pub struct BridgeResponse {
 }
 
 pub enum BridgeRequestsPayload {
-    Send(Vec<u8>, u64),                // send (address, amount)
-    Watch(Option<(Vec<u8>, Vec<u8>)>), // if already has a keypair
+    Send(Vec<u8>, u64),      // send (address, amount)
+    Watch(Option<TokenKey>), // if already has a keypair
 }
 
 pub enum BridgeResponsePayload {
-    Watch(Vec<u8>, String),
+    Watch(TokenSubscribtion),
     Address(String),
     Send,
     Empty,
@@ -46,7 +47,7 @@ pub struct BridgeSubscribtion {
 
 #[derive(Debug)]
 pub struct TokenSubscribtion {
-    pub secret_key: Vec<u8>,
+    pub private_key: Vec<u8>,
     pub public_key: String,
 }
 
@@ -163,9 +164,14 @@ impl Bridge {
 
         match req.payload {
             BridgeRequestsPayload::Watch(val) => match val {
-                Some((private_key, public_key)) => {
+                Some(token_key) => {
                     let pub_key = client
-                        .subscribe_with_keypair(private_key, public_key, drk_pub_key, mint_address)
+                        .subscribe_with_keypair(
+                            token_key.private_key,
+                            token_key.public_key,
+                            drk_pub_key,
+                            mint_address,
+                        )
                         .await;
 
                     if pub_key.is_err() {
@@ -193,7 +199,7 @@ impl Bridge {
                         let sub = sub?;
                         res = BridgeResponse {
                             error: BridgeResponseError::NoError,
-                            payload: BridgeResponsePayload::Watch(sub.secret_key, sub.public_key),
+                            payload: BridgeResponsePayload::Watch(sub),
                         };
                     }
                 }

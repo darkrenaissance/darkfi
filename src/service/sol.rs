@@ -407,7 +407,7 @@ impl NetworkClient for SolClient {
         let keypair = Keypair::generate(&mut OsRng);
 
         let public_key = keypair.pubkey().to_string();
-        let secret_key = serialize(&keypair);
+        let private_key = serialize(&keypair);
 
         let mint = self.check_mint_address(mint_address)?;
 
@@ -429,7 +429,7 @@ impl NetworkClient for SolClient {
         .detach();
 
         Ok(TokenSubscribtion {
-            secret_key,
+            private_key,
             public_key,
         })
     }

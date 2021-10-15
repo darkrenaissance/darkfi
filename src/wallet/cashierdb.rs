@@ -18,7 +18,7 @@ pub struct CashierDb {
 }
 
 #[derive(Debug, Clone)]
-pub struct MainTokenKey {
+pub struct TokenKey {
     pub public_key: Vec<u8>,
     pub private_key: Vec<u8>,
 }
@@ -32,8 +32,7 @@ pub struct WithdrawToken {
 
 pub struct DepositToken {
     pub drk_public_key: jubjub::SubgroupPoint,
-    pub token_public_key: Vec<u8>,
-    pub token_private_key: Vec<u8>,
+    pub token_key: TokenKey,
     pub token_id: jubjub::Fr,
     pub mint_address: String,
 }
@@ -80,7 +79,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn put_main_keys(&self, token_key: &MainTokenKey, network: &NetworkName) -> Result<()> {
+    pub fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
 
         // open connection
@@ -104,7 +103,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<MainTokenKey>> {
+    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
         debug!(target: "CASHIERDB", "Get main keys");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -127,7 +126,7 @@ impl CashierDb {
 
         for k in keys_iter {
             let k = k?;
-            keys.push(MainTokenKey {
+            keys.push(TokenKey {
                 private_key: k.0,
                 public_key: k.1,
             });
@@ -292,7 +291,7 @@ impl CashierDb {
         &self,
         d_key_public: &jubjub::SubgroupPoint,
         network: &NetworkName,
-    ) -> Result<Vec<MainTokenKey>> {
+    ) -> Result<Vec<TokenKey>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         // open connection
@@ -323,7 +322,7 @@ impl CashierDb {
 
         for k in keys_iter {
             let k = k?;
-            keys.push(MainTokenKey {
+            keys.push(TokenKey {
                 private_key: k.0,
                 public_key: k.1,
             });
@@ -367,14 +366,16 @@ impl CashierDb {
         for key in keys_iter {
             let key = key?;
             let drk_public_key: jubjub::SubgroupPoint = self.get_value_deserialized(&key.0)?;
-            let token_private_key = key.1;
-            let token_public_key = key.2;
+            let private_key = key.1;
+            let public_key = key.2;
             let token_id: jubjub::Fr = self.get_value_deserialized(&key.3)?;
             let mint_address: String = self.get_value_deserialized(&key.4)?;
             keys.push(DepositToken {
                 drk_public_key,
-                token_private_key,
-                token_public_key,
+                token_key: TokenKey {
+                    private_key,
+                    public_key,
+                },
                 token_id,
                 mint_address,
             });
@@ -519,7 +520,7 @@ mod tests {
         let network = NetworkName::Bitcoin;
 
         wallet.put_main_keys(
-            &MainTokenKey {
+            &TokenKey {
                 private_key: token_addr_private.clone(),
                 public_key: token_addr.clone(),
             },
@@ -574,8 +575,8 @@ mod tests {
         let resumed_keys = wallet.get_deposit_token_keys_by_network(&network)?;
 
         assert_eq!(resumed_keys[0].drk_public_key, public2);
-        assert_eq!(resumed_keys[0].token_private_key, token_addr_private);
-        assert_eq!(resumed_keys[0].token_public_key, token_addr);
+        assert_eq!(resumed_keys[0].token_key.private_key, token_addr_private);
+        assert_eq!(resumed_keys[0].token_key.public_key, token_addr);
         assert_eq!(resumed_keys[0].token_id, token_id);
 
         wallet.confirm_deposit_key_record(&public2, &network)?;

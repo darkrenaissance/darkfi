@@ -5,16 +5,16 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use bitcoin_hashes::hex::ToHex;
 use bitcoin::blockdata::{
     script::{Builder, Script},
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
 };
 use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
-use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
+use bitcoin::util::psbt::serialize::Serialize;
+use bitcoin_hashes::hex::ToHex;
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use secp256k1::{
@@ -169,7 +169,6 @@ pub struct BtcClient {
 
 impl BtcClient {
     pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
-
         //TODO
         // info!(target: "SOL BRIDGE", "Main BTC wallet pubkey: {:?}", &main_keypair.pubkey());
 
@@ -322,7 +321,6 @@ impl BtcClient {
         debug!(target: "BTC BRIDGE", "unSigned tx: {:?}",
                &txid.to_hex());
 
-
         let signed_tx = sign_transaction(
             transaction,
             script,
@@ -354,7 +352,7 @@ impl NetworkClient for BtcClient {
         // Generate bitcoin keys
         let keypair = Keypair::new();
         let btc_keys = Account::new(&keypair, self.network);
-        let secret_key = serialize(&keypair);
+        let private_key = serialize(&keypair);
         let public_key = btc_keys.address.to_string();
 
         // start scheduler for checking balance
@@ -369,7 +367,7 @@ impl NetworkClient for BtcClient {
         .detach();
 
         Ok(TokenSubscribtion {
-            secret_key,
+            private_key,
             public_key,
         })
     }
@@ -398,7 +396,12 @@ impl NetworkClient for BtcClient {
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
     }
-    async fn send(self: Arc<Self>, address: Vec<u8>, _mint: Option<String>, amount: u64) -> Result<()> {
+    async fn send(
+        self: Arc<Self>,
+        address: Vec<u8>,
+        _mint: Option<String>,
+        amount: u64,
+    ) -> Result<()> {
         // address is not a btc address, so derive the btc address
         let client = &self.client;
         let public_key = deserialize(&address)?;
@@ -646,10 +649,10 @@ pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 #[cfg(test)]
 mod tests {
 
-    use crate::serial::{deserialize, serialize};
-    use std::str::FromStr;
     use super::Keypair;
+    use crate::serial::{deserialize, serialize};
     use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
+    use std::str::FromStr;
 
     const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
@@ -668,7 +671,6 @@ mod tests {
 
     #[test]
     pub fn test_serialize_and_deserialize_keypair() -> super::BtcResult<()> {
-
         let keypair = Keypair::new();
 
         let bytes: [u8; KEYPAIR_LENGTH] = keypair.to_bytes();
