@@ -17,6 +17,11 @@ pub struct CashierDb {
     pub initialized: Mutex<bool>,
 }
 
+pub struct MainTokenKey {
+    pub public_key: Vec<u8>,
+    pub private_key: Vec<u8>,
+}
+
 impl WalletApi for CashierDb {
     fn get_password(&self) -> String {
         self.password.to_owned()
@@ -59,12 +64,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn put_main_keys(
-        &self,
-        token_key_private: &[u8],
-        token_key_public: &[u8],
-        network: &NetworkName,
-    ) -> Result<()> {
+    pub fn put_main_keys(&self, token_key: &MainTokenKey, network: &NetworkName) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
 
         // open connection
@@ -80,15 +80,15 @@ impl CashierDb {
             VALUES
             (:token_key_private, :token_key_public, :network)",
             named_params! {
-                ":token_key_private": token_key_private,
-                ":token_key_public": token_key_public,
+                ":token_key_private": token_key.private_key,
+                ":token_key_public": token_key.public_key,
                 ":network": &network,
             },
         )?;
         Ok(())
     }
 
-    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<MainTokenKey>> {
         debug!(target: "CASHIERDB", "Get main keys");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -110,7 +110,11 @@ impl CashierDb {
         let mut keys = vec![];
 
         for k in keys_iter {
-            keys.push(k?);
+            let k = k?;
+            keys.push(MainTokenKey {
+                private_key: k.0,
+                public_key: k.1,
+            });
         }
 
         Ok(keys)
@@ -488,14 +492,20 @@ mod tests {
 
         let network = NetworkName::Bitcoin;
 
-        wallet.put_main_keys(&token_addr_private, &token_addr, &network)?;
+        wallet.put_main_keys(
+            &MainTokenKey {
+                private_key: token_addr_private.clone(),
+                public_key: token_addr.clone(),
+            },
+            &network,
+        )?;
 
         let keys = wallet.get_main_keys(&network)?;
 
         assert_eq!(keys.len(), 1);
 
-        assert_eq!(keys[0].0, token_addr_private);
-        assert_eq!(keys[0].1, token_addr);
+        assert_eq!(keys[0].private_key, token_addr_private);
+        assert_eq!(keys[0].public_key, token_addr);
 
         std::fs::remove_file(walletdb_path)?;
 
@@ -541,7 +551,7 @@ mod tests {
         assert_eq!(resumed_keys[0].1, token_addr_private);
         assert_eq!(resumed_keys[0].2, token_addr);
         assert_eq!(resumed_keys[0].3, token_id);
-        
+
         wallet.confirm_deposit_key_record(&public2, &network)?;
 
         let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;

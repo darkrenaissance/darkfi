@@ -25,7 +25,7 @@ use drk::{
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
     util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
-    wallet::{CashierDb, WalletDb},
+    wallet::{cashierdb::MainTokenKey, CashierDb, WalletDb},
     Error, Result,
 };
 
@@ -482,12 +482,15 @@ impl Cashierd {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
-                                &serialize(&main_keypair),
-                                &serialize(&main_keypair.pubkey()),
+                                &MainTokenKey {
+                                    private_key: serialize(&main_keypair),
+                                    public_key: serialize(&main_keypair.pubkey()),
+                                },
                                 &NetworkName::Solana,
                             )?;
                         } else {
-                            main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                            main_keypair =
+                                deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(
@@ -518,12 +521,15 @@ impl Cashierd {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
-                                &serialize(&main_keypair),
-                                &serialize(&main_keypair.pubkey()),
+                                &MainTokenKey {
+                                    private_key: serialize(&main_keypair),
+                                    public_key: serialize(&main_keypair.pubkey()),
+                                },
                                 &NetworkName::Bitcoin,
                             )?;
                         } else {
-                            main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].0)?;
+                            main_keypair =
+                                deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(
