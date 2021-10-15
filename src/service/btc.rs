@@ -61,7 +61,7 @@ impl Keypair {
 
         bytes[..SECRET_KEY_SIZE].copy_from_slice(self.secret.as_ref());
         bytes[SECRET_KEY_SIZE..].copy_from_slice(&self.public.serialize());
-        debug!(target: "BTC CLIENT", "Keypair to bytes: {:?}", bytes);
+        debug!(target: "BTC BRIDGE", "Keypair to bytes: {:?}", bytes);
 
         bytes
     }
@@ -215,12 +215,12 @@ impl BtcClient {
 
         loop {
             let current_status = client.script_pop(&script)?;
-            debug!(target: "BTC CLIENT", "script status: {:?}", status);
-            debug!(target: "BTC CLIENT", "current_script status: {:?}", current_status);
+            debug!(target: "BTC BRIDGE", "script status: {:?}", status);
+            debug!(target: "BTC BRIDGE", "current_script status: {:?}", current_status);
             if current_status == status {
                 async_std::task::sleep(Duration::from_secs(5)).await;
                 debug!(
-                    target: "BTC CLIENT",
+                    target: "BTC BRIDGE",
                     "ScriptPubKey status has not changed, amtucfd: {}, amtcfd: {}",
                     client.script_get_balance(&script)?.unconfirmed,
                     client.script_get_balance(&script)?.confirmed
@@ -231,7 +231,7 @@ impl BtcClient {
             match current_status {
                 Some(_) => {
                     // Script has a notification update
-                    debug!(target: "BTC CLIENT", "ScripPubKey notify update");
+                    debug!(target: "BTC BRIDGE", "ScripPubKey notify update");
                     let _ = client.script_unsubscribe(&script)?;
                     break;
                 }
@@ -646,7 +646,7 @@ mod tests {
     use crate::serial::{deserialize, serialize};
     use std::str::FromStr;
     use super::Keypair;
-    use secp256k1::{constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE}};
+    use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
 
     const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
