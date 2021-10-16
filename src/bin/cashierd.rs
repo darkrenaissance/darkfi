@@ -208,34 +208,29 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0];
-        let mint_address = &args[1];
-        let drk_pub_key = &args[2];
+        let network: NetworkName;
+        let mut mint_address: &str;
+        let drk_pub_key: &str;
 
-        if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
-        }
-
-        let network = network.as_str().unwrap();
-
-        let network = match NetworkName::from_str(network) {
-            Ok(d) => d,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, Some(e.to_string()), id));
+        match (args[0].as_str(), args[1].as_str(), args[2].as_str()) {
+            (Some(n), Some(m), Some(d)) => {
+                if NetworkName::from_str(n).is_err() {
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                }
+                network = NetworkName::from_str(n).unwrap();
+                mint_address = m;
+                drk_pub_key = d;
             }
-        };
-
-        if mint_address.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            (None, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+            }
+            (_, None, _) => {
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            }
+            (_, _, None) => {
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+            }
         }
-
-        let mut mint_address = mint_address.as_str().unwrap().to_string();
-
-        if drk_pub_key.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
-        }
-
-        let drk_pub_key = drk_pub_key.as_str().unwrap();
 
         // Check if the features list contains this network
         if self
@@ -257,7 +252,7 @@ impl Cashierd {
             let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
 
             if mint_address_opt.is_none() {
-                mint_address = String::new();
+                mint_address = "";
             }
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
             let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
@@ -319,7 +314,7 @@ impl Cashierd {
                         &serialize(&token_key.public_key),
                         &network,
                         &token_id,
-                        mint_address,
+                        mint_address.into(),
                     )?;
 
                     return Ok(token_key.public_key);
@@ -349,34 +344,29 @@ impl Cashierd {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0];
-        let mint_address = &args[1];
-        let address = &args[2];
-        let amount = &args[3];
+        let network: NetworkName;
+        let mut mint_address: &str;
+        let address: &str;
 
-        if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+        match (args[0].as_str(), args[1].as_str(), args[2].as_str()) {
+            (Some(n), Some(m), Some(a)) => {
+                if NetworkName::from_str(n).is_err() {
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                }
+                network = NetworkName::from_str(n).unwrap();
+                mint_address = m;
+                address = a;
+            }
+            (None, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+            }
+            (_, None, _) => {
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            }
+            (_, _, None) => {
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+            }
         }
-
-        let network = NetworkName::from_str(args[0].as_str().unwrap()).unwrap();
-
-        if mint_address.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
-        }
-
-        let mut mint_address = mint_address.as_str().unwrap().to_string();
-
-        if address.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
-        }
-
-        let address = address.as_str().unwrap();
-
-        if amount.as_u64().is_none() {
-            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
-        }
-
-        let _amount = amount.as_u64().unwrap();
 
         // Check if the features list contains this network
         if self
@@ -399,7 +389,7 @@ impl Cashierd {
 
             if mint_address_opt.is_none() {
                 // empty string
-                mint_address = String::new();
+                mint_address = "";
             }
 
             let address = serialize(&address.to_string());
@@ -422,7 +412,7 @@ impl Cashierd {
                     &cashier_secret,
                     &network,
                     &token_id,
-                    mint_address,
+                    mint_address.into(),
                 )?;
             }
 
