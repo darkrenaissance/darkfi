@@ -477,6 +477,8 @@ impl NetworkClient for SolClient {
         mint: Option<String>,
         amount: u64,
     ) -> Result<()> {
+        debug!(target: "SOL BRIDGE", "start sending {} sol", lamports_to_sol(amount) );
+
         let rpc = RpcClient::new(self.rpc_server.to_string());
         let address: Pubkey = deserialize(&address)?;
 
@@ -491,7 +493,7 @@ impl NetworkClient for SolClient {
         }
 
         // reverse truncate
-        truncate(amount, decimals as u16, 8)?;
+        let amount = truncate(amount, decimals as u16, 8)?;
 
         let instruction =
             system_instruction::transfer(&self.main_keypair.pubkey(), &address, amount);

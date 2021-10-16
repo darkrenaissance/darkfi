@@ -231,6 +231,7 @@ mod tests {
     
         // Token decimals is less than decimals
         assert_eq!(1000000000, truncate(100000000, 9, 8).unwrap());
+        assert_eq!(100000000, truncate(10000000, 9, 8).unwrap());
         assert_eq!(100, truncate(10, 9, 8).unwrap());
         assert_eq!(10, truncate(1, 9, 8).unwrap());
         assert_eq!(100, truncate(10, 9, 8).unwrap());
