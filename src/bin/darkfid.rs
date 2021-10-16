@@ -169,20 +169,28 @@ impl Darkfid {
 
         let args = args.unwrap();
 
-        let network = args[0].as_str();
-        let symbol = args[1].as_str();
-
-        if network.is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+        if args.len() != 2 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        if symbol.is_none() {
-            return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id));
+        let network: &str;
+        let symbol: &str;
+
+        match (args[0].as_str(), args[1].as_str()) {
+            (Some(net), Some(sym)) => {
+                network = net;
+                symbol = sym;
+            }
+            (None, _) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+            }
+            (_, None) => {
+                return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id));
+            }
         }
-        let symbol = symbol.unwrap();
 
         let result: Result<Value> = async {
-            let network = NetworkName::from_str(&network.unwrap())?;
+            let network = NetworkName::from_str(&network)?;
             match network {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
@@ -242,20 +250,21 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0];
-        let token = &args[1];
+        let network: &str;
+        let token: &str;
 
-        if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+        match (args[0].as_str(), args[1].as_str()) {
+            (Some(net), Some(tkn)) => {
+                network = net;
+                token = tkn;
+            }
+            (None, _) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+            }
+            (_, None) => {
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            }
         }
-
-        let token = token.as_str().unwrap();
-
-        if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
-        }
-
-        let network = network.as_str().unwrap();
 
         let token_id = match assign_id(&network, &token, &self.sol_tokenlist) {
             Ok(t) => t,
@@ -309,28 +318,36 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let network = &args[0];
-        let token = &args[1];
-        let address = &args[2];
-        let amount = &args[3];
+        let network: &str;
+        let token: &str;
+        let address: &str;
+        let amount: &str;
 
-        if token.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+        match (
+            args[0].as_str(),
+            args[1].as_str(),
+            args[2].as_str(),
+            args[3].as_str(),
+        ) {
+            (Some(net), Some(tkn), Some(addr), Some(val)) => {
+                network = net;
+                token = tkn;
+                address = addr;
+                amount = val;
+            }
+            (None, _, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+            }
+            (_, None, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            }
+            (_, _, None, _) => {
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+            }
+            (_, _, _, None) => {
+                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+            }
         }
-
-        let token = token.as_str().unwrap();
-
-        if network.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
-        }
-
-        let network = network.as_str().unwrap();
-
-        if amount.as_str().is_none() {
-            return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
-        }
-
-        let amount = amount.as_str().unwrap();
 
         let amount_in_apo = match decode_base10(&amount, 8, true) {
             Ok(a) => a,
@@ -420,26 +437,26 @@ impl Darkfid {
             return JsonResult::Err(jsonerr(InvalidParams, None, id));
         }
 
-        let token = &args[0].as_str();
-        let address = &args[1].as_str();
-        let amount = &args[2].as_str();
+        let token: &str;
+        let address: &str;
+        let amount: &str;
 
-        if token.is_none() {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+        match (args[0].as_str(), args[1].as_str(), args[2].as_str()) {
+            (Some(tkn), Some(addr), Some(val)) => {
+                token = tkn;
+                address = addr;
+                amount = val;
+            }
+            (None, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            }
+            (_, None, _) => {
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+            }
+            (_, _, None) => {
+                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+            }
         }
-
-        let token = token.unwrap();
-
-        if address.is_none() {
-            return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
-        }
-
-        let address = address.unwrap();
-
-        if amount.is_none() {
-            return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
-        }
-        let amount = amount.unwrap();
 
         let token_id: &jubjub::Fr;
 
