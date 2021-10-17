@@ -381,7 +381,7 @@ pub struct State {
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
         debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
-        return self.public_keys.contains(public);
+        self.public_keys.contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {

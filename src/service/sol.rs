@@ -219,8 +219,9 @@ impl SolClient {
             ));
         }
 
+        let amnt = cur_balance - prev_balance;
+
         if mint.is_some() {
-            let amnt = cur_balance - prev_balance;
             let ui_amnt = amnt / u64::pow(10, decimals as u32);
 
             send_notification
@@ -237,7 +238,6 @@ impl SolClient {
             debug!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
             let _ = self.send_tok_to_main_wallet(&rpc, &mint.unwrap(), amnt, decimals, &keypair)?;
         } else {
-            let amnt = cur_balance - prev_balance;
             let ui_amnt = lamports_to_sol(amnt);
 
             send_notification

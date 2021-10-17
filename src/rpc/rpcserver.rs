@@ -103,7 +103,7 @@ async fn serve(
             },
             Err(e) => {
                 debug!(target: "RPC SERVER", "Failed to establish TLS connection: {:#}", e);
-                return Ok(());
+                Ok(())
             }
         },
     }

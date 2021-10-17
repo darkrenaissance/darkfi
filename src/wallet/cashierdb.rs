@@ -63,7 +63,7 @@ impl CashierDb {
                 let conn = Connection::open(&self.path)?;
                 debug!(target: "CASHIERDB", "Opened connection at path {:?}", self.path);
                 conn.pragma_update(None, "key", &self.password)?;
-                conn.execute_batch(&contents)?;
+                conn.execute_batch(contents)?;
                 *self.initialized.lock().await = true;
             } else {
                 debug!(
@@ -264,7 +264,7 @@ impl CashierDb {
             WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
         let addr_iter = stmt.query_map(
-            &[(":d_key_public", &d_key_public), (":confirm", &&confirm)],
+            &[(":d_key_public", &d_key_public), (":confirm", &confirm)],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
 

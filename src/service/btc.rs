@@ -312,7 +312,7 @@ impl BtcClient {
             input: inputs,
             output: vec![TxOut {
                 script_pubkey: main_script_pubkey,
-                value: value,
+                value,
             }],
             lock_time: 0,
             version: 2,

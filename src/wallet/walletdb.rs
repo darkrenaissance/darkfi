@@ -80,7 +80,7 @@ impl WalletDb {
                 let conn = Connection::open(&self.path)?;
                 debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
                 conn.pragma_update(None, "key", &self.password)?;
-                conn.execute_batch(&contents)?;
+                conn.execute_batch(contents)?;
                 *self.initialized.lock().await = true;
             } else {
                 debug!(
