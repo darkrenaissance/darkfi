@@ -60,7 +60,7 @@ pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Resul
         NetworkName::Bitcoin => {
             let id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
             Ok(id)
-        },
+        }
         _ => Err(Error::NotSupportedNetwork),
     }
 }
@@ -168,9 +168,7 @@ pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> 
     }
 
     if token_decimals < decimals {
-        for _ in 0..(decimals - token_decimals) {
-            amount.push('0');
-        }
+        amount.resize(amount.len() + (decimals - token_decimals) as usize, '0');
     }
 
     let amount = u64::from_str(&String::from_iter(amount))?;
@@ -225,10 +223,10 @@ mod tests {
         assert_eq!(00000000, truncate(0, 8, 0).unwrap());
         assert_eq!(100000000, truncate(1, 8, 0).unwrap());
 
-        //        
+        //
         // reverse truncate
         //
-    
+
         // Token decimals is less than decimals
         assert_eq!(1000000000, truncate(100000000, 9, 8).unwrap());
         assert_eq!(100000000, truncate(10000000, 9, 8).unwrap());
@@ -244,7 +242,7 @@ mod tests {
         assert_eq!(100, truncate(1000, 7, 8).unwrap());
         assert_eq!(120, truncate(12000, 6, 8).unwrap());
         assert_eq!(100, truncate(1000000, 4, 8).unwrap());
-        
+
         // token decimals is 0
         assert_eq!(0, truncate(00000000, 0, 8).unwrap());
         assert_eq!(1, truncate(100000000, 0, 8).unwrap());
