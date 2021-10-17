@@ -136,13 +136,18 @@ impl Darkfid {
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
-                // this is hardcoded for SOL
-                // TODO: if id == btc_id:
-                //          network = bitcoin
-                //      else
-                //          network = solana
 
-                let network = "solana";
+                
+                // XXX: this must be changed once cashierd 
+                // supports more than two networks 
+
+                let mut network = "solana";
+
+                if balance.token_id.to_string()
+                    == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd"
+                {
+                    network = "bitcoin"
+                }
 
                 if let Some(symbol) = self.drk_tokenlist.symbol_from_id(balance.token_id)? {
                     let amount = encode_base10(balance.value, 8);
