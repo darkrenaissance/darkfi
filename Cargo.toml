@@ -75,8 +75,8 @@ secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std
 electrum-client = {version = "0.8.0", optional = true }
 
 [dependencies.rusqlite]
-version = "0.25.1"
-features = ["bundled", "sqlcipher"]
+version = "0.26.0"
+features = ["bundled-sqlcipher"]
 
 [dependencies.zeromq]
 git = "https://github.com/zeromq/zmq.rs"
