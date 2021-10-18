@@ -34,6 +34,7 @@ bimap = "0.5.2"
 hex = "0.4.2"
 bs58 = "0.4.0"
 prettytable-rs = "0.8"
+num_cpus = "1.13.0"
 
 smol = "1.2.4"
 futures = "0.3.17"
