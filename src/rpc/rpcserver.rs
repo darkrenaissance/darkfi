@@ -2,6 +2,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use async_executor::Executor;
 use async_native_tls::{Identity, TlsAcceptor};
 use async_trait::async_trait;
 use log::{debug, error};
@@ -22,13 +23,14 @@ pub struct RpcServerConfig {
 
 #[async_trait]
 pub trait RequestHandler: Sync + Send {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult;
+    async fn handle_request(&self, req: JsonRequest, executor: Arc<Executor<'_>>) -> JsonResult;
 }
 
 async fn serve(
     mut stream: Async<TcpStream>,
     tls: Option<TlsAcceptor>,
     rh: Arc<impl RequestHandler + 'static>,
+    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     debug!(target: "RPC SERVER", "Accepted connection");
 
@@ -58,7 +60,7 @@ async fn serve(
                 }
             };
 
-            let reply = rh.handle_request(r).await;
+            let reply = rh.handle_request(r, executor.clone()).await;
             let j = serde_json::to_string(&reply).unwrap();
             debug!(target: "RPC", "<-- {}", j);
 
@@ -92,7 +94,7 @@ async fn serve(
                     }
                 };
 
-                let reply = rh.handle_request(r).await;
+                let reply = rh.handle_request(r, executor.clone()).await;
                 let j = serde_json::to_string(&reply).unwrap();
                 debug!(target: "RPC", "<-- {}", j);
 
@@ -113,6 +115,7 @@ async fn listen(
     listener: Async<TcpListener>,
     tls: Option<TlsAcceptor>,
     rh: Arc<impl RequestHandler + 'static>,
+    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     match &tls {
         None => {
@@ -123,13 +126,15 @@ async fn listen(
         }
     }
 
+    let ex = executor.clone();
     loop {
         let (stream, _) = listener.accept().await?;
         let tls = tls.clone();
         let rh_c = rh.clone();
 
-        smol::spawn(async move {
-            if let Err(err) = serve(stream, tls, rh_c).await {
+        let ex2 = ex.clone();
+        ex.spawn(async move {
+            if let Err(err) = serve(stream, tls, rh_c, ex2.clone()).await {
                 error!(target: "RPC SERVER", "Connection error: {:#?}", err);
             }
         })
@@ -140,6 +145,7 @@ async fn listen(
 pub async fn listen_and_serve(
     cfg: RpcServerConfig,
     rh: Arc<impl RequestHandler + 'static>,
+    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     let tls: Option<TlsAcceptor>;
 
@@ -151,6 +157,6 @@ pub async fn listen_and_serve(
         tls = None;
     }
 
-    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh);
+    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh, executor);
     listener.await
 }

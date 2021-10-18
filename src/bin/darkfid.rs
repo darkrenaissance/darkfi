@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use async_executor::Executor;
 use async_trait::async_trait;
 use clap::clap_app;
+use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
 
@@ -38,7 +40,7 @@ pub struct Cashier {
 
 #[async_trait]
 impl RequestHandler for Darkfid {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
@@ -81,12 +83,12 @@ impl Darkfid {
         })
     }
 
-    async fn start(&mut self, state: Arc<Mutex<State>>) -> Result<()> {
+    async fn start(&mut self, state: Arc<Mutex<State>>, executor: Arc<Executor<'_>>) -> Result<()> {
         self.client.lock().await.start().await?;
         self.client
             .lock()
             .await
-            .connect_to_subscriber(state)
+            .connect_to_subscriber(state, executor)
             .await?;
 
         Ok(())
@@ -136,10 +138,8 @@ impl Darkfid {
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
-
-                
-                // XXX: this must be changed once cashierd 
-                // supports more than two networks 
+                // XXX: this must be changed once cashierd
+                // supports more than two networks
 
                 let mut network = "solana";
 
@@ -496,30 +496,7 @@ impl Darkfid {
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let args = clap_app!(darkfid =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg verbose: -v --verbose "Increase verbosity")
-    )
-    .get_matches();
-
-    let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
-    } else {
-        join_config_path(&PathBuf::from("darkfid.toml"))?
-    };
-
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
-
-    simple_logger::init_with_level(loglevel)?;
-
-    let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-
+async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()> {
     let wallet = WalletDb::new(
         expand_path(&config.wallet_path)?.as_path(),
         config.wallet_password.clone(),
@@ -601,6 +578,50 @@ async fn main() -> Result<()> {
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    darkfid.start(state).await?;
-    listen_and_serve(server_config, Arc::new(darkfid)).await
+    darkfid.start(state, executor.clone()).await?;
+    listen_and_serve(server_config, Arc::new(darkfid), executor).await
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    let args = clap_app!(darkfid =>
+        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg verbose: -v --verbose "Increase verbosity")
+    )
+    .get_matches();
+
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
+    } else {
+        join_config_path(&PathBuf::from("darkfid.toml"))?
+    };
+
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
+
+    simple_logger::init_with_level(loglevel)?;
+
+    let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
+
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let ex2 = ex.clone();
+
+    let (_, result) = Parallel::new()
+        // Run four executor threads.
+        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2, &config).await?;
+                drop(signal);
+                Ok::<(), drk::Error>(())
+            })
+        });
+
+    result
 }

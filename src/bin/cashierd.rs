@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use async_executor::Executor;
 use async_trait::async_trait;
 use clap::clap_app;
+use easy_parallel::Parallel;
 use ff::Field;
 use log::debug;
 use rand::rngs::OsRng;
@@ -55,7 +57,7 @@ struct Cashierd {
 
 #[async_trait]
 impl RequestHandler for Cashierd {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest, executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
@@ -63,7 +65,7 @@ impl RequestHandler for Cashierd {
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("deposit") => return self.deposit(req.id, req.params).await,
+            Some("deposit") => return self.deposit(req.id, req.params, executor).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
             Some(_) => {}
@@ -106,6 +108,7 @@ impl Cashierd {
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
         networks: Vec<Network>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
 
@@ -120,6 +123,7 @@ impl Cashierd {
                     .subscribe(
                         deposit_token.drk_public_key,
                         Some(deposit_token.mint_address),
+                        executor.clone(),
                     )
                     .await;
 
@@ -142,6 +146,7 @@ impl Cashierd {
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
         recv_coin: async_channel::Receiver<(jubjub::SubgroupPoint, u64)>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // received drk coin
         let (drk_pub_key, amount) = recv_coin.recv().await?;
@@ -155,7 +160,11 @@ impl Cashierd {
         // received drk coin to token publickey
         if let Some(withdraw_token) = token {
             let bridge_subscribtion = bridge
-                .subscribe(drk_pub_key, Some(withdraw_token.mint_address))
+                .subscribe(
+                    drk_pub_key,
+                    Some(withdraw_token.mint_address),
+                    executor.clone(),
+                )
                 .await;
 
             // send a request to the bridge to send amount of token
@@ -199,7 +208,7 @@ impl Cashierd {
         Ok(())
     }
 
-    async fn deposit(&self, id: Value, params: Value) -> JsonResult {
+    async fn deposit(&self, id: Value, params: Value, executor: Arc<Executor<'_>>) -> JsonResult {
         debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
 
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
@@ -276,7 +285,9 @@ impl Cashierd {
             // record in cashierdb with the network name and token id
 
             let bridge = self.bridge.clone();
-            let bridge_subscribtion = bridge.subscribe(drk_pub_key, mint_address_opt).await;
+            let bridge_subscribtion = bridge
+                .subscribe(drk_pub_key, mint_address_opt, executor)
+                .await;
 
             if check.is_empty() {
                 bridge_subscribtion
@@ -458,6 +469,7 @@ impl Cashierd {
         &mut self,
         mut client: Client,
         state: Arc<Mutex<State>>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<(
         smol::Task<Result<()>>,
         smol::Task<Result<()>>,
@@ -551,10 +563,11 @@ impl Cashierd {
             }
         }
 
-        let resume_watch_deposit_keys_task = smol::spawn(Self::resume_watch_deposit_keys(
+        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
             self.bridge.clone(),
             self.cashier_wallet.clone(),
             self.networks.clone(),
+            executor.clone(),
         ));
 
         client.start().await?;
@@ -562,17 +575,25 @@ impl Cashierd {
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
 
         client
-            .connect_to_subscriber_from_cashier(state, self.cashier_wallet.clone(), notify.clone())
+            .connect_to_subscriber_from_cashier(
+                state,
+                self.cashier_wallet.clone(),
+                notify.clone(),
+                executor.clone(),
+            )
             .await?;
 
         let cashier_wallet = self.cashier_wallet.clone();
         let bridge = self.bridge.clone();
-        let listen_for_receiving_coins_task: smol::Task<Result<()>> = smol::spawn(async move {
+        let ex = executor.clone();
+        let listen_for_receiving_coins_task: smol::Task<Result<()>> = executor.spawn(async move {
+            let ex2 = ex.clone();
             loop {
                 Self::listen_for_receiving_coins(
                     bridge.clone(),
                     cashier_wallet.clone(),
                     recv_coin.clone(),
+                    ex2.clone(),
                 )
                 .await?;
             }
@@ -580,7 +601,7 @@ impl Cashierd {
 
         let bridge2 = self.bridge.clone();
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> =
-            smol::spawn(async move {
+            executor.spawn(async move {
                 while let Some(token_notification) = bridge2.clone().listen().await {
                     debug!(target: "CASHIER DAEMON", "Notification from birdge");
 
@@ -612,31 +633,11 @@ impl Cashierd {
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let args = clap_app!(cashierd =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg ADDRESS: -a --address "Get Cashier Public key")
-        (@arg verbose: -v --verbose "Increase verbosity")
-    )
-    .get_matches();
-
-    let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
-    } else {
-        join_config_path(&PathBuf::from("cashierd.toml"))?
-    };
-
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
-
-    simple_logger::init_with_level(loglevel)?;
-
-    let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
-
+async fn start(
+    executor: Arc<Executor<'_>>,
+    config: &CashierdConfig,
+    get_address_flag: bool,
+) -> Result<()> {
     let mut cashierd = Cashierd::new(config.clone()).await?;
 
     let client_wallet = WalletDb::new(
@@ -693,7 +694,7 @@ async fn main() -> Result<()> {
         public_keys: cashier_public_keys,
     }));
 
-    if args.is_present("ADDRESS") {
+    if get_address_flag {
         let cashier_public = client.main_keypair.public;
         let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
         println!("Public Key: {}", cashier_public);
@@ -707,12 +708,59 @@ async fn main() -> Result<()> {
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    let (t1, t2, t3) = cashierd.start(client, state).await?;
-    listen_and_serve(cfg, Arc::new(cashierd)).await?;
+    let (t1, t2, t3) = cashierd.start(client, state, executor.clone()).await?;
+    listen_and_serve(cfg, Arc::new(cashierd), executor).await?;
 
     t1.cancel().await;
     t2.cancel().await;
     t3.cancel().await;
 
     Ok(())
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    let args = clap_app!(cashierd =>
+        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
+        (@arg ADDRESS: -a --address "Get Cashier Public key")
+        (@arg verbose: -v --verbose "Increase verbosity")
+    )
+    .get_matches();
+
+    let config_path = if args.is_present("CONFIG") {
+        PathBuf::from(args.value_of("CONFIG").unwrap())
+    } else {
+        join_config_path(&PathBuf::from("cashierd.toml"))?
+    };
+
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
+
+    simple_logger::init_with_level(loglevel)?;
+
+    let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
+
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let ex2 = ex.clone();
+
+    let get_address_flag = args.is_present("ADDRESS");
+
+    let (_, result) = Parallel::new()
+        // Run four executor threads.
+        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2, &config, get_address_flag).await?;
+                drop(signal);
+                Ok::<(), drk::Error>(())
+            })
+        });
+
+    result
 }

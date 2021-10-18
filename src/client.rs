@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use bellman::groth16;
 use bls12_381::Bls12;
@@ -18,7 +19,7 @@ use crate::{
     service::{GatewayClient, GatewaySlabsSubscriber},
     state::{state_transition, ProgramState, StateUpdate},
     tx,
-    wallet::{CashierDbPtr, Keypair, WalletPtr, walletdb::Balances},
+    wallet::{walletdb::Balances, CashierDbPtr, Keypair, WalletPtr},
     Result,
 };
 
@@ -235,15 +236,17 @@ impl Client {
         state: Arc<Mutex<State>>,
         cashier_wallet: CashierDbPtr,
         notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber for cashier");
-        let gateway_slabs_sub: GatewaySlabsSubscriber = self.gateway.start_subscriber().await?;
+        let gateway_slabs_sub: GatewaySlabsSubscriber =
+            self.gateway.start_subscriber(executor.clone()).await?;
 
         let secret_key = self.main_keypair.private;
         let wallet = self.wallet.clone();
 
-        let task: smol::Task<Result<()>> = smol::spawn(async move {
+        let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
 
@@ -291,15 +294,20 @@ impl Client {
         Ok(())
     }
 
-    pub async fn connect_to_subscriber(&self, state: Arc<Mutex<State>>) -> Result<()> {
+    pub async fn connect_to_subscriber(
+        &self,
+        state: Arc<Mutex<State>>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         // start subscribing
         debug!(target: "CLIENT", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber = self.gateway.start_subscriber().await?;
+        let gateway_slabs_sub: GatewaySlabsSubscriber =
+            self.gateway.start_subscriber(executor.clone()).await?;
 
         let secret_key = self.main_keypair.private;
         let wallet = self.wallet.clone();
 
-        let task: smol::Task<Result<()>> = smol::spawn(async move {
+        let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
 

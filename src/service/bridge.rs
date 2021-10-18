@@ -1,6 +1,7 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
+use async_executor::Executor;
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
@@ -116,12 +117,15 @@ impl Bridge {
         self: Arc<Self>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> BridgeSubscribtion {
         debug!(target: "BRIDGE", "Start new subscription");
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
 
-        smol::spawn(self.listen_for_new_subscription(req, rep, drk_pub_key, mint)).detach();
+        executor
+            .spawn(self.listen_for_new_subscription(req, rep, drk_pub_key, mint, executor.clone()))
+            .detach();
 
         BridgeSubscribtion { sender, receiver }
     }
@@ -132,6 +136,7 @@ impl Bridge {
         rep: async_channel::Sender<BridgeResponse>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!(target: "BRIDGE", "Listen for new subscription");
         let req = req.recv().await?;
@@ -171,6 +176,7 @@ impl Bridge {
                             token_key.public_key,
                             drk_pub_key,
                             mint_address,
+                            executor
                         )
                         .await;
 
@@ -188,7 +194,7 @@ impl Bridge {
                     }
                 }
                 None => {
-                    let sub = client.subscribe(drk_pub_key, mint_address).await;
+                    let sub = client.subscribe(drk_pub_key, mint_address, executor).await;
                     if sub.is_err() {
                         error!(target: "BRIDGE", "{}", sub.unwrap_err().to_string());
                         res = BridgeResponse {
@@ -234,6 +240,7 @@ pub trait NetworkClient {
         self: Arc<Self>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion>;
 
     // should check if the keypair in not already subscribed
@@ -243,6 +250,7 @@ pub trait NetworkClient {
         public_key: Vec<u8>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<String>;
 
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>>;

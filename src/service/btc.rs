@@ -3,6 +3,7 @@ use std::convert::From;
 use std::str::FromStr;
 use std::time::Duration;
 
+use async_executor::Executor;
 use async_trait::async_trait;
 
 use bitcoin::blockdata::{
@@ -348,6 +349,7 @@ impl NetworkClient for BtcClient {
         self: Arc<Self>,
         drk_pub_key: jubjub::SubgroupPoint,
         _mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
         // Generate bitcoin keys
         let keypair = Keypair::new();
@@ -358,7 +360,7 @@ impl NetworkClient for BtcClient {
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        smol::spawn(async move {
+        executor.spawn(async move {
             let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
             if let Err(e) = result {
                 error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
@@ -378,12 +380,13 @@ impl NetworkClient for BtcClient {
         _public_key: Vec<u8>,
         drk_pub_key: jubjub::SubgroupPoint,
         _mint: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
         let btc_keys = Account::new(&keypair, self.network);
         let public_key = keypair.pubkey().to_string();
 
-        smol::spawn(async move {
+        executor.spawn(async move {
             let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
             if let Err(e) = result {
                 error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());

@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::Duration;
 
+use async_executor::Executor;
 use async_native_tls::TlsConnector;
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
@@ -403,6 +404,7 @@ impl NetworkClient for SolClient {
         self: Arc<Self>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint_address: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
         let keypair = Keypair::generate(&mut OsRng);
 
@@ -418,7 +420,7 @@ impl NetworkClient for SolClient {
             return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
         }
 
-        smol::spawn(async move {
+        executor.spawn(async move {
             let result = self
                 .handle_subscribe_request(keypair, drk_pub_key, mint)
                 .await;
@@ -441,6 +443,7 @@ impl NetworkClient for SolClient {
         _public_key: Vec<u8>,
         drk_pub_key: jubjub::SubgroupPoint,
         mint_address: Option<String>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
 
@@ -454,15 +457,16 @@ impl NetworkClient for SolClient {
             return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
         }
 
-        smol::spawn(async move {
-            let result = self
-                .handle_subscribe_request(keypair, drk_pub_key, mint)
-                .await;
-            if let Err(e) = result {
-                error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
-            }
-        })
-        .detach();
+        executor
+            .spawn(async move {
+                let result = self
+                    .handle_subscribe_request(keypair, drk_pub_key, mint)
+                    .await;
+                if let Err(e) = result {
+                    error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
+                }
+            })
+            .detach();
 
         Ok(public_key)
     }
