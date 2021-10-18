@@ -9,7 +9,7 @@ use crate::{
 pub enum NetworkName {
     Solana,
     Bitcoin,
-    Empty 
+    Empty,
 }
 
 impl std::fmt::Display for NetworkName {

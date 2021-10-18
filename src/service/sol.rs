@@ -420,15 +420,16 @@ impl NetworkClient for SolClient {
             return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
         }
 
-        executor.spawn(async move {
-            let result = self
-                .handle_subscribe_request(keypair, drk_pub_key, mint)
-                .await;
-            if let Err(e) = result {
-                error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
-            }
-        })
-        .detach();
+        executor
+            .spawn(async move {
+                let result = self
+                    .handle_subscribe_request(keypair, drk_pub_key, mint)
+                    .await;
+                if let Err(e) = result {
+                    error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
+                }
+            })
+            .detach();
 
         Ok(TokenSubscribtion {
             private_key,

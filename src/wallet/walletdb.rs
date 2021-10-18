@@ -510,7 +510,6 @@ mod tests {
 
         let balances = wallet.get_balances()?;
 
-
         assert_eq!(balances.list.len(), 1);
         assert_eq!(balances.list[0].value, 440);
         assert_eq!(balances.list[0].token_id, token_id);

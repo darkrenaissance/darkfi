@@ -157,6 +157,11 @@ pub async fn listen_and_serve(
         tls = None;
     }
 
-    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh, executor);
+    let listener = listen(
+        Async::<TcpListener>::bind(cfg.socket_addr)?,
+        tls,
+        rh,
+        executor,
+    );
     listener.await
 }

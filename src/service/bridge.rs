@@ -176,7 +176,7 @@ impl Bridge {
                             token_key.public_key,
                             drk_pub_key,
                             mint_address,
-                            executor
+                            executor,
                         )
                         .await;
 

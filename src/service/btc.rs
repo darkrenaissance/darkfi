@@ -360,13 +360,14 @@ impl NetworkClient for BtcClient {
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
-        executor.spawn(async move {
-            let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
-            if let Err(e) = result {
-                error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
-            }
-        })
-        .detach();
+        executor
+            .spawn(async move {
+                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
+                if let Err(e) = result {
+                    error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
+                }
+            })
+            .detach();
 
         Ok(TokenSubscribtion {
             private_key,
@@ -386,13 +387,14 @@ impl NetworkClient for BtcClient {
         let btc_keys = Account::new(&keypair, self.network);
         let public_key = keypair.pubkey().to_string();
 
-        executor.spawn(async move {
-            let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
-            if let Err(e) = result {
-                error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
-            }
-        })
-        .detach();
+        executor
+            .spawn(async move {
+                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
+                if let Err(e) = result {
+                    error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
+                }
+            })
+            .detach();
 
         Ok(public_key)
     }
