@@ -611,9 +611,13 @@ async fn main() -> Result<()> {
 
     let ex2 = ex.clone();
 
+    let nthreads = num_cpus::get();
+    debug!(target: "GATEWAY DAEMON", "Run {} executor threads", nthreads);
+
     let (_, result) = Parallel::new()
-        // Run four executor threads.
-        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        .each(0..nthreads, |_| {
+            smol::future::block_on(ex.run(shutdown.recv()))
+        })
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
