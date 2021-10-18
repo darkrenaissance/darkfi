@@ -36,12 +36,12 @@ bs58 = "0.4.0"
 prettytable-rs = "0.8"
 num_cpus = "1.13.0"
 
-smol = "1.2.4"
+smol = "1.2.5"
 futures = "0.3.17"
-async-channel = "1.4.2"
-async-trait = "0.1.42"
-async-executor = "1.4.0"
-async-std = "1.6.2"
+async-channel = "1.6.1"
+async-trait = "0.1.51"
+async-executor = "1.4.1"
+async-std = "1.10.0"
 async-native-tls = "0.3.3"
 native-tls = "0.2.8"
 easy-parallel = "3.1.0"
@@ -55,34 +55,27 @@ clap = "2.33.3"
 toml = "0.5.8"
 dirs = "4.0.0"
 url = "2.2.2"
-serde = { version = "1.0.126", features = ["derive"]}
-serde_json = "1.0.61"
+serde = "1.0.130"
+serde_json = "1.0.68"
 bytes = "1.0.1"
 signal-hook = "0.3.8"
 lazy_static = "1.4.0"
 
 rocksdb = {version = "0.16.0", default-features = false, features = ["lz4"]}
+zeromq = {version = "0.2.1", default-features = false, features = ["async-std-runtime", "all-transport"]}
+rusqlite = {version = "0.26.0", features = ["bundled-sqlcipher"]}
 
 ## Cashier Solana Dependencies
-spl-token = {version = "3.2.0", optional = true}
-solana-sdk = {version = "1.7.11", optional = true}
-solana-client = {version = "1.7.11", optional = true}
-spl-associated-token-account = {version = "1.0.3", optional = true}
+solana-sdk = {version = "1.8.0", optional = true}
+solana-client = {version = "1.8.0", optional = true}
+spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
+spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 
 ## Cashier Bitcoin Dependencies
 bitcoin = {version = "0.27.0", optional = true }
 bitcoin_hashes = "0.10.0"
 secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std"], optional = true}
 electrum-client = {version = "0.8.0", optional = true }
-
-[dependencies.rusqlite]
-version = "0.26.0"
-features = ["bundled-sqlcipher"]
-
-[dependencies.zeromq]
-git = "https://github.com/zeromq/zmq.rs"
-default-features = false
-features = ["async-std-runtime", "all-transport"]
 
 [features]
 btc = ["bitcoin", "secp256k1", "electrum-client"]
