@@ -183,7 +183,10 @@ impl ReqProtocol {
                 return Ok(None);
             }
 
-            assert!(reply.get_id() == request.get_id());
+            if reply.get_id() != request.get_id() {
+                warn!("Reply id is not equal to Request id");
+                return Ok(None);
+            }
 
             Ok(Some(reply.get_payload()))
         } else {
