@@ -17,8 +17,8 @@ using the `drk` command-line tool.
 
 Clone the DarkFi repo:
 
-``` $ git clone https://github.com/darkrenaissance/darkfi
-
+```
+$ git clone https://github.com/darkrenaissance/darkfi
 ```
 
 # Configure
@@ -33,12 +33,15 @@ Default config files can be found here: [example/config](example/config).
 
 First create a new directory for your config files:
 
-``` $ mkdir ~/.config/darkfi ```
+```
+$ mkdir ~/.config/darkfi
+```
 
 Copy darkfid.toml and drk.toml to ~/.config/darkfi.
 
-``` $ cp example/config/darkfid.toml example/config/drk.toml
-~/.config/darkfi ```
+```
+$ cp example/config/darkfid.toml example/config/drk.toml ~/.config/darkfi
+```
 
 Take some time to familiarize yourself with the config options.
 The defaults should be sufficient for most users and are safe to use
@@ -54,7 +57,11 @@ Now that DarkFi has been configured we can build the project.
 In the project root directory, run the makescript.  This might take some
 time if it's your first time building the project.
 
-``` $ make ``` Keep in mind that if you make changes to `darkfid.toml`
+```
+$ make
+```
+
+Keep in mind that if you make changes to `darkfid.toml`
 or `drk.toml` you will need to run the makescript again for it to
 take effect.
 
@@ -64,12 +71,15 @@ Once the project is compiled you can run the darkfi daemon.
 
 Run `darkfid` in verbose mode:
 
-``` $ ./target/release/darkfid -v ```
+```
+$ ./target/release/darkfid -v
+```
 
 Using the command line interface to the `darkfid` daemon, we can make
 use of the system:
 
-``` $ ./target/release/drk help
+```
+$ ./target/release/drk help
 
 ```
 
@@ -95,19 +105,22 @@ for deposits.
 
 To deposit testnet BTC:
 
-``` $ ./target/release/drk deposit btc --network bitcoin
+```
+$ ./target/release/drk deposit btc --network bitcoin
 
 ```
 
 To deposit testnet SOL:
 
-``` $ ./target/release/drk deposit sol --network solana
+```
+$ ./target/release/drk deposit sol --network solana
 
 ```
 
 To deposit any other asset:
 
-``` $ ./target/release/drk deposit [ASSET] --network solana
+```
+$ ./target/release/drk deposit [ASSET] --network solana
 
 ```
 
