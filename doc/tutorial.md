@@ -1,21 +1,16 @@
 # DarkFi v0 user tutorial
 
 Welcome to the dark renaissance. This tutorial will teach you how to
-install DarkFi on your system, and how to use the testnet to send and
+install darkfi on your system, and how to use the testnet to send and
 receive anonymous tokens.
 
-This tutorial is intended for standard DarkFi users.  If you'd like to
+This tutorial is intended for standard darkfi users. If you'd like to
 run a cashier, see this tutorial: [].
-
-DarkFi consists of several software daemons or processes.  These daemons
-have seperate, isolated concerns.
-
-As a user, your interest is in the `darkfid` daemon.  This is operated
-using the `drk` command-line tool.
 
 ## Download
 
-Clone the DarkFi repo:
+To run darkfi, we must first install the software. Do this by cloning
+the darkfi repo:
 
 ```
 $ git clone https://github.com/darkrenaissance/darkfi
@@ -23,40 +18,80 @@ $ git clone https://github.com/darkrenaissance/darkfi
 
 ## Build
 
-Now that DarkFi has been configured we can build the project.
-
-In the project root directory, run the makescript.  This might take some
-time if it's your first time building the project.
+In the project root directory, run provided Makefile. This will download
+the trusted setup params and compile the source code. This might take
+some time if it's your first time building the project.
 
 ```
 $ make
 ```
 
-Keep in mind that if you make changes to `darkfid.toml`
-or `drk.toml` you will need to run the makescript again for it to
-take effect.
+## Install
+
+We will now install the project. This will install the binaries on
+your device in /usr/local, so you can run darkfi from the command-line
+directly. It will also create a new directory for config files at
+$HOME/.config/darkfi.  Feel free to review the installed config files,
+but you don't need to change anything to run the testnet. The defaults
+will work fine.
+
+```
+$ sudo make install
+```
 
 ## Run
 
-Once the project is compiled you can run the darkfi daemon.
+Darkfi consists of several software daemons or processes. These daemons
+have seperate, isolated concerns.
 
-Run `darkfid` in verbose mode:
+As a user, your interest is in the `darkfid` daemon.  This is a user
+node that interacts with your wallet and communicates with services on
+the darkfi network.  It is operated using the `drk` command-line tool.
+
+After the installation, you should have `drk` and `darkfid` binaries in
+`/usr/local`. Also, the params and configuration files should be in
+`~/.config/darkfi`.
+
+We're now ready to use the testnet.
+
+Open two terminal windows. In one terminal, start `darkfid`:
 
 ```
-$ ./target/release/darkfid -v
+$ darkfid -v
 ```
 
-Using the command line interface to the `darkfid` daemon, we can make
-use of the system:
+And another terminal, run `drk`. This is the command-line interface to
+interact with `darkfid`.
 
 ```
-$ ./target/release/drk help
+$ drk -h
+drk
 
+USAGE:
+    drk [FLAGS] [OPTIONS] [SUBCOMMAND]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+    -v, --verbose    Increase verbosity
+
+OPTIONS:
+    -c, --config <CONFIG>    Sets a custom config file
+
+SUBCOMMANDS:
+    deposit     Deposit clear tokens for Dark tokens
+    features    Show what features the cashier supports
+    hello       Say hello to the RPC
+    help        Prints this message or the help of the given subcommand(s)
+    id          Get hexidecimal ID for token symbol
+    transfer    Transfer Dark tokens to address
+    wallet      Wallet operations
+    withdraw    Withdraw Dark tokens for clear tokens
 ```
 
 ## Deposit
 
-Let's start by depositing some coins into DarkFi.
+Let's start by depositing some coins into darkfi.
 
 First, we'll need testnet coins on either Bitcoin or Solana.  For Bitcoin
 these can be acquired from a faucet like [].  You will need to switch
@@ -131,4 +166,8 @@ for demo purposes.
 
 See the cashier tutorial [] for how to modify `darkfid.toml` to work
 with any cashier.
+
+Keep in mind that if you make changes to `darkfid.toml`
+or `drk.toml` you will need to run the makescript again for it to
+take effect.
 
