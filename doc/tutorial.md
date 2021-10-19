@@ -100,9 +100,9 @@ You will need to switch your Bitcoin wallet to testnet mode.
 For Solana, you can either install the Solana command-line suite or
 use [sollet](sollet.io).
 
-Follow [this tutorial] (https://docs.solana.com/cli) for the Solana
-command-line For sollet.io, switch the network to testnet and click the
-... to airdrop yourself some testnet coins.
+Follow [this tutorial](https://docs.solana.com/cli) for the Solana
+command-line For sollet.io, switch the network to testnet and click
+'Request Airdrop' to airdrop yourself some testnet coins.
 
 Now that we have testnet coins we can deposit into darkfi.
 
@@ -114,21 +114,21 @@ for deposits.
 To deposit testnet BTC:
 
 ```
-$ ./target/release/drk deposit btc --network bitcoin
+$ drk deposit btc --network bitcoin
 
 ```
 
 To deposit testnet SOL:
 
 ```
-$ ./target/release/drk deposit sol --network solana
+$ drk deposit sol --network solana
 
 ```
 
 To deposit any other asset:
 
 ```
-$ ./target/release/drk deposit [ASSET] --network solana
+$ drk deposit [ASSET] --network solana
 
 ```
 
