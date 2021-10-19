@@ -8,6 +8,7 @@ CARGO = cargo
 DLTOOL = wget -q -O-
 #DLTOOL = curl
 
+# Here it's possible to append "cashierd" and "gatewayd".
 BINS = \
 	drk \
 	darkfid
