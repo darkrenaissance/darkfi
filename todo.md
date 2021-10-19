@@ -79,6 +79,7 @@ Open research questions.
 
 - [ ] make bitreich halo2 impl
 - [ ] doc on circuit design
+- [ ] https://github.com/openethereum/openethereum for ETH bridge
 
 # halo2
 
