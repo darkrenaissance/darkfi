@@ -220,11 +220,18 @@ impl GatewayClient {
 
     pub async fn sync(&mut self) -> Result<u64> {
         debug!(target: "GATEWAY CLIENT", "Start Syncing");
+
         let local_last_index = self.slabstore.get_last_index()?;
 
         let last_index = self.get_last_index().await?;
 
-        assert!(last_index >= local_last_index);
+        if last_index < local_last_index {
+            return Err(Error::SlabsStore(
+                "Local slabstore has higher index than gateway's slabstore.
+                 Delete slabstore database \"darkfid_client.db\" and wallet database 
+                 \" darkfid_wallet.db\" in config directory.".into(),
+            ));
+        }
 
         if last_index > 0 {
             for index in (local_last_index + 1)..(last_index + 1) {
