@@ -58,6 +58,7 @@ pub enum Error {
     /// Database/Sql errors
     RocksdbError(String),
     RusqliteError(String),
+    SlabsStore(String),
 
     /// RPC errors
     JsonRpcError(String),
@@ -130,6 +131,7 @@ impl fmt::Display for Error {
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
+            Error::SlabsStore(ref err) => write!(f, "SlabsStore Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
             Error::TreeFull => f.write_str("MerkleTree is full"),
             Error::NotSupportedNetwork => f.write_str("Not supported network"),
