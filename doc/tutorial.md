@@ -157,7 +157,22 @@ $ drk wallet --balances
 
 ## Transfer
 
-TODO
+Now that you have darkened tokens inside darkfi, you can send them
+around anonymously.
+
+Find a friend with an account on darkfi and ask them for their darkfi
+address. Then run the transfer command:
+
+```
+$ drk transfer <TOKEN> <ADDRESS> <AMOUNT>
+```
+
+For example, to transfer 1 SOL to a user at XXX address, you would run
+the following command:
+
+```
+$ drk transfer sol <ADDRESS> 1
+```
 
 ## Withdraw
 
