@@ -20,12 +20,10 @@ jobs:
             - name: Install Dependencies
               run: |
                 sudo apt-get update
-                sudo apt-get install libsqlcipher-dev
                 sudo apt-get install libudev-dev
-            - name: Create Config Dir 
+            - name: Create config directory
               run: |
                 mkdir -p ~/.config/darkfi
-            - name: Compile with all features
+            - name: Test with all features
               run: |
-                make
-                make test
+                cargo test --release --all-features
