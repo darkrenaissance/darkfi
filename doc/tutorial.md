@@ -167,7 +167,4 @@ for demo purposes.
 See the cashier tutorial [] for how to modify `darkfid.toml` to work
 with any cashier.
 
-Keep in mind that if you make changes to `darkfid.toml`
-or `drk.toml` you will need to run the makescript again for it to
-take effect.
 
