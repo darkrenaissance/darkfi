@@ -2,7 +2,7 @@
 
 PREFIX = /usr/local
 CONFDIR = $(HOME)/.config/darkfi
-DLURL = https://testnet.cashier.dark.fi
+DLURL = http://185.165.171.77
 
 CARGO = cargo
 DLTOOL = wget -q -O-

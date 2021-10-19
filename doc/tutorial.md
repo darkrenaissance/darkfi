@@ -140,7 +140,20 @@ Deposit your coins to the following address: "734JBp3FRPoDs6ibSMyq3CV9zyMiDeynxM
 ```
 
 Using Bitcoin or Solana, deposit the desired tokens to the specified
-address. 
+address. Wait a moment- it should take about 30 seconds to receive your
+deposit. You can follow the progress on the terminal window where you ran
+`darkfid`.  Then check your updated balance, like so:
+
+```
+$ drk wallet --balances
+
++-------+--------+---------+
+| token | amount | network |
++-------+--------+---------+
+| SOL   | 1      | solana  |
++-------+--------+---------+
+
+```
 
 ## Transfer
 
