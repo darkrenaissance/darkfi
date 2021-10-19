@@ -751,7 +751,7 @@ async fn main() -> Result<()> {
     let get_address_flag = args.is_present("ADDRESS");
 
     let nthreads = num_cpus::get();
-    debug!(target: "GATEWAY DAEMON", "Run {} executor threads", nthreads);
+    debug!(target: "CASHIER DAEMON", "Run {} executor threads", nthreads);
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| {

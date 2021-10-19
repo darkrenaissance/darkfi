@@ -612,7 +612,7 @@ async fn main() -> Result<()> {
     let ex2 = ex.clone();
 
     let nthreads = num_cpus::get();
-    debug!(target: "GATEWAY DAEMON", "Run {} executor threads", nthreads);
+    debug!(target: "DARKFI DAEMON", "Run {} executor threads", nthreads);
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| {
