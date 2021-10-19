@@ -13,7 +13,7 @@ have seperate, isolated concerns.
 As a user, your interest is in the `darkfid` daemon.  This is operated
 using the `drk` command-line tool.
 
-# Download
+## Download
 
 Clone the DarkFi repo:
 
@@ -21,36 +21,7 @@ Clone the DarkFi repo:
 $ git clone https://github.com/darkrenaissance/darkfi
 ```
 
-# Configure
-
-Now that you have a copy of the software on your device, you will need
-to compile the project. But first we must configure our preferences.
-
-DarkFi is highly configurable by design. Key system parameters can be
-changed inside the config files.
-
-Default config files can be found here: [example/config](example/config).
-
-First create a new directory for your config files:
-
-```
-$ mkdir ~/.config/darkfi
-```
-
-Copy darkfid.toml and drk.toml to ~/.config/darkfi.
-
-```
-$ cp example/config/darkfid.toml example/config/drk.toml ~/.config/darkfi
-```
-
-Take some time to familiarize yourself with the config options.
-The defaults should be sufficient for most users and are safe to use
-for demo purposes.
-
-See the cashier tutorial [] for how to modify `darkfid.toml` to work
-with any cashier.
-
-# Build
+## Build
 
 Now that DarkFi has been configured we can build the project.
 
@@ -65,7 +36,7 @@ Keep in mind that if you make changes to `darkfid.toml`
 or `drk.toml` you will need to run the makescript again for it to
 take effect.
 
-# Run
+## Run
 
 Once the project is compiled you can run the darkfi daemon.
 
@@ -83,7 +54,7 @@ $ ./target/release/drk help
 
 ```
 
-# Deposit
+## Deposit
 
 Let's start by depositing some coins into DarkFi.
 
@@ -130,4 +101,34 @@ it, you should get an address printed to your terminal, like this:
 [image]
 
 Using Bitcoin or Solana, deposit the desired tokens to the specified
-cashier address. This
+cashier address. This ...
+
+## Configure
+
+Now that you have a copy of the software on your device, you will need
+to compile the project. But first we must configure our preferences.
+
+DarkFi is highly configurable by design. Key system parameters can be
+changed inside the config files.
+
+Default config files can be found here: [example/config](example/config).
+
+First create a new directory for your config files:
+
+```
+$ mkdir ~/.config/darkfi
+```
+
+Copy darkfid.toml and drk.toml to ~/.config/darkfi.
+
+```
+$ cp example/config/darkfid.toml example/config/drk.toml ~/.config/darkfi
+```
+
+Take some time to familiarize yourself with the config options.
+The defaults should be sufficient for most users and are safe to use
+for demo purposes.
+
+See the cashier tutorial [] for how to modify `darkfid.toml` to work
+with any cashier.
+
