@@ -2,62 +2,73 @@
 
 ![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/rust-build.yml/badge.svg)
 
-## Building
+## Build
+
+To build the necessary binaries, we can just clone the repo, and use
+the provided Makefile to build the project. This will download the
+trusted setup params, and compile the source code.
 
 ```
+$ git clone https://github.com/darkrenaissance/darkfi
 $ make
 ```
 
-## Configuration
+## Install
 
-The daemons can be configured using TOML files. Find examples in
-this repo: [example/config](example/config) and copy them over to
-`~/.config/darkfi`. The defaults should be safe to use for demo
-purposes.
-
-The cashier daemon must have enough testnet coins to cover fees.
-Testnet SOL can be acquired by calling `solana airdrop` on devnet.
-Testnet BTC can be acquired from a faucet.
-
-The darkfid daemon must be manually configured with the cashier
-public key. To get the cashier public key, run:
+This will install the binaries in `/usr/local`, and set up the
+config files in your user's `$HOME/.config/darkfi`. You can review
+the installed config files, but the defaults should be good for using
+the testnet.
 
 ```
-$ ./target/release/cashierd -a
+$ sudo make install
 ```
-
-Then add the cashier public key to `darkfid.toml`
 
 ## Usage
 
-For demo purposes we have to run three daemons. It is best practice to
-run them in three different terminals, and use the fourth to interact
-with them using the provided `drk` command line tool.
+After the installation, you should have `drk` and `darkfid` binaries in
+`/usr/local`. Also, the params and configuration files should be in
+`~/.config/darkfi`. Now we're ready to use the testnet.
 
-1. Run `gatewayd`:
-
-```
-$ ./target/release/gatewayd -v
-```
-
-2. Run `cashierd`:
+In one terminal, start `darkfid`, which is the daemon that will
+communicate with the DarkFi network:
 
 ```
-$ ./target/release/cashierd -v
+$ darkfid -v
 ```
 
-3. Run `darkfid`:
+And in the other terminal, we can use the CLI interface to `darkfid`
+called `drk`:
 
 ```
-$ ./target/release/darkfid -v
+$ drk -h
+drk
+
+USAGE:
+    drk [FLAGS] [OPTIONS] [SUBCOMMAND]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+    -v, --verbose    Increase verbosity
+
+OPTIONS:
+    -c, --config <CONFIG>    Sets a custom config file
+
+SUBCOMMANDS:
+    deposit     Deposit clear tokens for Dark tokens
+    features    Show what features the cashier supports
+    hello       Say hello to the RPC
+    help        Prints this message or the help of the given subcommand(s)
+    id          Get hexidecimal ID for token symbol
+    transfer    Transfer Dark tokens to address
+    wallet      Wallet operations
+    withdraw    Withdraw Dark tokens for clear tokens
 ```
 
-Now using the command line interface to the `darkfid` daemon, we can
-make use of the system:
+### Examples
 
-```
-$ ./target/release/drk help
-```
+See [doc/tutorial.md](doc/tutorial.md).
 
 ## Go Dark
 
