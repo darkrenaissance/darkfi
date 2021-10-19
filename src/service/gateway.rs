@@ -1,9 +1,12 @@
+use std::net::ToSocketAddrs;
+
 use async_std::sync::Arc;
 use std::convert::From;
 use std::net::SocketAddr;
 
 use async_executor::Executor;
-use log::*;
+use log::debug;
+use url::Url;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::blockchain::{rocks::columns, RocksColumn, Slab, SlabStore};
@@ -178,16 +181,25 @@ pub struct GatewayClient {
 }
 
 impl GatewayClient {
-    pub fn new(
-        addr: SocketAddr,
-        sub_addr: SocketAddr,
-        rocks: RocksColumn<columns::Slabs>,
-    ) -> Result<Self> {
-        let protocol = ReqProtocol::new(addr, String::from("GATEWAY CLIENT"));
+    pub fn new(addr: Url, sub_addr: Url, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
+        // TODO: We'll want differentiation between TCP and TLS here.
+        let addr_sock = (addr.host().unwrap().to_string(), addr.port().unwrap())
+            .to_socket_addrs()?
+            .next()
+            .ok_or(Error::UrlParseError)?;
+        let protocol = ReqProtocol::new(addr_sock, String::from("GATEWAY CLIENT"));
 
         let slabstore = SlabStore::new(rocks)?;
 
         let (gateway_slabs_sub_s, gateway_slabs_sub_rv) = async_channel::unbounded::<Slab>();
+
+        let sub_addr_sock = (
+            sub_addr.host().unwrap().to_string(),
+            sub_addr.port().unwrap(),
+        )
+            .to_socket_addrs()?
+            .next()
+            .ok_or(Error::UrlParseError)?;
 
         Ok(GatewayClient {
             protocol,
@@ -195,7 +207,7 @@ impl GatewayClient {
             gateway_slabs_sub_s,
             gateway_slabs_sub_rv,
             is_running: false,
-            sub_addr,
+            sub_addr: sub_addr_sock,
         })
     }
 

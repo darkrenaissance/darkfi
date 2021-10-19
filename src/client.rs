@@ -1,10 +1,9 @@
-use std::net::SocketAddr;
-
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use bellman::groth16;
 use bls12_381::Bls12;
-use log::*;
+use log::{debug, info, warn};
+use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
@@ -49,7 +48,7 @@ pub struct Client {
 impl Client {
     pub async fn new(
         rocks: Arc<Rocks>,
-        gateway_addrs: (SocketAddr, SocketAddr),
+        gateway_addrs: (Url, Url),
         wallet: WalletPtr,
         mint_params: bellman::groth16::Parameters<Bls12>,
         spend_params: bellman::groth16::Parameters<Bls12>,

@@ -9,6 +9,7 @@ use clap::clap_app;
 use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
+use url::Url;
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
@@ -546,8 +547,8 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
     let client = Client::new(
         rocks.clone(),
         (
-            config.gateway_protocol_url.parse()?,
-            config.gateway_publisher_url.parse()?,
+            Url::parse(&config.gateway_protocol_url)?,
+            Url::parse(&config.gateway_publisher_url)?,
         ),
         wallet.clone(),
         mint_params,
