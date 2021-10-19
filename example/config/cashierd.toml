@@ -18,10 +18,10 @@ tls_identity_path = "~/.config/darkfi/cashierd_identity.pfx"
 tls_identity_password = "FOOBAR"
 
 # The endpoint to a gatewayd protocol API
-gateway_protocol_url = "tcp://127.0.0.1:3333"
+gateway_protocol_url = "tcp://testnet.gateway-protocol.dark.fi:3333"
 
 # The endpoint to a gatewayd publisher API
-gateway_publisher_url = "tcp://127.0.0.1:4444"
+gateway_publisher_url = "tcp://testnet.gateway-publish.dark.fi:4444"
 
 # Path to mint.params
 mint_params_path = "~/.config/darkfi/mint.params"
