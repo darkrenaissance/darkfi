@@ -1,4 +1,6 @@
 target
 *.pyc
 *.sage.py
-
+.confdir
+.direnv/
+result
