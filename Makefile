@@ -1,13 +1,32 @@
 .POSIX:
 
-CARGO = cargo
 PREFIX = /usr/local
 CONFDIR = $(HOME)/.config/darkfi
+#DLURL = https://testnet.cashier.dark.fi
+DLURL = http://185.165.171.77
 
-all:
-	mkdir -p $(CONFDIR)
-	@echo "$(CONFDIR)" > .confdir
-	$(CARGO) build --release --all-features
+CARGO = cargo
+DLTOOL = wget -q -O-
+#DLTOOL = curl
+
+BINS = \
+	drk \
+	darkfid
+
+all: $(BINS) uid confdir mint.params spend.params
+
+$(BINS):
+	$(CARGO) build --release --all-features --bin $@
+	cp target/release/$@ $@
+
+uid:
+	id -u > $@
+
+confdir:
+	@echo "$(CONFDIR)" > $@
+
+%.params:
+	$(DLTOOL) $(DLURL)/$@ > $@
 
 test:
 	$(CARGO) test --release --all-features
@@ -19,25 +38,30 @@ clippy:
 	$(CARGO) clippy --release --all-features
 
 install:
-	@if ! [ -f target/release/drk ]; then \
+	@if ! [ -f uid ]; then \
 		echo "Please run 'make' as user first." ; \
 		exit 1 ; \
 	fi;
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	cp -f target/release/cashierd $(DESTDIR)$(PREFIX)/bin
-	cp -f target/release/darkfid $(DESTDIR)$(PREFIX)/bin
-	cp -f target/release/drk $(DESTDIR)$(PREFIX)/bin
-	cp -f target/release/gatewayd $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/cashierd
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/darkfid
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/drk
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/gatewayd
-	cp example/config/*.toml "$(shell cat .confdir)"
+	cp -f $(BINS) $(DESTDIR)$(PREFIX)/bin
+	mkdir -p "$(shell cat confdir)"
+	for i in $(BINS); \
+	do \
+		cp example/config/$$i.toml "$(shell cat confdir)" ; \
+	done;
+	cp mint.params spend.params "$(shell cat confdir)"
+	chown -R "$(shell cat uid):$(shell cat uid)" "$(shell cat confdir)"
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/cashierd
-	rm -f $(DESTDIR)$(PREFIX)/bin/darkfid
-	rm -f $(DESTDIR)$(PREFIX)/bin/drk
-	rm -f $(DESTDIR)$(PREFIX)/bin/gatewayd
+	for i in $(BINS); \
+	do \
+		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
+	done;
 
-.PHONY: all test fix clippy install uninstall
+clean:
+	rm -f $(BINS) mint.params spend.params uid confdir
+
+distclean: clean
+	rm -rf target
+
+.PHONY: all test fix clippy install uninstall clean distclean
