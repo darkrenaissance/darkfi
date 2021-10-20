@@ -39,7 +39,10 @@ install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/share/darkfi
 	mkdir -p $(DESTDIR)$(PREFIX)/share/doc/darkfi
 	cp -f $(BINS) $(DESTDIR)$(PREFIX)/bin
-	cp -f example/config/*.toml $(DESTDIR)$(PREFIX)/share/doc/darkfi
+	for i in $(BINS); \
+	do \
+		cp -f example/config/$$i.toml $(DESTDIR)$(PREFIX)/share/doc/darkfi; \
+	done;
 	cp -f mint.params spend.params $(DESTDIR)$(PREFIX)/share/darkfi
 
 uninstall:

@@ -48,6 +48,7 @@ database_path = "~/.config/darkfi/cashier_database.db"
 [[networks]]
 name = "sol"
 blockchain = "devnet"
+# The path to a secret key (can be created with solana-keygen new --no-bip39-passphrase)
 keypair = ""
 
 [[networks]]
