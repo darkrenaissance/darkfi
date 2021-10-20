@@ -181,11 +181,12 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         if matches.is_present("balances") {
             let reply = client.get_balances().await?;
-            let mut table = Table::new();
-            table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-            table.set_titles(row!["token", "amount", "network"]);
 
-            if reply.as_object().is_some() {
+            if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+                table.set_titles(row!["token", "amount", "network"]);
+
                 for (tkn, data) in reply.as_object().unwrap() {
                     table.add_row(row![
                         tkn,
@@ -193,6 +194,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
                         data[1].as_str().unwrap()
                     ]);
                 }
+
                 table.printstd();
             } else {
                 println!("Balances: {}", "0".to_string());
