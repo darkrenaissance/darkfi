@@ -164,11 +164,22 @@ impl SolClient {
 
         let ping_payload: Vec<u8> = vec![42, 33, 31, 42];
 
+        let mut sub_iter = 0;
+
         loop {
             let message = read.next().await.ok_or(Error::TungsteniteError)?;
             let message = message?;
 
             if let Message::Pong(_) = message.clone() {
+                if sub_iter > 60 * 10 {
+                    // 10 minutes
+                    self.unsubscribe(&mut write, &pubkey, &sub_id).await?;
+                    return Err(SolFailed::RpcError(format!(
+                        "Deposit for {:?} expired",
+                        pubkey
+                    )));
+                }
+                sub_iter += 1;
                 async_std::task::sleep(Duration::from_secs(1)).await;
                 write.send(Message::Ping(ping_payload.clone())).await?;
                 continue;
