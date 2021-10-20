@@ -173,6 +173,7 @@ impl SolClient {
 
         let ping_payload: Vec<u8> = vec![42, 33, 31, 42];
 
+        let iter_interval = 1;
         let mut sub_iter = 0;
 
         loop {
@@ -188,8 +189,8 @@ impl SolClient {
                         pubkey
                     )));
                 }
-                sub_iter += 1;
-                async_std::task::sleep(Duration::from_secs(1)).await;
+                sub_iter += iter_interval;
+                async_std::task::sleep(Duration::from_secs(iter_interval)).await;
                 write.send(Message::Ping(ping_payload.clone())).await?;
                 continue;
             };
