@@ -109,6 +109,15 @@ impl SolClient {
             keypair.pubkey()
         };
 
+        if mint.is_some() {
+            debug!(target: "SOL BRIDGE", "Got subscribe request for SPL token");
+            debug!(target: "SOL BRIDGE", "Main wallet: {}", keypair.pubkey());
+            debug!(target: "SOL BRIDGE", "Associated token address: {}", pubkey);
+        } else {
+            debug!(target: "SOL BRIDGE", "Got subscribe request for native SOL");
+            debug!(target: "SOL BRIDGE", "Main wallet: {}", keypair.pubkey());
+        }
+
         // Check if we're already subscribed
         if self.subscriptions.lock().await.contains(&pubkey) {
             return Ok(());
