@@ -9,13 +9,11 @@ DLTOOL = wget -nv --show-progress -O-
 #DLTOOL = curl
 
 # Here it's possible to append "cashierd" and "gatewayd".
-BINS = \
-	drk \
-	darkfid
+BINS = drk darkfid
 
 all: $(BINS) uid confdir mint.params spend.params
 
-$(BINS):
+$(BINS): $(shell find src -type f)
 	$(CARGO) build --release --all-features --bin $@
 	cp target/release/$@ $@
 
