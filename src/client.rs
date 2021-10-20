@@ -509,7 +509,7 @@ impl std::fmt::Display for ClientFailed {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ClientFailed::NotEnoughValue(i) => {
-                write!(f, "There is no enough value {}", i)
+                write!(f, "There is not enough value {}", i)
             }
             ClientFailed::InvalidAddress(i) => {
                 write!(f, "Invalid Address {}", i)
