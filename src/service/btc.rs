@@ -216,24 +216,12 @@ impl BtcClient {
 
         let status = client.script_subscribe(&script)?;
 
-        let iter_interval = 5;
-        let mut sub_iter = 0;
-
         loop {
-            if sub_iter > 60 * 10 {
-                // 10 minutes
-                return Err(BtcFailed::ElectrumError(format!(
-                    "Deposit for {:?} expired",
-                    script
-                )));
-            }
-            sub_iter += iter_interval;
-
             let current_status = client.script_pop(&script)?;
             debug!(target: "BTC BRIDGE", "script status: {:?}", status);
             debug!(target: "BTC BRIDGE", "current_script status: {:?}", current_status);
             if current_status == status {
-                async_std::task::sleep(Duration::from_secs(iter_interval)).await;
+                async_std::task::sleep(Duration::from_secs(5)).await;
                 debug!(
                     target: "BTC BRIDGE",
                     "ScriptPubKey status has not changed, amtucfd: {}, amtcfd: {}",
