@@ -25,10 +25,15 @@ impl SolTokenList {
     }
 
     pub fn get_symbols(&self) -> Result<Vec<String>> {
-        let mut symbols = Vec::new();
+        let mut symbols: Vec<String> = Vec::new();
         for item in self.tokens.iter() {
             let symbol = item["symbol"].as_str().unwrap();
-            symbols.push(symbol.to_string());
+            // FIXME: Change Sollet BTC to SBTC?
+            if symbol == "BTC" {
+                symbols.push("SBTC".to_string());
+            } else {
+                symbols.push(symbol.to_string());
+            }
         }
         Ok(symbols)
     }
@@ -66,10 +71,15 @@ impl DrkTokenList {
     pub fn new(sol_list: SolTokenList) -> Result<Self> {
         let sol_symbols = sol_list.get_symbols()?;
 
-        let tokens: HashMap<String, jubjub::Fr> = sol_symbols
+        let mut tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
             .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
             .collect();
+
+        tokens.insert(
+            "BTC".to_string(),
+            generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
+        );
 
         Ok(Self { tokens })
     }
@@ -86,6 +96,12 @@ impl DrkTokenList {
     }
 
     pub fn symbol_from_id(&self, id: jubjub::Fr) -> Result<Option<String>> {
+        if id.to_string()
+            == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd"
+        {
+            return Ok(Some("btc".to_string()))
+        }
+
         Ok(self
             .tokens
             .iter()
