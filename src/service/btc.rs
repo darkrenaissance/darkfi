@@ -348,7 +348,9 @@ impl BtcClient {
                serialize_hex(&signed_tx));
 
         //TODO: Replace unwrap with error matching
-        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec()).unwrap();
+        let txid = client
+            .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
+            .unwrap();
 
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
@@ -457,7 +459,9 @@ impl NetworkClient for BtcClient {
         );
 
         //TODO: Replace unwrap with error matching
-        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec()).unwrap();
+        let txid = client
+            .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
+            .unwrap();
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to external wallet, txid: {}", amount, txid);
         Ok(())
     }
