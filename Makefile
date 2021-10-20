@@ -5,7 +5,7 @@ CONFDIR = $(HOME)/.config/darkfi
 DLURL = http://185.165.171.77
 
 CARGO = cargo
-DLTOOL = wget -q -O-
+DLTOOL = wget -nv --show-progress -O-
 #DLTOOL = curl
 
 # Here it's possible to append "cashierd" and "gatewayd".
