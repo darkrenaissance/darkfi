@@ -28,16 +28,19 @@ $ make
 
 ## Install
 
-We will now install the project. This will install the binaries on your
-device in `/usr/local`, so you can run darkfi from the command-line
-directly. It will also create a new directory for config files at
-`$HOME/.config/darkfi`.
+We will now install the project. This will install the binaries
+and configurations in the configured namespace (`/usr/local`
+by default). The configurations are installed as TOML files in
+`/usr/local/share/doc/darkfi`. They have to be copied in your user's
+`$HOME/.config/darkfi` directory.
 
 Feel free to review the installed config files, but you don't need to
 change anything to run the testnet. The defaults will work fine.
 
 ```
 $ sudo make install
+$ mkdir -p ~/.config/darkfi
+$ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
 ## Run
