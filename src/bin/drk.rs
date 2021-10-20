@@ -5,7 +5,7 @@ use std::str::FromStr;
 extern crate prettytable;
 use clap::{clap_app, ArgMatches};
 use log::debug;
-use prettytable::Table;
+use prettytable::{format, Table};
 use serde_json::{json, Value};
 
 use drk::cli::{Config, DrkConfig};
@@ -182,7 +182,8 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         if matches.is_present("balances") {
             let reply = client.get_balances().await?;
             let mut table = Table::new();
-            table.add_row(row!["token", "amount", "network"]);
+            table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+            table.set_titles(row!["token", "amount", "network"]);
 
             if reply.as_object().is_some() {
                 for (tkn, data) in reply.as_object().unwrap() {
