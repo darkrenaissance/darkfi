@@ -10,7 +10,7 @@ use rusqlite::{named_params, params, Connection};
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
-    merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
+    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::{Error, Result};
@@ -173,7 +173,6 @@ impl WalletDb {
                 row.get(5)?,
                 row.get(6)?,
                 row.get(7)?,
-                row.get(8)?,
             ))
         })?;
 
@@ -181,15 +180,14 @@ impl WalletDb {
 
         for row in rows {
             let row = row?;
-            let coin_id: u64 = row.0;
-            let coin = self.get_value_deserialized(&row.1)?;
+            let coin = self.get_value_deserialized(&row.0)?;
 
             // note
-            let serial = self.get_value_deserialized(&row.2)?;
-            let coin_blind = self.get_value_deserialized(&row.3)?;
-            let valcom_blind = self.get_value_deserialized(&row.4)?;
-            let value: u64 = row.5;
-            let token_id = self.get_value_deserialized(&row.6)?;
+            let serial = self.get_value_deserialized(&row.1)?;
+            let coin_blind = self.get_value_deserialized(&row.2)?;
+            let valcom_blind = self.get_value_deserialized(&row.3)?;
+            let value: u64 = row.4;
+            let token_id = self.get_value_deserialized(&row.5)?;
 
             let note = Note {
                 serial,
@@ -199,8 +197,8 @@ impl WalletDb {
                 valcom_blind,
             };
 
-            let witness = self.get_value_deserialized(&row.7)?;
-            let secret: jubjub::Fr = self.get_value_deserialized(&row.8)?;
+            let witness = self.get_value_deserialized(&row.6)?;
+            let secret: jubjub::Fr = self.get_value_deserialized(&row.7)?;
 
             let oc = OwnCoin {
                 coin,
@@ -209,18 +207,30 @@ impl WalletDb {
                 witness,
             };
 
-            own_coins.push((coin_id, oc))
+            own_coins.push(oc)
         }
 
         Ok(own_coins)
     }
 
     pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
-        // prepare the values
-
         debug!(target: "WALLETDB", "Put own coins");
 
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
         let coin = self.get_value_serialized(&own_coin.coin.repr)?;
+
+        let mut stmt = conn.prepare("SELECT * FROM coins WHERE coin = ?;")?;
+
+        let check = stmt.exists(params![coin])?;
+
+        if check {
+            return Ok(());
+        }
+
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
         let valcom_blind = self.get_value_serialized(&own_coin.note.valcom_blind)?;
@@ -229,11 +239,6 @@ impl WalletDb {
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
         let is_spent = self.get_value_serialized(&false)?;
-
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
 
         conn.execute(
             "INSERT INTO coins
@@ -255,8 +260,10 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn confirm_spend_coin(&self, coin_id: &u64) -> Result<()> {
+    pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
+
+        let coin = self.get_value_serialized(coin)?;
 
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -268,21 +275,21 @@ impl WalletDb {
         conn.execute(
             "UPDATE coins 
             SET is_spent = ?1
-            WHERE coin_id = ?2 ;",
-            params![is_spent, coin_id],
+            WHERE coin = ?2 ;",
+            params![is_spent, coin],
         )?;
 
         Ok(())
     }
 
-    pub fn get_witnesses(&self) -> Result<HashMap<u64, IncrementalWitness<MerkleNode>>> {
+    pub fn get_witnesses(&self) -> Result<HashMap<Vec<u8>, IncrementalWitness<MerkleNode>>> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
         let is_spent = self.get_value_serialized(&false)?;
 
         let mut witnesses =
-            conn.prepare("SELECT coin_id, witness FROM coins WHERE is_spent = :is_spent;")?;
+            conn.prepare("SELECT coin, witness FROM coins WHERE is_spent = :is_spent;")?;
 
         let rows = witnesses.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((row.get(0)?, row.get(1)?))
@@ -291,9 +298,9 @@ impl WalletDb {
         let mut witnesses = HashMap::new();
         for i in rows {
             let i = i?;
-            let coin_id: u64 = i.0;
+            let coin: Vec<u8> = i.0;
             let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(&i.1)?;
-            witnesses.insert(coin_id, witness);
+            witnesses.insert(coin, witness);
         }
 
         Ok(witnesses)
@@ -301,7 +308,7 @@ impl WalletDb {
 
     pub fn update_witness(
         &self,
-        coin_id: u64,
+        coin: &Vec<u8>,
         witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
         debug!(target: "WALLETDB", "Updating witness");
@@ -313,8 +320,8 @@ impl WalletDb {
         let is_spent = self.get_value_serialized(&false)?;
 
         conn.execute(
-            "UPDATE coins SET witness = ?1  WHERE coin_id = ?2 AND is_spent = ?3",
-            params![witness, coin_id, is_spent],
+            "UPDATE coins SET witness = ?1  WHERE coin = ?2 AND is_spent = ?3",
+            params![witness, coin, is_spent],
         )?;
 
         Ok(())
@@ -455,7 +462,7 @@ mod tests {
 
         let id = wallet.get_token_id()?;
 
-        assert_eq!(id.len(), 4);
+        assert_eq!(id.len(), 1);
 
         for i in id {
             assert_eq!(i, token_id);
@@ -511,7 +518,7 @@ mod tests {
         let balances = wallet.get_balances()?;
 
         assert_eq!(balances.list.len(), 1);
-        assert_eq!(balances.list[0].value, 440);
+        assert_eq!(balances.list[0].value, 110);
         assert_eq!(balances.list[0].token_id, token_id);
 
         std::fs::remove_file(walletdb_path)?;
@@ -578,13 +585,13 @@ mod tests {
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
-        assert_eq!(&own_coin.1.note.valcom_blind, &note.valcom_blind);
-        assert_eq!(&own_coin.1.note.coin_blind, &note.coin_blind);
-        assert_eq!(own_coin.1.secret, secret);
-        assert_eq!(own_coin.1.witness.root(), witness.root());
-        assert_eq!(own_coin.1.witness.path(), witness.path());
+        assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
+        assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
+        assert_eq!(own_coin.secret, secret);
+        assert_eq!(own_coin.witness.root(), witness.root());
+        assert_eq!(own_coin.witness.path(), witness.path());
 
-        wallet.confirm_spend_coin(&own_coin.0)?;
+        wallet.confirm_spend_coin(&own_coin.coin)?;
 
         let own_coins = wallet.get_own_coins()?.clone();
 
@@ -644,9 +651,9 @@ mod tests {
         let node2 = MerkleNode::from_coin(&coin2);
         tree.append(node2)?;
 
-        for (coin_id, witness) in wallet.get_witnesses()?.iter_mut() {
+        for (coin, witness) in wallet.get_witnesses()?.iter_mut() {
             witness.append(node2).expect("Append to witness");
-            wallet.update_witness(coin_id.clone(), witness.clone())?;
+            wallet.update_witness(&coin.clone(), witness.clone())?;
         }
 
         for (_, witness) in wallet.get_witnesses()?.iter() {

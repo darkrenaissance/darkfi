@@ -228,8 +228,8 @@ impl GatewayClient {
         if last_index < local_last_index {
             return Err(Error::SlabsStore(
                 "Local slabstore has higher index than gateway's slabstore.
-                 Delete slabstore database \"darkfid_client.db\" and wallet database 
-                 \" darkfid_wallet.db\" in config directory.".into(),
+                 Delete slabstore database \"darkfid_client.db\"."
+                    .into(),
             ));
         }
 

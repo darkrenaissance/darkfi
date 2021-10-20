@@ -194,11 +194,11 @@ impl Client {
 
         let own_coins = self.wallet.get_own_coins()?;
 
-        for (coin_id, own_coin) in own_coins.iter() {
+        for own_coin in own_coins.iter() {
             if inputs_value >= amount {
                 break;
             }
-            self.wallet.confirm_spend_coin(coin_id)?;
+            self.wallet.confirm_spend_coin(&own_coin.coin)?;
             let witness = &own_coin.witness;
             let merkle_path = witness.path().unwrap();
             inputs_value += own_coin.note.value;
@@ -449,9 +449,9 @@ impl State {
             debug!(target: "CLIENT STATE", "Update witness");
 
             // Also update all the coin witnesses
-            for (coin_id, witness) in wallet.get_witnesses()?.iter_mut() {
+            for (coin, witness) in wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
-                wallet.update_witness(*coin_id, witness.clone())?;
+                wallet.update_witness(&coin, witness.clone())?;
             }
 
             debug!(target: "CLIENT STATE", "iterate over secret_keys to decrypt note");

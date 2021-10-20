@@ -5,8 +5,7 @@ CREATE TABLE IF NOT EXISTS keys(
 );
 PRAGMA foreign_keys=on;
 CREATE TABLE IF NOT EXISTS coins(
-	coin_id INTEGER PRIMARY KEY NOT NULL,
-	coin BLOB NOT NULL,
+	coin BLOB PRIMARY KEY NOT NULL,
 	serial BLOB NOT NULL,
 	coin_blind BLOB NOT NULL,
 	valcom_blind BLOB NOT NULL,
