@@ -80,7 +80,7 @@
     },
     {
       "chainId": 101,
-      "address": "7Y3hfmoPRYtUFiqZEDvRBHzh64ZuYAJG35CZDC9zEHyL",
+      "address": "DW29s6siJF8gRBT2FPRhurcRsmE13Zbh8ozGnJoEsfqN",
       "symbol": "XMR",
       "name": "Monero",
       "decimals": 9,
@@ -97,24 +97,7 @@
     },
     {
       "chainId": 101,
-      "address": "7Y3hfmoPRYtUFiqZEDvRBHzh64ZuYAJG35CZDC9zEHyL",
-      "symbol": "XMR",
-      "name": "Monero",
-      "decimals": 9,
-      "logoURI": "",
-      "tags": [
-        "Testnet tokens"
-      ],
-      "extensions": {
-        "website": "",
-        "telegram": "",
-        "twitter": ""
-
-      }
-    },
-    {
-      "chainId": 101,
-      "address": "G3PBKoUqDegxaxyUCXM6LYhmN3LBv4jT9DiVdXPvij71",
+      "address": "3yZHJRUdar5eE8WRkwwr8wNYgx1jy7CWo2hCHd4gykP3",
       "symbol": "WHACKD",
       "name": "John McAfee coin",
       "decimals": 9,
@@ -131,7 +114,7 @@
     },
     {
       "chainId": 101,
-      "address": "AHKUDMg2Q7i2PDABd3opH4XesYUdpf2jPykQHL4Lz1KY",
+      "address": "6sQrFgBfHnoofnMq8AmbYeUS6rkaMcQ65dGZR7QguTMZ",
       "symbol": "HDX",
       "name": "HydraDX",
       "decimals": 9,
@@ -148,7 +131,7 @@
     },
     {
       "chainId": 101,
-      "address": "6RYKFKgp2rXGsJk4a91b76iFTfazLq3CorNT7teE5x5V",
+      "address": "24cnHXiVttAACUNXb8VEJq4KZ86b3ZS7kYA5knfKTzF6",
       "symbol": "TORN",
       "name": "Tornado Cash",
       "decimals": 9,
