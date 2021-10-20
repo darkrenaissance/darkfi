@@ -15,19 +15,23 @@ $ make
 
 ## Install
 
-This will install the binaries in `/usr/local`, and set up the
-config files in your user's `$HOME/.config/darkfi`. You can review
-the installed config files, but the defaults should be good for using
-the testnet.
+This will install the binaries and configurations in the configured
+namespace (`/usr/local` by default). The configurations are installed
+as TOML files in `/usr/local/share/doc/darkfi`. They have to be copied
+in your user's `$HOME/.config/darkfi` directory. You can review the
+installed config files, but the defaults should be good for using
+the testnet if you're following this document.
 
 ```
 $ sudo make install
+$ mkdir -p ~/.config/darkfi
+$ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
 ## Usage
 
-After the installation, you should have `drk` and `darkfid` binaries in
-`/usr/local`. Also, the params and configuration files should be in
+After the installation, you should have `drk` and `darkfid`
+binaries in `/usr/local`. Also, the configuration files should be in
 `~/.config/darkfi`. Now we're ready to use the testnet.
 
 In one terminal, start `darkfid`, which is the daemon that will

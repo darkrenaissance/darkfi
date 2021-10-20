@@ -24,10 +24,10 @@ gateway_protocol_url = "tcp://testnet.gateway-protocol.dark.fi:3333"
 gateway_publisher_url = "tcp://testnet.gateway-publish.dark.fi:4444"
 
 # Path to mint.params
-mint_params_path = "~/.config/darkfi/mint.params"
+mint_params_path = "/usr/local/share/darkfi/mint.params"
 
 # Path to spend.params
-spend_params_path = "~/.config/darkfi/spend.params"
+spend_params_path = "/usr/local/share/darkfi/spend.params"
 
 # Path to the client database
 database_path = "~/.config/darkfi/darkfid_client.db"

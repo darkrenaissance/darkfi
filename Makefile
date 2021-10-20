@@ -1,8 +1,7 @@
 .POSIX:
 
 PREFIX = /usr/local
-CONFDIR = $(HOME)/.config/darkfi
-DLURL = http://185.165.171.77
+DLURL = https://testnet.cashier.dark.fi
 
 CARGO = cargo
 DLTOOL = wget -nv --show-progress -O-
@@ -17,17 +16,11 @@ BINDEPS = \
 	$(shell find token -type f) \
 	$(shell find sql -type f)
 
-all: $(BINS) uid confdir mint.params spend.params
+all: $(BINS) mint.params spend.params
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@
 	cp target/release/$@ $@
-
-uid:
-	id -u > $@
-
-confdir:
-	@echo "$(CONFDIR)" > $@
 
 %.params:
 	$(DLTOOL) $(DLURL)/$@ > $@
@@ -41,29 +34,24 @@ fix:
 clippy:
 	$(CARGO) clippy --release --all-features
 
-install:
-	@if ! [ -f uid ]; then \
-		echo "Please run 'make' as user first." ; \
-		exit 1 ; \
-	fi;
+install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	mkdir -p $(DESTDIR)$(PREFIX)/share/darkfi
+	mkdir -p $(DESTDIR)$(PREFIX)/share/doc/darkfi
 	cp -f $(BINS) $(DESTDIR)$(PREFIX)/bin
-	mkdir -p "$(shell cat confdir)"
-	for i in $(BINS); \
-	do \
-		cp example/config/$$i.toml "$(shell cat confdir)" ; \
-	done;
-	cp mint.params spend.params "$(shell cat confdir)"
-	chown -R "$(shell cat uid):$(shell cat uid)" "$(shell cat confdir)"
+	cp -f example/config/*.toml $(DESTDIR)$(PREFIX)/share/doc/darkfi
+	cp -f mint.params spend.params $(DESTDIR)$(PREFIX)/share/darkfi
 
 uninstall:
 	for i in $(BINS); \
 	do \
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
+	rm -rf $(DESTDIR)$(PREFIX)/share/doc/darkfi
+	rm -rf $(DESTDIR)$(PREFIX)/share/darkfi
 
 clean:
-	rm -f $(BINS) mint.params spend.params uid confdir
+	rm -f $(BINS) mint.params spend.params
 
 distclean: clean
 	rm -rf target
