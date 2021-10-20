@@ -215,12 +215,12 @@ impl Channel {
                 Ok(packet) => packet,
                 Err(err) => {
                     if Self::is_eof_error(err.clone()) {
-                        info!("Channel {} disconnected", self.address());
+                        info!("Channel {:?} disconnected", self.address());
                     } else {
                         error!("Read error on channel: {}", err);
                     }
                     debug!(target: "net",
-                        "Channel::receive_loop() stopping channel {}",
+                        "Channel::receive_loop() stopping channel {:?}",
                         self.address()
                     );
                     self.stop().await;
