@@ -18,6 +18,7 @@ impl SlabStore {
 
     pub fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
         debug!(target: "SLABSTORE", "get value");
+        let key: u64 = deserialize(&key)?;
         let value = self.rocks.get(key)?;
         Ok(value)
     }
