@@ -10,12 +10,12 @@ use bitcoin::blockdata::{
     script::{Builder, Script},
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
 };
+use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use bitcoin::util::psbt::serialize::Serialize;
-use bitcoin_hashes::hex::ToHex;
 use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
 use log::*;
 use secp256k1::{
@@ -302,24 +302,37 @@ impl BtcClient {
         }
         let main_script_pubkey = self.main_account.script_pubkey.clone();
 
-        //Estimate fee for getting in 2 blocks ahead
-        let estimated_fee = client.estimate_fee(2)?;
+        //TODO: Change to PSBT
+        let transaction = Transaction {
+            input: inputs.clone(),
+            output: vec![TxOut {
+                script_pubkey: main_script_pubkey.clone(),
+                value: amounts,
+            }],
+            lock_time: 0,
+            version: 2,
+        };
 
         //TODO: Better handling of fees, don't cast to u64
-        let value = amounts - estimated_fee as u64;
+        let tx_size = transaction.get_size();
+        //Estimate fee for getting in next block
+
+        let fee_per_kb = client.estimate_fee(1)?;
+        let _fee = tx_size as f64 * fee_per_kb * 100000 as f64;
+        //let value = amounts - fee as u64;
 
         let transaction = Transaction {
             input: inputs,
             output: vec![TxOut {
                 script_pubkey: main_script_pubkey,
-                value,
+                // TODO: calculate fee properly above
+                value: amounts - 300,
             }],
             lock_time: 0,
             version: 2,
         };
-        let txid = transaction.txid();
-        debug!(target: "BTC BRIDGE", "unSigned tx: {:?}",
-               &txid.to_hex());
+
+        let _txid = transaction.txid();
 
         let signed_tx = sign_transaction(
             transaction,
@@ -328,16 +341,16 @@ impl BtcClient {
             btc_keys.btc_pubkey,
             &btc_keys.keypair.context,
         );
-        let txid = signed_tx.txid();
-        //let serialized_tx = serialize(&signed_tx);
+        let _txid = signed_tx.txid();
+        let _serialized_tx = serialize(&signed_tx);
 
         debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
-               &txid.to_hex());
+               serialize_hex(&signed_tx));
 
         //TODO: Replace unwrap with error matching
-        let txid = client.transaction_broadcast_raw(&txid.to_vec()).unwrap();
+        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec()).unwrap();
 
-        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet", amount);
+        debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
     }
 }
@@ -428,7 +441,8 @@ impl NetworkClient for BtcClient {
             }],
             output: vec![TxOut {
                 script_pubkey: script_pubkey.clone(),
-                value: amount,
+                // TODO: Calculate fees
+                value: amount - 300,
             }],
             lock_time: 0,
             version: 2,
@@ -442,11 +456,9 @@ impl NetworkClient for BtcClient {
             &self.main_account.keypair.context,
         );
 
-        let serialized_tx = serialize(&signed_tx);
-
-        //TODO: Replace unwrap with error matchin
-        let txid = client.transaction_broadcast_raw(&serialized_tx).unwrap();
-        debug!(target: "BTC BRIDGE", "Sent {} BTC to main wallet: {}", amount, txid);
+        //TODO: Replace unwrap with error matching
+        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec()).unwrap();
+        debug!(target: "BTC BRIDGE", "Sent {} satoshi to external wallet, txid: {}", amount, txid);
         Ok(())
     }
 }
