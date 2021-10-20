@@ -53,10 +53,116 @@
     "tokenized-stock": {
       "name": "tokenized-stock",
       "description": "Tokenized stocks are tokenized derivatives that represent traditional securities, particularly shares in publicly firms traded on regulated exchanges"
+    },
+    "testnet": {
+      "name": "Testnet tokens",
+      "description": "DarkFi-specific testnet tokens that are purely for testing purposes"
     }
   },
   "timestamp": "2021-03-03T19:57:21+0000",
   "tokens": [
+    {
+      "chainId": 101,
+      "address": "eq7hQwi9L7hpdj2tqkBvDnB8piTiA8cf8WRRdEvZcUK",
+      "symbol": "OHM",
+      "name": "Olympus DAO",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
+    {
+      "chainId": 101,
+      "address": "7Y3hfmoPRYtUFiqZEDvRBHzh64ZuYAJG35CZDC9zEHyL",
+      "symbol": "XMR",
+      "name": "Monero",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
+    {
+      "chainId": 101,
+      "address": "7Y3hfmoPRYtUFiqZEDvRBHzh64ZuYAJG35CZDC9zEHyL",
+      "symbol": "XMR",
+      "name": "Monero",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
+    {
+      "chainId": 101,
+      "address": "G3PBKoUqDegxaxyUCXM6LYhmN3LBv4jT9DiVdXPvij71",
+      "symbol": "WHACKD",
+      "name": "John McAfee coin",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
+    {
+      "chainId": 101,
+      "address": "AHKUDMg2Q7i2PDABd3opH4XesYUdpf2jPykQHL4Lz1KY",
+      "symbol": "HDX",
+      "name": "HydraDX",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
+    {
+      "chainId": 101,
+      "address": "6RYKFKgp2rXGsJk4a91b76iFTfazLq3CorNT7teE5x5V",
+      "symbol": "TORN",
+      "name": "Tornado Cash",
+      "decimals": 9,
+      "logoURI": "",
+      "tags": [
+        "Testnet tokens"
+      ],
+      "extensions": {
+        "website": "",
+        "telegram": "",
+        "twitter": ""
+
+      }
+    },
     {
       "chainId": 101,
       "address": "HDLRMKW1FDz2q5Zg778CZx26UgrtnqpUDkNNJHhmVUFr",
