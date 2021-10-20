@@ -11,9 +11,15 @@ DLTOOL = wget -nv --show-progress -O-
 # Here it's possible to append "cashierd" and "gatewayd".
 BINS = drk darkfid
 
+# Dependencies which should force the binaries to be rebuilt
+BINDEPS = \
+	$(shell find src -type f) \
+	$(shell find token -type f) \
+	$(shell find sql -type f)
+
 all: $(BINS) uid confdir mint.params spend.params
 
-$(BINS): $(shell find src -type f)
+$(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@
 	cp target/release/$@ $@
 
