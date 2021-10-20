@@ -235,7 +235,8 @@ impl BtcClient {
                 Some(_) => {
                     // Script has a notification update
                     debug!(target: "BTC BRIDGE", "ScripPubKey notify update");
-                    let _ = client.script_unsubscribe(&script)?;
+                    //TODO: unsubscribe is never successful
+                    //let _ = client.script_unsubscribe(&script)?;
                     break;
                 }
                 None => {
@@ -245,8 +246,6 @@ impl BtcClient {
                 }
             };
         } // Endloop
-
-        //let _ = client.script_unsubscribe(&script)?;
 
         cur_balance = client.script_get_balance(&script)?;
 
