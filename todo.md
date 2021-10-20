@@ -9,10 +9,15 @@
 - [x] serialize signed btc transactions
 - [x] add genesis btc coinbase addr as token id
 - [x] serialize/encode btc keypairs
-- [ ] fix electrum rpc error: sendrawtransaction: TX decode failed
+- [x] fix electrum rpc error: sendrawtransaction: TX decode failed
 - [ ] fix unsubscribe generating errors from electrum rpc
-- [ ] start hosting cashierd and gatewayd
-- [ ] add cashierd public key to darkfid.toml defaults
+- [x] start hosting cashierd and gatewayd
+- [x] add cashierd public key to darkfid.toml defaults
+
+## post v0-release
+
+- [ ] sollet btc / btc has same interface on drk
+- [ ] add hdwallets to btc
 
 ## deposit
 
