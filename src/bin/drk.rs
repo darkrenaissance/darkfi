@@ -266,11 +266,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         client.transfer(&token_sym, &address, amount).await?;
 
-        println!(
-            "{:?} {:?} transferred successfully",
-            amount.to_string(),
-            token_sym.to_string()
-        );
+        println!("Transfered successfully");
 
         return Ok(());
     }
