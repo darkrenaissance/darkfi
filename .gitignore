@@ -5,7 +5,9 @@ target
 .direnv/
 result
 
-darkfid
 drk
+darkfid
+cashierd
+gatewayd
 mint.params
 spend.params
