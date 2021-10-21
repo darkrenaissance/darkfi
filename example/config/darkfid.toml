@@ -49,4 +49,4 @@ name = "testnet.cashier.dark.fi"
 rpc_url = "tls://testnet.cashier.dark.fi:9000"
 
 # The selected cashier public key
-public_key = "6CBJeUGMHC8QVBDHZSFvftPNAfCaideMJYGrzKpVYwSb"
+public_key = "95MPgrASV5WQ6DgoVaWgamrnCFN3V5FZrJNCUWWhDEKz"
