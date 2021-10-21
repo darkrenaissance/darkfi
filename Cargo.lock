@@ -421,6 +421,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
+name = "base64-compat"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8d4d2746f89841e49230dd26917df1876050f95abafafbe34f47cb534b88d7"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
+name = "bdk"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecf7e997526ceefbab7dd99fc0da6834ed8853bd051f53523415ed1dc82b870d"
+dependencies = [
+ "async-trait",
+ "bdk-macros",
+ "bitcoin",
+ "electrum-client",
+ "js-sys",
+ "log",
+ "miniscript",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "sled",
+ "tokio",
+]
+
+[[package]]
+name = "bdk-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81c1980e50ae23bb6efa9283ae8679d6ea2c6fa6a99fe62533f65f4a25a1a56c"
+dependencies = [
+ "proc-macro2 1.0.30",
+ "quote 1.0.10",
+ "syn 1.0.80",
+]
+
+[[package]]
 name = "bech32"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -486,6 +526,7 @@ version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a41df6ad9642c5c15ae312dd3d074de38fd3eb7cc87ad4ce10f90292a83fe4d"
 dependencies = [
+ "base64-compat",
  "bech32",
  "bitcoin_hashes",
  "secp256k1",
@@ -1255,16 +1296,17 @@ dependencies = [
 name = "darkfi"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-channel",
  "async-executor",
  "async-native-tls",
  "async-std",
  "async-trait",
  "async-tungstenite",
+ "bdk",
  "bellman",
  "bimap",
  "bitcoin",
- "bitcoin_hashes",
  "bitvec 0.18.5",
  "blake2b_simd",
  "blake2s_simd",
@@ -1275,7 +1317,6 @@ dependencies = [
  "crypto_api_chachapoly",
  "dirs 4.0.0",
  "easy-parallel",
- "electrum-client",
  "ff",
  "futures 0.3.17",
  "group",
@@ -1716,6 +1757,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1850,6 +1901,15 @@ dependencies = [
  "proc-macro-hack",
  "proc-macro-nested",
  "slab",
+]
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]
@@ -2506,6 +2566,16 @@ name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
+
+[[package]]
+name = "miniscript"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d69450033bf162edf854d4aacaff82ca5ef34fa81f6cf69e1c81a103f0834997"
+dependencies = [
+ "bitcoin",
+ "serde",
+]
 
 [[package]]
 name = "miniz_oxide"
@@ -3766,6 +3836,22 @@ name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9def91fd1e018fe007022791f865d0ccc9b3a0d5001e01aabb8b40e46000afb5"
+
+[[package]]
+name = "sled"
+version = "0.34.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f96b4737c2ce5987354855aed3797279def4ebf734436c6aa4552cf8e169935"
+dependencies = [
+ "crc32fast",
+ "crossbeam-epoch 0.9.5",
+ "crossbeam-utils 0.8.5",
+ "fs2",
+ "fxhash",
+ "libc",
+ "log",
+ "parking_lot 0.11.2",
+]
 
 [[package]]
 name = "smallvec"

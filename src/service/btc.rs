@@ -1,8 +1,13 @@
-use async_std::sync::Arc;
-use std::convert::From;
+use async_std::sync::{Arc, Mutex};
+use std::collections::{BTreeMap, HashMap};
+use std::convert::{From, TryFrom, TryInto};
+use std::cmp::max;
+use std::fmt;
+use std::ops::Add;
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use anyhow::Context;
 use async_executor::Executor;
 use async_trait::async_trait;
 
@@ -11,12 +16,18 @@ use bitcoin::blockdata::{
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
 };
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
+use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use bitcoin::util::psbt::serialize::Serialize;
-use electrum_client::{Client as ElectrumClient, ElectrumApi, GetBalanceRes};
+use bdk::electrum_client::{
+    Client as ElectrumClient,
+    ElectrumApi,
+    GetBalanceRes,
+    GetHistoryRes,
+    HeaderNotification
+};
 use log::*;
 use secp256k1::{
     constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
@@ -37,6 +48,40 @@ pub type PrivKey = BtcPrivKey;
 
 const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub struct BlockHeight(u32);
+
+impl From<BlockHeight> for u32 {
+fn from(height: BlockHeight) -> Self {
+        height.0
+    }
+}
+
+impl TryFrom<HeaderNotification> for BlockHeight {
+    type Error = BtcFailed;
+    fn try_from(value: HeaderNotification) -> BtcResult<Self> {
+        Ok(Self(
+            value
+                .height
+                .try_into()
+                .context("Failed to fit usize into u32")?,
+        ))
+    }
+}
+
+impl Add<u32> for BlockHeight {
+    type Output = BlockHeight;
+    fn add(self, rhs: u32) -> Self::Output {
+        BlockHeight(self.0 + rhs)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ExpiredTimelocks {
+    None,
+    Cancel,
+    Punish,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keypair {
     secret: SecretKey,
@@ -155,17 +200,163 @@ impl Account {
         Script::new_p2pkh(&btc_pubkey_hash)
     }
 }
+fn print_status_change(txid: Txid, old: Option<ScriptStatus>, new: ScriptStatus) -> ScriptStatus {
+    match (old, new) {
+        (None, new_status) => {
+            debug!(target: "BTC BRIDGE", "Found relevant Bitcoin transaction: {:?} {:?}", txid, new_status);
+        }
+        (Some(old_status), new_status) if old_status != new_status => {
+            debug!(target: "BTC BRIDGE", "Bitcoin transaction status changed: {:?} {} {}", txid, new_status, old_status);
+        }
+        _ => {}
+    }
 
+    new
+}
+
+fn sync_interval(avg_block_time: Duration) -> Duration {
+    max(avg_block_time / 10, Duration::from_secs(1))
+}
+pub struct Client {
+    electrum: ElectrumClient,
+    subscriptions: Arc<Mutex<Vec<Script>>>,
+    latest_block_height: BlockHeight,
+    last_sync: Instant,
+    sync_interval: Duration,
+    script_history: BTreeMap<Script, Vec<GetHistoryRes>>,
+
+}
+impl Client {
+    pub fn new(electrum_url: &str) -> BtcResult<Self> {
+
+       let config = bdk::electrum_client::ConfigBuilder::default()
+            .retry(5)
+            .build();
+        let client = ElectrumClient::from_config(electrum_url, config)?;
+
+        let electrum = ElectrumClient::new(electrum_url)
+            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+
+        let latest_block = electrum
+            .block_headers_subscribe()?;
+
+        //testnet avg block time
+        let interval = sync_interval(Duration::from_secs(300));
+
+        Ok(Self {
+            electrum: electrum,
+            subscriptions: Arc::new(Mutex::new(Vec::new())),
+            latest_block_height: BlockHeight::try_from(latest_block)
+                .map_err(|_| crate::Error::TryFromError)?,
+            last_sync: Instant::now(),
+            sync_interval: interval,
+            script_history: Default::default(),
+        })
+    }
+    fn update_state(&mut self) -> Result<()> {
+        let now = Instant::now();
+        if now < self.last_sync + self.sync_interval {
+            return Ok(());
+        }
+
+        self.last_sync = now;
+        self.update_latest_block()?;
+        self.update_script_histories()?;
+
+        Ok(())
+    }
+    fn update_latest_block(&mut self) -> BtcResult<()> {
+        let latest_block = self
+            .electrum
+            .block_headers_subscribe()?;
+        let latest_block_height = BlockHeight::try_from(latest_block)
+            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+
+        if latest_block_height > self.latest_block_height {
+            // debug!( target: "BTC BRIDGE", "{} {}"
+            //     u32::from(latest_block_height),
+            //     "Got notification for new block"
+            // );
+            self.latest_block_height = latest_block_height;
+        }
+
+        Ok(())
+    }
+
+    fn update_script_histories(&mut self) -> BtcResult<()> {
+        let histories = self
+            .electrum
+            .batch_script_get_history(self.script_history.keys())?;
+
+        if histories.len() != self.script_history.len() {
+            debug!(
+                "Expected {} history entries, received {}",
+                self.script_history.len(),
+                histories.len()
+            );
+        }
+
+        let scripts = self.script_history.keys().cloned();
+        let histories = histories.into_iter();
+
+        self.script_history = scripts.zip(histories).collect::<BTreeMap<_, _>>();
+
+        Ok(())
+    }
+
+    pub fn status_of_script<T>(&mut self, tx: &T) -> BtcResult<ScriptStatus>
+    where
+        T: Watchable,
+    {
+        let txid = tx.id();
+        let script = tx.script();
+
+
+        if !self.script_history.contains_key(&script) {
+            self.script_history.insert(script.clone(), vec![]);
+        }
+
+        self.update_state()?;
+
+        let history = self.script_history.entry(script).or_default();
+
+        let history_of_tx = history
+            .iter()
+            .filter(|entry| entry.tx_hash == txid)
+            .collect::<Vec<_>>();
+
+        match history_of_tx.as_slice() {
+            [] => Ok(ScriptStatus::Unseen),
+            [remaining @ .., last] => {
+                if !remaining.is_empty() {
+                    debug!("Found more than a single history entry for script. This is highly unexpected and those history entries will be ignored")
+                }
+
+                if last.height <= 0 {
+                    Ok(ScriptStatus::InMempool)
+                } else {
+                    Ok(ScriptStatus::Confirmed(
+                        Confirmed::from_inclusion_and_latest_block(
+                            u32::try_from(last.height)
+                                .map_err(|_| crate::Error::TryFromError)?,
+                            u32::from(self.latest_block_height),
+                        ),
+                    ))
+                }
+            }
+        }
+    }
+
+}
 pub struct BtcClient {
     main_account: Account,
+    client: Arc<Mutex<Client>>,
     notify_channel: (
         async_channel::Sender<TokenNotification>,
         async_channel::Receiver<TokenNotification>,
     ),
-    client: Arc<ElectrumClient>,
     network: Network,
 }
-
 impl BtcClient {
     pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
         //TODO
@@ -181,19 +372,18 @@ impl BtcClient {
 
         let main_account = Account::new(&main_keypair, network);
 
-        let electrum_client = ElectrumClient::new(url)
-            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-
         Ok(Arc::new(Self {
             main_account,
+            client: Arc::new(Mutex::new(Client::new(url)?)),
             notify_channel,
-            client: Arc::new(electrum_client),
             network,
         }))
     }
 
+
     async fn handle_subscribe_request(
         self: Arc<Self>,
+        tx: impl Watchable + Send + 'static,
         btc_keys: Account,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> BtcResult<()> {
@@ -201,51 +391,54 @@ impl BtcClient {
             target: "BTC BRIDGE",
             "Handle subscribe request"
         );
-        let client = &self.client;
+        let client = self.client.clone();
+        let electrum = &client.lock().await.electrum;
+        let script = tx.script();
+        let txid = tx.id();
 
-        let keys_clone = btc_keys.clone();
-        // p2pkh script
-        let script = keys_clone.script_pubkey;
-
+        // Check if we're already subscribed
+        if client.lock().await
+            .subscriptions.lock().await.contains(&script) {
+            return Ok(());
+        }
         //Fetch any current balance
-        let prev_balance = client.script_get_balance(&script)?;
+        let prev_balance = electrum.script_get_balance(&script)?;
 
         let cur_balance: GetBalanceRes;
+        //let status = client.script_subscribe(&script)?;
+        let mut last_status = None;
 
-        let status = client.script_subscribe(&script)?;
+
 
         loop {
-            let current_status = client.script_pop(&script)?;
-            debug!(target: "BTC BRIDGE", "script status: {:?}", status);
-            debug!(target: "BTC BRIDGE", "current_script status: {:?}", current_status);
-            if current_status == status {
-                async_std::task::sleep(Duration::from_secs(5)).await;
-                debug!(
-                    target: "BTC BRIDGE",
-                    "ScriptPubKey status has not changed, amtucfd: {}, amtcfd: {}",
-                    client.script_get_balance(&script)?.unconfirmed,
-                    client.script_get_balance(&script)?.confirmed
-                );
-                continue;
-            }
+            async_std::task::sleep(Duration::from_secs(5)).await;
+            //let current_status = client.script_pop(&script)?;
 
-            match current_status {
-                Some(_) => {
-                    // Script has a notification update
-                    debug!(target: "BTC BRIDGE", "ScripPubKey notify update");
-                    //TODO: unsubscribe is never successful
-                    //let _ = client.script_unsubscribe(&script)?;
-                    break;
-                }
-                None => {
-                    return Err(BtcFailed::ElectrumError(
-                        "ScriptPubKey was not found".to_string(),
-                    ));
+            let new_status = match client.lock().await.status_of_script(&tx) {
+                Ok(new_status) => new_status,
+                Err(error) => {
+                    debug!(target: "BTC BRIDGE", "Failed to get status of script: {:#}", error);
+                    return Err(BtcFailed::BtcError("Failed to get status of script".to_string()));
                 }
             };
+
+            last_status = Some(print_status_change(txid, last_status, new_status));
+
+            match new_status {
+                ScriptStatus::Unseen => continue,
+                ScriptStatus::InMempool => continue,
+                ScriptStatus::Confirmed(inner) => {
+                    let confirmations = inner.confirmations();
+                    debug!(target: "BTC BRIDGE", "Received confirmed tx: {:#}", confirmations);
+                    if confirmations > 0 {
+                        break
+                    }
+                },
+            }
+
         } // Endloop
 
-        cur_balance = client.script_get_balance(&script)?;
+        cur_balance = electrum.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
 
@@ -271,17 +464,18 @@ impl BtcClient {
             .map_err(Error::from)?;
 
         debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
-        let _ = self.send_btc_to_main_wallet(amnt as u64, btc_keys)?;
+        let _ = self.send_btc_to_main_wallet(amnt as u64, btc_keys).await;
 
         Ok(())
     }
 
-    fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: Account) -> BtcResult<()> {
+    async fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: Account) -> BtcResult<()> {
         debug!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
-        let client = &self.client;
+        let client = self.client.lock().await;
+        let electrum = &client.electrum;
         let keys_clone = btc_keys.clone();
         let script = keys_clone.script_pubkey;
-        let utxo = client.script_list_unspent(&script)?;
+        let utxo = electrum.script_list_unspent(&script)?;
 
         let mut inputs = Vec::new();
         let mut amounts: u64 = 0;
@@ -311,13 +505,10 @@ impl BtcClient {
             version: 2,
         };
 
-        //TODO: Better handling of fees, don't cast to u64
         let tx_size = transaction.get_size();
-        //Estimate fee for getting in next block
 
         let fee_per_kb = client.estimate_fee(1)?;
         let _fee = tx_size as f64 * fee_per_kb * 100000_f64;
-        //let value = amounts - fee as u64;
 
         let transaction = Transaction {
             input: inputs,
@@ -346,11 +537,12 @@ impl BtcClient {
         debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
                serialize_hex(&signed_tx));
 
-        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
+        let txid = electrum.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
 
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
     }
+
 }
 
 #[async_trait]
@@ -367,12 +559,22 @@ impl NetworkClient for BtcClient {
         let private_key = serialize(&keypair);
         let public_key = btc_keys.address.to_string();
 
+        let keys_clone = btc_keys.clone();
+        let script = keys_clone.script_pubkey;
+
+        let txid = self.client.lock().await.electrum
+            .script_get_history(&script).unwrap()[0].tx_hash;
+
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
+                let result = self.handle_subscribe_request(
+                    (txid, script),
+                    btc_keys,
+                    drk_pub_key
+                ).await;
                 if let Err(e) = result {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -397,9 +599,20 @@ impl NetworkClient for BtcClient {
         let btc_keys = Account::new(&keypair, self.network);
         let public_key = btc_keys.address.to_string();
 
+        let keys_clone = btc_keys.clone();
+        let script = keys_clone.script_pubkey;
+
+        //Ugly
+        let txid = self.client.lock().await.electrum.
+            script_get_history(&script).unwrap()[0].tx_hash;
+
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
+                let result = self.handle_subscribe_request(
+                    (txid, script),
+                    btc_keys,
+                    drk_pub_key
+                ).await;
                 if let Err(e) = result {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -418,14 +631,14 @@ impl NetworkClient for BtcClient {
         amount: u64,
     ) -> Result<()> {
         // address is not a btc address, so derive the btc address
-        let client = &self.client;
+        let electrum = &self.client.lock().await.electrum;
         let public_key = deserialize(&address)?;
         let script_pubkey = Account::derive_btc_script_pubkey(public_key, self.network);
 
         let main_script_pubkey = &self.main_account.script_pubkey;
 
-        let main_utxo = client
-            .script_list_unspent(main_script_pubkey)
+        let main_utxo = electrum
+            .script_list_unspent(&main_script_pubkey)
             .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
         let transaction = Transaction {
@@ -455,7 +668,7 @@ impl NetworkClient for BtcClient {
             &self.main_account.keypair.context,
         )?;
 
-        let txid = client
+        let txid = electrum
             .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
             .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
@@ -501,6 +714,97 @@ pub fn sign_transaction(
         input: signed_inputs,
         output: tx.output,
     })
+}
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ScriptStatus {
+    Unseen,
+    InMempool,
+    Confirmed(Confirmed),
+}
+
+impl ScriptStatus {
+    pub fn from_confirmations(confirmations: u32) -> Self {
+        match confirmations {
+            0 => Self::InMempool,
+            confirmations => Self::Confirmed(Confirmed::new(confirmations - 1)),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Confirmed {
+    depth: u32,
+}
+
+impl Confirmed {
+    pub fn new(depth: u32) -> Self {
+        Self { depth }
+    }
+    pub fn from_inclusion_and_latest_block(inclusion_height: u32, latest_block: u32) -> Self {
+        let depth = latest_block.saturating_sub(inclusion_height);
+
+        Self { depth }
+    }
+
+    pub fn confirmations(&self) -> u32 {
+        self.depth + 1
+    }
+
+    pub fn meets_target<T>(&self, target: T) -> bool
+    where
+        u32: PartialOrd<T>,
+    {
+        self.confirmations() >= target
+    }
+}
+
+impl ScriptStatus {
+    // Check if the script has any confirmations.
+    pub fn is_confirmed(&self) -> bool {
+        matches!(self, ScriptStatus::Confirmed(_))
+    }
+
+    // Check if the script has met the given confirmation target.
+    pub fn is_confirmed_with<T>(&self, target: T) -> bool
+    where
+        u32: PartialOrd<T>,
+    {
+        match self {
+            ScriptStatus::Confirmed(inner) => inner.meets_target(target),
+            _ => false,
+        }
+    }
+
+    pub fn has_been_seen(&self) -> bool {
+        matches!(self, ScriptStatus::InMempool | ScriptStatus::Confirmed(_))
+    }
+}
+
+impl fmt::Display for ScriptStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ScriptStatus::Unseen => write!(f, "unseen"),
+            ScriptStatus::InMempool => write!(f, "in mempool"),
+            ScriptStatus::Confirmed(inner) => {
+                write!(f, "confirmed with {} blocks", inner.confirmations())
+            }
+        }
+    }
+}
+
+pub trait Watchable {
+    fn id(&self) -> Txid;
+    fn script(&self) -> Script;
+}
+
+impl Watchable for (Txid, Script) {
+    fn id(&self) -> Txid {
+        self.0
+    }
+
+    fn script(&self) -> Script {
+        self.1.clone()
+    }
 }
 impl Encodable for bitcoin::Transaction {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
@@ -605,7 +909,6 @@ pub enum BtcFailed {
     KeypairError(String),
     Notification(String),
 }
-
 impl std::error::Error for BtcFailed {}
 
 impl std::fmt::Display for BtcFailed {
@@ -649,8 +952,8 @@ impl From<bitcoin::util::address::Error> for BtcFailed {
         BtcFailed::BadBtcAddress(err.to_string())
     }
 }
-impl From<electrum_client::Error> for BtcFailed {
-    fn from(err: electrum_client::Error) -> BtcFailed {
+impl From<bdk::electrum_client::Error> for BtcFailed {
+    fn from(err: bdk::electrum_client::Error) -> BtcFailed {
         BtcFailed::ElectrumError(err.to_string())
     }
 }
@@ -660,6 +963,12 @@ impl From<bitcoin::util::key::Error> for BtcFailed {
         BtcFailed::DecodeAndEncodeError(err.to_string())
     }
 }
+impl From<anyhow::Error> for BtcFailed {
+    fn from(err: anyhow::Error) -> BtcFailed {
+        BtcFailed::DecodeAndEncodeError(err.to_string())
+    }
+}
+
 
 pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 
