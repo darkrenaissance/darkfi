@@ -4,9 +4,6 @@ Welcome to the dark renaissance. This tutorial will teach you how to
 install darkfi on your system, and how to use the testnet to send and
 receive anonymous tokens.
 
-This tutorial is intended for standard darkfi users. If you'd like to
-run a cashier, see this tutorial: [].
-
 ## Download
 
 To run darkfi, we must first install the software. Do this by cloning
@@ -287,5 +284,3 @@ rpc_url = "tcp://185.165.171.77:9000"
 public_key = "2MezH7FrtzGwtEEeTU8anM2b67Nzfv8XsojggGUavCUd"
 ```  
 
-You can set up a custom cashier on your local host. To do so, following
-this tutorial: [].
