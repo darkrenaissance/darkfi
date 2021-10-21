@@ -223,14 +223,6 @@ impl WalletDb {
 
         let coin = self.get_value_serialized(&own_coin.coin.repr)?;
 
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE coin = ?;")?;
-
-        let check = stmt.exists(params![coin])?;
-
-        if check {
-            return Ok(());
-        }
-
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
         let valcom_blind = self.get_value_serialized(&own_coin.note.valcom_blind)?;
@@ -241,7 +233,7 @@ impl WalletDb {
         let is_spent = self.get_value_serialized(&false)?;
 
         conn.execute(
-            "INSERT INTO coins
+            "INSERT OR REPLACE INTO coins
             (coin, serial, value, token_id, coin_blind, valcom_blind, witness, secret, is_spent)
             VALUES
             (:coin, :serial, :value, :token_id, :coin_blind, :valcom_blind, :witness, :secret, :is_spent);",
