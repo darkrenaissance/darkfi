@@ -19,7 +19,7 @@ use drk::{
         load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
     },
     rpc::{
-        jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_request},
+        jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request},
         jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
@@ -226,7 +226,7 @@ impl Darkfid {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult;
         // NOTE: this just selects the first cashier in the list
-        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
+        match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
@@ -289,7 +289,7 @@ impl Darkfid {
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
         let rep: JsonResult;
-        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
+        match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 debug!(target: "DARKFID", "REQUEST IS ERR");
@@ -374,7 +374,7 @@ impl Darkfid {
             json!([network, token_id, address, amount_in_apo]),
         );
         let mut rep: JsonResult;
-        match send_request(&self.cashiers[0].rpc_url, json!(req)).await {
+        match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));

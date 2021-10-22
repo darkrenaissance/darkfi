@@ -146,7 +146,7 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     }
 }
 
-pub async fn send_request(url: &str, data: Value) -> Result<JsonResult, Error> {
+pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Error> {
     let use_tls: bool;
     let parsed_url = url::Url::parse(url)?;
 
