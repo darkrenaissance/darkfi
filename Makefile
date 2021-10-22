@@ -8,7 +8,7 @@ DLTOOL = wget -nv --show-progress -O-
 #DLTOOL = curl
 
 # Here it's possible to append "cashierd" and "gatewayd".
-BINS = eth drk darkfid cashierd gatewayd
+BINS = drk darkfid
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
