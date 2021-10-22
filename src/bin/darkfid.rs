@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
 use log::debug;
+use num_bigint::BigUint;
 use serde_json::{json, Value};
 use url::Url;
 
@@ -151,7 +152,7 @@ impl Darkfid {
                 }
 
                 if let Some(symbol) = self.drk_tokenlist.symbol_from_id(balance.token_id)? {
-                    let amount = encode_base10(balance.value, 8);
+                    let amount = encode_base10(BigUint::from(balance.value), 8);
                     symbols.insert(symbol, (amount, network.to_string()));
                 }
             }

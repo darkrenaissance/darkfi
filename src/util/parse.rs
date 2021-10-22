@@ -1,6 +1,7 @@
 use std::iter::FromIterator;
 use std::str::FromStr;
 
+use num_bigint::BigUint;
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -145,7 +146,7 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     Ok(number + round as u64)
 }
 
-pub fn encode_base10(amount: u64, decimal_places: usize) -> String {
+pub fn encode_base10(amount: BigUint, decimal_places: usize) -> String {
     let mut s: Vec<char> = format!("{:0width$}", amount, width = 1 + decimal_places)
         .chars()
         .collect();

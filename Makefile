@@ -8,10 +8,11 @@ DLTOOL = wget -nv --show-progress -O-
 #DLTOOL = curl
 
 # Here it's possible to append "cashierd" and "gatewayd".
-BINS = drk darkfid
+BINS = eth drk darkfid cashierd gatewayd
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
+	Cargo.toml \
 	$(shell find src -type f) \
 	$(shell find token -type f) \
 	$(shell find sql -type f)

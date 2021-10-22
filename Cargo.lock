@@ -1264,6 +1264,7 @@ dependencies = [
  "lazy_static",
  "log",
  "native-tls",
+ "num-bigint",
  "num_cpus",
  "prettytable-rs",
  "rand 0.7.3",
@@ -2554,6 +2555,7 @@ dependencies = [
  "autocfg 1.0.1",
  "num-integer",
  "num-traits",
+ "rand 0.7.3",
 ]
 
 [[package]]

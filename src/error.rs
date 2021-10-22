@@ -18,6 +18,7 @@ pub enum Error {
     ParseFailed(&'static str),
     ParseIntError,
     ParseFloatError,
+    FromHexError,
     UrlParseError,
     MalformedPacket,
     AddrParseError,
@@ -97,6 +98,7 @@ impl fmt::Display for Error {
             Error::ParseIntError => f.write_str("Parse int error"),
             Error::ParseFloatError => f.write_str("Parse float error"),
             Error::UrlParseError => f.write_str("Failed to parse URL"),
+            Error::FromHexError => f.write_str("Failed to convert from hex"),
             Error::AsyncChannelSenderError => f.write_str("Async_channel sender error"),
             Error::AsyncChannelReceiverError => f.write_str("Async_channel receiver error"),
             Error::AsyncNativeTlsError => f.write_str("Async_Native_TLS error"),
@@ -142,9 +144,7 @@ impl fmt::Display for Error {
             Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
             Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
             Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
-            Error::ConfigNotFound => {
-                f.write_str("No config file detected. Please create a config file")
-            }
+            Error::ConfigNotFound => f.write_str("No config file detected. Please create one."),
             Error::KeypairPathNotFound => f.write_str("No keypair file detected."),
             Error::CashierKeysNotFound => f.write_str("No cashier public keys detected."),
             Error::SetLoggerError => f.write_str("SetLoggerError"),
@@ -224,6 +224,12 @@ impl From<std::net::AddrParseError> for Error {
 impl From<url::ParseError> for Error {
     fn from(_err: url::ParseError) -> Error {
         Error::UrlParseError
+    }
+}
+
+impl From<hex::FromHexError> for Error {
+    fn from(_err: hex::FromHexError) -> Error {
+        Error::FromHexError
     }
 }
 
