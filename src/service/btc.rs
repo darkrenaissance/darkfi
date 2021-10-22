@@ -62,7 +62,6 @@ impl Keypair {
 
         bytes[..SECRET_KEY_SIZE].copy_from_slice(self.secret.as_ref());
         bytes[SECRET_KEY_SIZE..].copy_from_slice(&self.public.serialize());
-        debug!(target: "BTC BRIDGE", "Keypair to bytes: {:?}", bytes);
 
         bytes
     }
