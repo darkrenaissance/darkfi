@@ -252,6 +252,18 @@ impl WalletDb {
         Ok(())
     }
 
+    pub fn remove_own_coins(&self) -> Result<()> {
+        debug!(target: "WALLETDB", "Remove own coins");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        conn.execute("DELETE FROM coins;", [])?;
+        Ok(())
+    }
+
     pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
 
@@ -265,7 +277,7 @@ impl WalletDb {
         let is_spent = self.get_value_serialized(&true)?;
 
         conn.execute(
-            "UPDATE coins 
+            "UPDATE coins
             SET is_spent = ?1
             WHERE coin = ?2 ;",
             params![is_spent, coin],
@@ -567,12 +579,17 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
+        let coin_ser = crate::serial::serialize(&coin.repr);
+
+        assert_eq!(coin, crate::serial::deserialize(&coin_ser)?);
+
         let own_coin = OwnCoin {
             coin,
             note: note.clone(),
             secret,
             witness: witness.clone(),
         };
+
         wallet.put_own_coins(own_coin.clone())?;
 
         let own_coin = wallet.get_own_coins()?[0].clone();
@@ -584,6 +601,18 @@ mod tests {
         assert_eq!(own_coin.witness.path(), witness.path());
 
         wallet.confirm_spend_coin(&own_coin.coin)?;
+
+        let own_coins = wallet.get_own_coins()?.clone();
+
+        assert_eq!(own_coins.len(), 0);
+
+        wallet.put_own_coins(own_coin.clone())?;
+
+        let own_coins = wallet.get_own_coins()?.clone();
+
+        assert_eq!(own_coins.len(), 1);
+
+        wallet.remove_own_coins()?;
 
         let own_coins = wallet.get_own_coins()?.clone();
 
