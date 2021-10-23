@@ -200,13 +200,13 @@ impl Account {
         Script::new_p2pkh(&btc_pubkey_hash)
     }
 }
-fn print_status_change(txid: Txid, old: Option<ScriptStatus>, new: ScriptStatus) -> ScriptStatus {
+fn print_status_change(script: &Script, old: Option<ScriptStatus>, new: ScriptStatus) -> ScriptStatus {
     match (old, new) {
         (None, new_status) => {
-            debug!(target: "BTC BRIDGE", "Found relevant Bitcoin transaction: {:?} {:?}", txid, new_status);
+            debug!(target: "BTC BRIDGE", "Found relevant Bitcoin transaction: {:?} {:?}", script, new_status);
         }
         (Some(old_status), new_status) if old_status != new_status => {
-            debug!(target: "BTC BRIDGE", "Bitcoin transaction status changed: {:?} {} {}", txid, new_status, old_status);
+            debug!(target: "BTC BRIDGE", "Bitcoin transaction status changed: {:?} {} {}", script, new_status, old_status);
         }
         _ => {}
     }
@@ -244,7 +244,7 @@ impl Client {
         let interval = sync_interval(Duration::from_secs(300));
 
         Ok(Self {
-            electrum: electrum,
+            electrum,
             subscriptions: Arc::new(Mutex::new(Vec::new())),
             latest_block_height: BlockHeight::try_from(latest_block)
                 .map_err(|_| crate::Error::TryFromError)?,
@@ -273,10 +273,10 @@ impl Client {
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
         if latest_block_height > self.latest_block_height {
-            // debug!( target: "BTC BRIDGE", "{} {}"
-            //     u32::from(latest_block_height),
-            //     "Got notification for new block"
-            // );
+            debug!( target: "BTC BRIDGE", "{} {}",
+                u32::from(latest_block_height),
+                "Got notification for new block"
+            );
             self.latest_block_height = latest_block_height;
         }
 
@@ -304,34 +304,18 @@ impl Client {
         Ok(())
     }
 
-    pub fn status_of_script<T>(&mut self, tx: &T) -> BtcResult<ScriptStatus>
-    where
-        T: Watchable,
+    pub fn status_of_script(&mut self, script: Script) -> BtcResult<ScriptStatus>
     {
-        let txid = tx.id();
-        let script = tx.script();
-
-
         if !self.script_history.contains_key(&script) {
             self.script_history.insert(script.clone(), vec![]);
         }
-
         self.update_state()?;
 
-        let history = self.script_history.entry(script).or_default();
+        let history = self.script_history.entry(script.clone()).or_default();
 
-        let history_of_tx = history
-            .iter()
-            .filter(|entry| entry.tx_hash == txid)
-            .collect::<Vec<_>>();
-
-        match history_of_tx.as_slice() {
+        match history.as_slice() {
             [] => Ok(ScriptStatus::Unseen),
             [remaining @ .., last] => {
-                if !remaining.is_empty() {
-                    debug!("Found more than a single history entry for script. This is highly unexpected and those history entries will be ignored")
-                }
-
                 if last.height <= 0 {
                     Ok(ScriptStatus::InMempool)
                 } else {
@@ -383,7 +367,7 @@ impl BtcClient {
 
     async fn handle_subscribe_request(
         self: Arc<Self>,
-        tx: impl Watchable + Send + 'static,
+        //tx: impl Watchable + Send + 'static,
         btc_keys: Account,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> BtcResult<()> {
@@ -392,29 +376,36 @@ impl BtcClient {
             "Handle subscribe request"
         );
         let client = self.client.clone();
-        let electrum = &client.lock().await.electrum;
-        let script = tx.script();
-        let txid = tx.id();
+        debug!(
+            target: "BTC BRIDGE",
+            "electrum lock"
+        );
+        let keys_clone = btc_keys.clone();
+        let script = keys_clone.script_pubkey;
 
-        // Check if we're already subscribed
+        //Check if we're already subscribed
         if client.lock().await
             .subscriptions.lock().await.contains(&script) {
-            return Ok(());
+                return Ok(());
+            }
+        else {
+            client.lock().await
+                .subscriptions.lock().await.push(script.clone());
         }
+
+        debug!(
+            target: "BTC BRIDGE",
+            "subscriptions"
+        );
+
         //Fetch any current balance
-        let prev_balance = electrum.script_get_balance(&script)?;
-
+        let prev_balance = client.lock().await.electrum.script_get_balance(&script)?;
         let cur_balance: GetBalanceRes;
-        //let status = client.script_subscribe(&script)?;
         let mut last_status = None;
-
-
 
         loop {
             async_std::task::sleep(Duration::from_secs(5)).await;
-            //let current_status = client.script_pop(&script)?;
-
-            let new_status = match client.lock().await.status_of_script(&tx) {
+            let new_status = match client.lock().await.status_of_script(script.clone()) {
                 Ok(new_status) => new_status,
                 Err(error) => {
                     debug!(target: "BTC BRIDGE", "Failed to get status of script: {:#}", error);
@@ -422,33 +413,39 @@ impl BtcClient {
                 }
             };
 
-            last_status = Some(print_status_change(txid, last_status, new_status));
+            last_status = Some(print_status_change(&script, last_status, new_status));
 
             match new_status {
                 ScriptStatus::Unseen => continue,
                 ScriptStatus::InMempool => continue,
                 ScriptStatus::Confirmed(inner) => {
                     let confirmations = inner.confirmations();
-                    debug!(target: "BTC BRIDGE", "Received confirmed tx: {:#}", confirmations);
                     if confirmations > 0 {
                         break
                     }
                 },
             }
 
-        } // Endloop
+        }
 
-        cur_balance = electrum.script_get_balance(&script)?;
+        let client2 = client.lock().await;
+        let mut subscriptions = client2.subscriptions.lock().await;
+        let index = subscriptions.iter().position(|p| p == &script);
+        if let Some(ind) = index {
+            debug!("Removing subscription from list");
+            subscriptions.remove(ind);
+        }
+        cur_balance = client.lock().await.electrum.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
 
-        if cur_balance.unconfirmed < prev_balance.unconfirmed {
+        if cur_balance.confirmed < prev_balance.confirmed {
             return Err(BtcFailed::Notification(
                 "New balance is less than previous balance".into(),
             ));
         }
-        //TODO: Wait until they're confirmed balances above
-        let amnt = cur_balance.unconfirmed - prev_balance.unconfirmed;
+
+        let amnt = cur_balance.confirmed - prev_balance.confirmed;
         let ui_amnt = amnt;
 
         send_notification
@@ -559,19 +556,12 @@ impl NetworkClient for BtcClient {
         let private_key = serialize(&keypair);
         let public_key = btc_keys.address.to_string();
 
-        let keys_clone = btc_keys.clone();
-        let script = keys_clone.script_pubkey;
-
-        let txid = self.client.lock().await.electrum
-            .script_get_history(&script).unwrap()[0].tx_hash;
-
         // start scheduler for checking balance
         debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
         executor
             .spawn(async move {
                 let result = self.handle_subscribe_request(
-                    (txid, script),
                     btc_keys,
                     drk_pub_key
                 ).await;
@@ -599,17 +589,9 @@ impl NetworkClient for BtcClient {
         let btc_keys = Account::new(&keypair, self.network);
         let public_key = btc_keys.address.to_string();
 
-        let keys_clone = btc_keys.clone();
-        let script = keys_clone.script_pubkey;
-
-        //Ugly
-        let txid = self.client.lock().await.electrum.
-            script_get_history(&script).unwrap()[0].tx_hash;
-
         executor
             .spawn(async move {
                 let result = self.handle_subscribe_request(
-                    (txid, script),
                     btc_keys,
                     drk_pub_key
                 ).await;
