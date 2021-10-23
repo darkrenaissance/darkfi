@@ -1,5 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
+
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::{debug, info, warn};
@@ -8,6 +9,7 @@ use url::Url;
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
+        coin::Coin,
         merkle::{CommitmentTree, IncrementalWitness},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -35,6 +37,7 @@ pub enum ClientFailed {
     WalletInitialized,
     KeyExists,
     ClientError(String),
+    VerifyError(String),
 }
 
 pub struct Client {
@@ -93,7 +96,6 @@ impl Client {
         amount: u64,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
-
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
         let token_id_exists = self.wallet.token_id_exists(&token_id)?;
@@ -123,15 +125,12 @@ impl Client {
             return Err(ClientFailed::InvalidAmount(amount as u64));
         }
 
-        let (slab, tx) = self
-            .build_slab_from_tx(pub_key, amount, token_id, clear_input)
+        let coins = self
+            .build_slab_from_tx(pub_key, amount, token_id, clear_input, state)
             .await?;
 
-        // check if it's valid before send it to gateway
-        if let Err(err) = self.update_state(tx, state).await {
-            return Err(ClientFailed::from(err));
-        } else {
-            self.gateway.put_slab(slab).await?;
+        for coin in coins.iter() {
+            self.wallet.confirm_spend_coin(coin)?;
         }
 
         debug!(target: "CLIENT", "End send {}", amount);
@@ -140,17 +139,19 @@ impl Client {
     }
 
     async fn build_slab_from_tx(
-        &self,
+        &mut self,
         pub_key: jubjub::SubgroupPoint,
         value: u64,
         token_id: jubjub::Fr,
         clear_input: bool,
-    ) -> Result<(Slab, tx::Transaction)> {
+        state: Arc<Mutex<State>>,
+    ) -> ClientResult<Vec<Coin>> {
         debug!(target: "CLIENT", "Start build slab from tx");
 
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
+        let mut coins: Vec<Coin> = vec![];
 
         if clear_input {
             let signature_secret = self.main_keypair.private;
@@ -161,7 +162,45 @@ impl Client {
             };
             clear_inputs.push(input);
         } else {
-            inputs = self.build_inputs(value, token_id, &mut outputs).await?;
+            debug!(target: "CLIENT", "Start build inputs");
+
+            let mut inputs_value: u64 = 0;
+
+            let own_coins = self.wallet.get_own_coins()?;
+
+            for own_coin in own_coins.iter() {
+                if inputs_value >= value {
+                    break;
+                }
+                let witness = &own_coin.witness;
+                let merkle_path = witness.path().unwrap();
+                inputs_value += own_coin.note.value;
+
+                let input = tx::TransactionBuilderInputInfo {
+                    merkle_path,
+                    secret: own_coin.secret,
+                    note: own_coin.note.clone(),
+                };
+
+                inputs.push(input);
+                coins.push(own_coin.coin.clone());
+            }
+
+            if inputs_value < value {
+                return Err(ClientFailed::NotEnoughValue(inputs_value).into());
+            }
+
+            if inputs_value > value {
+                let return_value: u64 = inputs_value - value;
+
+                outputs.push(tx::TransactionBuilderOutputInfo {
+                    value: return_value,
+                    token_id,
+                    public: self.main_keypair.public,
+                });
+            }
+
+            debug!(target: "CLIENT", "End build inputs");
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo {
@@ -188,56 +227,13 @@ impl Client {
 
         debug!(target: "CLIENT", "End build slab from tx");
 
-        Ok((slab, tx))
-    }
+        // check if it's valid before send it to gateway
+        let state = state.lock().await;
+        state_transition(&state, tx)?;
 
-    async fn build_inputs(
-        &self,
-        amount: u64,
-        token_id: jubjub::Fr,
-        outputs: &mut Vec<tx::TransactionBuilderOutputInfo>,
-    ) -> Result<Vec<tx::TransactionBuilderInputInfo>> {
-        debug!(target: "CLIENT", "Start build inputs");
+        self.gateway.put_slab(slab).await?;
 
-        let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
-        let mut inputs_value: u64 = 0;
-
-        let own_coins = self.wallet.get_own_coins()?;
-
-        for own_coin in own_coins.iter() {
-            if inputs_value >= amount {
-                break;
-            }
-            self.wallet.confirm_spend_coin(&own_coin.coin)?;
-            let witness = &own_coin.witness;
-            let merkle_path = witness.path().unwrap();
-            inputs_value += own_coin.note.value;
-            let input = tx::TransactionBuilderInputInfo {
-                merkle_path,
-                secret: own_coin.secret,
-                note: own_coin.note.clone(),
-            };
-
-            inputs.push(input);
-        }
-
-        if inputs_value < amount {
-            return Err(ClientFailed::NotEnoughValue(inputs_value).into());
-        }
-
-        if inputs_value > amount {
-            let return_value: u64 = inputs_value - amount;
-
-            outputs.push(tx::TransactionBuilderOutputInfo {
-                value: return_value,
-                token_id,
-                public: self.main_keypair.public,
-            });
-        }
-
-        debug!(target: "CLIENT", "End build inputs");
-
-        Ok(inputs)
+        Ok(coins)
     }
 
     pub async fn connect_to_subscriber_from_cashier(
@@ -261,38 +257,21 @@ impl Client {
 
                 debug!(target: "CLIENT", "Received new slab");
 
-                debug!(target: "CLIENT", "Starting build tx from slab");
-                let tx = tx::Transaction::decode(&slab.get_payload()[..]);
-
-                if let Err(e) = tx {
-                    warn!("TX: {}", e.to_string());
-                    continue;
-                }
-
-                let mut state = state.lock().await;
-
-                let update = state_transition(&state, tx?);
-
-                if let Err(e) = update {
-                    warn!("state transition: {}", e.to_string());
-                    continue;
-                }
-
                 let mut secret_keys: Vec<jubjub::Fr> = vec![secret_key];
                 let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
                 secret_keys.append(&mut withdraw_keys);
 
-                let state_apply = state
-                    .apply(
-                        update?,
-                        secret_keys.clone(),
-                        Some(notify.clone()),
-                        wallet.clone(),
-                    )
-                    .await;
+                let update_state = Self::update_state(
+                    secret_keys,
+                    &slab,
+                    state.clone(),
+                    wallet.clone(),
+                    Some(notify.clone()),
+                )
+                .await;
 
-                if let Err(e) = state_apply {
-                    warn!("apply state: {}", e.to_string());
+                if let Err(e) = update_state {
+                    warn!("Update state: {}", e.to_string());
                     continue;
                 }
             }
@@ -322,32 +301,17 @@ impl Client {
 
                 debug!(target: "CLIENT", "Received new slab");
 
-                debug!(target: "CLIENT", "Starting build tx from slab");
+                let update_state = Self::update_state(
+                    vec![secret_key],
+                    &slab,
+                    state.clone(),
+                    wallet.clone(),
+                    None,
+                )
+                .await;
 
-                let tx = tx::Transaction::decode(&slab.get_payload()[..]);
-
-                if let Err(e) = tx {
-                    warn!("TX Decode: {}", e.to_string());
-                    continue;
-                }
-
-                let mut state = state.lock().await;
-
-                let update = state_transition(&state, tx?);
-
-                if let Err(e) = update {
-                    warn!("state transition: {}", e.to_string());
-                    continue;
-                }
-
-                let secret_keys: Vec<jubjub::Fr> = vec![secret_key];
-
-                let state_apply = state
-                    .apply(update?, secret_keys.clone(), None, wallet.clone())
-                    .await;
-
-                if let Err(e) = state_apply {
-                    warn!("apply state: {}", e.to_string());
+                if let Err(e) = update_state {
+                    warn!("Update state: {}", e.to_string());
                     continue;
                 }
             }
@@ -358,15 +322,23 @@ impl Client {
         Ok(())
     }
 
-    async fn update_state(&self, tx: tx::Transaction, state: Arc<Mutex<State>>) -> Result<()> {
+    async fn update_state(
+        secret_keys: Vec<jubjub::Fr>,
+        slab: &Slab,
+        state: Arc<Mutex<State>>,
+        wallet: WalletPtr,
+        notify: Option<async_channel::Sender<(jubjub::SubgroupPoint, u64)>>,
+    ) -> Result<()> {
+        debug!(target: "CLIENT", "Build tx from slab and update the state");
+
+        let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+
         let mut state = state.lock().await;
 
         let update = state_transition(&state, tx)?;
 
-        let secret_keys: Vec<jubjub::Fr> = vec![self.main_keypair.private];
-
         state
-            .apply(update, secret_keys.clone(), None, self.wallet.clone())
+            .apply(update, secret_keys.clone(), notify, wallet)
             .await?;
 
         Ok(())
@@ -376,19 +348,27 @@ impl Client {
         self.wallet.init_db().await
     }
 
-    pub async fn key_gen(&self) -> Result<()> {
+    pub fn get_own_coins(&self) -> Result<Vec<OwnCoin>> {
+        self.wallet.get_own_coins()
+    }
+
+    pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
+        self.wallet.confirm_spend_coin(coin)
+    }
+
+    pub fn key_gen(&self) -> Result<()> {
         self.wallet.key_gen()
     }
 
-    pub async fn get_balances(&self) -> Result<Balances> {
+    pub fn get_balances(&self) -> Result<Balances> {
         self.wallet.get_balances()
     }
 
-    pub async fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
+    pub fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
         self.wallet.token_id_exists(token_id)
     }
 
-    pub async fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
+    pub fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
         self.wallet.get_token_id()
     }
 }
@@ -533,7 +513,7 @@ impl std::fmt::Display for ClientFailed {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ClientFailed::NotEnoughValue(i) => {
-                write!(f, "There is not enough value {}", i)
+                write!(f, "There is no enough value {}", i)
             }
             ClientFailed::InvalidAddress(i) => {
                 write!(f, "Invalid Address {}", i)
@@ -552,8 +532,13 @@ impl std::fmt::Display for ClientFailed {
             ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
             ClientFailed::WalletInitialized => f.write_str("Wallet already initalized"),
             ClientFailed::KeyExists => f.write_str("Keypair already exists"),
+
             ClientFailed::ClientError(i) => {
-                write!(f, "ClientError: {}", i)
+                write!(f, "{}", i)
+            }
+
+            ClientFailed::VerifyError(i) => {
+                write!(f, "Verify error: {}", i)
             }
         }
     }
@@ -562,6 +547,12 @@ impl std::fmt::Display for ClientFailed {
 impl From<super::error::Error> for ClientFailed {
     fn from(err: super::error::Error) -> ClientFailed {
         ClientFailed::ClientError(err.to_string())
+    }
+}
+
+impl From<crate::state::VerifyFailed> for ClientFailed {
+    fn from(err: crate::state::VerifyFailed) -> ClientFailed {
+        ClientFailed::VerifyError(err.to_string())
     }
 }
 
