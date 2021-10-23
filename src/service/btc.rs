@@ -358,7 +358,6 @@ impl BtcClient {
 
     async fn handle_subscribe_request(
         self: Arc<Self>,
-        //tx: impl Watchable + Send + 'static,
         btc_keys: Account,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> BtcResult<()> {
@@ -769,21 +768,6 @@ impl fmt::Display for ScriptStatus {
                 write!(f, "confirmed with {} blocks", inner.confirmations())
             }
         }
-    }
-}
-
-pub trait Watchable {
-    fn id(&self) -> Txid;
-    fn script(&self) -> Script;
-}
-
-impl Watchable for (Txid, Script) {
-    fn id(&self) -> Txid {
-        self.0
-    }
-
-    fn script(&self) -> Script {
-        self.1.clone()
     }
 }
 impl Encodable for bitcoin::Transaction {
