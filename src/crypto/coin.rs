@@ -29,3 +29,9 @@ impl Decodable for Coin {
         })
     }
 }
+
+impl PartialEq for Coin {
+    fn eq(&self, other: &Self) -> bool {
+        self.repr == other.repr
+    }
+}
