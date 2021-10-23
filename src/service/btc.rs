@@ -1,7 +1,7 @@
 use async_std::sync::{Arc, Mutex};
+use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{From, TryFrom, TryInto};
-use std::cmp::max;
 use std::fmt;
 use std::ops::Add;
 use std::str::FromStr;
@@ -11,6 +11,9 @@ use anyhow::Context;
 use async_executor::Executor;
 use async_trait::async_trait;
 
+use bdk::electrum_client::{
+    Client as ElectrumClient, ElectrumApi, GetBalanceRes, GetHistoryRes, HeaderNotification,
+};
 use bitcoin::blockdata::{
     script::{Builder, Script},
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
@@ -21,13 +24,6 @@ use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
 use bitcoin::util::psbt::serialize::Serialize;
-use bdk::electrum_client::{
-    Client as ElectrumClient,
-    ElectrumApi,
-    GetBalanceRes,
-    GetHistoryRes,
-    HeaderNotification
-};
 use log::*;
 use secp256k1::{
     constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE},
@@ -52,7 +48,7 @@ const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 pub struct BlockHeight(u32);
 
 impl From<BlockHeight> for u32 {
-fn from(height: BlockHeight) -> Self {
+    fn from(height: BlockHeight) -> Self {
         height.0
     }
 }
@@ -200,7 +196,11 @@ impl Account {
         Script::new_p2pkh(&btc_pubkey_hash)
     }
 }
-fn print_status_change(script: &Script, old: Option<ScriptStatus>, new: ScriptStatus) -> ScriptStatus {
+fn print_status_change(
+    script: &Script,
+    old: Option<ScriptStatus>,
+    new: ScriptStatus,
+) -> ScriptStatus {
     match (old, new) {
         (None, new_status) => {
             debug!(target: "BTC BRIDGE", "Found relevant Bitcoin transaction: {:?} {:?}", script, new_status);
@@ -224,12 +224,10 @@ pub struct Client {
     last_sync: Instant,
     sync_interval: Duration,
     script_history: BTreeMap<Script, Vec<GetHistoryRes>>,
-
 }
 impl Client {
     pub fn new(electrum_url: &str) -> BtcResult<Self> {
-
-       let config = bdk::electrum_client::ConfigBuilder::default()
+        let config = bdk::electrum_client::ConfigBuilder::default()
             .retry(5)
             .build();
         let client = ElectrumClient::from_config(electrum_url, config)?;
@@ -237,8 +235,7 @@ impl Client {
         let electrum = ElectrumClient::new(electrum_url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
-        let latest_block = electrum
-            .block_headers_subscribe()?;
+        let latest_block = electrum.block_headers_subscribe()?;
 
         //testnet avg block time
         let interval = sync_interval(Duration::from_secs(300));
@@ -266,9 +263,7 @@ impl Client {
         Ok(())
     }
     fn update_latest_block(&mut self) -> BtcResult<()> {
-        let latest_block = self
-            .electrum
-            .block_headers_subscribe()?;
+        let latest_block = self.electrum.block_headers_subscribe()?;
         let latest_block_height = BlockHeight::try_from(latest_block)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
@@ -304,8 +299,7 @@ impl Client {
         Ok(())
     }
 
-    pub fn status_of_script(&mut self, script: Script) -> BtcResult<ScriptStatus>
-    {
+    pub fn status_of_script(&mut self, script: Script) -> BtcResult<ScriptStatus> {
         if !self.script_history.contains_key(&script) {
             self.script_history.insert(script.clone(), vec![]);
         }
@@ -321,8 +315,7 @@ impl Client {
                 } else {
                     Ok(ScriptStatus::Confirmed(
                         Confirmed::from_inclusion_and_latest_block(
-                            u32::try_from(last.height)
-                                .map_err(|_| crate::Error::TryFromError)?,
+                            u32::try_from(last.height).map_err(|_| crate::Error::TryFromError)?,
                             u32::from(self.latest_block_height),
                         ),
                     ))
@@ -330,7 +323,6 @@ impl Client {
             }
         }
     }
-
 }
 pub struct BtcClient {
     main_account: Account,
@@ -364,7 +356,6 @@ impl BtcClient {
         }))
     }
 
-
     async fn handle_subscribe_request(
         self: Arc<Self>,
         //tx: impl Watchable + Send + 'static,
@@ -384,13 +375,23 @@ impl BtcClient {
         let script = keys_clone.script_pubkey;
 
         //Check if we're already subscribed
-        if client.lock().await
-            .subscriptions.lock().await.contains(&script) {
-                return Ok(());
-            }
-        else {
-            client.lock().await
-                .subscriptions.lock().await.push(script.clone());
+        if client
+            .lock()
+            .await
+            .subscriptions
+            .lock()
+            .await
+            .contains(&script)
+        {
+            return Ok(());
+        } else {
+            client
+                .lock()
+                .await
+                .subscriptions
+                .lock()
+                .await
+                .push(script.clone());
         }
 
         debug!(
@@ -409,7 +410,9 @@ impl BtcClient {
                 Ok(new_status) => new_status,
                 Err(error) => {
                     debug!(target: "BTC BRIDGE", "Failed to get status of script: {:#}", error);
-                    return Err(BtcFailed::BtcError("Failed to get status of script".to_string()));
+                    return Err(BtcFailed::BtcError(
+                        "Failed to get status of script".to_string(),
+                    ));
                 }
             };
 
@@ -421,11 +424,10 @@ impl BtcClient {
                 ScriptStatus::Confirmed(inner) => {
                     let confirmations = inner.confirmations();
                     if confirmations > 0 {
-                        break
+                        break;
                     }
-                },
+                }
             }
-
         }
 
         let client2 = client.lock().await;
@@ -466,7 +468,11 @@ impl BtcClient {
         Ok(())
     }
 
-    async fn send_btc_to_main_wallet(self: Arc<Self>, amount: u64, btc_keys: Account) -> BtcResult<()> {
+    async fn send_btc_to_main_wallet(
+        self: Arc<Self>,
+        amount: u64,
+        btc_keys: Account,
+    ) -> BtcResult<()> {
         debug!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
         let client = self.client.lock().await;
         let electrum = &client.electrum;
@@ -539,7 +545,6 @@ impl BtcClient {
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
     }
-
 }
 
 #[async_trait]
@@ -561,10 +566,7 @@ impl NetworkClient for BtcClient {
 
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(
-                    btc_keys,
-                    drk_pub_key
-                ).await;
+                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
                 if let Err(e) = result {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -591,10 +593,7 @@ impl NetworkClient for BtcClient {
 
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(
-                    btc_keys,
-                    drk_pub_key
-                ).await;
+                let result = self.handle_subscribe_request(btc_keys, drk_pub_key).await;
                 if let Err(e) = result {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -745,7 +744,6 @@ impl ScriptStatus {
     pub fn is_confirmed(&self) -> bool {
         matches!(self, ScriptStatus::Confirmed(_))
     }
-
     // Check if the script has met the given confirmation target.
     pub fn is_confirmed_with<T>(&self, target: T) -> bool
     where
@@ -950,7 +948,6 @@ impl From<anyhow::Error> for BtcFailed {
         BtcFailed::DecodeAndEncodeError(err.to_string())
     }
 }
-
 
 pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 
