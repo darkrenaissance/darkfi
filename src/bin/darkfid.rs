@@ -589,6 +589,7 @@ async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
+        (@arg refresh: -r --refresh "Refresh the wallet and own coins")
     )
     .get_matches();
 
@@ -607,6 +608,27 @@ async fn main() -> Result<()> {
     simple_logger::init_with_level(loglevel)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
+
+    if args.is_present("refresh") {
+
+        debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
+
+        let wallet = WalletDb::new(
+            expand_path(&config.wallet_path)?.as_path(),
+            config.wallet_password.clone(),
+        )?;
+
+        wallet.remove_own_coins()?;
+
+        if let Some(path) = expand_path(&config.database_path)?.to_str() {
+            debug!(target: "DARKFI DAEMON", "Remove database: {}", path);
+            std::fs::remove_dir_all(path)?;
+        }
+
+        println!("Wallet got updated successfully.");
+
+        return Ok(());
+    }
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
