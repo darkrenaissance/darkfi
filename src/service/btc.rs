@@ -348,8 +348,7 @@ impl BtcClient {
 
         //TODO: Replace unwrap with error matching
         let txid = client
-            .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
-            .unwrap();
+            .transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
 
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
