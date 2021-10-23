@@ -91,13 +91,15 @@ impl Client {
         token_id: jubjub::Fr,
         pub_key: jubjub::SubgroupPoint,
         amount: u64,
+        state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
+
         debug!(target: "CLIENT", "Start transfer {}", amount);
 
         let token_id_exists = self.wallet.token_id_exists(&token_id)?;
 
         if token_id_exists {
-            self.send(pub_key, amount, token_id, false).await?;
+            self.send(pub_key, amount, token_id, false, state).await?;
         } else {
             return Err(ClientFailed::NotEnoughValue(amount));
         }
@@ -113,6 +115,7 @@ impl Client {
         amount: u64,
         token_id: jubjub::Fr,
         clear_input: bool,
+        state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
         debug!(target: "CLIENT", "Start send {}", amount);
 
@@ -120,11 +123,16 @@ impl Client {
             return Err(ClientFailed::InvalidAmount(amount as u64));
         }
 
-        let slab = self
+        let (slab, tx) = self
             .build_slab_from_tx(pub_key, amount, token_id, clear_input)
             .await?;
 
-        self.gateway.put_slab(slab).await?;
+        // check if it's valid before send it to gateway
+        if let Err(err) = self.update_state(tx, state).await {
+            return Err(ClientFailed::from(err));
+        } else {
+            self.gateway.put_slab(slab).await?;
+        }
 
         debug!(target: "CLIENT", "End send {}", amount);
 
@@ -137,7 +145,7 @@ impl Client {
         value: u64,
         token_id: jubjub::Fr,
         clear_input: bool,
-    ) -> Result<Slab> {
+    ) -> Result<(Slab, tx::Transaction)> {
         debug!(target: "CLIENT", "Start build slab from tx");
 
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
@@ -168,9 +176,11 @@ impl Client {
             outputs,
         };
 
+        let tx: tx::Transaction;
+
         let mut tx_data = vec![];
         {
-            let tx = builder.build(&self.mint_params, &self.spend_params);
+            tx = builder.build(&self.mint_params, &self.spend_params);
             tx.encode(&mut tx_data).expect("encode tx");
         }
 
@@ -178,7 +188,7 @@ impl Client {
 
         debug!(target: "CLIENT", "End build slab from tx");
 
-        Ok(slab)
+        Ok((slab, tx))
     }
 
     async fn build_inputs(
@@ -317,7 +327,7 @@ impl Client {
                 let tx = tx::Transaction::decode(&slab.get_payload()[..]);
 
                 if let Err(e) = tx {
-                    warn!("TX: {}", e.to_string());
+                    warn!("TX Decode: {}", e.to_string());
                     continue;
                 }
 
@@ -344,6 +354,20 @@ impl Client {
         });
 
         task.detach();
+
+        Ok(())
+    }
+
+    async fn update_state(&self, tx: tx::Transaction, state: Arc<Mutex<State>>) -> Result<()> {
+        let mut state = state.lock().await;
+
+        let update = state_transition(&state, tx)?;
+
+        let secret_keys: Vec<jubjub::Fr> = vec![self.main_keypair.private];
+
+        state
+            .apply(update, secret_keys.clone(), None, self.wallet.clone())
+            .await?;
 
         Ok(())
     }

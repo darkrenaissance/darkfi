@@ -576,7 +576,7 @@ impl Cashierd {
 
         client
             .connect_to_subscriber_from_cashier(
-                state,
+                state.clone(),
                 self.cashier_wallet.clone(),
                 notify.clone(),
                 executor.clone(),
@@ -619,6 +619,7 @@ impl Cashierd {
                             received_balance,
                             token_notification.token_id,
                             true,
+                            state.clone(),
                         )
                         .await?;
                 }

@@ -67,30 +67,36 @@ impl RequestHandler for Darkfid {
 
 struct Darkfid {
     client: Arc<Mutex<Client>>,
+    state: Arc<Mutex<State>>,
     sol_tokenlist: SolTokenList,
     drk_tokenlist: DrkTokenList,
     cashiers: Vec<Cashier>,
 }
 
 impl Darkfid {
-    async fn new(client: Arc<Mutex<Client>>, cashiers: Vec<Cashier>) -> Result<Self> {
+    async fn new(
+        client: Arc<Mutex<Client>>,
+        state: Arc<Mutex<State>>,
+        cashiers: Vec<Cashier>,
+    ) -> Result<Self> {
         let sol_tokenlist = SolTokenList::new()?;
         let drk_tokenlist = DrkTokenList::new(sol_tokenlist.clone())?;
 
         Ok(Self {
             client,
+            state,
             sol_tokenlist,
             drk_tokenlist,
             cashiers,
         })
     }
 
-    async fn start(&mut self, state: Arc<Mutex<State>>, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
         self.client.lock().await.start().await?;
         self.client
             .lock()
             .await
-            .connect_to_subscriber(state, executor)
+            .connect_to_subscriber(self.state.clone(), executor)
             .await?;
 
         Ok(())
@@ -402,7 +408,12 @@ impl Darkfid {
                 self.client
                     .lock()
                     .await
-                    .transfer(token_id.clone(), cashier_public, amount_in_apo)
+                    .transfer(
+                        token_id.clone(),
+                        cashier_public,
+                        amount_in_apo,
+                        self.state.clone(),
+                    )
                     .await?;
 
                 Ok(())
@@ -484,7 +495,7 @@ impl Darkfid {
             self.client
                 .lock()
                 .await
-                .transfer(token_id.clone(), drk_address, amount)
+                .transfer(token_id.clone(), drk_address, amount, self.state.clone())
                 .await?;
 
             Ok(())
@@ -559,8 +570,6 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
 
     let client = Arc::new(Mutex::new(client));
 
-    let mut darkfid = Darkfid::new(client, cashiers).await?;
-
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
@@ -573,6 +582,8 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
         public_keys: cashier_keys,
     }));
 
+    let mut darkfid = Darkfid::new(client, state, cashiers).await?;
+
     let server_config = RpcServerConfig {
         socket_addr: config.rpc_listen_address.clone(),
         use_tls: config.serve_tls,
@@ -580,7 +591,7 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    darkfid.start(state, executor.clone()).await?;
+    darkfid.start(executor.clone()).await?;
     listen_and_serve(server_config, Arc::new(darkfid), executor).await
 }
 
@@ -610,7 +621,6 @@ async fn main() -> Result<()> {
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
 
     if args.is_present("refresh") {
-
         debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
 
         let wallet = WalletDb::new(
