@@ -398,7 +398,7 @@ impl NetworkClient for BtcClient {
     ) -> Result<String> {
         let keypair: Keypair = deserialize(&private_key)?;
         let btc_keys = Account::new(&keypair, self.network);
-        let public_key = keypair.pubkey().to_string();
+        let public_key = btc_keys.script_pubkey.to_string();
 
         executor
             .spawn(async move {
