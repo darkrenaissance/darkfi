@@ -66,15 +66,14 @@ impl Keypair {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Keypair> {
+    pub fn from_bytes(bytes: &[u8]) -> BtcResult<Keypair> {
         if bytes.len() != KEYPAIR_LENGTH {
-            return Err(Error::BtcFailed("Not right size".to_string()));
+            return Err(BtcFailed::KeypairError("Not right size".to_string()));
         }
         let secp = Secp256k1::new();
 
-        //TODO: Map to errors properly, use context for public gen
-        let secret = SecretKey::from_slice(&bytes[..SECRET_KEY_SIZE]).unwrap();
-        let public = PublicKey::from_slice(&bytes[SECRET_KEY_SIZE..]).unwrap();
+        let secret = SecretKey::from_slice(&bytes[..SECRET_KEY_SIZE])?;
+        let public = PublicKey::from_slice(&bytes[SECRET_KEY_SIZE..])?;
 
         Ok(Keypair {
             secret,
@@ -339,16 +338,15 @@ impl BtcClient {
             btc_keys.keypair.secret,
             btc_keys.btc_pubkey,
             &btc_keys.keypair.context,
-        );
+        )?;
+
         let _txid = signed_tx.txid();
         let _serialized_tx = serialize(&signed_tx);
 
         debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
                serialize_hex(&signed_tx));
 
-        //TODO: Replace unwrap with error matching
-        let txid = client
-            .transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
+        let txid = client.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
 
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
@@ -426,8 +424,9 @@ impl NetworkClient for BtcClient {
 
         let main_script_pubkey = &self.main_account.script_pubkey;
 
-        //TODO: Map to errors properly
-        let main_utxo = client.script_list_unspent(&main_script_pubkey).unwrap();
+        let main_utxo = client
+            .script_list_unspent(&main_script_pubkey)
+            .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
         let transaction = Transaction {
             input: vec![TxIn {
@@ -454,12 +453,12 @@ impl NetworkClient for BtcClient {
             self.main_account.keypair.secret,
             self.main_account.btc_pubkey,
             &self.main_account.keypair.context,
-        );
+        )?;
 
-        //TODO: Replace unwrap with error matching
         let txid = client
             .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
-            .unwrap();
+            .map_err(|e| Error::from(BtcFailed::from(e)))?;
+
         debug!(target: "BTC BRIDGE", "Sent {} satoshi to external wallet, txid: {}", amount, txid);
         Ok(())
     }
@@ -471,13 +470,13 @@ pub fn sign_transaction(
     priv_key: SecretKey,
     pub_key: BtcPubKey,
     curve: &Secp256k1<All>,
-) -> Transaction {
+) -> BtcResult<Transaction> {
     let mut signed_inputs: Vec<TxIn> = Vec::new();
 
     for (i, unsigned_input) in tx.input.iter().enumerate() {
         let sighash = tx.signature_hash(i, &script_pubkey, SigHashType::All as u32);
-        //TODO: replace unwrap
-        let msg = BtcMessage::from_slice(&sighash.as_ref()).unwrap();
+
+        let msg = BtcMessage::from_slice(&sighash.as_ref())?;
 
         let signature = curve.sign(&msg, &priv_key);
         let byte_signature = &signature.serialize_der();
@@ -496,12 +495,12 @@ pub fn sign_transaction(
         });
     }
 
-    Transaction {
+    Ok(Transaction {
         version: tx.version,
         lock_time: tx.lock_time,
         input: signed_inputs,
         output: tx.output,
-    }
+    })
 }
 impl Encodable for bitcoin::Transaction {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
