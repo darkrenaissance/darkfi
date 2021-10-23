@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use async_executor::Executor;
 use async_trait::async_trait;
+use blake2s_simd::Params as Blake2sParams;
 use clap::clap_app;
 use easy_parallel::Parallel;
 use log::debug;
@@ -17,7 +18,8 @@ use drk::{
     cli::{Config, DarkfidConfig},
     client::{Client, State},
     crypto::{
-        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
+        load_params, merkle::CommitmentTree, nullifier::Nullifier, save_params, setup_mint_prover,
+        setup_spend_prover,
     },
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request},
@@ -25,6 +27,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
+    state::ProgramState,
     util::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
         NetworkName, SolTokenList,
@@ -102,6 +105,33 @@ impl Darkfid {
         Ok(())
     }
 
+    async fn update_balances(&self) -> Result<()> {
+        let own_coins = self.client.lock().await.get_own_coins()?;
+
+        for own_coin in own_coins {
+            let mut nullifier = [0; 32];
+            nullifier.copy_from_slice(
+                Blake2sParams::new()
+                    .hash_length(32)
+                    .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
+                    .to_state()
+                    .update(&own_coin.secret.to_bytes())
+                    .update(&own_coin.note.serial.to_bytes())
+                    .finalize()
+                    .as_bytes(),
+            );
+            let nullifier = Nullifier::new(nullifier);
+            let nullifier_exists = self.state.lock().await.nullifier_exists(&nullifier);
+            if nullifier_exists {
+                self.client
+                    .lock()
+                    .await
+                    .confirm_spend_coin(&own_coin.coin)?;
+            }
+        }
+        Ok(())
+    }
+
     // --> {"method": "say_hello", "params": []}
     // <-- {"result": "hello world"}
     async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
@@ -122,7 +152,7 @@ impl Darkfid {
     // --> {"method": "key_gen", "params": []}
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
-        match self.client.lock().await.key_gen().await {
+        match self.client.lock().await.key_gen() {
             Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
                 return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
@@ -142,7 +172,9 @@ impl Darkfid {
     // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, (String, String)>> = async {
-            let balances = self.client.lock().await.get_balances().await?;
+            self.update_balances().await?;
+
+            let balances = self.client.lock().await.get_balances()?;
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
@@ -491,6 +523,8 @@ impl Darkfid {
 
             let decimals: usize = 8;
             let amount = decode_base10(&amount, decimals, true)?;
+
+            self.update_balances().await?;
 
             self.client
                 .lock()
