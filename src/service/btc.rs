@@ -1,6 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use std::cmp::max;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::convert::{From, TryFrom, TryInto};
 use std::fmt;
 use std::ops::Add;
@@ -19,7 +19,7 @@ use bitcoin::blockdata::{
     transaction::{OutPoint, SigHashType, Transaction, TxIn, TxOut},
 };
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::hash_types::{PubkeyHash as BtcPubKeyHash, Txid};
+use bitcoin::hash_types::PubkeyHash as BtcPubKeyHash;
 use bitcoin::network::constants::Network;
 use bitcoin::util::address::Address;
 use bitcoin::util::ecdsa::{PrivateKey as BtcPrivKey, PublicKey as BtcPubKey};
@@ -309,7 +309,7 @@ impl Client {
 
         match history.as_slice() {
             [] => Ok(ScriptStatus::Unseen),
-            [remaining @ .., last] => {
+            [_remaining @ .., last] => {
                 if last.height <= 0 {
                     Ok(ScriptStatus::InMempool)
                 } else {
