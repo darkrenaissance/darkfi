@@ -242,10 +242,7 @@ impl Cashierd {
         }
 
         // Check if the features list contains this network
-        if !self
-            .networks
-            .iter().any(|net| net.name == network)
-        {
+        if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -328,9 +325,7 @@ impl Cashierd {
 
                     Ok(token_key.public_key)
                 }
-                bridge::BridgeResponsePayload::Address(token_pub) => {
-                    Ok(token_pub)
-                }
+                bridge::BridgeResponsePayload::Address(token_pub) => Ok(token_pub),
                 _ => Err(Error::BridgeError(
                     "Receive unknown value from Subscription".into(),
                 )),
@@ -378,10 +373,7 @@ impl Cashierd {
         }
 
         // Check if the features list contains this network
-        if !self
-            .networks
-            .iter().any(|net| net.name == network)
-        {
+        if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
@@ -502,9 +494,9 @@ impl Cashierd {
                                 deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
                         }
                     } else {
-                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(
-                            expand_path(&network.keypair.clone())?,
-                        )?;
+                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
+                            &network.keypair.clone(),
+                        )?)?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
                             .map_err(|e| SolFailed::ParseError(e.to_string()))?;
@@ -541,9 +533,9 @@ impl Cashierd {
                                 deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
                         }
                     } else {
-                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(
-                            expand_path(&network.keypair.clone())?,
-                        )?;
+                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
+                            &network.keypair.clone(),
+                        )?)?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
                             .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;

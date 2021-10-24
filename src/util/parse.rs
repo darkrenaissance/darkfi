@@ -179,9 +179,8 @@ pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> 
 #[allow(unused_imports)]
 mod tests {
     use num_bigint::ToBigUint;
-    
-    use super::{decode_base10, encode_base10, truncate};
 
+    use super::{decode_base10, encode_base10, truncate};
 
     #[test]
     fn test_decode_base10() {
@@ -202,9 +201,18 @@ mod tests {
             "23432111.1",
             &encode_base10(234321111_u64.to_biguint().unwrap(), 1)
         );
-        assert_eq!("234321.1", &encode_base10(2343211_u64.to_biguint().unwrap(), 1));
-        assert_eq!("2343211", &encode_base10(2343211_u64.to_biguint().unwrap(), 0));
-        assert_eq!("0.00002343", &encode_base10(2343_u64.to_biguint().unwrap(), 8));
+        assert_eq!(
+            "234321.1",
+            &encode_base10(2343211_u64.to_biguint().unwrap(), 1)
+        );
+        assert_eq!(
+            "2343211",
+            &encode_base10(2343211_u64.to_biguint().unwrap(), 0)
+        );
+        assert_eq!(
+            "0.00002343",
+            &encode_base10(2343_u64.to_biguint().unwrap(), 8)
+        );
     }
 
     #[test]
