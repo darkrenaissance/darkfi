@@ -143,9 +143,7 @@ impl Darkfid {
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.init_db().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => {
-                JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id))
-            }
+            Err(e) => JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id)),
         }
     }
 
@@ -154,9 +152,7 @@ impl Darkfid {
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.key_gen() {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => {
-                JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
-            }
+            Err(e) => JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id)),
         }
     }
 
@@ -440,12 +436,7 @@ impl Darkfid {
                 self.client
                     .lock()
                     .await
-                    .transfer(
-                        *token_id,
-                        cashier_public,
-                        amount_in_apo,
-                        self.state.clone(),
-                    )
+                    .transfer(*token_id, cashier_public, amount_in_apo, self.state.clone())
                     .await?;
 
                 Ok(())
