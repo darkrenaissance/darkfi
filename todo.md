@@ -10,7 +10,7 @@
 - [x] add genesis btc coinbase addr as token id
 - [x] serialize/encode btc keypairs
 - [x] fix electrum rpc error: sendrawtransaction: TX decode failed
-- [ ] fix unsubscribe generating errors from electrum rpc
+- [x] fix unsubscribe generating errors from electrum rpc
 - [x] start hosting cashierd and gatewayd
 - [x] add cashierd public key to darkfid.toml defaults
 

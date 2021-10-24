@@ -510,7 +510,7 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Add btc network");
-                    use drk::service::btc::{BtcClient, BtcFailed, Keypair};
+                    use drk::service::btc::{used_key, BtcClient, BtcFailed, Keypair};
 
                     let bridge2 = self.bridge.clone();
 
@@ -519,7 +519,11 @@ impl Cashierd {
                     let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
 
                     if network.keypair.is_empty() {
-                        if main_keypairs.is_empty() {
+                        //TODO: There needs to be a better way to flag completed txs
+                        if main_keypairs.is_empty() || used_key(
+                            &main_keypairs[main_keypairs.len() - 1].private_key,
+                            &network.blockchain,
+                        )? {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
                                 &TokenKey {

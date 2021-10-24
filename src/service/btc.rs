@@ -203,23 +203,50 @@ fn print_status_change(
 ) -> ScriptStatus {
     match (old, new) {
         (None, new_status) => {
-            debug!(target: "BTC BRIDGE", "Found relevant Bitcoin transaction: {:?} {:?}", script, new_status);
+            debug!(target: "BTC BRIDGE", "Found relevant script: {:?}, Status: {:?}", script, new_status);
         }
         (Some(old_status), new_status) if old_status != new_status => {
-            debug!(target: "BTC BRIDGE", "Bitcoin transaction status changed: {:?} {} {}", script, new_status, old_status);
+            debug!(target: "BTC BRIDGE", "Script status changed: {:?}, to {} from {}", script, new_status, old_status);
         }
         _ => {}
     }
 
     new
 }
+pub fn used_key(keys: &Vec<u8>, network: &str) -> Result<bool> {
+    let keypair: Keypair = deserialize(keys)?;
 
+    //TODO: Don't create an electrum client just to check address status
+    let (network, url) = match network {
+        "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
+        "testnet" => (Network::Testnet, "ssl://electrum.blockstream.info:60002"),
+        _ => return Err(Error::NotSupportedNetwork),
+    };
+    let btc_keys = Account::new(&keypair, network);
+    let script = btc_keys.script_pubkey;
+
+    let electrum =
+        ElectrumClient::new(url).map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+
+    let history = electrum
+        .script_get_history(&script)
+        .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+    let balance = electrum
+        .script_get_balance(&script)
+        .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+
+    if !history.is_empty() && balance.confirmed == 0 {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
 fn sync_interval(avg_block_time: Duration) -> Duration {
     max(avg_block_time / 10, Duration::from_secs(1))
 }
 pub struct Client {
     electrum: ElectrumClient,
-    subscriptions: Arc<Mutex<Vec<Script>>>,
+    subscriptions: Vec<Script>,
     latest_block_height: BlockHeight,
     last_sync: Instant,
     sync_interval: Duration,
@@ -242,7 +269,7 @@ impl Client {
 
         Ok(Self {
             electrum,
-            subscriptions: Arc::new(Mutex::new(Vec::new())),
+            subscriptions: Vec::new(),
             latest_block_height: BlockHeight::try_from(latest_block)
                 .map_err(|_| crate::Error::TryFromError)?,
             last_sync: Instant::now(),
@@ -361,25 +388,15 @@ impl BtcClient {
         btc_keys: Account,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> BtcResult<()> {
-        debug!(
-            target: "BTC BRIDGE",
-            "Handle subscribe request"
-        );
         let client = self.client.clone();
-        debug!(
-            target: "BTC BRIDGE",
-            "electrum lock"
-        );
+
         let keys_clone = btc_keys.clone();
         let script = keys_clone.script_pubkey;
 
-        //Check if we're already subscribed
         if client
             .lock()
             .await
             .subscriptions
-            .lock()
-            .await
             .contains(&script)
         {
             return Ok(());
@@ -388,16 +405,8 @@ impl BtcClient {
                 .lock()
                 .await
                 .subscriptions
-                .lock()
-                .await
                 .push(script.clone());
         }
-
-        debug!(
-            target: "BTC BRIDGE",
-            "subscriptions"
-        );
-
         //Fetch any current balance
         let prev_balance = client.lock().await.electrum.script_get_balance(&script)?;
         let cur_balance: GetBalanceRes;
@@ -419,27 +428,28 @@ impl BtcClient {
 
             match new_status {
                 ScriptStatus::Unseen => continue,
-                ScriptStatus::InMempool => continue,
+                ScriptStatus::InMempool => {
+                    break;
+                },
                 ScriptStatus::Confirmed(inner) => {
                     let confirmations = inner.confirmations();
-                    if confirmations > 0 {
-                        break;
-                    }
+                    //if confirmations < 1 {
+                    break;
+                    //}
                 }
             }
         }
 
-        let client2 = client.lock().await;
-        let mut subscriptions = client2.subscriptions.lock().await;
-        let index = subscriptions.iter().position(|p| p == &script);
+        let index = &mut client.lock().await.subscriptions.iter().position(|p| p == &script);
+
         if let Some(ind) = index {
-            debug!("Removing subscription from list");
-            subscriptions.remove(ind);
+            debug!(target: "BTC BRIDGE", "Removing subscription from list");
+            let _ = &mut client.lock().await.subscriptions.remove(*ind);
         }
+
         cur_balance = client.lock().await.electrum.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
-
         if cur_balance.confirmed < prev_balance.confirmed {
             return Err(BtcFailed::Notification(
                 "New balance is less than previous balance".into(),
@@ -448,7 +458,6 @@ impl BtcClient {
 
         let amnt = cur_balance.confirmed - prev_balance.confirmed;
         let ui_amnt = amnt;
-
         send_notification
             .send(TokenNotification {
                 network: NetworkName::Bitcoin,
@@ -517,7 +526,7 @@ impl BtcClient {
             output: vec![TxOut {
                 script_pubkey: main_script_pubkey,
                 // TODO: calculate fee properly above
-                value: amounts - 300,
+                value: amounts - 400,
             }],
             lock_time: 0,
             version: 2,
