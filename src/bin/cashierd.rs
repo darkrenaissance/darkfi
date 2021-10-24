@@ -520,10 +520,12 @@ impl Cashierd {
 
                     if network.keypair.is_empty() {
                         //TODO: There needs to be a better way to flag completed txs
-                        if main_keypairs.is_empty() || used_key(
-                            &main_keypairs[main_keypairs.len() - 1].private_key,
-                            &network.blockchain,
-                        )? {
+                        if main_keypairs.is_empty()
+                            || used_key(
+                                &main_keypairs[main_keypairs.len() - 1].private_key,
+                                &network.blockchain,
+                            )?
+                        {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
                                 &TokenKey {

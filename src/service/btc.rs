@@ -393,19 +393,10 @@ impl BtcClient {
         let keys_clone = btc_keys.clone();
         let script = keys_clone.script_pubkey;
 
-        if client
-            .lock()
-            .await
-            .subscriptions
-            .contains(&script)
-        {
+        if client.lock().await.subscriptions.contains(&script) {
             return Ok(());
         } else {
-            client
-                .lock()
-                .await
-                .subscriptions
-                .push(script.clone());
+            client.lock().await.subscriptions.push(script.clone());
         }
         //Fetch any current balance
         let prev_balance = client.lock().await.electrum.script_get_balance(&script)?;
@@ -430,7 +421,7 @@ impl BtcClient {
                 ScriptStatus::Unseen => continue,
                 ScriptStatus::InMempool => {
                     break;
-                },
+                }
                 ScriptStatus::Confirmed(inner) => {
                     let confirmations = inner.confirmations();
                     //if confirmations < 1 {
@@ -440,7 +431,12 @@ impl BtcClient {
             }
         }
 
-        let index = &mut client.lock().await.subscriptions.iter().position(|p| p == &script);
+        let index = &mut client
+            .lock()
+            .await
+            .subscriptions
+            .iter()
+            .position(|p| p == &script);
 
         if let Some(ind) = index {
             debug!(target: "BTC BRIDGE", "Removing subscription from list");
