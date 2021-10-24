@@ -196,15 +196,15 @@ mod tests {
     fn test_encode_base10() {
         assert_eq!(
             "23.4321111",
-            &encode_base10((234321111 as u64).to_biguint().unwrap(), 7)
+            &encode_base10(234321111_u64.to_biguint().unwrap(), 7)
         );
         assert_eq!(
             "23432111.1",
-            &encode_base10((234321111 as u64).to_biguint().unwrap(), 1)
+            &encode_base10(234321111_u64.to_biguint().unwrap(), 1)
         );
-        assert_eq!("234321.1", &encode_base10((2343211 as u64).to_biguint().unwrap(), 1));
-        assert_eq!("2343211", &encode_base10((2343211 as u64).to_biguint().unwrap(), 0));
-        assert_eq!("0.00002343", &encode_base10((2343 as u64).to_biguint().unwrap(), 8));
+        assert_eq!("234321.1", &encode_base10(2343211_u64.to_biguint().unwrap(), 1));
+        assert_eq!("2343211", &encode_base10(2343211_u64.to_biguint().unwrap(), 0));
+        assert_eq!("0.00002343", &encode_base10(2343_u64.to_biguint().unwrap(), 8));
     }
 
     #[test]

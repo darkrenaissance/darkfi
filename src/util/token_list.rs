@@ -142,7 +142,7 @@ mod tests {
     #[test]
     pub fn test_get_id_from_symbols() -> Result<()> {
         let tokens = _get_tokens()?;
-        let symbol = &tokens.clone().get_symbols()?[3];
+        let symbol = &tokens.get_symbols()?[3];
         let id = tokens.search_id(symbol)?;
         assert!(id.is_some());
         assert_eq!(id.unwrap(), "So11111111111111111111111111111111111111112");

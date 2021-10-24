@@ -187,7 +187,7 @@ impl Client {
             }
 
             if inputs_value < value {
-                return Err(ClientFailed::NotEnoughValue(inputs_value).into());
+                return Err(ClientFailed::NotEnoughValue(inputs_value));
             }
 
             if inputs_value > value {
@@ -455,7 +455,7 @@ impl State {
             // Also update all the coin witnesses
             for (coin, witness) in wallet.get_witnesses()?.iter_mut() {
                 witness.append(node).expect("Append to witness");
-                wallet.update_witness(&coin, witness.clone())?;
+                wallet.update_witness(coin, witness.clone())?;
             }
 
             debug!(target: "CLIENT STATE", "iterate over secret_keys to decrypt note");

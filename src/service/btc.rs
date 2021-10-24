@@ -181,7 +181,7 @@ impl BtcClient {
 
         let main_account = Account::new(&main_keypair, network);
 
-        let electrum_client = ElectrumClient::new(&url)
+        let electrum_client = ElectrumClient::new(url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
 
         Ok(Arc::new(Self {
@@ -316,7 +316,7 @@ impl BtcClient {
         //Estimate fee for getting in next block
 
         let fee_per_kb = client.estimate_fee(1)?;
-        let _fee = tx_size as f64 * fee_per_kb * 100000 as f64;
+        let _fee = tx_size as f64 * fee_per_kb * 100000_f64;
         //let value = amounts - fee as u64;
 
         let transaction = Transaction {
@@ -425,7 +425,7 @@ impl NetworkClient for BtcClient {
         let main_script_pubkey = &self.main_account.script_pubkey;
 
         let main_utxo = client
-            .script_list_unspent(&main_script_pubkey)
+            .script_list_unspent(main_script_pubkey)
             .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
         let transaction = Transaction {
@@ -476,7 +476,7 @@ pub fn sign_transaction(
     for (i, unsigned_input) in tx.input.iter().enumerate() {
         let sighash = tx.signature_hash(i, &script_pubkey, SigHashType::All as u32);
 
-        let msg = BtcMessage::from_slice(&sighash.as_ref())?;
+        let msg = BtcMessage::from_slice(sighash.as_ref())?;
 
         let signature = curve.sign(&msg, &priv_key);
         let byte_signature = &signature.serialize_der();

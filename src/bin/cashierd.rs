@@ -81,13 +81,13 @@ impl Cashierd {
         debug!(target: "CASHIER DAEMON", "Initialize");
 
         let cashier_wallet = CashierDb::new(
-            expand_path(&config.cashier_wallet_path.clone())?.as_path(),
+            expand_path(&config.cashier_wallet_path)?.as_path(),
             config.cashier_wallet_password.clone(),
         )?;
 
         let mut networks = Vec::new();
 
-        for network in config.clone().networks {
+        for network in config.networks {
             networks.push(Network {
                 name: NetworkName::from_str(&network.name)?,
                 blockchain: network.blockchain,
@@ -242,11 +242,9 @@ impl Cashierd {
         }
 
         // Check if the features list contains this network
-        if self
+        if !self
             .networks
-            .iter()
-            .find(|net| net.name == network)
-            .is_none()
+            .iter().any(|net| net.name == network)
         {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
@@ -256,9 +254,9 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            let token_id = generate_id(&mint_address, &network)?;
+            let token_id = generate_id(mint_address, &network)?;
 
-            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
+            let mint_address_opt = Self::check_token_id(&network, mint_address)?;
 
             if mint_address_opt.is_none() {
                 mint_address = "";
@@ -328,10 +326,10 @@ impl Cashierd {
                         mint_address.into(),
                     )?;
 
-                    return Ok(token_key.public_key);
+                    Ok(token_key.public_key)
                 }
                 bridge::BridgeResponsePayload::Address(token_pub) => {
-                    return Ok(token_pub);
+                    Ok(token_pub)
                 }
                 _ => Err(Error::BridgeError(
                     "Receive unknown value from Subscription".into(),
@@ -380,11 +378,9 @@ impl Cashierd {
         }
 
         // Check if the features list contains this network
-        if self
+        if !self
             .networks
-            .iter()
-            .find(|net| net.name == network)
-            .is_none()
+            .iter().any(|net| net.name == network)
         {
             return JsonResult::Err(jsonerr(
                 InvalidParams,
@@ -394,9 +390,9 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            let token_id = generate_id(&mint_address, &network)?;
+            let token_id = generate_id(mint_address, &network)?;
 
-            let mint_address_opt = Self::check_token_id(&network, &mint_address)?;
+            let mint_address_opt = Self::check_token_id(&network, mint_address)?;
 
             if mint_address_opt.is_none() {
                 // empty string
@@ -457,7 +453,7 @@ impl Cashierd {
                 if _token_id != SOL_NATIVE_TOKEN_ID {
                     return Ok(Some(_token_id.to_string()));
                 }
-                return Ok(None);
+                Ok(None)
             }
             #[cfg(feature = "btc")]
             NetworkName::Bitcoin => Ok(None),
@@ -507,7 +503,7 @@ impl Cashierd {
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(
-                            PathBuf::from(expand_path(&network.keypair.clone())?),
+                            expand_path(&network.keypair.clone())?,
                         )?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
@@ -546,7 +542,7 @@ impl Cashierd {
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(
-                            PathBuf::from(expand_path(&network.keypair.clone())?),
+                            expand_path(&network.keypair.clone())?,
                         )?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
@@ -703,7 +699,7 @@ async fn start(
     };
 
     let cfg = RpcServerConfig {
-        socket_addr: config.rpc_listen_address.clone(),
+        socket_addr: config.rpc_listen_address,
         use_tls: config.serve_tls,
         identity_path: expand_path(&config.clone().tls_identity_path)?,
         identity_pass: config.tls_identity_password.clone(),

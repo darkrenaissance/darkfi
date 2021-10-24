@@ -71,7 +71,7 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        assert_eq!(self.stopped.load(Ordering::Relaxed), false);
+        assert!(!self.stopped.load(Ordering::Relaxed));
         // Changes memory ordering to relaxed. We don't need strict thread locking here.
         self.stopped.store(false, Ordering::Relaxed);
         self.stop_subscriber.notify(Error::ChannelStopped).await;

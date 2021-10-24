@@ -21,7 +21,7 @@ fn unpack<F: PrimeField>(value: F) -> Vec<Scalar> {
         }
         print!("{}", if bit { 1 } else { 0 });
     }
-    println!("");
+    println!();
     bits
 }
 

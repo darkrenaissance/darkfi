@@ -322,7 +322,7 @@ impl Encodable for String {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let b = self.as_bytes();
         let vi_len = VarInt(b.len() as u64).encode(&mut s)?;
-        s.write_slice(&b)?;
+        s.write_slice(b)?;
         Ok(vi_len + b.len())
     }
 }
@@ -341,7 +341,7 @@ impl Encodable for Cow<'static, str> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let b = self.as_bytes();
         let vi_len = VarInt(b.len() as u64).encode(&mut s)?;
-        s.write_slice(&b)?;
+        s.write_slice(b)?;
         Ok(vi_len + b.len())
     }
 }
@@ -520,7 +520,7 @@ impl Decodable for SocketAddr {
 
 pub fn encode_with_size<S: io::Write>(data: &[u8], mut s: S) -> Result<usize> {
     let vi_len = VarInt(data.len() as u64).encode(&mut s)?;
-    s.write_slice(&data)?;
+    s.write_slice(data)?;
     Ok(vi_len + data.len())
 }
 
