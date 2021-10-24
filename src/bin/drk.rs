@@ -49,17 +49,17 @@ impl Drk {
         match reply {
             JsonResult::Resp(r) => {
                 debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
-                return Ok(r.result);
+                Ok(r.result)
             }
 
             JsonResult::Err(e) => {
                 debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-                return Err(Error::JsonRpcError(e.error.message.to_string()));
+                Err(Error::JsonRpcError(e.error.message.to_string()))
             }
 
             JsonResult::Notif(n) => {
                 debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-                return Err(Error::JsonRpcError("Unexpected reply".to_string()));
+                Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
         }
     }
@@ -155,7 +155,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     if let Some(matches) = options.subcommand_matches("wallet") {
         if matches.is_present("create") {
             let reply = client.create_wallet().await?;
-            if reply.as_bool().unwrap() == true {
+            if reply.as_bool().unwrap() {
                 println!("Wallet created successfully.")
             } else {
                 println!("Server replied: {}", &reply.to_string());
@@ -165,7 +165,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
         if matches.is_present("keygen") {
             let reply = client.key_gen().await?;
-            if reply.as_bool().unwrap() == true {
+            if reply.as_bool().unwrap() {
                 println!("Key generation successful.")
             } else {
                 println!("Server replied: {}", &reply.to_string());
@@ -212,7 +212,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             .check_network(&NetworkName::from_str(&network)?)
             .await?;
 
-        let reply = client.get_token_id(&network, &token).await?;
+        let reply = client.get_token_id(&network, token).await?;
 
         println!("Token ID: {}", &reply.to_string());
         return Ok(());
@@ -232,7 +232,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             .check_network(&NetworkName::from_str(&network)?)
             .await?;
 
-        let reply = client.deposit(&network, &token_sym).await?;
+        let reply = client.deposit(&network, token_sym).await?;
 
         println!(
             "Deposit your coins to the following address: {}",
@@ -253,7 +253,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             .await?;
 
         let reply = client
-            .withdraw(&network, &token_sym, &address, amount)
+            .withdraw(&network, token_sym, address, amount)
             .await?;
 
         println!("{}", &reply.to_string());
@@ -266,7 +266,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap();
 
-        client.transfer(&token_sym, &address, amount).await?;
+        client.transfer(token_sym, address, amount).await?;
 
         println!(
             "{} {} Transfered successfully",

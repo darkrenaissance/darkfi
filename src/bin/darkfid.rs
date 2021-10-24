@@ -142,9 +142,9 @@ impl Darkfid {
     // <-- {"result": true}
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.init_db().await {
-            Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id))
+                JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id))
             }
         }
     }
@@ -153,9 +153,9 @@ impl Darkfid {
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.key_gen() {
-            Ok(()) => return JsonResult::Resp(jsonresp(json!(true), id)),
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
+                JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id))
             }
         }
     }
@@ -165,7 +165,7 @@ impl Darkfid {
     async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
         let pk = self.client.lock().await.main_keypair.public;
         let b58 = bs58::encode(serialize(&pk)).into_string();
-        return JsonResult::Resp(jsonresp(json!(b58), id));
+        JsonResult::Resp(jsonresp(json!(b58), id))
     }
 
     // --> {"method": "get_balances", "params": []}
@@ -235,7 +235,7 @@ impl Darkfid {
         }
 
         let result: Result<Value> = async {
-            let network = NetworkName::from_str(&network)?;
+            let network = NetworkName::from_str(network)?;
             match network {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
@@ -273,9 +273,9 @@ impl Darkfid {
         }
 
         match rep {
-            JsonResult::Resp(r) => return JsonResult::Resp(r),
-            JsonResult::Err(e) => return JsonResult::Err(e),
-            JsonResult::Notif(_) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+            JsonResult::Resp(r) => JsonResult::Resp(r),
+            JsonResult::Err(e) => JsonResult::Err(e),
+            JsonResult::Notif(_) => JsonResult::Err(jsonerr(InternalError, None, id)),
         }
     }
 
@@ -311,7 +311,7 @@ impl Darkfid {
             }
         }
 
-        let token_id = match assign_id(&network, &token, &self.sol_tokenlist) {
+        let token_id = match assign_id(network, token, &self.sol_tokenlist) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -337,9 +337,9 @@ impl Darkfid {
         }
 
         match rep {
-            JsonResult::Resp(r) => return JsonResult::Resp(r),
-            JsonResult::Err(e) => return JsonResult::Err(e),
-            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+            JsonResult::Resp(r) => JsonResult::Resp(r),
+            JsonResult::Err(e) => JsonResult::Err(e),
+            JsonResult::Notif(_n) => JsonResult::Err(jsonerr(InternalError, None, id)),
         }
     }
 
@@ -394,14 +394,14 @@ impl Darkfid {
             }
         }
 
-        let amount_in_apo = match decode_base10(&amount, 8, true) {
+        let amount_in_apo = match decode_base10(amount, 8, true) {
             Ok(a) => a,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id));
             }
         };
 
-        let token_id = match assign_id(&network, &token, &self.sol_tokenlist) {
+        let token_id = match assign_id(network, token, &self.sol_tokenlist) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -441,7 +441,7 @@ impl Darkfid {
                     .lock()
                     .await
                     .transfer(
-                        token_id.clone(),
+                        *token_id,
                         cashier_public,
                         amount_in_apo,
                         self.state.clone(),
@@ -469,9 +469,9 @@ impl Darkfid {
         };
 
         match rep {
-            JsonResult::Resp(r) => return JsonResult::Resp(r),
-            JsonResult::Err(e) => return JsonResult::Err(e),
-            JsonResult::Notif(_n) => return JsonResult::Err(jsonerr(InternalError, None, id)),
+            JsonResult::Resp(r) => JsonResult::Resp(r),
+            JsonResult::Err(e) => JsonResult::Err(e),
+            JsonResult::Notif(_n) => JsonResult::Err(jsonerr(InternalError, None, id)),
         }
     }
 
@@ -522,14 +522,14 @@ impl Darkfid {
             let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
 
             let decimals: usize = 8;
-            let amount = decode_base10(&amount, decimals, true)?;
+            let amount = decode_base10(amount, decimals, true)?;
 
             self.update_balances().await?;
 
             self.client
                 .lock()
                 .await
-                .transfer(token_id.clone(), drk_address, amount, self.state.clone())
+                .transfer(*token_id, drk_address, amount, self.state.clone())
                 .await?;
 
             Ok(())
@@ -619,7 +619,7 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
     let mut darkfid = Darkfid::new(client, state, cashiers).await?;
 
     let server_config = RpcServerConfig {
-        socket_addr: config.rpc_listen_address.clone(),
+        socket_addr: config.rpc_listen_address,
         use_tls: config.serve_tls,
         identity_path: expand_path(&config.tls_identity_path.clone())?,
         identity_pass: config.tls_identity_password.clone(),

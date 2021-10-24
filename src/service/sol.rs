@@ -361,7 +361,7 @@ impl SolClient {
         instructions.push(transfer_ix);
 
         // Close the account and reap the rent if there's no more tokens on it.
-        let (tok_balance, _) = get_account_token_balance(&rpc, &temp_tok_pk, mint)?;
+        let (tok_balance, _) = get_account_token_balance(rpc, &temp_tok_pk, mint)?;
         if tok_balance - amount == 0 {
             debug!(target: "SOL BRIDGE", "Adding account close instruction because resulting balance is 0");
             let close_ix = spl_token::instruction::close_account(
@@ -375,7 +375,7 @@ impl SolClient {
         }
 
         let tx = Transaction::new_with_payer(&instructions, Some(&self.main_keypair.pubkey()));
-        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
+        let signature = sign_and_send_transaction(rpc, tx, vec![&self.main_keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent tokens to main wallet: {}", signature);
 
@@ -393,7 +393,7 @@ impl SolClient {
         let ix =
             system_instruction::transfer(&keypair.pubkey(), &self.main_keypair.pubkey(), amount);
         let tx = Transaction::new_with_payer(&[ix], Some(&self.main_keypair.pubkey()));
-        let signature = sign_and_send_transaction(&rpc, tx, vec![&self.main_keypair, keypair])?;
+        let signature = sign_and_send_transaction(rpc, tx, vec![&self.main_keypair, keypair])?;
 
         debug!(target: "SOL BRIDGE", "Sent {} SOL to main wallet: {}", lamports_to_sol(amount), signature);
         Ok(signature)

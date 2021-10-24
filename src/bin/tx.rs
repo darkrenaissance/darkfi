@@ -105,7 +105,7 @@ impl MemoryState {
             match ciphertext.decrypt(secret) {
                 Ok(note) => {
                     // ... and return the decrypted note for this coin.
-                    return Some((note, secret.clone()));
+                    return Some((note, *secret));
                 }
                 Err(_) => {}
             }
@@ -149,7 +149,7 @@ async fn main() {
         mint_pvk,
         spend_pvk,
         cashier_public,
-        secrets: vec![secret.clone()],
+        secrets: vec![secret],
     };
 
     // Step 1: Cashier deposits to wallet1's address
@@ -161,13 +161,13 @@ async fn main() {
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
             value: 110,
-            token_id: token_id,
+            token_id,
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
-            token_id: token_id,
+            token_id,
             public,
         }],
     };
@@ -198,7 +198,7 @@ async fn main() {
             tree.append(cmu).unwrap();
 
             let root = tree.root();
-            state.merkle_roots.push(root.into());
+            state.merkle_roots.push(root);
         }
     }
 
@@ -235,7 +235,7 @@ async fn main() {
             assert_eq!(tree.root(), witness.root());
 
             let root = tree.root();
-            state.merkle_roots.push(root.into());
+            state.merkle_roots.push(root);
         }
 
         assert_eq!(state.merkle_roots.len(), 16);
@@ -249,12 +249,12 @@ async fn main() {
         let merkle_path = witness.path().unwrap();
 
         // Just test the path is good because we just added a bunch of fake coins
-        let node = MerkleNode::from_coin(&coin);
+        let node = MerkleNode::from_coin(coin);
         let root = tree.root();
         drop(tree);
         drop(witness);
         assert_eq!(merkle_path.root(node), root);
-        let root = root.into();
+        let root = root;
         assert!(state.is_valid_merkle(&root));
 
         merkle_path
@@ -278,14 +278,14 @@ async fn main() {
         clear_inputs: vec![],
         inputs: vec![tx::TransactionBuilderInputInfo {
             merkle_path,
-            secret: secret.clone(),
+            secret,
             note: state.own_coins[0].1.clone(),
         }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
-            token_id: token_id,
+            token_id,
             public: public2,
         }],
     };

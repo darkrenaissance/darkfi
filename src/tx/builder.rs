@@ -101,7 +101,7 @@ impl TransactionBuilder {
                 .collect();
 
             let (proof, revealed) = create_spend_proof(
-                &spend_params,
+                spend_params,
                 input.note.value,
                 input.note.token_id,
                 input.note.valcom_blind,

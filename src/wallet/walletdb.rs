@@ -407,13 +407,13 @@ mod tests {
     use crate::util::join_config_path;
     use ff::PrimeField;
 
-    pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
+    pub fn init_db(path: &Path, password: String) -> Result<()> {
         if !password.trim().is_empty() {
             let contents = include_str!("../../sql/schema.sql");
-            let conn = Connection::open(&path)?;
+            let conn = Connection::open(path)?;
             debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", path);
             conn.pragma_update(None, "key", &password)?;
-            conn.execute_batch(&contents)?;
+            conn.execute_batch(contents)?;
         } else {
             debug!(
                 target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
@@ -454,15 +454,15 @@ mod tests {
 
         let own_coin = OwnCoin {
             coin,
-            note: note.clone(),
+            note,
             secret,
-            witness: witness.clone(),
+            witness,
         };
 
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin)?;
 
         let id = wallet.get_token_id()?;
 
@@ -509,15 +509,15 @@ mod tests {
 
         let own_coin = OwnCoin {
             coin,
-            note: note.clone(),
+            note,
             secret,
-            witness: witness.clone(),
+            witness,
         };
 
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin)?;
 
         let balances = wallet.get_balances()?;
 
@@ -590,7 +590,7 @@ mod tests {
             witness: witness.clone(),
         };
 
-        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin)?;
 
         let own_coin = wallet.get_own_coins()?[0].clone();
 
@@ -602,19 +602,19 @@ mod tests {
 
         wallet.confirm_spend_coin(&own_coin.coin)?;
 
-        let own_coins = wallet.get_own_coins()?.clone();
+        let own_coins = wallet.get_own_coins()?;
 
         assert_eq!(own_coins.len(), 0);
 
-        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin)?;
 
-        let own_coins = wallet.get_own_coins()?.clone();
+        let own_coins = wallet.get_own_coins()?;
 
         assert_eq!(own_coins.len(), 1);
 
         wallet.remove_own_coins()?;
 
-        let own_coins = wallet.get_own_coins()?.clone();
+        let own_coins = wallet.get_own_coins()?;
 
         assert_eq!(own_coins.len(), 0);
 
@@ -665,7 +665,7 @@ mod tests {
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
+        wallet.put_own_coins(own_coin)?;
 
         let coin2 = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
 

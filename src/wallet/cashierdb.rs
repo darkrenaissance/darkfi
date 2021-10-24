@@ -492,13 +492,13 @@ mod tests {
     use ff::Field;
     use rand::rngs::OsRng;
 
-    pub fn init_db(path: &PathBuf, password: String) -> Result<()> {
+    pub fn init_db(path: &Path, password: String) -> Result<()> {
         if !password.trim().is_empty() {
             let contents = include_str!("../../sql/cashier.sql");
-            let conn = Connection::open(&path)?;
+            let conn = Connection::open(path)?;
             debug!(target: "CASHIERDB", "OPENED CONNECTION AT PATH {:?}", path);
             conn.pragma_update(None, "key", &password)?;
-            conn.execute_batch(&contents)?;
+            conn.execute_batch(contents)?;
         } else {
             debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword));
@@ -617,13 +617,13 @@ mod tests {
 
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
 
-        assert_eq!(addr.is_some(), true);
+        assert!(addr.is_some());
 
         wallet.confirm_withdraw_key_record(&token_addr, &network)?;
 
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
 
-        assert_eq!(addr.is_none(), true);
+        assert!(addr.is_none());
 
         std::fs::remove_file(walletdb_path)?;
 
