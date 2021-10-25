@@ -158,7 +158,7 @@ impl WalletDb {
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         debug!(target: "WALLETDB", "Get own coins");
 
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         let conn = Connection::open(&self.path)?;
         // unlock database
@@ -235,7 +235,7 @@ impl WalletDb {
         let token_id = self.get_value_serialized(&own_coin.note.token_id)?;
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
 
         conn.execute(
@@ -283,7 +283,7 @@ impl WalletDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        let is_spent = self.get_value_serialized(&true)?;
+        let is_spent = 1;
 
         conn.execute(
             "UPDATE coins
@@ -299,7 +299,7 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         let mut witnesses =
             conn.prepare("SELECT coin, witness FROM coins WHERE is_spent = :is_spent;")?;
@@ -330,7 +330,7 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let witness = self.get_value_serialized(&witness)?;
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         conn.execute(
             "UPDATE coins SET witness = ?1  WHERE coin = ?2 AND is_spent = ?3",
@@ -345,7 +345,7 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         let mut stmt = conn.prepare(
             "SELECT value, token_id, nullifier FROM coins  WHERE is_spent = :is_spent ;",
@@ -376,7 +376,7 @@ impl WalletDb {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         let mut stmt = conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
@@ -398,7 +398,7 @@ impl WalletDb {
         conn.pragma_update(None, "key", &self.password)?;
 
         let id = self.get_value_serialized(token_id)?;
-        let is_spent = self.get_value_serialized(&false)?;
+        let is_spent = 0;
 
         let mut stmt = conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
         let id_check = stmt.exists(params![id, is_spent])?;

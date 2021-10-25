@@ -9,10 +9,10 @@ CREATE TABLE IF NOT EXISTS coins(
 	serial BLOB NOT NULL,
 	coin_blind BLOB NOT NULL,
 	valcom_blind BLOB NOT NULL,
-	value INT NOT NULL,
-	token_id INT NOT NULL,
+	value INTEGER NOT NULL,
+	token_id BLOB NOT NULL,
 	witness BLOB NOT NULL,
 	secret BLOB NOT NULL,
-	is_spent BLOB NOT NULL,
+	is_spent BOOLEAN NOT NULL,
 	nullifier BLOB NOT NULL
 );
