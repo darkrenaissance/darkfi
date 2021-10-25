@@ -16,7 +16,7 @@ jobs:
             - name: Install Dependencies
               run: |
                 sudo apt-get update
-                sudo apt-get install libudev-dev
+                sudo apt-get install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
             - name: Create config directory
               run: |
                 mkdir -p ~/.config/darkfi
