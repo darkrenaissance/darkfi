@@ -713,6 +713,7 @@ async fn main() -> Result<()> {
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg ADDRESS: -a --address "Get Cashier Public key")
         (@arg verbose: -v --verbose "Increase verbosity")
+        (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
     )
     .get_matches();
 
@@ -731,6 +732,33 @@ async fn main() -> Result<()> {
     simple_logger::init_with_level(loglevel)?;
 
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
+
+    if args.is_present("refresh") {
+        debug!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
+
+        let client_wallet = WalletDb::new(
+            expand_path(&config.client_wallet_path)?.as_path(),
+            config.client_wallet_password.clone(),
+        )?;
+
+        client_wallet.remove_own_coins()?;
+
+        let wallet = CashierDb::new(
+            expand_path(&config.cashier_wallet_path)?.as_path(),
+            config.cashier_wallet_password.clone(),
+        )?;
+
+        wallet.remove_withdraw_and_deposit_keys()?;
+
+        if let Some(path) = expand_path(&config.database_path)?.to_str() {
+            debug!(target: "CASHIER DAEMON", "Remove database: {}", path);
+            std::fs::remove_dir_all(path)?;
+        }
+
+        println!("Wallet got updated successfully.");
+
+        return Ok(());
+    }
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();

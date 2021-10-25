@@ -135,6 +135,21 @@ impl CashierDb {
         Ok(keys)
     }
 
+    pub fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
+        debug!(target: "CASHIERDB", "Remove withdraw and deposit keys");
+
+        // open connection
+        let conn = Connection::open(&self.path)?;
+        // unlock database
+        conn.pragma_update(None, "key", &self.password)?;
+
+        conn.execute("DELETE FROM deposit_keypairs;", [])?;
+        conn.execute("DELETE FROM withdraw_keypairs;", [])?;
+        Ok(())
+    }
+
+
+
     pub fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
@@ -620,6 +635,25 @@ mod tests {
         assert!(addr.is_some());
 
         wallet.confirm_withdraw_key_record(&token_addr, &network)?;
+
+        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
+
+        assert!(addr.is_none());
+
+        wallet.put_withdraw_keys(
+            &token_addr,
+            &public2,
+            &secret2,
+            &network,
+            &token_id,
+            String::new(),
+        )?;
+
+        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
+
+        assert!(addr.is_some());
+        
+        wallet.remove_withdraw_and_deposit_keys()?;
 
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
 

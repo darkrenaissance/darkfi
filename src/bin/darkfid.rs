@@ -619,7 +619,7 @@ async fn main() -> Result<()> {
     let args = clap_app!(darkfid =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
-        (@arg refresh: -r --refresh "Refresh the wallet and own coins")
+        (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
     )
     .get_matches();
 
