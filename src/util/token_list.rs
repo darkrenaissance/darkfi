@@ -107,7 +107,7 @@ mod tests {
     use crate::Result;
 
     fn _get_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../token/solanatokenlisttest.json");
+        let file_contents = include_bytes!("../../testdata/solanatokenlisttest.json");
         let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
         let tokens = sol_tokenlist["tokens"]
