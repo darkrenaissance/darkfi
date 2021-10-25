@@ -29,7 +29,7 @@ use drk::{
     state::ProgramState,
     util::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
-        NetworkName, SolTokenList,
+        NetworkName, TokenList,
     },
     wallet::WalletDb,
     Error, Result,
@@ -70,7 +70,7 @@ impl RequestHandler for Darkfid {
 struct Darkfid {
     client: Arc<Mutex<Client>>,
     state: Arc<Mutex<State>>,
-    sol_tokenlist: SolTokenList,
+    sol_tokenlist: TokenList,
     drk_tokenlist: DrkTokenList,
     cashiers: Vec<Cashier>,
 }
@@ -81,7 +81,7 @@ impl Darkfid {
         state: Arc<Mutex<State>>,
         cashiers: Vec<Cashier>,
     ) -> Result<Self> {
-        let sol_tokenlist = SolTokenList::new()?;
+        let sol_tokenlist = TokenList::new(include_bytes!("../../token/solana_token_list.json"))?;
         let drk_tokenlist = DrkTokenList::new(sol_tokenlist.clone())?;
 
         Ok(Self {

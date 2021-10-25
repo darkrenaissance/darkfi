@@ -8,19 +8,17 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct SolTokenList {
+pub struct TokenList {
     tokens: Vec<Value>,
 }
 
-impl SolTokenList {
-    pub fn new() -> Result<Self> {
-        let file_contents = include_bytes!("../../token/solanatokenlist.json");
-        let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
-        let tokens = sol_tokenlist["tokens"]
+impl TokenList {
+    pub fn new(data: &[u8]) -> Result<Self> {
+        let tokenlist: Value = serde_json::from_slice(data)?;
+        let tokens = tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?
             .clone();
-
         Ok(Self { tokens })
     }
 
@@ -28,12 +26,7 @@ impl SolTokenList {
         let mut symbols: Vec<String> = Vec::new();
         for item in self.tokens.iter() {
             let symbol = item["symbol"].as_str().unwrap();
-            // FIXME: Change Sollet BTC to SBTC?
-            if symbol == "BTC" {
-                symbols.push("SBTC".to_string());
-            } else {
-                symbols.push(symbol.to_string());
-            }
+            symbols.push(symbol.to_string());
         }
         Ok(symbols)
     }
@@ -68,7 +61,7 @@ pub struct DrkTokenList {
 }
 
 impl DrkTokenList {
-    pub fn new(sol_list: SolTokenList) -> Result<Self> {
+    pub fn new(sol_list: TokenList) -> Result<Self> {
         let sol_symbols = sol_list.get_symbols()?;
 
         let mut tokens: HashMap<String, jubjub::Fr> = sol_symbols
@@ -84,7 +77,7 @@ impl DrkTokenList {
         Ok(Self { tokens })
     }
 
-    fn generate_hash_pair(sol_list: &SolTokenList, symbol: &str) -> Result<(String, jubjub::Fr)> {
+    fn generate_hash_pair(sol_list: &TokenList, symbol: &str) -> Result<(String, jubjub::Fr)> {
         if let Some(token_id) = &sol_list.search_id(symbol)? {
             Ok((
                 symbol.to_string(),
@@ -110,10 +103,10 @@ impl DrkTokenList {
 #[allow(unused_imports)]
 mod tests {
     use super::*;
-    use crate::util::{DrkTokenList, SolTokenList};
+    use crate::util::{DrkTokenList, TokenList};
     use crate::Result;
 
-    fn _get_tokens() -> Result<SolTokenList> {
+    fn _get_tokens() -> Result<TokenList> {
         let file_contents = include_bytes!("../../token/solanatokenlisttest.json");
         let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
@@ -122,7 +115,7 @@ mod tests {
             .ok_or(Error::TokenParseError)?
             .clone();
 
-        let sol_tokenlist = SolTokenList { tokens };
+        let sol_tokenlist = TokenList { tokens };
         Ok(sol_tokenlist)
     }
 

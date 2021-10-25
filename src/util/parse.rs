@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     serial::{deserialize, serialize},
-    util::{NetworkName, SolTokenList},
+    util::{NetworkName, TokenList},
     Error, Result,
 };
 
@@ -43,7 +43,7 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Result<String> {
+pub fn assign_id(network: &str, token: &str, _tokenlist: &TokenList) -> Result<String> {
     let token = token.to_lowercase();
     let _token = token.as_str();
     match NetworkName::from_str(network)? {
@@ -66,7 +66,7 @@ pub fn assign_id(network: &str, token: &str, _tokenlist: &SolTokenList) -> Resul
     }
 }
 
-pub fn symbol_to_id(token: &str, tokenlist: &SolTokenList) -> Result<String> {
+pub fn symbol_to_id(token: &str, tokenlist: &TokenList) -> Result<String> {
     let vec: Vec<char> = token.chars().collect();
     let mut counter = 0;
     for c in vec {
