@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use blake2s_simd::Params as Blake2sParams;
 use clap::clap_app;
 use easy_parallel::Parallel;
 use log::debug;
@@ -18,7 +17,7 @@ use drk::{
     cli::{Config, DarkfidConfig},
     client::{Client, State},
     crypto::{
-        load_params, merkle::CommitmentTree, nullifier::Nullifier, save_params, setup_mint_prover,
+        load_params, merkle::CommitmentTree, save_params, setup_mint_prover,
         setup_spend_prover,
     },
     rpc::{
@@ -108,26 +107,21 @@ impl Darkfid {
     async fn update_balances(&self) -> Result<()> {
         let own_coins = self.client.lock().await.get_own_coins()?;
 
-        for own_coin in own_coins {
-            let mut nullifier = [0; 32];
-            nullifier.copy_from_slice(
-                Blake2sParams::new()
-                    .hash_length(32)
-                    .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
-                    .to_state()
-                    .update(&own_coin.secret.to_bytes())
-                    .update(&own_coin.note.serial.to_bytes())
-                    .finalize()
-                    .as_bytes(),
-            );
-            let nullifier = Nullifier::new(nullifier);
-            let nullifier_exists = self.state.lock().await.nullifier_exists(&nullifier);
+        for own_coin in own_coins.iter() {
+
+            let nullifier_exists = self
+                .state
+                .lock()
+                .await
+                .nullifier_exists(&own_coin.nullifier);
+
             if nullifier_exists {
                 self.client
                     .lock()
                     .await
                     .confirm_spend_coin(&own_coin.coin)?;
             }
+
         }
         Ok(())
     }
