@@ -5,7 +5,7 @@ use crate::{
     serial::{Decodable, Encodable},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Coin {
     pub repr: [u8; 32],
 }
@@ -30,8 +30,3 @@ impl Decodable for Coin {
     }
 }
 
-impl PartialEq for Coin {
-    fn eq(&self, other: &Self) -> bool {
-        self.repr == other.repr
-    }
-}

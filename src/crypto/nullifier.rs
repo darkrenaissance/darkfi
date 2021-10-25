@@ -6,7 +6,7 @@ use crate::{
 };
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Nullifier {
     pub repr: [u8; 32],
 }
@@ -31,8 +31,3 @@ impl Decodable for Nullifier {
     }
 }
 
-impl PartialEq for Nullifier {
-    fn eq(&self, other: &Self) -> bool {
-        self.repr == other.repr
-    }
-}
