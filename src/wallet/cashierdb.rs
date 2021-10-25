@@ -237,7 +237,7 @@ impl CashierDb {
         let mut private_keys: Vec<jubjub::Fr> = vec![];
 
         for k in keys {
-            let private_key: jubjub::Fr = self.get_value_deserialized(&k??)?;
+            let private_key: jubjub::Fr = self.get_value_deserialized(k??)?;
             private_keys.push(private_key);
         }
 
@@ -273,9 +273,9 @@ impl CashierDb {
         for addr in addr_iter {
             let addr = addr?;
             let token_public_key = addr.0;
-            let network: NetworkName = self.get_value_deserialized(&addr.1)?;
-            let token_id: jubjub::Fr = self.get_value_deserialized(&addr.2)?;
-            let mint_address: String = self.get_value_deserialized(&addr.3)?;
+            let network: NetworkName = self.get_value_deserialized(addr.1)?;
+            let token_id: jubjub::Fr = self.get_value_deserialized(addr.2)?;
+            let mint_address: String = self.get_value_deserialized(addr.3)?;
             token_addresses.push(WithdrawToken {
                 token_public_key,
                 network,
@@ -365,11 +365,11 @@ impl CashierDb {
 
         for key in keys_iter {
             let key = key?;
-            let drk_public_key: jubjub::SubgroupPoint = self.get_value_deserialized(&key.0)?;
+            let drk_public_key: jubjub::SubgroupPoint = self.get_value_deserialized(key.0)?;
             let private_key = key.1;
             let public_key = key.2;
-            let token_id: jubjub::Fr = self.get_value_deserialized(&key.3)?;
-            let mint_address: String = self.get_value_deserialized(&key.4)?;
+            let token_id: jubjub::Fr = self.get_value_deserialized(key.3)?;
+            let mint_address: String = self.get_value_deserialized(key.4)?;
             keys.push(DepositToken {
                 drk_public_key,
                 token_key: TokenKey {
@@ -419,8 +419,8 @@ impl CashierDb {
 
         for kp in keypair_iter {
             let kp = kp?;
-            let public: jubjub::SubgroupPoint = self.get_value_deserialized(&kp.1)?;
-            let private: jubjub::Fr = self.get_value_deserialized(&kp.0)?;
+            let public: jubjub::SubgroupPoint = self.get_value_deserialized(kp.1)?;
+            let private: jubjub::Fr = self.get_value_deserialized(kp.0)?;
             let keypair = Keypair { public, private };
             keypairs.push(keypair);
         }

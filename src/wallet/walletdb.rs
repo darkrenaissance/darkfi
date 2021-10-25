@@ -147,8 +147,8 @@ impl WalletDb {
             let key = key?;
             let public = key.0;
             let private = key.1;
-            let public: jubjub::SubgroupPoint = self.get_value_deserialized(&public)?;
-            let private: jubjub::Fr = self.get_value_deserialized(&private)?;
+            let public: jubjub::SubgroupPoint = self.get_value_deserialized(public)?;
+            let private: jubjub::Fr = self.get_value_deserialized(private)?;
             keypairs.push(Keypair { public, private });
         }
 
@@ -183,14 +183,14 @@ impl WalletDb {
 
         for row in rows {
             let row = row?;
-            let coin = self.get_value_deserialized(&row.0)?;
+            let coin = self.get_value_deserialized(row.0)?;
 
             // note
-            let serial = self.get_value_deserialized(&row.1)?;
-            let coin_blind = self.get_value_deserialized(&row.2)?;
-            let valcom_blind = self.get_value_deserialized(&row.3)?;
+            let serial = self.get_value_deserialized(row.1)?;
+            let coin_blind = self.get_value_deserialized(row.2)?;
+            let valcom_blind = self.get_value_deserialized(row.3)?;
             let value: u64 = row.4;
-            let token_id = self.get_value_deserialized(&row.5)?;
+            let token_id = self.get_value_deserialized(row.5)?;
 
             let note = Note {
                 serial,
@@ -200,9 +200,9 @@ impl WalletDb {
                 valcom_blind,
             };
 
-            let witness = self.get_value_deserialized(&row.6)?;
-            let secret: jubjub::Fr = self.get_value_deserialized(&row.7)?;
-            let nullifier: Nullifier = self.get_value_deserialized(&row.8)?;
+            let witness = self.get_value_deserialized(row.6)?;
+            let secret: jubjub::Fr = self.get_value_deserialized(row.7)?;
+            let nullifier: Nullifier = self.get_value_deserialized(row.8)?;
 
             let oc = OwnCoin {
                 coin,
@@ -312,7 +312,7 @@ impl WalletDb {
         for i in rows {
             let i = i?;
             let coin: Vec<u8> = i.0;
-            let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(&i.1)?;
+            let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(i.1)?;
             witnesses.insert(coin, witness);
         }
 
@@ -321,7 +321,7 @@ impl WalletDb {
 
     pub fn update_witness(
         &self,
-        coin: &Vec<u8>,
+        coin: &[u8],
         witness: IncrementalWitness<MerkleNode>,
     ) -> Result<()> {
         debug!(target: "WALLETDB", "Updating witness");
@@ -359,8 +359,8 @@ impl WalletDb {
         for row in rows {
             let row = row?;
             let value: u64 = row.0;
-            let token_id: jubjub::Fr = self.get_value_deserialized(&row.1)?;
-            let nullifier: Nullifier = self.get_value_deserialized(&row.2)?;
+            let token_id: jubjub::Fr = self.get_value_deserialized(row.1)?;
+            let nullifier: Nullifier = self.get_value_deserialized(row.2)?;
             balances.add(&Balance {
                 token_id,
                 value,
@@ -384,7 +384,7 @@ impl WalletDb {
         let mut token_ids = Vec::new();
         for row in rows {
             let row = row?;
-            let token_id = self.get_value_deserialized(&row).unwrap();
+            let token_id = self.get_value_deserialized(row).unwrap();
 
             token_ids.push(token_id);
         }

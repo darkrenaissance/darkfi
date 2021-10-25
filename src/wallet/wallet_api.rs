@@ -12,8 +12,8 @@ pub trait WalletApi {
         Ok(v)
     }
 
-    fn get_value_deserialized<D: Decodable>(&self, key: &Vec<u8>) -> Result<D> {
-        let v: D = deserialize(key)?;
+    fn get_value_deserialized<D: Decodable>(&self, key: Vec<u8>) -> Result<D> {
+        let v: D = deserialize(&key)?;
         Ok(v)
     }
 }
