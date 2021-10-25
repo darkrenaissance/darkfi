@@ -125,6 +125,6 @@ fn main() {
     let guard = verification.unwrap();
     let msm = guard.clone().use_challenges();
     assert!(msm.eval());
-    println!("Verify: [{:?}]", start.elapsed());
+    println!(" Verify: [{:?}].", start.elapsed());
 }
 
