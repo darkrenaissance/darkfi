@@ -2,6 +2,7 @@
 
 ![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/rust-build.yml/badge.svg)
 
+
 ## Build
 
 To build the necessary binaries, we can just clone the repo, and use
