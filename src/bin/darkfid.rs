@@ -188,7 +188,7 @@ impl Darkfid {
         }
         .await;
         match result {
-            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), id)),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
         }
     }
@@ -244,7 +244,7 @@ impl Darkfid {
         .await;
 
         match result {
-            Ok(res) => JsonResult::Resp(jsonresp(json!(res), json!(res))),
+            Ok(res) => JsonResult::Resp(jsonresp(json!(res), id)),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
         }
     }
@@ -447,7 +447,7 @@ impl Darkfid {
                             "Sent request to withdraw {} amount of {}",
                             amount, token_id
                         )),
-                        json!(id.clone()),
+                        id.clone(),
                     ))
                 }
             }
@@ -522,7 +522,7 @@ impl Darkfid {
         .await;
 
         match result {
-            Ok(msg) => JsonResult::Resp(jsonresp(json!(msg), json!(id))),
+            Ok(_) => JsonResult::Resp(jsonresp(json!("Success"), id)),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
         }
     }
