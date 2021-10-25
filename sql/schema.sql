@@ -13,5 +13,6 @@ CREATE TABLE IF NOT EXISTS coins(
 	token_id INT NOT NULL,
 	witness BLOB NOT NULL,
 	secret BLOB NOT NULL,
-	is_spent BLOB NOT NULL
+	is_spent BLOB NOT NULL,
+	nullifier BLOB NOT NULL
 );

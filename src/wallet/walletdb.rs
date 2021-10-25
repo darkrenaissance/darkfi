@@ -10,7 +10,8 @@ use rusqlite::{named_params, params, Connection};
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
-    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note, OwnCoin, OwnCoins,
+    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note,
+    nullifier::Nullifier, OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::{Error, Result};
@@ -27,6 +28,7 @@ pub struct Keypair {
 pub struct Balance {
     pub token_id: jubjub::Fr,
     pub value: u64,
+    pub nullifier: Nullifier,
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +175,7 @@ impl WalletDb {
                 row.get(5)?,
                 row.get(6)?,
                 row.get(7)?,
+                row.get(9)?,
             ))
         })?;
 
@@ -199,12 +202,14 @@ impl WalletDb {
 
             let witness = self.get_value_deserialized(&row.6)?;
             let secret: jubjub::Fr = self.get_value_deserialized(&row.7)?;
+            let nullifier: Nullifier = self.get_value_deserialized(&row.8)?;
 
             let oc = OwnCoin {
                 coin,
                 note,
                 secret,
                 witness,
+                nullifier,
             };
 
             own_coins.push(oc)
@@ -231,12 +236,15 @@ impl WalletDb {
         let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
         let is_spent = self.get_value_serialized(&false)?;
+        let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
 
         conn.execute(
             "INSERT OR REPLACE INTO coins
-            (coin, serial, value, token_id, coin_blind, valcom_blind, witness, secret, is_spent)
+            (coin, serial, value, token_id, coin_blind, 
+            valcom_blind, witness, secret, is_spent, nullifier)
             VALUES
-            (:coin, :serial, :value, :token_id, :coin_blind, :valcom_blind, :witness, :secret, :is_spent);",
+            (:coin, :serial, :value, :token_id, :coin_blind, 
+             :valcom_blind, :witness, :secret, :is_spent, :nullifier);",
             named_params! {
                 ":coin": coin,
                 ":serial": serial,
@@ -247,6 +255,7 @@ impl WalletDb {
                 ":witness": witness,
                 ":secret": secret,
                 ":is_spent": is_spent,
+                ":nullifier": nullifier,
             },
         )?;
         Ok(())
@@ -338,10 +347,11 @@ impl WalletDb {
 
         let is_spent = self.get_value_serialized(&false)?;
 
-        let mut stmt =
-            conn.prepare("SELECT value, token_id FROM coins  WHERE is_spent = :is_spent ;")?;
+        let mut stmt = conn.prepare(
+            "SELECT value, token_id, nullifier FROM coins  WHERE is_spent = :is_spent ;",
+        )?;
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| {
-            Ok((row.get(0)?, row.get(1)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?;
 
         let mut balances = Balances { list: Vec::new() };
@@ -350,7 +360,12 @@ impl WalletDb {
             let row = row?;
             let value: u64 = row.0;
             let token_id: jubjub::Fr = self.get_value_deserialized(&row.1)?;
-            balances.add(&Balance { token_id, value });
+            let nullifier: Nullifier = self.get_value_deserialized(&row.2)?;
+            balances.add(&Balance {
+                token_id,
+                value,
+                nullifier,
+            });
         }
 
         Ok(balances)
@@ -452,11 +467,14 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
+        let nullifier = Nullifier::new(coin.repr);
+
         let own_coin = OwnCoin {
             coin,
             note,
             secret,
             witness,
+            nullifier,
         };
 
         wallet.put_own_coins(own_coin.clone())?;
@@ -507,11 +525,14 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
+        let nullifier = Nullifier::new(coin.repr);
+
         let own_coin = OwnCoin {
             coin,
             note,
             secret,
             witness,
+            nullifier,
         };
 
         wallet.put_own_coins(own_coin.clone())?;
@@ -583,11 +604,14 @@ mod tests {
 
         assert_eq!(coin, crate::serial::deserialize(&coin_ser)?);
 
+        let nullifier = Nullifier::new(coin.repr);
+
         let own_coin = OwnCoin {
             coin,
             note: note.clone(),
             secret,
             witness: witness.clone(),
+            nullifier: nullifier.clone(),
         };
 
         wallet.put_own_coins(own_coin)?;
@@ -599,6 +623,7 @@ mod tests {
         assert_eq!(own_coin.secret, secret);
         assert_eq!(own_coin.witness.root(), witness.root());
         assert_eq!(own_coin.witness.path(), witness.path());
+        assert_eq!(own_coin.nullifier, nullifier);
 
         wallet.confirm_spend_coin(&own_coin.coin)?;
 
@@ -655,11 +680,15 @@ mod tests {
 
         let witness = IncrementalWitness::from_tree(&tree);
 
+        // for testing
+        let nullifier = Nullifier::new(coin.repr);
+
         let own_coin = OwnCoin {
             coin,
             note,
             secret,
             witness,
+            nullifier,
         };
 
         wallet.put_own_coins(own_coin.clone())?;

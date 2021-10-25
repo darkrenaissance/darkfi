@@ -25,6 +25,7 @@ pub struct OwnCoin {
     pub note: note::Note,
     pub secret: jubjub::Fr,
     pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
+    pub nullifier: nullifier::Nullifier 
 }
 
 pub type OwnCoins = Vec<OwnCoin>;

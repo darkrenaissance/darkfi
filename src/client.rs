@@ -5,6 +5,7 @@ use bellman::groth16;
 use bls12_381::Bls12;
 use log::{debug, info, warn};
 use url::Url;
+use blake2s_simd::Params as Blake2sParams;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
@@ -268,7 +269,7 @@ impl Client {
                     wallet.clone(),
                     Some(notify.clone()),
                 )
-                .await;
+                    .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -308,7 +309,7 @@ impl Client {
                     wallet.clone(),
                     None,
                 )
-                .await;
+                    .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -474,11 +475,26 @@ impl State {
                     // Make a new witness for this coin
                     let witness = IncrementalWitness::from_tree(&self.tree);
 
+                    let mut nullifier = [0; 32];
+                    nullifier.copy_from_slice(
+                        Blake2sParams::new()
+                        .hash_length(32)
+                        .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
+                        .to_state()
+                        .update(&secret.to_bytes())
+                        .update(&note.serial.to_bytes())
+                        .finalize()
+                        .as_bytes(),
+                    );
+
+                    let nullifier = Nullifier::new(nullifier);
+
                     let own_coin = OwnCoin {
                         coin: coin.clone(),
                         note: note.clone(),
                         secret: *secret,
                         witness: witness.clone(),
+                        nullifier
                     };
 
                     wallet.put_own_coins(own_coin)?;
