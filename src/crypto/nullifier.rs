@@ -5,6 +5,8 @@ use crate::{
     serial::{Decodable, Encodable},
 };
 
+
+#[derive(Debug, Clone)]
 pub struct Nullifier {
     pub repr: [u8; 32],
 }
@@ -26,5 +28,11 @@ impl Decodable for Nullifier {
         Ok(Self {
             repr: Decodable::decode(d)?,
         })
+    }
+}
+
+impl PartialEq for Nullifier {
+    fn eq(&self, other: &Self) -> bool {
+        self.repr == other.repr
     }
 }
