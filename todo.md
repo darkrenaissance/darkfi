@@ -84,7 +84,7 @@ Open research questions.
 
 - [ ] make bitreich halo2 impl
 - [ ] doc on circuit design
-- [ ] jsonrpc interface for ETH bridge (interface with geth)
+- [x] jsonrpc interface for ETH bridge (interface with geth)
 
 # halo2
 
