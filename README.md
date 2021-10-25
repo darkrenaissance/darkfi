@@ -1,6 +1,8 @@
 # DarkFi
 
 ![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/rust-build.yml/badge.svg)
+[![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-lightgrey?logo=firefox-browser&logoColor=white)](https://dark.fi)
+[![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-lightgrey?logo=firefox-browser&logoColor=white)](https://lists.dyne.org/lurker/message/20211021.123016.3dccaf0c.en.html)
 
 ## Build
 
