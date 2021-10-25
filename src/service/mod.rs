@@ -13,4 +13,7 @@ pub mod sol;
 #[cfg(feature = "sol")]
 pub use sol::{SolClient, SolFailed, SolResult};
 
+#[cfg(feature = "eth")]
+pub mod eth;
+
 pub use gateway::{GatewayClient, GatewayService, GatewaySlabsSubscriber};

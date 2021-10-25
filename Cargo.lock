@@ -1259,8 +1259,10 @@ dependencies = [
  "ff",
  "futures 0.3.17",
  "group",
+ "hash-db",
  "hex",
  "jubjub",
+ "keccak-hasher",
  "lazy_static",
  "log",
  "native-tls",
@@ -1940,6 +1942,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash-db"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+
+[[package]]
+name = "hash256-std-hasher"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2245,6 +2262,17 @@ name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
+
+[[package]]
+name = "keccak-hasher"
+version = "0.15.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
+dependencies = [
+ "hash-db",
+ "hash256-std-hasher",
+ "tiny-keccak",
+]
 
 [[package]]
 name = "kv-log-macro"
@@ -2556,6 +2584,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rand 0.7.3",
+ "serde",
 ]
 
 [[package]]
