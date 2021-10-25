@@ -429,7 +429,7 @@ impl Darkfid {
                     .lock()
                     .await
                     .transfer(
-                        token_id.clone(),
+                        *token_id,
                         cashier_public,
                         amount_in_apo.try_into()?,
                         self.state.clone(),
@@ -518,7 +518,7 @@ impl Darkfid {
                 .lock()
                 .await
                 .transfer(
-                    token_id.clone(),
+                    *token_id,
                     drk_address,
                     amount.try_into()?,
                     self.state.clone(),

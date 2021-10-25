@@ -14,7 +14,7 @@ use drk::{
     Result,
 };
 
-async fn start(executor: Arc<Executor<'_>>, config: Arc<&GatewaydConfig>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<()> {
     let rocks = Rocks::new(&expand_path(&config.database_path)?)?;
     let rocks_slabstore_column = RocksColumn::<columns::Slabs>::new(rocks);
 
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, config_ptr).await?;
+                start(ex2, &config_ptr).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

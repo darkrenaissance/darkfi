@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     let block = block.as_str().unwrap();
 
     // Native ETH balance
-    let hexbalance = eth.get_eth_balance(&acc, &block).await?;
+    let hexbalance = eth.get_eth_balance(&acc, block).await?;
     let hexbalance = hexbalance.as_str().unwrap().trim_start_matches("0x");
     let balance = BigUint::parse_bytes(hexbalance.as_bytes(), 16).unwrap();
     println!("{}", encode_base10(balance, 18));

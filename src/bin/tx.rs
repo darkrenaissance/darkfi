@@ -102,12 +102,9 @@ impl MemoryState {
         // Loop through all our secret keys...
         for secret in &self.secrets {
             // ... attempt to decrypt the note ...
-            match ciphertext.decrypt(secret) {
-                Ok(note) => {
-                    // ... and return the decrypted note for this coin.
-                    return Some((note, *secret));
-                }
-                Err(_) => {}
+            if let Ok(note) = ciphertext.decrypt(secret) {
+                // ... and return the decrypted note for this coin.
+                return Some((note, *secret));
             }
         }
         // We weren't able to decrypt the note with any of our keys.
@@ -251,8 +248,8 @@ async fn main() {
         // Just test the path is good because we just added a bunch of fake coins
         let node = MerkleNode::from_coin(coin);
         let root = tree.root();
-        drop(tree);
-        drop(witness);
+        //drop(tree);
+        //drop(witness);
         assert_eq!(merkle_path.root(node), root);
         let root = root;
         assert!(state.is_valid_merkle(&root));

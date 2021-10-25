@@ -5,12 +5,8 @@ homepage = "https://dark.fi"
 description = "Anonymous. Uncensored. Sovereign."
 authors = ["darkfi <dev@dark.fi>"]
 repository = "https://github.com/darkrenaissance/darkfi"
-readme = "README.md"
 license = "AGPL-3.0-only"
-edition = "2018"
-
-#[profile.release]
-#debug = 1
+edition = "2021"
 
 [lib]
 name = "drk"
@@ -59,16 +55,17 @@ url = "2.2.2"
 serde = {version = "1.0.130", features = ["derive"]}
 serde_json = "1.0.68"
 bytes = "1.0.1"
-signal-hook = "0.3.8"
+signal-hook = "0.3.10"
+signal-hook-async-std = "0.2.1"
 lazy_static = "1.4.0"
 
 rocksdb = {version = "0.16.0", default-features = false, features = ["lz4"]}
-zeromq = {version = "0.2.1", default-features = false, features = ["async-std-runtime", "all-transport"]}
+zeromq = {version = "0.2.2", default-features = false, features = ["async-std-runtime", "all-transport"]}
 rusqlite = {version = "0.26.0", features = ["bundled-sqlcipher"]}
 
 ## Cashier Solana Dependencies
-solana-sdk = {version = "1.8.0", optional = true}
-solana-client = {version = "1.8.0", optional = true}
+solana-sdk = {version = "1.8.1", optional = true}
+solana-client = {version = "1.8.1", optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 

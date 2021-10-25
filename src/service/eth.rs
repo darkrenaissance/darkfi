@@ -135,20 +135,9 @@ impl EthTx {
         data: Option<String>,
         nonce: Option<String>,
     ) -> Self {
-        let gas_hex = match gas {
-            Some(v) => Some(to_eth_hex(v)),
-            None => None,
-        };
-
-        let gasprice_hex = match gas_price {
-            Some(v) => Some(to_eth_hex(v)),
-            None => None,
-        };
-
-        let value_hex = match value {
-            Some(v) => Some(to_eth_hex(v)),
-            None => None,
-        };
+        let gas_hex = gas.map(to_eth_hex);
+        let gasprice_hex = gas_price.map(to_eth_hex);
+        let value_hex = value.map(to_eth_hex);
 
         EthTx {
             from: from.to_string(),
@@ -190,17 +179,17 @@ impl EthClient {
         match reply {
             JsonResult::Resp(r) => {
                 debug!(target: "ETH RPC", "<-- {}", serde_json::to_string(&r)?);
-                return Ok(r.result);
+                Ok(r.result)
             }
 
             JsonResult::Err(e) => {
                 debug!(target: "ETH RPC", "<-- {}", serde_json::to_string(&e)?);
-                return Err(Error::JsonRpcError(e.error.message.to_string()));
+                Err(Error::JsonRpcError(e.error.message.to_string()))
             }
 
             JsonResult::Notif(n) => {
                 debug!(target: "ETH RPC", "<-- {}", serde_json::to_string(&n)?);
-                return Err(Error::JsonRpcError("Unexpected reply".to_string()));
+                Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
         }
     }

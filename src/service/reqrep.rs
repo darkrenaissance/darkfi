@@ -1,3 +1,4 @@
+use async_std::prelude::*;
 use async_std::sync::Arc;
 use std::convert::TryFrom;
 use std::io;
@@ -8,7 +9,8 @@ use bytes::Bytes;
 use futures::FutureExt;
 use log::*;
 use rand::Rng;
-use signal_hook::{consts::SIGINT, iterator::Signals};
+use signal_hook::consts::SIGINT;
+use signal_hook_async_std::Signals;
 use zeromq::*;
 
 use crate::serial::{deserialize, serialize};
@@ -75,13 +77,19 @@ impl RepProtocol {
 
         let (stop_s, stop_r) = async_channel::unbounded::<()>();
 
-        let mut signals = Signals::new(&[SIGINT])?;
+        let signals = Signals::new(&[SIGINT])?;
+        let handle = signals.handle();
 
-        let stop_task = executor.spawn(async move {
-            // TODO: Why?
-            for _ in signals.forever() {
-                stop_s.send(()).await?;
-                break;
+        let signals_task = executor.spawn(async move {
+            let mut signals = signals.fuse();
+            while let Some(signal) = signals.next().await {
+                match signal {
+                    SIGINT => {
+                        stop_s.send(()).await?;
+                        break;
+                    }
+                    _ => unreachable!(),
+                }
             }
             Ok::<(), crate::Error>(())
         });
@@ -118,7 +126,10 @@ impl RepProtocol {
                 NetEvent::Stop => break,
             }
         }
-        let _ = stop_task.cancel().await;
+
+        handle.close();
+        signals_task.await?;
+
         debug!(target: "REP PROTOCOL API","{} SERVICE: Stopped", self.service_name);
         Ok(())
     }
