@@ -17,6 +17,7 @@ pub enum Error {
     /// Parsing And Encode/Decode errors
     ParseFailed(&'static str),
     ParseIntError,
+    ParseBigIntError,
     ParseFloatError,
     FromHexError,
     UrlParseError,
@@ -28,6 +29,7 @@ pub enum Error {
     StrUtf8Error(String),
     TryIntoError,
     TryFromError,
+    TryFromBigIntError,
     SerdeJsonError(String),
     TomlDeserializeError(String),
     TomlSerializeError(String),
@@ -96,6 +98,7 @@ impl fmt::Display for Error {
             Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
             Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
             Error::ParseIntError => f.write_str("Parse int error"),
+            Error::ParseBigIntError => f.write_str("Parse big int error"),
             Error::ParseFloatError => f.write_str("Parse float error"),
             Error::UrlParseError => f.write_str("Failed to parse URL"),
             Error::FromHexError => f.write_str("Failed to convert from hex"),
@@ -132,6 +135,7 @@ impl fmt::Display for Error {
             Error::SolFailed(ref err) => write!(f, "Sol client failed: {}", err),
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
+            Error::TryFromBigIntError => f.write_str("TryFromBigInt error"),
             Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
             Error::SlabsStore(ref err) => write!(f, "SlabsStore Error: {}", err),
             Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
@@ -236,6 +240,18 @@ impl From<hex::FromHexError> for Error {
 impl From<std::num::ParseIntError> for Error {
     fn from(_err: std::num::ParseIntError) -> Error {
         Error::ParseIntError
+    }
+}
+
+impl From<num_bigint::ParseBigIntError> for Error {
+    fn from(_err: num_bigint::ParseBigIntError) -> Error {
+        Error::ParseBigIntError
+    }
+}
+
+impl From<num_bigint::TryFromBigIntError<num_bigint::BigUint>> for Error {
+    fn from(_err: num_bigint::TryFromBigIntError<num_bigint::BigUint>) -> Error {
+        Error::TryFromBigIntError
     }
 }
 

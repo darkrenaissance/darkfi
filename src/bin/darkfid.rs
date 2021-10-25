@@ -1,5 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -17,8 +18,7 @@ use drk::{
     cli::{Config, DarkfidConfig},
     client::{Client, State},
     crypto::{
-        load_params, merkle::CommitmentTree, save_params, setup_mint_prover,
-        setup_spend_prover,
+        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
     },
     rpc::{
         jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request},
@@ -108,7 +108,6 @@ impl Darkfid {
         let own_coins = self.client.lock().await.get_own_coins()?;
 
         for own_coin in own_coins.iter() {
-
             let nullifier_exists = self
                 .state
                 .lock()
@@ -121,7 +120,6 @@ impl Darkfid {
                     .await
                     .confirm_spend_coin(&own_coin.coin)?;
             }
-
         }
         Ok(())
     }
@@ -430,7 +428,12 @@ impl Darkfid {
                 self.client
                     .lock()
                     .await
-                    .transfer(*token_id, cashier_public, amount_in_apo, self.state.clone())
+                    .transfer(
+                        token_id.clone(),
+                        cashier_public,
+                        amount_in_apo.try_into()?,
+                        self.state.clone(),
+                    )
                     .await?;
 
                 Ok(())
@@ -514,7 +517,12 @@ impl Darkfid {
             self.client
                 .lock()
                 .await
-                .transfer(*token_id, drk_address, amount, self.state.clone())
+                .transfer(
+                    token_id.clone(),
+                    drk_address,
+                    amount.try_into()?,
+                    self.state.clone(),
+                )
                 .await?;
 
             Ok(())

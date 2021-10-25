@@ -93,7 +93,7 @@ fn char_eq(a: char, b: char) -> bool {
     a == b
 }
 
-pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Result<u64> {
+pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Result<BigUint> {
     let mut s: Vec<char> = amount.to_string().chars().collect();
 
     // Get rid of the decimal point:
@@ -136,12 +136,14 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     }
 
     // Convert to an integer
-    let number = u64::from_str(&String::from_iter(&s))?;
+    let number = BigUint::from_str(&String::from_iter(&s))?;
 
     // Round and return
+    /*
     if round && number == u64::MAX {
         return Err(Error::ParseFailed("u64 overflow"));
     }
+    */
 
     Ok(number + round as u64)
 }
@@ -184,10 +186,22 @@ mod tests {
 
     #[test]
     fn test_decode_base10() {
-        assert_eq!(124, decode_base10("12.33", 1, false).unwrap());
-        assert_eq!(1233000, decode_base10("12.33", 5, false).unwrap());
-        assert_eq!(1200000, decode_base10("12.", 5, false).unwrap());
-        assert_eq!(1200000, decode_base10("12", 5, false).unwrap());
+        assert_eq!(
+            124.to_biguint().unwrap(),
+            decode_base10("12.33", 1, false).unwrap()
+        );
+        assert_eq!(
+            1233000.to_biguint().unwrap(),
+            decode_base10("12.33", 5, false).unwrap()
+        );
+        assert_eq!(
+            1200000.to_biguint().unwrap(),
+            decode_base10("12.", 5, false).unwrap()
+        );
+        assert_eq!(
+            1200000.to_biguint().unwrap(),
+            decode_base10("12", 5, false).unwrap()
+        );
         assert!(decode_base10("12.33", 1, true).is_err());
     }
 
