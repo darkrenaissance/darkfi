@@ -6,13 +6,10 @@
 
 ## Build
 
-This project requires the Rust compiler to be installed. Please visit https://rustup.rs/ for instructions.
+This project requires the Rust compiler to be installed. 
+Please visit https://rustup.rs/ for instructions.
 
-To build the necessary binaries, we can just clone the repo, and use
-the provided Makefile to build the project. This will download the
-trusted setup params, and compile the source code.
-
-The following dependencies are required
+The following dependencies are also required
 |Dep/OS| Ubuntu | OSX  |   |  
 |---|---|---|---|
 | gcc, gcc-c++, kernel headers|  build-essential |  |
@@ -22,12 +19,15 @@ The following dependencies are required
 | udev source |  libudev-dev |   | |
 | pkg-config |  pkg-config | brew install pkg-config| |
 
-Ubuntu users can simply
+Ubuntu users can simply run the following to install the required dependencies:
 ```
 sudo apt-get update
 sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
 ```
 
+To build the necessary binaries, we can just clone the repo, and use the 
+provided Makefile to build the project. This will download the trusted 
+setup params, and compile the source code.
 
 ```
 $ git clone https://github.com/darkrenaissance/darkfi
