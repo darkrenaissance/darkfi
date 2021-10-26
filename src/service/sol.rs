@@ -290,7 +290,7 @@ impl SolClient {
             let mut subscriptions = self.subscriptions.lock().await;
             let index = subscriptions.iter().position(|p| p == pubkey);
             if let Some(ind) = index {
-                debug!("Removing subscription from list");
+                debug!(target: "SOL BRIDGE", "Removing subscription from list");
                 subscriptions.remove(ind);
             }
         }
