@@ -21,8 +21,8 @@ The following dependencies are also required
 
 Ubuntu users can simply run the following to install the required dependencies:
 ```
-sudo apt-get update
-sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+$ sudo apt-get update
+$ sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
 ```
 
 To build the necessary binaries, we can just clone the repo, and use the 
