@@ -9,7 +9,7 @@ use prettytable::{format, Table};
 use serde_json::{json, Value};
 
 use drk::cli::{Config, DrkConfig};
-use drk::util::{join_config_path, NetworkName};
+use drk::util::{join_config_path, NetworkName, path::expand_path};
 use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 
 struct Drk {
@@ -331,7 +331,7 @@ async fn main() -> Result<()> {
     .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
+        expand_path(args.value_of("CONFIG").unwrap())?
     } else {
         join_config_path(&PathBuf::from("drk.toml"))?
     };

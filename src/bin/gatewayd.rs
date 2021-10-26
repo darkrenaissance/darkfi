@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
+        expand_path(args.value_of("CONFIG").unwrap())?
     } else {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
