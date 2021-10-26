@@ -213,34 +213,6 @@ fn print_status_change(
 
     new
 }
-pub fn used_key(keys: &Vec<u8>, network: &str) -> Result<bool> {
-    let keypair: Keypair = deserialize(keys)?;
-
-    //TODO: Don't create an electrum client just to check address status
-    let (network, url) = match network {
-        "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
-        "testnet" => (Network::Testnet, "ssl://electrum.blockstream.info:60002"),
-        _ => return Err(Error::NotSupportedNetwork),
-    };
-    let btc_keys = Account::new(&keypair, network);
-    let script = btc_keys.script_pubkey;
-
-    let electrum =
-        ElectrumClient::new(url).map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-
-    let history = electrum
-        .script_get_history(&script)
-        .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-    let balance = electrum
-        .script_get_balance(&script)
-        .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
-
-    if !history.is_empty() && balance.confirmed == 0 {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
 fn sync_interval(avg_block_time: Duration) -> Duration {
     max(avg_block_time / 10, Duration::from_secs(1))
 }
@@ -420,13 +392,15 @@ impl BtcClient {
             match new_status {
                 ScriptStatus::Unseen => continue,
                 ScriptStatus::InMempool => {
+
                     break;
                 }
                 ScriptStatus::Confirmed(inner) => {
+                    //Only break when confirmations happen
                     let confirmations = inner.confirmations();
-                    //if confirmations < 1 {
-                    break;
-                    //}
+                    if confirmations > 1 {
+                        break;
+                    }
                 }
             }
         }
@@ -446,12 +420,13 @@ impl BtcClient {
         cur_balance = client.lock().await.electrum.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
-        if cur_balance.confirmed < prev_balance.confirmed {
+        //FIXME: dev
+        if cur_balance.unconfirmed < prev_balance.unconfirmed {
             return Err(BtcFailed::Notification(
                 "New balance is less than previous balance".into(),
             ));
         }
-
+        //Just check unconfirmed for now
         let amnt = cur_balance.confirmed - prev_balance.confirmed;
         let ui_amnt = amnt;
         send_notification
@@ -514,7 +489,7 @@ impl BtcClient {
 
         let tx_size = transaction.get_size();
 
-        let fee_per_kb = client.estimate_fee(1)?;
+        let fee_per_kb = electrum.estimate_fee(1)?;
         let _fee = tx_size as f64 * fee_per_kb * 100000_f64;
 
         let transaction = Transaction {
