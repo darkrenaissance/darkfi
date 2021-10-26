@@ -125,21 +125,18 @@ To deposit testnet BTC:
 
 ```
 $ drk deposit btc --network bitcoin
-
 ```
 
 To deposit testnet SOL:
 
 ```
 $ drk deposit sol --network solana
-
 ```
 
 To deposit any other asset:
 
 ```
 $ drk deposit [ASSET] --network solana
-
 ```
 
 This command will send a deposit request to the cashier. After running
@@ -229,7 +226,7 @@ changed inside the config files.
 This is the darkfid config file. Your local copy can be found in
 `~/.config/darkfi`.
 
-```
+```toml
 ## darkfid configuration file
 ##
 ## Please make sure you go through all the settings so you can configure
