@@ -20,7 +20,7 @@ jobs:
       - uses: narodnik/matrix-action@main
         with:
           server: 'matrix.dark.fi'
-          room-id: '!MODZOZydPqCRdulXmR:dark.fi'
+          room-id: '!vQYIzdbHTOFwrjzIna:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
           status: 'OK'
           user: 'b1-66er'
@@ -37,4 +37,3 @@ jobs:
           #      This is an *example message* using **markdown** for formatting.\
           #      Use a `\` character at the end of a line to cause a linebreak (the whole message is treated as markdown).\
           #      You can use variables like ${{ github.sha }} anywhere.
-
