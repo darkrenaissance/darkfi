@@ -18,6 +18,7 @@ The following dependencies are also required
 |llvm libs |  llvm-dev | 
 | udev source |  libudev-dev |
 | pkg-config |  pkg-config | 
+| wget |  wget | 
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
