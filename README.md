@@ -10,14 +10,14 @@ This project requires the Rust compiler to be installed.
 Please visit https://rustup.rs/ for instructions.
 
 The following dependencies are also required
-|Dep/OS| Debian-based | OSX  |   |  
-|---|---|---|---|
-| gcc, gcc-c++, kernel headers|  build-essential |  |
-| clang |  clang | brew install llvm  |   |
-| clang libs |  libclang-dev |  contained in llvm |   | 
-|llvm libs |  llvm-dev | contained in llvm  | |
-| udev source |  libudev-dev |   | |
-| pkg-config |  pkg-config | brew install pkg-config| |
+|Dep/OS| Debian-based |   
+|---|---|
+| gcc, gcc-c++, kernel headers|  build-essential | 
+| clang |  clang | 
+| clang libs |  libclang-dev | 
+|llvm libs |  llvm-dev | 
+| udev source |  libudev-dev |
+| pkg-config |  pkg-config | 
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following to install the required dependencies:
 ```
