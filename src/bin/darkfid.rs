@@ -536,7 +536,11 @@ impl Darkfid {
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()> {
+async fn start(
+    executor: Arc<Executor<'_>>,
+    local_cashier: Option<&str>,
+    config: &DarkfidConfig,
+) -> Result<()> {
     let wallet = WalletDb::new(
         expand_path(&config.wallet_path)?.as_path(),
         config.wallet_password.clone(),
@@ -547,21 +551,35 @@ async fn start(executor: Arc<Executor<'_>>, config: &DarkfidConfig) -> Result<()
     let mut cashiers = Vec::new();
     let mut cashier_keys = Vec::new();
 
-    for cashier in config.clone().cashiers {
-        if cashier.public_key.is_empty() {
-            return Err(Error::CashierKeysNotFound);
-        }
+    if let Some(cpub) = local_cashier {
 
-        let cashier_public: jubjub::SubgroupPoint =
-            deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
+        let cashier_public: jubjub::SubgroupPoint = deserialize(&bs58::decode(cpub).into_vec()?)?;
 
         cashiers.push(Cashier {
-            name: cashier.name,
-            rpc_url: cashier.rpc_url,
+            name: "localCashier".into(),
+            rpc_url: "tcp://127.0.0.1:9000".into(),
             public_key: cashier_public,
         });
 
         cashier_keys.push(cashier_public);
+
+    } else {
+        for cashier in config.clone().cashiers {
+            if cashier.public_key.is_empty() {
+                return Err(Error::CashierKeysNotFound);
+            }
+
+            let cashier_public: jubjub::SubgroupPoint =
+                deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
+
+            cashiers.push(Cashier {
+                name: cashier.name,
+                rpc_url: cashier.rpc_url,
+                public_key: cashier_public,
+            });
+
+            cashier_keys.push(cashier_public);
+        }
     }
 
     // Load trusted setup parameters
@@ -628,11 +646,12 @@ async fn main() -> Result<()> {
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
         (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
+        (@arg cashier: --cashier +takes_value "Local cashier public key")
     )
     .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
+        expand_path(args.value_of("CONFIG").unwrap())?
     } else {
         join_config_path(&PathBuf::from("darkfid.toml"))?
     };
@@ -646,6 +665,7 @@ async fn main() -> Result<()> {
     simple_logger::init_with_level(loglevel)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
+
 
     if args.is_present("refresh") {
         debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
@@ -667,6 +687,12 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    let mut local_cashier: Option<&str> = None;
+
+    if args.is_present("cashier") {
+        local_cashier = Some(args.value_of("cashier").unwrap())
+    }
+
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
@@ -682,7 +708,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, &config).await?;
+                start(ex2, local_cashier, &config).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })
