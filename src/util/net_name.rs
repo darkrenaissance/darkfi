@@ -9,6 +9,7 @@ use crate::{
 pub enum NetworkName {
     Solana,
     Bitcoin,
+    Ethereum,
     Empty,
 }
 
@@ -20,6 +21,9 @@ impl std::fmt::Display for NetworkName {
             }
             Self::Bitcoin => {
                 write!(f, "Bitcoin")
+            }
+            Self::Ethereum => {
+                write!(f, "Ethereum")
             }
             Self::Empty => {
                 write!(f, "No Supported Network")
@@ -35,6 +39,7 @@ impl FromStr for NetworkName {
         match s.to_lowercase().as_str() {
             "sol" | "solana" => Ok(NetworkName::Solana),
             "btc" | "bitcoin" => Ok(NetworkName::Bitcoin),
+            "eth" | "ethereum" => Ok(NetworkName::Ethereum),
             _ => Err(crate::Error::NotSupportedNetwork),
         }
     }

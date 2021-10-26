@@ -242,8 +242,8 @@ impl EthClient {
 
         send_notification
             .send(TokenNotification {
-                network: NetworkName::Solana,
-                token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
+                network: NetworkName::Ethereum,
+                token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
                 drk_pub_key,
                 // TODO FIX
                 received_balance: amnt.to_u64_digits()[0],
