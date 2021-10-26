@@ -1,5 +1,8 @@
+use async_std::sync::{Arc, Mutex};
 use std::convert::TryInto;
 
+use async_executor::Executor;
+use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
 use lazy_static::lazy_static;
@@ -8,6 +11,7 @@ use num_bigint::{BigUint, RandBigInt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 
 // An ERC-20 token transfer transaction's data is as follows:
@@ -161,11 +165,22 @@ impl EthTx {
 //
 pub struct EthClient {
     socket_path: String,
+    _subscriptions: Arc<Mutex<Vec<Vec<u8>>>>,
+    notify_channel: (
+        async_channel::Sender<TokenNotification>,
+        async_channel::Receiver<TokenNotification>,
+    ),
 }
 
 impl EthClient {
     pub fn new(socket_path: String) -> Self {
-        Self { socket_path }
+        let notify_channel = async_channel::unbounded();
+        let _subscriptions = Arc::new(Mutex::new(Vec::new()));
+        Self {
+            socket_path,
+            _subscriptions,
+            notify_channel,
+        }
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
@@ -233,6 +248,48 @@ impl EthClient {
     pub async fn send_transaction(&self, tx: &EthTx, passphrase: &str) -> Result<Value> {
         let req = jsonrpc::request(json!("personal_sendTransaction"), json!([tx, passphrase]));
         Ok(self.request(req).await?)
+    }
+}
+
+#[async_trait]
+impl NetworkClient for EthClient {
+    async fn subscribe(
+        self: Arc<Self>,
+        _drk_pub_key: jubjub::SubgroupPoint,
+        _mint_address: Option<String>,
+        _executor: Arc<Executor<'_>>,
+    ) -> Result<TokenSubscribtion> {
+        let private_key: Vec<u8> = vec![];
+        let public_key = String::from("addr");
+        Ok(TokenSubscribtion {
+            private_key,
+            public_key,
+        })
+    }
+
+    async fn subscribe_with_keypair(
+        self: Arc<Self>,
+        _private_key: Vec<u8>,
+        _public_key: Vec<u8>,
+        _drk_pub_key: jubjub::SubgroupPoint,
+        _mint_address: Option<String>,
+        _executor: Arc<Executor<'_>>,
+    ) -> Result<String> {
+        let public_key = String::from("addr");
+        Ok(public_key)
+    }
+
+    async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
+        Ok(self.notify_channel.1.clone())
+    }
+
+    async fn send(
+        self: Arc<Self>,
+        _address: Vec<u8>,
+        _mint: Option<String>,
+        _amount: u64,
+    ) -> Result<()> {
+        Ok(())
     }
 }
 
