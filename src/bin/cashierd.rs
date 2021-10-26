@@ -1,5 +1,4 @@
 use async_std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -53,6 +52,7 @@ struct Cashierd {
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
     networks: Vec<Network>,
+    public_key: String,
 }
 
 #[async_trait]
@@ -101,6 +101,7 @@ impl Cashierd {
             bridge,
             cashier_wallet,
             networks,
+            public_key: String::from(""),
         })
     }
 
@@ -427,14 +428,34 @@ impl Cashierd {
     }
 
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(
-            json!(self
-                .networks
-                .iter()
-                .map(|net| (net.name.to_string(), net.blockchain.to_owned()))
-                .collect::<HashMap<String, String>>()),
-            id,
-        ))
+        let mut resp: serde_json::Value = json!(
+            {
+                "server_version": "0.1.0",
+                "protocol_version": "1.0",
+                "public_key": self.public_key,
+                "networks": [],
+                "hosts": {
+                    "tcp_port": null,
+                    "tls_port": 9000,
+                    "onion_addr": null,
+                    "dns_addr": "testnet.cashier.dark.fi"
+                }
+            }
+        );
+
+        for network in self.networks.iter() {
+            resp.as_object_mut().unwrap()["networks"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!(
+                {
+                    network.name.to_string().to_lowercase():
+                    {"chain": network.blockchain.to_lowercase()}
+                }
+                ));
+        }
+
+        JsonResult::Resp(jsonresp(resp, id))
     }
 
     fn check_token_id(network: &NetworkName, _token_id: &str) -> Result<Option<String>> {
@@ -519,9 +540,7 @@ impl Cashierd {
                     let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
 
                     if network.keypair.is_empty() {
-
-                        if main_keypairs.is_empty()
-                        {
+                        if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
                             self.cashier_wallet.put_main_keys(
                                 &TokenKey {
@@ -674,7 +693,11 @@ async fn start(
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
-    let cashier_public_keys = vec![client.main_keypair.public];
+    let cashier_public = client.main_keypair.public;
+    let cashier_public_str = bs58::encode(&serialize(&cashier_public)).into_string();
+    cashierd.public_key = cashier_public_str.clone();
+
+    let cashier_public_keys = vec![cashier_public];
 
     let state = Arc::new(Mutex::new(State {
         tree: CommitmentTree::empty(),
@@ -686,9 +709,7 @@ async fn start(
     }));
 
     if get_address_flag {
-        let cashier_public = client.main_keypair.public;
-        let cashier_public = bs58::encode(&serialize(&cashier_public)).into_string();
-        println!("Public Key: {}", cashier_public);
+        println!("Public Key: {}", cashier_public_str);
         return Ok(());
     };
 
@@ -720,7 +741,7 @@ async fn main() -> Result<()> {
     .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
-        PathBuf::from(args.value_of("CONFIG").unwrap())
+        expand_path(args.value_of("CONFIG").unwrap())?
     } else {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
