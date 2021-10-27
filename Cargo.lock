@@ -1332,6 +1332,7 @@ dependencies = [
  "prettytable-rs",
  "rand 0.7.3",
  "rand_core 0.5.1",
+ "ripemd160",
  "rocksdb",
  "rusqlite",
  "secp256k1",
@@ -3442,6 +3443,17 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "ripemd160"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eca4ecc81b7f313189bf73ce724400a07da2a6dac19588b03c8bd76a2dcc251"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
