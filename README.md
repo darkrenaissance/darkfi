@@ -9,16 +9,17 @@
 This project requires the Rust compiler to be installed. 
 Please visit https://rustup.rs/ for instructions.
 
-The following dependencies are also required
-|Dependency| Debian-based |   
-|---|---|
-| gcc, gcc-c++, kernel headers|  build-essential | 
-| clang |  clang | 
-| clang libs |  libclang-dev | 
-|llvm libs |  llvm-dev | 
-| udev source |  libudev-dev |
-| pkg-config |  pkg-config | 
-| wget |  wget | 
+The following dependencies are also required:
+
+|          Dependency          |  Debian-based   |   
+|------------------------------|-----------------|
+| gcc, gcc-c++, kernel headers | build-essential | 
+| clang                        | clang           | 
+| clang libs                   | libclang-dev    | 
+| llvm libs                    | llvm-dev        | 
+| udev libs                    | libudev-dev     |
+| pkg-config                   | pkg-config      | 
+| wget                         | wget            | 
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
