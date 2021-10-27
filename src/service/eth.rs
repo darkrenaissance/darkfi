@@ -194,7 +194,6 @@ impl EthClient {
 
     async fn handle_subscribe_request(
         self: Arc<Self>,
-        private: String,
         addr: String,
         drk_pub_key: jubjub::SubgroupPoint,
     ) -> Result<()> {
@@ -239,7 +238,6 @@ impl EthClient {
 
         let amnt = current_balance - prev_balance;
 
-
         send_notification
             .send(TokenNotification {
                 network: NetworkName::Ethereum,
@@ -264,9 +262,11 @@ impl EthClient {
         }
     }
 
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
+    async fn request(&self, r: jsonrpc::JsonRequest) -> EthResult<Value> {
         debug!(target: "ETH RPC", "--> {}", serde_json::to_string(&r)?);
-        let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r)).await
+        let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r))
+            .await
+            .map_err(EthFailed::from)
         {
             Ok(v) => v,
             Err(e) => return Err(e),
@@ -280,17 +280,17 @@ impl EthClient {
 
             JsonResult::Err(e) => {
                 debug!(target: "ETH RPC", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
+                Err(EthFailed::RpcError(e.error.message.to_string()))
             }
 
             JsonResult::Notif(n) => {
                 debug!(target: "ETH RPC", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
+                Err(EthFailed::RpcError("Unexpected reply".to_string()))
             }
         }
     }
 
-    pub async fn import_privkey(&self, key: &str, passphrase: &str) -> Result<Value> {
+    pub async fn import_privkey(&self, key: &str, passphrase: &str) -> EthResult<Value> {
         let req = jsonrpc::request(json!("personal_importRawKey"), json!([key, passphrase]));
         Ok(self.request(req).await?)
     }
@@ -302,17 +302,17 @@ impl EthClient {
     }
     */
 
-    pub async fn block_number(&self) -> Result<Value> {
+    pub async fn block_number(&self) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_blockNumber"), json!([]));
         Ok(self.request(req).await?)
     }
 
-    pub async fn get_eth_balance(&self, acc: &str, block: &str) -> Result<Value> {
+    pub async fn get_eth_balance(&self, acc: &str, block: &str) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_getBalance"), json!([acc, block]));
         Ok(self.request(req).await?)
     }
 
-    pub async fn get_erc20_balance(&self, acc: &str, mint: &str) -> Result<Value> {
+    pub async fn get_erc20_balance(&self, acc: &str, mint: &str) -> EthResult<Value> {
         let tx = EthTx::new(
             acc,
             mint,
@@ -326,7 +326,7 @@ impl EthClient {
         Ok(self.request(req).await?)
     }
 
-    pub async fn get_current_balance(&self, acc: &str, _mint: Option<&str>) -> Result<BigUint> {
+    pub async fn get_current_balance(&self, acc: &str, _mint: Option<&str>) -> EthResult<BigUint> {
         // Latest known block, used to calculate present balance.
         let block = self.block_number().await?;
         let block = block.as_str().unwrap();
@@ -339,7 +339,7 @@ impl EthClient {
         Ok(balance)
     }
 
-    pub async fn send_transaction(&self, tx: &EthTx, passphrase: &str) -> Result<Value> {
+    pub async fn send_transaction(&self, tx: &EthTx, passphrase: &str) -> EthResult<Value> {
         let req = jsonrpc::request(json!("personal_sendTransaction"), json!([tx, passphrase]));
         Ok(self.request(req).await?)
     }
@@ -363,15 +363,14 @@ impl NetworkClient for EthClient {
             .unwrap()
             .to_string();
 
-        let private = private_key.clone();
         let addr_cloned = addr.clone();
         executor
             .spawn(async move {
                 let result = self
-                    .handle_subscribe_request(private, addr_cloned, drk_pub_key)
+                    .handle_subscribe_request(addr_cloned, drk_pub_key)
                     .await;
                 if let Err(e) = result {
-                    error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
+                    error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
             .detach();
@@ -388,11 +387,22 @@ impl NetworkClient for EthClient {
         self: Arc<Self>,
         _private_key: Vec<u8>,
         public_key: Vec<u8>,
-        _drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: jubjub::SubgroupPoint,
         _mint_address: Option<String>,
-        _executor: Arc<Executor<'_>>,
+        executor: Arc<Executor<'_>>,
     ) -> Result<String> {
         let public_key: String = deserialize(&public_key)?;
+
+        let address = public_key.clone();
+        executor
+            .spawn(async move {
+                let result = self.handle_subscribe_request(address, drk_pub_key).await;
+                if let Err(e) = result {
+                    error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
+                }
+            })
+            .detach();
+
         Ok(public_key)
     }
 
@@ -409,6 +419,68 @@ impl NetworkClient for EthClient {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub enum EthFailed {
+    NotEnoughValue(u64),
+    MainAccountNotEnoughValue,
+    BadEthAddress(String),
+    DecodeAndEncodeError(String),
+    RpcError(String),
+    EthClientError(String),
+    MintIsNotValid(String),
+    JsonError(String),
+    ParseError(String),
+}
+
+impl std::error::Error for EthFailed {}
+
+impl std::fmt::Display for EthFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EthFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            EthFailed::MainAccountNotEnoughValue => {
+                write!(f, "Main Account Has no enough value")
+            }
+            EthFailed::BadEthAddress(ref err) => {
+                write!(f, "Bad Eth Address: {}", err)
+            }
+            EthFailed::DecodeAndEncodeError(ref err) => {
+                write!(f, "Decode and decode keys error: {}", err)
+            }
+            EthFailed::RpcError(i) => {
+                write!(f, "Rpc Error: {}", i)
+            }
+            EthFailed::ParseError(i) => {
+                write!(f, "Parse Error: {}", i)
+            }
+            EthFailed::MintIsNotValid(i) => {
+                write!(f, "Given mint is not valid: {}", i)
+            }
+            EthFailed::JsonError(i) => {
+                write!(f, "JsonError: {}", i)
+            }
+            EthFailed::EthClientError(i) => {
+                write!(f, "Eth client error: {}", i)
+            }
+        }
+    }
+}
+
+impl From<crate::error::Error> for EthFailed {
+    fn from(err: crate::error::Error) -> EthFailed {
+        EthFailed::EthClientError(err.to_string())
+    }
+}
+impl From<serde_json::Error> for EthFailed {
+    fn from(err: serde_json::Error) -> EthFailed {
+        EthFailed::JsonError(err.to_string())
+    }
+}
+
+pub type EthResult<T> = std::result::Result<T, EthFailed>;
 
 #[allow(unused_imports)]
 mod tests {
