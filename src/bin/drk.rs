@@ -9,7 +9,7 @@ use prettytable::{format, Table};
 use serde_json::{json, Value};
 
 use drk::cli::{Config, DrkConfig};
-use drk::util::{join_config_path, NetworkName, path::expand_path};
+use drk::util::{join_config_path, path::expand_path, NetworkName};
 use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
 
 struct Drk {
@@ -26,13 +26,27 @@ impl Drk {
     async fn check_network(&self, network: &NetworkName) -> Result<()> {
         let features = self.features().await?;
 
-        if features.as_object().is_none() {
+        if features.as_object().is_none()
+            && features.as_object().unwrap()["networks"]
+                .as_array()
+                .is_none()
+            && features.as_object().unwrap()["networks"]
+                .as_array()
+                .unwrap()
+                .len()
+                == 0
+        {
             return Err(Error::NotSupportedNetwork);
         }
 
-        for (net, _) in features.as_object().unwrap() {
-            if network == &NetworkName::from_str(&net.as_str().to_lowercase())? {
-                return Ok(());
+        for nets in features.as_object().unwrap()["networks"]
+            .as_array()
+            .unwrap()
+        {
+            for (net, _) in nets.as_object().unwrap() {
+                if network == &NetworkName::from_str(net.as_str())? {
+                    return Ok(());
+                }
             }
         }
 
