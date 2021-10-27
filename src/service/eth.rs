@@ -17,7 +17,7 @@ use crate::{
     rpc::jsonrpc,
     rpc::jsonrpc::JsonResult,
     serial::{deserialize, serialize},
-    util::{generate_id, NetworkName},
+    util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
 };
 
@@ -173,6 +173,9 @@ impl EthTx {
 // INFO [10-25|19:47:32.845] IPC endpoint opened: url=/home/x/.ethereum/ropsten/geth.ipc
 //
 pub struct EthClient {
+    // main_keypair (private, public)
+    main_keypair: (String, String),
+    passphrase: String,
     socket_path: String,
     subscriptions: Arc<Mutex<Vec<String>>>,
     notify_channel: (
@@ -182,14 +185,39 @@ pub struct EthClient {
 }
 
 impl EthClient {
-    pub fn new(socket_path: String) -> Arc<Self> {
+    pub fn new(
+        socket_path: String,
+        passphrase: String,
+        main_keypair: (String, String),
+    ) -> Arc<Self> {
         let notify_channel = async_channel::unbounded();
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
         Arc::new(Self {
+            main_keypair,
+            passphrase,
             socket_path,
             subscriptions,
             notify_channel,
         })
+    }
+
+    async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
+
+        debug!(target: "ETH BRIDGE", "Send eth to main wallet");
+
+        let tx = EthTx::new(
+            acc,
+            &self.main_keypair.1,
+            None,
+            None,
+            Some(amount),
+            None,
+            None,
+        );
+
+        self.send_transaction(&tx, &self.passphrase).await?;
+
+        Ok(())
     }
 
     async fn handle_subscribe_request(
@@ -236,7 +264,9 @@ impl EthClient {
             ));
         }
 
-        let amnt = current_balance - prev_balance;
+        let received_balance = current_balance - prev_balance;
+
+        let received_balance_ui = received_balance.clone() / u64::pow(10, decimals as u32);
 
         send_notification
             .send(TokenNotification {
@@ -244,16 +274,20 @@ impl EthClient {
                 token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
                 drk_pub_key,
                 // TODO FIX
-                received_balance: amnt.to_u64_digits()[0],
+                received_balance: received_balance.to_u64_digits()[0],
                 decimals: decimals as u16,
             })
             .await
             .map_err(Error::from)?;
 
+        self.send_eth_to_main_wallet(&addr, received_balance).await?;
+
+        debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
+
         Ok(())
     }
 
-    async fn unsubscribe(self: Arc<Self>, pubkey: &String) {
+    async fn unsubscribe(&self, pubkey: &String) {
         let mut subscriptions = self.subscriptions.lock().await;
         let index = subscriptions.iter().position(|p| p == pubkey);
         if let Some(ind) = index {
@@ -355,15 +389,15 @@ impl NetworkClient for EthClient {
     ) -> Result<TokenSubscribtion> {
         let private_key = generate_privkey();
 
-        // TODO fix
-        let addr: String = self
-            .import_privkey(&private_key, "testpass")
-            .await?
-            .as_str()
-            .unwrap()
-            .to_string();
+        let addr = self.import_privkey(&private_key, &self.passphrase).await?;
 
-        let addr_cloned = addr.clone();
+        let address: String = if addr.as_str().is_some() {
+            addr.as_str().unwrap().to_string()
+        } else {
+            return Err(Error::from(EthFailed::ImportPrivateError));
+        };
+
+        let addr_cloned = address.clone();
         executor
             .spawn(async move {
                 let result = self
@@ -379,7 +413,7 @@ impl NetworkClient for EthClient {
 
         Ok(TokenSubscribtion {
             private_key,
-            public_key: addr,
+            public_key: address,
         })
     }
 
@@ -412,10 +446,30 @@ impl NetworkClient for EthClient {
 
     async fn send(
         self: Arc<Self>,
-        _address: Vec<u8>,
+        address: Vec<u8>,
         _mint: Option<String>,
-        _amount: u64,
+        amount: u64,
     ) -> Result<()> {
+        // Recipient address
+        let dest: String = deserialize(&address)?;
+
+        let decimals = 18;
+
+        // reverse truncate
+        let amount = truncate(amount, decimals as u16, 8)?;
+
+        let tx = EthTx::new(
+            &self.main_keypair.1,
+            &dest,
+            None,
+            None,
+            Some(BigUint::from(amount)),
+            None,
+            None,
+        );
+
+        self.send_transaction(&tx, &self.passphrase).await?;
+
         Ok(())
     }
 }
@@ -431,6 +485,7 @@ pub enum EthFailed {
     MintIsNotValid(String),
     JsonError(String),
     ParseError(String),
+    ImportPrivateError,
 }
 
 impl std::error::Error for EthFailed {}
@@ -461,6 +516,9 @@ impl std::fmt::Display for EthFailed {
             }
             EthFailed::JsonError(i) => {
                 write!(f, "JsonError: {}", i)
+            }
+            EthFailed::ImportPrivateError => {
+                write!(f, "Unable to derive address from private key")
             }
             EthFailed::EthClientError(i) => {
                 write!(f, "Eth client error: {}", i)

@@ -1,7 +1,7 @@
 use num_bigint::BigUint;
 
 use drk::{
-    service::eth::{erc20_transfer_data, generate_privkey, EthClient, EthTx},
+    service::eth::{erc20_transfer_data, EthClient, EthTx},
     util::{decode_base10, encode_base10},
     Result,
 };
@@ -10,15 +10,20 @@ use drk::{
 async fn main() -> Result<()> {
     simple_logger::init_with_level(log::Level::Debug)?;
 
-    let eth = EthClient::new("/home/parazyd/.ethereum/ropsten/geth.ipc".to_string());
+    let acc = "0x113b6648f34f4d0340d04ff171cbcf0b49d47827".to_string();
+    let key = "67cbb73cb293eea5fa2a7025d5479dbd50319010c03fd8821917ad0d9d53276c".to_string();
+
+    let eth = EthClient::new(
+        "/home/parazyd/.ethereum/ropsten/geth.ipc".to_string(),
+        String::from("foobar"),
+        (key, acc.clone()),
+    );
 
     //let key = generate_privkey();
     //let passphrase = "foobar".to_string();
     //let rep = eth.import_privkey(&key, &passphrase).await?;
     //println!("{:#?}", rep);
 
-    let acc = "0x113b6648f34f4d0340d04ff171cbcf0b49d47827".to_string();
-    let _key = "67cbb73cb293eea5fa2a7025d5479dbd50319010c03fd8821917ad0d9d53276c".to_string();
     let passphrase = "foobar".to_string();
 
     // Recipient address
