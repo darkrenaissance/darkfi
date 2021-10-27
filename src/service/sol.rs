@@ -633,7 +633,6 @@ pub enum SolFailed {
     MintIsNotValid(String),
     JsonError(String),
     ParseError(String),
-    SolError(String),
 }
 
 impl std::error::Error for SolFailed {}
@@ -677,9 +676,6 @@ impl std::fmt::Display for SolFailed {
             SolFailed::JsonError(i) => {
                 write!(f, "JsonError: {}", i)
             }
-            SolFailed::SolError(i) => {
-                write!(f, "SolFailed: {}", i)
-            }
         }
     }
 }
@@ -698,7 +694,7 @@ impl From<tungstenite::Error> for SolFailed {
 
 impl From<solana_client::client_error::ClientError> for SolFailed {
     fn from(err: solana_client::client_error::ClientError) -> SolFailed {
-        SolFailed::SolError(err.to_string())
+        SolFailed::SolClientError(err.to_string())
     }
 }
 
@@ -710,7 +706,7 @@ impl From<solana_sdk::program_error::ProgramError> for SolFailed {
 
 impl From<crate::error::Error> for SolFailed {
     fn from(err: crate::error::Error) -> SolFailed {
-        SolFailed::SolError(err.to_string())
+        SolFailed::SolClientError(err.to_string())
     }
 }
 impl From<serde_json::Error> for SolFailed {
