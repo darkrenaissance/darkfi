@@ -53,6 +53,7 @@ struct Cashierd {
     cashier_wallet: Arc<CashierDb>,
     networks: Vec<Network>,
     public_key: String,
+    config: CashierdConfig,
 }
 
 #[async_trait]
@@ -87,7 +88,8 @@ impl Cashierd {
 
         let mut networks = Vec::new();
 
-        for network in config.networks {
+        let cfg = config.clone();
+        for network in cfg.networks {
             networks.push(Network {
                 name: NetworkName::from_str(&network.name)?,
                 blockchain: network.blockchain,
@@ -102,6 +104,7 @@ impl Cashierd {
             cashier_wallet,
             networks,
             public_key: String::from(""),
+            config,
         })
     }
 
@@ -428,17 +431,38 @@ impl Cashierd {
     }
 
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
+        let tcp_port: Option<u16>;
+        let tls_port: Option<u16>;
+        let onionaddr: Option<String>;
+        let dnsaddr: Option<String>;
+
+        if self.config.serve_tls {
+            tls_port = Some(self.config.rpc_listen_address.port());
+            tcp_port = None;
+        } else {
+            tcp_port = Some(self.config.rpc_listen_address.port());
+            tls_port = None;
+        }
+
+        if self.config.dns_addr.ends_with(".onion") {
+            onionaddr = Some(self.config.dns_addr.clone());
+            dnsaddr = None;
+        } else {
+            dnsaddr = Some(self.config.dns_addr.clone());
+            onionaddr = None;
+        }
+
         let mut resp: serde_json::Value = json!(
             {
-                "server_version": "0.1.0",
+                "server_version": env!("CARGO_PKG_VERSION"),
                 "protocol_version": "1.0",
                 "public_key": self.public_key,
                 "networks": [],
                 "hosts": {
-                    "tcp_port": null,
-                    "tls_port": 9000,
-                    "onion_addr": null,
-                    "dns_addr": "testnet.cashier.dark.fi"
+                    "tcp_port": tcp_port,
+                    "tls_port": tls_port,
+                    "onion_addr": onionaddr,
+                    "dns_addr": dnsaddr,
                 }
             }
         );

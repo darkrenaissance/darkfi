@@ -117,6 +117,8 @@ pub struct FeatureNetwork {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CashierdConfig {
+    /// The DNS name of the cashier (can also be an IP, or a .onion address)
+    pub dns_addr: String,
     /// The endpoint where cashierd will bind its RPC socket
     pub rpc_listen_address: SocketAddr,
     /// Whether to listen with TLS or plain TCP

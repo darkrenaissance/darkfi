@@ -3,6 +3,9 @@
 ## Please make sure you go through all the settings so you can configre
 ## your daemon properly.
 
+# The DNS name of the cashier (can also be an IP, or a .onion address)
+dns_addr = "testnet.cashier.dark.fi"
+
 # The endpoint where cashierd will bind its RPC socket
 rpc_listen_address = "127.0.0.1:9000"
 
