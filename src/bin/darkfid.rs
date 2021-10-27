@@ -51,6 +51,14 @@ impl RequestHandler for Darkfid {
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
+        if self.update_balances().await.is_err() {
+            return JsonResult::Err(jsonerr(
+                InternalError,
+                Some("Unable to update balances".into()),
+                req.id,
+            ));
+        }
+
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
@@ -121,6 +129,7 @@ impl Darkfid {
                     .confirm_spend_coin(&own_coin.coin)?;
             }
         }
+
         Ok(())
     }
 
@@ -160,8 +169,6 @@ impl Darkfid {
     // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, (String, String)>> = async {
-            self.update_balances().await?;
-
             let balances = self.client.lock().await.get_balances()?;
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
@@ -512,8 +519,6 @@ impl Darkfid {
             let decimals: usize = 8;
             let amount = decode_base10(amount, decimals, true)?;
 
-            self.update_balances().await?;
-
             self.client
                 .lock()
                 .await
@@ -552,7 +557,6 @@ async fn start(
     let mut cashier_keys = Vec::new();
 
     if let Some(cpub) = local_cashier {
-
         let cashier_public: jubjub::SubgroupPoint = deserialize(&bs58::decode(cpub).into_vec()?)?;
 
         cashiers.push(Cashier {
@@ -562,7 +566,6 @@ async fn start(
         });
 
         cashier_keys.push(cashier_public);
-
     } else {
         for cashier in config.clone().cashiers {
             if cashier.public_key.is_empty() {
@@ -665,7 +668,6 @@ async fn main() -> Result<()> {
     simple_logger::init_with_level(loglevel)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
-
 
     if args.is_present("refresh") {
         debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
