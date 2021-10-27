@@ -55,6 +55,8 @@ pub enum Error {
     BtcFailed(String),
     #[cfg(feature = "sol")]
     SolFailed(String),
+    #[cfg(feature = "eth")]
+    EthFailed(String),
     BridgeError(String),
     ZmqError(String),
 
@@ -133,6 +135,8 @@ impl fmt::Display for Error {
             Error::BtcFailed(ref err) => write!(f, "Btc client failed: {}", err),
             #[cfg(feature = "sol")]
             Error::SolFailed(ref err) => write!(f, "Sol client failed: {}", err),
+            #[cfg(feature = "eth")]
+            Error::EthFailed(ref err) => write!(f, "Eth client failed: {}", err),
             Error::TryIntoError => f.write_str("TryInto error"),
             Error::TryFromError => f.write_str("TryFrom error"),
             Error::TryFromBigIntError => f.write_str("TryFromBigInt error"),
@@ -296,6 +300,13 @@ impl From<crate::service::BtcFailed> for Error {
 impl From<crate::service::SolFailed> for Error {
     fn from(err: crate::service::SolFailed) -> Error {
         Error::SolFailed(err.to_string())
+    }
+}
+
+#[cfg(feature = "eth")]
+impl From<crate::service::EthFailed> for Error {
+    fn from(err: crate::service::EthFailed) -> Error {
+        Error::EthFailed(err.to_string())
     }
 }
 
