@@ -77,7 +77,6 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Initialize...");
         if !self.password.trim().is_empty() {
             let contents = include_str!("../../sql/schema.sql");
-            println!("{}", contents);
             let conn = Connection::open(&self.path)?;
             debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
             conn.pragma_update(None, "key", &self.password)?;
@@ -263,7 +262,7 @@ impl WalletDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        conn.execute("DELETE FROM coins;", [])?;
+        conn.execute("DROP TABLE coins;", [])?;
         Ok(())
     }
 

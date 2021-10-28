@@ -143,8 +143,8 @@ impl CashierDb {
         // unlock database
         conn.pragma_update(None, "key", &self.password)?;
 
-        conn.execute("DELETE FROM deposit_keypairs;", [])?;
-        conn.execute("DELETE FROM withdraw_keypairs;", [])?;
+        conn.execute("DROP TABLE deposit_keypairs;", [])?;
+        conn.execute("DROP TABLE withdraw_keypairs;", [])?;
         Ok(())
     }
 
