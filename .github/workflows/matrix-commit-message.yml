@@ -20,7 +20,7 @@ jobs:
       - uses: narodnik/matrix-action@main
         with:
           server: 'matrix.dark.fi'
-          room-id: '!vQYIzdbHTOFwrjzIna:dark.fi'
+          room-id: '!BQEjGPeQwWMEvvOLtO:dark.fi'
           #access_token: ${{ secrets.MATRIX_TOKEN }}
           status: 'OK'
           user: 'b1-66er'
