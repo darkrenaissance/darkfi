@@ -187,6 +187,11 @@ impl Darkfid {
                 if let Some(symbol) = self.drk_tokenlist.symbol_from_id(balance.token_id)? {
                     let amount = encode_base10(BigUint::from(balance.value), 8);
                     symbols.insert(symbol, (amount, network.to_string()));
+                } else {
+                    // TODO: Fetch decimals, or do we use 8 decimals for all our internal tokens?
+                    // TODO: SQL needs to have the mint address for show, not the internal hash.
+                    let amount = encode_base10(BigUint::from(balance.value), 8);
+                    symbols.insert(balance.token_id.to_string(), (amount, network.to_string()));
                 }
             }
             Ok(symbols)
