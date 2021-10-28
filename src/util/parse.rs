@@ -43,17 +43,16 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, token: &str, _tokenlist: &TokenList) -> Result<String> {
-    let token = token.to_lowercase();
-    let _token = token.as_str();
+pub fn assign_id(network: &str, token: &str, tokenlist: &TokenList) -> Result<String> {
     match NetworkName::from_str(network)? {
         #[cfg(feature = "sol")]
         NetworkName::Solana => {
             // (== 44) can represent a Solana base58 token mint address
-            let id = if _token.len() == 44 {
-                _token.to_string()
+            let id = if token.len() == 44 {
+                token.to_string()
             } else {
-                symbol_to_id(_token, _tokenlist)?
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, tokenlist)?
             };
             Ok(id)
         }
