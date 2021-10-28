@@ -1,4 +1,4 @@
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -53,7 +53,6 @@ impl Balances {
 pub struct WalletDb {
     pub path: PathBuf,
     pub password: String,
-    pub initialized: Mutex<bool>,
 }
 
 impl WalletApi for WalletDb {
@@ -71,29 +70,24 @@ impl WalletDb {
         Ok(Arc::new(Self {
             path: path.to_owned(),
             password,
-            initialized: Mutex::new(false),
         }))
     }
 
-    pub async fn init_db(&self) -> Result<()> {
-        if !*self.initialized.lock().await {
-            if !self.password.trim().is_empty() {
-                let contents = include_str!("../../sql/schema.sql");
-                let conn = Connection::open(&self.path)?;
-                debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
-                conn.pragma_update(None, "key", &self.password)?;
-                conn.execute_batch(contents)?;
-                *self.initialized.lock().await = true;
-            } else {
-                debug!(
-                    target: "WALLETDB",
-                    "Password is empty. You must set a password to use the wallet."
-                );
-                return Err(Error::from(ClientFailed::EmptyPassword));
-            }
+    pub fn init_db(&self) -> Result<()> {
+        debug!(target: "WALLETDB", "Initialize...");
+        if !self.password.trim().is_empty() {
+            let contents = include_str!("../../sql/schema.sql");
+            println!("{}", contents);
+            let conn = Connection::open(&self.path)?;
+            debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
+            conn.pragma_update(None, "key", &self.password)?;
+            conn.execute_batch(contents)?;
         } else {
-            debug!(target: "WALLETDB", "Wallet already initialized.");
-            return Err(Error::from(ClientFailed::WalletInitialized));
+            debug!(
+                target: "WALLETDB",
+                "Password is empty. You must set a password to use the wallet."
+            );
+            return Err(Error::from(ClientFailed::EmptyPassword));
         }
         Ok(())
     }
@@ -240,10 +234,10 @@ impl WalletDb {
 
         conn.execute(
             "INSERT OR REPLACE INTO coins
-            (coin, serial, value, token_id, coin_blind, 
+            (coin, serial, value, token_id, coin_blind,
             valcom_blind, witness, secret, is_spent, nullifier)
             VALUES
-            (:coin, :serial, :value, :token_id, :coin_blind, 
+            (:coin, :serial, :value, :token_id, :coin_blind,
              :valcom_blind, :witness, :secret, :is_spent, :nullifier);",
             named_params! {
                 ":coin": coin,

@@ -57,7 +57,8 @@ impl Client {
         mint_params: bellman::groth16::Parameters<Bls12>,
         spend_params: bellman::groth16::Parameters<Bls12>,
     ) -> Result<Self> {
-        wallet.init_db().await?;
+
+        wallet.init_db()?;
 
         if wallet.get_keypairs()?.is_empty() {
             wallet.key_gen()?;
@@ -345,8 +346,8 @@ impl Client {
         Ok(())
     }
 
-    pub async fn init_db(&self) -> Result<()> {
-        self.wallet.init_db().await
+    pub fn init_db(&self) -> Result<()> {
+        self.wallet.init_db()
     }
 
     pub fn get_own_coins(&self) -> Result<Vec<OwnCoin>> {

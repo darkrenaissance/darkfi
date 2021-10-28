@@ -142,7 +142,7 @@ impl Darkfid {
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
-        match self.client.lock().await.init_db().await {
+        match self.client.lock().await.init_db() {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id)),
         }
