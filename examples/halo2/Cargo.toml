@@ -1,0 +1,15 @@
+[package]
+name = "drk_halo2"
+version = "0.1.0"
+authors = ["Ivan Jelincic <parazyd@dyne.org>"]
+edition = "2021"
+
+[dependencies]
+rand = "0.8.4"
+pasta_curves = "0.2.1"
+halo2 = "=0.1.0-beta.1"
+
+[dependencies.halo2_gadgets]
+git = "https://github.com/parazyd/halo2_gadgets.git"
+rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
+features = ["dev-graph", "test-dependencies"]
