@@ -19,7 +19,7 @@ use halo2_gadgets::{
 };
 use pasta_curves::pallas;
 
-use drk_halo2::{Proof, ProvingKey, VerifyingKey};
+use drk_halo2::proof::{Proof, ProvingKey, VerifyingKey};
 
 #[derive(Clone, Debug)]
 struct Config {
