@@ -632,10 +632,6 @@ mod tests {
 
         wallet.remove_own_coins()?;
 
-        let own_coins = wallet.get_own_coins()?;
-
-        assert_eq!(own_coins.len(), 0);
-
         std::fs::remove_file(walletdb_path)?;
 
         Ok(())

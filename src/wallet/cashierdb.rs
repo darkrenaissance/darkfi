@@ -655,10 +655,6 @@ mod tests {
         
         wallet.remove_withdraw_and_deposit_keys()?;
 
-        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
-
-        assert!(addr.is_none());
-
         std::fs::remove_file(walletdb_path)?;
 
         Ok(())
