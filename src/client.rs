@@ -2,10 +2,10 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 
 use bellman::groth16;
+use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use log::{debug, info, warn};
 use url::Url;
-use blake2s_simd::Params as Blake2sParams;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
@@ -57,7 +57,6 @@ impl Client {
         mint_params: bellman::groth16::Parameters<Bls12>,
         spend_params: bellman::groth16::Parameters<Bls12>,
     ) -> Result<Self> {
-
         wallet.init_db()?;
 
         if wallet.get_keypairs()?.is_empty() {
@@ -270,7 +269,7 @@ impl Client {
                     wallet.clone(),
                     Some(notify.clone()),
                 )
-                    .await;
+                .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -310,7 +309,7 @@ impl Client {
                     wallet.clone(),
                     None,
                 )
-                    .await;
+                .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -455,10 +454,13 @@ impl State {
             debug!(target: "CLIENT STATE", "Update witness");
 
             // Also update all the coin witnesses
-            for (coin, witness) in wallet.get_witnesses()?.iter_mut() {
+            let mut updated_witnesses = wallet.get_witnesses()?;
+
+            updated_witnesses.iter_mut().for_each(|(_, witness)| {
                 witness.append(node).expect("Append to witness");
-                wallet.update_witness(coin, witness.clone())?;
-            }
+            });
+
+            wallet.update_witnesses(updated_witnesses)?;
 
             debug!(target: "CLIENT STATE", "iterate over secret_keys to decrypt note");
 
@@ -479,13 +481,13 @@ impl State {
                     let mut nullifier = [0; 32];
                     nullifier.copy_from_slice(
                         Blake2sParams::new()
-                        .hash_length(32)
-                        .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
-                        .to_state()
-                        .update(&secret.to_bytes())
-                        .update(&note.serial.to_bytes())
-                        .finalize()
-                        .as_bytes(),
+                            .hash_length(32)
+                            .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
+                            .to_state()
+                            .update(&secret.to_bytes())
+                            .update(&note.serial.to_bytes())
+                            .finalize()
+                            .as_bytes(),
                     );
 
                     let nullifier = Nullifier::new(nullifier);
@@ -495,7 +497,7 @@ impl State {
                         note: note.clone(),
                         secret: *secret,
                         witness: witness.clone(),
-                        nullifier
+                        nullifier,
                     };
 
                     wallet.put_own_coins(own_coin)?;

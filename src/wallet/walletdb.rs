@@ -312,23 +312,24 @@ impl WalletDb {
         Ok(witnesses)
     }
 
-    pub fn update_witness(
+    pub fn update_witnesses(
         &self,
-        coin: &[u8],
-        witness: IncrementalWitness<MerkleNode>,
+        witnesses: HashMap<Vec<u8>, IncrementalWitness<MerkleNode>>,
     ) -> Result<()> {
         debug!(target: "WALLETDB", "Updating witness");
 
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
 
-        let witness = self.get_value_serialized(&witness)?;
-        let is_spent = 0;
+        for (coin, witness) in witnesses.iter() {
+            let witness = self.get_value_serialized(witness)?;
+            let is_spent = 0;
 
-        conn.execute(
-            "UPDATE coins SET witness = ?1  WHERE coin = ?2 AND is_spent = ?3",
-            params![witness, coin, is_spent],
-        )?;
+            conn.execute(
+                "UPDATE coins SET witness = ?1  WHERE coin = ?2 AND is_spent = ?3",
+                params![witness, coin, is_spent],
+            )?;
+        }
 
         Ok(())
     }
@@ -690,10 +691,13 @@ mod tests {
         let node2 = MerkleNode::from_coin(&coin2);
         tree.append(node2)?;
 
-        for (coin, witness) in wallet.get_witnesses()?.iter_mut() {
+        let mut updated_witnesses = wallet.get_witnesses()?;
+
+        updated_witnesses.iter_mut().for_each(|(_, witness)| {
             witness.append(node2).expect("Append to witness");
-            wallet.update_witness(&coin.clone(), witness.clone())?;
-        }
+        });
+
+        wallet.update_witnesses(updated_witnesses)?;
 
         for (_, witness) in wallet.get_witnesses()?.iter() {
             assert_eq!(tree.root(), witness.root());
