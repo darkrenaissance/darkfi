@@ -6,8 +6,12 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.4"
+ff = "0.11.0"
 pasta_curves = "0.2.1"
-halo2 = "=0.1.0-beta.1"
+
+[dependencies.halo2]
+version = "=0.1.0-beta.1"
+features = ["dev-graph", "gadget-traces", "sanity-checks"]
 
 [dependencies.halo2_gadgets]
 git = "https://github.com/parazyd/halo2_gadgets.git"

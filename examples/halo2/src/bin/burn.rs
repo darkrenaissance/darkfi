@@ -1,4 +1,5 @@
 use std::iter;
+use std::time::Instant;
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -11,7 +12,7 @@ use halo2::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoints,
+        FixedPoint, FixedPoints,
     },
     poseidon::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives,
@@ -19,15 +20,13 @@ use halo2_gadgets::{
         poseidon::{ConstantLength, P128Pow5T3},
         sinsemilla::S_PERSONALIZATION,
     },
-    sinsemilla,
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::chip::{MerkleChip, MerkleConfig},
         merkle::MerklePath,
     },
     utilities::{
-        gen_const_array, lookup_range_check::LookupRangeCheckConfig, CellValue,
-        UtilitiesInstructions, Var,
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
 use pasta_curves::{
@@ -38,9 +37,13 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 
 use drk_halo2::{
-    constants::sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-    constants::OrchardFixedBases,
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        OrchardFixedBases,
+    },
     crypto::pedersen_commitment,
+    proof::{Proof, ProvingKey, VerifyingKey},
+    spec::i2lebsp,
 };
 
 #[derive(Clone, Debug)]
@@ -63,6 +66,7 @@ impl BurnConfig {
         EccChip::construct(self.ecc_config.clone())
     }
 
+    /*
     fn sinsemilla_chip_1(
         &self,
     ) -> SinsemillaChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
@@ -74,6 +78,7 @@ impl BurnConfig {
     ) -> SinsemillaChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
         SinsemillaChip::construct(self.sinsemilla_config_2.clone())
     }
+    */
 
     fn merkle_chip_1(
         &self,
@@ -87,10 +92,22 @@ impl BurnConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
+    /*
     fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
+    */
 }
+
+// The public input array offsets
+const BURN_NULLIFIER_OFFSET: usize = 0;
+const BURN_VALCOMX_OFFSET: usize = 1;
+const BURN_VALCOMY_OFFSET: usize = 2;
+const BURN_ASSCOMX_OFFSET: usize = 3;
+const BURN_ASSCOMY_OFFSET: usize = 4;
+const BURN_MERKLEROOT_OFFSET: usize = 5;
+const BURN_SIGKEYX_OFFSET: usize = 6;
+const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 struct BurnCircuit {
@@ -101,7 +118,8 @@ struct BurnCircuit {
     coin_blind: Option<pallas::Base>,
     value_blind: Option<pallas::Scalar>,
     asset_blind: Option<pallas::Scalar>,
-    //merkle_path: Option<Vec<(pallas::Base, bool)>>,
+    leaf: Option<pallas::Base>,
+    leaf_pos: Option<u32>,
     merkle_path: Option<[pallas::Base; 32]>,
     sig_secret: Option<pallas::Scalar>,
 }
@@ -264,30 +282,175 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
 
-        /*
-        // Merkle path validity check
-        let anchor = {
-            let path = self.merkle_path.map(|typed_path| {
-                // TODO: Replace with array::map once MSRV is 1.55.0.
-                gen_const_array(|i| typed_path[i].inner())
-            });
-            let merkle_inputs = MerklePath {
-                chip_1: config.merkle_chip_1(),
-                chip_2: config.merkle_chip_2(),
-                domain: OrchardHashDomains::MerkleCrh,
-                leaf_pos: self.pos,
-                path,
-            };
-            let leaf = *cm_old.extract_p().inner();
-            merkle_inputs.calculate_root(layouter.namespace(|| "MerkleCRH"), leaf)?
+        // Construct the merkle chips
+        let merkle_chip_1 = config.merkle_chip_1();
+        let merkle_chip_2 = config.merkle_chip_2();
+
+        // =========
+        // Nullifier
+        // =========
+
+        // TODO
+
+        // ===========
+        // Merkle root
+        // ===========
+        let leaf = self.load_private(
+            layouter.namespace(|| "load leaf"),
+            config.advices[0],
+            self.leaf,
+        )?;
+
+        let path = MerklePath {
+            chip_1: merkle_chip_1,
+            chip_2: merkle_chip_2,
+            domain: OrchardHashDomains::MerkleCrh,
+            leaf_pos: self.leaf_pos,
+            path: self.merkle_path,
         };
 
-        // Enforce the merkle root
-        layouter.constrain_instance(anchor.cell(), config.primary, 5)?;
-        */
+        let computed_final_root =
+            path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
 
+        layouter.constrain_instance(
+            computed_final_root.cell(),
+            config.primary,
+            BURN_MERKLEROOT_OFFSET,
+        )?;
+
+        // ================
+        // Value commitment
+        // ================
+
+        // This constant one is used for multiplication
+        let one = self.load_private(
+            layouter.namespace(|| "load constant one"),
+            config.advices[0],
+            Some(pallas::Base::one()),
+        )?;
+
+        let value = self.load_private(
+            layouter.namespace(|| "load value"),
+            config.advices[0],
+            self.value,
+        )?;
+
+        // v * G_1
+        let (commitment, _) = {
+            let value_commit_v = OrchardFixedBases::ValueCommitV;
+            let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
+            value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+        };
+
+        // r_V * G_2
+        let (blind, _rcv) = {
+            let rcv = self.value_blind;
+            let value_commit_r = OrchardFixedBases::ValueCommitR;
+            let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
+            value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
+        };
+
+        // Constrain the value commitment coordinates
+        let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
+        layouter.constrain_instance(
+            value_commit.inner().x().cell(),
+            config.primary,
+            BURN_VALCOMX_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            value_commit.inner().y().cell(),
+            config.primary,
+            BURN_VALCOMY_OFFSET,
+        )?;
+
+        // ================
+        // Asset commitment
+        // ================
+
+        let asset = self.load_private(
+            layouter.namespace(|| "load asset"),
+            config.advices[0],
+            self.asset,
+        )?;
+
+        // a * G_1
+        let (commitment, _) = {
+            let asset_commit_v = OrchardFixedBases::ValueCommitV;
+            let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
+            asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+        };
+
+        // r_A * G_2
+        let (blind, _rca) = {
+            let rca = self.asset_blind;
+            let asset_commit_r = OrchardFixedBases::ValueCommitR;
+            let asset_commit_r = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_r);
+            asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
+        };
+
+        // Constrain the asset commitment coordinates
+        let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+        layouter.constrain_instance(
+            asset_commit.inner().x().cell(),
+            config.primary,
+            BURN_ASSCOMX_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            asset_commit.inner().y().cell(),
+            config.primary,
+            BURN_ASSCOMY_OFFSET,
+        )?;
+
+        // ========================
+        // Signature key derivation
+        // ========================
+        let (sig_pub, _) = {
+            let spend_auth_g = OrchardFixedBases::SpendAuthG;
+            let spend_auth_g = FixedPoint::from_inner(ecc_chip, spend_auth_g);
+            // TODO: Do we need to load sig_secret somewhere first?
+            spend_auth_g.mul(layouter.namespace(|| "[x_s] SpendAuthG"), self.sig_secret)?
+        };
+
+        layouter.constrain_instance(
+            sig_pub.inner().x().cell(),
+            config.primary,
+            BURN_SIGKEYX_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            sig_pub.inner().y().cell(),
+            config.primary,
+            BURN_SIGKEYY_OFFSET,
+        )?;
+
+        // At this point we've enforced all of our public inputs.
         Ok(())
     }
+}
+
+fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::Base {
+    let domain = primitives::sinsemilla::HashDomain::new(MERKLE_CRH_PERSONALIZATION);
+
+    let pos_bool = i2lebsp::<32>(leaf_pos as u64);
+
+    let mut node = leaf;
+    for (l, (sibling, pos)) in path.iter().zip(pos_bool.iter()).enumerate() {
+        let (left, right) = if *pos {
+            (*sibling, node)
+        } else {
+            (node, *sibling)
+        };
+
+        let l_star = i2lebsp::<10>(l as u64);
+        let left: Vec<_> = left.to_le_bits().iter().by_val().take(255).collect();
+        let right: Vec<_> = right.to_le_bits().iter().by_val().take(255).collect();
+
+        let mut message = l_star.to_vec();
+        message.extend_from_slice(&left);
+        message.extend_from_slice(&right);
+
+        node = domain.hash(message.into_iter()).unwrap();
+    }
+    node
 }
 
 fn main() {
@@ -327,7 +490,11 @@ fn main() {
     }
 
     // Merkle root
-    let merkle_root = pallas::Base::random(&mut OsRng);
+    let leaf = pallas::Base::random(&mut OsRng);
+    use rand::random;
+    let pos = random::<u32>();
+    let path: Vec<_> = (0..32).map(|_| pallas::Base::random(&mut OsRng)).collect();
+    let merkle_root = root(path.clone().try_into().unwrap(), pos, leaf);
 
     // Value and asset commitments
     let value_blind = pallas::Scalar::random(&mut OsRng);
@@ -362,10 +529,26 @@ fn main() {
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
         asset_blind: Some(asset_blind),
-        merkle_path: None,
+        leaf: Some(leaf),
+        leaf_pos: Some(pos),
+        merkle_path: Some(path.try_into().unwrap()),
         sig_secret: Some(sig_secret),
     };
 
     let prover = MockProver::run(k, &circuit, vec![public_inputs.clone()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
+
+    // Actual ZK proof
+    let start = Instant::now();
+    let vk = VerifyingKey::build(k, BurnCircuit::default());
+    let pk = ProvingKey::build(k, BurnCircuit::default());
+    println!("Setup: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
+    let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
+    println!("Prove: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
+    assert!(proof.verify(&vk, &public_inputs).is_ok());
+    println!("Verify: [{:?}]", start.elapsed());
 }
