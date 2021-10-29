@@ -14,7 +14,10 @@ use halo2_gadgets::{
         chip::{EccChip, EccConfig},
         FixedPoint, FixedPoints,
     },
-    poseidon::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
+    poseidon::{
+        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
+        StateWord, Word,
+    },
     primitives,
     primitives::{
         poseidon::{ConstantLength, P128Pow5T3},
@@ -92,11 +95,9 @@ impl BurnConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    /*
     fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
-    */
 }
 
 // The public input array offsets
@@ -111,7 +112,7 @@ const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 struct BurnCircuit {
-    secret_key: Option<pallas::Scalar>,
+    secret_key: Option<pallas::Base>,
     serial: Option<pallas::Base>,
     value: Option<pallas::Base>,
     asset: Option<pallas::Base>,
@@ -289,8 +290,56 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // =========
         // Nullifier
         // =========
+        let hashed_secret_key = self.load_private(
+            layouter.namespace(|| "load sinsemilla(secret key)"),
+            config.advices[0],
+            self.secret_key,
+        )?;
 
-        // TODO
+        let serial = self.load_private(
+            layouter.namespace(|| "load serial"),
+            config.advices[0],
+            self.serial,
+        )?;
+
+        let message = [hashed_secret_key, serial];
+        let hash = {
+            let poseidon_message = layouter.assign_region(
+                || "load message",
+                |mut region| {
+                    let mut message_word = |i: usize| {
+                        let value = message[i].value();
+                        let var = region.assign_advice(
+                            || format!("load message_{}", i),
+                            config.poseidon_config.state()[i],
+                            0,
+                            || value.ok_or(Error::SynthesisError),
+                        )?;
+                        region.constrain_equal(var, message[i].cell())?;
+                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                            var, value,
+                        )))
+                    };
+                    Ok([message_word(0)?, message_word(1)?])
+                },
+            )?;
+
+            let poseidon_hasher = PoseidonHash::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+                ConstantLength::<2>,
+            )?;
+
+            let poseidon_output = poseidon_hasher.hash(
+                layouter.namespace(|| "Poseidon hash (secretkey, serial)"),
+                poseidon_message,
+            )?;
+
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            poseidon_output
+        };
+
+        layouter.constrain_instance(hash.cell(), config.primary, BURN_NULLIFIER_OFFSET)?;
 
         // ===========
         // Merkle root
@@ -463,13 +512,14 @@ fn main() {
     let value = 42;
     let asset = 1;
 
-    // Nullifier = SinsemillaHash(secret_key, serial)
+    // Nullifier = poseidon(sinsemilla(secret_key), serial)
     let domain = primitives::sinsemilla::HashDomain::new(S_PERSONALIZATION);
     let bits_secretkey: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
-    let bits_serial: Vec<bool> = serial.to_le_bits().iter().by_val().collect();
-    let nullifier = domain
-        .hash(iter::empty().chain(bits_secretkey).chain(bits_serial))
-        .unwrap();
+    let hashed_secret_key = domain.hash(iter::empty().chain(bits_secretkey)).unwrap();
+
+    let nullifier = [hashed_secret_key, serial];
+    let nullifier =
+        primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
     // Public key derivation
     let public_key = OrchardFixedBases::SpendAuthG.generator() * secret_key;
@@ -491,8 +541,7 @@ fn main() {
 
     // Merkle root
     let leaf = pallas::Base::random(&mut OsRng);
-    use rand::random;
-    let pos = random::<u32>();
+    let pos = rand::random::<u32>();
     let path: Vec<_> = (0..32).map(|_| pallas::Base::random(&mut OsRng)).collect();
     let merkle_root = root(path.clone().try_into().unwrap(), pos, leaf);
 
@@ -522,7 +571,7 @@ fn main() {
     ];
 
     let circuit = BurnCircuit {
-        secret_key: Some(secret_key),
+        secret_key: Some(hashed_secret_key),
         serial: Some(serial),
         value: Some(pallas::Base::from(value)),
         asset: Some(pallas::Base::from(asset)),
