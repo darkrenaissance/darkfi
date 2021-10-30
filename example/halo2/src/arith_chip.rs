@@ -1,46 +1,16 @@
 use halo2::{
-    circuit::{Layouter, Chip, SimpleFloorPlanner},
-    dev::MockProver,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
-    },
+    circuit::{Chip, Layouter},
+    plonk::{Advice, Column, ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-use halo2_gadgets::{
-    ecc::{
-        chip::{EccChip, EccConfig},
-        FixedPoint, FixedPoints,
-    },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
-    primitives,
-    primitives::{
-        poseidon::{ConstantLength, P128Pow5T3},
-        sinsemilla::S_PERSONALIZATION,
-    },
-    sinsemilla::{
-        chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
-    },
-    utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-    },
-};
-use pasta_curves::{
-    arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve},
-    pallas,
-};
-use std::time::Instant;
+use halo2_gadgets::utilities::{CellValue, Var};
+use pasta_curves::pallas;
 
 type Variable = CellValue<pallas::Base>;
 
 // Replace with use pasta::Fp and pasta::Fq
 type Fp = pallas::Base;
-type Fq = pallas::Scalar;
+//type Fq = pallas::Scalar;
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticChipConfig {
@@ -53,7 +23,7 @@ pub struct ArithmeticChipConfig {
 }
 
 pub struct ArithmeticChip {
-    config: ArithmeticChipConfig
+    config: ArithmeticChipConfig,
 }
 
 impl Chip<Fp> for ArithmeticChip {
@@ -121,14 +91,19 @@ impl ArithmeticChip {
         });
         */
 
-        ArithmeticChipConfig { a_col, b_col, /*permute,*/ s_add, s_mul /*, s_pub*/ }
+        ArithmeticChipConfig {
+            a_col,
+            b_col,
+            /*permute,*/ s_add,
+            s_mul, /*, s_pub*/
+        }
     }
 
     pub fn add(
         &self,
         mut layouter: impl Layouter<Fp>,
         a: Variable,
-        b: Variable
+        b: Variable,
     ) -> Result<Variable, Error> {
         let mut out = None;
         layouter.assign_region(
@@ -171,7 +146,7 @@ impl ArithmeticChip {
         &self,
         mut layouter: impl Layouter<Fp>,
         a: Variable,
-        b: Variable
+        b: Variable,
     ) -> Result<Variable, Error> {
         let mut out = None;
         layouter.assign_region(
@@ -231,4 +206,3 @@ impl ArithmeticChip {
     }
     */
 }
-
