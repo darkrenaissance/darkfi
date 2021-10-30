@@ -1,14 +1,13 @@
 .POSIX:
 
+# Install prefix
 PREFIX = /usr/local
-DLURL = https://testnet.cashier.dark.fi
 
+# Cargo binary
 CARGO = cargo
-DLTOOL = wget -nv --show-progress -O-
-#DLTOOL = curl
 
 # Here it's possible to append "cashierd" and "gatewayd".
-BINS = drk darkfid
+BINS = drk darkfid cashierd gatewayd
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -17,14 +16,11 @@ BINDEPS = \
 	$(shell find token -type f) \
 	$(shell find sql -type f)
 
-all: $(BINS) mint.params spend.params
+all: $(BINS)
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@
 	cp target/release/$@ $@
-
-%.params:
-	$(DLTOOL) $(DLURL)/$@ > $@
 
 test:
 	$(CARGO) test --release --all-features
@@ -44,7 +40,6 @@ install: all
 	do \
 		cp -f example/config/$$i.toml $(DESTDIR)$(PREFIX)/share/doc/darkfi; \
 	done;
-	cp -f mint.params spend.params $(DESTDIR)$(PREFIX)/share/darkfi
 
 uninstall:
 	for i in $(BINS); \
@@ -55,7 +50,7 @@ uninstall:
 	rm -rf $(DESTDIR)$(PREFIX)/share/darkfi
 
 clean:
-	rm -f $(BINS) mint.params spend.params
+	rm -f $(BINS)
 
 distclean: clean
 	rm -rf target
