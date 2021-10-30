@@ -251,6 +251,9 @@ impl Circuit<pallas::Base> for MintCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
+        // Load the Sinsemilla generator lookup table used by the whole circuit.
+        SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
+
         let ecc_chip = config.ecc_chip();
 
         let pub_x = self.load_private(
