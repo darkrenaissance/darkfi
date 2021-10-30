@@ -1,11 +1,12 @@
 use async_std::sync::{Arc, Mutex};
 use std::path::{Path, PathBuf};
 
-use log::*;
+use log::debug;
 use rusqlite::{named_params, params, Connection};
 
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
+use crate::crypto::types::{PublicKey, SecretKey, TokenId};
 use crate::util::NetworkName;
 use crate::{Error, Result};
 
@@ -26,14 +27,14 @@ pub struct TokenKey {
 pub struct WithdrawToken {
     pub token_public_key: Vec<u8>,
     pub network: NetworkName,
-    pub token_id: jubjub::Fr,
+    pub token_id: TokenId,
     pub mint_address: String,
 }
 
 pub struct DepositToken {
-    pub drk_public_key: jubjub::SubgroupPoint,
+    pub drk_public_key: PublicKey,
     pub token_key: TokenKey,
-    pub token_id: jubjub::Fr,
+    pub token_id: TokenId,
     pub mint_address: String,
 }
 
@@ -148,15 +149,13 @@ impl CashierDb {
         Ok(())
     }
 
-
-
     pub fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
-        d_key_public: &jubjub::SubgroupPoint,
-        d_key_private: &jubjub::Fr,
+        d_key_public: &PublicKey,
+        d_key_private: &SecretKey,
         network: &NetworkName,
-        token_id: &jubjub::Fr,
+        token_id: &TokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
@@ -193,11 +192,11 @@ impl CashierDb {
 
     pub fn put_deposit_keys(
         &self,
-        d_key_public: &jubjub::SubgroupPoint,
+        d_key_public: &PublicKey,
         token_key_private: &[u8],
         token_key_public: &[u8],
         network: &NetworkName,
-        token_id: &jubjub::Fr,
+        token_id: &TokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
@@ -232,7 +231,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_withdraw_private_keys(&self) -> Result<Vec<jubjub::Fr>> {
+    pub fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
         debug!(target: "CASHIERDB", "Get withdraw private keys");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -249,10 +248,10 @@ impl CashierDb {
 
         let keys = stmt.query_map(&[(":confirm", &confirm)], |row| Ok(row.get(0)))?;
 
-        let mut private_keys: Vec<jubjub::Fr> = vec![];
+        let mut private_keys: Vec<SecretKey> = vec![];
 
         for k in keys {
-            let private_key: jubjub::Fr = self.get_value_deserialized(k??)?;
+            let private_key: SecretKey = self.get_value_deserialized(k??)?;
             private_keys.push(private_key);
         }
 
@@ -261,7 +260,7 @@ impl CashierDb {
 
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
-        pub_key: &jubjub::SubgroupPoint,
+        pub_key: &PublicKey,
     ) -> Result<Option<WithdrawToken>> {
         debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
@@ -289,7 +288,7 @@ impl CashierDb {
             let addr = addr?;
             let token_public_key = addr.0;
             let network: NetworkName = self.get_value_deserialized(addr.1)?;
-            let token_id: jubjub::Fr = self.get_value_deserialized(addr.2)?;
+            let token_id: TokenId = self.get_value_deserialized(addr.2)?;
             let mint_address: String = self.get_value_deserialized(addr.3)?;
             token_addresses.push(WithdrawToken {
                 token_public_key,
@@ -304,7 +303,7 @@ impl CashierDb {
 
     pub fn get_deposit_token_keys_by_dkey_public(
         &self,
-        d_key_public: &jubjub::SubgroupPoint,
+        d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
@@ -380,10 +379,10 @@ impl CashierDb {
 
         for key in keys_iter {
             let key = key?;
-            let drk_public_key: jubjub::SubgroupPoint = self.get_value_deserialized(key.0)?;
+            let drk_public_key: PublicKey = self.get_value_deserialized(key.0)?;
             let private_key = key.1;
             let public_key = key.2;
-            let token_id: jubjub::Fr = self.get_value_deserialized(key.3)?;
+            let token_id: TokenId = self.get_value_deserialized(key.3)?;
             let mint_address: String = self.get_value_deserialized(key.4)?;
             keys.push(DepositToken {
                 drk_public_key,
@@ -434,8 +433,8 @@ impl CashierDb {
 
         for kp in keypair_iter {
             let kp = kp?;
-            let public: jubjub::SubgroupPoint = self.get_value_deserialized(kp.1)?;
-            let private: jubjub::Fr = self.get_value_deserialized(kp.0)?;
+            let public: PublicKey = self.get_value_deserialized(kp.1)?;
+            let private: SecretKey = self.get_value_deserialized(kp.0)?;
             let keypair = Keypair { public, private };
             keypairs.push(keypair);
         }
@@ -471,7 +470,7 @@ impl CashierDb {
 
     pub fn confirm_deposit_key_record(
         &self,
-        d_key_public: &jubjub::SubgroupPoint,
+        d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");
@@ -501,6 +500,7 @@ impl CashierDb {
 mod tests {
 
     use super::*;
+    use crate::crypto::types::derive_publickey;
     use crate::serial::serialize;
     use crate::util::join_config_path;
 
@@ -567,9 +567,9 @@ mod tests {
 
         let network = NetworkName::Bitcoin;
 
-        let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
-        let token_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let secret2 = SecretKey::random(&mut OsRng);
+        let public2 = derive_publickey(secret2);
+        let token_id = TokenId::random(&mut OsRng);
 
         wallet.put_deposit_keys(
             &public2,
@@ -612,9 +612,9 @@ mod tests {
         let wallet = CashierDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret2: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public2 = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret2;
-        let token_id: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
+        let secret2: SecretKey = SecretKey::random(&mut OsRng);
+        let public2 = derive_publickey(secret2);
+        let token_id: TokenId = TokenId::random(&mut OsRng);
 
         // btc addr testnet
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
@@ -652,7 +652,7 @@ mod tests {
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
 
         assert!(addr.is_some());
-        
+
         wallet.remove_withdraw_and_deposit_keys()?;
 
         std::fs::remove_file(walletdb_path)?;

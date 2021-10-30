@@ -8,6 +8,7 @@ pub mod note;
 pub mod nullifier;
 pub mod schnorr;
 pub mod spend_proof;
+pub mod types;
 pub mod util;
 
 use bellman::groth16;
@@ -25,7 +26,7 @@ pub struct OwnCoin {
     pub note: note::Note,
     pub secret: jubjub::Fr,
     pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
-    pub nullifier: nullifier::Nullifier 
+    pub nullifier: nullifier::Nullifier,
 }
 
 pub type OwnCoins = Vec<OwnCoin>;

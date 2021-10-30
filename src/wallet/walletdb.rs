@@ -10,8 +10,13 @@ use rusqlite::{named_params, params, Connection};
 use super::WalletApi;
 use crate::client::ClientFailed;
 use crate::crypto::{
-    coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note,
-    nullifier::Nullifier, OwnCoin, OwnCoins,
+    coin::Coin,
+    merkle::IncrementalWitness,
+    merkle_node::MerkleNode,
+    note::Note,
+    nullifier::Nullifier,
+    types::{PublicKey, SecretKey, TokenId},
+    OwnCoin, OwnCoins,
 };
 use crate::serial;
 use crate::{Error, Result};
@@ -20,13 +25,13 @@ pub type WalletPtr = Arc<WalletDb>;
 
 #[derive(Debug, Clone)]
 pub struct Keypair {
-    pub public: jubjub::SubgroupPoint,
-    pub private: jubjub::Fr,
+    pub public: PublicKey,
+    pub private: SecretKey,
 }
 
 #[derive(Debug, Clone)]
 pub struct Balance {
-    pub token_id: jubjub::Fr,
+    pub token_id: TokenId,
     pub value: u64,
     pub nullifier: Nullifier,
 }
@@ -98,8 +103,8 @@ impl WalletDb {
         let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
         let key_check = stmt.exists(params!["0"])?;
         if !key_check {
-            let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-            let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+            let secret: SecretKey = SecretKey::random(&mut OsRng);
+            let public: PublicKey = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
             self.put_keypair(&public, &secret)?;
         } else {
             debug!(target: "WALLETDB", "Keys already exist.");
@@ -108,11 +113,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn put_keypair(
-        &self,
-        key_public: &jubjub::SubgroupPoint,
-        key_private: &jubjub::Fr,
-    ) -> Result<()> {
+    pub fn put_keypair(&self, key_public: &PublicKey, key_private: &SecretKey) -> Result<()> {
         let conn = Connection::open(&self.path)?;
 
         conn.pragma_update(None, "key", &self.password)?;
@@ -140,8 +141,8 @@ impl WalletDb {
             let key = key?;
             let public = key.0;
             let private = key.1;
-            let public: jubjub::SubgroupPoint = self.get_value_deserialized(public)?;
-            let private: jubjub::Fr = self.get_value_deserialized(private)?;
+            let public: PublicKey = self.get_value_deserialized(public)?;
+            let private: SecretKey = self.get_value_deserialized(private)?;
             keypairs.push(Keypair { public, private });
         }
 
@@ -194,7 +195,7 @@ impl WalletDb {
             };
 
             let witness = self.get_value_deserialized(row.6)?;
-            let secret: jubjub::Fr = self.get_value_deserialized(row.7)?;
+            let secret: SecretKey = self.get_value_deserialized(row.7)?;
             let nullifier: Nullifier = self.get_value_deserialized(row.8)?;
 
             let oc = OwnCoin {
@@ -353,7 +354,7 @@ impl WalletDb {
         for row in rows {
             let row = row?;
             let value: u64 = row.0;
-            let token_id: jubjub::Fr = self.get_value_deserialized(row.1)?;
+            let token_id: TokenId = self.get_value_deserialized(row.1)?;
             let nullifier: Nullifier = self.get_value_deserialized(row.2)?;
             balances.add(&Balance {
                 token_id,
@@ -365,7 +366,7 @@ impl WalletDb {
         Ok(balances)
     }
 
-    pub fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
+    pub fn get_token_id(&self) -> Result<Vec<TokenId>> {
         debug!(target: "WALLETDB", "Get token ID...");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -386,7 +387,7 @@ impl WalletDb {
         Ok(token_ids)
     }
 
-    pub fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
+    pub fn token_id_exists(&self, token_id: &TokenId) -> Result<bool> {
         debug!(target: "WALLETDB", "Check tokenID exists");
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -410,9 +411,13 @@ impl WalletDb {
 
 #[cfg(test)]
 mod tests {
-
+    // TODO: Clean up, there's a lot of duplicated code here.
     use super::*;
-    use crate::crypto::{coin::Coin, OwnCoin};
+    use crate::crypto::{
+        coin::Coin,
+        types::{derive_publickey, CoinBlind, NullifierSerial, ValueCommitBlind},
+        OwnCoin,
+    };
     use crate::util::join_config_path;
     use ff::PrimeField;
 
@@ -439,19 +444,19 @@ mod tests {
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let secret = SecretKey::random(&mut OsRng);
+        let public = derive_publickey(secret);
 
         wallet.put_keypair(&public, &secret)?;
 
-        let token_id = jubjub::Fr::random(&mut OsRng);
+        let token_id = TokenId::random(&mut OsRng);
 
         let note = Note {
-            serial: jubjub::Fr::random(&mut OsRng),
+            serial: NullifierSerial::random(&mut OsRng),
             value: 110,
             token_id,
-            coin_blind: jubjub::Fr::random(&mut OsRng),
-            valcom_blind: jubjub::Fr::random(&mut OsRng),
+            coin_blind: CoinBlind::random(&mut OsRng),
+            valcom_blind: ValueCommitBlind::random(&mut OsRng),
         };
 
         let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
@@ -497,19 +502,19 @@ mod tests {
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let secret = SecretKey::random(&mut OsRng);
+        let public = derive_publickey(secret);
 
         wallet.put_keypair(&public, &secret)?;
 
-        let token_id = jubjub::Fr::random(&mut OsRng);
+        let token_id = TokenId::random(&mut OsRng);
 
         let note = Note {
-            serial: jubjub::Fr::random(&mut OsRng),
+            serial: NullifierSerial::random(&mut OsRng),
             value: 110,
             token_id,
-            coin_blind: jubjub::Fr::random(&mut OsRng),
-            valcom_blind: jubjub::Fr::random(&mut OsRng),
+            coin_blind: CoinBlind::random(&mut OsRng),
+            valcom_blind: ValueCommitBlind::random(&mut OsRng),
         };
 
         let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
@@ -552,8 +557,8 @@ mod tests {
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let secret = SecretKey::random(&mut OsRng);
+        let public = derive_publickey(secret);
 
         wallet.put_keypair(&public, &secret)?;
 
@@ -574,17 +579,17 @@ mod tests {
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let secret = SecretKey::random(&mut OsRng);
+        let public = derive_publickey(secret);
 
         wallet.put_keypair(&public, &secret)?;
 
         let note = Note {
-            serial: jubjub::Fr::random(&mut OsRng),
+            serial: NullifierSerial::random(&mut OsRng),
             value: 110,
-            token_id: jubjub::Fr::random(&mut OsRng),
-            coin_blind: jubjub::Fr::random(&mut OsRng),
-            valcom_blind: jubjub::Fr::random(&mut OsRng),
+            token_id: TokenId::random(&mut OsRng),
+            coin_blind: CoinBlind::random(&mut OsRng),
+            valcom_blind: ValueCommitBlind::random(&mut OsRng),
         };
 
         let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
@@ -645,19 +650,19 @@ mod tests {
         let wallet = WalletDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret: jubjub::Fr = jubjub::Fr::random(&mut OsRng);
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+        let secret = SecretKey::random(&mut OsRng);
+        let public = derive_publickey(secret);
 
         wallet.put_keypair(&public, &secret)?;
 
         let mut tree = crate::crypto::merkle::CommitmentTree::empty();
 
         let note = Note {
-            serial: jubjub::Fr::random(&mut OsRng),
+            serial: NullifierSerial::random(&mut OsRng),
             value: 110,
-            token_id: jubjub::Fr::random(&mut OsRng),
-            coin_blind: jubjub::Fr::random(&mut OsRng),
-            valcom_blind: jubjub::Fr::random(&mut OsRng),
+            token_id: TokenId::random(&mut OsRng),
+            coin_blind: CoinBlind::random(&mut OsRng),
+            valcom_blind: ValueCommitBlind::random(&mut OsRng),
         };
 
         let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
