@@ -1,15 +1,46 @@
 use halo2::{
-    circuit::{SimpleFloorPlanner, Cell, Chip, Layouter},
-    pasta::{EqAffine, Fp, pallas},
-    plonk::{Advice, Any, Circuit, Column, ConstraintSystem, Error, Expression, Selector, create_proof, verify_proof, keygen_vk, keygen_pk/*, Permutation*/},
-    poly::{commitment::{Blind, Params}, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    circuit::{Layouter, Chip, SimpleFloorPlanner},
+    dev::MockProver,
+    plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
+    },
+    poly::Rotation,
 };
-use halo2_utilities::{CellValue, Var};
-use group::Curve;
+use halo2_gadgets::{
+    ecc::{
+        chip::{EccChip, EccConfig},
+        FixedPoint, FixedPoints,
+    },
+    poseidon::{
+        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
+        StateWord, Word,
+    },
+    primitives,
+    primitives::{
+        poseidon::{ConstantLength, P128Pow5T3},
+        sinsemilla::S_PERSONALIZATION,
+    },
+    sinsemilla::{
+        chip::{SinsemillaChip, SinsemillaConfig},
+        merkle::chip::{MerkleChip, MerkleConfig},
+        merkle::MerklePath,
+    },
+    utilities::{
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+    },
+};
+use pasta_curves::{
+    arithmetic::{CurveAffine, Field},
+    group::{ff::PrimeFieldBits, Curve},
+    pallas,
+};
 use std::time::Instant;
 
 type Variable = CellValue<pallas::Base>;
+
+// Replace with use pasta::Fp and pasta::Fq
+type Fp = pallas::Base;
+type Fq = pallas::Scalar;
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticChipConfig {

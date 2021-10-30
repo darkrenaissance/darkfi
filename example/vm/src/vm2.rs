@@ -1,29 +1,43 @@
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    pasta::pallas,
-    plonk,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error as PlonkError, Instance as InstanceColumn,
-        Selector,
-    },
-};
 use std::collections::HashMap;
 use std::{convert::TryInto, time::Instant};
 
-use halo2_ecc::{
-    chip::{EccChip, EccConfig},
-    gadget::FixedPoint,
+use halo2::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    dev::MockProver,
+    plonk,
+    plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector,
+    },
+    poly::Rotation,
 };
-use halo2_poseidon::{
-    gadget::{Hash as PoseidonHash, Word},
-    pow5t3::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig, StateWord},
-    primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
+use halo2_gadgets::{
+    ecc::{
+        chip::{EccChip, EccConfig},
+        FixedPoint, FixedPoints,
+    },
+    poseidon::{
+        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
+        StateWord, Word,
+    },
+    primitives,
+    primitives::{
+        poseidon::{ConstantLength, P128Pow5T3},
+        sinsemilla::S_PERSONALIZATION,
+    },
+    sinsemilla::{
+        chip::{SinsemillaChip, SinsemillaConfig},
+        merkle::chip::{MerkleChip, MerkleConfig},
+        merkle::MerklePath,
+    },
+    utilities::{
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+    },
 };
-use halo2_utilities::{
-    lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+use pasta_curves::{
+    arithmetic::{CurveAffine, Field},
+    group::{ff::PrimeFieldBits, Curve},
+    pallas,
 };
-use orchard::constants::{OrchardCommitDomains, OrchardFixedBases, OrchardHashDomains};
-use sinsemilla::chip::{SinsemillaChip, SinsemillaConfig};
 
 use crate::arith_chip::{ArithmeticChipConfig, ArithmeticChip};
 use crate::error::{Error, Result};
@@ -260,7 +274,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
-    ) -> std::result::Result<(), PlonkError> {
+    ) -> std::result::Result<(), plonk::Error> {
         let ecc_chip = config.ecc_chip();
         let arith_chip = config.arithmetic_chip();
 
