@@ -1,0 +1,56 @@
+# :set syntax=zk
+# :source scripts/zk.vim
+constant EcFixedPoint VALUE_COMMIT_VALUE
+constant EcFixedPoint VALUE_COMMIT_RANDOM
+constant EcFixedPoint SPEND_AUTH_G
+
+contract Burn {
+    Base secret
+    Base serial
+    MerklePath path
+    Base leaf
+
+    Base value
+    Base asset
+    Scalar value_blind
+    Scalar asset_blind
+    Scalar sig_secret
+}
+
+circuit Burn {
+    # nullifier = Hash(secret, serial)
+    poseidon_hash nullifier secret serial
+    constrain_instance nullifier
+
+    # root = calculate_root(path, leaf)
+    calculate_merkle_root root path leaf
+    constrain_instance root
+
+    # value_commit = PedersenCommit(value, value_blind);
+    ec_mul_short vcv value VALUE_COMMIT_VALUE
+    ec_mul vcr value_blind VALUE_COMMIT_RANDOM
+    ec_add value_commit vcv vcr
+    ec_get_x x value_commit
+    ec_get_y y value_commit
+    constrain_instance x
+    constrain_instance y
+
+    # asset_commit = PedersenCommit(asset, asset_blind);
+    ec_mul_short acv asset VALUE_COMMIT_VALUE
+    ec_mul acr asset_blind VALUE_COMMIT_RANDOM
+    ec_add asset_commit acv acr
+    ec_get_x x asset_commit
+    ec_get_y y asset_commit
+    constrain_instance x
+    constrain_instance y
+
+    # spend_auth_public = sig_secret * SPEND_AUTH_G
+    ec_mul spend_auth_public sig_secret SPEND_AUTH_G
+    ec_get_x sx spend_auth_public
+    ec_get_y sy spend_auth_public
+    constrain_instance sx
+    constrain_instance sy
+
+    # return (nullifier, root, value_commit, value_blind);
+}
+
