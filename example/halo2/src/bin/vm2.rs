@@ -31,7 +31,7 @@ use halo2_gadgets::{
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Group, Curve},
+    group::{ff::PrimeFieldBits, Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -46,7 +46,7 @@ use drk_halo2::{
     proof::{Proof, ProvingKey, VerifyingKey},
     serial::Decodable,
     spec::i2lebsp,
-    vm2
+    vm2,
 };
 
 fn main() -> std::result::Result<(), failure::Error> {
@@ -91,7 +91,8 @@ fn main() -> std::result::Result<(), failure::Error> {
         coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
     }
 
-    let coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash([*coords.x(), *coords.y()]);
+    let coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>)
+        .hash([*coords.x(), *coords.y()]);
 
     let value_commit = pedersen_commitment(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();

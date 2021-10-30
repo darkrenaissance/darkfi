@@ -41,6 +41,6 @@ circuit Mint {
     constrain_instance x
     constrain_instance y
 
-    # return (coin, value_commit, value_blind);
+    # return (coin, value_commit, asset_commit);
 }
 

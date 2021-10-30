@@ -34,6 +34,7 @@ pub enum ZkType {
     Scalar,
     EcPoint,
     EcFixedPoint,
+    MerklePath,
 }
 
 type ArgIdx = usize;
@@ -96,6 +97,7 @@ pub struct ZkCircuit<'a> {
     // For each type create a separate stack
     pub witness_base: HashMap<String, Option<pallas::Base>>,
     pub witness_scalar: HashMap<String, Option<pallas::Scalar>>,
+    pub witness_merkle_path: HashMap<String, (Option<u32>, Option<[pallas::Base; 32]>)>,
 }
 
 impl<'a> ZkCircuit<'a> {
@@ -106,6 +108,7 @@ impl<'a> ZkCircuit<'a> {
     ) -> Self {
         let mut witness_base = HashMap::new();
         let mut witness_scalar = HashMap::new();
+        let mut witness_merkle_path = HashMap::new();
         for (name, type_id) in contract.witness.iter() {
             match type_id {
                 ZkType::Base => {
@@ -113,6 +116,9 @@ impl<'a> ZkCircuit<'a> {
                 }
                 ZkType::Scalar => {
                     witness_scalar.insert(name.clone(), None);
+                }
+                ZkType::MerklePath => {
+                    witness_merkle_path.insert(name.clone(), (None, None));
                 }
                 _ => {
                     unimplemented!();
@@ -126,6 +132,7 @@ impl<'a> ZkCircuit<'a> {
             contract,
             witness_base,
             witness_scalar,
+            witness_merkle_path,
         }
     }
 
@@ -156,6 +163,25 @@ impl<'a> ZkCircuit<'a> {
         }
         return Err(Error::InvalidParamName);
     }
+
+    pub fn witness_merkle_path(
+        &mut self,
+        name: &str,
+        leaf_pos: u32,
+        path: [pallas::Base; 32],
+    ) -> Result<()> {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
+                continue;
+            }
+            if *type_id != ZkType::Scalar {
+                return Err(Error::InvalidParamType);
+            }
+            *self.witness_merkle_path.get_mut(name).unwrap() = (Some(leaf_pos), Some(path));
+            return Ok(());
+        }
+        return Err(Error::InvalidParamName);
+    }
 }
 
 impl<'a> UtilitiesInstructions<pallas::Base> for ZkCircuit<'a> {
@@ -180,6 +206,11 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 .witness_scalar
                 .keys()
                 .map(|key| (key.clone(), None))
+                .collect(),
+            witness_merkle_path: self
+                .witness_scalar
+                .keys()
+                .map(|key| (key.clone(), (None, None)))
                 .collect(),
         }
     }
@@ -268,6 +299,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         let mut stack_scalar = Vec::new();
         let mut stack_ec_point = Vec::new();
         let mut stack_ec_fixed_point = Vec::new();
+        let mut stack_merkle_path = Vec::new();
 
         // Load constants first onto the stacks
         for (variable, type_id) in self.constants.iter() {
@@ -284,6 +316,9 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 ZkType::EcFixedPoint => {
                     let value = self.const_fixed_points[variable];
                     stack_ec_fixed_point.push(value);
+                }
+                ZkType::MerklePath => {
+                    unimplemented!();
                 }
             }
         }
@@ -309,6 +344,13 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 }
                 ZkType::EcFixedPoint => {
                     unimplemented!();
+                }
+                ZkType::MerklePath => {
+                    let value = self
+                        .witness_merkle_path
+                        .get(variable)
+                        .expect("witness merkle path set");
+                    stack_merkle_path.push(value.clone());
                 }
             }
         }
