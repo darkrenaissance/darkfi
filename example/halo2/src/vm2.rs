@@ -82,6 +82,10 @@ pub struct MintConfig {
     pub ecc_config: EccConfig,
     pub merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     pub merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub sinsemilla_config_1:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub sinsemilla_config_2:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     pub poseidon_config: PoseidonConfig<pallas::Base>,
     pub arith_config: ArithmeticChipConfig,
 }
@@ -347,6 +351,8 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
             ecc_config,
             merkle_config_1,
             merkle_config_2,
+            sinsemilla_config_1,
+            sinsemilla_config_2,
             poseidon_config,
             arith_config,
         }
@@ -357,6 +363,9 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), plonk::Error> {
+        // Load the Sinsemilla generator lookup table used by the whole circuit.
+        SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
+
         let arith_chip = config.arithmetic_chip();
 
         // Construct the ECC chip.
