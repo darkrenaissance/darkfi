@@ -6,5 +6,5 @@ pub mod error;
 pub mod proof;
 pub mod serial;
 pub mod spec;
-//pub mod vm2;
-//pub mod vm2_serial;
+pub mod vm2;
+pub mod vm2_serial;

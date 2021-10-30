@@ -42,6 +42,16 @@ use pasta_curves::{
 use crate::arith_chip::{ArithmeticChipConfig, ArithmeticChip};
 use crate::error::{Error, Result};
 
+use crate::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        OrchardFixedBases,
+    },
+    crypto::pedersen_commitment,
+    proof::{Proof, ProvingKey, VerifyingKey},
+    spec::i2lebsp,
+};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ZkType {
     Base,
@@ -251,7 +261,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
 
         let poseidon_config = PoseidonChip::configure(
             meta,
-            OrchardNullifier,
+            P128Pow5T3,
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
@@ -347,7 +357,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                                     || val.ok_or(plonk::Error::SynthesisError),
                                 )?;
                                 region.constrain_equal(var, messages[i].cell())?;
-                                Ok(Word::<_, _, OrchardNullifier, 3, 2>::from_inner(
+                                Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(
                                     StateWord::new(var, val),
                                 ))
                             };
@@ -394,10 +404,10 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     let fixed_point = stack_ec_fixed_point[*point_idx];
 
                     // This constant one is used for multiplication
-                    let one = self.load_constant(
-                        layouter.namespace(|| "constant one"),
+                    let one = self.load_private(
+                        layouter.namespace(|| "load constant one"),
                         config.advices[0],
-                        pallas::Base::one(),
+                        Some(pallas::Base::one()),
                     )?;
 
                     // v * G_1
@@ -432,7 +442,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     let lhs = &stack_ec_point[*lhs_idx];
                     let rhs = &stack_ec_point[*rhs_idx];
 
-                    let result = lhs.add(layouter.namespace(|| "valuecommit"), &rhs)?;
+                    let result = lhs.add(layouter.namespace(|| "valuecommit"), rhs)?;
                     stack_ec_point.push(result);
                 }
                 ZkFunctionCall::EcGetX(arg_idx) => {
