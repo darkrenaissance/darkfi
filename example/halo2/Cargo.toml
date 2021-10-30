@@ -8,6 +8,7 @@ edition = "2021"
 rand = "0.8.4"
 ff = "0.11.0"
 pasta_curves = "0.2.1"
+hex = "0.4.3"
 
 [dependencies.halo2]
 version = "=0.1.0-beta.1"
