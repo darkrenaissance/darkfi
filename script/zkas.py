@@ -198,8 +198,8 @@ class DynamicTracer:
 
                 stack_type_id = stack[variable]
                 if stack_type_id != type_id:
-                    type_name = type_id_to_name[type]
-                    stack_type_name = type_id_to_name[stack_type]
+                    type_name = type_id_to_name[type_id]
+                    stack_type_name = type_id_to_name[stack_type_id]
                     raise CompileException(
     f"variable '{variable}' has incorrect type. "
     f"Found {type_name} but expected variable of "
