@@ -1,47 +1,19 @@
 [package]
-name = "halo2_examples"
+name = "drk_halo2"
 version = "0.1.0"
-authors = ["narodnik <x@x.org>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Ivan Jelincic <parazyd@dyne.org>"]
+edition = "2021"
 
 [dependencies]
-ff = "0.10"
-group = "0.10"
-pasta_curves = "0.1.2"
-bitvec = "0.22"
 rand = "0.8.4"
-arrayvec = "0.7.0"
-lazy_static = "1"
-bigint = "4"
-subtle = "2.3"
-halo2 = "0.0"
+ff = "0.11.0"
+pasta_curves = "0.2.1"
 
-[patch.crates-io]
-halo2 = { git = "https://github.com/zcash/halo2.git", rev = "27c4187673a9c6ade13fbdbd4f20955530c22d7f" }
+[dependencies.halo2]
+version = "=0.1.0-beta.1"
+features = ["dev-graph", "gadget-traces", "sanity-checks"]
 
-[dependencies.halo2_poseidon]
-git = "https://github.com/parazyd/orchard.git"
-#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
-rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
-features = ["halo2"]
-
-[dependencies.halo2_utilities]
-git = "https://github.com/parazyd/orchard.git"
-#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
-rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
-
-[dependencies.halo2_ecc]
-git = "https://github.com/parazyd/orchard.git"
-#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
-rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
-
-[dependencies.sinsemilla]
-git = "https://github.com/parazyd/orchard.git"
-#rev = "0d14f2390734e4710fc24a976f037dae3a6e7ac8"
-rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
-
- [dependencies.orchard]
-git = "https://github.com/parazyd/orchard.git"
-rev = "f9cc01c21010b31988129f9cbc2ca8c0bdbf2ee9"
+[dependencies.halo2_gadgets]
+git = "https://github.com/parazyd/halo2_gadgets.git"
+rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
+features = ["dev-graph", "test-dependencies"]

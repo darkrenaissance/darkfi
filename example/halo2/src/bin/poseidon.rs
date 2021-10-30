@@ -1,55 +1,61 @@
-use std::convert::TryInto;
 use std::time::Instant;
 
 use halo2::{
-    circuit::{floor_planner, Layouter},
-    pasta::{vesta, Fp},
-    plonk,
+    circuit::{Layouter, SimpleFloorPlanner},
+    dev::MockProver,
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
     },
-    poly::{commitment, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite},
+    poly::Rotation,
 };
-
-use halo2_poseidon::{
-    gadget::{Hash as PoseidonHash, Word},
-    pow5t3::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig, StateWord},
-    primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
+use halo2_gadgets::{
+    poseidon::{
+        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
+        StateWord, Word,
+    },
+    primitives,
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
+    utilities::{copy, CellValue, UtilitiesInstructions, Var},
 };
-use halo2_utilities::{copy, CellValue, UtilitiesInstructions, Var};
+use pasta_curves::pallas;
 
-const K: u32 = 6;
+use drk_halo2::proof::{Proof, ProvingKey, VerifyingKey};
 
 #[derive(Clone, Debug)]
 struct Config {
     primary: Column<InstanceColumn>,
     q_add: Selector,
     advices: [Column<Advice>; 10],
-    poseidon_config: PoseidonConfig<Fp>,
+    poseidon_config: PoseidonConfig<pallas::Base>,
+}
+
+impl Config {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+        PoseidonChip::construct(self.poseidon_config.clone())
+    }
 }
 
 #[derive(Default, Debug)]
 struct HashCircuit {
-    a: Option<Fp>, // First input for hash
-    b: Option<Fp>, // Second input for hash
-    c: Option<Fp>, // c is summed with hash
+    a: Option<pallas::Base>,
+    b: Option<pallas::Base>,
+    c: Option<pallas::Base>,
 }
 
-impl UtilitiesInstructions<Fp> for HashCircuit {
-    type Var = CellValue<Fp>;
+impl UtilitiesInstructions<pallas::Base> for HashCircuit {
+    type Var = CellValue<pallas::Base>;
 }
 
-impl Circuit<Fp> for HashCircuit {
+impl Circuit<pallas::Base> for HashCircuit {
     type Config = Config;
-    type FloorPlanner = floor_planner::V1;
+    type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
-        // 10 advice columns
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+        // Advice columns used in the circuit
         let advices = [
             meta.advice_column(),
             meta.advice_column(),
@@ -63,9 +69,8 @@ impl Circuit<Fp> for HashCircuit {
             meta.advice_column(),
         ];
 
-        // Addition of two field elements: poseidon_hash(a, b) + c
+        // Addition of two field elements
         let q_add = meta.selector();
-
         meta.create_gate("poseidon_hash(a, b) + c", |meta| {
             let q_add = meta.query_selector(q_add);
             let sum = meta.query_advice(advices[6], Rotation::cur());
@@ -75,13 +80,20 @@ impl Circuit<Fp> for HashCircuit {
             vec![q_add * (hash + c - sum)]
         });
 
+        // Instance column used for public inputs
         let primary = meta.instance_column();
         meta.enable_equality(primary.into());
 
+        // Permutation over all advice columns
         for advice in advices.iter() {
             meta.enable_equality((*advice).into());
         }
 
+        // Poseidon requires four advice columns, while ECC incomplete addition
+        // requires six. We can reduce the proof size by sharing fixed columns
+        // between the ECC and Poseidon chips.
+        // TODO: For multiple invocations they could/should be configured in
+        // parallel rather than sharing perhaps?
         let lagrange_coeffs = [
             meta.fixed_column(),
             meta.fixed_column(),
@@ -92,15 +104,16 @@ impl Circuit<Fp> for HashCircuit {
             meta.fixed_column(),
             meta.fixed_column(),
         ];
-
         let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
         let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
 
+        // Also use the first Lagrange coefficient column for loading global constants.
         meta.enable_constant(lagrange_coeffs[0]);
 
+        // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure(
             meta,
-            OrchardNullifier,
+            P128Pow5T3,
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
@@ -118,7 +131,7 @@ impl Circuit<Fp> for HashCircuit {
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
         let a = self.load_private(layouter.namespace(|| "load a"), config.advices[0], self.a)?;
         let b = self.load_private(layouter.namespace(|| "load b"), config.advices[0], self.b)?;
@@ -139,17 +152,16 @@ impl Circuit<Fp> for HashCircuit {
                             || value.ok_or(Error::SynthesisError),
                         )?;
                         region.constrain_equal(var, message[i].cell())?;
-                        Ok(Word::<_, _, OrchardNullifier, 3, 2>::from_inner(
-                            StateWord::new(var, value),
-                        ))
+                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                            var, value,
+                        )))
                     };
                     Ok([message_word(0)?, message_word(1)?])
                 },
             )?;
 
             let poseidon_hasher = PoseidonHash::init(
-                //config.poseidon_chip(),
-                PoseidonChip::construct(config.poseidon_config.clone()),
+                config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
                 ConstantLength::<2>,
             )?;
@@ -159,7 +171,7 @@ impl Circuit<Fp> for HashCircuit {
                 poseidon_message,
             )?;
 
-            let poseidon_output: CellValue<Fp> = poseidon_output.inner().into();
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
             poseidon_output
         };
 
@@ -184,91 +196,24 @@ impl Circuit<Fp> for HashCircuit {
             },
         )?;
 
-        layouter.constrain_instance(scalar.cell(), config.primary, 0)
+        // Constrain sum to equal the public input
+        layouter.constrain_instance(scalar.cell(), config.primary, 0)?;
+
+        // At this point we've enforced all of our public inputs.
+        Ok(())
     }
-}
-
-#[derive(Debug)]
-struct VerifyingKey {
-    params: commitment::Params<vesta::Affine>,
-    vk: plonk::VerifyingKey<vesta::Affine>,
-}
-
-impl VerifyingKey {
-    fn build() -> Self {
-        let params = commitment::Params::new(K);
-        let circuit: HashCircuit = Default::default();
-
-        let vk = plonk::keygen_vk(&params, &circuit).unwrap();
-
-        VerifyingKey { params, vk }
-    }
-}
-
-#[derive(Debug)]
-struct ProvingKey {
-    params: commitment::Params<vesta::Affine>,
-    pk: plonk::ProvingKey<vesta::Affine>,
-}
-
-impl ProvingKey {
-    fn build() -> Self {
-        let params = commitment::Params::new(K);
-        let circuit: HashCircuit = Default::default();
-
-        let vk = plonk::keygen_vk(&params, &circuit).unwrap();
-        let pk = plonk::keygen_pk(&params, vk, &circuit).unwrap();
-
-        ProvingKey { params, pk }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Proof(Vec<u8>);
-
-impl AsRef<[u8]> for Proof {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Proof {
-    fn create(pk: &ProvingKey, circuits: &[HashCircuit], pubinputs: &[Fp]) -> Result<Self, Error> {
-        let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
-        plonk::create_proof(
-            &pk.params,
-            &pk.pk,
-            circuits,
-            &[&[pubinputs]],
-            &mut transcript,
-        )?;
-        Ok(Proof(transcript.finalize()))
-    }
-
-    fn verify(&self, vk: &VerifyingKey, pubinputs: &[Fp]) -> Result<(), plonk::Error> {
-        let msm = vk.params.empty_msm();
-        let mut transcript = Blake2bRead::init(&self.0[..]);
-        let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;
-        let msm = guard.clone().use_challenges();
-        if msm.eval() {
-            Ok(())
-        } else {
-            Err(Error::ConstraintSystemFailure)
-        }
-    }
-
-    // fn new(bytes: Vec<u8>) -> Self {
-    // Proof(bytes)
-    // }
 }
 
 fn main() {
-    let a = Fp::from(13);
-    let b = Fp::from(69);
-    let c = Fp::from(42);
+    // The number of rows in our circuit cannot exceed 2^k
+    let k: u32 = 6;
+
+    let a = pallas::Base::from(13);
+    let b = pallas::Base::from(69);
+    let c = pallas::Base::from(42);
 
     let message = [a, b];
-    let output = Hash::init(OrchardNullifier, ConstantLength::<2>).hash(message);
+    let output = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(message);
 
     let circuit = HashCircuit {
         a: Some(a),
@@ -278,14 +223,20 @@ fn main() {
 
     let sum = output + c;
 
+    // Incorrect:
+    let public_inputs = vec![sum + pallas::Base::one()];
+    let prover = MockProver::run(k, &circuit, vec![public_inputs]).unwrap();
+    assert!(prover.verify().is_err());
+
     // Correct:
     let public_inputs = vec![sum];
-    // Incorrect:
-    // let public_inputs = vec![sum + Fp::one()];
+    let prover = MockProver::run(k, &circuit, vec![public_inputs.clone()]).unwrap();
+    assert_eq!(prover.verify(), Ok(()));
 
+    // Actual ZK proof
     let start = Instant::now();
-    let vk = VerifyingKey::build();
-    let pk = ProvingKey::build();
+    let vk = VerifyingKey::build(k, HashCircuit::default());
+    let pk = ProvingKey::build(k, HashCircuit::default());
     println!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();
