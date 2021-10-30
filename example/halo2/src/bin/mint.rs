@@ -443,7 +443,7 @@ impl Circuit<pallas::Base> for MintCircuit {
 
 fn main() {
     // The number of rows in our circuit cannot exceed 2^k
-    let k: u32 = 9;
+    let k: u32 = 11;
 
     let pubkey = pallas::Point::random(&mut OsRng);
     let coords = pubkey.to_affine().coordinates().unwrap();
