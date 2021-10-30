@@ -201,7 +201,7 @@ impl<'a> ZkCircuit<'a> {
             if name != variable {
                 continue;
             }
-            if *type_id != ZkType::Scalar {
+            if *type_id != ZkType::MerklePath {
                 return Err(Error::InvalidParamType);
             }
             *self.witness_merkle_path.get_mut(name).unwrap() = (Some(leaf_pos), Some(path));
