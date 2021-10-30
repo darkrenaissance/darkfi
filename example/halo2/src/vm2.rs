@@ -16,6 +16,11 @@ use halo2_gadgets::{
         StateWord, Word,
     },
     primitives::poseidon::{ConstantLength, P128Pow5T3},
+    sinsemilla::{
+        chip::{SinsemillaChip, SinsemillaConfig},
+        merkle::chip::{MerkleChip, MerkleConfig},
+        merkle::MerklePath,
+    },
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
@@ -24,7 +29,10 @@ use pasta_curves::pallas;
 
 use crate::{
     arith_chip::{ArithmeticChip, ArithmeticChipConfig},
-    constants::OrchardFixedBases,
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        OrchardFixedBases,
+    },
     error::{Error, Result},
 };
 
@@ -49,6 +57,7 @@ pub enum ZkFunctionCall {
     EcAdd(ArgIdx, ArgIdx),
     EcGetX(ArgIdx),
     EcGetY(ArgIdx),
+    CalculateMerkleRoot(ArgIdx, ArgIdx),
 }
 
 pub struct ZkBinary {
@@ -71,6 +80,8 @@ pub struct MintConfig {
     pub q_add: Selector,
     pub advices: [Column<Advice>; 10],
     pub ecc_config: EccConfig,
+    pub merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     pub poseidon_config: PoseidonConfig<pallas::Base>,
     pub arith_config: ArithmeticChipConfig,
 }
@@ -86,6 +97,18 @@ impl MintConfig {
 
     pub fn arithmetic_chip(&self) -> ArithmeticChip {
         ArithmeticChip::construct(self.arith_config.clone())
+    }
+
+    fn merkle_chip_1(
+        &self,
+    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+        MerkleChip::construct(self.merkle_config_1.clone())
+    }
+
+    fn merkle_chip_2(
+        &self,
+    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+        MerkleChip::construct(self.merkle_config_2.clone())
     }
 }
 
@@ -232,6 +255,11 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         let q_add = meta.selector();
 
         let table_idx = meta.lookup_table_column();
+        let lookup = (
+            table_idx,
+            meta.lookup_table_column(),
+            meta.lookup_table_column(),
+        );
 
         let primary = meta.instance_column();
 
@@ -277,11 +305,48 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
 
         let arith_config = ArithmeticChip::configure(meta);
 
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_1, merkle_config_1) = {
+            let sinsemilla_config_1 = SinsemillaChip::configure(
+                meta,
+                advices[..5].try_into().unwrap(),
+                advices[6],
+                lagrange_coeffs[0],
+                lookup,
+                range_check.clone(),
+            );
+            let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
+            (sinsemilla_config_1, merkle_config_1)
+        };
+
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_2, merkle_config_2) = {
+            let sinsemilla_config_2 = SinsemillaChip::configure(
+                meta,
+                advices[5..].try_into().unwrap(),
+                advices[7],
+                lagrange_coeffs[1],
+                lookup,
+                range_check,
+            );
+            let merkle_config_2 = MerkleChip::configure(meta, sinsemilla_config_2.clone());
+
+            (sinsemilla_config_2, merkle_config_2)
+        };
+
         MintConfig {
             primary,
             q_add,
             advices,
             ecc_config,
+            merkle_config_1,
+            merkle_config_2,
             poseidon_config,
             arith_config,
         }
@@ -292,8 +357,10 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), plonk::Error> {
-        let ecc_chip = config.ecc_chip();
         let arith_chip = config.arithmetic_chip();
+
+        // Construct the ECC chip.
+        let ecc_chip = config.ecc_chip();
 
         let mut stack_base = Vec::new();
         let mut stack_scalar = Vec::new();
@@ -473,6 +540,25 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     let arg = &stack_ec_point[*arg_idx];
                     let y = arg.inner().y();
                     stack_base.push(y);
+                }
+                ZkFunctionCall::CalculateMerkleRoot(path_idx, leaf_idx) => {
+                    assert!(*path_idx < stack_merkle_path.len());
+                    assert!(*leaf_idx < stack_base.len());
+
+                    let (leaf_pos, path) = &stack_merkle_path[*path_idx];
+                    let leaf = &stack_base[*leaf_idx];
+
+                    let path = MerklePath {
+                        chip_1: config.merkle_chip_1(),
+                        chip_2: config.merkle_chip_2(),
+                        domain: OrchardHashDomains::MerkleCrh,
+                        leaf_pos: leaf_pos.clone(),
+                        path: path.clone(),
+                    };
+
+                    let root =
+                        path.calculate_root(layouter.namespace(|| "calculate root"), leaf.clone())?;
+                    stack_base.push(root);
                 }
             }
         }

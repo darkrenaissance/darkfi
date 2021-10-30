@@ -23,7 +23,7 @@ FUNC_ID_EC_MUL                  = 4
 FUNC_ID_EC_ADD                  = 5
 FUNC_ID_EC_GET_X                = 6
 FUNC_ID_EC_GET_Y                = 7
-FUNC_ID_CALCULATE_ROOT          = 8
+FUNC_ID_CALCULATE_MERKLE_ROOT   = 8
 
 class FuncFormat:
 
@@ -66,8 +66,9 @@ function_formats = {
     "ec_get_y": FuncFormat(
         FUNC_ID_EC_GET_Y,       [TYPE_ID_BASE],     [TYPE_ID_EC_POINT]
     ),
-    "calculate_root": FuncFormat(
-        FUNC_ID_CALCULATE_ROOT, [TYPE_ID_BASE],     [TYPE_ID_MERKLE_PATH,
+    "calculate_merkle_root": FuncFormat(
+        FUNC_ID_CALCULATE_MERKLE_ROOT, 
+                                [TYPE_ID_BASE],     [TYPE_ID_MERKLE_PATH,
                                                      TYPE_ID_BASE]
     ),
 }

@@ -24,6 +24,7 @@ impl Decodable for ZkType {
             1 => Ok(Self::Scalar),
             2 => Ok(Self::EcPoint),
             3 => Ok(Self::EcFixedPoint),
+            4 => Ok(Self::MerklePath),
             _i => Err(Error::BadOperationType),
         }
     }
@@ -63,6 +64,10 @@ impl Decodable for ZkFunctionCall {
             )),
             6 => Ok(Self::EcGetX(ReadExt::read_u32(&mut d)? as usize)),
             7 => Ok(Self::EcGetY(ReadExt::read_u32(&mut d)? as usize)),
+            8 => Ok(Self::CalculateMerkleRoot(
+                ReadExt::read_u32(&mut d)? as usize,
+                ReadExt::read_u32(&mut d)? as usize,
+            )),
             _i => Err(Error::BadOperationType),
         }
     }
