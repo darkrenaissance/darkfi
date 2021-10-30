@@ -1,55 +1,31 @@
 use std::collections::HashMap;
-use std::{convert::TryInto, time::Instant};
+use std::convert::TryInto;
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
-    dev::MockProver,
     plonk,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector,
-    },
-    poly::Rotation,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector},
 };
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPoints,
+        FixedPoint,
     },
     poseidon::{
         Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
         StateWord, Word,
     },
-    primitives,
-    primitives::{
-        poseidon::{ConstantLength, P128Pow5T3},
-        sinsemilla::S_PERSONALIZATION,
-    },
-    sinsemilla::{
-        chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
-    },
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
-use pasta_curves::{
-    arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve},
-    pallas,
-};
-
-use crate::arith_chip::{ArithmeticChipConfig, ArithmeticChip};
-use crate::error::{Error, Result};
+use pasta_curves::pallas;
 
 use crate::{
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-        OrchardFixedBases,
-    },
-    crypto::pedersen_commitment,
-    proof::{Proof, ProvingKey, VerifyingKey},
-    spec::i2lebsp,
+    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+    constants::OrchardFixedBases,
+    error::{Error, Result},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -357,9 +333,9 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                                     || val.ok_or(plonk::Error::SynthesisError),
                                 )?;
                                 region.constrain_equal(var, messages[i].cell())?;
-                                Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(
-                                    StateWord::new(var, val),
-                                ))
+                                Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                                    var, val,
+                                )))
                             };
                             Ok([message_word(0)?, message_word(1)?])
                         },
@@ -381,9 +357,8 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     assert!(*lhs_idx < stack_base.len());
                     assert!(*rhs_idx < stack_base.len());
                     let (lhs, rhs) = (stack_base[*lhs_idx], stack_base[*rhs_idx]);
-                    let output = arith_chip.add(
-                        layouter.namespace(|| "arithmetic add"),
-                        lhs, rhs)?;
+                    let output =
+                        arith_chip.add(layouter.namespace(|| "arithmetic add"), lhs, rhs)?;
                     stack_base.push(output);
                 }
                 ZkFunctionCall::ConstrainInstance(arg_idx) => {
