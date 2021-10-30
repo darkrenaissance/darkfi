@@ -14,6 +14,7 @@ use ff::{Field, PrimeField};
 use group::Curve;
 use zcash_proofs::circuit::{ecc, pedersen_hash};
 
+#[derive(Default)]
 pub struct MintContract {
     pub value: Option<u64>,
     pub token_id: Option<jubjub::Fr>,
@@ -23,6 +24,7 @@ pub struct MintContract {
     pub randomness_coin: Option<jubjub::Fr>,
     pub public: Option<jubjub::SubgroupPoint>,
 }
+
 impl Circuit<bls12_381::Scalar> for MintContract {
     fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
         self,

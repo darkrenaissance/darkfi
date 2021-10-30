@@ -10,6 +10,7 @@ pub mod circuit;
 pub mod cli;
 pub mod client;
 pub mod crypto;
+pub mod crypto_new;
 pub mod endian;
 pub mod error;
 pub mod net;

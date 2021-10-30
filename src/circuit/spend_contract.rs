@@ -15,6 +15,7 @@ use zcash_proofs::circuit::{ecc, pedersen_hash};
 
 use crate::crypto::merkle_node::SAPLING_COMMITMENT_TREE_DEPTH;
 
+#[derive(Default)]
 pub struct SpendContract {
     pub value: Option<u64>,
     pub token_id: Option<jubjub::Fr>,
