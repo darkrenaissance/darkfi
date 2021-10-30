@@ -19,6 +19,11 @@ use halo2_gadgets::{
     },
     primitives,
     primitives::poseidon::{ConstantLength, P128Pow5T3},
+    sinsemilla::{
+        chip::{SinsemillaChip, SinsemillaConfig},
+        merkle::chip::{MerkleChip, MerkleConfig},
+        merkle::MerklePath,
+    },
     utilities::{
         copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
@@ -31,7 +36,10 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 
 use drk_halo2::{
-    constants::OrchardFixedBases,
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        OrchardFixedBases,
+    },
     crypto::pedersen_commitment,
     proof::{Proof, ProvingKey, VerifyingKey},
 };
@@ -42,6 +50,12 @@ struct MintConfig {
     q_add: Selector,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig,
+    merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    sinsemilla_config_1:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    sinsemilla_config_2:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
@@ -126,7 +140,7 @@ impl Circuit<pallas::Base> for MintCircuit {
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let _lookup = (
+        let lookup = (
             table_idx,
             meta.lookup_table_column(),
             meta.lookup_table_column(),
@@ -167,8 +181,12 @@ impl Circuit<pallas::Base> for MintCircuit {
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config =
-            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices,
+            lagrange_coeffs,
+            range_check.clone(),
+        );
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure(
@@ -180,11 +198,50 @@ impl Circuit<pallas::Base> for MintCircuit {
             rc_b,
         );
 
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_1, merkle_config_1) = {
+            let sinsemilla_config_1 = SinsemillaChip::configure(
+                meta,
+                advices[..5].try_into().unwrap(),
+                advices[6],
+                lagrange_coeffs[0],
+                lookup,
+                range_check.clone(),
+            );
+            let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
+            (sinsemilla_config_1, merkle_config_1)
+        };
+
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_2, merkle_config_2) = {
+            let sinsemilla_config_2 = SinsemillaChip::configure(
+                meta,
+                advices[5..].try_into().unwrap(),
+                advices[7],
+                lagrange_coeffs[1],
+                lookup,
+                range_check,
+            );
+            let merkle_config_2 = MerkleChip::configure(meta, sinsemilla_config_2.clone());
+
+            (sinsemilla_config_2, merkle_config_2)
+        };
+
         MintConfig {
             primary,
             q_add,
             advices,
             ecc_config,
+            merkle_config_1,
+            merkle_config_2,
+            sinsemilla_config_1,
+            sinsemilla_config_2,
             poseidon_config,
         }
     }
