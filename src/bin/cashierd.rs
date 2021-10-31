@@ -561,12 +561,18 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Solana)?;
+                    let main_keypairs =
+                        self.cashier_wallet.get_main_keys(&NetworkName::Ethereum)?;
 
                     let passphrase = String::from("TEST_PASS");
 
-                    let mut eth_client =
-                        EthClient::new(String::from("URL"), passphrase.clone());
+                    let mut eth_client = EthClient::new(
+                        expand_path("~/.ethereum/ropsten/geth.ipc")?
+                            .to_str()
+                            .unwrap()
+                            .into(),
+                        passphrase.clone(),
+                    );
 
                     if main_keypairs.is_empty() {
                         let main_private_key = generate_privkey();
@@ -590,14 +596,12 @@ impl Cashierd {
                             public_key: main_public_key,
                         };
                     } else {
-
                         let last_keypair = &main_keypairs[main_keypairs.len() - 1];
 
                         main_keypair = Keypair {
                             private_key: deserialize(&last_keypair.private_key)?,
                             public_key: deserialize(&last_keypair.public_key)?,
                         }
-
                     }
 
                     eth_client.set_main_keypair(&main_keypair);
