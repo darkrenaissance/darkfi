@@ -16,12 +16,18 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
     rpc::jsonrpc,
     rpc::jsonrpc::JsonResult,
-    serial::{deserialize, serialize},
+    serial::{deserialize, serialize, Decodable, Encodable},
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
 };
 
 pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
+
+#[derive(Clone, Debug)]
+pub struct Keypair {
+    pub private_key: String,
+    pub public_key: String,
+}
 
 // An ERC-20 token transfer transaction's data is as follows:
 //
@@ -174,7 +180,7 @@ impl EthTx {
 //
 pub struct EthClient {
     // main_keypair (private, public)
-    main_keypair: (String, String),
+    main_keypair: Keypair,
     passphrase: String,
     socket_path: String,
     subscriptions: Arc<Mutex<Vec<String>>>,
@@ -185,29 +191,32 @@ pub struct EthClient {
 }
 
 impl EthClient {
-    pub fn new(
-        socket_path: String,
-        passphrase: String,
-        main_keypair: (String, String),
-    ) -> Arc<Self> {
+    pub fn new(socket_path: String, passphrase: String) -> Self {
         let notify_channel = async_channel::unbounded();
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
-        Arc::new(Self {
-            main_keypair,
+        Self {
+            // this must set by the cashier
+            main_keypair: Keypair {
+                private_key: String::new(),
+                public_key: String::new(),
+            },
             passphrase,
             socket_path,
             subscriptions,
             notify_channel,
-        })
+        }
+    }
+
+    pub fn set_main_keypair(&mut self, keypair: &Keypair) {
+        self.main_keypair = keypair.clone();
     }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
-
         debug!(target: "ETH BRIDGE", "Send eth to main wallet");
 
         let tx = EthTx::new(
             acc,
-            &self.main_keypair.1,
+            &self.main_keypair.public_key,
             None,
             None,
             Some(amount),
@@ -280,7 +289,8 @@ impl EthClient {
             .await
             .map_err(Error::from)?;
 
-        self.send_eth_to_main_wallet(&addr, received_balance).await?;
+        self.send_eth_to_main_wallet(&addr, received_balance)
+            .await?;
 
         debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
 
@@ -459,7 +469,7 @@ impl NetworkClient for EthClient {
         let amount = truncate(amount, decimals as u16, 8)?;
 
         let tx = EthTx::new(
-            &self.main_keypair.1,
+            &self.main_keypair.public_key,
             &dest,
             None,
             None,
@@ -471,6 +481,24 @@ impl NetworkClient for EthClient {
         self.send_transaction(&tx, &self.passphrase).await?;
 
         Ok(())
+    }
+}
+
+impl Encodable for Keypair {
+    fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.private_key.encode(&mut s)?;
+        len += self.public_key.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Keypair {
+    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            private_key: Decodable::decode(&mut d)?,
+            public_key: Decodable::decode(&mut d)?,
+        })
     }
 }
 
