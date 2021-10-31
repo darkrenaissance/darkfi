@@ -58,3 +58,8 @@ keypair = ""
 name = "btc"
 blockchain = "testnet"
 keypair = ""
+
+[[networks]]
+name = "eth"
+blockchain = "ropsten"
+keypair = ""
