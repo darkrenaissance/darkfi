@@ -453,18 +453,18 @@ impl Cashierd {
         }
 
         let mut resp: serde_json::Value = json!(
-            {
-                "server_version": env!("CARGO_PKG_VERSION"),
-                "protocol_version": "1.0",
-                "public_key": self.public_key,
-                "networks": [],
-                "hosts": {
-                    "tcp_port": tcp_port,
-                    "tls_port": tls_port,
-                    "onion_addr": onionaddr,
-                    "dns_addr": dnsaddr,
-                }
+        {
+            "server_version": env!("CARGO_PKG_VERSION"),
+            "protocol_version": "1.0",
+            "public_key": self.public_key,
+            "networks": [],
+            "hosts": {
+                "tcp_port": tcp_port,
+                "tls_port": tls_port,
+                "onion_addr": onionaddr,
+                "dns_addr": dnsaddr,
             }
+        }
         );
 
         for network in self.networks.iter() {
@@ -472,10 +472,10 @@ impl Cashierd {
                 .as_array_mut()
                 .unwrap()
                 .push(json!(
-                {
-                    network.name.to_string().to_lowercase():
-                    {"chain": network.blockchain.to_lowercase()}
-                }
+                        {
+                            network.name.to_string().to_lowercase():
+                            {"chain": network.blockchain.to_lowercase()}
+                        }
                 ));
         }
 
@@ -550,6 +550,61 @@ impl Cashierd {
                     let sol_client = SolClient::new(main_keypair, &network.blockchain).await?;
 
                     bridge2.add_clients(NetworkName::Solana, sol_client).await?;
+                }
+
+                #[cfg(feature = "eth")]
+                NetworkName::Ethereum => {
+                    debug!(target: "CASHIER DAEMON", "Add eth network");
+                    use drk::service::{eth::generate_privkey, eth::Keypair, EthClient};
+
+                    let bridge2 = self.bridge.clone();
+
+                    let main_keypair: Keypair;
+
+                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Solana)?;
+
+                    let passphrase = String::from("TEST_PASS");
+
+                    let mut eth_client =
+                        EthClient::new(String::from("URL"), passphrase.clone());
+
+                    if main_keypairs.is_empty() {
+                        let main_private_key = generate_privkey();
+                        let main_public_key = eth_client
+                            .import_privkey(&main_private_key, &passphrase)
+                            .await?
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+
+                        self.cashier_wallet.put_main_keys(
+                            &TokenKey {
+                                private_key: serialize(&main_private_key),
+                                public_key: serialize(&main_public_key),
+                            },
+                            &NetworkName::Ethereum,
+                        )?;
+
+                        main_keypair = Keypair {
+                            private_key: main_private_key,
+                            public_key: main_public_key,
+                        };
+                    } else {
+
+                        let last_keypair = &main_keypairs[main_keypairs.len() - 1];
+
+                        main_keypair = Keypair {
+                            private_key: deserialize(&last_keypair.private_key)?,
+                            public_key: deserialize(&last_keypair.public_key)?,
+                        }
+
+                    }
+
+                    eth_client.set_main_keypair(&main_keypair);
+
+                    bridge2
+                        .add_clients(NetworkName::Ethereum, Arc::new(eth_client))
+                        .await?;
                 }
 
                 #[cfg(feature = "btc")]
