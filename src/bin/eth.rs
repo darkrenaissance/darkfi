@@ -1,7 +1,7 @@
 use num_bigint::BigUint;
 
 use drk::{
-    service::eth::{erc20_transfer_data, EthClient, EthTx},
+    service::eth::{erc20_transfer_data, EthClient, EthTx, Keypair},
     util::{decode_base10, encode_base10},
     Result,
 };
@@ -13,11 +13,15 @@ async fn main() -> Result<()> {
     let acc = "0x113b6648f34f4d0340d04ff171cbcf0b49d47827".to_string();
     let key = "67cbb73cb293eea5fa2a7025d5479dbd50319010c03fd8821917ad0d9d53276c".to_string();
 
-    let eth = EthClient::new(
+    let mut eth = EthClient::new(
         "/home/parazyd/.ethereum/ropsten/geth.ipc".to_string(),
         String::from("foobar"),
-        (key, acc.clone()),
     );
+
+    eth.set_main_keypair(&Keypair {
+        private_key: key,
+        public_key: acc.clone(),
+    });
 
     //let key = generate_privkey();
     //let passphrase = "foobar".to_string();
