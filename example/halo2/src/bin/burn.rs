@@ -540,7 +540,8 @@ fn main() {
     }
 
     // Merkle root
-    let leaf = pallas::Base::random(&mut OsRng);
+    //let leaf = pallas::Base::random(&mut OsRng);
+    let leaf = coin.clone();
     let pos = rand::random::<u32>();
     let path: Vec<_> = (0..32).map(|_| pallas::Base::random(&mut OsRng)).collect();
     let merkle_root = root(path.clone().try_into().unwrap(), pos, leaf);
