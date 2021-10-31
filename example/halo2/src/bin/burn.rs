@@ -34,7 +34,7 @@ use halo2_gadgets::{
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve},
+    group::{ff::{PrimeField, PrimeFieldBits}, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -290,7 +290,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // =========
         // Nullifier
         // =========
-        let hashed_secret_key = self.load_private(
+        let secret_key = self.load_private(
             layouter.namespace(|| "load sinsemilla(secret key)"),
             config.advices[0],
             self.secret_key,
@@ -302,7 +302,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
             self.serial,
         )?;
 
-        let message = [hashed_secret_key, serial];
+        let message = [secret_key, serial];
         let hash = {
             let poseidon_message = layouter.assign_region(
                 || "load message",
@@ -340,6 +340,12 @@ impl Circuit<pallas::Base> for BurnCircuit {
         };
 
         layouter.constrain_instance(hash.cell(), config.primary, BURN_NULLIFIER_OFFSET)?;
+
+        // let nullifier_k = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+        //     nullifier_k.mul(
+        //         layouter.namespace(|| "[poseidon_output + psi_old] NullifierK"),
+        //         scalar,
+        //     )?
 
         // ===========
         // Merkle root
@@ -502,11 +508,15 @@ fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::
     node
 }
 
+fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
+    pallas::Scalar::from_repr(x.to_repr()).unwrap()
+}
+
 fn main() {
     // The number of rows in our circuit cannot exceed 2^k
     let k: u32 = 11;
 
-    let secret_key = pallas::Scalar::random(&mut OsRng);
+    let secret = pallas::Base::random(&mut OsRng);
     let serial = pallas::Base::random(&mut OsRng);
 
     let value = 42;
@@ -514,15 +524,15 @@ fn main() {
 
     // Nullifier = poseidon(sinsemilla(secret_key), serial)
     let domain = primitives::sinsemilla::HashDomain::new(S_PERSONALIZATION);
-    let bits_secretkey: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
-    let hashed_secret_key = domain.hash(iter::empty().chain(bits_secretkey)).unwrap();
+    //let bits_secretkey: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
+    //let hashed_secret_key = domain.hash(iter::empty().chain(bits_secretkey)).unwrap();
 
-    let nullifier = [hashed_secret_key, serial];
+    let nullifier = [secret, serial];
     let nullifier =
         primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
     // Public key derivation
-    let public_key = OrchardFixedBases::SpendAuthG.generator() * secret_key;
+    let public_key = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
     let coords = public_key.to_affine().coordinates().unwrap();
 
     // Construct Coin
@@ -572,7 +582,7 @@ fn main() {
     ];
 
     let circuit = BurnCircuit {
-        secret_key: Some(hashed_secret_key),
+        secret_key: Some(secret),
         serial: Some(serial),
         value: Some(pallas::Base::from(value)),
         asset: Some(pallas::Base::from(asset)),
