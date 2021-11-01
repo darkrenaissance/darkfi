@@ -7,7 +7,7 @@ n = p * q
 # phi = (p - 1) * (q - 1)
 K = IntegerModRing(n)
 
-A_0 = K.random_element()
+A_0 = K(5)
 
 c_0 = random_prime(2^12)
 A_1 = A_0^c_0
