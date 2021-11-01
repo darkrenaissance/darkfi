@@ -1,11 +1,13 @@
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     serial::{Decodable, Encodable},
     Result,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum NetworkName {
     Solana,
     Bitcoin,
