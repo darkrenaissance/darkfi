@@ -33,7 +33,7 @@ use crate::crypto::constants::{
 };
 
 #[derive(Clone, Debug)]
-pub struct BurnConfig {
+pub struct SpendConfig {
     primary: Column<InstanceColumn>,
     q_add: Selector,
     advices: [Column<Advice>; 10],
@@ -47,7 +47,7 @@ pub struct BurnConfig {
     poseidon_config: PoseidonConfig<pasta::Fp>,
 }
 
-impl BurnConfig {
+impl SpendConfig {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
         EccChip::construct(self.ecc_config.clone())
     }
@@ -94,26 +94,26 @@ const BURN_SIGKEYX_OFFSET: usize = 6;
 const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
-struct BurnContract {
-    secret_key: Option<pasta::Fp>,
-    serial: Option<pasta::Fp>,
-    value: Option<pasta::Fp>,
-    asset: Option<pasta::Fp>,
-    coin_blind: Option<pasta::Fp>,
-    value_blind: Option<pasta::Fq>,
-    asset_blind: Option<pasta::Fq>,
-    leaf: Option<pasta::Fp>,
-    leaf_pos: Option<u32>,
-    merkle_path: Option<[pasta::Fp; 32]>,
-    sig_secret: Option<pasta::Fq>,
+pub struct SpendContract {
+    pub secret_key: Option<pasta::Fp>,
+    pub serial: Option<pasta::Fp>,
+    pub value: Option<pasta::Fp>,
+    pub asset: Option<pasta::Fp>,
+    pub coin_blind: Option<pasta::Fp>,
+    pub value_blind: Option<pasta::Fq>,
+    pub asset_blind: Option<pasta::Fq>,
+    pub leaf: Option<pasta::Fp>,
+    pub leaf_pos: Option<u32>,
+    pub merkle_path: Option<[pasta::Fp; 32]>,
+    pub sig_secret: Option<pasta::Fq>,
 }
 
-impl UtilitiesInstructions<pasta::Fp> for BurnContract {
+impl UtilitiesInstructions<pasta::Fp> for SpendContract {
     type Var = CellValue<pasta::Fp>;
 }
 
-impl Circuit<pasta::Fp> for BurnContract {
-    type Config = BurnConfig;
+impl Circuit<pasta::Fp> for SpendContract {
+    type Config = SpendConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -242,7 +242,7 @@ impl Circuit<pasta::Fp> for BurnContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-        BurnConfig {
+        SpendConfig {
             primary,
             q_add,
             advices,
