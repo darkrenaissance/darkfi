@@ -1,16 +1,19 @@
 pub mod coin;
+pub mod constants;
 pub mod diffie_hellman;
-pub mod fr_serial;
-pub mod merkle;
-pub mod merkle_node;
+//pub mod merkle;
+//pub mod merkle_node;
 pub mod mint_proof;
 pub mod note;
 pub mod nullifier;
+pub mod pasta_serial;
+pub mod proof;
 pub mod schnorr;
-pub mod spend_proof;
 pub mod types;
+//pub mod spend_proof;
 pub mod util;
 
+/*
 use bellman::groth16;
 use bls12_381::Bls12;
 
@@ -48,3 +51,4 @@ pub fn load_params(
     let pvk = groth16::prepare_verifying_key(&params.vk);
     Ok((params, pvk))
 }
+*/

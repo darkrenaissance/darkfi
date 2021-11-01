@@ -1,41 +1,45 @@
-use ff::Field;
-use group::GroupEncoding;
-use rand::rngs::OsRng;
 use std::io;
 
-use super::util::hash_to_scalar;
+use halo2_gadgets::ecc::FixedPoints;
+use pasta_curves as pasta;
+use pasta_curves::{arithmetic::Field, group::GroupEncoding};
+use rand::rngs::OsRng;
+
+use super::{
+    constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
+    util::hash_to_scalar,
+};
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
-pub struct SecretKey(pub jubjub::Fr);
+pub struct SecretKey(pub pasta::Fq);
 
 impl SecretKey {
     pub fn random() -> Self {
-        Self(jubjub::Fr::random(&mut OsRng))
+        Self(pasta::Fq::random(&mut OsRng))
     }
 
     pub fn sign(&self, message: &[u8]) -> Signature {
-        let mask = jubjub::Fr::random(&mut OsRng);
-        let commit = zcash_primitives::constants::SPENDING_KEY_GENERATOR * mask;
+        let mask = pasta::Fq::random(&mut OsRng);
+        let commit = OrchardFixedBases::SpendAuthG.generator() * mask;
 
-        let challenge = hash_to_scalar(b"DarkFi_Schnorr", &commit.to_bytes(), message);
-
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
         let response = mask + challenge * self.0;
 
         Signature { commit, response }
     }
 
     pub fn public_key(&self) -> PublicKey {
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * self.0;
+        let public = OrchardFixedBases::SpendAuthG.generator() * self.0;
         PublicKey(public)
     }
 }
 
-pub struct PublicKey(pub jubjub::SubgroupPoint);
+pub struct PublicKey(pub pasta::Ep);
 
 pub struct Signature {
-    commit: jubjub::SubgroupPoint,
-    response: jubjub::Fr,
+    commit: pasta::Ep,
+    response: pasta::Fq,
 }
 
 impl Encodable for Signature {
@@ -58,9 +62,8 @@ impl Decodable for Signature {
 
 impl PublicKey {
     pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
-        let challenge = hash_to_scalar(b"DarkFi_Schnorr", &signature.commit.to_bytes(), message);
-        zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature.response
-            - self.0 * challenge
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
+        OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge
             == signature.commit
     }
 }

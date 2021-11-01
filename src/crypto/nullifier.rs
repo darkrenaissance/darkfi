@@ -1,10 +1,9 @@
 use std::io;
 
 use crate::{
-    error::Result,
     serial::{Decodable, Encodable},
+    Result,
 };
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Nullifier {
@@ -30,4 +29,3 @@ impl Decodable for Nullifier {
         })
     }
 }
-

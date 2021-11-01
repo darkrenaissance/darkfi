@@ -1,56 +1,56 @@
-use bellman::gadgets::multipack;
-use bellman::groth16;
-use blake2s_simd::Params as Blake2sParams;
-use bls12_381::Bls12;
-use group::{Curve, GroupEncoding};
-use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
+use halo2_gadgets::primitives;
+use halo2_gadgets::primitives::poseidon::{ConstantLength, P128Pow5T3};
+use log::debug;
+use pasta_curves as pasta;
+use pasta_curves::{
+    arithmetic::{CurveAffine, FieldExt},
+    group::Curve,
+};
+
+use super::{
+    proof::{Proof, ProvingKey, VerifyingKey},
+    types::*,
+    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+};
 use crate::circuit::mint_contract::MintContract;
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
 pub struct MintRevealedValues {
-    pub value_commit: jubjub::SubgroupPoint,
-    pub token_commit: jubjub::SubgroupPoint,
+    pub value_commit: DrkValueCommit,
+    pub token_commit: DrkValueCommit,
     pub coin: [u8; 32],
 }
 
 impl MintRevealedValues {
     fn compute(
         value: u64,
-        token_id: jubjub::Fr,
-        randomness_value: &jubjub::Fr,
-        randomness_token: &jubjub::Fr,
-        serial: &jubjub::Fr,
-        randomness_coin: &jubjub::Fr,
-        public: &jubjub::SubgroupPoint,
+        token_id: DrkTokenId,
+        value_blind: DrkValueBlind,
+        token_blind: DrkValueBlind,
+        serial: DrkSerial,
+        coin_blind: DrkCoinBlind,
+        public_key: DrkPublicKey,
     ) -> Self {
-        let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * jubjub::Fr::from(value))
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_value);
+        let value_commit = pedersen_commitment_u64(value, value_blind);
+        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
 
-        let token_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * token_id)
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_token);
+        let coords = public_key.to_affine().coordinates().unwrap();
+        let messages = [
+            [*coords.x(), *coords.y()],
+            [pasta::Fp::from_u64(value), token_id],
+            [serial, coin_blind],
+        ];
 
-        let mut coin = [0; 32];
-        coin.copy_from_slice(
-            Blake2sParams::new()
-                .hash_length(32)
-                .personal(zcash_primitives::constants::CRH_IVK_PERSONALIZATION)
-                .to_state()
-                .update(&public.to_bytes())
-                .update(&value.to_le_bytes())
-                .update(&token_id.to_bytes())
-                .update(&serial.to_bytes())
-                .update(&randomness_coin.to_bytes())
-                .finalize()
-                .as_bytes(),
-        );
+        let mut hash = pasta::Fp::zero();
+        for msg in messages.iter() {
+            hash += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
+        }
+
+        let coin = hash.to_bytes();
 
         MintRevealedValues {
             value_commit,
@@ -59,41 +59,19 @@ impl MintRevealedValues {
         }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 6] {
-        let mut public_input = [bls12_381::Scalar::zero(); 6];
+    fn make_outputs(&self) -> [pasta::Fp; 5] {
+        let value_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let token_coords = self.value_commit.to_affine().coordinates().unwrap();
 
-        {
-            let result = jubjub::ExtendedPoint::from(self.value_commit);
-            let affine = result.to_affine();
-            //let (u, v) = (affine.get_u(), affine.get_v());
-            let u = affine.get_u();
-            let v = affine.get_v();
-            public_input[0] = u;
-            public_input[1] = v;
-        }
-
-        {
-            let result = jubjub::ExtendedPoint::from(self.token_commit);
-            let affine = result.to_affine();
-            let u = affine.get_u();
-            let v = affine.get_v();
-            public_input[2] = u;
-            public_input[3] = v;
-        }
-
-        {
-            // Pack the hash as inputs for proof verification.
-            let hash = multipack::bytes_to_bits_le(&self.coin);
-            let hash = multipack::compute_multipacking(&hash);
-
-            // There are 2 chunks for a blake hash
-            assert_eq!(hash.len(), 2);
-
-            public_input[4] = hash[0];
-            public_input[5] = hash[1];
-        }
-
-        public_input
+        vec![
+            pasta::Fp::from_bytes(&self.coin).unwrap(),
+            *value_coords.x(),
+            *value_coords.y(),
+            *token_coords.x(),
+            *token_coords.y(),
+        ]
+        .try_into()
+        .unwrap()
     }
 }
 
@@ -117,72 +95,54 @@ impl Decodable for MintRevealedValues {
     }
 }
 
-pub fn setup_mint_prover() -> groth16::Parameters<Bls12> {
-    println!("Mint: Making random params...");
-    let start = Instant::now();
-    let params = {
-        let c = MintContract {
-            value: None,
-            token_id: None,
-            randomness_value: None,
-            randomness_token: None,
-            serial: None,
-            randomness_coin: None,
-            public: None,
-        };
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
-    };
-    println!("Setup: [{:?}]", start.elapsed());
-    params
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn create_mint_proof(
-    params: &groth16::Parameters<Bls12>,
     value: u64,
-    token_id: jubjub::Fr,
-    randomness_value: jubjub::Fr,
-    randomness_token: jubjub::Fr,
-    serial: jubjub::Fr,
-    randomness_coin: jubjub::Fr,
-    public: jubjub::SubgroupPoint,
-) -> (groth16::Proof<Bls12>, MintRevealedValues) {
+    token_id: pasta::Fp,
+    value_blind: pasta::Fq,
+    token_blind: pasta::Fq,
+    serial: pasta::Fp,
+    coin_blind: pasta::Fp,
+    public_key: pasta::Ep,
+) -> Result<(Proof, MintRevealedValues)> {
     let revealed = MintRevealedValues::compute(
         value,
         token_id,
-        &randomness_value,
-        &randomness_token,
-        &serial,
-        &randomness_coin,
-        &public,
+        value_blind,
+        token_blind,
+        serial,
+        coin_blind,
+        public_key,
     );
 
+    let coords = public_key.to_affine().coordinates().unwrap();
+
     let c = MintContract {
-        value: Some(value),
-        token_id: Some(token_id),
-        randomness_value: Some(randomness_value),
-        randomness_token: Some(randomness_token),
+        pub_x: Some(*coords.x()),
+        pub_y: Some(*coords.y()),
+        value: Some(pasta::Fp::from_u64(value)),
+        asset: Some(token_id),
         serial: Some(serial),
-        randomness_coin: Some(randomness_coin),
-        public: Some(public),
+        coin_blind: Some(coin_blind),
+        value_blind: Some(value_blind),
+        asset_blind: Some(token_blind),
     };
 
     let start = Instant::now();
-    let proof = groth16::create_random_proof(c, params, &mut OsRng).unwrap();
-    println!("Prove: [{:?}]", start.elapsed());
-
-    (proof, revealed)
-}
-
-pub fn verify_mint_proof(
-    pvk: &groth16::PreparedVerifyingKey<Bls12>,
-    proof: &groth16::Proof<Bls12>,
-    revealed: &MintRevealedValues,
-) -> bool {
-    let public_input = revealed.make_outputs();
+    let pk = ProvingKey::build(11, MintContract::default());
+    debug!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();
-    let result = groth16::verify_proof(pvk, proof, &public_input).is_ok();
-    println!("Verify: [{:?}]", start.elapsed());
-    result
+    let public_inputs = revealed.make_outputs();
+    let proof = Proof::create(&pk, &[c], &public_inputs)?;
+    debug!("Prove: [{:?}]", start.elapsed());
+
+    Ok((proof, revealed))
+}
+
+pub fn verify_mint_proof(proof: Proof, revealed: &MintRevealedValues) -> Result<()> {
+    let public_inputs = revealed.make_outputs();
+
+    let vk = VerifyingKey::build(11, MintContract::default());
+    Ok(proof.verify(&vk, &public_inputs)?)
 }

@@ -1,32 +1,27 @@
-use std::collections::{HashMap, HashSet};
-
-use bellman::groth16;
-use bls12_381::{Bls12, Scalar};
-
 pub mod async_serial;
 pub mod blockchain;
-pub mod bls_extensions;
+// pub mod bls_extensions;
 pub mod circuit;
 pub mod cli;
-pub mod client;
+// pub mod client;
 pub mod crypto;
-pub mod crypto_new;
 pub mod endian;
 pub mod error;
 pub mod net;
 pub mod rpc;
 pub mod serial;
-pub mod service;
-pub mod state;
+// pub mod service;
+// pub mod state;
 pub mod system;
-pub mod tx;
-pub mod util;
-pub mod vm;
-pub mod vm_serial;
-pub mod wallet;
+// pub mod tx;
+// pub mod util;
+// pub mod vm;
+// pub mod vm_serial;
+// pub mod wallet;
 
-pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::error::{Error, Result};
+/*
+pub use crate::bls_extensions::BlsStringConversion;
 pub use crate::net::p2p::P2p;
 pub use crate::serial::{Decodable, Encodable};
 pub use crate::vm::{
@@ -128,3 +123,4 @@ impl ZkContract {
         self.vm.verify(&proof.proof, &public)
     }
 }
+*/

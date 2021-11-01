@@ -16,7 +16,9 @@ BINDEPS = \
 	$(shell find token -type f) \
 	$(shell find sql -type f)
 
-all: $(BINS)
+#all: $(BINS)
+all:
+	cargo build --release --all-features --lib
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@

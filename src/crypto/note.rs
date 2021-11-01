@@ -1,9 +1,15 @@
-use crypto_api_chachapoly::ChachaPolyIetf;
-use ff::Field;
-use rand::rngs::OsRng;
 use std::io;
 
-use super::diffie_hellman::{kdf_sapling, sapling_ka_agree};
+use crypto_api_chachapoly::ChachaPolyIetf;
+use halo2_gadgets::ecc::FixedPoints;
+use pasta_curves as pasta;
+use pasta_curves::arithmetic::Field;
+use rand::rngs::OsRng;
+
+use super::{
+    constants::OrchardFixedBases,
+    diffie_hellman::{kdf_sapling, sapling_ka_agree},
+};
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
 
@@ -17,11 +23,11 @@ pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
 #[derive(Clone)]
 pub struct Note {
-    pub serial: jubjub::Fr,
+    pub serial: pasta::Fp,
     pub value: u64,
-    pub token_id: jubjub::Fr,
-    pub coin_blind: jubjub::Fr,
-    pub valcom_blind: jubjub::Fr,
+    pub token_id: pasta::Fp,
+    pub coin_blind: pasta::Fp,
+    pub valcom_blind: pasta::Fq,
 }
 
 impl Encodable for Note {
@@ -49,9 +55,9 @@ impl Decodable for Note {
 }
 
 impl Note {
-    pub fn encrypt(&self, public: &jubjub::SubgroupPoint) -> Result<EncryptedNote> {
-        let ephem_secret = jubjub::Fr::random(&mut OsRng);
-        let ephem_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * ephem_secret;
+    pub fn encrypt(&self, public: &pasta::Ep) -> Result<EncryptedNote> {
+        let ephem_secret = pasta::Fq::random(&mut OsRng);
+        let ephem_public = OrchardFixedBases::SpendAuthG.generator() * ephem_secret;
         let shared_secret = sapling_ka_agree(&ephem_secret, public.into());
         let key = kdf_sapling(shared_secret, &ephem_public.into());
 
@@ -75,7 +81,7 @@ impl Note {
 
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
-    ephem_public: jubjub::SubgroupPoint,
+    ephem_public: pasta::Ep,
 }
 
 impl Encodable for EncryptedNote {
@@ -100,7 +106,7 @@ impl Decodable for EncryptedNote {
 }
 
 impl EncryptedNote {
-    pub fn decrypt(&self, secret: &jubjub::Fr) -> Result<Note> {
+    pub fn decrypt(&self, secret: &pasta::Fq) -> Result<Note> {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public.into());
         let key = kdf_sapling(shared_secret, &self.ephem_public.into());
 

@@ -1,8 +1,7 @@
 use std::fmt;
 
-use crate::client;
-use crate::state;
-use crate::vm::ZkVmError;
+//use crate::client;
+//use crate::state;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -43,6 +42,7 @@ pub enum Error {
     VmError,
     BadContract,
     Groth16Error,
+    PlonkError,
     OperationFailed,
     NoteDecryptionFailed,
     VerifyFailed,
@@ -117,6 +117,7 @@ impl fmt::Display for Error {
             Error::VmError => f.write_str("VM error"),
             Error::BadContract => f.write_str("Contract is poorly defined"),
             Error::Groth16Error => f.write_str("Groth16 error"),
+            Error::PlonkError => f.write_str("Plonk error"),
             Error::RusqliteError(ref err) => write!(f, "Rusqlite error {}", err),
             Error::OperationFailed => f.write_str("Operation failed"),
             Error::ConnectFailed => f.write_str("Connection failed"),
@@ -193,18 +194,6 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
-impl From<ZkVmError> for Error {
-    fn from(_err: ZkVmError) -> Error {
-        Error::VmError
-    }
-}
-
-impl From<bellman::SynthesisError> for Error {
-    fn from(_err: bellman::SynthesisError) -> Error {
-        Error::Groth16Error
-    }
-}
-
 impl<T> From<async_channel::SendError<T>> for Error {
     fn from(_err: async_channel::SendError<T>) -> Error {
         Error::AsyncChannelSenderError
@@ -277,6 +266,7 @@ impl From<std::str::Utf8Error> for Error {
     }
 }
 
+/*
 impl From<state::VerifyFailed> for Error {
     fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
@@ -288,6 +278,7 @@ impl From<client::ClientFailed> for Error {
         Error::ClientFailed(err.to_string())
     }
 }
+*/
 
 #[cfg(feature = "btc")]
 impl From<crate::service::BtcFailed> for Error {
@@ -343,5 +334,11 @@ impl From<log::SetLoggerError> for Error {
 impl From<tungstenite::Error> for Error {
     fn from(_err: tungstenite::Error) -> Error {
         Error::TungsteniteError
+    }
+}
+
+impl From<halo2::plonk::Error> for Error {
+    fn from(_err: halo2::plonk::Error) -> Error {
+        Error::PlonkError
     }
 }

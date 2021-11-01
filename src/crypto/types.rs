@@ -1,20 +1,21 @@
 //! Type aliases used in the codebase.
 // Helpful for changing the curve and crypto we're using.
+use halo2_gadgets::ecc::FixedPoints;
+use pasta_curves as pasta;
 
-pub type PublicKey = jubjub::SubgroupPoint;
+use super::{constants::OrchardFixedBases, util::mod_r_p};
 
-pub type SecretKey = jubjub::Fr;
+pub type DrkTokenId = pasta::Fp;
+pub type DrkSerial = pasta::Fp;
+pub type DrkCoinBlind = pasta::Fp;
 
-pub fn derive_publickey(secret: SecretKey) -> PublicKey {
-    zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret
+pub type DrkValueBlind = pasta::Fq;
+pub type DrkValueCommit = pasta::Ep;
+
+pub type DrkPublicKey = pasta::Ep;
+pub type DrkSecretKey = pasta::Fp;
+
+pub fn derive_publickey(s: DrkSecretKey) -> DrkPublicKey {
+    let skrt = mod_r_p(s);
+    OrchardFixedBases::SpendAuthG.generator() * skrt
 }
-
-pub type TokenId = jubjub::Fr;
-
-pub type NullifierSerial = jubjub::Fr;
-
-pub type CoinBlind = jubjub::Fr;
-
-pub type ValueCommitBlind = jubjub::Fr;
-
-pub type TokenCommitBlind = jubjub::Fr;

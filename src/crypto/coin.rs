@@ -1,8 +1,8 @@
 use std::io;
 
 use crate::{
-    error::Result,
     serial::{Decodable, Encodable},
+    Result,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,4 +29,3 @@ impl Decodable for Coin {
         })
     }
 }
-
