@@ -1,5 +1,5 @@
-use pasta_curves as pasta;
 use pasta_curves::vesta;
+// TODO: Alias vesta::Affine to something
 
 use halo2::{
     plonk,
@@ -8,6 +8,8 @@ use halo2::{
     transcript::{Blake2bRead, Blake2bWrite},
 };
 
+use super::types::*;
+
 #[derive(Debug)]
 pub struct VerifyingKey {
     pub params: commitment::Params<vesta::Affine>,
@@ -15,7 +17,7 @@ pub struct VerifyingKey {
 }
 
 impl VerifyingKey {
-    pub fn build(k: u32, c: impl Circuit<pasta::Fp>) -> Self {
+    pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
         let params = commitment::Params::new(k);
         let vk = plonk::keygen_vk(&params, &c).unwrap();
         VerifyingKey { params, vk }
@@ -29,7 +31,7 @@ pub struct ProvingKey {
 }
 
 impl ProvingKey {
-    pub fn build(k: u32, c: impl Circuit<pasta::Fp>) -> Self {
+    pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
         let params = commitment::Params::new(k);
         let vk = plonk::keygen_vk(&params, &c).unwrap();
         let pk = plonk::keygen_pk(&params, vk, &c).unwrap();
@@ -49,8 +51,8 @@ impl AsRef<[u8]> for Proof {
 impl Proof {
     pub fn create(
         pk: &ProvingKey,
-        circuits: &[impl Circuit<pasta::Fp>],
-        pubinputs: &[pasta::Fp],
+        circuits: &[impl Circuit<DrkCircuitField>],
+        pubinputs: &[DrkCircuitField],
     ) -> Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
 
@@ -65,7 +67,11 @@ impl Proof {
         Ok(Proof(transcript.finalize()))
     }
 
-    pub fn verify(&self, vk: &VerifyingKey, pubinputs: &[pasta::Fp]) -> Result<(), plonk::Error> {
+    pub fn verify(
+        &self,
+        vk: &VerifyingKey,
+        pubinputs: &[DrkCircuitField],
+    ) -> Result<(), plonk::Error> {
         let msm = vk.params.empty_msm();
         let mut transcript = Blake2bRead::init(&self.0[..]);
         let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;

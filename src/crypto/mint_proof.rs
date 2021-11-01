@@ -4,7 +4,6 @@ use std::time::Instant;
 use halo2_gadgets::primitives;
 use halo2_gadgets::primitives::poseidon::{ConstantLength, P128Pow5T3};
 use log::debug;
-use pasta_curves as pasta;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
@@ -41,11 +40,11 @@ impl MintRevealedValues {
         let coords = public_key.to_affine().coordinates().unwrap();
         let messages = [
             [*coords.x(), *coords.y()],
-            [pasta::Fp::from_u64(value), token_id],
+            [DrkValue::from_u64(value), token_id],
             [serial, coin_blind],
         ];
 
-        let mut hash = pasta::Fp::zero();
+        let mut hash = DrkCoin::zero();
         for msg in messages.iter() {
             hash += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
         }
@@ -59,12 +58,12 @@ impl MintRevealedValues {
         }
     }
 
-    fn make_outputs(&self) -> [pasta::Fp; 5] {
+    fn make_outputs(&self) -> [DrkCircuitField; 5] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.value_commit.to_affine().coordinates().unwrap();
 
         vec![
-            pasta::Fp::from_bytes(&self.coin).unwrap(),
+            DrkCircuitField::from_bytes(&self.coin).unwrap(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),
@@ -98,12 +97,12 @@ impl Decodable for MintRevealedValues {
 #[allow(clippy::too_many_arguments)]
 pub fn create_mint_proof(
     value: u64,
-    token_id: pasta::Fp,
-    value_blind: pasta::Fq,
-    token_blind: pasta::Fq,
-    serial: pasta::Fp,
-    coin_blind: pasta::Fp,
-    public_key: pasta::Ep,
+    token_id: DrkTokenId,
+    value_blind: DrkValueBlind,
+    token_blind: DrkValueBlind,
+    serial: DrkSerial,
+    coin_blind: DrkCoinBlind,
+    public_key: DrkPublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {
     let revealed = MintRevealedValues::compute(
         value,
@@ -120,7 +119,7 @@ pub fn create_mint_proof(
     let c = MintContract {
         pub_x: Some(*coords.x()),
         pub_y: Some(*coords.y()),
-        value: Some(pasta::Fp::from_u64(value)),
+        value: Some(DrkValue::from_u64(value)),
         asset: Some(token_id),
         serial: Some(serial),
         coin_blind: Some(coin_blind),
@@ -129,6 +128,7 @@ pub fn create_mint_proof(
     };
 
     let start = Instant::now();
+    // TODO: Don't always build this
     let pk = ProvingKey::build(11, MintContract::default());
     debug!("Setup: [{:?}]", start.elapsed());
 
@@ -143,6 +143,7 @@ pub fn create_mint_proof(
 pub fn verify_mint_proof(proof: Proof, revealed: &MintRevealedValues) -> Result<()> {
     let public_inputs = revealed.make_outputs();
 
+    // TODO: Don't always build this
     let vk = VerifyingKey::build(11, MintContract::default());
     Ok(proof.verify(&vk, &public_inputs)?)
 }

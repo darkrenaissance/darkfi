@@ -1,14 +1,13 @@
 use std::io;
 
 use crypto_api_chachapoly::ChachaPolyIetf;
-use halo2_gadgets::ecc::FixedPoints;
-use pasta_curves as pasta;
 use pasta_curves::arithmetic::Field;
 use rand::rngs::OsRng;
 
 use super::{
-    constants::OrchardFixedBases,
     diffie_hellman::{kdf_sapling, sapling_ka_agree},
+    types::*,
+    util::mod_r_p,
 };
 use crate::error::{Error, Result};
 use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
@@ -23,11 +22,11 @@ pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
 #[derive(Clone)]
 pub struct Note {
-    pub serial: pasta::Fp,
+    pub serial: DrkSerial,
     pub value: u64,
-    pub token_id: pasta::Fp,
-    pub coin_blind: pasta::Fp,
-    pub valcom_blind: pasta::Fq,
+    pub token_id: DrkTokenId,
+    pub coin_blind: DrkCoinBlind,
+    pub valcom_blind: DrkValueBlind,
 }
 
 impl Encodable for Note {
@@ -55,10 +54,10 @@ impl Decodable for Note {
 }
 
 impl Note {
-    pub fn encrypt(&self, public: &pasta::Ep) -> Result<EncryptedNote> {
-        let ephem_secret = pasta::Fq::random(&mut OsRng);
-        let ephem_public = OrchardFixedBases::SpendAuthG.generator() * ephem_secret;
-        let shared_secret = sapling_ka_agree(&ephem_secret, public.into());
+    pub fn encrypt(&self, public: &DrkPublicKey) -> Result<EncryptedNote> {
+        let ephem_secret = DrkSecretKey::random(&mut OsRng);
+        let ephem_public = derive_publickey(ephem_secret);
+        let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public.into());
         let key = kdf_sapling(shared_secret, &ephem_public.into());
 
         let mut input = Vec::new();
@@ -81,7 +80,7 @@ impl Note {
 
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
-    ephem_public: pasta::Ep,
+    ephem_public: DrkPublicKey,
 }
 
 impl Encodable for EncryptedNote {
@@ -106,8 +105,8 @@ impl Decodable for EncryptedNote {
 }
 
 impl EncryptedNote {
-    pub fn decrypt(&self, secret: &pasta::Fq) -> Result<Note> {
-        let shared_secret = sapling_ka_agree(secret, &self.ephem_public.into());
+    pub fn decrypt(&self, secret: &DrkSecretKey) -> Result<Note> {
+        let shared_secret = sapling_ka_agree(&mod_r_p(*secret), &self.ephem_public.into());
         let key = kdf_sapling(shared_secret, &self.ephem_public.into());
 
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];

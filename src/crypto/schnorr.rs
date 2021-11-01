@@ -1,45 +1,44 @@
 use std::io;
 
 use halo2_gadgets::ecc::FixedPoints;
-use pasta_curves as pasta;
 use pasta_curves::{arithmetic::Field, group::GroupEncoding};
 use rand::rngs::OsRng;
 
 use super::{
     constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
-    util::hash_to_scalar,
+    types::*,
+    util::{hash_to_scalar, mod_r_p},
 };
 use crate::error::Result;
 use crate::serial::{Decodable, Encodable};
 
-pub struct SecretKey(pub pasta::Fq);
+pub struct SecretKey(pub DrkSecretKey);
 
 impl SecretKey {
     pub fn random() -> Self {
-        Self(pasta::Fq::random(&mut OsRng))
+        Self(DrkSecretKey::random(&mut OsRng))
     }
 
     pub fn sign(&self, message: &[u8]) -> Signature {
-        let mask = pasta::Fq::random(&mut OsRng);
+        let mask = DrkValueBlind::random(&mut OsRng);
         let commit = OrchardFixedBases::SpendAuthG.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
-        let response = mask + challenge * self.0;
+        let response = mask + challenge * mod_r_p(self.0);
 
         Signature { commit, response }
     }
 
     pub fn public_key(&self) -> PublicKey {
-        let public = OrchardFixedBases::SpendAuthG.generator() * self.0;
-        PublicKey(public)
+        PublicKey(derive_publickey(self.0))
     }
 }
 
-pub struct PublicKey(pub pasta::Ep);
+pub struct PublicKey(pub DrkPublicKey);
 
 pub struct Signature {
-    commit: pasta::Ep,
-    response: pasta::Fq,
+    commit: DrkValueCommit,
+    response: DrkValueBlind,
 }
 
 impl Encodable for Signature {
