@@ -43,8 +43,13 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
     Ok(token_id)
 }
 
-pub fn assign_id(network: &str, token: &str, tokenlist: &TokenList) -> Result<String> {
-    match NetworkName::from_str(network)? {
+pub fn assign_id(
+    network: &NetworkName,
+    token: &str,
+    sol_tokenlist: &TokenList,
+    eth_tokenlist: &TokenList,
+) -> Result<String> {
+    match network {
         #[cfg(feature = "sol")]
         NetworkName::Solana => {
             // (== 44) can represent a Solana base58 token mint address
@@ -52,13 +57,25 @@ pub fn assign_id(network: &str, token: &str, tokenlist: &TokenList) -> Result<St
                 token.to_string()
             } else {
                 let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, tokenlist)?
+                symbol_to_id(&tok_lower, sol_tokenlist)?
             };
             Ok(id)
         }
         #[cfg(feature = "btc")]
         NetworkName::Bitcoin => {
+            // FIXME should load the id from the json file
             let id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
+            Ok(id)
+        }
+        #[cfg(feature = "eth")]
+        NetworkName::Ethereum => {
+            use crate::service::eth::ETH_NATIVE_TOKEN_ID;
+            let id = if token == "eth" && token == ETH_NATIVE_TOKEN_ID {
+                token.to_string()
+            } else {
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, eth_tokenlist)?
+            };
             Ok(id)
         }
         _ => Err(Error::NotSupportedNetwork),
@@ -140,7 +157,7 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     // Round and return
     /*
     if round && number == u64::MAX {
-        return Err(Error::ParseFailed("u64 overflow"));
+    return Err(Error::ParseFailed("u64 overflow"));
     }
     */
 
