@@ -151,8 +151,14 @@ impl Drk {
     // --> {"jsonrpc": "2.0", "method": "transfer",
     //      "params": ["dusdc", "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", 13.37], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
-    async fn transfer(&self, token: &str, address: &str, amount: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("transfer"), json!([token, address, amount]));
+    async fn transfer(
+        &self,
+        network: &str,
+        token: &str,
+        address: &str,
+        amount: &str,
+    ) -> Result<Value> {
+        let req = jsonrpc::request(json!("transfer"), json!([network, token, address, amount]));
         Ok(self.request(req).await?)
     }
 }
@@ -276,11 +282,18 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     }
 
     if let Some(matches) = options.subcommand_matches("transfer") {
+        let network = matches.value_of("network").unwrap().to_lowercase();
         let token_sym = matches.value_of("TOKENSYM").unwrap();
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap();
 
-        client.transfer(token_sym, address, amount).await?;
+        client
+            .check_network(&NetworkName::from_str(&network)?)
+            .await?;
+
+        client
+            .transfer(&network, token_sym, address, amount)
+            .await?;
 
         println!(
             "{} {} Transfered successfully",
@@ -329,6 +342,8 @@ async fn main() -> Result<()> {
     )
     (@subcommand transfer =>
      (about: "Transfer Dark tokens to address")
+     (@arg network: +required +takes_value --network
+      "Which network to use (bitcoin/solana/...)")
      (@arg TOKENSYM: +required "Desired token (btc/sol/usdc...)")
      (@arg ADDRESS: +required "Recipient address")
      (@arg AMOUNT: +required "Amount to send")
