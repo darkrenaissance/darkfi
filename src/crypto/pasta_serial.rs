@@ -3,8 +3,10 @@ use std::io;
 use pasta_curves as pasta;
 use pasta_curves::{arithmetic::FieldExt, group::GroupEncoding};
 
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
+use crate::{
+    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    Error, Result,
+};
 
 impl Encodable for pasta::Fp {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {

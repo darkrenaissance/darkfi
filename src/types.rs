@@ -3,7 +3,7 @@
 use halo2_gadgets::ecc::FixedPoints;
 use pasta_curves as pasta;
 
-use super::{constants::OrchardFixedBases, util::mod_r_p};
+use crate::crypto::{constants::OrchardFixedBases, util::mod_r_p};
 
 pub type DrkCircuitField = pasta::Fp;
 

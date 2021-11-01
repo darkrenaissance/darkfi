@@ -8,16 +8,17 @@ pub mod pasta_serial;
 pub mod proof;
 pub mod schnorr;
 pub mod spend_proof;
-pub mod types;
 pub mod util;
+
+use crate::types::*;
 
 #[derive(Clone)]
 pub struct OwnCoin {
-    pub coin: types::DrkCoin,
+    pub coin: DrkCoin,
     pub note: note::Note,
-    pub secret: types::DrkSecretKey,
+    pub secret: DrkSecretKey,
     //pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
-    pub nullifier: types::DrkNullifier,
+    pub nullifier: DrkNullifier,
 }
 
 pub type OwnCoins = Vec<OwnCoin>;

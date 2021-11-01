@@ -13,6 +13,7 @@ pub mod serial;
 // pub mod service;
 // pub mod state;
 pub mod system;
+pub mod types;
 // pub mod tx;
 // pub mod util;
 // pub mod vm;

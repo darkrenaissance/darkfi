@@ -6,11 +6,13 @@ use rand::rngs::OsRng;
 
 use super::{
     diffie_hellman::{kdf_sapling, sapling_ka_agree},
-    types::*,
     util::mod_r_p,
 };
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
+use crate::{
+    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    types::*,
+    Error, Result,
+};
 
 pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
     8 +     // value
@@ -129,16 +131,18 @@ impl EncryptedNote {
 
 #[test]
 fn test_note_encdec() {
+    use crate::types::*;
+
     let note = Note {
-        serial: jubjub::Fr::random(&mut OsRng),
+        serial: DrkSerial::random(&mut OsRng),
         value: 110,
-        token_id: jubjub::Fr::random(&mut OsRng),
-        coin_blind: jubjub::Fr::random(&mut OsRng),
-        valcom_blind: jubjub::Fr::random(&mut OsRng),
+        token_id: DrkTokenId::random(&mut OsRng),
+        coin_blind: DrkCoinBlind::random(&mut OsRng),
+        valcom_blind: DrkValueBlind::random(&mut OsRng),
     };
 
-    let secret = jubjub::Fr::random(&mut OsRng);
-    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    let secret = DrkSecretKey::random(&mut OsRng);
+    let public = derive_publickey(secret);
 
     let encrypted_note = note.encrypt(&public).unwrap();
     let note2 = encrypted_note.decrypt(&secret).unwrap();

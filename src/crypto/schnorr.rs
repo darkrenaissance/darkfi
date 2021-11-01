@@ -6,11 +6,13 @@ use rand::rngs::OsRng;
 
 use super::{
     constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
-    types::*,
     util::{hash_to_scalar, mod_r_p},
 };
-use crate::error::Result;
-use crate::serial::{Decodable, Encodable};
+use crate::{
+    serial::{Decodable, Encodable},
+    types::*,
+    Result,
+};
 
 pub struct SecretKey(pub DrkSecretKey);
 

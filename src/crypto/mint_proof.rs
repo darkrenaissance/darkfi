@@ -11,12 +11,14 @@ use pasta_curves::{
 
 use super::{
     proof::{Proof, ProvingKey, VerifyingKey},
-    types::*,
     util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
 };
-use crate::circuit::mint_contract::MintContract;
-use crate::error::Result;
-use crate::serial::{Decodable, Encodable};
+use crate::{
+    circuit::mint_contract::MintContract,
+    serial::{Decodable, Encodable},
+    types::*,
+    Result,
+};
 
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,

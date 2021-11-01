@@ -1,6 +1,5 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::path::PathBuf;
 use std::str::FromStr;
 

@@ -13,12 +13,14 @@ use pasta_curves::{
 
 use super::{
     proof::{Proof, ProvingKey, VerifyingKey},
-    types::*,
     util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
 };
-use crate::circuit::spend_contract::SpendContract;
-use crate::serial::{Decodable, Encodable};
-use crate::Result;
+use crate::{
+    circuit::spend_contract::SpendContract,
+    serial::{Decodable, Encodable},
+    types::*,
+    Result,
+};
 
 pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,

@@ -8,7 +8,7 @@ use halo2::{
     transcript::{Blake2bRead, Blake2bWrite},
 };
 
-use super::types::*;
+use crate::types::*;
 
 #[derive(Debug)]
 pub struct VerifyingKey {

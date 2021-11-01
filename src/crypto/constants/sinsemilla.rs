@@ -21,9 +21,6 @@ pub const INV_TWO_POW_K: [u8; 32] = [
 /// of Pallas.
 pub const C: usize = 253;
 
-/// $\ell^\mathsf{Orchard}_\mathsf{Merkle}$
-//pub(crate) const L_ORCHARD_MERKLE: usize = 255;
-
 /// SWU hash-to-curve personalization for the Merkle CRH generator
 pub const MERKLE_CRH_PERSONALIZATION: &str = "z.cash:Orchard-MerkleCRH";
 
@@ -73,8 +70,14 @@ pub const Q_MERKLE_CRH: ([u8; 32], [u8; 32]) = (
     ],
 );
 
-/*
-pub(crate) fn lebs2ip_k(bits: &[bool]) -> u32 {
+#[allow(dead_code)]
+fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
+    assert!(NUM_BITS <= 64);
+    super::util::gen_const_array(|mask: usize| (int & (1 << mask)) != 0)
+}
+
+#[allow(dead_code)]
+fn lebs2ip_k(bits: &[bool]) -> u32 {
     assert!(bits.len() == K);
     bits.iter()
         .enumerate()
@@ -83,11 +86,11 @@ pub(crate) fn lebs2ip_k(bits: &[bool]) -> u32 {
 
 /// The sequence of K bits in little-endian order representing an integer
 /// up to `2^K` - 1.
-pub(crate) fn i2lebsp_k(int: usize) -> [bool; K] {
+#[allow(dead_code)]
+fn i2lebsp_k(int: usize) -> [bool; K] {
     assert!(int < (1 << K));
     i2lebsp(int as u64)
 }
-*/
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OrchardHashDomains {
@@ -144,16 +147,15 @@ impl CommitDomains<pallas::Affine, OrchardFixedBases, OrchardHashDomains> for Or
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{
+    use crate::crypto::constants::{
         fixed_bases::{COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION},
         sinsemilla::MERKLE_CRH_PERSONALIZATION,
     };
     use halo2_gadgets::primitives::sinsemilla::{CommitDomain, HashDomain};
 
-    use ff::PrimeField;
-    use group::Curve;
     use pasta_curves::{
         arithmetic::{CurveAffine, FieldExt},
+        group::{ff::PrimeField, Curve},
         pallas,
     };
     use rand::{self, rngs::OsRng, Rng};
@@ -161,7 +163,7 @@ mod tests {
     #[test]
     // Nodes in the Merkle tree are Pallas base field elements.
     fn l_orchard_merkle() {
-        assert_eq!(super::L_ORCHARD_MERKLE, pallas::Base::NUM_BITS as usize);
+        assert_eq!(255, pallas::Base::NUM_BITS as usize);
     }
 
     #[test]

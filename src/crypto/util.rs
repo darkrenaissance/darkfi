@@ -5,12 +5,10 @@ use pasta_curves::{
     pallas,
 };
 
-use super::{
-    constants::fixed_bases::{
-        VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
-    },
-    types::*,
+use super::constants::fixed_bases::{
+    VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
 };
+use crate::types::*;
 
 pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> DrkScalar {
     let mut hasher = Params::new().hash_length(64).personal(persona).to_state();
