@@ -492,6 +492,9 @@ impl Cashierd {
                 }
                 Ok(None)
             }
+            // FIXME add tokens support  
+            #[cfg(feature = "eth")]
+            NetworkName::Ethereum => Ok(None),
             #[cfg(feature = "btc")]
             NetworkName::Bitcoin => Ok(None),
             _ => Err(Error::NotSupportedNetwork),
