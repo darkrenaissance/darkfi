@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-use log::{debug, error};
+use log::{debug, error, info};
 use pasta_curves::arithmetic::Field;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, params, Connection};
@@ -45,68 +45,55 @@ impl Balances {
 }
 
 pub struct WalletDb {
-    pub path: PathBuf,
-    pub password: String,
+    pub conn: Connection,
 }
 
-impl WalletApi for WalletDb {
-    fn get_password(&self) -> String {
-        self.password.to_owned()
-    }
-    fn get_path(&self) -> PathBuf {
-        self.path.to_owned()
-    }
-}
+impl WalletApi for WalletDb {}
 
 impl WalletDb {
     pub fn new(path: &Path, password: String) -> Result<WalletPtr> {
         debug!(target: "WALLETDB", "new() Constructor called");
-        Ok(Arc::new(Self {
-            path: path.to_owned(),
-            password,
-        }))
-    }
-
-    fn connect(&self) -> Result<Connection> {
-        if self.password.trim().is_empty() {
+        if password.trim().is_empty() {
             error!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
-        let conn = Connection::open(&self.path)?;
-        debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
-        conn.pragma_update(None, "key", &self.password)?;
-        Ok(conn)
+
+        let conn = Connection::open(path)?;
+        conn.pragma_update(None, "key", &password)?;
+        info!(target: "WALLETDB", "Opened connection at path: {:?}", path);
+
+        Ok(Arc::new(Self { conn }))
     }
 
     pub fn init_db(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Initialize...");
         let contents = include_str!("../../sql/schema.sql");
-        let conn = self.connect()?;
-        Ok(conn.execute_batch(contents)?)
+        Ok(self.conn.execute_batch(contents)?)
     }
 
     pub fn key_gen(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
+        let mut stmt = self.conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
+
         let key_check = stmt.exists(params!["0"])?;
+
         if !key_check {
             let secret = DrkSecretKey::random(&mut OsRng);
             let public = derive_publickey(secret);
             self.put_keypair(&public, &secret)?;
-        } else {
-            debug!(target: "WALLETDB", "Keys already exist.");
-            return Err(Error::from(ClientFailed::KeyExists));
+            return Ok(());
         }
-        Ok(())
+
+        error!(target: "WALLETDB", "Keys already exist.");
+        Err(Error::from(ClientFailed::KeyExists))
     }
 
     pub fn put_keypair(&self, key_public: &DrkPublicKey, key_private: &DrkSecretKey) -> Result<()> {
-        let conn = self.connect()?;
+        debug!(target: "WALLETDB", "put_keypair()");
         let key_public = serial::serialize(key_public);
         let key_private = serial::serialize(key_private);
 
-        conn.execute(
+        self.conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
             params![key_public, key_private],
         )?;
@@ -116,8 +103,8 @@ impl WalletDb {
 
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         debug!(target: "WALLETDB", "Returning keypairs...");
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
+        let mut stmt = self.conn.prepare("SELECT * FROM keys")?;
+
         // this just gets the first key. maybe we should randomize this
         let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
         let mut keypairs = Vec::new();
@@ -136,9 +123,12 @@ impl WalletDb {
 
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         debug!(target: "WALLETDB", "Get own coins");
-        let conn = self.connect()?;
         let is_spent = 0;
-        let mut coins = conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+
+        let mut coins = self
+            .conn
+            .prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+
         let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((
                 row.get(0)?,
@@ -197,10 +187,7 @@ impl WalletDb {
 
     pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
         debug!(target: "WALLETDB", "Put own coins");
-        let conn = self.connect()?;
-
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
-
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
         let value_blind = self.get_value_serialized(&own_coin.note.value_blind)?;
@@ -211,7 +198,7 @@ impl WalletDb {
         let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
 
-        conn.execute(
+        self.conn.execute(
             "INSERT OR REPLACE INTO coins
             (coin, serial, value, token_id, coin_blind,
             valcom_blind, witness, secret, is_spent, nullifier)
@@ -231,22 +218,22 @@ impl WalletDb {
                 ":nullifier": nullifier,
             },
         )?;
+
         Ok(())
     }
 
     pub fn remove_own_coins(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Remove own coins");
-        let conn = self.connect()?;
-        conn.execute("DROP TABLE coins;", [])?;
+        let _rows = self.conn.execute("DROP TABLE coins;", [])?;
         Ok(())
     }
 
     pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
-        let coin = self.get_value_serialized(coin)?;
-        let conn = self.connect()?;
         let is_spent = 1;
-        conn.execute(
+        let coin = self.get_value_serialized(coin)?;
+
+        self.conn.execute(
             "UPDATE coins
             SET is_spent = ?1
             WHERE coin = ?2 ;",
@@ -306,13 +293,12 @@ impl WalletDb {
 
     pub fn get_balances(&self) -> Result<Balances> {
         debug!(target: "WALLETDB", "Get token and balances...");
-        let conn = self.connect()?;
-
         let is_spent = 0;
 
-        let mut stmt = conn.prepare(
+        let mut stmt = self.conn.prepare(
             "SELECT value, token_id, nullifier FROM coins  WHERE is_spent = :is_spent ;",
         )?;
+
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?;
@@ -336,11 +322,12 @@ impl WalletDb {
 
     pub fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
         debug!(target: "WALLETDB", "Get token ID...");
-        let conn = self.connect()?;
-
         let is_spent = 0;
 
-        let mut stmt = conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
+
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
 
         let mut token_ids = Vec::new();
@@ -356,20 +343,20 @@ impl WalletDb {
 
     pub fn token_id_exists(&self, token_id: &DrkTokenId) -> Result<bool> {
         debug!(target: "WALLETDB", "Check tokenID exists");
-        let conn = self.connect()?;
-
-        let id = self.get_value_serialized(token_id)?;
         let is_spent = 0;
+        let id = self.get_value_serialized(token_id)?;
 
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
+
         let id_check = stmt.exists(params![id, is_spent])?;
+
         Ok(id_check)
     }
 
     pub fn test_wallet(&self) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
+        let mut stmt = self.conn.prepare("SELECT * FROM keys")?;
         let _rows = stmt.query([])?;
         Ok(())
     }
