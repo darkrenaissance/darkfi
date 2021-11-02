@@ -1,5 +1,6 @@
 use std::fmt;
 
+/*
 use bellman::groth16;
 use bls12_381::Bls12;
 use log::debug;
@@ -23,6 +24,7 @@ pub struct StateUpdate {
     pub coins: Vec<Coin>,
     pub enc_notes: Vec<EncryptedNote>,
 }
+*/
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
 
@@ -69,6 +71,7 @@ impl fmt::Display for VerifyFailed {
     }
 }
 
+/*
 pub fn state_transition<S: ProgramState>(
     state: &async_std::sync::MutexGuard<S>,
     tx: tx::Transaction,
@@ -132,3 +135,4 @@ pub fn state_transition<S: ProgramState>(
         enc_notes,
     })
 }
+*/

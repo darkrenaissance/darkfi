@@ -1,25 +1,21 @@
 pub mod builder;
 pub mod partial;
 
-use bellman::groth16;
-use bls12_381::Bls12;
-use group::Group;
 use std::io;
 
-use self::partial::{PartialTransactionClearInput, PartialTransactionInput};
-use crate::crypto::{
-    note::EncryptedNote, schnorr, verify_mint_proof, verify_spend_proof, MintRevealedValues,
-    SpendRevealedValues,
-};
-use crate::error::Result;
-use crate::impl_vec;
-use crate::serial::{Decodable, Encodable, VarInt};
-use crate::state;
+use pasta_curves::group::Group;
 
-pub use self::builder::{
-    TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
-    TransactionBuilderOutputInfo,
+use crate::crypto::{
+    mint_proof::verify_mint_proof,
+    note::EncryptedNote,
+    proof::{Proof, VerifyingKey},
+    schnorr,
+    spend_proof::verify_spend_proof,
+    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+    MintRevealedValues, SpendRevealedValues,
 };
+use crate::serial::{Decodable, Encodable, VarInt};
+use crate::{impl_vec, state, types::*, Result};
 
 pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
@@ -29,21 +25,21 @@ pub struct Transaction {
 
 pub struct TransactionClearInput {
     pub value: u64,
-    pub token_id: jubjub::Fr,
-    pub valcom_blind: jubjub::Fr,
-    pub token_commit_blind: jubjub::Fr,
-    pub signature_public: jubjub::SubgroupPoint,
+    pub token_id: DrkTokenId,
+    pub value_blind: DrkValueBlind,
+    pub token_blind: DrkValueBlind,
+    pub signature_public: DrkPublicKey,
     pub signature: schnorr::Signature,
 }
 
 pub struct TransactionInput {
-    pub spend_proof: groth16::Proof<Bls12>,
+    pub spend_proof: Proof,
     pub revealed: SpendRevealedValues,
     pub signature: schnorr::Signature,
 }
 
 pub struct TransactionOutput {
-    pub mint_proof: groth16::Proof<Bls12>,
+    pub mint_proof: Proof,
     pub revealed: MintRevealedValues,
     pub enc_note: EncryptedNote,
 }
@@ -55,11 +51,6 @@ impl Transaction {
         len += self.inputs.encode_without_signature(&mut s)?;
         len += self.outputs.encode(s)?;
         Ok(len)
-    }
-
-    fn compute_pedersen_commit(value: jubjub::Fr, blind: &jubjub::Fr) -> jubjub::SubgroupPoint {
-        (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR * value)
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR * blind)
     }
 
     fn verify_token_commitments(&self) -> bool {
@@ -77,7 +68,7 @@ impl Transaction {
                 .any(|output| output.revealed.token_commit != token_commit_value);
         failed = failed
             || self.clear_inputs.iter().any(|input| {
-                Self::compute_pedersen_commit(input.token_id, &input.token_commit_blind)
+                pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind)
                     != token_commit_value
             });
         !failed
@@ -85,28 +76,30 @@ impl Transaction {
 
     pub fn verify(
         &self,
-        mint_pvk: &groth16::PreparedVerifyingKey<Bls12>,
-        spend_pvk: &groth16::PreparedVerifyingKey<Bls12>,
+        mint_pvk: &VerifyingKey,
+        spend_pvk: &VerifyingKey,
     ) -> state::VerifyResult<()> {
-        let mut valcom_total = jubjub::SubgroupPoint::identity();
+        let mut valcom_total = DrkValueCommit::identity();
+
         for input in &self.clear_inputs {
-            let value = jubjub::Fr::from(input.value);
-            valcom_total += Self::compute_pedersen_commit(value, &input.valcom_blind);
+            valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
         }
+
         for (i, input) in self.inputs.iter().enumerate() {
-            if !verify_spend_proof(spend_pvk, &input.spend_proof, &input.revealed) {
+            if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
                 return Err(state::VerifyFailed::SpendProof(i));
             }
             valcom_total += &input.revealed.value_commit;
         }
+
         for (i, output) in self.outputs.iter().enumerate() {
-            if !verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed) {
+            if verify_mint_proof(mint_pvk, output.mint_proof.clone(), &output.revealed).is_err() {
                 return Err(state::VerifyFailed::MintProof(i));
             }
             valcom_total -= &output.revealed.value_commit;
         }
 
-        if valcom_total != jubjub::SubgroupPoint::identity() {
+        if valcom_total != DrkValueCommit::identity() {
             return Err(state::VerifyFailed::MissingFunds);
         }
 
@@ -137,12 +130,15 @@ impl Transaction {
 }
 
 impl TransactionClearInput {
-    fn from_partial(partial: PartialTransactionClearInput, signature: schnorr::Signature) -> Self {
+    fn from_partial(
+        partial: partial::PartialTransactionClearInput,
+        signature: schnorr::Signature,
+    ) -> Self {
         Self {
             value: partial.value,
             token_id: partial.token_id,
-            valcom_blind: partial.valcom_blind,
-            token_commit_blind: partial.token_commit_blind,
+            value_blind: partial.value_blind,
+            token_blind: partial.token_blind,
             signature_public: partial.signature_public,
             signature,
         }
@@ -152,15 +148,18 @@ impl TransactionClearInput {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
-        len += self.valcom_blind.encode(&mut s)?;
-        len += self.token_commit_blind.encode(&mut s)?;
+        len += self.value_blind.encode(&mut s)?;
+        len += self.token_blind.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
         Ok(len)
     }
 }
 
 impl TransactionInput {
-    fn from_partial(partial: PartialTransactionInput, signature: schnorr::Signature) -> Self {
+    fn from_partial(
+        partial: partial::PartialTransactionInput,
+        signature: schnorr::Signature,
+    ) -> Self {
         Self {
             spend_proof: partial.spend_proof,
             revealed: partial.revealed,
@@ -201,8 +200,8 @@ impl Encodable for TransactionClearInput {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
-        len += self.valcom_blind.encode(&mut s)?;
-        len += self.token_commit_blind.encode(&mut s)?;
+        len += self.value_blind.encode(&mut s)?;
+        len += self.token_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         len += self.signature.encode(s)?;
         Ok(len)
@@ -214,8 +213,8 @@ impl Decodable for TransactionClearInput {
         Ok(Self {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(&mut d)?,
-            token_commit_blind: Decodable::decode(&mut d)?,
+            value_blind: Decodable::decode(&mut d)?,
+            token_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
             signature: Decodable::decode(d)?,
         })

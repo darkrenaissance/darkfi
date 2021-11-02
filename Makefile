@@ -25,13 +25,13 @@ $(BINS): $(BINDEPS)
 	cp target/release/$@ $@
 
 test:
-	$(CARGO) test --release --all-features
+	$(CARGO) test --release --all-features --lib
 
 fix:
 	$(CARGO) fix --release --all-features --allow-dirty
 
 clippy:
-	$(CARGO) clippy --release --all-features
+	$(CARGO) clippy --release --all-features --lib
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin

@@ -142,10 +142,11 @@ pub fn create_mint_proof(
     Ok((proof, revealed))
 }
 
-pub fn verify_mint_proof(proof: Proof, revealed: &MintRevealedValues) -> Result<()> {
+pub fn verify_mint_proof(
+    vk: &VerifyingKey,
+    proof: Proof,
+    revealed: &MintRevealedValues,
+) -> Result<()> {
     let public_inputs = revealed.make_outputs();
-
-    // TODO: Don't always build this
-    let vk = VerifyingKey::build(11, MintContract::default());
-    Ok(proof.verify(&vk, &public_inputs)?)
+    Ok(proof.verify(vk, &public_inputs)?)
 }

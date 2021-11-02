@@ -171,10 +171,11 @@ pub fn create_spend_proof(
     Ok((proof, revealed))
 }
 
-pub fn verify_spend_proof(proof: Proof, revealed: &SpendRevealedValues) -> Result<()> {
+pub fn verify_spend_proof(
+    vk: &VerifyingKey,
+    proof: Proof,
+    revealed: &SpendRevealedValues,
+) -> Result<()> {
     let public_inputs = revealed.make_outputs();
-
-    // TODO: Don't always build this
-    let vk = VerifyingKey::build(11, SpendContract::default());
-    Ok(proof.verify(&vk, &public_inputs)?)
+    Ok(proof.verify(vk, &public_inputs)?)
 }

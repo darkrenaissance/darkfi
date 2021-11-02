@@ -1,12 +1,10 @@
-use bellman::groth16;
-use bls12_381::Bls12;
 use std::io;
 
 use super::TransactionOutput;
-use crate::crypto::SpendRevealedValues;
-use crate::error::Result;
-use crate::impl_vec;
+use crate::crypto::{Proof, SpendRevealedValues};
 use crate::serial::{Decodable, Encodable, VarInt};
+use crate::types::*;
+use crate::{impl_vec, Result};
 
 pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
@@ -16,14 +14,14 @@ pub struct PartialTransaction {
 
 pub struct PartialTransactionClearInput {
     pub value: u64,
-    pub token_id: jubjub::Fr,
-    pub valcom_blind: jubjub::Fr,
-    pub token_commit_blind: jubjub::Fr,
-    pub signature_public: jubjub::SubgroupPoint,
+    pub token_id: DrkTokenId,
+    pub value_blind: DrkValueBlind,
+    pub token_blind: DrkValueBlind,
+    pub signature_public: DrkPublicKey,
 }
 
 pub struct PartialTransactionInput {
-    pub spend_proof: groth16::Proof<Bls12>,
+    pub spend_proof: Proof,
     pub revealed: SpendRevealedValues,
 }
 
@@ -52,8 +50,8 @@ impl Encodable for PartialTransactionClearInput {
         let mut len = 0;
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
-        len += self.valcom_blind.encode(&mut s)?;
-        len += self.token_commit_blind.encode(&mut s)?;
+        len += self.value_blind.encode(&mut s)?;
+        len += self.token_blind.encode(&mut s)?;
         len += self.signature_public.encode(&mut s)?;
         Ok(len)
     }
@@ -63,8 +61,8 @@ impl Decodable for PartialTransactionClearInput {
         Ok(Self {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(&mut d)?,
-            token_commit_blind: Decodable::decode(&mut d)?,
+            value_blind: Decodable::decode(&mut d)?,
+            token_blind: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(&mut d)?,
         })
     }

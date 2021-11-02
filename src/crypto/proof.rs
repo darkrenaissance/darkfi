@@ -94,7 +94,7 @@ impl Proof {
 
 impl Encodable for Proof {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.as_ref()[..])?;
+        s.write_slice(self.as_ref())?;
         Ok(self.as_ref().len())
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 
 //use crate::client;
-//use crate::state;
+use crate::state;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -266,13 +266,13 @@ impl From<std::str::Utf8Error> for Error {
     }
 }
 
-/*
 impl From<state::VerifyFailed> for Error {
     fn from(_err: state::VerifyFailed) -> Error {
         Error::VerifyFailed
     }
 }
 
+/*
 impl From<client::ClientFailed> for Error {
     fn from(err: client::ClientFailed) -> Error {
         Error::ClientFailed(err.to_string())

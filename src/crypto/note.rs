@@ -59,8 +59,8 @@ impl Note {
     pub fn encrypt(&self, public: &DrkPublicKey) -> Result<EncryptedNote> {
         let ephem_secret = DrkSecretKey::random(&mut OsRng);
         let ephem_public = derive_publickey(ephem_secret);
-        let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public.into());
-        let key = kdf_sapling(shared_secret, &ephem_public.into());
+        let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public);
+        let key = kdf_sapling(shared_secret, &ephem_public);
 
         let mut input = Vec::new();
         self.encode(&mut input)?;
@@ -108,8 +108,8 @@ impl Decodable for EncryptedNote {
 
 impl EncryptedNote {
     pub fn decrypt(&self, secret: &DrkSecretKey) -> Result<Note> {
-        let shared_secret = sapling_ka_agree(&mod_r_p(*secret), &self.ephem_public.into());
-        let key = kdf_sapling(shared_secret, &self.ephem_public.into());
+        let shared_secret = sapling_ka_agree(&mod_r_p(*secret), &self.ephem_public);
+        let key = kdf_sapling(shared_secret, &self.ephem_public);
 
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
         assert_eq!(

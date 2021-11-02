@@ -11,7 +11,7 @@ pub mod schnorr;
 pub mod spend_proof;
 pub mod util;
 
-use incrementalmerkletree::bridgetree::Frontier as BridgeFrontier;
+pub(crate) use {mint_proof::MintRevealedValues, proof::Proof, spend_proof::SpendRevealedValues};
 
 use crate::types::DrkSecretKey;
 
