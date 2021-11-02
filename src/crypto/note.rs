@@ -18,7 +18,7 @@ pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
     8 +     // value
     32 +    // token_id
     32 +    // coin_blind
-    32; // valcom_blind
+    32; // value_blind
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
@@ -28,7 +28,7 @@ pub struct Note {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub coin_blind: DrkCoinBlind,
-    pub valcom_blind: DrkValueBlind,
+    pub value_blind: DrkValueBlind,
 }
 
 impl Encodable for Note {
@@ -38,7 +38,7 @@ impl Encodable for Note {
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
         len += self.coin_blind.encode(&mut s)?;
-        len += self.valcom_blind.encode(&mut s)?;
+        len += self.value_blind.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -50,7 +50,7 @@ impl Decodable for Note {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
             coin_blind: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(d)?,
+            value_blind: Decodable::decode(d)?,
         })
     }
 }
@@ -138,7 +138,7 @@ fn test_note_encdec() {
         value: 110,
         token_id: DrkTokenId::random(&mut OsRng),
         coin_blind: DrkCoinBlind::random(&mut OsRng),
-        valcom_blind: DrkValueBlind::random(&mut OsRng),
+        value_blind: DrkValueBlind::random(&mut OsRng),
     };
 
     let secret = DrkSecretKey::random(&mut OsRng);

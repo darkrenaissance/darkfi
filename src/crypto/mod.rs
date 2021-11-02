@@ -11,17 +11,18 @@ pub mod schnorr;
 pub mod spend_proof;
 pub mod util;
 
-/*
-use crate::types::*;
+use incrementalmerkletree::bridgetree::Frontier as BridgeFrontier;
+
+use crate::types::DrkSecretKey;
 
 #[derive(Clone)]
 pub struct OwnCoin {
-    pub coin: DrkCoin,
+    pub coin: coin::Coin,
     pub note: note::Note,
     pub secret: DrkSecretKey,
     //pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
-    pub nullifier: DrkNullifier,
+    //pub witness: BridgeFrontier<merkle::MerkleHash, 32>,
+    pub nullifier: nullifier::Nullifier,
 }
 
 pub type OwnCoins = Vec<OwnCoin>;
-*/

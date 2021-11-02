@@ -1,14 +1,17 @@
-use pasta_curves::vesta;
-// TODO: Alias vesta::Affine to something
+use std::io;
 
+// TODO: Alias vesta::Affine to something
 use halo2::{
     plonk,
     plonk::Circuit,
     poly::commitment,
     transcript::{Blake2bRead, Blake2bWrite},
 };
+use pasta_curves::vesta;
 
+use crate::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt};
 use crate::types::*;
+use crate::Result;
 
 #[derive(Debug)]
 pub struct VerifyingKey {
@@ -53,7 +56,7 @@ impl Proof {
         pk: &ProvingKey,
         circuits: &[impl Circuit<DrkCircuitField>],
         pubinputs: &[DrkCircuitField],
-    ) -> Result<Self, plonk::Error> {
+    ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
 
         plonk::create_proof(
@@ -71,7 +74,7 @@ impl Proof {
         &self,
         vk: &VerifyingKey,
         pubinputs: &[DrkCircuitField],
-    ) -> Result<(), plonk::Error> {
+    ) -> std::result::Result<(), plonk::Error> {
         let msm = vk.params.empty_msm();
         let mut transcript = Blake2bRead::init(&self.0[..]);
         let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;
@@ -86,5 +89,21 @@ impl Proof {
 
     pub fn new(bytes: Vec<u8>) -> Self {
         Proof(bytes)
+    }
+}
+
+impl Encodable for Proof {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        s.write_slice(&self.as_ref()[..])?;
+        Ok(self.as_ref().len())
+    }
+}
+
+impl Decodable for Proof {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0 as usize;
+        let mut r = vec![0u8; len];
+        d.read_slice(&mut r)?;
+        Ok(Proof::new(r))
     }
 }

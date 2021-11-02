@@ -1,7 +1,6 @@
 //! Implementation of a Merkle tree of commitments used to prove the existence
 //! of notes.
 
-/*
 //use byteorder::{LittleEndian, ReadBytesExt};
 use crate::serial::{Decodable, Encodable, VarInt};
 use crate::{Error, Result};
@@ -452,4 +451,3 @@ impl<Node: Hashable> MerklePath<Node> {
             )
     }
 }
-*/
