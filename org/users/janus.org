@@ -1,0 +1,29 @@
+#+TAGS: @janus
+
+* Development
+** TODO Fix [[../../src/service/btc.rs::499][fee calculation]] for BTC
+* Infrastructure
+** TODO Sourcehut services need to be updated
+   Currently, they're not even working after updating python/flask
+** TODO CI builds and deploy action for cashier/gateway
+** DONE Orgmode workflow docs example
+** TODO Investigate why old matrix rooms still appear client side
+** TODO Streamline machine build using flakes
+
+   - State "DONE"       from              [2021-11-01 Mon 16:18]
+* Research
+** INPROGRESS Evaluate Casper CBC examples [1/2]
+   - State "INPROGRESS" from              [2021-11-01 Mon 16:19]
+   - [X] [[https://github.com/cbc-casper/cbc-casper][Python example]]
+   - [ ] [[https://gitlab.com/TrueLevel/casper/core-cbc][Rust example]]
+** DONE read https://fantom.foundation/lachesis-consensus-algorithm/
+   - State "DONE"       from "TODO"       [2021-10-22 Fri 16:38]
+** DONE Watch https://www.youtube.com/watch?v=7pWxCklcNsU
+   - State "DONE"       from "TODO"       [2021-11-01 Mon 23:39]
+** TODO Read https://wiki.polkadot.network/docs/learn-consensus
+** DONE https://salemal.medium.com/paper-review-of-streamlet-textbook-streamlined-blockchains-179a23255d76
+   - State "DONE"       from "TODO"       [2021-11-01 Mon 23:42]
+** TODO Study EIP 1559
+** DONE https://decentralizedthoughts.github.io/2020-05-14-streamlet/
+   - State "DONE"       from "TODO"       [2021-11-01 Mon 23:42]
+** TODO "proof of balance" by KNRC
