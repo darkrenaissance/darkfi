@@ -1,8 +1,7 @@
-use std::net::ToSocketAddrs;
-
-use async_std::sync::Arc;
 use std::convert::From;
 use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
+use std::sync::Arc;
 
 use async_executor::Executor;
 use log::debug;

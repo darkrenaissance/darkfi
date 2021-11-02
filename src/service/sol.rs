@@ -1,14 +1,12 @@
-use async_std::sync::{Arc, Mutex};
-use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::Duration;
 
 use async_executor::Executor;
 use async_native_tls::TlsConnector;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
-use rand::rngs::OsRng;
 use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
@@ -28,7 +26,7 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, parse::truncate, NetworkName};
-use crate::{Error, Result};
+use crate::{types::*, Error, Result};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
 
@@ -97,7 +95,7 @@ impl SolClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         keypair: Keypair,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint: Option<Pubkey>,
     ) -> SolResult<()> {
         debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
@@ -423,11 +421,11 @@ impl SolClient {
 impl NetworkClient for SolClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
-        let keypair = Keypair::generate(&mut OsRng);
+        let keypair = Keypair::new();
 
         let public_key = keypair.pubkey().to_string();
         let private_key = serialize(&keypair);
@@ -463,7 +461,7 @@ impl NetworkClient for SolClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         _public_key: Vec<u8>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {

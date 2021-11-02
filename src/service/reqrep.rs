@@ -1,10 +1,9 @@
-use async_std::prelude::*;
-use async_std::sync::Arc;
-use std::convert::TryFrom;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use async_executor::Executor;
+use async_std::prelude::*;
 use bytes::Bytes;
 use futures::FutureExt;
 use log::*;
@@ -13,8 +12,8 @@ use signal_hook::consts::SIGINT;
 use signal_hook_async_std::Signals;
 use zeromq::*;
 
-use crate::serial::{deserialize, serialize};
-use crate::{Decodable, Encodable, Result};
+use crate::serial::{deserialize, serialize, Decodable, Encodable};
+use crate::Result;
 
 pub type PeerId = Vec<u8>;
 

@@ -1,7 +1,7 @@
-use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
@@ -9,7 +9,7 @@ use log::*;
 
 use crate::util::NetworkName;
 use crate::wallet::cashierdb::TokenKey;
-use crate::{Error, Result};
+use crate::{types::*, Error, Result};
 
 pub struct BridgeRequests {
     pub network: NetworkName,
@@ -55,8 +55,8 @@ pub struct TokenSubscribtion {
 #[derive(Debug)]
 pub struct TokenNotification {
     pub network: NetworkName,
-    pub token_id: jubjub::Fr,
-    pub drk_pub_key: jubjub::SubgroupPoint,
+    pub token_id: DrkTokenId,
+    pub drk_pub_key: DrkPublicKey,
     pub received_balance: u64,
     pub decimals: u16,
 }
@@ -115,7 +115,7 @@ impl Bridge {
 
     pub async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> BridgeSubscribtion {
@@ -134,7 +134,7 @@ impl Bridge {
         self: Arc<Self>,
         req: async_channel::Receiver<BridgeRequests>,
         rep: async_channel::Sender<BridgeResponse>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
@@ -238,7 +238,7 @@ impl Bridge {
 pub trait NetworkClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion>;
@@ -248,7 +248,7 @@ pub trait NetworkClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         public_key: Vec<u8>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String>;

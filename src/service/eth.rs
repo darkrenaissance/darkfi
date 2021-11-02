@@ -1,8 +1,8 @@
-use async_std::sync::{Arc, Mutex};
 use std::convert::TryInto;
 use std::time::Duration;
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
@@ -17,6 +17,7 @@ use crate::{
     rpc::jsonrpc,
     rpc::jsonrpc::JsonResult,
     serial::{deserialize, serialize},
+    types::*,
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
 };
@@ -202,7 +203,6 @@ impl EthClient {
     }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
-
         debug!(target: "ETH BRIDGE", "Send eth to main wallet");
 
         let tx = EthTx::new(
@@ -223,7 +223,7 @@ impl EthClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         addr: String,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
     ) -> Result<()> {
         if self.subscriptions.lock().await.contains(&addr) {
             return Ok(());
@@ -280,7 +280,8 @@ impl EthClient {
             .await
             .map_err(Error::from)?;
 
-        self.send_eth_to_main_wallet(&addr, received_balance).await?;
+        self.send_eth_to_main_wallet(&addr, received_balance)
+            .await?;
 
         debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
 
@@ -383,7 +384,7 @@ impl EthClient {
 impl NetworkClient for EthClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
@@ -421,7 +422,7 @@ impl NetworkClient for EthClient {
         self: Arc<Self>,
         _private_key: Vec<u8>,
         public_key: Vec<u8>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {
