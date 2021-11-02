@@ -86,8 +86,7 @@ fn lebs2ip_k(bits: &[bool]) -> u32 {
 
 /// The sequence of K bits in little-endian order representing an integer
 /// up to `2^K` - 1.
-#[allow(dead_code)]
-fn i2lebsp_k(int: usize) -> [bool; K] {
+pub(crate) fn i2lebsp_k(int: usize) -> [bool; K] {
     assert!(int < (1 << K));
     i2lebsp(int as u64)
 }

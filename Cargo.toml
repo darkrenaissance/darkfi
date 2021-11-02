@@ -20,6 +20,10 @@ git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
 features = ["dev-graph", "test-dependencies"]
 
+[dependencies.incrementalmerkletree]
+git = "https://github.com/zcash/incrementalmerkletree.git"
+rev = "b7bd6246122a6e9ace8edb51553fbf5228906cbb"
+
 [dependencies.rocksdb]
 git = "https://github.com/parazyd/rust-rocksdb"
 rev = "bd966750ec861d687913d59a9939a1408ac53131"

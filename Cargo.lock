@@ -844,6 +844,7 @@ dependencies = [
  "halo2",
  "halo2_gadgets",
  "hex",
+ "incrementalmerkletree",
  "lazy_static",
  "log",
  "native-tls",
@@ -1448,6 +1449,14 @@ dependencies = [
  "num-rational",
  "num-traits",
  "png",
+]
+
+[[package]]
+name = "incrementalmerkletree"
+version = "0.1.0"
+source = "git+https://github.com/zcash/incrementalmerkletree.git?rev=b7bd6246122a6e9ace8edb51553fbf5228906cbb#b7bd6246122a6e9ace8edb51553fbf5228906cbb"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

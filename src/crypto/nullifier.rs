@@ -1,10 +1,10 @@
 use pasta_curves::{arithmetic::FieldExt, pallas};
 
-pub struct Coin(pallas::Base);
+pub struct Nullifier(pallas::Base);
 
-impl Coin {
+impl Nullifier {
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        pallas::Base::from_bytes(bytes).map(Coin).unwrap()
+        pallas::Base::from_bytes(bytes).map(Nullifier).unwrap()
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
