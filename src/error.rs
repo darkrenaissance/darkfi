@@ -1,6 +1,6 @@
 use std::fmt;
 
-//use crate::client;
+use crate::client;
 use crate::state;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -272,13 +272,11 @@ impl From<state::VerifyFailed> for Error {
     }
 }
 
-/*
 impl From<client::ClientFailed> for Error {
     fn from(err: client::ClientFailed) -> Error {
         Error::ClientFailed(err.to_string())
     }
 }
-*/
 
 #[cfg(feature = "btc")]
 impl From<crate::service::BtcFailed> for Error {

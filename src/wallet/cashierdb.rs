@@ -1,14 +1,13 @@
-use async_std::sync::{Arc, Mutex};
 use std::path::{Path, PathBuf};
 
+use async_std::sync::{Arc, Mutex};
 use log::debug;
 use rusqlite::{named_params, params, Connection};
 
 use super::{Keypair, WalletApi};
 use crate::client::ClientFailed;
-use crate::crypto::types::{PublicKey, SecretKey, TokenId};
 use crate::util::NetworkName;
-use crate::{Error, Result};
+use crate::{types::*, Error, Result};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -27,14 +26,14 @@ pub struct TokenKey {
 pub struct WithdrawToken {
     pub token_public_key: Vec<u8>,
     pub network: NetworkName,
-    pub token_id: TokenId,
+    pub token_id: DrkTokenId,
     pub mint_address: String,
 }
 
 pub struct DepositToken {
-    pub drk_public_key: PublicKey,
+    pub drk_public_key: DrkPublicKey,
     pub token_key: TokenKey,
-    pub token_id: TokenId,
+    pub token_id: DrkTokenId,
     pub mint_address: String,
 }
 
@@ -152,10 +151,10 @@ impl CashierDb {
     pub fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
-        d_key_public: &PublicKey,
-        d_key_private: &SecretKey,
+        d_key_public: &DrkPublicKey,
+        d_key_private: &DrkSecretKey,
         network: &NetworkName,
-        token_id: &TokenId,
+        token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put withdraw keys");
@@ -192,11 +191,11 @@ impl CashierDb {
 
     pub fn put_deposit_keys(
         &self,
-        d_key_public: &PublicKey,
+        d_key_public: &DrkPublicKey,
         token_key_private: &[u8],
         token_key_public: &[u8],
         network: &NetworkName,
-        token_id: &TokenId,
+        token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Put exchange keys");
@@ -231,7 +230,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
+    pub fn get_withdraw_private_keys(&self) -> Result<Vec<DrkSecretKey>> {
         debug!(target: "CASHIERDB", "Get withdraw private keys");
         // open connection
         let conn = Connection::open(&self.path)?;
@@ -248,10 +247,10 @@ impl CashierDb {
 
         let keys = stmt.query_map(&[(":confirm", &confirm)], |row| Ok(row.get(0)))?;
 
-        let mut private_keys: Vec<SecretKey> = vec![];
+        let mut private_keys: Vec<DrkSecretKey> = vec![];
 
         for k in keys {
-            let private_key: SecretKey = self.get_value_deserialized(k??)?;
+            let private_key: DrkSecretKey = self.get_value_deserialized(k??)?;
             private_keys.push(private_key);
         }
 
@@ -260,7 +259,7 @@ impl CashierDb {
 
     pub fn get_withdraw_token_public_key_by_dkey_public(
         &self,
-        pub_key: &PublicKey,
+        pub_key: &DrkPublicKey,
     ) -> Result<Option<WithdrawToken>> {
         debug!(target: "CASHIERDB", "Get token address by pub_key");
         // open connection
@@ -288,7 +287,7 @@ impl CashierDb {
             let addr = addr?;
             let token_public_key = addr.0;
             let network: NetworkName = self.get_value_deserialized(addr.1)?;
-            let token_id: TokenId = self.get_value_deserialized(addr.2)?;
+            let token_id: DrkTokenId = self.get_value_deserialized(addr.2)?;
             let mint_address: String = self.get_value_deserialized(addr.3)?;
             token_addresses.push(WithdrawToken {
                 token_public_key,
@@ -303,7 +302,7 @@ impl CashierDb {
 
     pub fn get_deposit_token_keys_by_dkey_public(
         &self,
-        d_key_public: &PublicKey,
+        d_key_public: &DrkPublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
         debug!(target: "CASHIERDB", "Check for existing dkey");
@@ -379,10 +378,10 @@ impl CashierDb {
 
         for key in keys_iter {
             let key = key?;
-            let drk_public_key: PublicKey = self.get_value_deserialized(key.0)?;
+            let drk_public_key: DrkPublicKey = self.get_value_deserialized(key.0)?;
             let private_key = key.1;
             let public_key = key.2;
-            let token_id: TokenId = self.get_value_deserialized(key.3)?;
+            let token_id: DrkTokenId = self.get_value_deserialized(key.3)?;
             let mint_address: String = self.get_value_deserialized(key.4)?;
             keys.push(DepositToken {
                 drk_public_key,
@@ -433,8 +432,8 @@ impl CashierDb {
 
         for kp in keypair_iter {
             let kp = kp?;
-            let public: PublicKey = self.get_value_deserialized(kp.1)?;
-            let private: SecretKey = self.get_value_deserialized(kp.0)?;
+            let public: DrkPublicKey = self.get_value_deserialized(kp.1)?;
+            let private: DrkSecretKey = self.get_value_deserialized(kp.0)?;
             let keypair = Keypair { public, private };
             keypairs.push(keypair);
         }
@@ -470,7 +469,7 @@ impl CashierDb {
 
     pub fn confirm_deposit_key_record(
         &self,
-        d_key_public: &PublicKey,
+        d_key_public: &DrkPublicKey,
         network: &NetworkName,
     ) -> Result<()> {
         debug!(target: "CASHIERDB", "Confirm withdraw keys");
@@ -567,9 +566,9 @@ mod tests {
 
         let network = NetworkName::Bitcoin;
 
-        let secret2 = SecretKey::random(&mut OsRng);
+        let secret2 = DrkSecretKey::random(&mut OsRng);
         let public2 = derive_publickey(secret2);
-        let token_id = TokenId::random(&mut OsRng);
+        let token_id = DrkTokenId::random(&mut OsRng);
 
         wallet.put_deposit_keys(
             &public2,
@@ -612,9 +611,9 @@ mod tests {
         let wallet = CashierDb::new(&walletdb_path, password.clone())?;
         init_db(&walletdb_path, password)?;
 
-        let secret2: SecretKey = SecretKey::random(&mut OsRng);
+        let secret2 = DrkSecretKey::random(&mut OsRng);
         let public2 = derive_publickey(secret2);
-        let token_id: TokenId = TokenId::random(&mut OsRng);
+        let token_id = DrkTokenId::random(&mut OsRng);
 
         // btc addr testnet
         let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));

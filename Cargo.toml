@@ -25,28 +25,35 @@ git = "https://github.com/zcash/incrementalmerkletree.git"
 rev = "b7bd6246122a6e9ace8edb51553fbf5228906cbb"
 
 [dependencies.rocksdb]
+# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
 git = "https://github.com/parazyd/rust-rocksdb"
 rev = "bd966750ec861d687913d59a9939a1408ac53131"
 default-features = false
 features = ["lz4"]
 
 [dependencies]
+# Crypto
 pasta_curves = "0.2.1"
 rand = "0.8.4"
-num-bigint = "0.4.2"
+num-bigint = {version = "0.4.2", features = ["rand"]}
 blake2b_simd = "0.5.11"
 blake2s_simd = "0.5.11"
 group = "0.11.0"
 crypto_api_chachapoly = "0.5.0"
 arrayvec = "0.7.0"
+sha2 = "0.9.8"
+ripemd160 = "0.9.1"
 
-hex = "0.4.3"
+# Encoding and parsing
 bs58 = "0.4.0"
+bytes = "1.1.0"
+hex = "0.4.3"
 toml = "0.5.8"
 url = "2.2.2"
 serde_json = "1.0.68"
 serde = {version = "1.0.130", features = ["derive"]}
 
+# Async
 async-std = "1.10.0"
 async-trait = "0.1.51"
 async-channel = "1.6.1"
@@ -56,14 +63,42 @@ async-executor = "1.4.1"
 futures = "0.3.17"
 smol = "1.2.5"
 
-log = "0.4.14"
-simple_logger = "1.13.0"
-num_cpus = "1.13.0"
-
+# Utilities
+anyhow = "1.0.44"
+dirs = "4.0.0"
 lazy_static = "1.4.0"
+log = "0.4.14"
+num_cpus = "1.13.0"
+simple_logger = "1.13.0"
+signal-hook = "0.3.10"
+signal-hook-async-std = "0.2.1"
 
-tungstenite = "0.15.0"
+# Used for Websockets client implementation.
 async-tungstenite = "0.15.0"
+tungstenite = "0.15.0"
 
+# Used for wallet management.
 rusqlite = {version = "0.26.1", features = ["bundled-sqlcipher"]}
+
+# Used for gatewayd network transport.
 zeromq = {version = "0.3.0", default-features = false, features = ["async-std-runtime", "all-transport"]}
+
+# Cashier Bitcoin dependencies
+bdk = {version = "0.12.0", optional = true}
+bitcoin = {version = "0.27.0", optional = true}
+secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std"], optional = true}
+
+# Cashier Ethereum dependencies
+hash-db = {version = "0.15.2", optional = true}
+keccak-hasher = {version = "0.15.3", optional = true}
+
+# Cashier Solana dependencies
+solana-client = {version = "1.8.2", optional = true}
+solana-sdk = {version = "1.8.2", optional = true}
+spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
+spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
+
+[features]
+btc = ["bdk", "bitcoin", "secp256k1"]
+eth = ["keccak-hasher", "hash-db"]
+sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]

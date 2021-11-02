@@ -1,21 +1,15 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use async_std::sync::Arc;
-use log::debug;
+use log::{debug, error};
 use pasta_curves::arithmetic::Field;
 use rand::rngs::OsRng;
 use rusqlite::{named_params, params, Connection};
 
 use super::WalletApi;
-use crate::{
-    client::ClientFailed,
-    crypto::{
-        coin::Coin, merkle::IncrementalWitness, merkle_node::MerkleNode, note::Note,
-        nullifier::Nullifier, types::*, OwnCoin, OwnCoins,
-    },
-    serial, Error, Result,
-};
+use crate::crypto::{coin::Coin, note::Note, nullifier::Nullifier, OwnCoin, OwnCoins};
+use crate::{client::ClientFailed, serial, types::*, Error, Result};
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -50,7 +44,6 @@ impl Balances {
     }
 }
 
-//#[derive(Clone)]
 pub struct WalletDb {
     pub path: PathBuf,
     pub password: String,
@@ -74,28 +67,27 @@ impl WalletDb {
         }))
     }
 
-    pub fn init_db(&self) -> Result<()> {
-        debug!(target: "WALLETDB", "Initialize...");
-        if !self.password.trim().is_empty() {
-            let contents = include_str!("../../sql/schema.sql");
-            let conn = Connection::open(&self.path)?;
-            debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
-            conn.pragma_update(None, "key", &self.password)?;
-            conn.execute_batch(contents)?;
-        } else {
-            debug!(
-                target: "WALLETDB",
-                "Password is empty. You must set a password to use the wallet."
-            );
+    fn connect(&self) -> Result<Connection> {
+        if self.password.trim().is_empty() {
+            error!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword));
         }
-        Ok(())
+        let conn = Connection::open(&self.path)?;
+        debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", self.path);
+        conn.pragma_update(None, "key", &self.password)?;
+        Ok(conn)
+    }
+
+    pub fn init_db(&self) -> Result<()> {
+        debug!(target: "WALLETDB", "Initialize...");
+        let contents = include_str!("../../sql/schema.sql");
+        let conn = self.connect()?;
+        Ok(conn.execute_batch(contents)?)
     }
 
     pub fn key_gen(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+        let conn = self.connect()?;
         let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
         let key_check = stmt.exists(params!["0"])?;
         if !key_check {
@@ -110,10 +102,7 @@ impl WalletDb {
     }
 
     pub fn put_keypair(&self, key_public: &DrkPublicKey, key_private: &DrkSecretKey) -> Result<()> {
-        let conn = Connection::open(&self.path)?;
-
-        conn.pragma_update(None, "key", &self.password)?;
-
+        let conn = self.connect()?;
         let key_public = serial::serialize(key_public);
         let key_private = serial::serialize(key_private);
 
@@ -121,13 +110,13 @@ impl WalletDb {
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
             params![key_public, key_private],
         )?;
+
         Ok(())
     }
 
     pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         debug!(target: "WALLETDB", "Returning keypairs...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+        let conn = self.connect()?;
         let mut stmt = conn.prepare("SELECT * FROM keys")?;
         // this just gets the first key. maybe we should randomize this
         let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
@@ -147,13 +136,8 @@ impl WalletDb {
 
     pub fn get_own_coins(&self) -> Result<OwnCoins> {
         debug!(target: "WALLETDB", "Get own coins");
-
+        let conn = self.connect()?;
         let is_spent = 0;
-
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
         let mut coins = conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
         let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((
@@ -163,7 +147,7 @@ impl WalletDb {
                 row.get(3)?,
                 row.get(4)?,
                 row.get(5)?,
-                row.get(6)?,
+                // TODO: row.get(6)?,
                 row.get(7)?,
                 row.get(9)?,
             ))
@@ -178,7 +162,7 @@ impl WalletDb {
             // note
             let serial = self.get_value_deserialized(row.1)?;
             let coin_blind = self.get_value_deserialized(row.2)?;
-            let valcom_blind = self.get_value_deserialized(row.3)?;
+            let value_blind = self.get_value_deserialized(row.3)?;
             let value: u64 = row.4;
             let token_id = self.get_value_deserialized(row.5)?;
 
@@ -187,18 +171,21 @@ impl WalletDb {
                 value,
                 token_id,
                 coin_blind,
-                valcom_blind,
+                value_blind,
             };
 
-            let witness = self.get_value_deserialized(row.6)?;
-            let secret: DrkSecretKey = self.get_value_deserialized(row.7)?;
-            let nullifier: Nullifier = self.get_value_deserialized(row.8)?;
+            // TODO:
+            // let witness = self.get_value_deserialized(row.6)?;
+            // let secret: DrkSecretKey = self.get_value_deserialized(row.7)?;
+            // let nullifier: Nullifier = self.get_value_deserialized(row.8)?;
+            let secret: DrkSecretKey = self.get_value_deserialized(row.6)?;
+            let nullifier: Nullifier = self.get_value_deserialized(row.7)?;
 
             let oc = OwnCoin {
                 coin,
                 note,
                 secret,
-                witness,
+                // TODO: witness,
                 nullifier,
             };
 
@@ -210,20 +197,16 @@ impl WalletDb {
 
     pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
         debug!(target: "WALLETDB", "Put own coins");
+        let conn = self.connect()?;
 
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
-        let coin = self.get_value_serialized(&own_coin.coin.repr)?;
+        let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
 
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
-        let valcom_blind = self.get_value_serialized(&own_coin.note.valcom_blind)?;
+        let value_blind = self.get_value_serialized(&own_coin.note.value_blind)?;
         let value: u64 = own_coin.note.value;
         let token_id = self.get_value_serialized(&own_coin.note.token_id)?;
-        let witness = self.get_value_serialized(&own_coin.witness)?;
+        // TODO: let witness = self.get_value_serialized(&own_coin.witness)?;
         let secret = self.get_value_serialized(&own_coin.secret)?;
         let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
@@ -241,8 +224,8 @@ impl WalletDb {
                 ":value": value,
                 ":token_id": token_id,
                 ":coin_blind": coin_blind,
-                ":valcom_blind": valcom_blind,
-                ":witness": witness,
+                ":valcom_blind": value_blind,
+                // TODO: ":witness": witness,
                 ":secret": secret,
                 ":is_spent": is_spent,
                 ":nullifier": nullifier,
@@ -253,28 +236,16 @@ impl WalletDb {
 
     pub fn remove_own_coins(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Remove own coins");
-
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
+        let conn = self.connect()?;
         conn.execute("DROP TABLE coins;", [])?;
         Ok(())
     }
 
     pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
-
         let coin = self.get_value_serialized(coin)?;
-
-        // open connection
-        let conn = Connection::open(&self.path)?;
-        // unlock database
-        conn.pragma_update(None, "key", &self.password)?;
-
+        let conn = self.connect()?;
         let is_spent = 1;
-
         conn.execute(
             "UPDATE coins
             SET is_spent = ?1
@@ -285,6 +256,7 @@ impl WalletDb {
         Ok(())
     }
 
+    /* TODO:
     pub fn get_witnesses(&self) -> Result<HashMap<Vec<u8>, IncrementalWitness<MerkleNode>>> {
         let conn = Connection::open(&self.path)?;
         conn.pragma_update(None, "key", &self.password)?;
@@ -330,11 +302,11 @@ impl WalletDb {
 
         Ok(())
     }
+    */
 
     pub fn get_balances(&self) -> Result<Balances> {
         debug!(target: "WALLETDB", "Get token and balances...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+        let conn = self.connect()?;
 
         let is_spent = 0;
 
@@ -364,8 +336,7 @@ impl WalletDb {
 
     pub fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
         debug!(target: "WALLETDB", "Get token ID...");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+        let conn = self.connect()?;
 
         let is_spent = 0;
 
@@ -385,8 +356,7 @@ impl WalletDb {
 
     pub fn token_id_exists(&self, token_id: &DrkTokenId) -> Result<bool> {
         debug!(target: "WALLETDB", "Check tokenID exists");
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
+        let conn = self.connect()?;
 
         let id = self.get_value_serialized(token_id)?;
         let is_spent = 0;

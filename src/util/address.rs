@@ -1,25 +1,22 @@
 use group::GroupEncoding;
 use sha2::Digest;
 
-use crate::{
-    serial::{Decodable, Encodable},
-    Result,
-};
+use crate::types::*;
 
 #[derive(Clone, Debug)]
 pub struct Address {
-    pub raw: jubjub::SubgroupPoint,
+    pub raw: DrkPublicKey,
     pub pkh: String,
 }
 
 impl Address {
-    pub fn new(raw: jubjub::SubgroupPoint) -> Self {
+    pub fn new(raw: DrkPublicKey) -> Self {
         let pkh = Self::pkh_address(&raw);
 
         Address { raw, pkh }
     }
 
-    fn get_hash(raw: &jubjub::SubgroupPoint) -> Vec<u8> {
+    fn get_hash(raw: &DrkPublicKey) -> Vec<u8> {
         // sha256
         let mut hasher = sha2::Sha256::new();
         hasher.update(raw.to_bytes());
@@ -33,7 +30,7 @@ impl Address {
         hash.to_vec()
     }
 
-    pub fn pkh_address(raw: &jubjub::SubgroupPoint) -> String {
+    pub fn pkh_address(raw: &DrkPublicKey) -> String {
         let mut hash = Self::get_hash(raw);
 
         let mut payload = vec![];
@@ -63,4 +60,3 @@ impl std::fmt::Display for Address {
         write!(f, "{}", self.pkh)
     }
 }
-

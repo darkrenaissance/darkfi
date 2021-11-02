@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::{
+    types::*,
     util::{generate_id, NetworkName},
     Error, Result,
 };
@@ -57,14 +58,14 @@ impl TokenList {
 
 #[derive(Debug, Clone)]
 pub struct DrkTokenList {
-    pub tokens: HashMap<String, jubjub::Fr>,
+    pub tokens: HashMap<String, DrkTokenId>,
 }
 
 impl DrkTokenList {
     pub fn new(sol_list: TokenList) -> Result<Self> {
         let sol_symbols = sol_list.get_symbols()?;
 
-        let mut tokens: HashMap<String, jubjub::Fr> = sol_symbols
+        let mut tokens: HashMap<String, DrkTokenId> = sol_symbols
             .iter()
             .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
             .collect();
@@ -77,7 +78,7 @@ impl DrkTokenList {
         Ok(Self { tokens })
     }
 
-    fn generate_hash_pair(sol_list: &TokenList, symbol: &str) -> Result<(String, jubjub::Fr)> {
+    fn generate_hash_pair(sol_list: &TokenList, symbol: &str) -> Result<(String, DrkTokenId)> {
         if let Some(token_id) = &sol_list.search_id(symbol)? {
             Ok((
                 symbol.to_string(),
@@ -88,10 +89,13 @@ impl DrkTokenList {
         }
     }
 
-    pub fn symbol_from_id(&self, id: jubjub::Fr) -> Result<Option<String>> {
+    pub fn symbol_from_id(&self, id: DrkTokenId) -> Result<Option<String>> {
+        // TODO:
+        /*
         if id.to_string() == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd" {
             return Ok(Some("BTC".to_string()));
         }
+        */
 
         Ok(self
             .tokens

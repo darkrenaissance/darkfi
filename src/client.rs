@@ -1,3 +1,4 @@
+/*
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 
@@ -24,6 +25,7 @@ use crate::{
     wallet::{walletdb::Balances, CashierDbPtr, Keypair, WalletPtr},
     Result,
 };
+*/
 
 #[derive(Debug)]
 pub enum ClientFailed {
@@ -41,6 +43,7 @@ pub enum ClientFailed {
     VerifyError(String),
 }
 
+/*
 pub struct Client {
     mint_params: bellman::groth16::Parameters<Bls12>,
     spend_params: bellman::groth16::Parameters<Bls12>,
@@ -525,6 +528,7 @@ impl State {
         }
     }
 }
+*/
 
 impl std::error::Error for ClientFailed {}
 

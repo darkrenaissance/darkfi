@@ -1,8 +1,8 @@
 use futures::prelude::*;
 
 use crate::endian;
-use crate::error::{Error, Result};
 use crate::serial::VarInt;
+use crate::{Error, Result};
 
 impl VarInt {
     pub async fn encode_async<W: AsyncWrite + Unpin>(&self, stream: &mut W) -> Result<usize> {
