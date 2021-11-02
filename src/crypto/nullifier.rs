@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct Nullifier(pallas::Base);
+pub struct Nullifier(pub(crate) pallas::Base);
 
 impl Nullifier {
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {

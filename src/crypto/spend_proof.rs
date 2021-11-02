@@ -12,6 +12,7 @@ use pasta_curves::{
 };
 
 use super::{
+    nullifier::Nullifier,
     proof::{Proof, ProvingKey, VerifyingKey},
     util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
 };
@@ -25,7 +26,7 @@ use crate::{
 pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
-    pub nullifier: DrkNullifier,
+    pub nullifier: Nullifier,
     //pub merkle_root: MerkleNode,
     pub signature_public: DrkPublicKey,
 }
@@ -70,7 +71,7 @@ impl SpendRevealedValues {
         SpendRevealedValues {
             value_commit,
             token_commit,
-            nullifier,
+            nullifier: Nullifier(nullifier),
             signature_public,
         }
     }
@@ -82,7 +83,7 @@ impl SpendRevealedValues {
 
         // TODO: merkle
         vec![
-            self.nullifier,
+            self.nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),

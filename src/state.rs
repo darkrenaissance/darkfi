@@ -1,22 +1,18 @@
 use std::fmt;
 
-/*
-use bellman::groth16;
-use bls12_381::Bls12;
 use log::debug;
 
-use crate::{
-    crypto::{coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier},
-    tx,
-};
+use crate::crypto::{coin::Coin, note::EncryptedNote, nullifier::Nullifier, proof::VerifyingKey};
+use crate::tx::Transaction;
+use crate::types::*;
 
 pub trait ProgramState {
-    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
-    fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
+    fn is_valid_cashier_public_key(&self, public: &DrkPublicKey) -> bool;
+    // TODO: fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
-    fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
-    fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
+    fn mint_pvk(&self) -> &VerifyingKey;
+    fn spend_pvk(&self) -> &VerifyingKey;
 }
 
 pub struct StateUpdate {
@@ -24,7 +20,6 @@ pub struct StateUpdate {
     pub coins: Vec<Coin>,
     pub enc_notes: Vec<EncryptedNote>,
 }
-*/
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
 
@@ -71,10 +66,9 @@ impl fmt::Display for VerifyFailed {
     }
 }
 
-/*
 pub fn state_transition<S: ProgramState>(
     state: &async_std::sync::MutexGuard<S>,
-    tx: tx::Transaction,
+    tx: Transaction,
 ) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
 
@@ -93,14 +87,14 @@ pub fn state_transition<S: ProgramState>(
     debug!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
-        // Check merkle roots
-        let merkle = &input.revealed.merkle_root;
+        // TODO: Check merkle roots
+        //let merkle = &input.revealed.merkle_root;
 
         // Merkle is used to know whether this is a coin that existed
         // in a previous state.
-        if !state.is_valid_merkle(merkle) {
-            return Err(VerifyFailed::InvalidMerkle(i));
-        }
+        // if !state.is_valid_merkle(merkle) {
+        // return Err(VerifyFailed::InvalidMerkle(i));
+        // }
 
         // The nullifiers should not already exist
         // It is double spend protection.
@@ -125,7 +119,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin::new(output.revealed.coin));
+        coins.push(Coin::from_bytes(&output.revealed.coin));
         enc_notes.push(output.enc_note);
     }
 
@@ -135,4 +129,3 @@ pub fn state_transition<S: ProgramState>(
         enc_notes,
     })
 }
-*/
