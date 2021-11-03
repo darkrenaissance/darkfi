@@ -176,25 +176,19 @@ impl Darkfid {
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
-                // XXX: this must be changed once cashierd
-                // supports more than two networks
-
-                let mut network = "solana";
-
-                if balance.token_id.to_string()
-                    == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd"
+                if let Some((network, symbol)) =
+                    self.drk_tokenlist.symbol_from_id(&balance.token_id)?
                 {
-                    network = "bitcoin"
-                }
-
-                if let Some(symbol) = self.drk_tokenlist.symbol_from_id(&balance.token_id)? {
                     let amount = encode_base10(BigUint::from(balance.value), 8);
                     symbols.insert(symbol, (amount, network.to_string()));
                 } else {
-                    // TODO: Fetch decimals, or do we use 8 decimals for all our internal tokens?
                     // TODO: SQL needs to have the mint address for show, not the internal hash.
+                    // TODO: SQL needs to have the network name
                     let amount = encode_base10(BigUint::from(balance.value), 8);
-                    symbols.insert(balance.token_id.to_string(), (amount, network.to_string()));
+                    symbols.insert(
+                        balance.token_id.to_string(),
+                        (amount, String::from("UNKNOWN")),
+                    );
                 }
             }
             Ok(symbols)

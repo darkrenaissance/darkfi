@@ -107,18 +107,11 @@ impl DrkTokenList {
         Err(Error::NotSupportedToken)
     }
 
-    pub fn symbol_from_id(
-        &self,
-        id: &jubjub::Fr,
-    ) -> Result<Option<String>> {
-        if id.to_string() == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd" {
-            return Ok(Some("BTC".to_string()));
-        }
-
-        for (_, tokens) in self.tokens.iter() {
+    pub fn symbol_from_id(&self, id: &jubjub::Fr) -> Result<Option<(NetworkName, String)>> {
+        for (network, tokens) in self.tokens.iter() {
             for (key, val) in tokens.iter() {
                 if val == id {
-                    return Ok(Some(key.clone()));
+                    return Ok(Some((network.clone(), key.clone())));
                 }
             }
         }
