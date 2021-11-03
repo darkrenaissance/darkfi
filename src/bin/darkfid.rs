@@ -242,8 +242,11 @@ impl Darkfid {
             match network {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
-                    let token_id = self.sol_tokenlist.search_id(symbol)?;
-                    Ok(json!(token_id))
+                    if let Some(tkn) = self.sol_tokenlist.search_id(symbol)? {
+                        Ok(json!(tkn))
+                    } else {
+                        return Err(Error::NotSupportedToken);
+                    }
                 }
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
@@ -253,9 +256,18 @@ impl Darkfid {
                 }
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
-                    //hardcoded genesis coinbase address
-                    use drk::service::eth::ETH_NATIVE_TOKEN_ID;
-                    let token_id = ETH_NATIVE_TOKEN_ID.to_string();
+                    // hardcoded genesis coinbase address
+                    let token_id: String = if symbol.to_lowercase() == "eth" {
+                        use drk::service::eth::ETH_NATIVE_TOKEN_ID;
+                        ETH_NATIVE_TOKEN_ID.to_string()
+                    } else {
+                        if let Some(tkn) = self.eth_tokenlist.search_id(symbol)? {
+                            tkn
+                        } else {
+                            return Err(Error::NotSupportedToken);
+                        }
+                    };
+
                     Ok(json!(token_id))
                 }
                 _ => Err(Error::NotSupportedNetwork),

@@ -70,7 +70,7 @@ pub fn assign_id(
         #[cfg(feature = "eth")]
         NetworkName::Ethereum => {
             use crate::service::eth::ETH_NATIVE_TOKEN_ID;
-            let id = if token == "eth" && token == ETH_NATIVE_TOKEN_ID {
+            let id = if token == "eth" || token == ETH_NATIVE_TOKEN_ID {
                 token.to_string()
             } else {
                 let tok_lower = token.to_lowercase();
