@@ -145,6 +145,10 @@ pub struct CashierdConfig {
     pub client_wallet_password: String,
     /// Path to database
     pub database_path: String,
+    /// Geth IPC endpoint 
+    pub geth_socket: String,
+    /// Geth passphrase 
+    pub geth_passphrase: String,
     /// The configured networks to use
     pub networks: Vec<FeatureNetwork>,
 }

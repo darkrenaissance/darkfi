@@ -499,7 +499,7 @@ impl Cashierd {
                     return Ok(Some(_token_id.to_string()));
                 }
                 Ok(None)
-            },
+            }
             #[cfg(feature = "btc")]
             NetworkName::Bitcoin => Ok(None),
             _ => Err(Error::NotSupportedNetwork),
@@ -572,10 +572,10 @@ impl Cashierd {
                     let main_keypairs =
                         self.cashier_wallet.get_main_keys(&NetworkName::Ethereum)?;
 
-                    let passphrase = String::from("TEST_PASS");
+                    let passphrase = self.config.geth_passphrase.clone();
 
                     let mut eth_client = EthClient::new(
-                        expand_path("~/.ethereum/ropsten/geth.ipc")?
+                        expand_path(&self.config.geth_socket)?
                             .to_str()
                             .unwrap()
                             .into(),

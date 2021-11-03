@@ -47,6 +47,12 @@ client_wallet_password = "TEST_PASSWORD"
 # Path to database
 database_path = "~/.config/darkfi/cashier_database.db"
 
+# Geth IPC endpoint 
+geth_socket= "~/.ethereum/ropsten/geth.ipc"
+
+# Geth passphrase 
+geth_passphrase= "TEST_PASS"
+
 # The configured networks to use.
 [[networks]]
 name = "sol"
