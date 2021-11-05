@@ -472,10 +472,7 @@ impl Cashierd {
         mut client: Client,
         state: Arc<Mutex<State>>,
         executor: Arc<Executor<'_>>,
-    ) -> Result<(
-        smol::Task<Result<()>>,
-        smol::Task<Result<()>>,
-    )> {
+    ) -> Result<(smol::Task<Result<()>>, smol::Task<Result<()>>)> {
         self.cashier_wallet.init_db().await?;
 
         for network in self.networks.iter() {
@@ -512,7 +509,7 @@ impl Cashierd {
                         )?)?;
                         let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
                         main_keypair = Keypair::from_bytes(&keypair_bytes)
-                            .map_err(|e| SolFailed::ParseError(e.to_string()))?;
+                            .map_err(|e| SolFailed::Signature(e.to_string()))?;
                     }
 
                     let sol_client = SolClient::new(main_keypair, &network.blockchain).await?;

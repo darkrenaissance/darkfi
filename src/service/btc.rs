@@ -391,7 +391,6 @@ impl BtcClient {
             match new_status {
                 ScriptStatus::Unseen => continue,
                 ScriptStatus::InMempool => {
-
                     break;
                 }
                 ScriptStatus::Confirmed(inner) => {
@@ -842,42 +841,22 @@ impl Decodable for Keypair {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum BtcFailed {
+    #[error("There is no enough value {0}")]
     NotEnoughValue(u64),
+    #[error("could not parse BTC address: {0}")]
     BadBtcAddress(String),
+    #[error("Unable to create Electrum Client: {0}")]
     ElectrumError(String),
+    #[error("BtcFailed: {0}")]
     BtcError(String),
+    #[error("Decode and decode keys error: {0}")]
     DecodeAndEncodeError(String),
+    #[error("Keypair error from Secp256k1:  {0}")]
     KeypairError(String),
+    #[error("Received Notification Error: {0}")]
     Notification(String),
-}
-impl std::error::Error for BtcFailed {}
-
-impl std::fmt::Display for BtcFailed {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            BtcFailed::NotEnoughValue(i) => {
-                write!(f, "There is no enough value {}", i)
-            }
-            BtcFailed::BadBtcAddress(ref err) => {
-                write!(f, "Unable to create Electrum Client: {}", err)
-            }
-            BtcFailed::ElectrumError(ref err) => write!(f, "could not parse BTC address: {}", err),
-            BtcFailed::DecodeAndEncodeError(ref err) => {
-                write!(f, "Decode and decode keys error: {}", err)
-            }
-            BtcFailed::KeypairError(ref err) => {
-                write!(f, "Keypair error from Secp256k1: {}", err)
-            }
-            BtcFailed::Notification(i) => {
-                write!(f, "Received Notification Error: {}", i)
-            }
-            BtcFailed::BtcError(i) => {
-                write!(f, "BtcFailed: {}", i)
-            }
-        }
-    }
 }
 
 impl From<crate::error::Error> for BtcFailed {

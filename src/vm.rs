@@ -75,9 +75,11 @@ pub enum ConstraintInstruction {
     LcCoeffDouble,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, thiserror::Error)]
 pub enum ZkVmError {
+    #[error("DivisionByZero")]
     DivisionByZero,
+    #[error("MalformedRange")]
     MalformedRange,
 }
 

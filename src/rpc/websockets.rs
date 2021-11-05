@@ -63,15 +63,20 @@ impl Stream for WsStream {
 /// Connects to a WebSocket address (optionally secured by TLS).
 pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Response)> {
     let url = Url::parse(addr)?;
-    let host = url.host_str().ok_or(Error::UrlParseError)?.to_string();
-    let port = url.port_or_known_default().ok_or(Error::UrlParseError)?;
+    let host = url
+        .host_str()
+        .ok_or(Error::UrlParseError(format!("Missing Host in {}", url)))?
+        .to_string();
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", url)))?;
 
     let socket_addr = {
         let host = host.clone();
         smol::unblock(move || (host.as_str(), port).to_socket_addrs())
             .await?
             .next()
-            .ok_or(Error::UrlParseError)?
+            .ok_or(Error::NoUrlFound)?
     };
 
     match url.scheme() {
@@ -86,6 +91,9 @@ pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Resp
             let (stream, resp) = async_tungstenite::client_async(addr, stream).await?;
             Ok((WsStream::Tls(stream), resp))
         }
-        _scheme => Err(Error::UrlParseError),
+        scheme => Err(Error::UrlParseError(format!(
+            "Invalid url scheme `{}`, in `{}`",
+            scheme, url
+        ))),
     }
 }
