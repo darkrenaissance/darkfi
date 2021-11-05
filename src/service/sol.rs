@@ -177,7 +177,10 @@ impl SolClient {
         let mut sub_iter = 0;
 
         loop {
-            let message = read.next().await.ok_or(Error::TungsteniteError)?;
+            let message = read
+                .next()
+                .await
+                .ok_or_else(|| Error::TungsteniteError("No more messages".to_string()))?;
             let message = message?;
 
             if let Message::Pong(_) = message.clone() {
@@ -324,16 +327,9 @@ impl SolClient {
 
         match rpc.get_account_data(&main_tok_pk) {
             Ok(v) => {
-                match spl_token::state::Account::unpack_from_slice(&v) {
-                    // It's valid token data, and we consider account initialized.
-                    Ok(_) => {}
-                    // Some other unexpected data.
-                    Err(_) => {
-                        return Err(SolFailed::SolClientError(
-                            "Invalid data on derived account".into(),
-                        ));
-                    }
-                }
+                // This will fail in the event of unexpected data
+                // otherwise it's valid token data, and we consider account initialized.
+                spl_token::state::Account::unpack_from_slice(&v)?;
             }
             Err(_) => {
                 // Unitinialized, so we add a creation instruction
@@ -619,100 +615,36 @@ impl Decodable for Pubkey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SolFailed {
+    #[error("There is no enough value `{0}`")]
     NotEnoughValue(u64),
+    #[error("Main Account Has no enough value")]
     MainAccountNotEnoughValue,
+    #[error("Bad Sol Address: `{0}`")]
     BadSolAddress(String),
+    #[error("Decode and decode keys error: `{0}`")]
     DecodeAndEncodeError(String),
-    WebSocketError(String),
+    #[error(transparent)]
+    WebSocketError(#[from] tungstenite::Error),
+    #[error("RpcError: `{0}`")]
     RpcError(String),
-    SolClientError(String),
+    #[error(transparent)]
+    SolClientError(#[from] solana_client::client_error::ClientError),
+    #[error("Received Notification Error: `{0}`")]
     Notification(String),
-    ProgramError(String),
+    #[error(transparent)]
+    ProgramError(#[from] solana_sdk::program_error::ProgramError),
+    #[error("Given mint is not valid: `{0}`")]
     MintIsNotValid(String),
-    JsonError(String),
-    ParseError(String),
-}
-
-impl std::error::Error for SolFailed {}
-
-impl std::fmt::Display for SolFailed {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SolFailed::NotEnoughValue(i) => {
-                write!(f, "There is no enough value {}", i)
-            }
-            SolFailed::MainAccountNotEnoughValue => {
-                write!(f, "Main Account Has no enough value")
-            }
-            SolFailed::BadSolAddress(ref err) => {
-                write!(f, "Bad Sol Address: {}", err)
-            }
-            SolFailed::DecodeAndEncodeError(ref err) => {
-                write!(f, "Decode and decode keys error: {}", err)
-            }
-            SolFailed::WebSocketError(i) => {
-                write!(f, "WebSocket Error: {}", i)
-            }
-            SolFailed::RpcError(i) => {
-                write!(f, "Rpc Error: {}", i)
-            }
-            SolFailed::ParseError(i) => {
-                write!(f, "Parse Error: {}", i)
-            }
-            SolFailed::SolClientError(i) => {
-                write!(f, "Solana Client Error: {}", i)
-            }
-            SolFailed::Notification(i) => {
-                write!(f, "Received Notification Error: {}", i)
-            }
-            SolFailed::ProgramError(i) => {
-                write!(f, "ProgramError Error: {}", i)
-            }
-            SolFailed::MintIsNotValid(i) => {
-                write!(f, "Given mint is not valid: {}", i)
-            }
-            SolFailed::JsonError(i) => {
-                write!(f, "JsonError: {}", i)
-            }
-        }
-    }
-}
-
-impl From<solana_sdk::pubkey::ParsePubkeyError> for SolFailed {
-    fn from(err: solana_sdk::pubkey::ParsePubkeyError) -> SolFailed {
-        SolFailed::ParseError(err.to_string())
-    }
-}
-
-impl From<tungstenite::Error> for SolFailed {
-    fn from(err: tungstenite::Error) -> SolFailed {
-        SolFailed::WebSocketError(err.to_string())
-    }
-}
-
-impl From<solana_client::client_error::ClientError> for SolFailed {
-    fn from(err: solana_client::client_error::ClientError) -> SolFailed {
-        SolFailed::SolClientError(err.to_string())
-    }
-}
-
-impl From<solana_sdk::program_error::ProgramError> for SolFailed {
-    fn from(err: solana_sdk::program_error::ProgramError) -> SolFailed {
-        SolFailed::ProgramError(err.to_string())
-    }
-}
-
-impl From<crate::error::Error> for SolFailed {
-    fn from(err: crate::error::Error) -> SolFailed {
-        SolFailed::SolClientError(err.to_string())
-    }
-}
-impl From<serde_json::Error> for SolFailed {
-    fn from(err: serde_json::Error) -> SolFailed {
-        SolFailed::JsonError(err.to_string())
-    }
+    #[error(transparent)]
+    JsonError(#[from] serde_json::Error),
+    #[error(transparent)]
+    ParseError(#[from] solana_sdk::pubkey::ParsePubkeyError),
+    #[error("Signature Error: `{0}`")]
+    Signature(String),
+    #[error(transparent)]
+    Darkfi(#[from] crate::error::Error),
 }
 
 pub type SolResult<T> = std::result::Result<T, SolFailed>;

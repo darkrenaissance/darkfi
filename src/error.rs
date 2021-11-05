@@ -1,166 +1,154 @@
-use std::fmt;
-
 use crate::client;
 use crate::state;
 use crate::vm::ZkVmError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
+    #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
 
-    /// VarInt was encoded in a non-minimal way
+    #[error("Cannot find home directory")]
     PathNotFound,
+    /// VarInt was encoded in a non-minimal way
+    #[error("non-minimal varint")]
     NonMinimalVarInt,
 
     /// Parsing And Encode/Decode errors
+    #[error("parse failed: `{0}`")]
     ParseFailed(&'static str),
-    ParseIntError,
-    ParseBigIntError,
-    ParseFloatError,
-    FromHexError,
-    UrlParseError,
+    #[error(transparent)]
+    ParseIntError(#[from] std::num::ParseIntError),
+    #[error(transparent)]
+    ParseBigIntError(#[from] num_bigint::ParseBigIntError),
+    #[error(transparent)]
+    ParseFloatError(#[from] std::num::ParseFloatError),
+    #[error(transparent)]
+    FromHexError(#[from] hex::FromHexError),
+    #[error("Url parse erro `{0}`")]
+    UrlParseError(String),
+    #[error("No url found")]
+    NoUrlFound,
+    #[error("Malformed packet")]
     MalformedPacket,
-    AddrParseError,
-    Base58EncodeError(String),
-    Base58DecodeError(String),
-    Utf8Error,
-    StrUtf8Error(String),
+    #[error(transparent)]
+    AddrParseError(#[from] std::net::AddrParseError),
+    #[error(transparent)]
+    Base58EncodeError(#[from] bs58::encode::Error),
+    #[error(transparent)]
+    Base58DecodeError(#[from] bs58::decode::Error),
+    #[error(transparent)]
+    Utf8Error(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    StrUtf8Error(#[from] std::str::Utf8Error),
+    #[error("TryInto error")]
     TryIntoError,
+    #[error("TryFrom error")]
     TryFromError,
-    TryFromBigIntError,
+    #[error(transparent)]
+    TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
+    #[error("Json serialization error: `{0}`")]
     SerdeJsonError(String),
-    TomlDeserializeError(String),
-    TomlSerializeError(String),
+    #[error(transparent)]
+    TomlDeserializeError(#[from] toml::de::Error),
+    #[error(transparent)]
+    TomlSerializeError(#[from] toml::ser::Error),
 
     /// Contract
+    #[error("Bad variable ref type byte")]
     BadVariableRefType,
+    #[error("Bad operation type byte")]
     BadOperationType,
+    #[error("Bad constraint type byte")]
     BadConstraintType,
+    #[error("Invalid param name")]
     InvalidParamName,
+    #[error("Missing params")]
     MissingParams,
-    VmError,
+    #[error(transparent)]
+    VmError(#[from] ZkVmError),
+    #[error("Contract is poorly defined")]
     BadContract,
-    Groth16Error,
+    #[error("Groth16 Error: `{0}`")]
+    Groth16Error(String),
+    #[error("Operation failed")]
     OperationFailed,
+    #[error("Unable to decrypt mint note")]
     NoteDecryptionFailed,
-    VerifyFailed,
+    #[error(transparent)]
+    VerifyFailed(#[from] state::VerifyFailed),
+    #[error("MerkleTree is full")]
     TreeFull,
 
     /// Service
+    #[error("Services Error: `{0}`")]
     ServicesError(&'static str),
+    #[error("Client failed: `{0}`")]
     ClientFailed(String),
     #[cfg(feature = "btc")]
-    BtcFailed(String),
+    #[error(transparent)]
+    BtcFailed(#[from] crate::service::BtcFailed),
     #[cfg(feature = "sol")]
+    #[error("Sol client failed: `{0}`")]
     SolFailed(String),
     #[cfg(feature = "eth")]
-    EthFailed(String),
+    #[error(transparent)]
+    EthFailed(#[from] crate::service::EthFailed),
+    #[error("BridgeError Error: `{0}`")]
     BridgeError(String),
+    #[error("ZmqError: `{0}`")]
     ZmqError(String),
 
     /// Database/Sql errors
+    #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
+    #[error("Rusqlite error: `{0}`")]
     RusqliteError(String),
+    #[error("SlabsStore Error: `{0}`")]
     SlabsStore(String),
 
     /// RPC errors
+    #[error("JsonRpc Error: `{0}`")]
     JsonRpcError(String),
+    #[error("Not supported network")]
     NotSupportedNetwork,
+    #[error("Not supported token")]
     NotSupportedToken,
+    #[error("Could not parse token parameter")]
     TokenParseError,
+    #[error("Cannot parse network parameter")]
     NetworkParseError,
-    AsyncNativeTlsError,
-    TungsteniteError,
+    #[error("Async_Native_TLS error: `{0}`")]
+    AsyncNativeTlsError(String),
+    #[error("TungsteniteError: `{0}`")]
+    TungsteniteError(String),
 
     /// Network
+    #[error("Connection failed")]
     ConnectFailed,
+    #[error("Connection timed out")]
     ConnectTimeout,
+    #[error("Channel stopped")]
     ChannelStopped,
+    #[error("Channel timed out")]
     ChannelTimeout,
+    #[error("Service stopped")]
     ServiceStopped,
 
     /// Util
+    #[error("No config file detected. Please create one.")]
     ConfigNotFound,
+    #[error("No keypair file detected.")]
     KeypairPathNotFound,
+    #[error("No cashier public keys detected.")]
     CashierKeysNotFound,
+    #[error("SetLoggerError")]
     SetLoggerError,
+    #[error("Async_channel sender error")]
     AsyncChannelSenderError,
-    AsyncChannelReceiverError,
-}
-
-impl std::error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            Error::PathNotFound => f.write_str("Cannot find home directory"),
-            Error::Io(ref err) => write!(f, "io error:{:?}", err),
-            Error::NonMinimalVarInt => f.write_str("non-minimal varint"),
-            Error::ParseFailed(ref err) => write!(f, "parse failed: {}", err),
-            Error::ParseIntError => f.write_str("Parse int error"),
-            Error::ParseBigIntError => f.write_str("Parse big int error"),
-            Error::ParseFloatError => f.write_str("Parse float error"),
-            Error::UrlParseError => f.write_str("Failed to parse URL"),
-            Error::FromHexError => f.write_str("Failed to convert from hex"),
-            Error::AsyncChannelSenderError => f.write_str("Async_channel sender error"),
-            Error::AsyncChannelReceiverError => f.write_str("Async_channel receiver error"),
-            Error::AsyncNativeTlsError => f.write_str("Async_Native_TLS error"),
-            Error::MalformedPacket => f.write_str("Malformed packet"),
-            Error::AddrParseError => f.write_str("Unable to parse address"),
-            Error::BadVariableRefType => f.write_str("Bad variable ref type byte"),
-            Error::BadOperationType => f.write_str("Bad operation type byte"),
-            Error::BadConstraintType => f.write_str("Bad constraint type byte"),
-            Error::InvalidParamName => f.write_str("Invalid param name"),
-            Error::MissingParams => f.write_str("Missing params"),
-            Error::VmError => f.write_str("VM error"),
-            Error::BadContract => f.write_str("Contract is poorly defined"),
-            Error::Groth16Error => f.write_str("Groth16 error"),
-            Error::RusqliteError(ref err) => write!(f, "Rusqlite error {}", err),
-            Error::OperationFailed => f.write_str("Operation failed"),
-            Error::ConnectFailed => f.write_str("Connection failed"),
-            Error::ConnectTimeout => f.write_str("Connection timed out"),
-            Error::ChannelStopped => f.write_str("Channel stopped"),
-            Error::ChannelTimeout => f.write_str("Channel timed out"),
-            Error::ServiceStopped => f.write_str("Service stopped"),
-            Error::Utf8Error => f.write_str("Malformed UTF8"),
-            Error::StrUtf8Error(ref err) => write!(f, "Malformed UTF8: {}", err),
-            Error::NoteDecryptionFailed => f.write_str("Unable to decrypt mint note"),
-            Error::ServicesError(ref err) => write!(f, "Services error: {}", err),
-            Error::ZmqError(ref err) => write!(f, "ZmqError: {}", err),
-            Error::VerifyFailed => f.write_str("Verify failed"),
-            Error::ClientFailed(ref err) => write!(f, "Client failed: {}", err),
-            #[cfg(feature = "btc")]
-            Error::BtcFailed(ref err) => write!(f, "Btc client failed: {}", err),
-            #[cfg(feature = "sol")]
-            Error::SolFailed(ref err) => write!(f, "Sol client failed: {}", err),
-            #[cfg(feature = "eth")]
-            Error::EthFailed(ref err) => write!(f, "Eth client failed: {}", err),
-            Error::TryIntoError => f.write_str("TryInto error"),
-            Error::TryFromError => f.write_str("TryFrom error"),
-            Error::TryFromBigIntError => f.write_str("TryFromBigInt error"),
-            Error::RocksdbError(ref err) => write!(f, "Rocksdb Error: {}", err),
-            Error::SlabsStore(ref err) => write!(f, "SlabsStore Error: {}", err),
-            Error::JsonRpcError(ref err) => write!(f, "JsonRpc Error: {}", err),
-            Error::TreeFull => f.write_str("MerkleTree is full"),
-            Error::NotSupportedNetwork => f.write_str("Not supported network"),
-            Error::NotSupportedToken => f.write_str("Not supported token"),
-            Error::BridgeError(ref err) => write!(f, "Bridge error: {}", err),
-            Error::SerdeJsonError(ref err) => write!(f, "Json serialization error: {}", err),
-            Error::TomlDeserializeError(ref err) => write!(f, "Toml parsing error: {}", err),
-            Error::TomlSerializeError(ref err) => write!(f, "Toml parsing error: {}", err),
-            Error::Base58EncodeError(ref err) => write!(f, "bs58 encode error: {}", err),
-            Error::Base58DecodeError(ref err) => write!(f, "bs58 decode error: {}", err),
-            Error::ConfigNotFound => f.write_str("No config file detected. Please create one."),
-            Error::KeypairPathNotFound => f.write_str("No keypair file detected."),
-            Error::CashierKeysNotFound => f.write_str("No cashier public keys detected."),
-            Error::SetLoggerError => f.write_str("SetLoggerError"),
-            Error::TokenParseError => f.write_str("Could not parse token parameter"),
-            Error::TungsteniteError => f.write_str("TungsteniteError"),
-            Error::NetworkParseError => f.write_str("Cannot parse network parameter"),
-        }
-    }
+    #[error(transparent)]
+    AsyncChannelReceiverError(#[from] async_channel::RecvError),
 }
 
 impl From<zeromq::ZmqError> for Error {
@@ -172,6 +160,12 @@ impl From<zeromq::ZmqError> for Error {
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Error {
+        Error::RusqliteError(err.to_string())
     }
 }
 
@@ -187,150 +181,15 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
-        Error::RusqliteError(err.to_string())
-    }
-}
-
-impl From<ZkVmError> for Error {
-    fn from(_err: ZkVmError) -> Error {
-        Error::VmError
-    }
-}
-
-impl From<bellman::SynthesisError> for Error {
-    fn from(_err: bellman::SynthesisError) -> Error {
-        Error::Groth16Error
-    }
-}
-
-impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(_err: async_channel::SendError<T>) -> Error {
-        Error::AsyncChannelSenderError
-    }
-}
-
-impl From<async_channel::RecvError> for Error {
-    fn from(_err: async_channel::RecvError) -> Error {
-        Error::AsyncChannelReceiverError
-    }
-}
-
-impl From<async_native_tls::Error> for Error {
-    fn from(_err: async_native_tls::Error) -> Error {
-        Error::AsyncNativeTlsError
-    }
-}
-
-impl From<std::net::AddrParseError> for Error {
-    fn from(_err: std::net::AddrParseError) -> Error {
-        Error::AddrParseError
-    }
-}
-
-impl From<url::ParseError> for Error {
-    fn from(_err: url::ParseError) -> Error {
-        Error::UrlParseError
-    }
-}
-
-impl From<hex::FromHexError> for Error {
-    fn from(_err: hex::FromHexError) -> Error {
-        Error::FromHexError
-    }
-}
-
-impl From<std::num::ParseIntError> for Error {
-    fn from(_err: std::num::ParseIntError) -> Error {
-        Error::ParseIntError
-    }
-}
-
-impl From<num_bigint::ParseBigIntError> for Error {
-    fn from(_err: num_bigint::ParseBigIntError) -> Error {
-        Error::ParseBigIntError
-    }
-}
-
-impl From<num_bigint::TryFromBigIntError<num_bigint::BigUint>> for Error {
-    fn from(_err: num_bigint::TryFromBigIntError<num_bigint::BigUint>) -> Error {
-        Error::TryFromBigIntError
-    }
-}
-
-impl From<std::num::ParseFloatError> for Error {
-    fn from(_err: std::num::ParseFloatError) -> Error {
-        Error::ParseFloatError
-    }
-}
-
-impl From<std::string::FromUtf8Error> for Error {
-    fn from(_err: std::string::FromUtf8Error) -> Error {
-        Error::Utf8Error
-    }
-}
-
-impl From<std::str::Utf8Error> for Error {
-    fn from(err: std::str::Utf8Error) -> Error {
-        Error::StrUtf8Error(err.to_string())
-    }
-}
-
-impl From<state::VerifyFailed> for Error {
-    fn from(_err: state::VerifyFailed) -> Error {
-        Error::VerifyFailed
-    }
-}
-
 impl From<client::ClientFailed> for Error {
     fn from(err: client::ClientFailed) -> Error {
         Error::ClientFailed(err.to_string())
     }
 }
 
-#[cfg(feature = "btc")]
-impl From<crate::service::BtcFailed> for Error {
-    fn from(err: crate::service::BtcFailed) -> Error {
-        Error::BtcFailed(err.to_string())
-    }
-}
-
-#[cfg(feature = "sol")]
-impl From<crate::service::SolFailed> for Error {
-    fn from(err: crate::service::SolFailed) -> Error {
-        Error::SolFailed(err.to_string())
-    }
-}
-
-#[cfg(feature = "eth")]
-impl From<crate::service::EthFailed> for Error {
-    fn from(err: crate::service::EthFailed) -> Error {
-        Error::EthFailed(err.to_string())
-    }
-}
-
-impl From<toml::de::Error> for Error {
-    fn from(err: toml::de::Error) -> Error {
-        Error::TomlDeserializeError(err.to_string())
-    }
-}
-
-impl From<toml::ser::Error> for Error {
-    fn from(err: toml::ser::Error) -> Error {
-        Error::TomlSerializeError(err.to_string())
-    }
-}
-
-impl From<bs58::encode::Error> for Error {
-    fn from(err: bs58::encode::Error) -> Error {
-        Error::Base58EncodeError(err.to_string())
-    }
-}
-
-impl From<bs58::decode::Error> for Error {
-    fn from(err: bs58::decode::Error) -> Error {
-        Error::Base58DecodeError(err.to_string())
+impl<T> From<async_channel::SendError<T>> for Error {
+    fn from(_err: async_channel::SendError<T>) -> Error {
+        Error::AsyncChannelSenderError
     }
 }
 
@@ -341,7 +200,31 @@ impl From<log::SetLoggerError> for Error {
 }
 
 impl From<tungstenite::Error> for Error {
-    fn from(_err: tungstenite::Error) -> Error {
-        Error::TungsteniteError
+    fn from(err: tungstenite::Error) -> Error {
+        Error::TungsteniteError(err.to_string())
+    }
+}
+impl From<async_native_tls::Error> for Error {
+    fn from(err: async_native_tls::Error) -> Error {
+        Error::AsyncNativeTlsError(err.to_string())
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Error {
+        Error::UrlParseError(err.to_string())
+    }
+}
+
+#[cfg(feature = "sol")]
+impl From<crate::service::SolFailed> for Error {
+    fn from(err: crate::service::SolFailed) -> Error {
+        Error::SolFailed(err.to_string())
+    }
+}
+
+impl From<bellman::SynthesisError> for Error {
+    fn from(err: bellman::SynthesisError) -> Error {
+        Error::Groth16Error(err.to_string())
     }
 }

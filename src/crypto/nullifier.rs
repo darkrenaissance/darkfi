@@ -5,7 +5,6 @@ use crate::{
     serial::{Decodable, Encodable},
 };
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Nullifier {
     pub repr: [u8; 32],
@@ -30,4 +29,3 @@ impl Decodable for Nullifier {
         })
     }
 }
-

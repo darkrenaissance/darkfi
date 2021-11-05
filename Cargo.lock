@@ -1347,6 +1347,7 @@ dependencies = [
  "solana-sdk",
  "spl-associated-token-account",
  "spl-token",
+ "thiserror",
  "toml",
  "tungstenite 0.15.0",
  "url",

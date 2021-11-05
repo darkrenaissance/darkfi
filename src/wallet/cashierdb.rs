@@ -148,8 +148,6 @@ impl CashierDb {
         Ok(())
     }
 
-
-
     pub fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
@@ -652,7 +650,7 @@ mod tests {
         let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
 
         assert!(addr.is_some());
-        
+
         wallet.remove_withdraw_and_deposit_keys()?;
 
         std::fs::remove_file(walletdb_path)?;

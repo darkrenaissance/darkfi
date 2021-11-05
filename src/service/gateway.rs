@@ -186,7 +186,7 @@ impl GatewayClient {
         let addr_sock = (addr.host().unwrap().to_string(), addr.port().unwrap())
             .to_socket_addrs()?
             .next()
-            .ok_or(Error::UrlParseError)?;
+            .ok_or(Error::NoUrlFound)?;
         let protocol = ReqProtocol::new(addr_sock, String::from("GATEWAY CLIENT"));
 
         let slabstore = SlabStore::new(rocks)?;
@@ -199,7 +199,7 @@ impl GatewayClient {
         )
             .to_socket_addrs()?
             .next()
-            .ok_or(Error::UrlParseError)?;
+            .ok_or(Error::NoUrlFound)?;
 
         Ok(GatewayClient {
             protocol,

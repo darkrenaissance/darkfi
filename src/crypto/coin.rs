@@ -29,4 +29,3 @@ impl Decodable for Coin {
         })
     }
 }
-
