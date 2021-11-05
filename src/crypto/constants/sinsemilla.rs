@@ -70,8 +70,7 @@ pub const Q_MERKLE_CRH: ([u8; 32], [u8; 32]) = (
     ],
 );
 
-#[allow(dead_code)]
-fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
+pub fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
     assert!(NUM_BITS <= 64);
     super::util::gen_const_array(|mask: usize| (int & (1 << mask)) != 0)
 }

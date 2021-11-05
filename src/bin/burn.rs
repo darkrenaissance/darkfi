@@ -39,14 +39,18 @@ use pasta_curves::{
 };
 use rand::rngs::OsRng;
 
-use drk_halo2::{
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-        OrchardFixedBases,
+use drk::{
+    crypto::{
+        constants::{
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION, i2lebsp},
+            OrchardFixedBases,
+        },
+        util::{
+            pedersen_commitment_u64,
+            pedersen_commitment_scalar
+        },
+        proof::{Proof, ProvingKey, VerifyingKey},
     },
-    crypto::pedersen_commitment,
-    proof::{Proof, ProvingKey, VerifyingKey},
-    spec::i2lebsp,
 };
 
 #[derive(Clone, Debug)]
@@ -559,8 +563,8 @@ fn main() {
     // Value and asset commitments
     let value_blind = pallas::Scalar::random(&mut OsRng);
     let asset_blind = pallas::Scalar::random(&mut OsRng);
-    let value_commit = pedersen_commitment(value, value_blind);
-    let asset_commit = pedersen_commitment(asset, asset_blind);
+    let value_commit = pedersen_commitment_u64(value, value_blind);
+    let asset_commit = pedersen_commitment_u64(asset, asset_blind);
 
     let value_coords = value_commit.to_affine().coordinates().unwrap();
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
