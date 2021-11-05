@@ -68,14 +68,14 @@ impl DrkTokenList {
         let sol_tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
             .filter_map(|symbol| {
-                Self::generate_hash_pair(&sol_list, &NetworkName::Solana, symbol).ok()
+                Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
             })
             .collect();
 
         let eth_tokens: HashMap<String, jubjub::Fr> = eth_symbols
             .iter()
             .filter_map(|symbol| {
-                Self::generate_hash_pair(&eth_list, &NetworkName::Ethereum, symbol).ok()
+                Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
             })
             .collect();
 

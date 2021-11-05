@@ -33,8 +33,7 @@ impl Drk {
             && features.as_object().unwrap()["networks"]
                 .as_array()
                 .unwrap()
-                .len()
-                == 0
+                .is_empty()
         {
             return Err(Error::NotSupportedNetwork);
         }

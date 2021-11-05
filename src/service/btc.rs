@@ -229,7 +229,7 @@ impl Client {
         let config = bdk::electrum_client::ConfigBuilder::default()
             .retry(5)
             .build();
-        let client = ElectrumClient::from_config(electrum_url, config)?;
+        let _client = ElectrumClient::from_config(electrum_url, config)?;
 
         let electrum = ElectrumClient::new(electrum_url)
             .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
@@ -263,8 +263,7 @@ impl Client {
     }
     fn update_latest_block(&mut self) -> BtcResult<()> {
         let latest_block = self.electrum.block_headers_subscribe()?;
-        let latest_block_height = BlockHeight::try_from(latest_block)
-            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+        let latest_block_height = BlockHeight::try_from(latest_block)?;
 
         if latest_block_height > self.latest_block_height {
             debug!( target: "BTC BRIDGE", "{} {}",
@@ -304,7 +303,7 @@ impl Client {
         }
         self.update_state()?;
 
-        let history = self.script_history.entry(script.clone()).or_default();
+        let history = self.script_history.entry(script).or_default();
 
         match history.as_slice() {
             [] => Ok(ScriptStatus::Unseen),
@@ -598,7 +597,7 @@ impl NetworkClient for BtcClient {
         let main_script_pubkey = &self.main_account.script_pubkey;
 
         let main_utxo = electrum
-            .script_list_unspent(&main_script_pubkey)
+            .script_list_unspent(main_script_pubkey)
             .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
         let transaction = Transaction {

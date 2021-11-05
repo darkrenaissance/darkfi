@@ -70,7 +70,7 @@ impl Client {
             bs58::encode(&serialize(&main_keypair.public)).into_string()
         );
 
-        let slabstore = RocksColumn::<columns::Slabs>::new(rocks.clone());
+        let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
 
         // create gateway client
         debug!(target: "CLIENT", "Creating GatewayClient");

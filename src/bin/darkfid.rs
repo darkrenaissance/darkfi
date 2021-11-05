@@ -176,15 +176,14 @@ impl Darkfid {
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
+                let amount = encode_base10(BigUint::from(balance.value), 8);
                 if let Some((network, symbol)) =
                     self.drk_tokenlist.symbol_from_id(&balance.token_id)?
                 {
-                    let amount = encode_base10(BigUint::from(balance.value), 8);
                     symbols.insert(symbol, (amount, network.to_string()));
                 } else {
                     // TODO: SQL needs to have the mint address for show, not the internal hash.
                     // TODO: SQL needs to have the network name
-                    let amount = encode_base10(BigUint::from(balance.value), 8);
                     symbols.insert(
                         balance.token_id.to_string(),
                         (amount, String::from("UNKNOWN")),
@@ -239,7 +238,7 @@ impl Darkfid {
                     if let Some(tkn) = self.sol_tokenlist.search_id(symbol)? {
                         Ok(json!(tkn))
                     } else {
-                        return Err(Error::NotSupportedToken);
+                        Err(Error::NotSupportedToken)
                     }
                 }
                 #[cfg(feature = "btc")]
@@ -254,12 +253,10 @@ impl Darkfid {
                     let token_id: String = if symbol.to_lowercase() == "eth" {
                         use drk::service::eth::ETH_NATIVE_TOKEN_ID;
                         ETH_NATIVE_TOKEN_ID.to_string()
+                    } else if let Some(tkn) = self.eth_tokenlist.search_id(symbol)? {
+                        tkn
                     } else {
-                        if let Some(tkn) = self.eth_tokenlist.search_id(symbol)? {
-                            tkn
-                        } else {
-                            return Err(Error::NotSupportedToken);
-                        }
+                        return Err(Error::NotSupportedToken);
                     };
 
                     Ok(json!(token_id))

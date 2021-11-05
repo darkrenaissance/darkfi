@@ -23,10 +23,7 @@ impl std::fmt::Display for Address {
         hasher.update(self.hash);
         let mut hash = hasher.finalize().to_vec();
 
-        let mut payload = vec![];
-
-        // add version
-        payload.push(0x00 as u8);
+        let mut payload: Vec<u8> = vec![0x00_u8];
 
         // add public key hash
         payload.append(&mut hash);
