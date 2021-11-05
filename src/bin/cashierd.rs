@@ -107,45 +107,6 @@ impl Cashierd {
             config,
         })
     }
-
-    async fn resume_watch_deposit_keys(
-        bridge: Arc<Bridge>,
-        cashier_wallet: Arc<CashierDb>,
-        networks: Vec<Network>,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
-
-        for network in networks.iter() {
-            let keypairs_to_watch =
-                cashier_wallet.get_deposit_token_keys_by_network(&network.name)?;
-
-            for deposit_token in keypairs_to_watch {
-                let bridge = bridge.clone();
-
-                let bridge_subscribtion = bridge
-                    .subscribe(
-                        deposit_token.drk_public_key,
-                        Some(deposit_token.mint_address),
-                        executor.clone(),
-                    )
-                    .await;
-
-                bridge_subscribtion
-                    .sender
-                    .send(bridge::BridgeRequests {
-                        network: network.name.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some(
-                            deposit_token.token_key,
-                        )),
-                    })
-                    .await?;
-            }
-        }
-
-        Ok(())
-    }
-
     async fn listen_for_receiving_coins(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
@@ -514,7 +475,6 @@ impl Cashierd {
     ) -> Result<(
         smol::Task<Result<()>>,
         smol::Task<Result<()>>,
-        smol::Task<Result<()>>,
     )> {
         self.cashier_wallet.init_db().await?;
 
@@ -663,13 +623,6 @@ impl Cashierd {
             }
         }
 
-        let resume_watch_deposit_keys_task = executor.spawn(Self::resume_watch_deposit_keys(
-            self.bridge.clone(),
-            self.cashier_wallet.clone(),
-            self.networks.clone(),
-            executor.clone(),
-        ));
-
         client.start().await?;
 
         let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
@@ -727,7 +680,6 @@ impl Cashierd {
             });
 
         Ok((
-            resume_watch_deposit_keys_task,
             listen_for_receiving_coins_task,
             listen_for_notification_from_bridge_task,
         ))
@@ -811,12 +763,11 @@ async fn start(
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    let (t1, t2, t3) = cashierd.start(client, state, executor.clone()).await?;
+    let (t1, t2) = cashierd.start(client, state, executor.clone()).await?;
     listen_and_serve(cfg, Arc::new(cashierd), executor).await?;
 
     t1.cancel().await;
     t2.cancel().await;
-    t3.cancel().await;
 
     Ok(())
 }
@@ -899,3 +850,41 @@ async fn main() -> Result<()> {
 
     result
 }
+
+// async fn resume_watch_deposit_keys(
+//     bridge: Arc<Bridge>,
+//     cashier_wallet: Arc<CashierDb>,
+//     networks: Vec<Network>,
+//     executor: Arc<Executor<'_>>,
+// ) -> Result<()> {
+//     debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
+
+//     for network in networks.iter() {
+//         let keypairs_to_watch =
+//             cashier_wallet.get_deposit_token_keys_by_network(&network.name)?;
+
+//         for deposit_token in keypairs_to_watch {
+//             let bridge = bridge.clone();
+
+//             let bridge_subscribtion = bridge
+//                 .subscribe(
+//                     deposit_token.drk_public_key,
+//                     Some(deposit_token.mint_address),
+//                     executor.clone(),
+//                 )
+//                 .await;
+
+//             bridge_subscribtion
+//                 .sender
+//                 .send(bridge::BridgeRequests {
+//                     network: network.name.clone(),
+//                     payload: bridge::BridgeRequestsPayload::Watch(Some(
+//                         deposit_token.token_key,
+//                     )),
+//                 })
+//                 .await?;
+//         }
+//     }
+
+//     Ok(())
+// }
