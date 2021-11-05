@@ -3,24 +3,21 @@ use sha2::Digest;
 
 #[derive(Clone, Debug)]
 pub struct Address {
-    pub raw: jubjub::SubgroupPoint,
     pub hash: [u8; 32],
 }
 
 impl Address {
     pub fn new(raw: jubjub::SubgroupPoint) -> Self {
-
         let mut hasher = sha2::Sha256::new();
         hasher.update(raw.to_bytes());
         let hash: [u8; 32] = hasher.finalize().into();
 
-        Address { raw, hash }
+        Address { hash }
     }
 }
 
 impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-
         // ripemd160 hash
         let mut hasher = ripemd160::Ripemd160::new();
         hasher.update(self.hash);
