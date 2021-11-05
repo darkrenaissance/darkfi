@@ -1,40 +1,30 @@
 use group::GroupEncoding;
 use sha2::Digest;
 
-use crate::{
-    serial::{Decodable, Encodable},
-    Result,
-};
-
 #[derive(Clone, Debug)]
 pub struct Address {
     pub raw: jubjub::SubgroupPoint,
-    pub pkh: String,
+    pub hash: [u8; 32],
 }
 
 impl Address {
     pub fn new(raw: jubjub::SubgroupPoint) -> Self {
-        let pkh = Self::pkh_address(&raw);
 
-        Address { raw, pkh }
-    }
-
-    fn get_hash(raw: &jubjub::SubgroupPoint) -> Vec<u8> {
-        // sha256
         let mut hasher = sha2::Sha256::new();
         hasher.update(raw.to_bytes());
-        let hash = hasher.finalize();
+        let hash: [u8; 32] = hasher.finalize().into();
 
-        // ripemd160
-        let mut hasher = ripemd160::Ripemd160::new();
-        hasher.update(hash.to_vec());
-        let hash = hasher.finalize();
-
-        hash.to_vec()
+        Address { raw, hash }
     }
+}
 
-    pub fn pkh_address(raw: &jubjub::SubgroupPoint) -> String {
-        let mut hash = Self::get_hash(raw);
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+
+        // ripemd160 hash
+        let mut hasher = ripemd160::Ripemd160::new();
+        hasher.update(self.hash);
+        let mut hash = hasher.finalize().to_vec();
 
         let mut payload = vec![];
 
@@ -54,13 +44,6 @@ impl Address {
         // base56 encoding
         let address: String = bs58::encode(payload).into_string();
 
-        address
+        write!(f, "{}", address)
     }
 }
-
-impl std::fmt::Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.pkh)
-    }
-}
-
