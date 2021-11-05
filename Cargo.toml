@@ -33,7 +33,6 @@ features = ["lz4"]
 
 [dependencies]
 # Crypto
-ff = "0.11.0"
 pasta_curves = "0.2.1"
 rand = "0.8.4"
 num-bigint = {version = "0.4.2", features = ["rand"]}
