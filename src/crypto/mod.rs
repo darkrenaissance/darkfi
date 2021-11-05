@@ -1,3 +1,4 @@
+pub mod arith_chip;
 pub mod coin;
 pub mod constants;
 pub mod diffie_hellman;

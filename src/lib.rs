@@ -16,5 +16,7 @@ pub mod tx;
 pub mod types;
 pub mod util;
 pub mod wallet;
+pub mod vm2;
+pub mod vm2_serial;
 
 pub use crate::error::{Error, Result};

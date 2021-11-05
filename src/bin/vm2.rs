@@ -37,16 +37,20 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 use std::{collections::HashMap, fs::File, time::Instant};
 
-use drk_halo2::{
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-        OrchardFixedBases,
+use drk::{
+    crypto::{
+        constants::{
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+            OrchardFixedBases,
+        },
+        util::{
+            pedersen_commitment_u64,
+            pedersen_commitment_scalar
+        },
+        proof::{Proof, ProvingKey, VerifyingKey},
     },
-    crypto::pedersen_commitment,
-    proof::{Proof, ProvingKey, VerifyingKey},
     serial::Decodable,
-    spec::i2lebsp,
-    vm2,
+    vm2
 };
 
 fn main() -> std::result::Result<(), failure::Error> {
@@ -54,7 +58,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let k: u32 = 11;
 
     let start = Instant::now();
-    let file = File::open("../../proof/mint.zk.bin")?;
+    let file = File::open("proof/mint.zk.bin")?;
     let zkbin = vm2::ZkBinary::decode(file)?;
     for contract_name in zkbin.contracts.keys() {
         println!("Loaded '{}' contract.", contract_name);
@@ -94,10 +98,10 @@ fn main() -> std::result::Result<(), failure::Error> {
     let coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>)
         .hash([*coords.x(), *coords.y()]);
 
-    let value_commit = pedersen_commitment(value, value_blind);
+    let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-    let asset_commit = pedersen_commitment(asset, asset_blind);
+    let asset_commit = pedersen_commitment_u64(asset, asset_blind);
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
 
     let mut public_inputs = vec![

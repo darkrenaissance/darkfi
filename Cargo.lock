@@ -1282,6 +1282,7 @@ dependencies = [
  "bytes 1.1.0",
  "crypto_api_chachapoly",
  "dirs",
+ "failure",
  "futures",
  "group",
  "halo2",

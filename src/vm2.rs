@@ -28,10 +28,12 @@ use halo2_gadgets::{
 use pasta_curves::pallas;
 
 use crate::{
-    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-        OrchardFixedBases,
+    crypto::{
+        arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+        constants::{
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+            OrchardFixedBases,
+        },
     },
     error::{Error, Result},
 };
