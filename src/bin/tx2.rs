@@ -1,5 +1,6 @@
 use rand::rngs::OsRng;
 use std::{fmt, time::Instant};
+use log::*;
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -37,10 +38,12 @@ use pasta_curves::{
 
 use drk::{
     crypto::{
+        coin::Coin,
         constants::{
             sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
             OrchardFixedBases,
         },
+        nullifier::Nullifier,
         util::{
             pedersen_commitment_u64,
             pedersen_commitment_scalar
@@ -54,6 +57,9 @@ struct MemoryState {
 }
 
 impl ProgramState for MemoryState {
+    fn is_valid_cashier_public_key(&self, public: &pallas::Point) -> bool {
+        true
+    }
 }
 
 impl MemoryState {
@@ -67,6 +73,8 @@ mod tx2 {
         group::{ff::{PrimeField, PrimeFieldBits}, Curve},
         pallas,
     };
+
+    use drk::types::derive_public_key;
 
     pub struct TransactionBuilder {
         pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -91,16 +99,87 @@ mod tx2 {
 
     impl TransactionBuilder {
         pub fn build(self) -> Transaction {
-            Transaction {}
+            let mut clear_inputs = vec![];
+            //let token_blind = DrkValueBlind::random(&mut OsRng);
+            for input in &self.clear_inputs {
+                let signature_public = derive_public_key(input.signature_secret);
+                //let value_blind = DrkValueBlind::random(&mut OsRng);
+
+                let clear_input = PartialTransactionClearInput {
+                    value: input.value,
+                    //token_id: input.token_id,
+                    //value_blind,
+                    //token_blind,
+                    signature_public,
+                };
+                clear_inputs.push(clear_input);
+            }
+
+            let partial_tx = PartialTransaction {
+                clear_inputs,
+                //inputs,
+                //outputs,
+            };
+
+            let mut clear_inputs = vec![];
+            for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
+                //let secret = schnorr::SecretKey(info.signature_secret);
+                //let signature = secret.sign(&unsigned_tx_data[..]);
+                let input = TransactionClearInput::from_partial(input);
+                clear_inputs.push(input);
+            }
+
+            Transaction {
+                clear_inputs
+            }
         }
     }
 
+    pub struct PartialTransaction {
+        pub clear_inputs: Vec<PartialTransactionClearInput>,
+        //pub inputs: Vec<PartialTransactionInput>,
+        //pub outputs: Vec<TransactionOutput>,
+    }
+    
+    pub struct PartialTransactionClearInput {
+        pub value: u64,
+        //pub token_id: DrkTokenId,
+        //pub value_blind: DrkValueBlind,
+        //pub token_blind: DrkValueBlind,
+        pub signature_public: pallas::Point,
+    }
+
     pub struct Transaction {
+        pub clear_inputs: Vec<TransactionClearInput>,
+    }
+
+    pub struct TransactionClearInput {
+        pub value: u64,
+        //pub token_id: DrkTokenId,
+        //pub value_blind: DrkValueBlind,
+        //pub token_blind: DrkValueBlind,
+        pub signature_public: pallas::Point,
+        //pub signature: schnorr::Signature,
+    }
+
+    impl TransactionClearInput {
+        fn from_partial(
+            partial: PartialTransactionClearInput,
+        ) -> Self {
+            Self {
+                value: partial.value,
+                //token_id: partial.token_id,
+                //value_blind: partial.value_blind,
+                //token_blind: partial.token_blind,
+                signature_public: partial.signature_public,
+                //signature,
+            }
+        }
     }
 }
 
 pub trait ProgramState {
-    //fn is_valid_cashier_public_key(&self, public: &DrkPublicKey) -> bool;
+    fn is_valid_cashier_public_key(&self, public: &pallas::Point) -> bool;
     //// TODO: fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     //fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
@@ -109,8 +188,8 @@ pub trait ProgramState {
 }
 
 pub struct StateUpdate {
-    //pub nullifiers: Vec<Nullifier>,
-    //pub coins: Vec<Coin>,
+    pub nullifiers: Vec<Nullifier>,
+    pub coins: Vec<Coin>,
     //pub enc_notes: Vec<EncryptedNote>,
 }
 
@@ -163,7 +242,29 @@ pub fn state_transition<S: ProgramState>(
     state: &S,
     tx: tx2::Transaction,
 ) -> VerifyResult<StateUpdate> {
-    Ok(StateUpdate {})
+    // Check deposits are legit
+
+    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
+
+    for (i, input) in tx.clear_inputs.iter().enumerate() {
+        // Check the public key in the clear inputs
+        // It should be a valid public key for the cashier
+
+        if !state.is_valid_cashier_public_key(&input.signature_public) {
+            log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
+            return Err(VerifyFailed::InvalidCashierKey(i));
+        }
+    }
+
+    let mut nullifiers = vec![];
+
+    // Newly created coins for this tx
+    let mut coins = vec![];
+
+    Ok(StateUpdate {
+        nullifiers,
+        coins,
+    })
 }
 
 fn main() -> std::result::Result<(), failure::Error> {
@@ -195,6 +296,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let tx = builder.build();
 
     let update = state_transition(&state, tx)?;
+    state.apply(update);
 
     Ok(())
 }

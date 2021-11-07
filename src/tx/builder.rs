@@ -62,7 +62,7 @@ impl TransactionBuilder {
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
-            let signature_public = derive_publickey(input.signature_secret);
+            let signature_public = derive_public_key(input.signature_secret);
             let value_blind = DrkValueBlind::random(&mut OsRng);
 
             let clear_input = PartialTransactionClearInput {

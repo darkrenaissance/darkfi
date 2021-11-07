@@ -79,7 +79,7 @@ impl WalletDb {
 
         if !key_check {
             let secret = DrkSecretKey::random(&mut OsRng);
-            let public = derive_publickey(secret);
+            let public = derive_public_key(secret);
             self.put_keypair(&public, &secret)?;
             return Ok(());
         }
@@ -368,7 +368,7 @@ mod tests {
     use super::*;
     use crate::crypto::{
         coin::Coin,
-        types::{derive_publickey, CoinBlind, NullifierSerial, ValueCommitBlind},
+        types::{derive_public_key, CoinBlind, NullifierSerial, ValueCommitBlind},
         OwnCoin,
     };
     use crate::util::join_config_path;
@@ -398,7 +398,7 @@ mod tests {
         init_db(&walletdb_path, password)?;
 
         let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_publickey();
+        let public = secret.derive_public_key();
 
         wallet.put_keypair(&public, &secret)?;
 
@@ -456,7 +456,7 @@ mod tests {
         init_db(&walletdb_path, password)?;
 
         let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_publickey();
+        let public = secret.derive_public_key();
 
         wallet.put_keypair(&public, &secret)?;
 
@@ -511,7 +511,7 @@ mod tests {
         init_db(&walletdb_path, password)?;
 
         let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_publickey();
+        let public = secret.derive_public_key();
 
         wallet.put_keypair(&public, &secret)?;
 
@@ -533,7 +533,7 @@ mod tests {
         init_db(&walletdb_path, password)?;
 
         let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_publickey();
+        let public = secret.derive_public_key();
 
         wallet.put_keypair(&public, &secret)?;
 
@@ -604,7 +604,7 @@ mod tests {
         init_db(&walletdb_path, password)?;
 
         let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_publickey();
+        let public = secret.derive_public_key();
 
         wallet.put_keypair(&public, &secret)?;
 

@@ -32,7 +32,7 @@ impl SecretKey {
     }
 
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(derive_publickey(self.0))
+        PublicKey(derive_public_key(self.0))
     }
 }
 

@@ -58,7 +58,7 @@ impl Decodable for Note {
 impl Note {
     pub fn encrypt(&self, public: &DrkPublicKey) -> Result<EncryptedNote> {
         let ephem_secret = DrkSecretKey::random(&mut OsRng);
-        let ephem_public = derive_publickey(ephem_secret);
+        let ephem_public = derive_public_key(ephem_secret);
         let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public);
         let key = kdf_sapling(shared_secret, &ephem_public);
 
@@ -142,7 +142,7 @@ fn test_note_encdec() {
     };
 
     let secret = DrkSecretKey::random(&mut OsRng);
-    let public = derive_publickey(secret);
+    let public = derive_public_key(secret);
 
     let encrypted_note = note.encrypt(&public).unwrap();
     let note2 = encrypted_note.decrypt(&secret).unwrap();

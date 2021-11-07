@@ -23,6 +23,6 @@ pub type DrkValueCommit = pasta::Ep;
 pub type DrkPublicKey = pasta::Ep;
 pub type DrkSecretKey = pasta::Fp;
 
-pub fn derive_publickey(s: DrkSecretKey) -> DrkPublicKey {
+pub fn derive_public_key(s: DrkSecretKey) -> DrkPublicKey {
     OrchardFixedBases::SpendAuthG.generator() * mod_r_p(s)
 }

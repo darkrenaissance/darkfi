@@ -48,7 +48,7 @@ impl SpendRevealedValues {
         let nullifier =
             primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
-        let public_key = derive_publickey(secret);
+        let public_key = derive_public_key(secret);
         let coords = public_key.to_affine().coordinates().unwrap();
         let messages = [
             [*coords.x(), *coords.y()],
@@ -66,7 +66,7 @@ impl SpendRevealedValues {
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
 
-        let signature_public = derive_publickey(signature_secret);
+        let signature_public = derive_public_key(signature_secret);
 
         SpendRevealedValues {
             value_commit,
