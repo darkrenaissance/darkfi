@@ -68,13 +68,25 @@ impl MemoryState {
 }
 
 mod tx2 {
+    use rand::rngs::OsRng;
+
     use pasta_curves::{
         arithmetic::{CurveAffine, Field},
         group::{ff::{PrimeField, PrimeFieldBits}, Curve},
         pallas,
     };
 
-    use drk::types::derive_public_key;
+    use drk::{
+        crypto::note::{Note, EncryptedNote},
+        error::Result,
+        types::{
+        DrkValueBlind,
+        DrkSerial,
+        DrkCoinBlind,
+        derive_public_key
+    }};
+
+    type DrkTokenId2 = u64;
 
     pub struct TransactionBuilder {
         pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -84,7 +96,7 @@ mod tx2 {
 
     pub struct TransactionBuilderClearInputInfo {
         pub value: u64,
-        pub token_id: u64,
+        pub token_id: DrkTokenId2,
         pub signature_secret: pallas::Base
     }
 
@@ -93,32 +105,100 @@ mod tx2 {
 
     pub struct TransactionBuilderOutputInfo {
         pub value: u64,
-        pub token_id: u64,
+        pub token_id: DrkTokenId2,
         pub public: pallas::Point
     }
 
     impl TransactionBuilder {
-        pub fn build(self) -> Transaction {
+        fn compute_remainder_blind(
+            clear_inputs: &[PartialTransactionClearInput],
+            input_blinds: &[DrkValueBlind],
+            output_blinds: &[DrkValueBlind],
+        ) -> DrkValueBlind {
+            let mut total = DrkValueBlind::zero();
+
+            for input in clear_inputs {
+                total += input.value_blind;
+            }
+
+            for input_blind in input_blinds {
+                total += input_blind;
+            }
+
+            for output_blind in output_blinds {
+                total -= output_blind;
+            }
+
+            total
+        }
+
+        pub fn build(self) -> Result<Transaction> {
             let mut clear_inputs = vec![];
-            //let token_blind = DrkValueBlind::random(&mut OsRng);
+            let token_blind = DrkValueBlind::random(&mut OsRng);
             for input in &self.clear_inputs {
                 let signature_public = derive_public_key(input.signature_secret);
-                //let value_blind = DrkValueBlind::random(&mut OsRng);
+                let value_blind = DrkValueBlind::random(&mut OsRng);
 
                 let clear_input = PartialTransactionClearInput {
                     value: input.value,
-                    //token_id: input.token_id,
-                    //value_blind,
-                    //token_blind,
+                    token_id: input.token_id,
+                    value_blind,
+                    token_blind,
                     signature_public,
                 };
                 clear_inputs.push(clear_input);
             }
 
+            let mut input_blinds = vec![];
+
+            let mut outputs = vec![];
+            let mut output_blinds = vec![];
+
+            for (i, output) in self.outputs.iter().enumerate() {
+                let value_blind = if i == self.outputs.len() - 1 {
+                    Self::compute_remainder_blind(&clear_inputs, &input_blinds, &output_blinds)
+                } else {
+                    DrkValueBlind::random(&mut OsRng)
+                };
+                output_blinds.push(value_blind);
+
+                let serial = DrkSerial::random(&mut OsRng);
+                let coin_blind = DrkCoinBlind::random(&mut OsRng);
+
+                //let (mint_proof, revealed) = create_mint_proof(
+                //    output.value,
+                //    output.token_id,
+                //    value_blind,
+                //    token_blind,
+                //    serial,
+                //    coin_blind,
+                //    output.public,
+                //)?;
+
+                // Encrypted note
+
+                let note = Note {
+                    serial,
+                    value: output.value,
+                    token_id: pallas::Base::from(output.token_id),
+                    coin_blind,
+                    value_blind,
+                };
+
+                let encrypted_note = note.encrypt(&output.public).unwrap();
+
+                let output = TransactionOutput {
+                    //mint_proof,
+                    //revealed,
+                    enc_note: encrypted_note,
+                };
+                outputs.push(output);
+            }
+
             let partial_tx = PartialTransaction {
                 clear_inputs,
                 //inputs,
-                //outputs,
+                outputs,
             };
 
             let mut clear_inputs = vec![];
@@ -129,28 +209,30 @@ mod tx2 {
                 clear_inputs.push(input);
             }
 
-            Transaction {
-                clear_inputs
-            }
+            Ok(Transaction {
+                clear_inputs,
+                outputs: partial_tx.outputs,
+            })
         }
     }
 
     pub struct PartialTransaction {
         pub clear_inputs: Vec<PartialTransactionClearInput>,
         //pub inputs: Vec<PartialTransactionInput>,
-        //pub outputs: Vec<TransactionOutput>,
+        pub outputs: Vec<TransactionOutput>,
     }
     
     pub struct PartialTransactionClearInput {
         pub value: u64,
-        //pub token_id: DrkTokenId,
-        //pub value_blind: DrkValueBlind,
-        //pub token_blind: DrkValueBlind,
+        pub token_id: DrkTokenId2,
+        pub value_blind: DrkValueBlind,
+        pub token_blind: DrkValueBlind,
         pub signature_public: pallas::Point,
     }
 
     pub struct Transaction {
         pub clear_inputs: Vec<TransactionClearInput>,
+        pub outputs: Vec<TransactionOutput>,
     }
 
     pub struct TransactionClearInput {
@@ -175,6 +257,12 @@ mod tx2 {
                 //signature,
             }
         }
+    }
+
+    pub struct TransactionOutput {
+        //pub mint_proof: Proof,
+        //pub revealed: MintRevealedValues,
+        pub enc_note: EncryptedNote,
     }
 }
 
@@ -293,7 +381,7 @@ fn main() -> std::result::Result<(), failure::Error> {
         }]
     };
 
-    let tx = builder.build();
+    let tx = builder.build()?;
 
     let update = state_transition(&state, tx)?;
     state.apply(update);
