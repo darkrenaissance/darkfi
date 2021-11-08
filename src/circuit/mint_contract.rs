@@ -1,4 +1,4 @@
-use pasta_curves as pasta;
+use pasta_curves::pallas;
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -42,7 +42,7 @@ pub struct MintConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    poseidon_config: PoseidonConfig<pasta::Fp>,
+    poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
 impl MintConfig {
@@ -50,7 +50,7 @@ impl MintConfig {
         EccChip::construct(self.ecc_config.clone())
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pasta::Fp> {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
@@ -64,21 +64,21 @@ const MINT_ASSCOMY_OFFSET: usize = 4;
 
 #[derive(Default, Debug)]
 pub struct MintContract {
-    pub pub_x: Option<pasta::Fp>,       // x coordinate for pubkey
-    pub pub_y: Option<pasta::Fp>,       // y coordinate for pubkey
-    pub value: Option<pasta::Fp>,       // The value of this coin
-    pub asset: Option<pasta::Fp>,       // The asset ID
-    pub serial: Option<pasta::Fp>,      // Unique serial number corresponding to this coin
-    pub coin_blind: Option<pasta::Fp>,  // Random blinding factor for coin
-    pub value_blind: Option<pasta::Fq>, // Random blinding factor for value commitment
-    pub asset_blind: Option<pasta::Fq>, // Random blinding factor for the asset ID
+    pub pub_x: Option<pallas::Base>,       // x coordinate for pubkey
+    pub pub_y: Option<pallas::Base>,       // y coordinate for pubkey
+    pub value: Option<pallas::Base>,       // The value of this coin
+    pub asset: Option<pallas::Base>,       // The asset ID
+    pub serial: Option<pallas::Base>,      // Unique serial number corresponding to this coin
+    pub coin_blind: Option<pallas::Base>,  // Random blinding factor for coin
+    pub value_blind: Option<pallas::Scalar>, // Random blinding factor for value commitment
+    pub asset_blind: Option<pallas::Scalar>, // Random blinding factor for the asset ID
 }
 
-impl UtilitiesInstructions<pasta::Fp> for MintContract {
-    type Var = CellValue<pasta::Fp>;
+impl UtilitiesInstructions<pallas::Base> for MintContract {
+    type Var = CellValue<pallas::Base>;
 }
 
-impl Circuit<pasta::Fp> for MintContract {
+impl Circuit<pallas::Base> for MintContract {
     type Config = MintConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -86,7 +86,7 @@ impl Circuit<pasta::Fp> for MintContract {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<pasta::Fp>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
         // Advice columns used in the circuit
         let advices = [
             meta.advice_column(),
@@ -235,7 +235,7 @@ impl Circuit<pasta::Fp> for MintContract {
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<pasta::Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), plonk::Error> {
         // Load the Sinsemilla generator lookup table used by the whole circuit.
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
@@ -317,7 +317,7 @@ impl Circuit<pasta::Fp> for MintContract {
                     poseidon_message,
                 )?;
 
-                let poseidon_output: CellValue<pasta::Fp> = poseidon_output.inner().into();
+                let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
                 poseidon_output
             };
 
@@ -360,7 +360,7 @@ impl Circuit<pasta::Fp> for MintContract {
         let one = self.load_private(
             layouter.namespace(|| "load constant one"),
             config.advices[0],
-            Some(pasta::Fp::one()),
+            Some(pallas::Base::one()),
         )?;
 
         // v * G_1
@@ -426,3 +426,4 @@ impl Circuit<pasta::Fp> for MintContract {
         Ok(())
     }
 }
+

@@ -34,23 +34,23 @@ use halo2_gadgets::{
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::{PrimeField, PrimeFieldBits}, Curve},
+    group::{
+        ff::{PrimeField, PrimeFieldBits},
+        Curve,
+    },
     pallas,
 };
 use rand::rngs::OsRng;
 
-use drk::{
-    crypto::{
-        constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION, i2lebsp},
-            OrchardFixedBases,
+use drk::crypto::{
+    constants::{
+        sinsemilla::{
+            i2lebsp, OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION,
         },
-        util::{
-            pedersen_commitment_u64,
-            pedersen_commitment_scalar
-        },
-        proof::{Proof, ProvingKey, VerifyingKey},
+        OrchardFixedBases,
     },
+    proof::{Proof, ProvingKey, VerifyingKey},
+    util::{pedersen_commitment_scalar, pedersen_commitment_u64},
 };
 
 #[derive(Clone, Debug)]

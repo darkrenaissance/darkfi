@@ -35,18 +35,13 @@ use pasta_curves::{
 };
 use rand::rngs::OsRng;
 
-use drk::{
-    crypto::{
-        constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-            OrchardFixedBases,
-        },
-        util::{
-            pedersen_commitment_u64,
-            pedersen_commitment_scalar
-        },
-        proof::{Proof, ProvingKey, VerifyingKey},
+use drk::crypto::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        OrchardFixedBases,
     },
+    proof::{Proof, ProvingKey, VerifyingKey},
+    util::{pedersen_commitment_scalar, pedersen_commitment_u64},
 };
 
 #[derive(Clone, Debug)]
@@ -518,4 +513,3 @@ fn main() {
     assert!(proof.verify(&vk, &public_inputs).is_ok());
     println!("Verify: [{:?}]", start.elapsed());
 }
-

@@ -1,6 +1,6 @@
+use log::*;
 use rand::rngs::OsRng;
 use std::{fmt, time::Instant};
-use log::*;
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -32,40 +32,49 @@ use halo2_gadgets::{
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::{PrimeField, PrimeFieldBits}, Curve},
+    group::{
+        ff::{PrimeField, PrimeFieldBits},
+        Curve,
+    },
     pallas,
 };
 
 use drk::{
+    circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     crypto::{
         coin::Coin,
         constants::{
             sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
             OrchardFixedBases,
         },
-        note::{Note, EncryptedNote},
+        note::{EncryptedNote, Note},
         nullifier::Nullifier,
-        util::{
-            pedersen_commitment_u64,
-            pedersen_commitment_scalar
-        },
         proof::{Proof, ProvingKey, VerifyingKey},
         util::mod_r_p,
+        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
     },
 };
 
 struct MemoryState {
+    mint_vk: VerifyingKey,
+    spend_vk: VerifyingKey,
 }
 
 impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &pallas::Point) -> bool {
         true
     }
+
+    fn mint_vk(&self) -> &VerifyingKey {
+        &self.mint_vk
+    }
+    fn spend_vk(&self) -> &VerifyingKey {
+        &self.spend_vk
+    }
 }
 
 impl MemoryState {
-    fn apply(&mut self, mut update: StateUpdate) {
-    }
+    fn apply(&mut self, mut update: StateUpdate) {}
 }
 
 mod tx2 {
@@ -73,45 +82,45 @@ mod tx2 {
 
     use pasta_curves::{
         arithmetic::{CurveAffine, Field},
-        group::{ff::{PrimeField, PrimeFieldBits}, Curve},
+        group::{
+            ff::{PrimeField, PrimeFieldBits},
+            Curve, Group,
+        },
         pallas,
     };
 
+    use super::{VerifyFailed, VerifyResult};
     use drk::{
         crypto::{
-            mint_proof::{create_mint_proof, MintRevealedValues},
-            proof::Proof,
-            note::{Note, EncryptedNote}
+            mint_proof::{create_mint_proof, verify_mint_proof, MintRevealedValues},
+            note::{EncryptedNote, Note},
+            proof::{Proof, VerifyingKey},
+            util::pedersen_commitment_u64,
         },
         error::Result,
-        types::{
-        DrkValueBlind,
-        DrkSerial,
-        DrkCoinBlind,
-        derive_public_key
-    }};
+        types::{derive_public_key, DrkCoinBlind, DrkSerial, DrkValueBlind, DrkValueCommit},
+    };
 
     type DrkTokenId2 = u64;
 
     pub struct TransactionBuilder {
         pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
         pub inputs: Vec<TransactionBuilderInputInfo>,
-        pub outputs: Vec<TransactionBuilderOutputInfo>
+        pub outputs: Vec<TransactionBuilderOutputInfo>,
     }
 
     pub struct TransactionBuilderClearInputInfo {
         pub value: u64,
         pub token_id: DrkTokenId2,
-        pub signature_secret: pallas::Base
+        pub signature_secret: pallas::Base,
     }
 
-    pub struct TransactionBuilderInputInfo {
-    }
+    pub struct TransactionBuilderInputInfo {}
 
     pub struct TransactionBuilderOutputInfo {
         pub value: u64,
         pub token_id: DrkTokenId2,
-        pub public: pallas::Point
+        pub public: pallas::Point,
     }
 
     impl TransactionBuilder {
@@ -226,7 +235,7 @@ mod tx2 {
         //pub inputs: Vec<PartialTransactionInput>,
         pub outputs: Vec<TransactionOutput>,
     }
-    
+
     pub struct PartialTransactionClearInput {
         pub value: u64,
         pub token_id: DrkTokenId2,
@@ -240,24 +249,77 @@ mod tx2 {
         pub outputs: Vec<TransactionOutput>,
     }
 
+    impl Transaction {
+        fn verify_token_commitments(&self) -> bool {
+            assert_ne!(self.outputs.len(), 0);
+            let token_commit_value = self.outputs[0].revealed.token_commit;
+
+            let mut failed = self
+                .outputs
+                .iter()
+                .any(|output| output.revealed.token_commit != token_commit_value);
+            failed = failed
+                || self.clear_inputs.iter().any(|input| {
+                    pedersen_commitment_u64(input.token_id, input.token_blind) != token_commit_value
+                });
+            !failed
+        }
+
+        pub fn verify(
+            &self,
+            mint_vk: &VerifyingKey,
+            spend_vk: &VerifyingKey,
+        ) -> VerifyResult<()> {
+            let mut valcom_total = DrkValueCommit::identity();
+
+            for input in &self.clear_inputs {
+                valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
+            }
+
+            //for (i, input) in self.inputs.iter().enumerate() {
+            //    if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
+            //        return Err(VerifyFailed::SpendProof(i));
+            //    }
+            //    valcom_total += &input.revealed.value_commit;
+            //}
+
+            for (i, output) in self.outputs.iter().enumerate() {
+                //if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err()
+                //{
+                //    return Err(VerifyFailed::MintProof(i));
+                //}
+                valcom_total -= &output.revealed.value_commit;
+            }
+
+            if valcom_total != DrkValueCommit::identity() {
+                return Err(VerifyFailed::MissingFunds);
+            }
+
+            // Verify token commitments match
+            if !self.verify_token_commitments() {
+                return Err(VerifyFailed::TokenMismatch);
+            }
+
+            Ok(())
+        }
+    }
+
     pub struct TransactionClearInput {
         pub value: u64,
-        //pub token_id: DrkTokenId,
-        //pub value_blind: DrkValueBlind,
-        //pub token_blind: DrkValueBlind,
+        pub token_id: DrkTokenId2,
+        pub value_blind: DrkValueBlind,
+        pub token_blind: DrkValueBlind,
         pub signature_public: pallas::Point,
         //pub signature: schnorr::Signature,
     }
 
     impl TransactionClearInput {
-        fn from_partial(
-            partial: PartialTransactionClearInput,
-        ) -> Self {
+        fn from_partial(partial: PartialTransactionClearInput) -> Self {
             Self {
                 value: partial.value,
-                //token_id: partial.token_id,
-                //value_blind: partial.value_blind,
-                //token_blind: partial.token_blind,
+                token_id: partial.token_id,
+                value_blind: partial.value_blind,
+                token_blind: partial.token_blind,
                 signature_public: partial.signature_public,
                 //signature,
             }
@@ -276,8 +338,8 @@ pub trait ProgramState {
     //// TODO: fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     //fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
-    //fn mint_pvk(&self) -> &VerifyingKey;
-    //fn spend_pvk(&self) -> &VerifyingKey;
+    fn mint_vk(&self) -> &VerifyingKey;
+    fn spend_vk(&self) -> &VerifyingKey;
 }
 
 pub struct StateUpdate {
@@ -298,7 +360,7 @@ pub enum VerifyFailed {
     ClearInputSignature(usize),
     InputSignature(usize),
     MissingFunds,
-    AssetMismatch,
+    TokenMismatch,
 }
 
 impl std::error::Error for VerifyFailed {}
@@ -324,7 +386,7 @@ impl fmt::Display for VerifyFailed {
             VerifyFailed::MissingFunds => {
                 f.write_str("Money in does not match money out (value commits)")
             }
-            VerifyFailed::AssetMismatch => {
+            VerifyFailed::TokenMismatch => {
                 f.write_str("Assets don't match some inputs or outputs (token commits)")
             }
         }
@@ -351,7 +413,7 @@ pub fn state_transition<S: ProgramState>(
 
     debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
     // Check the tx verifies correctly
-    //tx.verify(state.mint_pvk(), state.spend_pvk())?;
+    tx.verify(state.mint_vk(), state.spend_vk())?;
 
     let mut nullifiers = vec![];
 
@@ -367,19 +429,40 @@ pub fn state_transition<S: ProgramState>(
     Ok(StateUpdate {
         nullifiers,
         coins,
-        enc_notes
+        enc_notes,
     })
 }
 
 fn main() -> std::result::Result<(), failure::Error> {
+    use drk::{
+        crypto::mint_proof::{create_mint_proof, verify_mint_proof},
+        types::{DrkSerial, DrkCoinBlind}
+    };
+
     let cashier_secret = pallas::Base::random(&mut OsRng);
     let cashier_public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(cashier_secret);
 
     let secret = pallas::Base::random(&mut OsRng);
     let public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
 
-    let mut state = MemoryState {
-    };
+    let (proof, revealed) = create_mint_proof(
+        110,
+        pallas::Base::from(110),
+        pallas::Scalar::random(&mut OsRng),
+        pallas::Scalar::random(&mut OsRng),
+        DrkSerial::random(&mut OsRng),
+        DrkCoinBlind::random(&mut OsRng),
+        public.clone()
+    )?;
+
+    const K: u32 = 11;
+    let mint_vk = VerifyingKey::build(K, MintContract::default());
+    let spend_vk = VerifyingKey::build(K, SpendContract::default());
+
+    //verify_mint_proof(&mint_vk, &proof, &revealed)?;
+    //println!("DONE!");
+
+    let mut state = MemoryState { mint_vk, spend_vk };
 
     let token_id = 110;
 
@@ -387,14 +470,14 @@ fn main() -> std::result::Result<(), failure::Error> {
         clear_inputs: vec![tx2::TransactionBuilderClearInputInfo {
             value: 110,
             token_id,
-            signature_secret: cashier_secret
+            signature_secret: cashier_secret,
         }],
         inputs: vec![],
         outputs: vec![tx2::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
-            public
-        }]
+            public,
+        }],
     };
 
     let tx = builder.build()?;
@@ -404,4 +487,3 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     Ok(())
 }
-

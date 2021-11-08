@@ -43,14 +43,11 @@ use drk::{
             sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
             OrchardFixedBases,
         },
-        util::{
-            pedersen_commitment_u64,
-            pedersen_commitment_scalar
-        },
         proof::{Proof, ProvingKey, VerifyingKey},
+        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     serial::Decodable,
-    vm2
+    vm2,
 };
 
 fn main() -> std::result::Result<(), failure::Error> {

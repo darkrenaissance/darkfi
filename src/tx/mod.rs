@@ -93,7 +93,7 @@ impl Transaction {
         }
 
         for (i, output) in self.outputs.iter().enumerate() {
-            if verify_mint_proof(mint_pvk, output.mint_proof.clone(), &output.revealed).is_err() {
+            if verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed).is_err() {
                 return Err(state::VerifyFailed::MintProof(i));
             }
             valcom_total -= &output.revealed.value_commit;

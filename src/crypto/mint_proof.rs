@@ -146,7 +146,7 @@ pub fn create_mint_proof(
 
 pub fn verify_mint_proof(
     vk: &VerifyingKey,
-    proof: Proof,
+    proof: &Proof,
     revealed: &MintRevealedValues,
 ) -> Result<()> {
     let public_inputs = revealed.make_outputs();

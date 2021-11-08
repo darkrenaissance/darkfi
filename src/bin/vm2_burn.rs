@@ -42,17 +42,16 @@ use std::{collections::HashMap, fs::File, time::Instant};
 use drk::{
     crypto::{
         constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION, i2lebsp},
+            sinsemilla::{
+                i2lebsp, OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION,
+            },
             OrchardFixedBases,
         },
-        util::{
-            pedersen_commitment_u64,
-            pedersen_commitment_scalar
-        },
         proof::{Proof, ProvingKey, VerifyingKey},
+        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     serial::Decodable,
-    vm2
+    vm2,
 };
 
 fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::Base {
