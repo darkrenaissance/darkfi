@@ -106,6 +106,8 @@ pub fn create_mint_proof(
     coin_blind: DrkCoinBlind,
     public_key: DrkPublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {
+    const K: u32 = 11;
+
     let revealed = MintRevealedValues::compute(
         value,
         token_id,
@@ -131,7 +133,7 @@ pub fn create_mint_proof(
 
     let start = Instant::now();
     // TODO: Don't always build this
-    let pk = ProvingKey::build(11, MintContract::default());
+    let pk = ProvingKey::build(K, MintContract::default());
     debug!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();

@@ -133,6 +133,8 @@ pub fn create_spend_proof(
     merkle_path: Vec<DrkCoin>,
     signature_secret: DrkSecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
+    const K: u32 = 11;
+
     let revealed = SpendRevealedValues::compute(
         value,
         token_id,
@@ -161,7 +163,7 @@ pub fn create_spend_proof(
 
     let start = Instant::now();
     // TODO: Don't always build this
-    let pk = ProvingKey::build(11, SpendContract::default());
+    let pk = ProvingKey::build(K, SpendContract::default());
     debug!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();

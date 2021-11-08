@@ -43,6 +43,7 @@ use drk::{
             sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
             OrchardFixedBases,
         },
+        note::{Note, EncryptedNote},
         nullifier::Nullifier,
         util::{
             pedersen_commitment_u64,
@@ -77,7 +78,11 @@ mod tx2 {
     };
 
     use drk::{
-        crypto::note::{Note, EncryptedNote},
+        crypto::{
+            mint_proof::{create_mint_proof, MintRevealedValues},
+            proof::Proof,
+            note::{Note, EncryptedNote}
+        },
         error::Result,
         types::{
         DrkValueBlind,
@@ -165,15 +170,15 @@ mod tx2 {
                 let serial = DrkSerial::random(&mut OsRng);
                 let coin_blind = DrkCoinBlind::random(&mut OsRng);
 
-                //let (mint_proof, revealed) = create_mint_proof(
-                //    output.value,
-                //    output.token_id,
-                //    value_blind,
-                //    token_blind,
-                //    serial,
-                //    coin_blind,
-                //    output.public,
-                //)?;
+                let (mint_proof, revealed) = create_mint_proof(
+                    output.value,
+                    pallas::Base::from(output.token_id),
+                    value_blind,
+                    token_blind,
+                    serial,
+                    coin_blind,
+                    output.public,
+                )?;
 
                 // Encrypted note
 
@@ -188,8 +193,8 @@ mod tx2 {
                 let encrypted_note = note.encrypt(&output.public).unwrap();
 
                 let output = TransactionOutput {
-                    //mint_proof,
-                    //revealed,
+                    mint_proof,
+                    revealed,
                     enc_note: encrypted_note,
                 };
                 outputs.push(output);
@@ -260,8 +265,8 @@ mod tx2 {
     }
 
     pub struct TransactionOutput {
-        //pub mint_proof: Proof,
-        //pub revealed: MintRevealedValues,
+        pub mint_proof: Proof,
+        pub revealed: MintRevealedValues,
         pub enc_note: EncryptedNote,
     }
 }
@@ -278,7 +283,7 @@ pub trait ProgramState {
 pub struct StateUpdate {
     pub nullifiers: Vec<Nullifier>,
     pub coins: Vec<Coin>,
-    //pub enc_notes: Vec<EncryptedNote>,
+    pub enc_notes: Vec<EncryptedNote>,
 }
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
@@ -344,14 +349,25 @@ pub fn state_transition<S: ProgramState>(
         }
     }
 
+    debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
+    // Check the tx verifies correctly
+    //tx.verify(state.mint_pvk(), state.spend_pvk())?;
+
     let mut nullifiers = vec![];
 
     // Newly created coins for this tx
     let mut coins = vec![];
+    let mut enc_notes = vec![];
+    for output in tx.outputs {
+        // Gather all the coins
+        coins.push(Coin::from_bytes(&output.revealed.coin));
+        enc_notes.push(output.enc_note);
+    }
 
     Ok(StateUpdate {
         nullifiers,
         coins,
+        enc_notes
     })
 }
 
