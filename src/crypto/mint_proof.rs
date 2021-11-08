@@ -62,7 +62,7 @@ impl MintRevealedValues {
 
     fn make_outputs(&self) -> [DrkCircuitField; 5] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let token_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         vec![
             DrkCircuitField::from_bytes(&self.coin).unwrap(),

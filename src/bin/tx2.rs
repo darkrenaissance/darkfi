@@ -31,7 +31,7 @@ use halo2_gadgets::{
     },
 };
 use pasta_curves::{
-    arithmetic::{CurveAffine, Field},
+    arithmetic::{CurveAffine, Field, FieldExt},
     group::{
         ff::{PrimeField, PrimeFieldBits},
         Curve,
@@ -284,10 +284,10 @@ mod tx2 {
             //}
 
             for (i, output) in self.outputs.iter().enumerate() {
-                //if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err()
-                //{
-                //    return Err(VerifyFailed::MintProof(i));
-                //}
+                if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err()
+                {
+                    return Err(VerifyFailed::MintProof(i));
+                }
                 valcom_total -= &output.revealed.value_commit;
             }
 
@@ -436,7 +436,7 @@ pub fn state_transition<S: ProgramState>(
 fn main() -> std::result::Result<(), failure::Error> {
     use drk::{
         crypto::mint_proof::{create_mint_proof, verify_mint_proof},
-        types::{DrkSerial, DrkCoinBlind}
+        types::{DrkSerial, DrkCoinBlind, DrkCircuitField}
     };
 
     let cashier_secret = pallas::Base::random(&mut OsRng);
@@ -445,22 +445,9 @@ fn main() -> std::result::Result<(), failure::Error> {
     let secret = pallas::Base::random(&mut OsRng);
     let public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
 
-    let (proof, revealed) = create_mint_proof(
-        110,
-        pallas::Base::from(110),
-        pallas::Scalar::random(&mut OsRng),
-        pallas::Scalar::random(&mut OsRng),
-        DrkSerial::random(&mut OsRng),
-        DrkCoinBlind::random(&mut OsRng),
-        public.clone()
-    )?;
-
     const K: u32 = 11;
     let mint_vk = VerifyingKey::build(K, MintContract::default());
     let spend_vk = VerifyingKey::build(K, SpendContract::default());
-
-    //verify_mint_proof(&mint_vk, &proof, &revealed)?;
-    //println!("DONE!");
 
     let mut state = MemoryState { mint_vk, spend_vk };
 
