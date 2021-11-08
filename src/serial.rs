@@ -355,36 +355,21 @@ impl Decodable for Cow<'static, str> {
     }
 }
 
-// Arrays
-macro_rules! impl_array {
-    ( $size:expr ) => {
-        impl Encodable for [u8; $size] {
-            #[inline]
-            fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize> {
-                s.write_slice(&self[..])?;
-                Ok(self.len())
-            }
-        }
-
-        impl Decodable for [u8; $size] {
-            #[inline]
-            fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-                let mut ret = [0; $size];
-                d.read_slice(&mut ret)?;
-                Ok(ret)
-            }
-        }
-    };
+impl<const N: usize> Encodable for [u8; N] {
+    #[inline]
+    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize> {
+        s.write_slice(&self[..])?;
+        Ok(self.len())
+    }
 }
-
-impl_array!(2);
-impl_array!(4);
-impl_array!(8);
-impl_array!(12);
-impl_array!(16);
-impl_array!(32);
-impl_array!(33);
-impl_array!(64);
+impl<const N: usize> Decodable for [u8; N] {
+    #[inline]
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let mut ret = [0; N];
+        d.read_slice(&mut ret)?;
+        Ok(ret)
+    }
+}
 
 // Options
 impl<T: Encodable> Encodable for Option<T> {
