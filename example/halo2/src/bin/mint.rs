@@ -22,7 +22,6 @@ use halo2_gadgets::{
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
     },
     utilities::{
         copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -37,7 +36,7 @@ use rand::rngs::OsRng;
 
 use drk_halo2::{
     constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
         OrchardFixedBases,
     },
     crypto::pedersen_commitment,
