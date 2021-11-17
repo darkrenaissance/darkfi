@@ -38,6 +38,10 @@ use pasta_curves::{
     },
     pallas,
 };
+use incrementalmerkletree::{
+    bridgetree::{BridgeTree, Frontier as BridgeFrontier},
+    Altitude, Frontier, Tree,
+};
 
 use drk::{
     circuit::{mint_contract::MintContract, spend_contract::SpendContract},
@@ -433,6 +437,85 @@ pub fn state_transition<S: ProgramState>(
     })
 }
 
+use std::iter;
+use subtle::ConstantTimeEq;
+use incrementalmerkletree::Hashable;
+use halo2_gadgets::primitives::sinsemilla::HashDomain;
+use lazy_static::lazy_static;
+
+use drk::crypto::constants::{L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD, sinsemilla::i2lebsp_k};
+
+//const UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from_u64(2);
+
+lazy_static! {
+    static ref UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from_u64(2);
+    static ref EMPTY_ROOTS: Vec<MerkleNode> = {
+        iter::empty()
+            .chain(Some(MerkleNode::empty_leaf()))
+            .chain(
+                (0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
+                    let l = l as u8;
+                    *state = MerkleNode::combine(l.into(), state, state);
+                    Some(state.clone())
+                }),
+            )
+            .collect()
+    };
+}
+
+#[derive(Clone, std::cmp::Eq)]
+pub struct MerkleNode(pallas::Base);
+
+impl std::cmp::PartialEq for MerkleNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ct_eq(&other.0).into()
+    }
+}
+
+impl std::hash::Hash for MerkleNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        <Option<pallas::Base>>::from(self.0)
+            .map(|b| b.to_bytes())
+            .hash(state)
+    }
+}
+
+impl Hashable for MerkleNode {
+    fn empty_leaf() -> Self {
+        MerkleNode(UNCOMMITTED_ORCHARD.clone())
+    }
+
+    /// Implements `MerkleCRH^Orchard` as defined in
+    /// <https://zips.z.cash/protocol/protocol.pdf#orchardmerklecrh>
+    ///
+    /// The layer with 2^n nodes is called "layer n":
+    ///      - leaves are at layer MERKLE_DEPTH_ORCHARD = 32;
+    ///      - the root is at layer 0.
+    /// `l` is MERKLE_DEPTH_ORCHARD - layer - 1.
+    ///      - when hashing two leaves, we produce a node on the layer above the leaves, i.e.
+    ///        layer = 31, l = 0
+    ///      - when hashing to the final root, we produce the anchor with layer = 0, l = 31.
+    fn combine(altitude: Altitude, left: &Self, right: &Self) -> Self {
+        // MerkleCRH Sinsemilla hash domain.
+        let domain = HashDomain::new(MERKLE_CRH_PERSONALIZATION);
+
+        MerkleNode(
+            domain
+                .hash(
+                    iter::empty()
+                        .chain(i2lebsp_k(altitude.into()).iter().copied())
+                        .chain(left.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE))
+                        .chain(right.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE)),
+                )
+                .unwrap_or(pallas::Base::zero()),
+        )
+    }
+
+    fn empty_root(altitude: Altitude) -> Self {
+        EMPTY_ROOTS[<usize>::from(altitude)].clone()
+    }
+}
+
 fn main() -> std::result::Result<(), failure::Error> {
     use drk::{
         crypto::mint_proof::{create_mint_proof, verify_mint_proof},
@@ -471,6 +554,13 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let update = state_transition(&state, tx)?;
     state.apply(update);
+
+    //let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+    //let coin = MerkleNode(pallas::Base::random(&mut OsRng));
+    //tree.append(&coin);
+    //tree.witness();
+
+    let mut tree = BridgeTree::<String, 3>::new(100);
 
     Ok(())
 }

@@ -43,6 +43,8 @@ crypto_api_chachapoly = "0.5.0"
 arrayvec = "0.7.0"
 sha2 = "0.9.8"
 ripemd160 = "0.9.1"
+# Constant time options which is used for MerkleNode incrementalmerkletree
+subtle = "2.3"
 
 # Encoding and parsing
 bs58 = "0.4.0"
