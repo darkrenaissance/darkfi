@@ -53,9 +53,9 @@ impl RequestHandler for Darkfid {
 
         if self.update_balances().await.is_err() {
             return JsonResult::Err(jsonerr(
-                InternalError,
-                Some("Unable to update balances".into()),
-                req.id,
+                    InternalError,
+                    Some("Unable to update balances".into()),
+                    req.id,
             ));
         }
 
@@ -80,6 +80,7 @@ struct Darkfid {
     state: Arc<Mutex<State>>,
     sol_tokenlist: TokenList,
     eth_tokenlist: TokenList,
+    btc_tokenlist: TokenList,
     drk_tokenlist: DrkTokenList,
     cashiers: Vec<Cashier>,
 }
@@ -92,13 +93,15 @@ impl Darkfid {
     ) -> Result<Self> {
         let sol_tokenlist = TokenList::new(include_bytes!("../../token/solana_token_list.json"))?;
         let eth_tokenlist = TokenList::new(include_bytes!("../../token/erc20_token_list.json"))?;
-        let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist)?;
+        let btc_tokenlist = TokenList::new(include_bytes!("../../token/bitcoin_token_list.json"))?;
+        let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
         Ok(Self {
             client,
             state,
             sol_tokenlist,
             eth_tokenlist,
+            btc_tokenlist,
             drk_tokenlist,
             cashiers,
         })
@@ -243,23 +246,22 @@ impl Darkfid {
                 }
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
-                    //hardcoded genesis coinbase address
-                    let token_id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
-                    Ok(json!(token_id))
+                    if let Some(tkn) = self.btc_tokenlist.search_id(symbol)? {
+                        Ok(json!(tkn))
+                    } else {
+                        Err(Error::NotSupportedToken)
+                    }
                 }
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
-                    // hardcoded genesis coinbase address
-                    let token_id: String = if symbol.to_lowercase() == "eth" {
+                    if symbol.to_lowercase() == "eth" {
                         use drk::service::eth::ETH_NATIVE_TOKEN_ID;
-                        ETH_NATIVE_TOKEN_ID.to_string()
+                        Ok(json!(ETH_NATIVE_TOKEN_ID.to_string()))
                     } else if let Some(tkn) = self.eth_tokenlist.search_id(symbol)? {
-                        tkn
+                        Ok(json!(tkn))
                     } else {
-                        return Err(Error::NotSupportedToken);
-                    };
-
-                    Ok(json!(token_id))
+                        Err(Error::NotSupportedToken)
+                    }
                 }
                 _ => Err(Error::NotSupportedNetwork),
             }
@@ -327,7 +329,7 @@ impl Darkfid {
             }
         }
 
-        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist) {
+        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist, &self.btc_tokenlist) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -420,7 +422,7 @@ impl Darkfid {
             }
         };
 
-        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist) {
+        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist,&self.btc_tokenlist ) {
             Ok(t) => t,
             Err(e) => {
                 return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
@@ -476,11 +478,11 @@ impl Darkfid {
                 }
                 Ok(_) => {
                     rep = JsonResult::Resp(jsonresp(
-                        json!(format!(
-                            "Sent request to withdraw {} amount of {}",
-                            amount, token_id
-                        )),
-                        id.clone(),
+                            json!(format!(
+                                    "Sent request to withdraw {} amount of {}",
+                                    amount, token_id
+                            )),
+                            id.clone(),
                     ))
                 }
             }
@@ -650,7 +652,7 @@ async fn start(
         mint_params,
         spend_params,
     )
-    .await?;
+        .await?;
 
     let client = Arc::new(Mutex::new(client));
 
@@ -687,7 +689,7 @@ async fn main() -> Result<()> {
         (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
         (@arg cashier: --cashier +takes_value "Local cashier public key")
     )
-    .get_matches();
+        .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
         expand_path(args.value_of("CONFIG").unwrap())?
@@ -743,14 +745,14 @@ async fn main() -> Result<()> {
         .each(0..nthreads, |_| {
             smol::future::block_on(ex.run(shutdown.recv()))
         })
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex2, local_cashier, &config).await?;
-                drop(signal);
-                Ok::<(), drk::Error>(())
-            })
-        });
+    // Run the main future on the current thread.
+    .finish(|| {
+        smol::future::block_on(async move {
+            start(ex2, local_cashier, &config).await?;
+            drop(signal);
+            Ok::<(), drk::Error>(())
+        })
+    });
 
     result
 }

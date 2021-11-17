@@ -61,36 +61,38 @@ pub struct DrkTokenList {
 }
 
 impl DrkTokenList {
-    pub fn new(sol_list: &TokenList, eth_list: &TokenList) -> Result<Self> {
+    pub fn new(sol_list: &TokenList, eth_list: &TokenList, btc_list: &TokenList) -> Result<Self> {
         let sol_symbols = sol_list.get_symbols()?;
         let eth_symbols = eth_list.get_symbols()?;
+        let btc_symbols = btc_list.get_symbols()?;
 
         let sol_tokens: HashMap<String, jubjub::Fr> = sol_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
             })
-            .collect();
+        .collect();
 
         let eth_tokens: HashMap<String, jubjub::Fr> = eth_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
             })
-            .collect();
+        .collect();
 
-        // FIXME
-        let mut btc_tokens: HashMap<String, jubjub::Fr> = HashMap::new();
-        btc_tokens.insert(
-            "BTC".to_string(),
-            generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
-        );
+        let btc_tokens: HashMap<String, jubjub::Fr> = btc_symbols
+            .iter()
+            .filter_map(|symbol| {
+                Self::generate_hash_pair(btc_list, &NetworkName::Bitcoin, symbol).ok()
+            })
+        .collect();
 
-        let mut tokens: HashMap<NetworkName, HashMap<String, jubjub::Fr>> = HashMap::new();
-
-        tokens.insert(NetworkName::Solana, sol_tokens);
-        tokens.insert(NetworkName::Ethereum, eth_tokens);
-        tokens.insert(NetworkName::Bitcoin, btc_tokens);
+        let tokens: HashMap<NetworkName, HashMap<String, jubjub::Fr>> =
+            HashMap::from([
+                (NetworkName::Solana, sol_tokens),
+                (NetworkName::Ethereum, eth_tokens),
+                (NetworkName::Bitcoin, btc_tokens)
+            ]);
 
         Ok(Self { tokens })
     }
@@ -141,15 +143,28 @@ mod tests {
 
     fn _get_eth_tokens() -> Result<TokenList> {
         let file_contents = include_bytes!("../../testdata/erc20tokenlisttest.json");
-        let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
+        let eth_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
-        let tokens = sol_tokenlist["tokens"]
+        let tokens = eth_tokenlist["tokens"]
             .as_array()
             .ok_or(Error::TokenParseError)?
             .clone();
 
-        let sol_tokenlist = TokenList { tokens };
-        Ok(sol_tokenlist)
+        let eth_tokenlist = TokenList { tokens };
+        Ok(eth_tokenlist)
+    }
+
+    fn _get_btc_tokens() -> Result<TokenList> {
+        let file_contents = include_bytes!("../../token/bitcoin_token_list.json");
+        let btc_tokenlist: Value = serde_json::from_slice(file_contents)?;
+
+        let tokens = btc_tokenlist["tokens"]
+            .as_array()
+            .ok_or(Error::TokenParseError)?
+            .clone();
+
+        let btc_tokenlist = TokenList { tokens };
+        Ok(btc_tokenlist)
     }
 
     #[test]
@@ -181,8 +196,10 @@ mod tests {
         let sol_tokens2 = _get_sol_tokens()?;
         let eth_tokens = _get_eth_tokens()?;
         let eth_tokens2 = _get_eth_tokens()?;
+        let btc_tokens = _get_btc_tokens()?;
+        let btc_tokens2 = _get_btc_tokens()?;
 
-        let drk_token = DrkTokenList::new(&sol_tokens, &eth_tokens)?;
+        let drk_token = DrkTokenList::new(&sol_tokens, &eth_tokens, &btc_tokens)?;
 
         assert_eq!(drk_token.tokens[&NetworkName::Solana].len(), 5);
         assert_eq!(drk_token.tokens[&NetworkName::Ethereum].len(), 3);
@@ -193,6 +210,14 @@ mod tests {
             generate_id(
                 &sol_tokens2.search_id("SOL")?.unwrap(),
                 &NetworkName::Solana
+            )?
+        );
+
+        assert_eq!(
+            drk_token.tokens[&NetworkName::Bitcoin]["BTC"],
+            generate_id(
+                &btc_tokens2.search_id("BTC")?.unwrap(),
+                &NetworkName::Bitcoin
             )?
         );
 

@@ -48,35 +48,41 @@ pub fn assign_id(
     token: &str,
     sol_tokenlist: &TokenList,
     eth_tokenlist: &TokenList,
+    btc_tokenlist: &TokenList,
 ) -> Result<String> {
     match network {
         #[cfg(feature = "sol")]
         NetworkName::Solana => {
             // (== 44) can represent a Solana base58 token mint address
-            let id = if token.len() == 44 {
-                token.to_string()
+            if token.len() == 44 {
+                Ok(token.to_string())
             } else {
                 let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, sol_tokenlist)?
-            };
-            Ok(id)
+                symbol_to_id(&tok_lower, sol_tokenlist)
+            }
         }
         #[cfg(feature = "btc")]
         NetworkName::Bitcoin => {
-            // FIXME should load the id from the json file
-            let id = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string();
-            Ok(id)
+            if token.len() == 34 {
+                Ok(token.to_string())
+            } else {
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, btc_tokenlist)
+            }
         }
         #[cfg(feature = "eth")]
         NetworkName::Ethereum => {
             use crate::service::eth::ETH_NATIVE_TOKEN_ID;
-            let id = if token == "eth" || token == ETH_NATIVE_TOKEN_ID {
-                token.to_string()
+            // (== 42) can represent a erc20 token mint address
+            if token.len() == 42 {
+                Ok(token.to_string())
+            }
+            else if token == "eth" {
+                Ok(ETH_NATIVE_TOKEN_ID.to_string())
             } else {
                 let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, eth_tokenlist)?
-            };
-            Ok(id)
+                symbol_to_id(&tok_lower, eth_tokenlist)
+            }
         }
         _ => Err(Error::NotSupportedNetwork),
     }
@@ -156,10 +162,10 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
 
     // Round and return
     /*
-    if round && number == u64::MAX {
-    return Err(Error::ParseFailed("u64 overflow"));
-    }
-    */
+       if round && number == u64::MAX {
+       return Err(Error::ParseFailed("u64 overflow"));
+       }
+       */
 
     Ok(number + round as u64)
 }
