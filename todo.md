@@ -18,6 +18,8 @@
 
 - [ ] sollet btc / btc has same interface on drk
 - [ ] add hdwallets to btc
+- [ ] integrate eth / erc20 tokens for the cashier 
+- [ ] switch to p2p network 
 
 ## deposit
 
