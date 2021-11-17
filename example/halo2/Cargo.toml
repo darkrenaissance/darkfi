@@ -18,5 +18,5 @@ features = ["dev-graph", "gadget-traces", "sanity-checks"]
 
 [dependencies.halo2_gadgets]
 git = "https://github.com/parazyd/halo2_gadgets.git"
-rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
+rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 features = ["dev-graph", "test-dependencies"]
