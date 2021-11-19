@@ -106,6 +106,10 @@ pub fn erc20_balanceof_data(account: &str) -> String {
     format!("0x{}{}", hex::encode(*ERC20_BALANCEOF_METHOD), acc_padded)
 }
 
+pub fn erc20_decimals_data() -> String {
+    format!("0x{}", hex::encode(*ERC20_DECIMALS_METHOD))
+}
+
 fn to_eth_hex(val: BigUint) -> String {
     let bytes = val.to_bytes_be();
     let h = hex::encode(bytes);
@@ -211,6 +215,24 @@ impl EthClient {
         self.main_keypair = keypair.clone();
     }
 
+    async fn send_erc20_to_main_wallet(&self, acc: &str, amount: BigUint, mint: &str) -> Result<()> {
+        debug!(target: "ETH BRIDGE", "Send erc20 token to main wallet");
+
+        let tx = EthTx::new(
+            acc,
+            mint,
+            None,
+            None,
+            None,
+            Some(erc20_transfer_data(self.main_keypair.public_key.as_str(), amount)),
+            None,
+        );
+
+        self.send_transaction(&tx, &self.passphrase).await?;
+
+        Ok(())
+    }
+
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
         debug!(target: "ETH BRIDGE", "Send eth to main wallet");
 
@@ -233,13 +255,38 @@ impl EthClient {
         self: Arc<Self>,
         addr: String,
         drk_pub_key: jubjub::SubgroupPoint,
+        mint: Option<String>,
     ) -> Result<()> {
+
+        let token_pubkey = if mint.is_some() {
+            mint.clone().unwrap()
+        } else {
+            addr.clone()
+        };
+
+        if mint.is_some() {
+            debug!(target: "ETH BRIDGE", "Got subscribe request for ERC20 token");
+            debug!(target: "ETH BRIDGE", "Main wallet: {}", addr);
+            debug!(target: "ETH BRIDGE", "Associated token address: {}", token_pubkey);
+        } else {
+            debug!(target: "ETH BRIDGE", "Got subscribe request for native ETH");
+            debug!(target: "ETH BRIDGE", "Main wallet: {}", addr);
+        }
+
+
         if self.subscriptions.lock().await.contains(&addr) {
             return Ok(());
         }
 
-        let decimals = 18;
-        let prev_balance = self.get_current_balance(&addr, None).await?;
+        let decimals = if mint.is_some() {
+            let hexdecimals = self.get_erc20_decimals(&addr, &token_pubkey).await?;
+            let hexdecimals = hexdecimals.as_str().unwrap().trim_start_matches("0x");
+            18
+        } else {
+            18
+        };
+
+        let prev_balance = self.get_current_balance(&addr, mint.clone()).await?;
 
         let mut current_balance;
 
@@ -256,7 +303,7 @@ impl EthClient {
             sub_iter += iter_interval;
             async_std::task::sleep(Duration::from_secs(iter_interval)).await;
 
-            current_balance = self.get_current_balance(&addr, None).await?;
+            current_balance = self.get_current_balance(&addr, mint.clone()).await?;
 
             if current_balance != prev_balance {
                 break;
@@ -269,7 +316,7 @@ impl EthClient {
 
         if current_balance < prev_balance {
             return Err(crate::Error::ClientFailed(
-                "New balance is less than previous balance".into(),
+                    "New balance is less than previous balance".into(),
             ));
         }
 
@@ -277,22 +324,44 @@ impl EthClient {
 
         let received_balance_ui = received_balance.clone() / u64::pow(10, decimals as u32);
 
-        send_notification
-            .send(TokenNotification {
-                network: NetworkName::Ethereum,
-                token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
-                drk_pub_key,
-                // TODO FIX
-                received_balance: received_balance.to_u64_digits()[0],
-                decimals: decimals as u16,
-            })
+
+
+        if mint.is_some() {
+            send_notification
+                .send(TokenNotification {
+                    network: NetworkName::Ethereum,
+                    token_id: generate_id(token_pubkey.as_str(), &NetworkName::Ethereum)?,
+                    drk_pub_key,
+                    // TODO FIX
+                    received_balance: received_balance.to_u64_digits()[0],
+                    decimals: decimals as u16,
+                })
             .await
-            .map_err(Error::from)?;
+                .map_err(Error::from)?;
 
-        self.send_eth_to_main_wallet(&addr, received_balance)
-            .await?;
+            self.send_erc20_to_main_wallet(&addr, received_balance, &token_pubkey)
+                .await?;
 
-        debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
+            debug!(target: "ETH BRIDGE", "Received {} erc20 token: {}", received_balance_ui, token_pubkey);
+
+        } else {
+            send_notification
+                .send(TokenNotification {
+                    network: NetworkName::Ethereum,
+                    token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
+                    drk_pub_key,
+                    // TODO FIX
+                    received_balance: received_balance.to_u64_digits()[0],
+                    decimals: decimals as u16,
+                })
+            .await
+                .map_err(Error::from)?;
+
+            self.send_eth_to_main_wallet(&addr, received_balance)
+                .await?;
+
+            debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
+        }
 
         Ok(())
     }
@@ -311,10 +380,10 @@ impl EthClient {
         let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r))
             .await
             .map_err(EthFailed::from)
-        {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+            {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
 
         match reply {
             JsonResult::Resp(r) => {
@@ -340,11 +409,11 @@ impl EthClient {
     }
 
     /*
-    pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
-    let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
-    Ok(self.request(req).await?)
-    }
-    */
+       pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
+       let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
+       Ok(self.request(req).await?)
+       }
+       */
 
     pub async fn block_number(&self) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_blockNumber"), json!([]));
@@ -370,13 +439,36 @@ impl EthClient {
         Ok(self.request(req).await?)
     }
 
-    pub async fn get_current_balance(&self, acc: &str, _mint: Option<&str>) -> EthResult<BigUint> {
-        // Latest known block, used to calculate present balance.
-        let block = self.block_number().await?;
-        let block = block.as_str().unwrap();
+    pub async fn get_erc20_decimals(&self, acc: &str, mint: &str) -> EthResult<Value> {
+        let tx = EthTx::new(
+            acc,
+            mint,
+            None,
+            None,
+            None,
+            Some(erc20_decimals_data()),
+            None,
+        );
+        let req = jsonrpc::request(json!("eth_call"), json!([tx, "latest"]));
+        Ok(self.request(req).await?)
+    }
 
-        // Native ETH balance
-        let hexbalance = self.get_eth_balance(acc, block).await?;
+    pub async fn get_current_balance(&self, acc: &str, mint: Option<String>) -> EthResult<BigUint> {
+
+
+        let hexbalance = if mint.is_some() {
+            // ERC20 balance
+            self.get_erc20_balance(acc, mint.unwrap().as_str()).await?
+        } else {
+            // Latest known block, used to calculate present balance.
+            let block = self.block_number().await?;
+            let block = block.as_str().unwrap();
+
+            // Native ETH balance
+            self.get_eth_balance(acc, block).await?
+        };
+
+
         let hexbalance = hexbalance.as_str().unwrap().trim_start_matches("0x");
         let balance = BigUint::parse_bytes(hexbalance.as_bytes(), 16).unwrap();
 
@@ -394,7 +486,7 @@ impl NetworkClient for EthClient {
     async fn subscribe(
         self: Arc<Self>,
         drk_pub_key: jubjub::SubgroupPoint,
-        _mint_address: Option<String>,
+        mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
         let private_key = generate_privkey();
@@ -411,13 +503,13 @@ impl NetworkClient for EthClient {
         executor
             .spawn(async move {
                 let result = self
-                    .handle_subscribe_request(addr_cloned, drk_pub_key)
+                    .handle_subscribe_request(addr_cloned, drk_pub_key, mint_address)
                     .await;
                 if let Err(e) = result {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         let private_key: Vec<u8> = serialize(&private_key);
 
@@ -432,7 +524,7 @@ impl NetworkClient for EthClient {
         _private_key: Vec<u8>,
         public_key: Vec<u8>,
         drk_pub_key: jubjub::SubgroupPoint,
-        _mint_address: Option<String>,
+        mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {
         let public_key: String = deserialize(&public_key)?;
@@ -440,12 +532,12 @@ impl NetworkClient for EthClient {
         let address = public_key.clone();
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(address, drk_pub_key).await;
+                let result = self.handle_subscribe_request(address, drk_pub_key, mint_address).await;
                 if let Err(e) = result {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(public_key)
     }
@@ -457,26 +549,40 @@ impl NetworkClient for EthClient {
     async fn send(
         self: Arc<Self>,
         address: Vec<u8>,
-        _mint: Option<String>,
+        mint: Option<String>,
         amount: u64,
     ) -> Result<()> {
         // Recipient address
         let dest: String = deserialize(&address)?;
 
+        // FIXME
         let decimals = 18;
 
         // reverse truncate
         let amount = truncate(amount, decimals as u16, 8)?;
 
-        let tx = EthTx::new(
-            &self.main_keypair.public_key,
-            &dest,
-            None,
-            None,
-            Some(BigUint::from(amount)),
-            None,
-            None,
-        );
+
+        let tx = if mint.is_some() {
+            EthTx::new(
+                &self.main_keypair.public_key,
+                &mint.unwrap(),
+                None,
+                None,
+                None,
+                Some(erc20_transfer_data(&dest, BigUint::from(amount))),
+                None,
+            )
+        } else {
+            EthTx::new(
+                &self.main_keypair.public_key,
+                &dest,
+                None,
+                None,
+                Some(BigUint::from(amount)),
+                None,
+                None,
+            )
+        };
 
         self.send_transaction(&tx, &self.passphrase).await?;
 
