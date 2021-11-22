@@ -93,7 +93,7 @@ mod tx2 {
         pallas,
     };
 
-    use super::{VerifyFailed, VerifyResult};
+    use super::{VerifyFailed, VerifyResult, MerkleNode};
     use drk::{
         crypto::{
             mint_proof::{create_mint_proof, verify_mint_proof, MintRevealedValues},
@@ -119,7 +119,11 @@ mod tx2 {
         pub signature_secret: pallas::Base,
     }
 
-    pub struct TransactionBuilderInputInfo {}
+    pub struct TransactionBuilderInputInfo {
+        pub merkle_path: Vec<MerkleNode>,
+        pub secret: pallas::Base,
+        pub note: Note,
+    }
 
     pub struct TransactionBuilderOutputInfo {
         pub value: u64,
@@ -167,7 +171,46 @@ mod tx2 {
                 clear_inputs.push(clear_input);
             }
 
+            let mut inputs = vec![];
             let mut input_blinds = vec![];
+            let mut signature_secrets = vec![];
+            for input in &self.inputs {
+                input_blinds.push(input.note.value_blind);
+
+                let signature_secret = pallas::Base::random(&mut OsRng);
+
+                /*
+                // TODO: Some stupid glue code. Need to sort this out
+                let auth_path: Vec<(bls12_381::Scalar, bool)> = input
+                    .merkle_path
+                    .auth_path
+                    .iter()
+                    .map(|(node, b)| ((*node).into(), *b))
+                    .collect();
+                */
+
+                //let (proof, revealed) = create_spend_proof(
+                //    input.note.value,
+                //    input.note.token_id,
+                //    input.note.value_blind,
+                //    token_blind,
+                //    input.note.serial,
+                //    input.note.coin_blind,
+                //    input.secret,
+                //    auth_path,
+                //    signature_secret,
+                //)?;
+
+                //// First we make the tx then sign after
+                //let signature_secret = schnorr::SecretKey(signature_secret);
+                signature_secrets.push(signature_secret);
+
+                let input = PartialTransactionInput {
+                    //spend_proof: proof,
+                    //revealed,
+                };
+                inputs.push(input);
+            }
 
             let mut outputs = vec![];
             let mut output_blinds = vec![];
@@ -215,7 +258,7 @@ mod tx2 {
 
             let partial_tx = PartialTransaction {
                 clear_inputs,
-                //inputs,
+                inputs,
                 outputs,
             };
 
@@ -236,7 +279,7 @@ mod tx2 {
 
     pub struct PartialTransaction {
         pub clear_inputs: Vec<PartialTransactionClearInput>,
-        //pub inputs: Vec<PartialTransactionInput>,
+        pub inputs: Vec<PartialTransactionInput>,
         pub outputs: Vec<TransactionOutput>,
     }
 
@@ -246,6 +289,11 @@ mod tx2 {
         pub value_blind: DrkValueBlind,
         pub token_blind: DrkValueBlind,
         pub signature_public: pallas::Point,
+    }
+
+    pub struct PartialTransactionInput {
+        //pub spend_proof: Proof,
+        //pub revealed: SpendRevealedValues,
     }
 
     pub struct Transaction {
@@ -426,7 +474,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin::from_bytes(&output.revealed.coin));
+        coins.push(Coin(output.revealed.coin.clone()));
         enc_notes.push(output.enc_note);
     }
 
@@ -552,8 +600,32 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let tx = builder.build()?;
 
+    let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
+    let node = MerkleNode(tx.outputs[0].revealed.coin.clone());
+    tree.append(&node);
+    tree.witness();
+    let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
+
+    let note = tx.outputs[0].enc_note.decrypt(&secret)?;
+
     let update = state_transition(&state, tx)?;
     state.apply(update);
+
+    // Now spend
+
+    let builder = tx2::TransactionBuilder {
+        clear_inputs: vec![],
+        inputs: vec![tx2::TransactionBuilderInputInfo {
+            merkle_path,
+            secret,
+            note,
+        }],
+        outputs: vec![tx2::TransactionBuilderOutputInfo {
+            value: 110,
+            token_id,
+            public,
+        }],
+    };
 
     let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
     let coin1 = MerkleNode(pallas::Base::random(&mut OsRng));

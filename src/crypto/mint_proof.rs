@@ -7,6 +7,7 @@ use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
+    pallas,
 };
 
 use super::{
@@ -23,7 +24,8 @@ use crate::{
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
-    pub coin: [u8; 32],
+    //pub coin: [u8; 32],
+    pub coin: pallas::Base,
 }
 
 impl MintRevealedValues {
@@ -46,12 +48,12 @@ impl MintRevealedValues {
             [serial, coin_blind],
         ];
 
-        let mut hash = DrkCoin::zero();
+        let mut coin = DrkCoin::zero();
         for msg in messages.iter() {
-            hash += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
+            coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
         }
 
-        let coin = hash.to_bytes();
+        //let coin = hash.to_bytes();
 
         MintRevealedValues {
             value_commit,
@@ -65,7 +67,8 @@ impl MintRevealedValues {
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         vec![
-            DrkCircuitField::from_bytes(&self.coin).unwrap(),
+            //DrkCircuitField::from_bytes(&self.coin).unwrap(),
+            self.coin.clone(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),

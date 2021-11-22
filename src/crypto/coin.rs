@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct Coin(pallas::Base);
+pub struct Coin(pub pallas::Base);
 
 impl Coin {
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {

@@ -119,7 +119,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin::from_bytes(&output.revealed.coin));
+        coins.push(Coin(output.revealed.coin.clone()));
         enc_notes.push(output.enc_note);
     }
 
