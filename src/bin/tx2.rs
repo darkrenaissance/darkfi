@@ -463,7 +463,7 @@ lazy_static! {
     };
 }
 
-#[derive(Clone, std::cmp::Eq)]
+#[derive(Debug, Clone, std::cmp::Eq)]
 pub struct MerkleNode(pallas::Base);
 
 impl std::cmp::PartialEq for MerkleNode {
@@ -555,12 +555,59 @@ fn main() -> std::result::Result<(), failure::Error> {
     let update = state_transition(&state, tx)?;
     state.apply(update);
 
-    //let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
-    //let coin = MerkleNode(pallas::Base::random(&mut OsRng));
-    //tree.append(&coin);
-    //tree.witness();
+    let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
+    let coin1 = MerkleNode(pallas::Base::random(&mut OsRng));
+    let coin2 = MerkleNode(pallas::Base::random(&mut OsRng));
+    let coin3 = MerkleNode(pallas::Base::random(&mut OsRng));
+    let coin4 = MerkleNode(pallas::Base::random(&mut OsRng));
+    tree.append(&coin1);
+    let current = MerkleNode::combine(0.into(), &coin1, &MerkleNode::empty_leaf());
+    let root = MerkleNode::combine(1.into(), &current, &MerkleNode::empty_root(1.into()));
+    assert_eq!(tree.root(), root);
 
-    let mut tree = BridgeTree::<String, 3>::new(100);
+    tree.append(&coin2);
+    tree.append(&coin3);
+    tree.witness();
+    tree.append(&coin4);
+    let (position, path) = tree.authentication_path(&coin3).unwrap();
+    assert_eq!(path.len(), 2);
+    let current = MerkleNode::combine(0.into(), &coin3, &path[0]);
+    let root2 = MerkleNode::combine(1.into(), &path[1], &current);
+    assert_eq!(root2, tree.root());
+    println!("{}", u64::from(position));
+
+    let position: u64 = position.into();
+    let mut current = coin3;
+    for (level, sibling) in path.iter().enumerate() {
+        let level = level as u8;
+        current = 
+            if position & (1 << level) == 0 {
+                MerkleNode::combine(level.into(), &current, sibling)
+            } else {
+                MerkleNode::combine(level.into(), sibling, &current)
+            };
+    }
+    assert_eq!(current, root2);
+    
+    #[derive(Clone, std::cmp::Eq, PartialEq, std::hash::Hash)]
+    struct StrWrap(String);
+
+    impl Hashable for StrWrap {
+        fn empty_leaf() -> Self {
+            StrWrap("_".to_string())
+        }
+
+        fn combine(_: Altitude, a: &Self, b: &Self) -> Self {
+            StrWrap(a.0.to_string() + &b.0)
+        }
+    }
+
+    let mut tree = BridgeTree::<StrWrap, 3>::new(100);
+    tree.append(&StrWrap("a".to_string()));
+    // 2^3 elements in this tree. _ means an empty slot.
+    assert_eq!(tree.root().0, "a_______");
+    tree.append(&StrWrap("b".to_string()));
+    assert_eq!(tree.root().0, "ab______");
 
     Ok(())
 }
