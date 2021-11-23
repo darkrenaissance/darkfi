@@ -83,20 +83,10 @@ impl TransactionBuilder {
         let mut inputs = vec![];
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
-        for input in &self.inputs {
+        for input in self.inputs {
             input_blinds.push(input.note.value_blind);
 
             let signature_secret = DrkSecretKey::random(&mut OsRng);
-
-            /*
-            // TODO: Some stupid glue code. Need to sort this out
-            let auth_path: Vec<(bls12_381::Scalar, bool)> = input
-                .merkle_path
-                .auth_path
-                .iter()
-                .map(|(node, b)| ((*node).into(), *b))
-                .collect();
-            */
 
             let (proof, revealed) = create_spend_proof(
                 input.note.value,
@@ -106,7 +96,7 @@ impl TransactionBuilder {
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
-                vec![],
+                input.merkle_path,
                 signature_secret,
             )?;
 

@@ -9,6 +9,7 @@ use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
+    pallas,
 };
 
 use super::{
@@ -18,6 +19,7 @@ use super::{
 };
 use crate::{
     circuit::spend_contract::SpendContract,
+    crypto::merkle_node2::MerkleNode,
     serial::{Decodable, Encodable},
     types::*,
     Result,
@@ -130,10 +132,12 @@ pub fn create_spend_proof(
     serial: DrkSerial,
     coin_blind: DrkCoinBlind,
     secret: DrkSecretKey,
-    merkle_path: Vec<DrkCoin>,
+    merkle_path: Vec<MerkleNode>,
     signature_secret: DrkSecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
     const K: u32 = 11;
+
+    let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
 
     let revealed = SpendRevealedValues::compute(
         value,

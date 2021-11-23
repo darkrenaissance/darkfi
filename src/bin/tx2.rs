@@ -663,7 +663,6 @@ impl Hashable for MerkleNode {
 */
 
 fn main() -> std::result::Result<(), failure::Error> {
-    use incrementalmerkletree::Hashable;
     use drk::{
         crypto::{
             merkle_node2::MerkleNode,
@@ -672,6 +671,7 @@ fn main() -> std::result::Result<(), failure::Error> {
         },
         types::{DrkCircuitField, DrkCoinBlind, DrkSerial},
     };
+    use incrementalmerkletree::Hashable;
 
     let cashier_secret = schnorr::SecretKey::random();
     let cashier_public = cashier_secret.public_key();
@@ -703,11 +703,26 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let tx = builder.build()?;
 
+    tx.verify(&state.mint_vk, &state.spend_vk)
+        .expect("tx verify");
+
     let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
     let node = MerkleNode(tx.outputs[0].revealed.coin.clone());
     tree.append(&node);
     tree.witness();
     let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
+
+    let mut current = node;
+    let position: u64 = merkle_position.into();
+    for (level, sibling) in merkle_path.iter().enumerate() {
+        let level = level as u8;
+        current = if position & (1 << level) == 0 {
+            MerkleNode::combine(level.into(), &current, sibling)
+        } else {
+            MerkleNode::combine(level.into(), sibling, &current)
+        };
+    }
+    assert_eq!(current, tree.root());
 
     let note = tx.outputs[0].enc_note.decrypt(&secret)?;
 
