@@ -12,6 +12,12 @@
 - [ ] switch to p2p network 
 - [ ] make cashier a multisig
 
+## documentation
+
+- [ ] document v0 architecture 
+- [ ] mint/ burn explainer
+- [ ] v1 roadmap
+
 # v1-research
 
 ## blockchain
