@@ -83,3 +83,4 @@ Open research questions.
 # org
 
 - [ ] clean up shared repo and migrate to wiki
+- [ ] md blog for website
