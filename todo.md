@@ -15,6 +15,7 @@
 ## documentation
 
 - [ ] document v0 architecture 
+- [ ] finish cashier explainer
 - [ ] mint/ burn explainer
 - [ ] v1 roadmap
 
