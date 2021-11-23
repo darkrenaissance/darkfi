@@ -29,7 +29,7 @@ use halo2_gadgets::{
         merkle::MerklePath,
     },
     utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
 use incrementalmerkletree::{
@@ -355,6 +355,104 @@ impl Circuit<pallas::Base> for BurnCircuit {
         //         layouter.namespace(|| "[poseidon_output + psi_old] NullifierK"),
         //         scalar,
         //     )?
+
+        let value = self.load_private(
+            layouter.namespace(|| "load value"),
+            config.advices[0],
+            self.value,
+        )?;
+
+        let asset = self.load_private(
+            layouter.namespace(|| "load asset"),
+            config.advices[0],
+            self.asset,
+        )?;
+
+        let coin_blind = self.load_private(
+            layouter.namespace(|| "load coin_blind"),
+            config.advices[0],
+            self.coin_blind,
+        )?;
+
+        let (public_key, _) = {
+            let spend_auth_g = OrchardFixedBases::SpendAuthG;
+            let spend_auth_g = FixedPoint::from_inner(ecc_chip, spend_auth_g);
+            // TODO: Do we need to load sig_secret somewhere first?
+            spend_auth_g.mul(layouter.namespace(|| "[x_s] SpendAuthG"), self.secret_key)?
+        };
+
+        let (pub_x, pub_y) = (public_key.inner().x().cell(), public_key.inner().y().cell());
+
+        // =========
+        // Coin hash
+        // =========
+        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
+        let mut hashes = vec![];
+
+        for message in messages.iter() {
+            let hash = {
+                let poseidon_message = layouter.assign_region(
+                    || "load message",
+                    |mut region| {
+                        let mut message_word = |i: usize| {
+                            let value = message[i].value();
+                            let var = region.assign_advice(
+                                || format!("load message_{}", i),
+                                config.poseidon_config.state()[i],
+                                0,
+                                || value.ok_or(Error::SynthesisError),
+                            )?;
+                            region.constrain_equal(var, message[i].cell())?;
+                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                                var, value,
+                            )))
+                        };
+                        Ok([message_word(0)?, message_word(1)?])
+                    },
+                )?;
+
+                let poseidon_hasher = PoseidonHash::init(
+                    config.poseidon_chip(),
+                    layouter.namespace(|| "Poseidon init"),
+                    ConstantLength::<2>,
+                )?;
+
+                let poseidon_output = poseidon_hasher.hash(
+                    layouter.namespace(|| "Poseidon hash (a, b)"),
+                    poseidon_message,
+                )?;
+
+                let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+                poseidon_output
+            };
+
+            hashes.push(hash);
+        }
+
+        let coin = layouter.assign_region(
+            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
+            |mut region| {
+                config.q_add.enable(&mut region, 0)?;
+
+                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
+                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
+                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
+
+                let scalar_val = hashes[0]
+                    .value()
+                    .zip(hashes[1].value())
+                    .zip(hashes[2].value())
+                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
+
+                let cell = region.assign_advice(
+                    || "hash(a,b)+hash(c,d)+hash(e,f)",
+                    config.advices[5],
+                    0,
+                    || scalar_val.ok_or(Error::SynthesisError),
+                )?;
+                Ok(CellValue::new(cell, scalar_val))
+            },
+        )?;
 
         // ===========
         // Merkle root
