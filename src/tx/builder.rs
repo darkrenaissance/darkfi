@@ -8,8 +8,12 @@ use super::{
 use crate::crypto::{
     mint_proof::create_mint_proof, note::Note, schnorr, spend_proof::create_spend_proof,
 };
-use crate::serial::Encodable;
-use crate::{types::*, Result};
+use crate::{
+    crypto::merkle_node2::MerkleNode,
+    serial::Encodable,
+    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
+    Result,
+};
 
 pub struct TransactionBuilder {
     pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
@@ -20,11 +24,12 @@ pub struct TransactionBuilder {
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
-    pub signature_secret: DrkSecretKey,
+    pub signature_secret: schnorr::SecretKey,
 }
 
 pub struct TransactionBuilderInputInfo {
-    //pub merkle_path: MerklePath<MerkleNode>, // TODO:
+    pub merkle_position: incrementalmerkletree::Position,
+    pub merkle_path: Vec<MerkleNode>,
     pub secret: DrkSecretKey,
     pub note: Note,
 }
@@ -62,7 +67,7 @@ impl TransactionBuilder {
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
-            let signature_public = derive_public_key(input.signature_secret);
+            let signature_public = input.signature_secret.public_key();
             let value_blind = DrkValueBlind::random(&mut OsRng);
 
             let clear_input = PartialTransactionClearInput {
@@ -92,8 +97,6 @@ impl TransactionBuilder {
                 .map(|(node, b)| ((*node).into(), *b))
                 .collect();
             */
-            // TODO: FIXME:
-            let auth_path = vec![DrkCoin::random(&mut OsRng)];
 
             let (proof, revealed) = create_spend_proof(
                 input.note.value,
@@ -103,7 +106,7 @@ impl TransactionBuilder {
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
-                auth_path,
+                vec![],
                 signature_secret,
             )?;
 
@@ -169,13 +172,11 @@ impl TransactionBuilder {
         };
 
         let mut unsigned_tx_data = vec![];
-        partial_tx
-            .encode(&mut unsigned_tx_data)
-            .expect("TODO handle this");
+        partial_tx.encode(&mut unsigned_tx_data)?;
 
         let mut clear_inputs = vec![];
         for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
-            let secret = schnorr::SecretKey(info.signature_secret);
+            let secret = info.signature_secret;
             let signature = secret.sign(&unsigned_tx_data[..]);
             let input = TransactionClearInput::from_partial(input, signature);
             clear_inputs.push(input);

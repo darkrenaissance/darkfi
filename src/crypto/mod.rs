@@ -3,6 +3,7 @@ pub mod coin;
 pub mod constants;
 pub mod diffie_hellman;
 pub mod merkle;
+pub mod merkle_node2;
 pub mod mint_proof;
 pub mod note;
 pub mod nullifier;

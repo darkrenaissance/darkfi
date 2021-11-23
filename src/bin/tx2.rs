@@ -30,6 +30,10 @@ use halo2_gadgets::{
         copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
+use incrementalmerkletree::{
+    bridgetree::{BridgeTree, Frontier as BridgeFrontier},
+    Altitude, Frontier, Tree,
+};
 use pasta_curves::{
     arithmetic::{CurveAffine, Field, FieldExt},
     group::{
@@ -37,10 +41,6 @@ use pasta_curves::{
         Curve,
     },
     pallas,
-};
-use incrementalmerkletree::{
-    bridgetree::{BridgeTree, Frontier as BridgeFrontier},
-    Altitude, Frontier, Tree,
 };
 
 use drk::{
@@ -57,6 +57,7 @@ use drk::{
         util::mod_r_p,
         util::{pedersen_commitment_scalar, pedersen_commitment_u64},
     },
+    tx,
 };
 
 struct MemoryState {
@@ -81,6 +82,7 @@ impl MemoryState {
     fn apply(&mut self, mut update: StateUpdate) {}
 }
 
+/*
 mod tx2 {
     use rand::rngs::OsRng;
 
@@ -92,16 +94,20 @@ mod tx2 {
         },
         pallas,
     };
+    use std::io;
 
-    use super::{VerifyFailed, VerifyResult, MerkleNode};
+    use super::{MerkleNode, VerifyFailed, VerifyResult};
     use drk::{
         crypto::{
             mint_proof::{create_mint_proof, verify_mint_proof, MintRevealedValues},
             note::{EncryptedNote, Note},
             proof::{Proof, VerifyingKey},
+            schnorr,
+            spend_proof::{create_spend_proof, verify_spend_proof, SpendRevealedValues},
             util::pedersen_commitment_u64,
         },
         error::Result,
+        serial::{Decodable, Encodable, VarInt},
         types::{derive_public_key, DrkCoinBlind, DrkSerial, DrkValueBlind, DrkValueCommit},
     };
 
@@ -116,10 +122,11 @@ mod tx2 {
     pub struct TransactionBuilderClearInputInfo {
         pub value: u64,
         pub token_id: DrkTokenId2,
-        pub signature_secret: pallas::Base,
+        pub signature_secret: schnorr::SecretKey,
     }
 
     pub struct TransactionBuilderInputInfo {
+        pub merkle_position: incrementalmerkletree::Position,
         pub merkle_path: Vec<MerkleNode>,
         pub secret: pallas::Base,
         pub note: Note,
@@ -158,7 +165,7 @@ mod tx2 {
             let mut clear_inputs = vec![];
             let token_blind = DrkValueBlind::random(&mut OsRng);
             for input in &self.clear_inputs {
-                let signature_public = derive_public_key(input.signature_secret);
+                let signature_public = input.signature_secret.public_key();
                 let value_blind = DrkValueBlind::random(&mut OsRng);
 
                 let clear_input = PartialTransactionClearInput {
@@ -189,25 +196,25 @@ mod tx2 {
                     .collect();
                 */
 
-                //let (proof, revealed) = create_spend_proof(
-                //    input.note.value,
-                //    input.note.token_id,
-                //    input.note.value_blind,
-                //    token_blind,
-                //    input.note.serial,
-                //    input.note.coin_blind,
-                //    input.secret,
-                //    auth_path,
-                //    signature_secret,
-                //)?;
+                let (proof, revealed) = create_spend_proof(
+                    input.note.value,
+                    input.note.token_id,
+                    input.note.value_blind,
+                    token_blind,
+                    input.note.serial,
+                    input.note.coin_blind,
+                    input.secret,
+                    vec![],
+                    signature_secret,
+                )?;
 
                 //// First we make the tx then sign after
                 //let signature_secret = schnorr::SecretKey(signature_secret);
                 signature_secrets.push(signature_secret);
 
                 let input = PartialTransactionInput {
-                    //spend_proof: proof,
-                    //revealed,
+                    spend_proof: proof,
+                    revealed,
                 };
                 inputs.push(input);
             }
@@ -262,16 +269,31 @@ mod tx2 {
                 outputs,
             };
 
+            let mut unsigned_tx_data = vec![];
+            partial_tx.encode(&mut unsigned_tx_data)?;
+
             let mut clear_inputs = vec![];
             for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
-                //let secret = schnorr::SecretKey(info.signature_secret);
-                //let signature = secret.sign(&unsigned_tx_data[..]);
-                let input = TransactionClearInput::from_partial(input);
+                let secret = info.signature_secret;
+                let signature = secret.sign(&unsigned_tx_data[..]);
+                let input = TransactionClearInput::from_partial(input, signature);
                 clear_inputs.push(input);
+            }
+
+            let mut inputs = vec![];
+            for (input, signature_secret) in partial_tx
+                .inputs
+                .into_iter()
+                .zip(signature_secrets.into_iter())
+            {
+                let signature = signature_secret.sign(&unsigned_tx_data[..]);
+                let input = TransactionInput::from_partial(input, signature);
+                inputs.push(input);
             }
 
             Ok(Transaction {
                 clear_inputs,
+                inputs,
                 outputs: partial_tx.outputs,
             })
         }
@@ -288,16 +310,81 @@ mod tx2 {
         pub token_id: DrkTokenId2,
         pub value_blind: DrkValueBlind,
         pub token_blind: DrkValueBlind,
-        pub signature_public: pallas::Point,
+        pub signature_public: schnorr::PublicKey,
     }
 
     pub struct PartialTransactionInput {
-        //pub spend_proof: Proof,
-        //pub revealed: SpendRevealedValues,
+        pub spend_proof: Proof,
+        pub revealed: SpendRevealedValues,
     }
+
+    impl Encodable for PartialTransaction {
+        fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+            let mut len = 0;
+            len += self.clear_inputs.encode(&mut s)?;
+            len += self.inputs.encode(&mut s)?;
+            len += self.outputs.encode(s)?;
+            Ok(len)
+        }
+    }
+
+    impl Decodable for PartialTransaction {
+        fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+            Ok(Self {
+                clear_inputs: Decodable::decode(&mut d)?,
+                inputs: Decodable::decode(&mut d)?,
+                outputs: Decodable::decode(d)?,
+            })
+        }
+    }
+
+    impl Encodable for PartialTransactionClearInput {
+        fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+            let mut len = 0;
+            len += self.value.encode(&mut s)?;
+            len += self.token_id.encode(&mut s)?;
+            len += self.value_blind.encode(&mut s)?;
+            len += self.token_blind.encode(&mut s)?;
+            len += self.signature_public.encode(&mut s)?;
+            Ok(len)
+        }
+    }
+    impl Decodable for PartialTransactionClearInput {
+        fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+            Ok(Self {
+                value: Decodable::decode(&mut d)?,
+                token_id: Decodable::decode(&mut d)?,
+                value_blind: Decodable::decode(&mut d)?,
+                token_blind: Decodable::decode(&mut d)?,
+                signature_public: Decodable::decode(&mut d)?,
+            })
+        }
+    }
+
+    impl Encodable for PartialTransactionInput {
+        fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+            let mut len = 0;
+            len += self.spend_proof.encode(&mut s)?;
+            len += self.revealed.encode(s)?;
+            Ok(len)
+        }
+    }
+
+    impl Decodable for PartialTransactionInput {
+        fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+            Ok(Self {
+                spend_proof: Decodable::decode(&mut d)?,
+                revealed: Decodable::decode(d)?,
+            })
+        }
+    }
+
+    impl_vec2!(PartialTransactionClearInput);
+    impl_vec2!(PartialTransactionInput);
 
     pub struct Transaction {
         pub clear_inputs: Vec<TransactionClearInput>,
+        pub inputs: Vec<TransactionInput>,
         pub outputs: Vec<TransactionOutput>,
     }
 
@@ -317,27 +404,24 @@ mod tx2 {
             !failed
         }
 
-        pub fn verify(
-            &self,
-            mint_vk: &VerifyingKey,
-            spend_vk: &VerifyingKey,
-        ) -> VerifyResult<()> {
+        pub fn verify(&self, mint_vk: &VerifyingKey, spend_vk: &VerifyingKey) -> VerifyResult<()> {
             let mut valcom_total = DrkValueCommit::identity();
 
             for input in &self.clear_inputs {
                 valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
             }
 
-            //for (i, input) in self.inputs.iter().enumerate() {
-            //    if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
-            //        return Err(VerifyFailed::SpendProof(i));
-            //    }
-            //    valcom_total += &input.revealed.value_commit;
-            //}
+            for (i, input) in self.inputs.iter().enumerate() {
+                if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed)
+                    .is_err()
+                {
+                    return Err(VerifyFailed::SpendProof(i));
+                }
+                valcom_total += &input.revealed.value_commit;
+            }
 
             for (i, output) in self.outputs.iter().enumerate() {
-                if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err()
-                {
+                if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err() {
                     return Err(VerifyFailed::MintProof(i));
                 }
                 valcom_total -= &output.revealed.value_commit;
@@ -361,21 +445,30 @@ mod tx2 {
         pub token_id: DrkTokenId2,
         pub value_blind: DrkValueBlind,
         pub token_blind: DrkValueBlind,
-        pub signature_public: pallas::Point,
-        //pub signature: schnorr::Signature,
+        pub signature_public: schnorr::PublicKey,
+        pub signature: schnorr::Signature,
     }
 
     impl TransactionClearInput {
-        fn from_partial(partial: PartialTransactionClearInput) -> Self {
+        fn from_partial(
+            partial: PartialTransactionClearInput,
+            signature: schnorr::Signature,
+        ) -> Self {
             Self {
                 value: partial.value,
                 token_id: partial.token_id,
                 value_blind: partial.value_blind,
                 token_blind: partial.token_blind,
                 signature_public: partial.signature_public,
-                //signature,
+                signature,
             }
         }
+    }
+
+    pub struct TransactionInput {
+        pub spend_proof: Proof,
+        pub revealed: SpendRevealedValues,
+        pub signature: schnorr::Signature,
     }
 
     pub struct TransactionOutput {
@@ -384,6 +477,7 @@ mod tx2 {
         pub enc_note: EncryptedNote,
     }
 }
+*/
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &pallas::Point) -> bool;
@@ -445,9 +539,10 @@ impl fmt::Display for VerifyFailed {
     }
 }
 
+/*
 pub fn state_transition<S: ProgramState>(
     state: &S,
-    tx: tx2::Transaction,
+    tx: tx::Transaction,
 ) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
 
@@ -484,14 +579,16 @@ pub fn state_transition<S: ProgramState>(
         enc_notes,
     })
 }
+*/
 
+/*
+use halo2_gadgets::primitives::sinsemilla::HashDomain;
+use incrementalmerkletree::Hashable;
+use lazy_static::lazy_static;
 use std::iter;
 use subtle::ConstantTimeEq;
-use incrementalmerkletree::Hashable;
-use halo2_gadgets::primitives::sinsemilla::HashDomain;
-use lazy_static::lazy_static;
 
-use drk::crypto::constants::{L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD, sinsemilla::i2lebsp_k};
+use drk::crypto::constants::{sinsemilla::i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD};
 
 //const UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from_u64(2);
 
@@ -563,15 +660,21 @@ impl Hashable for MerkleNode {
         EMPTY_ROOTS[<usize>::from(altitude)].clone()
     }
 }
+*/
 
 fn main() -> std::result::Result<(), failure::Error> {
+    use incrementalmerkletree::Hashable;
     use drk::{
-        crypto::mint_proof::{create_mint_proof, verify_mint_proof},
-        types::{DrkSerial, DrkCoinBlind, DrkCircuitField}
+        crypto::{
+            merkle_node2::MerkleNode,
+            mint_proof::{create_mint_proof, verify_mint_proof},
+            schnorr,
+        },
+        types::{DrkCircuitField, DrkCoinBlind, DrkSerial},
     };
 
-    let cashier_secret = pallas::Base::random(&mut OsRng);
-    let cashier_public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(cashier_secret);
+    let cashier_secret = schnorr::SecretKey::random();
+    let cashier_public = cashier_secret.public_key();
 
     let secret = pallas::Base::random(&mut OsRng);
     let public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
@@ -582,16 +685,16 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let mut state = MemoryState { mint_vk, spend_vk };
 
-    let token_id = 110;
+    let token_id = pallas::Base::from(110);
 
-    let builder = tx2::TransactionBuilder {
-        clear_inputs: vec![tx2::TransactionBuilderClearInputInfo {
+    let builder = tx::TransactionBuilder {
+        clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
             value: 110,
             token_id,
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx2::TransactionBuilderOutputInfo {
+        outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
             public,
@@ -608,19 +711,20 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let note = tx.outputs[0].enc_note.decrypt(&secret)?;
 
-    let update = state_transition(&state, tx)?;
-    state.apply(update);
+    //let update = state_transition(&state, tx)?;
+    //state.apply(update);
 
     // Now spend
 
-    let builder = tx2::TransactionBuilder {
+    let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
-        inputs: vec![tx2::TransactionBuilderInputInfo {
+        inputs: vec![tx::TransactionBuilderInputInfo {
+            merkle_position,
             merkle_path,
             secret,
             note,
         }],
-        outputs: vec![tx2::TransactionBuilderOutputInfo {
+        outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
             public,
@@ -652,34 +756,13 @@ fn main() -> std::result::Result<(), failure::Error> {
     let mut current = coin3;
     for (level, sibling) in path.iter().enumerate() {
         let level = level as u8;
-        current = 
-            if position & (1 << level) == 0 {
-                MerkleNode::combine(level.into(), &current, sibling)
-            } else {
-                MerkleNode::combine(level.into(), sibling, &current)
-            };
+        current = if position & (1 << level) == 0 {
+            MerkleNode::combine(level.into(), &current, sibling)
+        } else {
+            MerkleNode::combine(level.into(), sibling, &current)
+        };
     }
     assert_eq!(current, root2);
-    
-    #[derive(Clone, std::cmp::Eq, PartialEq, std::hash::Hash)]
-    struct StrWrap(String);
-
-    impl Hashable for StrWrap {
-        fn empty_leaf() -> Self {
-            StrWrap("_".to_string())
-        }
-
-        fn combine(_: Altitude, a: &Self, b: &Self) -> Self {
-            StrWrap(a.0.to_string() + &b.0)
-        }
-    }
-
-    let mut tree = BridgeTree::<StrWrap, 3>::new(100);
-    tree.append(&StrWrap("a".to_string()));
-    // 2^3 elements in this tree. _ means an empty slot.
-    assert_eq!(tree.root().0, "a_______");
-    tree.append(&StrWrap("b".to_string()));
-    assert_eq!(tree.root().0, "ab______");
 
     Ok(())
 }

@@ -1,10 +1,13 @@
 use std::io;
 
 use super::TransactionOutput;
-use crate::crypto::{Proof, SpendRevealedValues};
-use crate::serial::{Decodable, Encodable, VarInt};
-use crate::types::*;
-use crate::{impl_vec, Result};
+use crate::{
+    crypto::{schnorr, spend_proof::SpendRevealedValues, Proof},
+    error::Result,
+    impl_vec,
+    serial::{Decodable, Encodable, VarInt},
+    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
+};
 
 pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
@@ -17,7 +20,7 @@ pub struct PartialTransactionClearInput {
     pub token_id: DrkTokenId,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
-    pub signature_public: DrkPublicKey,
+    pub signature_public: schnorr::PublicKey,
 }
 
 pub struct PartialTransactionInput {

@@ -5,17 +5,30 @@ use std::io;
 
 use pasta_curves::group::Group;
 
-use crate::crypto::{
-    mint_proof::verify_mint_proof,
-    note::EncryptedNote,
-    proof::{Proof, VerifyingKey},
-    schnorr,
-    spend_proof::verify_spend_proof,
-    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
-    MintRevealedValues, SpendRevealedValues,
+use crate::{
+    crypto::{
+        mint_proof::verify_mint_proof,
+        note::EncryptedNote,
+        proof::{Proof, VerifyingKey},
+        schnorr,
+        spend_proof::verify_spend_proof,
+        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        MintRevealedValues, SpendRevealedValues,
+    },
+    error::Result,
+    impl_vec,
+    serial::{Decodable, Encodable, VarInt},
+    state,
+    types::{
+        DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind,
+        DrkValueCommit,
+    },
 };
-use crate::serial::{Decodable, Encodable, VarInt};
-use crate::{impl_vec, state, types::*, Result};
+
+pub use self::builder::{
+    TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+    TransactionBuilderOutputInfo,
+};
 
 pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
@@ -28,7 +41,7 @@ pub struct TransactionClearInput {
     pub token_id: DrkTokenId,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
-    pub signature_public: DrkPublicKey,
+    pub signature_public: schnorr::PublicKey,
     pub signature: schnorr::Signature,
 }
 
@@ -113,7 +126,7 @@ impl Transaction {
         self.encode_without_signature(&mut unsigned_tx_data)
             .expect("TODO handle this");
         for (i, input) in self.clear_inputs.iter().enumerate() {
-            let public = schnorr::PublicKey(input.signature_public);
+            let public = &input.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
                 return Err(state::VerifyFailed::ClearInputSignature(i));
             }

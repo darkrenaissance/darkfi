@@ -2,12 +2,14 @@ use std::fmt;
 
 use log::debug;
 
-use crate::crypto::{coin::Coin, note::EncryptedNote, nullifier::Nullifier, proof::VerifyingKey};
-use crate::tx::Transaction;
-use crate::types::*;
+use crate::{
+    crypto::{coin::Coin, note::EncryptedNote, nullifier::Nullifier, proof::VerifyingKey, schnorr},
+    tx::Transaction,
+    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
+};
 
 pub trait ProgramState {
-    fn is_valid_cashier_public_key(&self, public: &DrkPublicKey) -> bool;
+    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool;
     // TODO: fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 

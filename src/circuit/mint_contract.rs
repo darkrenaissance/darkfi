@@ -64,12 +64,12 @@ const MINT_ASSCOMY_OFFSET: usize = 4;
 
 #[derive(Default, Debug)]
 pub struct MintContract {
-    pub pub_x: Option<pallas::Base>,       // x coordinate for pubkey
-    pub pub_y: Option<pallas::Base>,       // y coordinate for pubkey
-    pub value: Option<pallas::Base>,       // The value of this coin
-    pub asset: Option<pallas::Base>,       // The asset ID
-    pub serial: Option<pallas::Base>,      // Unique serial number corresponding to this coin
-    pub coin_blind: Option<pallas::Base>,  // Random blinding factor for coin
+    pub pub_x: Option<pallas::Base>,         // x coordinate for pubkey
+    pub pub_y: Option<pallas::Base>,         // y coordinate for pubkey
+    pub value: Option<pallas::Base>,         // The value of this coin
+    pub asset: Option<pallas::Base>,         // The asset ID
+    pub serial: Option<pallas::Base>,        // Unique serial number corresponding to this coin
+    pub coin_blind: Option<pallas::Base>,    // Random blinding factor for coin
     pub value_blind: Option<pallas::Scalar>, // Random blinding factor for value commitment
     pub asset_blind: Option<pallas::Scalar>, // Random blinding factor for the asset ID
 }
@@ -426,4 +426,3 @@ impl Circuit<pallas::Base> for MintContract {
         Ok(())
     }
 }
-

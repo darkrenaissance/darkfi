@@ -9,9 +9,12 @@ use super::{
     util::{hash_to_scalar, mod_r_p},
 };
 use crate::{
+    error::Result,
     serial::{Decodable, Encodable},
-    types::*,
-    Result,
+    types::{
+        derive_public_key, DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId,
+        DrkValueBlind, DrkValueCommit,
+    },
 };
 
 pub struct SecretKey(pub DrkSecretKey);
@@ -66,6 +69,18 @@ impl PublicKey {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
         OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge
             == signature.commit
+    }
+}
+
+impl Encodable for PublicKey {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        Ok(self.0.encode(s)?)
+    }
+}
+
+impl Decodable for PublicKey {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self(Decodable::decode(&mut d)?))
     }
 }
 
