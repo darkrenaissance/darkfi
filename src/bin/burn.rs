@@ -32,6 +32,10 @@ use halo2_gadgets::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
+use incrementalmerkletree::{
+    bridgetree::{BridgeTree, Frontier as BridgeFrontier},
+    Altitude, Frontier, Tree,
+};
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
     group::{
@@ -49,6 +53,7 @@ use drk::crypto::{
         },
         OrchardFixedBases,
     },
+    merkle_node2::MerkleNode,
     proof::{Proof, ProvingKey, VerifyingKey},
     util::{pedersen_commitment_scalar, pedersen_commitment_u64},
 };
@@ -553,12 +558,27 @@ fn main() {
         coin += hash;
     }
 
+    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+    for _ in 0..10 {
+        let random_node = MerkleNode(pallas::Base::random(&mut OsRng));
+        tree.append(&random_node);
+    }
+    let node = MerkleNode(coin.clone());
+    tree.append(&node);
+    tree.witness();
+    for _ in 0..10 {
+        let random_node = MerkleNode(pallas::Base::random(&mut OsRng));
+        tree.append(&random_node);
+    }
+
+    let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
+
     // Merkle root
     //let leaf = pallas::Base::random(&mut OsRng);
     let leaf = coin.clone();
-    let pos = rand::random::<u32>();
-    let path: Vec<_> = (0..32).map(|_| pallas::Base::random(&mut OsRng)).collect();
-    let merkle_root = root(path.clone().try_into().unwrap(), pos, leaf);
+    let pos: u64 = merkle_position.into();
+    let path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
+    let merkle_root = tree.root().0;
 
     // Value and asset commitments
     let value_blind = pallas::Scalar::random(&mut OsRng);
@@ -594,7 +614,7 @@ fn main() {
         value_blind: Some(value_blind),
         asset_blind: Some(asset_blind),
         leaf: Some(leaf),
-        leaf_pos: Some(pos),
+        leaf_pos: Some(pos as u32),
         merkle_path: Some(path.try_into().unwrap()),
         sig_secret: Some(sig_secret),
     };
