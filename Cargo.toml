@@ -59,6 +59,7 @@ bytes = "1.0.1"
 signal-hook = "0.3.10"
 signal-hook-async-std = "0.2.1"
 lazy_static = "1.4.0"
+thiserror = "1.0.30"
 
 rocksdb = {version = "0.16.0", default-features = false, features = ["lz4"]}
 zeromq = {version = "0.2.2", default-features = false, features = ["async-std-runtime", "all-transport"]}
@@ -79,7 +80,6 @@ secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std
 ## Cashier Ethereum Dependencies
 hash-db = {version = "0.15.2", optional = true}
 keccak-hasher = {version = "0.15.3", optional = true}
-thiserror = "1.0.30"
 
 [features]
 btc = ["bdk", "bitcoin", "secp256k1"]
