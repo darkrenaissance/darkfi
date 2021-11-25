@@ -47,7 +47,7 @@ pub enum VerifyFailed {
 }
 
 pub fn state_transition<S: ProgramState>(
-    state: &async_std::sync::MutexGuard<S>,
+    state: &S,
     tx: tx::Transaction,
 ) -> VerifyResult<StateUpdate> {
     // Check deposits are legit

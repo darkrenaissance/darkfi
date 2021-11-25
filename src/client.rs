@@ -241,8 +241,9 @@ impl Client {
         debug!(target: "CLIENT", "End build slab from tx");
 
         // check if it's valid before send it to gateway
-        let state = state.lock().await;
-        state_transition(&state, tx)?;
+        let state = &*state.lock().await;
+
+        state_transition(state, tx)?;
 
         self.gateway.put_slab(slab).await?;
 
@@ -281,7 +282,7 @@ impl Client {
                     wallet.clone(),
                     Some(notify.clone()),
                 )
-                .await;
+                    .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -321,7 +322,7 @@ impl Client {
                     wallet.clone(),
                     None,
                 )
-                .await;
+                    .await;
 
                 if let Err(e) = update_state {
                     warn!("Update state: {}", e.to_string());
@@ -346,9 +347,15 @@ impl Client {
 
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
-        let mut state = state.lock().await;
 
-        let update = state_transition(&state, tx)?;
+        let update: StateUpdate;
+
+        {
+            let state = &*state.lock().await;
+            update = state_transition(state, tx)?;
+        }
+
+        let mut state = state.lock().await;
 
         state
             .apply(update, secret_keys.clone(), notify, wallet)
@@ -493,13 +500,13 @@ impl State {
                     let mut nullifier = [0; 32];
                     nullifier.copy_from_slice(
                         Blake2sParams::new()
-                            .hash_length(32)
-                            .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
-                            .to_state()
-                            .update(&secret.to_bytes())
-                            .update(&note.serial.to_bytes())
-                            .finalize()
-                            .as_bytes(),
+                        .hash_length(32)
+                        .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
+                        .to_state()
+                        .update(&secret.to_bytes())
+                        .update(&note.serial.to_bytes())
+                        .finalize()
+                        .as_bytes(),
                     );
 
                     let nullifier = Nullifier::new(nullifier);
