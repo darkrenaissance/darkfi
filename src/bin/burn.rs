@@ -128,7 +128,6 @@ struct BurnCircuit {
     coin_blind: Option<pallas::Base>,
     value_blind: Option<pallas::Scalar>,
     asset_blind: Option<pallas::Scalar>,
-    leaf: Option<pallas::Base>,
     leaf_pos: Option<u32>,
     merkle_path: Option<[pallas::Base; 32]>,
     sig_secret: Option<pallas::Scalar>,
@@ -671,8 +670,6 @@ fn main() {
     let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
 
     // Merkle root
-    //let leaf = pallas::Base::random(&mut OsRng);
-    let leaf = coin.clone();
     let pos: u64 = merkle_position.into();
     let path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
     let merkle_root = tree.root().0;
@@ -710,7 +707,6 @@ fn main() {
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
         asset_blind: Some(asset_blind),
-        leaf: Some(leaf),
         leaf_pos: Some(pos as u32),
         merkle_path: Some(path.try_into().unwrap()),
         sig_secret: Some(sig_secret),

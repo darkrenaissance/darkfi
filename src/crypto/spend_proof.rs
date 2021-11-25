@@ -132,6 +132,7 @@ pub fn create_spend_proof(
     serial: DrkSerial,
     coin_blind: DrkCoinBlind,
     secret: DrkSecretKey,
+    leaf_position: u64,
     merkle_path: Vec<MerkleNode>,
     signature_secret: DrkSecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
@@ -159,8 +160,7 @@ pub fn create_spend_proof(
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
         asset_blind: Some(token_blind),
-        leaf: Some(pasta_curves::Fp::one()), // TODO:
-        leaf_pos: Some(0),                   // TODO:
+        leaf_pos: Some(leaf_position as u32),
         merkle_path: Some(merkle_path.try_into().unwrap()),
         sig_secret: Some(mod_r_p(signature_secret)),
     };

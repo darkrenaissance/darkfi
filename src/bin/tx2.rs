@@ -710,10 +710,10 @@ fn main() -> std::result::Result<(), failure::Error> {
     let node = MerkleNode(tx.outputs[0].revealed.coin.clone());
     tree.append(&node);
     tree.witness();
-    let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
+    let (leaf_position, merkle_path) = tree.authentication_path(&node).unwrap();
 
     let mut current = node;
-    let position: u64 = merkle_position.into();
+    let position: u64 = leaf_position.into();
     for (level, sibling) in merkle_path.iter().enumerate() {
         let level = level as u8;
         current = if position & (1 << level) == 0 {
@@ -734,7 +734,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![],
         inputs: vec![tx::TransactionBuilderInputInfo {
-            merkle_position,
+            leaf_position,
             merkle_path,
             secret,
             note,

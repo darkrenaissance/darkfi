@@ -23,7 +23,7 @@ use halo2_gadgets::{
         merkle::MerklePath,
     },
     utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
 
@@ -102,7 +102,6 @@ pub struct SpendContract {
     pub coin_blind: Option<pasta::Fp>,
     pub value_blind: Option<pasta::Fq>,
     pub asset_blind: Option<pasta::Fq>,
-    pub leaf: Option<pasta::Fp>,
     pub leaf_pos: Option<u32>,
     pub merkle_path: Option<[pasta::Fp; 32]>,
     pub sig_secret: Option<pasta::Fq>,
@@ -273,7 +272,7 @@ impl Circuit<pasta::Fp> for SpendContract {
         // =========
         // Nullifier
         // =========
-        let hashed_secret_key = self.load_private(
+        let secret_key = self.load_private(
             layouter.namespace(|| "load sinsemilla(secret key)"),
             config.advices[0],
             self.secret_key,
@@ -285,7 +284,7 @@ impl Circuit<pasta::Fp> for SpendContract {
             self.serial,
         )?;
 
-        let message = [hashed_secret_key, serial];
+        let message = [secret_key, serial];
         let hash = {
             let poseidon_message = layouter.assign_region(
                 || "load message",
@@ -324,14 +323,117 @@ impl Circuit<pasta::Fp> for SpendContract {
 
         layouter.constrain_instance(hash.cell(), config.primary, BURN_NULLIFIER_OFFSET)?;
 
+        // let nullifier_k = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+        //     nullifier_k.mul(
+        //         layouter.namespace(|| "[poseidon_output + psi_old] NullifierK"),
+        //         scalar,
+        //     )?
+
+        let value = self.load_private(
+            layouter.namespace(|| "load value"),
+            config.advices[0],
+            self.value,
+        )?;
+
+        let asset = self.load_private(
+            layouter.namespace(|| "load asset"),
+            config.advices[0],
+            self.asset,
+        )?;
+
+        let coin_blind = self.load_private(
+            layouter.namespace(|| "load coin_blind"),
+            config.advices[0],
+            self.coin_blind,
+        )?;
+
+        let public_key = {
+            let nullifier_k = OrchardFixedBases::NullifierK;
+            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
+            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), secret_key)?
+        };
+
+        let (pub_x, pub_y) = (public_key.inner().x(), public_key.inner().y());
+
+        // =========
+        // Coin hash
+        // =========
+        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
+        let mut hashes = vec![];
+
+        for message in messages.iter() {
+            let hash = {
+                let poseidon_message = layouter.assign_region(
+                    || "load message",
+                    |mut region| {
+                        let mut message_word = |i: usize| {
+                            let value = message[i].value();
+                            let var = region.assign_advice(
+                                || format!("load message_{}", i),
+                                config.poseidon_config.state()[i],
+                                0,
+                                || value.ok_or(Error::SynthesisError),
+                            )?;
+                            region.constrain_equal(var, message[i].cell())?;
+                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                                var, value,
+                            )))
+                        };
+                        Ok([message_word(0)?, message_word(1)?])
+                    },
+                )?;
+
+                let poseidon_hasher = PoseidonHash::init(
+                    config.poseidon_chip(),
+                    layouter.namespace(|| "Poseidon init"),
+                    ConstantLength::<2>,
+                )?;
+
+                let poseidon_output = poseidon_hasher.hash(
+                    layouter.namespace(|| "Poseidon hash (a, b)"),
+                    poseidon_message,
+                )?;
+
+                let poseidon_output: CellValue<pasta::Fp> = poseidon_output.inner().into();
+                poseidon_output
+            };
+
+            hashes.push(hash);
+        }
+
+        let coin = layouter.assign_region(
+            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
+            |mut region| {
+                config.q_add.enable(&mut region, 0)?;
+
+                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
+                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
+                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
+
+                let scalar_val = hashes[0]
+                    .value()
+                    .zip(hashes[1].value())
+                    .zip(hashes[2].value())
+                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
+
+                let cell = region.assign_advice(
+                    || "hash(a,b)+hash(c,d)+hash(e,f)",
+                    config.advices[5],
+                    0,
+                    || scalar_val.ok_or(Error::SynthesisError),
+                )?;
+                Ok(CellValue::new(cell, scalar_val))
+            },
+        )?;
+
         // ===========
         // Merkle root
         // ===========
-        let leaf = self.load_private(
-            layouter.namespace(|| "load leaf"),
-            config.advices[0],
-            self.leaf,
-        )?;
+        //let leaf = self.load_private(
+        //    layouter.namespace(|| "load leaf"),
+        //    config.advices[0],
+        //    self.leaf,
+        //)?;
 
         let path = MerklePath {
             chip_1: merkle_chip_1,
@@ -342,7 +444,7 @@ impl Circuit<pasta::Fp> for SpendContract {
         };
 
         let computed_final_root =
-            path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
+            path.calculate_root(layouter.namespace(|| "calculate root"), coin)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),

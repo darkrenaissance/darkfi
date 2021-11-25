@@ -28,7 +28,7 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub merkle_position: incrementalmerkletree::Position,
+    pub leaf_position: incrementalmerkletree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: DrkSecretKey,
     pub note: Note,
@@ -96,6 +96,7 @@ impl TransactionBuilder {
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
+                input.leaf_position.into(),
                 input.merkle_path,
                 signature_secret,
             )?;
