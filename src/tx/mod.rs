@@ -132,7 +132,7 @@ impl Transaction {
             }
         }
         for (i, input) in self.inputs.iter().enumerate() {
-            let public = schnorr::PublicKey(input.revealed.signature_public);
+            let public = &input.revealed.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
                 return Err(state::VerifyFailed::InputSignature(i));
             }

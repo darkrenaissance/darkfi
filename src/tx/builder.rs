@@ -86,7 +86,7 @@ impl TransactionBuilder {
         for input in self.inputs {
             input_blinds.push(input.note.value_blind);
 
-            let signature_secret = DrkSecretKey::random(&mut OsRng);
+            let signature_secret = schnorr::SecretKey::random();
 
             let (proof, revealed) = create_spend_proof(
                 input.note.value,
@@ -96,13 +96,12 @@ impl TransactionBuilder {
                 input.note.serial,
                 input.note.coin_blind,
                 input.secret,
-                input.leaf_position.into(),
+                input.leaf_position,
                 input.merkle_path,
-                signature_secret,
+                signature_secret.clone(),
             )?;
 
             // First we make the tx then sign after
-            let signature_secret = schnorr::SecretKey(signature_secret);
             signature_secrets.push(signature_secret);
 
             let input = PartialTransactionInput {
@@ -146,7 +145,7 @@ impl TransactionBuilder {
                 value_blind,
             };
 
-            let encrypted_note = note.encrypt(&output.public).unwrap();
+            let encrypted_note = note.encrypt(&output.public)?;
 
             let output = TransactionOutput {
                 mint_proof,

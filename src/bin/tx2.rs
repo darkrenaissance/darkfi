@@ -677,7 +677,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let cashier_public = cashier_secret.public_key();
 
     let secret = pallas::Base::random(&mut OsRng);
-    let public = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
+    let public = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
 
     const K: u32 = 11;
     let mint_vk = VerifyingKey::build(K, MintContract::default());
@@ -706,7 +706,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     tx.verify(&state.mint_vk, &state.spend_vk)
         .expect("tx verify");
 
-    let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
+    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
     let node = MerkleNode(tx.outputs[0].revealed.coin.clone());
     tree.append(&node);
     tree.witness();
@@ -746,6 +746,11 @@ fn main() -> std::result::Result<(), failure::Error> {
         }],
     };
 
+    let tx = builder.build()?;
+
+    tx.verify(&state.mint_vk, &state.spend_vk)
+        .expect("tx verify");
+
     let mut tree = BridgeTree::<MerkleNode, 2>::new(100);
     let coin1 = MerkleNode(pallas::Base::random(&mut OsRng));
     let coin2 = MerkleNode(pallas::Base::random(&mut OsRng));
@@ -765,7 +770,6 @@ fn main() -> std::result::Result<(), failure::Error> {
     let current = MerkleNode::combine(0.into(), &coin3, &path[0]);
     let root2 = MerkleNode::combine(1.into(), &path[1], &current);
     assert_eq!(root2, tree.root());
-    println!("{}", u64::from(position));
 
     let position: u64 = position.into();
     let mut current = coin3;

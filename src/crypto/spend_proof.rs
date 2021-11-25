@@ -11,6 +11,7 @@ use pasta_curves::{
     group::Curve,
     pallas,
 };
+use incrementalmerkletree::Hashable;
 
 use super::{
     nullifier::Nullifier,
@@ -19,7 +20,7 @@ use super::{
 };
 use crate::{
     circuit::spend_contract::SpendContract,
-    crypto::merkle_node2::MerkleNode,
+    crypto::{merkle_node2::MerkleNode, schnorr},
     serial::{Decodable, Encodable},
     types::*,
     Result,
@@ -29,8 +30,8 @@ pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
-    //pub merkle_root: MerkleNode,
-    pub signature_public: DrkPublicKey,
+    pub merkle_root: MerkleNode,
+    pub signature_public: schnorr::PublicKey,
 }
 
 impl SpendRevealedValues {
@@ -43,8 +44,9 @@ impl SpendRevealedValues {
         serial: DrkSerial,
         coin_blind: DrkCoinBlind,
         secret: DrkSecretKey,
-        merkle_path: Vec<DrkCoin>,
-        signature_secret: DrkSecretKey,
+        leaf_position: incrementalmerkletree::Position,
+        merkle_path: Vec<MerkleNode>,
+        signature_secret: schnorr::SecretKey,
     ) -> Self {
         let nullifier = [secret, serial];
         let nullifier =
@@ -63,34 +65,46 @@ impl SpendRevealedValues {
             coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
         }
 
-        // TODO: Merkle root
+        let merkle_root = {
+        let position: u64 = leaf_position.into();
+        let mut current = MerkleNode(coin);
+        for (level, sibling) in merkle_path.iter().enumerate() {
+            let level = level as u8;
+            current = 
+                if position & (1 << level) == 0 {
+                    MerkleNode::combine(level.into(), &current, sibling)
+                } else {
+                    MerkleNode::combine(level.into(), sibling, &current)
+                };
+        }
+        current
+        };
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
-
-        let signature_public = derive_public_key(signature_secret);
 
         SpendRevealedValues {
             value_commit,
             token_commit,
             nullifier: Nullifier(nullifier),
-            signature_public,
+            merkle_root,
+            signature_public: signature_secret.public_key(),
         }
     }
 
     fn make_outputs(&self) -> [DrkCircuitField; 8] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
-        let sig_coords = self.signature_public.to_affine().coordinates().unwrap();
+        let merkle_root = self.merkle_root.0;
+        let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 
-        // TODO: merkle
         vec![
             self.nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),
             *token_coords.y(),
-            // merkleroot,
+            merkle_root,
             *sig_coords.x(),
             *sig_coords.y(),
         ]
@@ -105,7 +119,7 @@ impl Encodable for SpendRevealedValues {
         len += self.value_commit.encode(&mut s)?;
         len += self.token_commit.encode(&mut s)?;
         len += self.nullifier.encode(&mut s)?;
-        //len += self.merkle_root.encode(&mut s)?;
+        len += self.merkle_root.encode(&mut s)?;
         len += self.signature_public.encode(s)?;
         Ok(len)
     }
@@ -117,7 +131,7 @@ impl Decodable for SpendRevealedValues {
             value_commit: Decodable::decode(&mut d)?,
             token_commit: Decodable::decode(&mut d)?,
             nullifier: Decodable::decode(&mut d)?,
-            //merkle_root: Decodable::decode(&mut d)?,
+            merkle_root: Decodable::decode(&mut d)?,
             signature_public: Decodable::decode(d)?,
         })
     }
@@ -132,13 +146,11 @@ pub fn create_spend_proof(
     serial: DrkSerial,
     coin_blind: DrkCoinBlind,
     secret: DrkSecretKey,
-    leaf_position: u64,
+    leaf_position: incrementalmerkletree::Position,
     merkle_path: Vec<MerkleNode>,
-    signature_secret: DrkSecretKey,
+    signature_secret: schnorr::SecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
     const K: u32 = 11;
-
-    let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
 
     let revealed = SpendRevealedValues::compute(
         value,
@@ -148,9 +160,13 @@ pub fn create_spend_proof(
         serial,
         coin_blind,
         secret,
+        leaf_position,
         merkle_path.clone(),
-        signature_secret,
+        signature_secret.clone(),
     );
+
+    let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
+    let leaf_position: u64 = leaf_position.into();
 
     let c = SpendContract {
         secret_key: Some(secret),
@@ -162,7 +178,7 @@ pub fn create_spend_proof(
         asset_blind: Some(token_blind),
         leaf_pos: Some(leaf_position as u32),
         merkle_path: Some(merkle_path.try_into().unwrap()),
-        sig_secret: Some(mod_r_p(signature_secret)),
+        sig_secret: Some(signature_secret.0),
     };
 
     let start = Instant::now();

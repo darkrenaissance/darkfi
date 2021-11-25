@@ -429,11 +429,6 @@ impl Circuit<pasta::Fp> for SpendContract {
         // ===========
         // Merkle root
         // ===========
-        //let leaf = self.load_private(
-        //    layouter.namespace(|| "load leaf"),
-        //    config.advices[0],
-        //    self.leaf,
-        //)?;
 
         let path = MerklePath {
             chip_1: merkle_chip_1,

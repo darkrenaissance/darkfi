@@ -23,6 +23,8 @@ pub type DrkValueCommit = pallas::Point;
 pub type DrkPublicKey = pallas::Point;
 pub type DrkSecretKey = pallas::Base;
 
+// TODO: move this elsewhere
 pub fn derive_public_key(s: DrkSecretKey) -> DrkPublicKey {
-    OrchardFixedBases::SpendAuthG.generator() * mod_r_p(s)
+    OrchardFixedBases::NullifierK.generator() * mod_r_p(s)
 }
+

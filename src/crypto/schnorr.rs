@@ -1,7 +1,7 @@
 use std::io;
 
 use halo2_gadgets::ecc::FixedPoints;
-use pasta_curves::{arithmetic::Field, group::GroupEncoding};
+use pasta_curves::{arithmetic::Field, group::GroupEncoding, pallas};
 use rand::rngs::OsRng;
 
 use super::{
@@ -17,11 +17,12 @@ use crate::{
     },
 };
 
-pub struct SecretKey(pub DrkSecretKey);
+#[derive(Clone)]
+pub struct SecretKey(pub pallas::Scalar);
 
 impl SecretKey {
     pub fn random() -> Self {
-        Self(DrkSecretKey::random(&mut OsRng))
+        Self(pallas::Scalar::random(&mut OsRng))
     }
 
     pub fn sign(&self, message: &[u8]) -> Signature {
@@ -29,13 +30,14 @@ impl SecretKey {
         let commit = OrchardFixedBases::SpendAuthG.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
-        let response = mask + challenge * mod_r_p(self.0);
+        let response = mask + challenge * self.0;
 
         Signature { commit, response }
     }
 
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(derive_public_key(self.0))
+        let public_key = OrchardFixedBases::SpendAuthG.generator() * self.0;
+        PublicKey(public_key)
     }
 }
 
