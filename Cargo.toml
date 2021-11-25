@@ -1,6 +1,6 @@
 [package]
 name = "darkfi"
-version = "0.1.0"
+version = "0.0.1"
 homepage = "https://dark.fi"
 description = "Anonymous. Uncensored. Sovereign."
 authors = ["darkfi <dev@dark.fi>"]
