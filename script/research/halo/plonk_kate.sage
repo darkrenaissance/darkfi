@@ -162,3 +162,26 @@ q_R_coeffs = inverse_matrix(H) * q_R
 q_O_coeffs = inverse_matrix(H) * q_O
 q_M_coeffs = inverse_matrix(H) * q_M
 q_C_coeffs = inverse_matrix(H) * q_C
+
+# The copy constraints involving left, right, output values are encoded as
+# polynomials S_sigma_1, S_sigma_2, S_sigma_3 using the cosets we found
+# earlier. The roots of unity H are used to label entries in vector a,
+# the elements of k1H are used to label entries in vector b, and vector c is
+# labeled by the elements of k2H.
+print("Copy constraints:")
+print(f"a: {a}")
+print(f"b: {b}")
+print(f"c: {c}")
+# a1 = b1, a2 = b2, a3 = b3, a4 = c1
+sigma_1 = vector([k1H[0], k1H[1], k1H[2], k2H[0]])
+print(f"sigma_1: {sigma_1}")
+# b1 = a1, b2 = a2, b3 = a3, b4 = c2
+sigma_2 = vector([H[0], H[1], H[2], k2H[1]])
+print(f"sigma_2: {sigma_2}")
+# c1 = a4, c2 = b4, c3 = c4, c4 = c3
+sigma_3 = vector([H[3], k1H[3], k2H[3], k2H[2]])
+print(f"sigma_3: {sigma_3}")
+
+S_sigma_1_coeffs = inverse_matrix(H) * sigma_1
+S_sigma_2_coeffs = inverse_matrix(H) * sigma_2
+S_sigma_3_coeffs = inverse_matrix(H) * sigma_3
