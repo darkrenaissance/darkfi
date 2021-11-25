@@ -3,18 +3,21 @@ use std::fmt;
 use log::debug;
 
 use crate::{
-    crypto::{coin::Coin, note::EncryptedNote, nullifier::Nullifier, proof::VerifyingKey, schnorr},
+    crypto::{
+        coin::Coin, merkle_node2::MerkleNode, note::EncryptedNote, nullifier::Nullifier,
+        proof::VerifyingKey, schnorr,
+    },
     tx::Transaction,
     types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
 };
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool;
-    // TODO: fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
+    fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
-    fn mint_pvk(&self) -> &VerifyingKey;
-    fn spend_pvk(&self) -> &VerifyingKey;
+    fn mint_vk(&self) -> &VerifyingKey;
+    fn spend_vk(&self) -> &VerifyingKey;
 }
 
 pub struct StateUpdate {
@@ -68,10 +71,7 @@ impl fmt::Display for VerifyFailed {
     }
 }
 
-pub fn state_transition<S: ProgramState>(
-    state: &async_std::sync::MutexGuard<S>,
-    tx: Transaction,
-) -> VerifyResult<StateUpdate> {
+pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
 
     debug!(target: "STATE TRANSITION", "iterate clear_inputs");
@@ -89,14 +89,13 @@ pub fn state_transition<S: ProgramState>(
     debug!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
-        // TODO: Check merkle roots
-        //let merkle = &input.revealed.merkle_root;
+        let merkle = &input.revealed.merkle_root;
 
         // Merkle is used to know whether this is a coin that existed
         // in a previous state.
-        // if !state.is_valid_merkle(merkle) {
-        // return Err(VerifyFailed::InvalidMerkle(i));
-        // }
+        if !state.is_valid_merkle(merkle) {
+            return Err(VerifyFailed::InvalidMerkle(i));
+        }
 
         // The nullifiers should not already exist
         // It is double spend protection.
@@ -109,7 +108,7 @@ pub fn state_transition<S: ProgramState>(
 
     debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
     // Check the tx verifies correctly
-    tx.verify(state.mint_pvk(), state.spend_pvk())?;
+    tx.verify(state.mint_vk(), state.spend_vk())?;
 
     let mut nullifiers = vec![];
     for input in tx.inputs {

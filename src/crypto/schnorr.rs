@@ -41,6 +41,7 @@ impl SecretKey {
     }
 }
 
+#[derive(PartialEq)]
 pub struct PublicKey(pub DrkPublicKey);
 
 pub struct Signature {
