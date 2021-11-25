@@ -374,14 +374,13 @@ impl Circuit<pallas::Base> for BurnCircuit {
             self.coin_blind,
         )?;
 
-        let (public_key, _) = {
-            let spend_auth_g = OrchardFixedBases::SpendAuthG;
-            let spend_auth_g = FixedPoint::from_inner(ecc_chip, spend_auth_g);
-            // TODO: Do we need to load sig_secret somewhere first?
-            spend_auth_g.mul(layouter.namespace(|| "[x_s] SpendAuthG"), self.secret_key)?
+        let public_key = {
+            let nullifier_k = OrchardFixedBases::NullifierK;
+            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
+            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), secret_key)?
         };
 
-        let (pub_x, pub_y) = (public_key.inner().x().cell(), public_key.inner().y().cell());
+        let (pub_x, pub_y) = (public_key.inner().x(), public_key.inner().y());
 
         // =========
         // Coin hash
@@ -457,11 +456,11 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // ===========
         // Merkle root
         // ===========
-        let leaf = self.load_private(
-            layouter.namespace(|| "load leaf"),
-            config.advices[0],
-            self.leaf,
-        )?;
+        //let leaf = self.load_private(
+        //    layouter.namespace(|| "load leaf"),
+        //    config.advices[0],
+        //    self.leaf,
+        //)?;
 
         let path = MerklePath {
             chip_1: merkle_chip_1,
@@ -472,7 +471,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
         };
 
         let computed_final_root =
-            path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
+            path.calculate_root(layouter.namespace(|| "calculate root"), coin)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -639,7 +638,7 @@ fn main() {
         primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
     // Public key derivation
-    let public_key = OrchardFixedBases::SpendAuthG.generator() * mod_r_p(secret);
+    let public_key = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
     let coords = public_key.to_affine().coordinates().unwrap();
 
     // Construct Coin
