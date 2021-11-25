@@ -1,7 +1,7 @@
 # We'll use y^2 = x^3 + 3 for our curve, over F_101
 p = 101
 F = FiniteField(p)
-R.<x> = F[]
+R.<x_f> = F[]
 E = EllipticCurve(F, [0, 3])
 print(E)
 
@@ -34,7 +34,7 @@ while True:
 print(f"Found embedding degree: k={k}")
 
 # Our extension field. The polynomial x^2+2 is irreducible in F_101.
-F2.<u> = F.extension(x^2+2, 'u')
+F2.<u> = F.extension(x_f^2+2, 'u')
 assert u^2 == -2
 print(F2)
 E2 = EllipticCurve(F2, [0, 3])
@@ -50,10 +50,10 @@ G_2 = E2(36, 31*u)
 # We choose 2 as our random number for demo purposes.
 s = 2
 # Our circuit will have 4 gates.
-n = 4
+n_gates = 4
 
 SRS = []
-for i in range(0, n+3):
+for i in range(0, n_gates+3):
 	SRS.append(s^i * G_1)
 for i in range(0, 2):
 	SRS.append(s^i * G_2)
@@ -103,3 +103,62 @@ q_C = vector([0, 0, 0, 0])
 a = vector([3, 4, 5, 9])
 b = vector([3, 4, 5, 16])
 c = vector([9, 16, 25, 25])
+
+# Roots of Unity.
+# The vectors for our circuit and assignment are all length 4, so the domain
+# for our polynomial interpolation must have at least four elements.
+roots_of_unity = []
+F_r = FiniteField(r)
+for i in F_r:
+	if i^4 == 1:
+		roots_of_unity.append(i)
+
+omega_0 = roots_of_unity[0]
+omega_1 = roots_of_unity[1]
+omega_2 = roots_of_unity[3]
+omega_3 = roots_of_unity[2]
+
+# Cosets
+# k_1 not in H, k_2 not in H nor k_1H
+k_1 = 2
+k_2 = 3
+H = [omega_0, omega_1, omega_2, omega_3]
+k1H = [H[0]*k_1, H[1]*k_1, H[2]*k_1, H[3]*k_1]
+k2H = [H[0]*k_2, H[1]*k_2, H[2]*k_2, H[3]*k_2]
+print("Polynomial interpolation using roots of unity")
+print(f"H:   {H}")
+print(f"k1H: {k1H}")
+print(f"k2H: {k2H}")
+
+# Interpolating using the Roots of Unity
+# The interpolated polynomial will be degree-3 and have the form:
+# f_a(x) = d + c*x + b*x^2 + a*x^3
+# f_a(1) = 3, f_a(4) = 4, f_a(16) = 5, f_a(13) = 9
+# Note that the above x is H (the omegas)
+#
+# This gives a system of equations:
+# f(1)  = d + c*1 + b*1^2 + a*1^3 = 3
+# f(4)  = d + c*4 + b*4^2 + a*4^3 = 4
+# f(16) = d + c*16 + b*16^2 + a*16^3 = 5
+# f(13) = d + c*13 + b*13^2 + a*13^3 = 9
+
+# We can rewrite it as a matrix equation and solve by computing
+# an inverse matrix.
+def inverse_matrix(c):
+	return Matrix([
+		[c[0]^0, c[0]^1, c[0]^2, c[0]^3],
+		[c[1]^0, c[1]^1, c[1]^2, c[1]^3],
+		[c[2]^0, c[2]^1, c[2]^2, c[2]^3],
+		[c[3]^0, c[3]^1, c[3]^2, c[3]^3],
+	])^-1
+
+# Now we can find polynomial f_a by multiplying the vector a=(3,4,5,9) by
+# the interpolation matrix.
+f_a_coeffs = inverse_matrix(H) * a
+f_b_coeffs = inverse_matrix(H) * b
+f_c_coeffs = inverse_matrix(H) * c
+q_L_coeffs = inverse_matrix(H) * q_L
+q_R_coeffs = inverse_matrix(H) * q_R
+q_O_coeffs = inverse_matrix(H) * q_O
+q_M_coeffs = inverse_matrix(H) * q_M
+q_C_coeffs = inverse_matrix(H) * q_C
