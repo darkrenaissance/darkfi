@@ -5,13 +5,13 @@ use halo2_gadgets::{
     primitives,
     primitives::poseidon::{ConstantLength, P128Pow5T3},
 };
+use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
     pallas,
 };
-use incrementalmerkletree::Hashable;
 
 use super::{
     nullifier::Nullifier,
@@ -66,18 +66,17 @@ impl SpendRevealedValues {
         }
 
         let merkle_root = {
-        let position: u64 = leaf_position.into();
-        let mut current = MerkleNode(coin);
-        for (level, sibling) in merkle_path.iter().enumerate() {
-            let level = level as u8;
-            current = 
-                if position & (1 << level) == 0 {
+            let position: u64 = leaf_position.into();
+            let mut current = MerkleNode(coin);
+            for (level, sibling) in merkle_path.iter().enumerate() {
+                let level = level as u8;
+                current = if position & (1 << level) == 0 {
                     MerkleNode::combine(level.into(), &current, sibling)
                 } else {
                     MerkleNode::combine(level.into(), sibling, &current)
                 };
-        }
-        current
+            }
+            current
         };
 
         let value_commit = pedersen_commitment_u64(value, value_blind);

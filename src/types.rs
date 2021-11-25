@@ -27,4 +27,3 @@ pub type DrkSecretKey = pallas::Base;
 pub fn derive_public_key(s: DrkSecretKey) -> DrkPublicKey {
     OrchardFixedBases::NullifierK.generator() * mod_r_p(s)
 }
-
