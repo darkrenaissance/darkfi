@@ -85,9 +85,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.48"
+version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62e1f47f7dc0422027a4e370dd4548d4d66b26782e513e98dca1e689e058a80e"
+checksum = "0a03e93e97a28fbc9f42fbc5ba0886a3c67eb637b476dbee711f80a6ffe8223d"
 
 [[package]]
 name = "arrayref"
@@ -214,11 +214,11 @@ dependencies = [
 
 [[package]]
 name = "async-native-tls"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e9e7a929bd34c68a82d58a4de7f86fffdaf97fb2af850162a7bb19dd7269b33"
+checksum = "d57d4cec3c647232e1094dc013546c0b33ce785d8aeb251e1f20dfaf8a9a13fe"
 dependencies = [
- "async-std",
+ "futures-util",
  "native-tls",
  "thiserror",
  "url",
@@ -299,15 +299,15 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "742cc7dcb20b2f84a42f4691aa999070ec7e78f8e7e7438bf14be7017b44907e"
+checksum = "a0d06e9a20f1c0d64b6067ef6aa9fdf59e194ecde93575591fb4c78063692324"
 dependencies = [
  "futures-io",
  "futures-util",
  "log",
  "pin-project-lite",
- "tungstenite 0.15.0",
+ "tungstenite 0.16.0",
 ]
 
 [[package]]
@@ -412,9 +412,9 @@ dependencies = [
 
 [[package]]
 name = "bdk"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecf7e997526ceefbab7dd99fc0da6834ed8853bd051f53523415ed1dc82b870d"
+checksum = "9f687a9504efaa1650148b9e891b4c111adb31ceeb9011dec578941b00f18c9f"
 dependencies = [
  "async-trait",
  "bdk-macros",
@@ -551,13 +551,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "blake2s_simd"
-version = "0.5.11"
+name = "blake2b_simd"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e461a7034e85b211a4acb57ee2e6730b32912b06c08cc242243c39fc21ae6a2"
+checksum = "72936ee4afc7f8f736d1c38383b56480b5497b4617b4a77bdbf1d2ababc76127"
 dependencies = [
  "arrayref",
- "arrayvec 0.5.2",
+ "arrayvec 0.7.2",
+ "constant_time_eq",
+]
+
+[[package]]
+name = "blake2s_simd"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db539cc2b5f6003621f1cd9ef92d7ded8ea5232c7de0f9faa2de251cd98730d4"
+dependencies = [
+ "arrayref",
+ "arrayvec 0.7.2",
  "constant_time_eq",
 ]
 
@@ -1287,7 +1298,7 @@ dependencies = [
  "async-tungstenite",
  "bdk",
  "bitcoin",
- "blake2b_simd",
+ "blake2b_simd 1.0.0",
  "blake2s_simd",
  "bs58 0.4.0",
  "bytes 1.1.0",
@@ -1327,7 +1338,7 @@ dependencies = [
  "subtle",
  "thiserror",
  "toml",
- "tungstenite 0.15.0",
+ "tungstenite 0.16.0",
  "url",
  "zeromq",
 ]
@@ -2135,7 +2146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f186b85ed81082fb1cf59d52b0111f02915e89a4ac61d292b38d075e570f3a9"
 dependencies = [
  "backtrace",
- "blake2b_simd",
+ "blake2b_simd 0.5.11",
  "ff",
  "group",
  "pasta_curves",
@@ -3122,7 +3133,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d647d91972bad78120fd61e06b225fcda117805c9bbf17676b51bd03a251278b"
 dependencies = [
- "blake2b_simd",
+ "blake2b_simd 0.5.11",
  "ff",
  "group",
  "lazy_static",
@@ -3651,7 +3662,7 @@ name = "reddsa"
 version = "0.0.0"
 source = "git+https://github.com/str4d/redjubjub.git?rev=416a6a8ebf8bd42c114c938883016c04f338de72#416a6a8ebf8bd42c114c938883016c04f338de72"
 dependencies = [
- "blake2b_simd",
+ "blake2b_simd 0.5.11",
  "byteorder",
  "digest 0.9.0",
  "group",
@@ -5241,9 +5252,9 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "983d40747bce878d2fb67d910dcb8bd3eca2b2358540c3cc1b98c027407a3ae3"
+checksum = "6ad3713a14ae247f22a728a0456a545df14acf3867f905adff84be99e23b3ad1"
 dependencies = [
  "base64 0.13.0",
  "byteorder",

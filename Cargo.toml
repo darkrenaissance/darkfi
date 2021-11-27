@@ -11,10 +11,6 @@ edition = "2021"
 [lib]
 name = "drk"
 
-[dependencies.halo2]
-version = "=0.1.0-beta.1"
-features = ["dev-graph", "gadget-traces", "sanity-checks"]
-
 [dependencies.halo2_gadgets]
 git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
@@ -33,18 +29,17 @@ features = ["lz4"]
 
 [dependencies]
 # Crypto
+halo2 = {version = "=0.1.0-beta.1", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 pasta_curves = "0.2.1"
 rand = "0.8.4"
-num-bigint = {version = "0.4.2", features = ["rand"]}
-blake2b_simd = "0.5.11"
-blake2s_simd = "0.5.11"
+num-bigint = {version = "0.4.3", features = ["rand"]}
+blake2b_simd = "1.0.0"
+blake2s_simd = "1.0.0"
 group = "0.11.0"
 crypto_api_chachapoly = "0.5.0"
-arrayvec = "0.7.0"
+arrayvec = "0.7.2"
 sha2 = "0.9.8"
 ripemd160 = "0.9.1"
-# Constant time options which is used for MerkleNode incrementalmerkletree
-subtle = "2.3"
 
 # Encoding and parsing
 bs58 = "0.4.0"
@@ -52,7 +47,7 @@ bytes = "1.1.0"
 hex = "0.4.3"
 toml = "0.5.8"
 url = "2.2.2"
-serde_json = "1.0.68"
+serde_json = "1.0.72"
 serde = {version = "1.0.130", features = ["derive"]}
 
 # Async
@@ -60,25 +55,27 @@ async-std = "1.10.0"
 async-trait = "0.1.51"
 async-channel = "1.6.1"
 native-tls = "0.2.8"
-async-native-tls = "0.3.3"
+async-native-tls = "0.4.0"
 async-executor = "1.4.1"
-futures = "0.3.17"
+futures = "0.3.18"
 smol = "1.2.5"
 
 # Utilities
-anyhow = "1.0.44"
+anyhow = "1.0.49"
+thiserror = "1.0.30"
 dirs = "4.0.0"
 failure = "0.1.8"
 lazy_static = "1.4.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
-simple_logger = "1.13.0"
+simple_logger = "1.15.0"
 signal-hook = "0.3.10"
 signal-hook-async-std = "0.2.1"
+subtle = "2.4.1"
 
 # Used for Websockets client implementation.
-async-tungstenite = "0.15.0"
-tungstenite = "0.15.0"
+async-tungstenite = "0.16.0"
+tungstenite = "0.16.0"
 
 # Used for wallet management.
 rusqlite = {version = "0.26.1", features = ["bundled-sqlcipher"]}
@@ -87,18 +84,17 @@ rusqlite = {version = "0.26.1", features = ["bundled-sqlcipher"]}
 zeromq = {version = "0.3.0", default-features = false, features = ["async-std-runtime", "all-transport"]}
 
 # Cashier Bitcoin dependencies
-bdk = {version = "0.12.0", optional = true}
-bitcoin = {version = "0.27.0", optional = true}
+bdk = {version = "0.13.0", optional = true}
+bitcoin = {version = "0.27.1", optional = true}
 secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std"], optional = true}
 
 # Cashier Ethereum dependencies
 hash-db = {version = "0.15.2", optional = true}
 keccak-hasher = {version = "0.15.3", optional = true}
-thiserror = "1.0.30"
 
 # Cashier Solana dependencies
-solana-client = {version = "1.8.2", optional = true}
-solana-sdk = {version = "1.8.2", optional = true}
+solana-client = {version = "1.8.5", optional = true}
+solana-sdk = {version = "1.8.5", optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 
