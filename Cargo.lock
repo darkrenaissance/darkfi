@@ -1325,6 +1325,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-token",
  "subtle",
+ "thiserror",
  "toml",
  "tungstenite 0.15.0",
  "url",

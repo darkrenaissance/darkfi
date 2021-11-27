@@ -94,6 +94,7 @@ secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std
 # Cashier Ethereum dependencies
 hash-db = {version = "0.15.2", optional = true}
 keccak-hasher = {version = "0.15.3", optional = true}
+thiserror = "1.0.30"
 
 # Cashier Solana dependencies
 solana-client = {version = "1.8.2", optional = true}

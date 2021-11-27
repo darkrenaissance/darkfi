@@ -135,7 +135,12 @@ pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Erro
     match parsed_url.scheme() {
         "tcp" => use_tls = false,
         "tls" => use_tls = true,
-        _ => return Err(Error::UrlParseError),
+        scheme => {
+            return Err(Error::UrlParseError(format!(
+                "Invalid scheme `{}` found in `{}`",
+                scheme, parsed_url
+            )))
+        }
     }
 
     // TODO: Error handling
@@ -147,7 +152,7 @@ pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Erro
         smol::unblock(move || (host.as_str(), port).to_socket_addrs())
             .await?
             .next()
-            .ok_or(Error::UrlParseError)?
+            .ok_or(Error::NoUrlFound)?
     };
 
     let mut buf = [0; 2048];

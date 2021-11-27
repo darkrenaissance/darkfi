@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    serial::{deserialize, serialize},
+    serial::{deserialize, serialize, Decodable, Encodable},
     types::*,
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
@@ -439,57 +439,28 @@ impl NetworkClient for EthClient {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum EthFailed {
+    #[error("There is no enough value {0}")]
     NotEnoughValue(u64),
+    #[error("Main Account Has no enough value")]
     MainAccountNotEnoughValue,
+    #[error("Bad Eth Address: {0}")]
     BadEthAddress(String),
+    #[error("Decode and decode keys error: {0}")]
     DecodeAndEncodeError(String),
+    #[error("Rpc Error: {0}")]
     RpcError(String),
+    #[error("Eth client error: {0}")]
     EthClientError(String),
+    #[error("Given mint is not valid: {0}")]
     MintIsNotValid(String),
+    #[error("JsonError: {0}")]
     JsonError(String),
+    #[error("Parse Error: {0}")]
     ParseError(String),
+    #[error("Unable to derive address from private key")]
     ImportPrivateError,
-}
-
-impl std::error::Error for EthFailed {}
-
-impl std::fmt::Display for EthFailed {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            EthFailed::NotEnoughValue(i) => {
-                write!(f, "There is no enough value {}", i)
-            }
-            EthFailed::MainAccountNotEnoughValue => {
-                write!(f, "Main Account Has no enough value")
-            }
-            EthFailed::BadEthAddress(ref err) => {
-                write!(f, "Bad Eth Address: {}", err)
-            }
-            EthFailed::DecodeAndEncodeError(ref err) => {
-                write!(f, "Decode and decode keys error: {}", err)
-            }
-            EthFailed::RpcError(i) => {
-                write!(f, "Rpc Error: {}", i)
-            }
-            EthFailed::ParseError(i) => {
-                write!(f, "Parse Error: {}", i)
-            }
-            EthFailed::MintIsNotValid(i) => {
-                write!(f, "Given mint is not valid: {}", i)
-            }
-            EthFailed::JsonError(i) => {
-                write!(f, "JsonError: {}", i)
-            }
-            EthFailed::ImportPrivateError => {
-                write!(f, "Unable to derive address from private key")
-            }
-            EthFailed::EthClientError(i) => {
-                write!(f, "Eth client error: {}", i)
-            }
-        }
-    }
 }
 
 impl From<crate::error::Error> for EthFailed {

@@ -1,5 +1,3 @@
-use std::fmt;
-
 use log::debug;
 
 use crate::{
@@ -28,47 +26,26 @@ pub struct StateUpdate {
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum VerifyFailed {
+    #[error("Invalid cashier public key for clear input {0}")]
     InvalidCashierKey(usize),
+    #[error("Invalid merkle root for input {0}")]
     InvalidMerkle(usize),
+    #[error("Duplicate nullifier for input {0}")]
     DuplicateNullifier(usize),
+    #[error("Spend proof for input {0}")]
     SpendProof(usize),
+    #[error("Mint proof for input {0}")]
     MintProof(usize),
+    #[error("Invalid signature for clear input {0}")]
     ClearInputSignature(usize),
+    #[error("Invalid signature for input {0}")]
     InputSignature(usize),
+    #[error("Money in does not match money out (value commits)")]
     MissingFunds,
+    #[error("Assets don't match some inputs or outputs (token commits)")]
     AssetMismatch,
-}
-
-impl std::error::Error for VerifyFailed {}
-
-impl fmt::Display for VerifyFailed {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            VerifyFailed::InvalidCashierKey(i) => {
-                write!(f, "Invalid cashier public key for clear input {}", i)
-            }
-            VerifyFailed::InvalidMerkle(i) => {
-                write!(f, "Invalid merkle root for input {}", i)
-            }
-            VerifyFailed::DuplicateNullifier(i) => {
-                write!(f, "Duplicate nullifier for input {}", i)
-            }
-            VerifyFailed::SpendProof(i) => write!(f, "Spend proof for input {}", i),
-            VerifyFailed::MintProof(i) => write!(f, "Mint proof for input {}", i),
-            VerifyFailed::ClearInputSignature(i) => {
-                write!(f, "Invalid signature for clear input {}", i)
-            }
-            VerifyFailed::InputSignature(i) => write!(f, "Invalid signature for input {}", i),
-            VerifyFailed::MissingFunds => {
-                f.write_str("Money in does not match money out (value commits)")
-            }
-            VerifyFailed::AssetMismatch => {
-                f.write_str("Assets don't match some inputs or outputs (token commits)")
-            }
-        }
-    }
 }
 
 pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
