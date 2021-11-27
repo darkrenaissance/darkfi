@@ -1,5 +1,4 @@
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -14,8 +13,7 @@ use serde_json::{json, Value};
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
-    rpc::jsonrpc,
-    rpc::jsonrpc::JsonResult,
+    rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize},
     types::*,
     util::{generate_id, parse::truncate, NetworkName},
@@ -86,12 +84,7 @@ pub fn erc20_transfer_data(recipient: &str, amount: BigUint) -> String {
     let amnt_hex = hex::encode(amnt_bytes);
     let amnt_hex_padded = format!("{:0>64}", amnt_hex);
 
-    format!(
-        "0x{}{}{}",
-        hex::encode(*ERC20_TRANSFER_METHOD),
-        rec_padded,
-        amnt_hex_padded
-    )
+    format!("0x{}{}{}", hex::encode(*ERC20_TRANSFER_METHOD), rec_padded, amnt_hex_padded)
 }
 
 pub fn erc20_balanceof_data(account: &str) -> String {
@@ -179,10 +172,8 @@ pub struct EthClient {
     passphrase: String,
     socket_path: String,
     subscriptions: Arc<Mutex<Vec<String>>>,
-    notify_channel: (
-        async_channel::Sender<TokenNotification>,
-        async_channel::Receiver<TokenNotification>,
-    ),
+    notify_channel:
+        (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
 }
 
 impl EthClient {
@@ -193,27 +184,13 @@ impl EthClient {
     ) -> Arc<Self> {
         let notify_channel = async_channel::unbounded();
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
-        Arc::new(Self {
-            main_keypair,
-            passphrase,
-            socket_path,
-            subscriptions,
-            notify_channel,
-        })
-        }
+        Arc::new(Self { main_keypair, passphrase, socket_path, subscriptions, notify_channel })
+    }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
         debug!(target: "ETH BRIDGE", "Send eth to main wallet");
 
-        let tx = EthTx::new(
-            acc,
-            &self.main_keypair.1,
-            None,
-            None,
-            Some(amount),
-            None,
-            None,
-        );
+        let tx = EthTx::new(acc, &self.main_keypair.1, None, None, Some(amount), None, None);
 
         self.send_transaction(&tx, &self.passphrase).await?;
 
@@ -225,9 +202,8 @@ impl EthClient {
         addr: String,
         drk_pub_key: DrkPublicKey,
     ) -> Result<()> {
-
         if self.subscriptions.lock().await.contains(&addr) {
-            return Ok(());
+            return Ok(())
         }
 
         let decimals = 18;
@@ -243,7 +219,7 @@ impl EthClient {
             if sub_iter > 60 * 10 {
                 // 10 minutes
                 self.unsubscribe(&addr).await;
-                return Err(crate::Error::ClientFailed("Deposit for expired".into()));
+                return Err(crate::Error::ClientFailed("Deposit for expired".into()))
             }
 
             sub_iter += iter_interval;
@@ -252,7 +228,7 @@ impl EthClient {
             current_balance = self.get_current_balance(&addr, None).await?;
 
             if current_balance != prev_balance {
-                break;
+                break
             }
         }
 
@@ -263,7 +239,7 @@ impl EthClient {
         if current_balance < prev_balance {
             return Err(crate::Error::ClientFailed(
                 "New balance is less than previous balance".into(),
-            ));
+            ))
         }
 
         let received_balance = current_balance - prev_balance;
@@ -282,11 +258,10 @@ impl EthClient {
             .await
             .map_err(Error::from)?;
 
-        self.send_eth_to_main_wallet(&addr, received_balance)
-            .await?;
+        self.send_eth_to_main_wallet(&addr, received_balance).await?;
 
         debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
-        
+
         Ok(())
     }
 
@@ -350,15 +325,7 @@ impl EthClient {
     }
 
     pub async fn get_erc20_balance(&self, acc: &str, mint: &str) -> EthResult<Value> {
-        let tx = EthTx::new(
-            acc,
-            mint,
-            None,
-            None,
-            None,
-            Some(erc20_balanceof_data(acc)),
-            None,
-        );
+        let tx = EthTx::new(acc, mint, None, None, None, Some(erc20_balanceof_data(acc)), None);
         let req = jsonrpc::request(json!("eth_call"), json!([tx, "latest"]));
         Ok(self.request(req).await?)
     }
@@ -374,7 +341,6 @@ impl EthClient {
         let balance = BigUint::parse_bytes(hexbalance.as_bytes(), 16).unwrap();
 
         Ok(balance)
-
     }
 
     pub async fn send_transaction(&self, tx: &EthTx, passphrase: &str) -> EthResult<Value> {
@@ -398,15 +364,13 @@ impl NetworkClient for EthClient {
         let address: String = if addr.as_str().is_some() {
             addr.as_str().unwrap().to_string()
         } else {
-            return Err(Error::from(EthFailed::ImportPrivateError));
+            return Err(Error::from(EthFailed::ImportPrivateError))
         };
 
         let addr_cloned = address.clone();
         executor
             .spawn(async move {
-                let result = self
-                    .handle_subscribe_request(addr_cloned, drk_pub_key)
-                    .await;
+                let result = self.handle_subscribe_request(addr_cloned, drk_pub_key).await;
                 if let Err(e) = result {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -415,10 +379,7 @@ impl NetworkClient for EthClient {
 
         let private_key: Vec<u8> = serialize(&private_key);
 
-        Ok(TokenSubscribtion {
-            private_key,
-            public_key: address,
-        })
+        Ok(TokenSubscribtion { private_key, public_key: address })
     }
 
     async fn subscribe_with_keypair(

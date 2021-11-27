@@ -18,10 +18,7 @@ async fn main() -> Result<()> {
         String::from("foobar"),
     );
 
-    eth.set_main_keypair(&Keypair {
-        private_key: key,
-        public_key: acc.clone(),
-    });
+    eth.set_main_keypair(&Keypair { private_key: key, public_key: acc.clone() });
 
     //let key = generate_privkey();
     //let passphrase = "foobar".to_string();

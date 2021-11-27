@@ -1,5 +1,4 @@
-use std::io;
-use std::time::Instant;
+use std::{io, time::Instant};
 
 use halo2_gadgets::{
     primitives,

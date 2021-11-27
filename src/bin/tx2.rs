@@ -2,8 +2,7 @@ use rand::rngs::OsRng;
 use std::{fmt, time::Instant};
 
 use halo2_gadgets::ecc::FixedPoints;
-use incrementalmerkletree::Hashable;
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Hashable, Tree};
 use pasta_curves::{
     arithmetic::{CurveAffine, Field, FieldExt},
     pallas,
@@ -19,8 +18,7 @@ use drk::{
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr,
-        util::mod_r_p,
-        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     state::{state_transition, ProgramState, StateUpdate},
     tx,
@@ -95,7 +93,7 @@ impl MemoryState {
             // ... attempt to decrypt the note ...
             if let Ok(note) = ciphertext.decrypt(secret) {
                 // ... and return the decrypted note for this coin.
-                return Some((note, *secret));
+                return Some((note, *secret))
             }
         }
         // We weren't able to decrypt the note with any of our keys.
@@ -134,17 +132,12 @@ fn main() -> std::result::Result<(), failure::Error> {
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public,
-        }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public }],
     };
 
     let tx = builder.build()?;
 
-    tx.verify(&state.mint_vk, &state.spend_vk)
-        .expect("tx verify");
+    tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
 
     let note = tx.outputs[0].enc_note.decrypt(&secret)?;
 
@@ -164,11 +157,7 @@ fn main() -> std::result::Result<(), failure::Error> {
             secret,
             note: note.clone(),
         }],
-        outputs: vec![tx::TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public,
-        }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public }],
     };
 
     let tx = builder.build()?;

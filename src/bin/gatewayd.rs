@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use clap::clap_app;
@@ -41,11 +40,7 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
+    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
 
     simple_logger::init_with_level(loglevel)?;
 
@@ -62,9 +57,7 @@ async fn main() -> Result<()> {
     debug!(target: "GATEWAY DAEMON", "Run {} executor threads", nthreads);
 
     let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| {
-            smol::future::block_on(ex.run(shutdown.recv()))
-        })
+        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {

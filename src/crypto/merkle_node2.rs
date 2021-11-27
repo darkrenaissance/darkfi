@@ -1,15 +1,12 @@
-use halo2_gadgets::primitives::sinsemilla::HashDomain;
-use halo2_gadgets::utilities::Var;
-use incrementalmerkletree::Altitude;
-use incrementalmerkletree::Hashable;
+use halo2_gadgets::{primitives::sinsemilla::HashDomain, utilities::Var};
+use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
 use pasta_curves::{
     arithmetic::{Field, FieldExt},
     group::ff::PrimeFieldBits,
     pallas,
 };
-use std::io;
-use std::iter;
+use std::{io, iter};
 use subtle::ConstantTimeEq;
 
 use crate::{
@@ -26,13 +23,11 @@ lazy_static! {
     static ref EMPTY_ROOTS: Vec<MerkleNode> = {
         iter::empty()
             .chain(Some(MerkleNode::empty_leaf()))
-            .chain(
-                (0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
-                    let l = l as u8;
-                    *state = MerkleNode::combine(l.into(), state, state);
-                    Some(state.clone())
-                }),
-            )
+            .chain((0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
+                let l = l as u8;
+                *state = MerkleNode::combine(l.into(), state, state);
+                Some(state.clone())
+            }))
             .collect()
     };
 }
@@ -48,9 +43,7 @@ impl std::cmp::PartialEq for MerkleNode {
 
 impl std::hash::Hash for MerkleNode {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        <Option<pallas::Base>>::from(self.0)
-            .map(|b| b.to_bytes())
-            .hash(state)
+        <Option<pallas::Base>>::from(self.0).map(|b| b.to_bytes()).hash(state)
     }
 }
 
@@ -66,8 +59,8 @@ impl Hashable for MerkleNode {
     ///      - leaves are at layer MERKLE_DEPTH_ORCHARD = 32;
     ///      - the root is at layer 0.
     /// `l` is MERKLE_DEPTH_ORCHARD - layer - 1.
-    ///      - when hashing two leaves, we produce a node on the layer above the leaves, i.e.
-    ///        layer = 31, l = 0
+    ///      - when hashing two leaves, we produce a node on the layer above the leaves, i.e. layer
+    ///        = 31, l = 0
     ///      - when hashing to the final root, we produce the anchor with layer = 0, l = 31.
     fn combine(altitude: Altitude, left: &Self, right: &Self) -> Self {
         // MerkleCRH Sinsemilla hash domain.

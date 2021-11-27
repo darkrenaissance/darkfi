@@ -3,10 +3,10 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::Result;
-use crate::net::p2p::P2pPtr;
-use crate::net::protocols::ProtocolVersion;
-use crate::net::ChannelPtr;
+use crate::{
+    error::Result,
+    net::{p2p::P2pPtr, protocols::ProtocolVersion, ChannelPtr},
+};
 
 /// Removes channel from the list of connected channels when a stop signal is
 /// received.
@@ -68,9 +68,7 @@ pub trait Session: Sync {
         self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so can remove from p2p
-        executor
-            .spawn(remove_sub_on_stop(self.p2p(), channel))
-            .detach();
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
 
         // Channel is ready for use
         Ok(())

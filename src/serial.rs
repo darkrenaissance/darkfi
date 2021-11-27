@@ -1,10 +1,15 @@
-use std::borrow::Cow;
-use std::io::{Cursor, Read, Write};
-use std::net::{IpAddr, SocketAddr};
-use std::{io, mem};
+use std::{
+    borrow::Cow,
+    io,
+    io::{Cursor, Read, Write},
+    mem,
+    net::{IpAddr, SocketAddr},
+};
 
-use crate::endian;
-use crate::error::{Error, Result};
+use crate::{
+    endian,
+    error::{Error, Result},
+};
 
 /// Encode an object into a vector
 pub fn serialize<T: Encodable + ?Sized>(data: &T) -> Vec<u8> {
@@ -28,9 +33,7 @@ pub fn deserialize<T: Decodable>(data: &[u8]) -> Result<T> {
     if consumed == data.len() {
         Ok(rv)
     } else {
-        Err(Error::ParseFailed(
-            "data not consumed entirely when explicitly deserializing",
-        ))
+        Err(Error::ParseFailed("data not consumed entirely when explicitly deserializing"))
     }
 }
 
@@ -102,8 +105,7 @@ macro_rules! encoder_fn {
     ($name:ident, $val_type:ty, $writefn:ident) => {
         #[inline]
         fn $name(&mut self, v: $val_type) -> Result<()> {
-            self.write_all(&endian::$writefn(v))
-                .map_err(|e| Error::Io(e.kind()))
+            self.write_all(&endian::$writefn(v)).map_err(|e| Error::Io(e.kind()))
         }
     };
 }
@@ -114,8 +116,7 @@ macro_rules! decoder_fn {
         fn $name(&mut self) -> Result<$val_type> {
             assert_eq!(::std::mem::size_of::<$val_type>(), $byte_len); // size_of isn't a constfn in 1.22
             let mut val = [0; $byte_len];
-            self.read_exact(&mut val[..])
-                .map_err(|e| Error::Io(e.kind()))?;
+            self.read_exact(&mut val[..]).map_err(|e| Error::Io(e.kind()))?;
             Ok(endian::$readfn(&val))
         }
     };
@@ -569,11 +570,9 @@ tuple_encode!(T0, T1, T2, T3, T4, T5, T6, T7);
 
 #[cfg(test)]
 mod tests {
-    use super::{deserialize, serialize, Error, Result, VarInt};
-    use super::{deserialize_partial, Encodable};
+    use super::{deserialize, deserialize_partial, serialize, Encodable, Error, Result, VarInt};
     use crate::endian::{u16_to_array_le, u32_to_array_le, u64_to_array_le};
-    use std::io;
-    use std::mem::discriminant;
+    use std::{io, mem::discriminant};
 
     #[test]
     fn serialize_int_test() {
@@ -610,27 +609,12 @@ mod tests {
         assert_eq!(serialize(&256u64), vec![0u8, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(serialize(&5000u64), vec![136u8, 19, 0, 0, 0, 0, 0, 0]);
         assert_eq!(serialize(&500000u64), vec![32u8, 161, 7, 0, 0, 0, 0, 0]);
-        assert_eq!(
-            serialize(&723401728380766730u64),
-            vec![10u8, 10, 10, 10, 10, 10, 10, 10]
-        );
+        assert_eq!(serialize(&723401728380766730u64), vec![10u8, 10, 10, 10, 10, 10, 10, 10]);
         // i64
-        assert_eq!(
-            serialize(&-1i64),
-            vec![255u8, 255, 255, 255, 255, 255, 255, 255]
-        );
-        assert_eq!(
-            serialize(&-256i64),
-            vec![0u8, 255, 255, 255, 255, 255, 255, 255]
-        );
-        assert_eq!(
-            serialize(&-5000i64),
-            vec![120u8, 236, 255, 255, 255, 255, 255, 255]
-        );
-        assert_eq!(
-            serialize(&-500000i64),
-            vec![224u8, 94, 248, 255, 255, 255, 255, 255]
-        );
+        assert_eq!(serialize(&-1i64), vec![255u8, 255, 255, 255, 255, 255, 255, 255]);
+        assert_eq!(serialize(&-256i64), vec![0u8, 255, 255, 255, 255, 255, 255, 255]);
+        assert_eq!(serialize(&-5000i64), vec![120u8, 236, 255, 255, 255, 255, 255, 255]);
+        assert_eq!(serialize(&-500000i64), vec![224u8, 94, 248, 255, 255, 255, 255, 255]);
         assert_eq!(
             serialize(&-723401728380766730i64),
             vec![246u8, 245, 245, 245, 245, 245, 245, 245]
@@ -639,10 +623,7 @@ mod tests {
         assert_eq!(serialize(&256i64), vec![0u8, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(serialize(&5000i64), vec![136u8, 19, 0, 0, 0, 0, 0, 0]);
         assert_eq!(serialize(&500000i64), vec![32u8, 161, 7, 0, 0, 0, 0, 0]);
-        assert_eq!(
-            serialize(&723401728380766730i64),
-            vec![10u8, 10, 10, 10, 10, 10, 10, 10]
-        );
+        assert_eq!(serialize(&723401728380766730i64), vec![10u8, 10, 10, 10, 10, 10, 10, 10]);
     }
 
     #[test]
@@ -651,10 +632,7 @@ mod tests {
         assert_eq!(serialize(&VarInt(0xFC)), vec![0xFCu8]);
         assert_eq!(serialize(&VarInt(0xFD)), vec![0xFDu8, 0xFD, 0]);
         assert_eq!(serialize(&VarInt(0xFFF)), vec![0xFDu8, 0xFF, 0xF]);
-        assert_eq!(
-            serialize(&VarInt(0xF0F0F0F)),
-            vec![0xFEu8, 0xF, 0xF, 0xF, 0xF]
-        );
+        assert_eq!(serialize(&VarInt(0xF0F0F0F)), vec![0xFEu8, 0xF, 0xF, 0xF, 0xF]);
         assert_eq!(
             serialize(&VarInt(0xF0F0F0F0F0E0)),
             vec![0xFFu8, 0xE0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0, 0]
@@ -663,14 +641,8 @@ mod tests {
             test_varint_encode(0xFF, &u64_to_array_le(0x100000000)).unwrap(),
             VarInt(0x100000000)
         );
-        assert_eq!(
-            test_varint_encode(0xFE, &u64_to_array_le(0x10000)).unwrap(),
-            VarInt(0x10000)
-        );
-        assert_eq!(
-            test_varint_encode(0xFD, &u64_to_array_le(0xFD)).unwrap(),
-            VarInt(0xFD)
-        );
+        assert_eq!(test_varint_encode(0xFE, &u64_to_array_le(0x10000)).unwrap(), VarInt(0x10000));
+        assert_eq!(test_varint_encode(0xFD, &u64_to_array_le(0xFD)).unwrap(), VarInt(0xFD));
 
         // Test that length calc is working correctly
         test_varint_len(VarInt(0), 1);
@@ -768,10 +740,7 @@ mod tests {
 
     #[test]
     fn serialize_strbuf_test() {
-        assert_eq!(
-            serialize(&"Andrew".to_string()),
-            vec![6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]
-        );
+        assert_eq!(serialize(&"Andrew".to_string()), vec![6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]);
     }
 
     #[test]
@@ -795,26 +764,17 @@ mod tests {
 
         // u32
         assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0]).ok(), Some(0xCDABu32));
-        assert_eq!(
-            deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD]).ok(),
-            Some(0xCDAB0DA0u32)
-        );
+        assert_eq!(deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD]).ok(), Some(0xCDAB0DA0u32));
         let failure32: Result<u32> = deserialize(&[1u8, 2, 3]);
         assert!(failure32.is_err());
         // TODO: test negative numbers
         assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0]).ok(), Some(0xCDABi32));
-        assert_eq!(
-            deserialize(&[0xA0u8, 0x0D, 0xAB, 0x2D]).ok(),
-            Some(0x2DAB0DA0i32)
-        );
+        assert_eq!(deserialize(&[0xA0u8, 0x0D, 0xAB, 0x2D]).ok(), Some(0x2DAB0DA0i32));
         let failurei32: Result<i32> = deserialize(&[1u8, 2, 3]);
         assert!(failurei32.is_err());
 
         // u64
-        assert_eq!(
-            deserialize(&[0xABu8, 0xCD, 0, 0, 0, 0, 0, 0]).ok(),
-            Some(0xCDABu64)
-        );
+        assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0, 0, 0, 0, 0]).ok(), Some(0xCDABu64));
         assert_eq!(
             deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD, 0x99, 0, 0, 0x99]).ok(),
             Some(0x99000099CDAB0DA0u64)
@@ -822,10 +782,7 @@ mod tests {
         let failure64: Result<u64> = deserialize(&[1u8, 2, 3, 4, 5, 6, 7]);
         assert!(failure64.is_err());
         // TODO: test negative numbers
-        assert_eq!(
-            deserialize(&[0xABu8, 0xCD, 0, 0, 0, 0, 0, 0]).ok(),
-            Some(0xCDABi64)
-        );
+        assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0, 0, 0, 0, 0]).ok(), Some(0xCDABi64));
         assert_eq!(
             deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD, 0x99, 0, 0, 0x99]).ok(),
             Some(-0x66ffff663254f260i64)

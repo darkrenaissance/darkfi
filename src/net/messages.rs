@@ -1,10 +1,11 @@
 use futures::prelude::*;
 use log::*;
-use std::io;
-use std::net::SocketAddr;
+use std::{io, net::SocketAddr};
 
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, VarInt};
+use crate::{
+    error::{Error, Result},
+    serial::{Decodable, Encodable, VarInt},
+};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 
@@ -84,9 +85,7 @@ impl Encodable for PingMessage {
 
 impl Decodable for PingMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            nonce: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { nonce: Decodable::decode(&mut d)? })
     }
 }
 
@@ -100,9 +99,7 @@ impl Encodable for PongMessage {
 
 impl Decodable for PongMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            nonce: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { nonce: Decodable::decode(&mut d)? })
     }
 }
 
@@ -129,9 +126,7 @@ impl Encodable for AddrsMessage {
 
 impl Decodable for AddrsMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            addrs: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { addrs: Decodable::decode(&mut d)? })
     }
 }
 
@@ -175,7 +170,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     stream.read_exact(&mut magic).await?;
     debug!(target: "net", "read magic {:?}", magic);
     if magic != MAGIC_BYTES {
-        return Err(Error::MalformedPacket);
+        return Err(Error::MalformedPacket)
     }
 
     // The type of the message
@@ -196,10 +191,7 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
     }
     debug!(target: "net", "read payload {} bytes", payload_len);
 
-    Ok(Packet {
-        command: cmd,
-        payload,
-    })
+    Ok(Packet { command: cmd, payload })
 }
 
 /// Sends an outbound packet by writing data to TCP stream.
@@ -208,17 +200,13 @@ pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) 
     stream.write_all(&MAGIC_BYTES).await?;
     debug!(target: "net", "sent magic...");
 
-    VarInt(packet.command.len() as u64)
-        .encode_async(stream)
-        .await?;
+    VarInt(packet.command.len() as u64).encode_async(stream).await?;
     assert!(!packet.command.is_empty());
     stream.write_all(packet.command.as_bytes()).await?;
     debug!(target: "net", "sent command: {}", packet.command);
 
     assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<u64>());
-    VarInt(packet.payload.len() as u64)
-        .encode_async(stream)
-        .await?;
+    VarInt(packet.payload.len() as u64).encode_async(stream).await?;
 
     if !packet.payload.is_empty() {
         stream.write_all(&packet.payload).await?;

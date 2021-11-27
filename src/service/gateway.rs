@@ -1,15 +1,19 @@
-use std::convert::From;
-use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
-use std::sync::Arc;
+use std::{
+    convert::From,
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
 use async_executor::Executor;
 use log::debug;
 use url::Url;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
-use crate::blockchain::{rocks::columns, RocksColumn, Slab, SlabStore};
-use crate::{serial::deserialize, serial::serialize, Error, Result};
+use crate::{
+    blockchain::{rocks::columns, RocksColumn, Slab, SlabStore},
+    serial::{deserialize, serialize},
+    Error, Result,
+};
 
 pub type GatewaySlabsSubscriber = async_channel::Receiver<Slab>;
 
@@ -41,11 +45,7 @@ impl GatewayService {
     ) -> Result<Arc<GatewayService>> {
         let slabstore = SlabStore::new(rocks)?;
 
-        Ok(Arc::new(GatewayService {
-            slabstore,
-            addr,
-            pub_addr,
-        }))
+        Ok(Arc::new(GatewayService { slabstore, addr, pub_addr }))
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -163,7 +163,7 @@ impl GatewayService {
                 // GETLASTINDEX
             }
             _ => {
-                return Err(Error::ServicesError("received wrong command"));
+                return Err(Error::ServicesError("received wrong command"))
             }
         }
         Ok(())
@@ -192,10 +192,7 @@ impl GatewayClient {
 
         let (gateway_slabs_sub_s, gateway_slabs_sub_rv) = async_channel::unbounded::<Slab>();
 
-        let sub_addr_sock = (
-            sub_addr.host().unwrap().to_string(),
-            sub_addr.port().unwrap(),
-        )
+        let sub_addr_sock = (sub_addr.host().unwrap().to_string(), sub_addr.port().unwrap())
             .to_socket_addrs()?
             .next()
             .ok_or(Error::UrlParseError)?;
@@ -229,13 +226,13 @@ impl GatewayClient {
                 "Local slabstore has higher index than gateway's slabstore.
                  Run \" darkfid -r \" to refresh the database."
                     .into(),
-            ));
+            ))
         }
 
         if last_index > 0 {
             for index in (local_last_index + 1)..(last_index + 1) {
                 if self.get_slab(index).await?.is_none() {
-                    break;
+                    break
                 }
             }
         }
@@ -250,18 +247,14 @@ impl GatewayClient {
         let handle_error = Arc::new(handle_error);
         let rep = self
             .protocol
-            .request(
-                GatewayCommand::GetSlab as u8,
-                serialize(&index),
-                handle_error,
-            )
+            .request(GatewayCommand::GetSlab as u8, serialize(&index), handle_error)
             .await?;
 
         if let Some(slab) = rep {
             let slab: Slab = deserialize(&slab)?;
             self.gateway_slabs_sub_s.send(slab.clone()).await?;
             self.slabstore.put(slab.clone())?;
-            return Ok(Some(slab));
+            return Ok(Some(slab))
         }
 
         Ok(None)
@@ -283,7 +276,7 @@ impl GatewayClient {
                 .await?;
 
             if rep.is_some() {
-                break;
+                break
             }
         }
         Ok(())
@@ -294,12 +287,10 @@ impl GatewayClient {
 
         let handle_error = Arc::new(handle_error);
 
-        let rep = self
-            .protocol
-            .request(GatewayCommand::GetLastIndex as u8, vec![], handle_error)
-            .await?;
+        let rep =
+            self.protocol.request(GatewayCommand::GetLastIndex as u8, vec![], handle_error).await?;
         if let Some(index) = rep {
-            return deserialize(&index);
+            return deserialize(&index)
         }
         Ok(0)
     }

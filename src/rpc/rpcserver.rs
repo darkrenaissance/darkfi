@@ -1,6 +1,8 @@
-use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{
+    net::{SocketAddr, TcpListener, TcpStream},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use async_executor::Executor;
 use async_native_tls::{Identity, TlsAcceptor};
@@ -11,8 +13,10 @@ use smol::{
     Async,
 };
 
-use crate::rpc::jsonrpc::{JsonRequest, JsonResult};
-use crate::Result;
+use crate::{
+    rpc::jsonrpc::{JsonRequest, JsonResult},
+    Result,
+};
 
 pub struct RpcServerConfig {
     pub socket_addr: SocketAddr,
@@ -41,13 +45,13 @@ async fn serve(
             let n = match stream.read(&mut buf).await {
                 Ok(n) if n == 0 => {
                     debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(());
+                    return Ok(())
                 }
                 Ok(n) => n,
                 Err(e) => {
                     debug!(target: "RPC SERVER", "Failed to read from socket: {:#?}", e);
                     debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(());
+                    return Ok(())
                 }
             };
 
@@ -56,7 +60,7 @@ async fn serve(
                 Err(e) => {
                     debug!(target: "RPC SERVER", "Received invalid JSON: {:#?}", e);
                     debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(());
+                    return Ok(())
                 }
             };
 
@@ -67,7 +71,7 @@ async fn serve(
             if let Err(e) = stream.write_all(j.as_bytes()).await {
                 debug!(target: "RPC SERVER", "Failed to write to socket: {:#?}", e);
                 debug!(target: "RPC SERVER", "Closed connection");
-                return Ok(());
+                return Ok(())
             }
         },
         Some(tls) => match tls.accept(stream).await {
@@ -75,13 +79,13 @@ async fn serve(
                 let n = match stream.read(&mut buf).await {
                     Ok(n) if n == 0 => {
                         debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(());
+                        return Ok(())
                     }
                     Ok(n) => n,
                     Err(e) => {
                         debug!(target: "RPC SERVER", "Failed to read from socket: {:#?}", e);
                         debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(());
+                        return Ok(())
                     }
                 };
 
@@ -90,7 +94,7 @@ async fn serve(
                     Err(e) => {
                         debug!(target: "RPC SERVER", "Received invalid JSON: {:#?}", e);
                         debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(());
+                        return Ok(())
                     }
                 };
 
@@ -100,7 +104,7 @@ async fn serve(
 
                 if let Err(e) = stream.write_all(j.as_bytes()).await {
                     debug!(target: "RPC SERVER", "Failed to write to socket: {:#?}", e);
-                    return Ok(());
+                    return Ok(())
                 }
             },
             Err(e) => {
@@ -157,11 +161,6 @@ pub async fn listen_and_serve(
         tls = None;
     }
 
-    let listener = listen(
-        Async::<TcpListener>::bind(cfg.socket_addr)?,
-        tls,
-        rh,
-        executor,
-    );
+    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh, executor);
     listener.await
 }

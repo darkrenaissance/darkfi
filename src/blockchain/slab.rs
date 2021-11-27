@@ -1,5 +1,7 @@
-use crate::serial::{Decodable, Encodable};
-use crate::Result;
+use crate::{
+    serial::{Decodable, Encodable},
+    Result,
+};
 
 #[derive(Clone, Debug)]
 pub struct Slab {
@@ -37,9 +39,6 @@ impl Encodable for Slab {
 
 impl Decodable for Slab {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            index: Decodable::decode(&mut d)?,
-            payload: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { index: Decodable::decode(&mut d)?, payload: Decodable::decode(&mut d)? })
     }
 }

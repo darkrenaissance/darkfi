@@ -3,10 +3,10 @@ use halo2_gadgets::ecc::{
     chip::{compute_lagrange_coeffs, NUM_WINDOWS, NUM_WINDOWS_SHORT},
     FixedPoints, H,
 };
-use pasta_curves::pallas;
 use pasta_curves::{
     arithmetic::{CurveAffine, Field, FieldExt},
     group::Curve,
+    pallas,
 };
 
 pub mod commit_ivk_r;
@@ -105,8 +105,8 @@ fn compute_window_table<C: CurveAffine>(base: C, num_windows: usize) -> Vec<[C; 
             (0..H)
                 .map(|k| {
                     // scalar = (k+2)*(8^w)
-                    let scalar = C::ScalarExt::from_u64(k as u64 + 2)
-                        * C::ScalarExt::from_u64(H as u64).pow(&[w as u64, 0, 0, 0]);
+                    let scalar = C::ScalarExt::from_u64(k as u64 + 2) *
+                        C::ScalarExt::from_u64(H as u64).pow(&[w as u64, 0, 0, 0]);
                     (base * scalar).to_affine()
                 })
                 .collect::<ArrayVec<C, H>>()
@@ -130,9 +130,9 @@ fn compute_window_table<C: CurveAffine>(base: C, num_windows: usize) -> Vec<[C; 
         (0..H)
             .map(|k| {
                 // scalar = k * (2^3)^w - sum, where w = `num_windows - 1`
-                let scalar = C::ScalarExt::from_u64(k as u64)
-                    * C::ScalarExt::from_u64(H as u64).pow(&[(num_windows - 1) as u64, 0, 0, 0])
-                    - sum;
+                let scalar = C::ScalarExt::from_u64(k as u64) *
+                    C::ScalarExt::from_u64(H as u64).pow(&[(num_windows - 1) as u64, 0, 0, 0]) -
+                    sum;
                 (base * scalar).to_affine()
             })
             .collect::<ArrayVec<C, H>>()
@@ -158,9 +158,9 @@ fn test_lagrange_coeffs<C: CurveAffine>(base: C, num_windows: usize) {
                 let interpolated_x = super::util::evaluate::<C>(bits, coeffs);
 
                 // Compute the actual x-coordinate of the multiple [(k+2)*(8^w)]B.
-                let point = base
-                    * C::Scalar::from_u64(bits as u64 + 2)
-                    * C::Scalar::from_u64(H as u64).pow(&[idx as u64, 0, 0, 0]);
+                let point = base *
+                    C::Scalar::from_u64(bits as u64 + 2) *
+                    C::Scalar::from_u64(H as u64).pow(&[idx as u64, 0, 0, 0]);
                 let x = *point.to_affine().coordinates().unwrap().x();
 
                 // Check that the interpolated x-coordinate matches the actual one.
@@ -184,9 +184,9 @@ fn test_lagrange_coeffs<C: CurveAffine>(base: C, num_windows: usize) {
                 0,
             ])
         });
-        let scalar = C::Scalar::from_u64(bits as u64)
-            * C::Scalar::from_u64(H as u64).pow(&[(num_windows - 1) as u64, 0, 0, 0])
-            - offset;
+        let scalar = C::Scalar::from_u64(bits as u64) *
+            C::Scalar::from_u64(H as u64).pow(&[(num_windows - 1) as u64, 0, 0, 0]) -
+            offset;
         let point = base * scalar;
         let x = *point.to_affine().coordinates().unwrap().x();
 

@@ -16,10 +16,7 @@ pub struct TokenList {
 impl TokenList {
     pub fn new(data: &[u8]) -> Result<Self> {
         let tokenlist: Value = serde_json::from_slice(data)?;
-        let tokens = tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?
-            .clone();
+        let tokens = tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
         Ok(Self { tokens })
     }
 
@@ -37,7 +34,7 @@ impl TokenList {
             if item["symbol"] == symbol.to_uppercase() {
                 let address = item["address"].clone();
                 let address = address.as_str().ok_or(Error::TokenParseError)?;
-                return Ok(Some(address.to_string()));
+                return Ok(Some(address.to_string()))
             }
         }
         Ok(None)
@@ -49,7 +46,7 @@ impl TokenList {
                 let decimals = item["decimals"].clone();
                 let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
                 let decimals = decimals as usize;
-                return Ok(Some(decimals));
+                return Ok(Some(decimals))
             }
         }
         Ok(None)
@@ -68,22 +65,19 @@ impl DrkTokenList {
         let mut tokens: HashMap<String, DrkTokenId> = sol_symbols
             .iter()
             .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
-        .collect();
+            .collect();
 
-         tokens.insert(
+        tokens.insert(
             "BTC".to_string(),
             generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
-         );
+        );
 
         Ok(Self { tokens })
     }
 
     fn generate_hash_pair(sol_list: &TokenList, symbol: &str) -> Result<(String, DrkTokenId)> {
         if let Some(token_id) = &sol_list.search_id(symbol)? {
-            Ok((
-                symbol.to_string(),
-                generate_id(token_id, &NetworkName::Solana)?,
-            ))
+            Ok((symbol.to_string(), generate_id(token_id, &NetworkName::Solana)?))
         } else {
             Err(Error::NotSupportedToken)
         }
@@ -107,17 +101,16 @@ impl DrkTokenList {
 #[allow(unused_imports)]
 mod tests {
     use super::*;
-    use crate::util::{DrkTokenList, TokenList};
-    use crate::Result;
+    use crate::{
+        util::{DrkTokenList, TokenList},
+        Result,
+    };
 
     fn _get_sol_tokens() -> Result<TokenList> {
         let file_contents = include_bytes!("../../testdata/solanatokenlisttest.json");
         let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
-        let tokens = sol_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?
-            .clone();
+        let tokens = sol_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
 
         let sol_tokenlist = TokenList { tokens };
         Ok(sol_tokenlist)
@@ -127,10 +120,7 @@ mod tests {
         let file_contents = include_bytes!("../../testdata/erc20tokenlisttest.json");
         let eth_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
-        let tokens = eth_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?
-            .clone();
+        let tokens = eth_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
 
         let eth_tokenlist = TokenList { tokens };
         Ok(eth_tokenlist)
@@ -140,10 +130,7 @@ mod tests {
         let file_contents = include_bytes!("../../token/bitcoin_token_list.json");
         let btc_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
-        let tokens = btc_tokenlist["tokens"]
-            .as_array()
-            .ok_or(Error::TokenParseError)?
-            .clone();
+        let tokens = btc_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
 
         let btc_tokenlist = TokenList { tokens };
         Ok(btc_tokenlist)
@@ -189,26 +176,17 @@ mod tests {
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Solana]["SOL"],
-            generate_id(
-                &sol_tokens2.search_id("SOL")?.unwrap(),
-                &NetworkName::Solana
-            )?
+            generate_id(&sol_tokens2.search_id("SOL")?.unwrap(), &NetworkName::Solana)?
         );
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Bitcoin]["BTC"],
-            generate_id(
-                &btc_tokens2.search_id("BTC")?.unwrap(),
-                &NetworkName::Bitcoin
-            )?
+            generate_id(&btc_tokens2.search_id("BTC")?.unwrap(), &NetworkName::Bitcoin)?
         );
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Ethereum]["WBTC"],
-            generate_id(
-                &eth_tokens2.search_id("WBTC")?.unwrap(),
-                &NetworkName::Ethereum
-            )?
+            generate_id(&eth_tokens2.search_id("WBTC")?.unwrap(), &NetworkName::Ethereum)?
         );
 
         Ok(())

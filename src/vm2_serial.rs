@@ -1,9 +1,11 @@
 use std::io;
 
-use crate::error::{Error, Result};
-use crate::impl_vec;
-use crate::serial::{Decodable, Encodable, ReadExt, VarInt};
-use crate::vm2::{ZkBinary, ZkContract, ZkFunctionCall, ZkType};
+use crate::{
+    error::{Error, Result},
+    impl_vec,
+    serial::{Decodable, Encodable, ReadExt, VarInt},
+    vm2::{ZkBinary, ZkContract, ZkFunctionCall, ZkType},
+};
 
 impl_vec!((String, ZkType));
 impl_vec!(ZkFunctionCall);
@@ -84,9 +86,7 @@ impl Decodable for ZkBinary {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {
             constants: Decodable::decode(&mut d)?,
-            contracts: Vec::<(String, ZkContract)>::decode(&mut d)?
-                .into_iter()
-                .collect(),
+            contracts: Vec::<(String, ZkContract)>::decode(&mut d)?.into_iter().collect(),
         })
     }
 }
@@ -100,9 +100,6 @@ impl Encodable for ZkContract {
 
 impl Decodable for ZkContract {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            witness: Decodable::decode(&mut d)?,
-            code: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { witness: Decodable::decode(&mut d)?, code: Decodable::decode(&mut d)? })
     }
 }

@@ -1,15 +1,20 @@
 use async_executor::Executor;
 use log::*;
-use std::net::SocketAddr;
-use std::sync::{Arc, Weak};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Weak},
+};
 
 use crate::error::{Error, Result};
 //use crate::net::error::{Error, Result};
-use crate::net::protocols::{ProtocolAddress, ProtocolPing};
-use crate::net::sessions::Session;
-use crate::net::{Acceptor, AcceptorPtr};
-use crate::net::{ChannelPtr, P2p};
-use crate::system::{StoppableTask, StoppableTaskPtr};
+use crate::{
+    net::{
+        protocols::{ProtocolAddress, ProtocolPing},
+        sessions::Session,
+        Acceptor, AcceptorPtr, ChannelPtr, P2p,
+    },
+    system::{StoppableTask, StoppableTaskPtr},
+};
 
 /// Defines inbound connections session.
 pub struct InboundSession {
@@ -23,11 +28,7 @@ impl InboundSession {
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         let acceptor = Acceptor::new();
 
-        Arc::new(Self {
-            p2p,
-            acceptor,
-            accept_task: StoppableTask::new(),
-        })
+        Arc::new(Self { p2p, acceptor, accept_task: StoppableTask::new() })
     }
     /// Starts the inbound session. Begins by accepting connections and fails if
     /// the address is not configured. Then runs the channel subscription
@@ -35,12 +36,11 @@ impl InboundSession {
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         match self.p2p().settings().inbound {
             Some(accept_addr) => {
-                self.clone()
-                    .start_accept_session(accept_addr, executor.clone())?;
+                self.clone().start_accept_session(accept_addr, executor.clone())?;
             }
             None => {
                 info!("Not configured for accepting incoming connections.");
-                return Ok(());
+                return Ok(())
             }
         }
 
@@ -81,9 +81,7 @@ impl InboundSession {
             let channel = channel_sub.receive().await?;
             // Spawn a detached task to process the channel
             // This will just perform the channel setup then exit.
-            executor
-                .spawn(self.clone().setup_channel(channel, executor.clone()))
-                .detach();
+            executor.spawn(self.clone().setup_channel(channel, executor.clone())).detach();
         }
     }
 
@@ -97,9 +95,7 @@ impl InboundSession {
     ) -> Result<()> {
         info!("Connected inbound [{}]", channel.address());
 
-        self.clone()
-            .register_channel(channel.clone(), executor.clone())
-            .await?;
+        self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
         self.attach_protocols(channel, executor).await
     }

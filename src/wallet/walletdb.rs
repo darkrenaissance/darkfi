@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use log::{debug, error, info};
 use pasta_curves::arithmetic::Field;
@@ -8,8 +6,13 @@ use rand::rngs::OsRng;
 use rusqlite::{named_params, params, Connection};
 
 use super::WalletApi;
-use crate::crypto::{coin::Coin, note::Note, nullifier::Nullifier, OwnCoin, OwnCoins};
-use crate::{client::ClientFailed, serial, types::*, Error, Result};
+use crate::{
+    client::ClientFailed,
+    crypto::{coin::Coin, note::Note, nullifier::Nullifier, OwnCoin, OwnCoins},
+    serial,
+    types::*,
+    Error, Result,
+};
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -32,10 +35,8 @@ pub struct Balances {
 }
 impl Balances {
     pub fn add(&mut self, balance: &Balance) {
-        if let Some(mut saved_balance) = self
-            .list
-            .iter_mut()
-            .find(|b| b.token_id == balance.token_id)
+        if let Some(mut saved_balance) =
+            self.list.iter_mut().find(|b| b.token_id == balance.token_id)
         {
             saved_balance.value += balance.value;
         } else {
@@ -55,7 +56,7 @@ impl WalletDb {
         debug!(target: "WALLETDB", "new() Constructor called");
         if password.trim().is_empty() {
             error!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword));
+            return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
         let conn = Connection::open(path)?;
@@ -81,7 +82,7 @@ impl WalletDb {
             let secret = DrkSecretKey::random(&mut OsRng);
             let public = derive_public_key(secret);
             self.put_keypair(&public, &secret)?;
-            return Ok(());
+            return Ok(())
         }
 
         error!(target: "WALLETDB", "Keys already exist.");
@@ -125,9 +126,7 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Get own coins");
         let is_spent = 0;
 
-        let mut coins = self
-            .conn
-            .prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+        let mut coins = self.conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
 
         let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((
@@ -156,13 +155,7 @@ impl WalletDb {
             let value: u64 = row.4;
             let token_id = self.get_value_deserialized(row.5)?;
 
-            let note = Note {
-                serial,
-                value,
-                token_id,
-                coin_blind,
-                value_blind,
-            };
+            let note = Note { serial, value, token_id, coin_blind, value_blind };
 
             // TODO:
             // let witness = self.get_value_deserialized(row.6)?;
@@ -310,11 +303,7 @@ impl WalletDb {
             let value: u64 = row.0;
             let token_id: DrkTokenId = self.get_value_deserialized(row.1)?;
             let nullifier: Nullifier = self.get_value_deserialized(row.2)?;
-            balances.add(&Balance {
-                token_id,
-                value,
-                nullifier,
-            });
+            balances.add(&Balance { token_id, value, nullifier });
         }
 
         Ok(balances)
@@ -324,9 +313,8 @@ impl WalletDb {
         debug!(target: "WALLETDB", "Get token ID...");
         let is_spent = 0;
 
-        let mut stmt = self
-            .conn
-            .prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
+        let mut stmt =
+            self.conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
 
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
 
@@ -346,9 +334,8 @@ impl WalletDb {
         let is_spent = 0;
         let id = self.get_value_serialized(token_id)?;
 
-        let mut stmt = self
-            .conn
-            .prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
+        let mut stmt =
+            self.conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
 
         let id_check = stmt.exists(params![id, is_spent])?;
 
@@ -366,12 +353,14 @@ impl WalletDb {
 mod tests {
     // TODO: Clean up, there's a lot of duplicated code here.
     use super::*;
-    use crate::crypto::{
-        coin::Coin,
-        types::{derive_public_key, CoinBlind, NullifierSerial, ValueCommitBlind},
-        OwnCoin,
+    use crate::{
+        crypto::{
+            coin::Coin,
+            types::{derive_public_key, CoinBlind, NullifierSerial, ValueCommitBlind},
+            OwnCoin,
+        },
+        util::join_config_path,
     };
-    use crate::util::join_config_path;
     use ff::PrimeField;
 
     pub fn init_db(path: &Path, password: String) -> Result<()> {
@@ -385,7 +374,7 @@ mod tests {
             debug!(
                 target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
             );
-            return Err(Error::from(ClientFailed::EmptyPassword));
+            return Err(Error::from(ClientFailed::EmptyPassword))
         }
         Ok(())
     }
@@ -421,13 +410,7 @@ mod tests {
 
         let nullifier = Nullifier::new(coin.repr);
 
-        let own_coin = OwnCoin {
-            coin,
-            note,
-            secret,
-            witness,
-            nullifier,
-        };
+        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
 
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
@@ -479,13 +462,7 @@ mod tests {
 
         let nullifier = Nullifier::new(coin.repr);
 
-        let own_coin = OwnCoin {
-            coin,
-            note,
-            secret,
-            witness,
-            nullifier,
-        };
+        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
 
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;
@@ -631,13 +608,7 @@ mod tests {
         // for testing
         let nullifier = Nullifier::new(coin.repr);
 
-        let own_coin = OwnCoin {
-            coin,
-            note,
-            secret,
-            witness,
-            nullifier,
-        };
+        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
 
         wallet.put_own_coins(own_coin.clone())?;
         wallet.put_own_coins(own_coin.clone())?;

@@ -1,5 +1,7 @@
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::Result;
+use crate::{
+    serial::{deserialize, serialize, Decodable, Encodable},
+    Result,
+};
 
 pub trait WalletApi {
     fn get_value_serialized<T: Encodable>(&self, data: &T) -> Result<Vec<u8>> {

@@ -3,11 +3,12 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::{Error, Result};
-use crate::net::message_subscriber::MessageSubscription;
-use crate::net::messages;
-use crate::net::utility::sleep;
-use crate::net::{ChannelPtr, SettingsPtr};
+use crate::{
+    error::{Error, Result},
+    net::{
+        message_subscriber::MessageSubscription, messages, utility::sleep, ChannelPtr, SettingsPtr,
+    },
+};
 
 /// Implements the protocol version handshake sent out by nodes at the beginning
 /// of a connection.
@@ -37,12 +38,7 @@ impl ProtocolVersion {
             .await
             .expect("Missing verack dispatcher!");
 
-        Arc::new(Self {
-            channel,
-            version_sub,
-            verack_sub,
-            settings,
-        })
+        Arc::new(Self { channel, version_sub, verack_sub, settings })
     }
     /// Start version information exchange. Start the timer. Send version info
     /// and wait for version acknowledgement. Wait for version info and send

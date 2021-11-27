@@ -1,13 +1,14 @@
-use std::net::{TcpStream, ToSocketAddrs};
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    net::{TcpStream, ToSocketAddrs},
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use async_native_tls::{TlsConnector, TlsStream};
 use async_tungstenite::WebSocketStream;
 use futures::sink::Sink;
 use smol::{prelude::*, Async};
-use tungstenite::handshake::client::Response;
-use tungstenite::Message;
+use tungstenite::{handshake::client::Response, Message};
 use url::Url;
 
 use crate::{Error, Result as DrkResult};
@@ -63,13 +64,8 @@ impl Stream for WsStream {
 /// Connects to a WebSocket address (optionally secured by TLS).
 pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Response)> {
     let url = Url::parse(addr)?;
-    let host = url
-        .host_str()
-        .ok_or(Error::UrlParseError)?
-        .to_string();
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| Error::UrlParseError)?;
+    let host = url.host_str().ok_or(Error::UrlParseError)?.to_string();
+    let port = url.port_or_known_default().ok_or_else(|| Error::UrlParseError)?;
 
     let socket_addr = {
         let host = host.clone();

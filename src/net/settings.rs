@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;

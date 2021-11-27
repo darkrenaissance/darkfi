@@ -1,6 +1,4 @@
-use std::io;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{io, net::SocketAddr, sync::Arc};
 
 use async_executor::Executor;
 use async_std::prelude::*;
@@ -12,15 +10,15 @@ use signal_hook::consts::SIGINT;
 use signal_hook_async_std::Signals;
 use zeromq::*;
 
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::Result;
+use crate::{
+    serial::{deserialize, serialize, Decodable, Encodable},
+    Result,
+};
 
 pub type PeerId = Vec<u8>;
 
-pub type Channels = (
-    async_channel::Sender<(PeerId, Reply)>,
-    async_channel::Receiver<(PeerId, Request)>,
-);
+pub type Channels =
+    (async_channel::Sender<(PeerId, Reply)>, async_channel::Receiver<(PeerId, Request)>);
 
 enum NetEvent {
     Receive(zeromq::ZmqMessage),
@@ -49,22 +47,13 @@ impl RepProtocol {
 
         let channels = (send_channel, recv_channel);
 
-        RepProtocol {
-            addr,
-            socket,
-            recv_queue,
-            send_queue,
-            channels,
-            service_name,
-        }
+        RepProtocol { addr, socket, recv_queue, send_queue, channels, service_name }
     }
 
     pub async fn start(
         &mut self,
-    ) -> Result<(
-        async_channel::Sender<(PeerId, Reply)>,
-        async_channel::Receiver<(PeerId, Request)>,
-    )> {
+    ) -> Result<(async_channel::Sender<(PeerId, Reply)>, async_channel::Receiver<(PeerId, Request)>)>
+    {
         let addr = addr_to_string(self.addr);
         self.socket.bind(addr.as_str()).await?;
         debug!(target: "REP PROTOCOL API", "{} SERVICE: Bound To {}", self.service_name, addr);
@@ -85,7 +74,7 @@ impl RepProtocol {
                 match signal {
                     SIGINT => {
                         stop_s.send(()).await?;
-                        break;
+                        break
                     }
                     _ => unreachable!(),
                 }
@@ -143,11 +132,7 @@ pub struct ReqProtocol {
 impl ReqProtocol {
     pub fn new(addr: SocketAddr, service_name: String) -> ReqProtocol {
         let socket = zeromq::DealerSocket::new();
-        ReqProtocol {
-            addr,
-            socket,
-            service_name,
-        }
+        ReqProtocol { addr, socket, service_name }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -190,19 +175,17 @@ impl ReqProtocol {
 
             if reply.has_error() {
                 handle_error(reply.get_error());
-                return Ok(None);
+                return Ok(None)
             }
 
             if reply.get_id() != request.get_id() {
                 warn!("Reply id is not equal to Request id");
-                return Ok(None);
+                return Ok(None)
             }
 
             Ok(Some(reply.get_payload()))
         } else {
-            Err(crate::Error::ZmqError(
-                "Couldn't parse ZmqMessage".to_string(),
-            ))
+            Err(crate::Error::ZmqError("Couldn't parse ZmqMessage".to_string()))
         }
     }
 }
@@ -216,11 +199,7 @@ pub struct Publisher {
 impl Publisher {
     pub fn new(addr: SocketAddr, service_name: String) -> Publisher {
         let socket = zeromq::PubSocket::new();
-        Publisher {
-            addr,
-            socket,
-            service_name,
-        }
+        Publisher { addr, socket, service_name }
     }
 
     pub async fn start(&mut self, recv_queue: async_channel::Receiver<Vec<u8>>) -> Result<()> {
@@ -253,11 +232,7 @@ pub struct Subscriber {
 impl Subscriber {
     pub fn new(addr: SocketAddr, service_name: String) -> Subscriber {
         let socket = zeromq::SubSocket::new();
-        Subscriber {
-            addr,
-            socket,
-            service_name,
-        }
+        Subscriber { addr, socket, service_name }
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -281,9 +256,7 @@ impl Subscriber {
                 let data: T = deserialize(&data)?;
                 Ok(data)
             }
-            None => Err(crate::Error::ZmqError(
-                "Couldn't parse ZmqMessage".to_string(),
-            )),
+            None => Err(crate::Error::ZmqError("Couldn't parse ZmqMessage".to_string())),
         }
     }
 }
@@ -298,11 +271,7 @@ pub struct Request {
 impl Request {
     pub fn new(command: u8, payload: Vec<u8>) -> Request {
         let id = Self::gen_id();
-        Request {
-            command,
-            id,
-            payload,
-        }
+        Request { command, id, payload }
     }
     fn gen_id() -> u32 {
         let mut rng = rand::thread_rng();
@@ -331,11 +300,7 @@ pub struct Reply {
 
 impl Reply {
     pub fn from(request: &Request, error: u32, payload: Vec<u8>) -> Reply {
-        Reply {
-            id: request.get_id(),
-            error,
-            payload,
-        }
+        Reply { id: request.get_id(), error, payload }
     }
 
     pub fn has_error(&self) -> bool {

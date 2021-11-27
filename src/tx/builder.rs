@@ -5,11 +5,11 @@ use super::{
     partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
-use crate::crypto::{
-    mint_proof::create_mint_proof, note::Note, schnorr, spend_proof::create_spend_proof,
-};
 use crate::{
-    crypto::merkle_node2::MerkleNode,
+    crypto::{
+        merkle_node2::MerkleNode, mint_proof::create_mint_proof, note::Note, schnorr,
+        spend_proof::create_spend_proof,
+    },
     serial::Encodable,
     types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
     Result,
@@ -104,10 +104,7 @@ impl TransactionBuilder {
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialTransactionInput {
-                spend_proof: proof,
-                revealed,
-            };
+            let input = PartialTransactionInput { spend_proof: proof, revealed };
             inputs.push(input);
         }
 
@@ -147,19 +144,11 @@ impl TransactionBuilder {
 
             let encrypted_note = note.encrypt(&output.public)?;
 
-            let output = TransactionOutput {
-                mint_proof,
-                revealed,
-                enc_note: encrypted_note,
-            };
+            let output = TransactionOutput { mint_proof, revealed, enc_note: encrypted_note };
             outputs.push(output);
         }
 
-        let partial_tx = PartialTransaction {
-            clear_inputs,
-            inputs,
-            outputs,
-        };
+        let partial_tx = PartialTransaction { clear_inputs, inputs, outputs };
 
         let mut unsigned_tx_data = vec![];
         partial_tx.encode(&mut unsigned_tx_data)?;
@@ -173,20 +162,14 @@ impl TransactionBuilder {
         }
 
         let mut inputs = vec![];
-        for (input, signature_secret) in partial_tx
-            .inputs
-            .into_iter()
-            .zip(signature_secrets.into_iter())
+        for (input, signature_secret) in
+            partial_tx.inputs.into_iter().zip(signature_secrets.into_iter())
         {
             let signature = signature_secret.sign(&unsigned_tx_data[..]);
             let input = TransactionInput::from_partial(input, signature);
             inputs.push(input);
         }
 
-        Ok(Transaction {
-            clear_inputs,
-            inputs,
-            outputs: partial_tx.outputs,
-        })
+        Ok(Transaction { clear_inputs, inputs, outputs: partial_tx.outputs })
     }
 }

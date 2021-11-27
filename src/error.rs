@@ -1,7 +1,6 @@
 use std::fmt;
 
-use crate::client;
-use crate::state;
+use crate::{client, state};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

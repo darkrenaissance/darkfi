@@ -1,6 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -19,8 +18,7 @@ use drk::{
         load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
     },
     rpc::{
-        jsonrpc::{error as jsonerr, response as jsonresp},
-        jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
+        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
@@ -33,9 +31,7 @@ use drk::{
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
         1 => Err(Error::BridgeError("Not Supported Client".into())),
-        2 => Err(Error::BridgeError(
-            "Unable to watch the deposit address".into(),
-        )),
+        2 => Err(Error::BridgeError("Unable to watch the deposit address".into())),
         3 => Err(Error::BridgeError("Unable to send the token".into())),
         _ => Err(Error::BridgeError("Unknown error_code".into())),
     }
@@ -60,7 +56,7 @@ struct Cashierd {
 impl RequestHandler for Cashierd {
     async fn handle_request(&self, req: JsonRequest, executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
@@ -73,7 +69,7 @@ impl RequestHandler for Cashierd {
             None => {}
         };
 
-        return JsonResult::Err(jsonerr(MethodNotFound, None, req.id));
+        return JsonResult::Err(jsonerr(MethodNotFound, None, req.id))
     }
 }
 
@@ -99,13 +95,7 @@ impl Cashierd {
 
         let bridge = bridge::Bridge::new();
 
-        Ok(Self {
-            bridge,
-            cashier_wallet,
-            networks,
-            public_key: String::from(""),
-            config,
-        })
+        Ok(Self { bridge, cashier_wallet, networks, public_key: String::from(""), config })
     }
     async fn listen_for_receiving_coins(
         bridge: Arc<Bridge>,
@@ -125,11 +115,7 @@ impl Cashierd {
         // received drk coin to token publickey
         if let Some(withdraw_token) = token {
             let bridge_subscribtion = bridge
-                .subscribe(
-                    drk_pub_key,
-                    Some(withdraw_token.mint_address),
-                    executor.clone(),
-                )
+                .subscribe(drk_pub_key, Some(withdraw_token.mint_address), executor.clone())
                 .await;
 
             // send a request to the bridge to send amount of token
@@ -152,7 +138,7 @@ impl Cashierd {
             let error_code = res.error as u32;
 
             if error_code != 0 {
-                return handle_bridge_error(error_code);
+                return handle_bridge_error(error_code)
             }
 
             match res.payload {
@@ -163,9 +149,7 @@ impl Cashierd {
                     )?;
                 }
                 _ => {
-                    return Err(Error::BridgeError(
-                        "Receive unknown value from Subscription".into(),
-                    ));
+                    return Err(Error::BridgeError("Receive unknown value from Subscription".into()))
                 }
             }
         }
@@ -179,7 +163,7 @@ impl Cashierd {
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
         if args.len() != 3 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: NetworkName;
@@ -189,20 +173,20 @@ impl Cashierd {
         match (args[0].as_str(), args[1].as_str(), args[2].as_str()) {
             (Some(n), Some(m), Some(d)) => {
                 if NetworkName::from_str(n).is_err() {
-                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
                 }
                 network = NetworkName::from_str(n).unwrap();
                 mint_address = m;
                 drk_pub_key = d;
             }
             (None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
             }
             (_, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
             }
         }
 
@@ -212,7 +196,7 @@ impl Cashierd {
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
                 id,
-            ));
+            ))
         }
 
         let result: Result<String> = async {
@@ -245,9 +229,8 @@ impl Cashierd {
             // record in cashierdb with the network name and token id
 
             let bridge = self.bridge.clone();
-            let bridge_subscribtion = bridge
-                .subscribe(drk_pub_key, mint_address_opt, executor)
-                .await;
+            let bridge_subscribtion =
+                bridge.subscribe(drk_pub_key, mint_address_opt, executor).await;
 
             if check.is_empty() {
                 bridge_subscribtion
@@ -273,7 +256,7 @@ impl Cashierd {
             let error_code = bridge_res.error as u32;
 
             if error_code != 0 {
-                return handle_bridge_error(error_code).map(|_| String::new());
+                return handle_bridge_error(error_code).map(|_| String::new())
             }
 
             match bridge_res.payload {
@@ -291,9 +274,7 @@ impl Cashierd {
                     Ok(token_key.public_key)
                 }
                 bridge::BridgeResponsePayload::Address(token_pub) => Ok(token_pub),
-                _ => Err(Error::BridgeError(
-                    "Receive unknown value from Subscription".into(),
-                )),
+                _ => Err(Error::BridgeError("Receive unknown value from Subscription".into())),
             }
         }
         .await;
@@ -310,7 +291,7 @@ impl Cashierd {
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
         if args.len() != 4 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: NetworkName;
@@ -320,20 +301,20 @@ impl Cashierd {
         match (args[0].as_str(), args[1].as_str(), args[2].as_str()) {
             (Some(n), Some(m), Some(a)) => {
                 if NetworkName::from_str(n).is_err() {
-                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
                 }
                 network = NetworkName::from_str(n).unwrap();
                 mint_address = m;
                 address = a;
             }
             (None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
             }
             (_, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
             }
         }
 
@@ -343,7 +324,7 @@ impl Cashierd {
                 InvalidParams,
                 Some(format!("Cashier doesn't support this network: {}", network)),
                 id,
-            ));
+            ))
         }
 
         let result: Result<String> = async {
@@ -360,9 +341,8 @@ impl Cashierd {
 
             let cashier_public: jubjub::SubgroupPoint;
 
-            if let Some(addr) = self
-                .cashier_wallet
-                .get_withdraw_keys_by_token_public_key(&address, &network)?
+            if let Some(addr) =
+                self.cashier_wallet.get_withdraw_keys_by_token_public_key(&address, &network)?
             {
                 cashier_public = addr.public;
             } else {
@@ -429,15 +409,12 @@ impl Cashierd {
         );
 
         for network in self.networks.iter() {
-            resp.as_object_mut().unwrap()["networks"]
-                .as_array_mut()
-                .unwrap()
-                .push(json!(
-                        {
-                            network.name.to_string().to_lowercase():
-                            {"chain": network.blockchain.to_lowercase()}
-                        }
-                ));
+            resp.as_object_mut().unwrap()["networks"].as_array_mut().unwrap().push(json!(
+                    {
+                        network.name.to_string().to_lowercase():
+                        {"chain": network.blockchain.to_lowercase()}
+                    }
+            ));
         }
 
         JsonResult::Resp(jsonresp(resp, id))
@@ -449,7 +426,7 @@ impl Cashierd {
             NetworkName::Solana => {
                 use drk::service::sol::SOL_NATIVE_TOKEN_ID;
                 if _token_id != SOL_NATIVE_TOKEN_ID {
-                    return Ok(Some(_token_id.to_string()));
+                    return Ok(Some(_token_id.to_string()))
                 }
                 Ok(None)
             }
@@ -457,7 +434,7 @@ impl Cashierd {
             NetworkName::Ethereum => {
                 use drk::service::eth::ETH_NATIVE_TOKEN_ID;
                 if _token_id != ETH_NATIVE_TOKEN_ID {
-                    return Ok(Some(_token_id.to_string()));
+                    return Ok(Some(_token_id.to_string()))
                 }
                 Ok(None)
             }
@@ -520,7 +497,10 @@ impl Cashierd {
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
                     debug!(target: "CASHIER DAEMON", "Add eth network");
-                    use drk::service::{eth::generate_privkey, eth::Keypair, EthClient};
+                    use drk::service::{
+                        eth::{generate_privkey, Keypair},
+                        EthClient,
+                    };
 
                     let bridge2 = self.bridge.clone();
 
@@ -532,10 +512,7 @@ impl Cashierd {
                     let passphrase = self.config.geth_passphrase.clone();
 
                     let mut eth_client = EthClient::new(
-                        expand_path(&self.config.geth_socket)?
-                            .to_str()
-                            .unwrap()
-                            .into(),
+                        expand_path(&self.config.geth_socket)?.to_str().unwrap().into(),
                         passphrase.clone(),
                     );
 
@@ -556,10 +533,8 @@ impl Cashierd {
                             &NetworkName::Ethereum,
                         )?;
 
-                        main_keypair = Keypair {
-                            private_key: main_private_key,
-                            public_key: main_public_key,
-                        };
+                        main_keypair =
+                            Keypair { private_key: main_private_key, public_key: main_public_key };
                     } else {
                         let last_keypair = &main_keypairs[main_keypairs.len() - 1];
 
@@ -571,9 +546,7 @@ impl Cashierd {
 
                     eth_client.set_main_keypair(&main_keypair);
 
-                    bridge2
-                        .add_clients(NetworkName::Ethereum, Arc::new(eth_client))
-                        .await?;
+                    bridge2.add_clients(NetworkName::Ethereum, Arc::new(eth_client)).await?;
                 }
 
                 #[cfg(feature = "btc")]
@@ -612,9 +585,7 @@ impl Cashierd {
 
                     let btc_client = BtcClient::new(main_keypair, &network.blockchain).await?;
 
-                    bridge2
-                        .add_clients(NetworkName::Bitcoin, btc_client)
-                        .await?;
+                    bridge2.add_clients(NetworkName::Bitcoin, btc_client).await?;
                 }
                 _ => {}
             }
@@ -676,10 +647,7 @@ impl Cashierd {
                 Ok(())
             });
 
-        Ok((
-            listen_for_receiving_coins_task,
-            listen_for_notification_from_bridge_task,
-        ))
+        Ok((listen_for_receiving_coins_task, listen_for_notification_from_bridge_task))
     }
 }
 
@@ -720,10 +688,7 @@ async fn start(
 
     let client = Client::new(
         rocks.clone(),
-        (
-            config.gateway_protocol_url.parse()?,
-            config.gateway_publisher_url.parse()?,
-        ),
+        (config.gateway_protocol_url.parse()?, config.gateway_publisher_url.parse()?),
         client_wallet.clone(),
         mint_params,
         spend_params,
@@ -750,7 +715,7 @@ async fn start(
 
     if get_address_flag {
         println!("Public Key: {}", cashier_public_str);
-        return Ok(());
+        return Ok(())
     };
 
     let cfg = RpcServerConfig {
@@ -785,11 +750,7 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
+    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
 
     simple_logger::init_with_level(loglevel)?;
 
@@ -819,7 +780,7 @@ async fn main() -> Result<()> {
 
         println!("Wallet got updated successfully.");
 
-        return Ok(());
+        return Ok(())
     }
 
     let ex = Arc::new(Executor::new());
@@ -833,9 +794,7 @@ async fn main() -> Result<()> {
     debug!(target: "CASHIER DAEMON", "Run {} executor threads", nthreads);
 
     let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| {
-            smol::future::block_on(ex.run(shutdown.recv()))
-        })
+        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {

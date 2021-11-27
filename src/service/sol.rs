@@ -1,5 +1,4 @@
-use std::str::FromStr;
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use async_executor::Executor;
 use async_native_tls::TlsConnector;
@@ -23,10 +22,13 @@ use spl_associated_token_account::{create_associated_token_account, get_associat
 use tungstenite::Message;
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream};
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::util::{generate_id, parse::truncate, NetworkName};
-use crate::{types::*, Error, Result};
+use crate::{
+    rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
+    serial::{deserialize, serialize, Decodable, Encodable},
+    types::*,
+    util::{generate_id, parse::truncate, NetworkName},
+    Error, Result,
+};
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
 
@@ -40,10 +42,8 @@ pub struct SolClient {
     main_keypair: Keypair,
     // Subscriptions vector of pubkey
     subscriptions: Arc<Mutex<Vec<Pubkey>>>,
-    notify_channel: (
-        async_channel::Sender<TokenNotification>,
-        async_channel::Receiver<TokenNotification>,
-    ),
+    notify_channel:
+        (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
     rpc_server: &'static str,
     wss_server: &'static str,
 }
@@ -55,18 +55,9 @@ impl SolClient {
         info!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
         let (rpc_server, wss_server) = match network {
-            "mainnet" => (
-                "https://api.mainnet-beta.solana.com",
-                "wss://api.devnet.solana.com",
-            ),
-            "devnet" => (
-                "https://api.devnet.solana.com",
-                "wss://api.devnet.solana.com",
-            ),
-            "testnet" => (
-                "https://api.testnet.solana.com",
-                "wss://api.testnet.solana.com",
-            ),
+            "mainnet" => ("https://api.mainnet-beta.solana.com", "wss://api.devnet.solana.com"),
+            "devnet" => ("https://api.devnet.solana.com", "wss://api.devnet.solana.com"),
+            "testnet" => ("https://api.testnet.solana.com", "wss://api.testnet.solana.com"),
             "localhost" => ("http://localhost:8899", "ws://localhost:8900"),
             _ => return Err(Error::NotSupportedNetwork),
         };
@@ -81,9 +72,8 @@ impl SolClient {
     }
 
     fn check_main_account_balance(&self, rpc: &RpcClient) -> SolResult<bool> {
-        let main_sol_balance = rpc
-            .get_balance(&self.main_keypair.pubkey())
-            .map_err(SolFailed::from)?;
+        let main_sol_balance =
+            rpc.get_balance(&self.main_keypair.pubkey()).map_err(SolFailed::from)?;
 
         let fees = rpc.get_fees()?;
         let lamports_per_signature = fees.fee_calculator.lamports_per_signature;
@@ -118,7 +108,7 @@ impl SolClient {
 
         // Check if we're already subscribed
         if self.subscriptions.lock().await.contains(&pubkey) {
-            return Ok(());
+            return Ok(())
         }
 
         let rpc = RpcClient::new(self.rpc_server.to_string());
@@ -134,7 +124,7 @@ impl SolClient {
                     let (exists, decimals) = account_is_initialized_mint(&rpc, &mint);
                     if !exists {
                         debug!("Could not figure out the number of decimals in SPL token");
-                        return Err(SolFailed::MintIsNotValid(mint.to_string()));
+                        return Err(SolFailed::MintIsNotValid(mint.to_string()))
                     }
                     (0, decimals)
                 }
@@ -148,10 +138,8 @@ impl SolClient {
         let (mut write, mut read) = stream.split();
 
         // Subscription request build
-        let sub_params = SubscribeParams {
-            encoding: json!("jsonParsed"),
-            commitment: json!("finalized"),
-        };
+        let sub_params =
+            SubscribeParams { encoding: json!("jsonParsed"), commitment: json!("finalized") };
 
         let subscription = jsonrpc::request(
             json!("accountSubscribe"),
@@ -159,9 +147,7 @@ impl SolClient {
         );
 
         debug!(target: "SOLANA RPC", "--> {}", serde_json::to_string(&subscription)?);
-        write
-            .send(Message::text(serde_json::to_string(&subscription)?))
-            .await?;
+        write.send(Message::text(serde_json::to_string(&subscription)?)).await?;
 
         // Subscription ID used for unsubscribing later.
         let mut sub_id: i64 = 0;
@@ -175,25 +161,19 @@ impl SolClient {
         let mut sub_iter = 0;
 
         loop {
-            let message = read
-                .next()
-                .await
-                .ok_or_else(|| Error::TungsteniteError)?;
+            let message = read.next().await.ok_or_else(|| Error::TungsteniteError)?;
             let message = message?;
 
             if let Message::Pong(_) = message.clone() {
                 if sub_iter > 60 * 10 {
                     // 10 minutes
                     self.unsubscribe(&mut write, &pubkey, &sub_id).await?;
-                    return Err(SolFailed::RpcError(format!(
-                        "Deposit for {:?} expired",
-                        pubkey
-                    )));
+                    return Err(SolFailed::RpcError(format!("Deposit for {:?} expired", pubkey)))
                 }
                 sub_iter += iter_interval;
                 async_std::task::sleep(Duration::from_secs(iter_interval)).await;
                 write.send(Message::Ping(ping_payload.clone())).await?;
-                continue;
+                continue
             };
 
             match serde_json::from_slice(&message.into_data())? {
@@ -210,7 +190,7 @@ impl SolClient {
                     debug!(target: "SOLANA RPC", "<-- {}", serde_json::to_string(&e)?);
 
                     self.unsubscribe(&mut write, &pubkey, &sub_id).await?;
-                    return Err(SolFailed::RpcError(e.error.message.to_string()));
+                    return Err(SolFailed::RpcError(e.error.message.to_string()))
                 }
                 JsonResult::Notif(n) => {
                     // Account updated
@@ -226,7 +206,7 @@ impl SolClient {
                     } else {
                         cur_balance = params["lamports"].as_u64().unwrap();
                     }
-                    break;
+                    break
                 }
             }
         }
@@ -237,9 +217,7 @@ impl SolClient {
         self2.unsubscribe(&mut write, &pubkey, &sub_id).await?;
 
         if cur_balance < prev_balance {
-            return Err(SolFailed::Notification(
-                "New balance is less than previous balance".into(),
-            ));
+            return Err(SolFailed::Notification("New balance is less than previous balance".into()))
         }
 
         let amnt = cur_balance - prev_balance;
@@ -298,9 +276,7 @@ impl SolClient {
 
         let unsubscription = jsonrpc::request(json!("accountUnsubscribe"), json!([sub_id]));
 
-        write
-            .send(Message::text(serde_json::to_string(&unsubscription)?))
-            .await?;
+        write.send(Message::text(serde_json::to_string(&unsubscription)?)).await?;
 
         Ok(())
     }
@@ -403,7 +379,7 @@ impl SolClient {
             let rpc = RpcClient::new(self.rpc_server.to_string());
 
             if !account_is_initialized_mint(&rpc, &pubkey).0 {
-                return Err(SolFailed::MintIsNotValid(mint_addr));
+                return Err(SolFailed::MintIsNotValid(mint_addr))
             }
 
             Ok(Some(pubkey))
@@ -432,24 +408,19 @@ impl NetworkClient for SolClient {
 
         if !self.check_main_account_balance(&rpc)? {
             warn!(target: "SOL BRIDGE", "Main account has no enough funds");
-            return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
+            return Err(Error::from(SolFailed::MainAccountNotEnoughValue))
         }
 
         executor
             .spawn(async move {
-                let result = self
-                    .handle_subscribe_request(keypair, drk_pub_key, mint)
-                    .await;
+                let result = self.handle_subscribe_request(keypair, drk_pub_key, mint).await;
                 if let Err(e) = result {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
             .detach();
 
-        Ok(TokenSubscribtion {
-            private_key,
-            public_key,
-        })
+        Ok(TokenSubscribtion { private_key, public_key })
     }
 
     // in solana case private key it's the same as keypair
@@ -470,14 +441,12 @@ impl NetworkClient for SolClient {
         let rpc = RpcClient::new(self.rpc_server.to_string());
 
         if !self.check_main_account_balance(&rpc)? {
-            return Err(Error::from(SolFailed::MainAccountNotEnoughValue));
+            return Err(Error::from(SolFailed::MainAccountNotEnoughValue))
         }
 
         executor
             .spawn(async move {
-                let result = self
-                    .handle_subscribe_request(keypair, drk_pub_key, mint)
-                    .await;
+                let result = self.handle_subscribe_request(keypair, drk_pub_key, mint).await;
                 if let Err(e) = result {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
@@ -525,9 +494,7 @@ impl NetworkClient for SolClient {
             Ok(v) => tx.sign(&[&self.main_keypair], v.0),
         }
 
-        let _signature = rpc
-            .send_and_confirm_transaction(&tx)
-            .map_err(SolFailed::from)?;
+        let _signature = rpc.send_and_confirm_transaction(&tx).map_err(SolFailed::from)?;
 
         Ok(())
     }
@@ -585,9 +552,7 @@ impl Decodable for Keypair {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = Keypair::from_bytes(key.as_slice()).map_err(|_| {
-            crate::Error::from(SolFailed::DecodeAndEncodeError(
-                "load keypair from slice".into(),
-            ))
+            crate::Error::from(SolFailed::DecodeAndEncodeError("load keypair from slice".into()))
         })?;
         Ok(key)
     }
@@ -605,9 +570,7 @@ impl Decodable for Pubkey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
         let key = Pubkey::try_from(key.as_str()).map_err(|_| {
-            crate::Error::from(SolFailed::DecodeAndEncodeError(
-                "load public key from slice".into(),
-            ))
+            crate::Error::from(SolFailed::DecodeAndEncodeError("load public key from slice".into()))
         })?;
         Ok(key)
     }

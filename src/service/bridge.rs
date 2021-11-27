@@ -3,13 +3,10 @@ use std::collections::HashMap;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use futures::stream::FuturesUnordered;
-use futures::stream::StreamExt;
+use futures::stream::{FuturesUnordered, StreamExt};
 use log::*;
 
-use crate::util::NetworkName;
-use crate::wallet::cashierdb::TokenKey;
-use crate::{types::*, Error, Result};
+use crate::{types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error, Result};
 
 pub struct BridgeRequests {
     pub network: NetworkName,
@@ -68,10 +65,7 @@ pub struct Bridge {
 
 impl Bridge {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            clients: Mutex::new(HashMap::new()),
-            notifiers: FuturesUnordered::new(),
-        })
+        Arc::new(Self { clients: Mutex::new(HashMap::new()), notifiers: FuturesUnordered::new() })
     }
 
     pub async fn add_clients(
@@ -149,7 +143,7 @@ impl Bridge {
                 payload: BridgeResponsePayload::Empty,
             };
             rep.send(res).await?;
-            return Ok(());
+            return Ok(())
         }
 
         let mut mint_address: Option<String> = mint.clone();

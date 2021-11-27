@@ -1,5 +1,4 @@
-use std::iter::FromIterator;
-use std::str::FromStr;
+use std::{iter::FromIterator, str::FromStr};
 
 use num_bigint::BigUint;
 use sha2::{Digest, Sha256};
@@ -34,9 +33,9 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
                 let token_id = deserialize::<DrkTokenId>(&hash);
                 if token_id.is_err() {
                     counter += 1;
-                    continue;
+                    continue
                 }
-                return Ok(token_id.unwrap());
+                return Ok(token_id.unwrap())
             }
         }
     };
@@ -77,8 +76,7 @@ pub fn assign_id(
             // (== 42) can represent a erc20 token mint address
             if token.len() == 42 {
                 Ok(token.to_string())
-            }
-            else if token == "eth" {
+            } else if token == "eth" {
                 Ok(ETH_NATIVE_TOKEN_ID.to_string())
             } else {
                 let tok_lower = token.to_lowercase();
@@ -131,7 +129,7 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     // Only digits should remain
     for i in &s {
         if !is_digit(*i) {
-            return Err(Error::ParseFailed("Found non-digits"));
+            return Err(Error::ParseFailed("Found non-digits"))
         }
     }
 
@@ -148,14 +146,14 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
         for i in &s[end..s.len()] {
             if !char_eq(*i, '0') {
                 round = true;
-                break;
+                break
             }
         }
         s.truncate(end);
     }
 
     if strict && round {
-        return Err(Error::ParseFailed("Would end up rounding while strict"));
+        return Err(Error::ParseFailed("Would end up rounding while strict"))
     }
 
     // Convert to an integer
@@ -163,24 +161,20 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
 
     // Round and return
     /*
-       if round && number == u64::MAX {
-       return Err(Error::ParseFailed("u64 overflow"));
-       }
-       */
+    if round && number == u64::MAX {
+    return Err(Error::ParseFailed("u64 overflow"));
+    }
+    */
 
     Ok(number + round as u64)
 }
 
 pub fn encode_base10(amount: BigUint, decimal_places: usize) -> String {
-    let mut s: Vec<char> = format!("{:0width$}", amount, width = 1 + decimal_places)
-        .chars()
-        .collect();
+    let mut s: Vec<char> =
+        format!("{:0width$}", amount, width = 1 + decimal_places).chars().collect();
     s.insert(s.len() - decimal_places, '.');
 
-    String::from_iter(&s)
-        .trim_end_matches('0')
-        .trim_end_matches('.')
-        .to_string()
+    String::from_iter(&s).trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> {
@@ -188,7 +182,7 @@ pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> 
 
     if token_decimals > decimals {
         if amount.len() <= (token_decimals - decimals) as usize {
-            return Ok(0);
+            return Ok(0)
         }
         amount.truncate(amount.len() - (token_decimals - decimals) as usize);
     }
@@ -209,47 +203,20 @@ mod tests {
 
     #[test]
     fn test_decode_base10() {
-        assert_eq!(
-            124.to_biguint().unwrap(),
-            decode_base10("12.33", 1, false).unwrap()
-        );
-        assert_eq!(
-            1233000.to_biguint().unwrap(),
-            decode_base10("12.33", 5, false).unwrap()
-        );
-        assert_eq!(
-            1200000.to_biguint().unwrap(),
-            decode_base10("12.", 5, false).unwrap()
-        );
-        assert_eq!(
-            1200000.to_biguint().unwrap(),
-            decode_base10("12", 5, false).unwrap()
-        );
+        assert_eq!(124.to_biguint().unwrap(), decode_base10("12.33", 1, false).unwrap());
+        assert_eq!(1233000.to_biguint().unwrap(), decode_base10("12.33", 5, false).unwrap());
+        assert_eq!(1200000.to_biguint().unwrap(), decode_base10("12.", 5, false).unwrap());
+        assert_eq!(1200000.to_biguint().unwrap(), decode_base10("12", 5, false).unwrap());
         assert!(decode_base10("12.33", 1, true).is_err());
     }
 
     #[test]
     fn test_encode_base10() {
-        assert_eq!(
-            "23.4321111",
-            &encode_base10(234321111_u64.to_biguint().unwrap(), 7)
-        );
-        assert_eq!(
-            "23432111.1",
-            &encode_base10(234321111_u64.to_biguint().unwrap(), 1)
-        );
-        assert_eq!(
-            "234321.1",
-            &encode_base10(2343211_u64.to_biguint().unwrap(), 1)
-        );
-        assert_eq!(
-            "2343211",
-            &encode_base10(2343211_u64.to_biguint().unwrap(), 0)
-        );
-        assert_eq!(
-            "0.00002343",
-            &encode_base10(2343_u64.to_biguint().unwrap(), 8)
-        );
+        assert_eq!("23.4321111", &encode_base10(234321111_u64.to_biguint().unwrap(), 7));
+        assert_eq!("23432111.1", &encode_base10(234321111_u64.to_biguint().unwrap(), 1));
+        assert_eq!("234321.1", &encode_base10(2343211_u64.to_biguint().unwrap(), 1));
+        assert_eq!("2343211", &encode_base10(2343211_u64.to_biguint().unwrap(), 0));
+        assert_eq!("0.00002343", &encode_base10(2343_u64.to_biguint().unwrap(), 8));
     }
 
     #[test]

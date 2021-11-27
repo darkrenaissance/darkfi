@@ -2,11 +2,15 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::Result;
-use crate::net::message_subscriber::MessageSubscription;
-use crate::net::messages;
-use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
-use crate::net::{ChannelPtr, HostsPtr};
+use crate::{
+    error::Result,
+    net::{
+        message_subscriber::MessageSubscription,
+        messages,
+        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
+        ChannelPtr, HostsPtr,
+    },
+};
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -50,14 +54,8 @@ impl ProtocolAddress {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_addrs(), executor.clone())
-            .await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_get_addrs(), executor)
-            .await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_get_addrs(), executor).await;
 
         // Send get_address message.
         let get_addrs = messages::GetAddrsMessage {};

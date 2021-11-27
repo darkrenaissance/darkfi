@@ -1,15 +1,19 @@
 use async_executor::Executor;
 use futures::FutureExt;
 use log::*;
-use std::net::SocketAddr;
-use std::sync::{Arc, Weak};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Weak},
+};
 
 use crate::error::{Error, Result};
 //use crate::net::error::{Error, Result};
-use crate::net::protocols::{ProtocolPing, ProtocolSeed};
-use crate::net::sessions::Session;
-use crate::net::utility::sleep;
-use crate::net::{ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr};
+use crate::net::{
+    protocols::{ProtocolPing, ProtocolSeed},
+    sessions::Session,
+    utility::sleep,
+    ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
+};
 
 /// Defines seed connections session.
 pub struct SeedSession {
@@ -30,7 +34,7 @@ impl SeedSession {
 
         if settings.seeds.is_empty() {
             warn!("Skipping seed sync process since no seeds are configured.");
-            return Ok(());
+            return Ok(())
         }
 
         // if cached addresses then quit
@@ -64,7 +68,7 @@ impl SeedSession {
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
             error!("Hosts pool still empty after seeding");
-            return Err(Error::OperationFailed);
+            return Err(Error::OperationFailed)
         }
 
         debug!(target: "net", "SeedSession::start() [END]");
@@ -93,21 +97,15 @@ impl SeedSession {
 
                 info!("Connected seed #{} [{}]", seed_index, seed);
 
-                self.clone()
-                    .register_channel(channel.clone(), executor.clone())
-                    .await?;
+                self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-                self.attach_protocols(channel, hosts, settings, executor)
-                    .await?;
+                self.attach_protocols(channel, hosts, settings, executor).await?;
 
                 debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
             }
             Err(err) => {
-                info!(
-                    "Failure contacting seed #{} [{}]: {}",
-                    seed_index, seed, err
-                );
+                info!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
                 Err(err)
             }
         }

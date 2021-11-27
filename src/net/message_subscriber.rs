@@ -2,15 +2,13 @@ use async_std::sync::Mutex;
 use async_trait::async_trait;
 use log::*;
 use rand::Rng;
-use std::any::Any;
-use std::collections::HashMap;
-use std::io;
-use std::io::Cursor;
-use std::sync::Arc;
+use std::{any::Any, collections::HashMap, io, io::Cursor, sync::Arc};
 
-use crate::error::{Error, Result};
-use crate::net::messages::Message;
-use crate::serial::{Decodable, Encodable};
+use crate::{
+    error::{Error, Result},
+    net::messages::Message,
+    serial::{Decodable, Encodable},
+};
 
 /// 64bit identifier for message subscription.
 pub type MessageSubscriptionId = u64;
@@ -60,9 +58,7 @@ struct MessageDispatcher<M: Message> {
 impl<M: Message> MessageDispatcher<M> {
     /// Create a new message dispatcher.
     fn new() -> Self {
-        MessageDispatcher {
-            subs: Mutex::new(HashMap::new()),
-        }
+        MessageDispatcher { subs: Mutex::new(HashMap::new()) }
     }
 
     /// Create a random ID.
@@ -78,11 +74,7 @@ impl<M: Message> MessageDispatcher<M> {
         let sub_id = Self::random_id();
         self.subs.lock().await.insert(sub_id, sender);
 
-        MessageSubscription {
-            id: sub_id,
-            recv_queue: recvr,
-            parent: self,
-        }
+        MessageSubscription { id: sub_id, recv_queue: recvr, parent: self }
     }
 
     /// Unsubcribe from a channel. Removes the associated ID from the subscriber
@@ -173,17 +165,12 @@ pub struct MessageSubsystem {
 impl MessageSubsystem {
     /// Create a new message subsystem.
     pub fn new() -> Self {
-        MessageSubsystem {
-            dispatchers: Mutex::new(HashMap::new()),
-        }
+        MessageSubsystem { dispatchers: Mutex::new(HashMap::new()) }
     }
 
     /// Add a new message dispatcher.
     pub async fn add_dispatch<M: Message>(&self) {
-        self.dispatchers
-            .lock()
-            .await
-            .insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
+        self.dispatchers.lock().await.insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
     }
 
     /// Add a dispatcher to the list of subscribers.
@@ -202,7 +189,7 @@ impl MessageSubsystem {
             None => {
                 // normall return failure here
                 // for now panic
-                return Err(Error::OperationFailed);
+                return Err(Error::OperationFailed)
             }
         };
 
@@ -268,9 +255,7 @@ async fn _do_message_subscriber_test() {
 
     impl Decodable for MyVersionMessage {
         fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-            Ok(Self {
-                x: Decodable::decode(&mut d)?,
-            })
+            Ok(Self { x: Decodable::decode(&mut d)? })
         }
     }
     println!("hello");

@@ -1,6 +1,6 @@
+use crate::types::*;
 use group::GroupEncoding;
 use sha2::Digest;
-use crate::types::*;
 
 #[derive(Clone, Debug)]
 pub struct Address {

@@ -1,8 +1,9 @@
-use std::io;
-use std::time::Instant;
+use std::{io, time::Instant};
 
-use halo2_gadgets::primitives;
-use halo2_gadgets::primitives::poseidon::{ConstantLength, P128Pow5T3};
+use halo2_gadgets::{
+    primitives,
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
+};
 use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
@@ -55,11 +56,7 @@ impl MintRevealedValues {
 
         //let coin = hash.to_bytes();
 
-        MintRevealedValues {
-            value_commit,
-            token_commit,
-            coin,
-        }
+        MintRevealedValues { value_commit, token_commit, coin }
     }
 
     fn make_outputs(&self) -> [DrkCircuitField; 5] {

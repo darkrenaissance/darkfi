@@ -82,7 +82,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
 
         if !state.is_valid_cashier_public_key(&input.signature_public) {
             log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
-            return Err(VerifyFailed::InvalidCashierKey(i));
+            return Err(VerifyFailed::InvalidCashierKey(i))
         }
     }
 
@@ -94,7 +94,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         // Merkle is used to know whether this is a coin that existed
         // in a previous state.
         if !state.is_valid_merkle(merkle) {
-            return Err(VerifyFailed::InvalidMerkle(i));
+            return Err(VerifyFailed::InvalidMerkle(i))
         }
 
         // The nullifiers should not already exist
@@ -102,7 +102,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         let nullifier = &input.revealed.nullifier;
 
         if state.nullifier_exists(nullifier) {
-            return Err(VerifyFailed::DuplicateNullifier(i));
+            return Err(VerifyFailed::DuplicateNullifier(i))
         }
     }
 
@@ -124,9 +124,5 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         enc_notes.push(output.enc_note);
     }
 
-    Ok(StateUpdate {
-        nullifiers,
-        coins,
-        enc_notes,
-    })
+    Ok(StateUpdate { nullifiers, coins, enc_notes })
 }

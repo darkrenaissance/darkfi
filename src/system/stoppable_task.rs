@@ -1,6 +1,5 @@
 use async_executor::Executor;
-use futures::Future;
-use futures::FutureExt;
+use futures::{Future, FutureExt};
 use std::sync::Arc;
 
 pub type StoppableTaskPtr = Arc<StoppableTask>;
@@ -13,10 +12,7 @@ pub struct StoppableTask {
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
         let (stop_send, stop_recv) = async_channel::unbounded();
-        Arc::new(Self {
-            stop_send,
-            stop_recv,
-        })
+        Arc::new(Self { stop_send, stop_recv })
     }
 
     pub async fn stop(&self) {

@@ -6,8 +6,7 @@ use std::{
     str,
 };
 
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{Error, Result};
 

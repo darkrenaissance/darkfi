@@ -90,9 +90,8 @@ macro_rules! define_chunk_slice_to_int {
         #[inline]
         pub fn $name(inp: &[u8], outp: &mut [$type]) {
             assert_eq!(inp.len(), outp.len() * ::std::mem::size_of::<$type>());
-            for (outp_val, data_bytes) in outp
-                .iter_mut()
-                .zip(inp.chunks(::std::mem::size_of::<$type>()))
+            for (outp_val, data_bytes) in
+                outp.iter_mut().zip(inp.chunks(::std::mem::size_of::<$type>()))
             {
                 *outp_val = $converter(data_bytes);
             }

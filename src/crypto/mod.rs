@@ -13,7 +13,9 @@ pub mod schnorr;
 pub mod spend_proof;
 pub mod util;
 
-pub(crate) use {mint_proof::MintRevealedValues, proof::Proof, spend_proof::SpendRevealedValues};
+pub(crate) use mint_proof::MintRevealedValues;
+pub(crate) use proof::Proof;
+pub(crate) use spend_proof::SpendRevealedValues;
 
 use crate::types::DrkSecretKey;
 

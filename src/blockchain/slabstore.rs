@@ -2,10 +2,14 @@ use std::sync::Arc;
 
 use log::debug;
 
-use super::rocks::{columns, IteratorMode, RocksColumn};
-use super::slab::Slab;
-use crate::serial::{deserialize, serialize};
-use crate::Result;
+use super::{
+    rocks::{columns, IteratorMode, RocksColumn},
+    slab::Slab,
+};
+use crate::{
+    serial::{deserialize, serialize},
+    Result,
+};
 
 pub struct SlabStore {
     rocks: RocksColumn<columns::Slabs>,

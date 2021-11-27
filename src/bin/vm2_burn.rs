@@ -24,8 +24,10 @@ use halo2_gadgets::{
     },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
     },
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -61,11 +63,7 @@ fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::
 
     let mut node = leaf;
     for (l, (sibling, pos)) in path.iter().zip(pos_bool.iter()).enumerate() {
-        let (left, right) = if *pos {
-            (*sibling, node)
-        } else {
-            (node, *sibling)
-        };
+        let (left, right) = if *pos { (*sibling, node) } else { (node, *sibling) };
 
         let l_star = i2lebsp::<10>(l as u64);
         let left: Vec<_> = left.to_le_bits().iter().by_val().take(255).collect();
@@ -165,14 +163,8 @@ fn main() -> std::result::Result<(), failure::Error> {
     //
 
     let mut const_fixed_points = HashMap::new();
-    const_fixed_points.insert(
-        "VALUE_COMMIT_VALUE".to_string(),
-        OrchardFixedBases::ValueCommitV,
-    );
-    const_fixed_points.insert(
-        "VALUE_COMMIT_RANDOM".to_string(),
-        OrchardFixedBases::ValueCommitR,
-    );
+    const_fixed_points.insert("VALUE_COMMIT_VALUE".to_string(), OrchardFixedBases::ValueCommitV);
+    const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
     const_fixed_points.insert("SPEND_AUTH_G".to_string(), OrchardFixedBases::SpendAuthG);
 
     let mut circuit = vm2::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);

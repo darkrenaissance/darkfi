@@ -2931,10 +2931,12 @@ pub fn generator() -> pallas::Affine {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{
-        test_lagrange_coeffs, test_zs_and_us, NUM_WINDOWS, VALUE_COMMITMENT_PERSONALIZATION,
+    use super::{
+        super::{
+            test_lagrange_coeffs, test_zs_and_us, NUM_WINDOWS, VALUE_COMMITMENT_PERSONALIZATION,
+        },
+        *,
     };
-    use super::*;
     use group::Curve;
     use pasta_curves::{
         arithmetic::{CurveAffine, CurveExt, FieldExt},

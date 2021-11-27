@@ -4,18 +4,20 @@ use ff::{Field, PrimeField};
 use rand::rngs::OsRng;
 use std::path::Path;
 
-use drk::crypto::{
-    coin::Coin,
-    load_params,
-    merkle::{CommitmentTree, IncrementalWitness},
-    merkle_node::MerkleNode,
-    note::{EncryptedNote, Note},
-    nullifier::Nullifier,
-    save_params, setup_mint_prover, setup_spend_prover,
+use drk::{
+    crypto::{
+        coin::Coin,
+        load_params,
+        merkle::{CommitmentTree, IncrementalWitness},
+        merkle_node::MerkleNode,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
+        save_params, setup_mint_prover, setup_spend_prover,
+    },
+    serial::{Decodable, Encodable},
+    state::{ProgramState, StateUpdate},
+    tx,
 };
-use drk::serial::{Decodable, Encodable};
-use drk::state::{ProgramState, StateUpdate};
-use drk::tx;
 
 struct MemoryState {
     // The entire merkle tree state
@@ -104,7 +106,7 @@ impl MemoryState {
             // ... attempt to decrypt the note ...
             if let Ok(note) = ciphertext.decrypt(secret) {
                 // ... and return the decrypted note for this coin.
-                return Some((note, *secret));
+                return Some((note, *secret))
             }
         }
         // We weren't able to decrypt the note with any of our keys.
@@ -162,11 +164,7 @@ async fn main() {
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public,
-        }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public }],
     };
 
     // We will 'compile' the tx, and then serialize it to this Vec<u8>
@@ -280,11 +278,7 @@ async fn main() {
         }],
         // We can add more outputs to this list.
         // The only constraint is that sum(value in) == sum(value out)
-        outputs: vec![tx::TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public: public2,
-        }],
+        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public: public2 }],
     };
     // Build the tx
     let mut tx_data = vec![];
@@ -317,7 +311,7 @@ pub fn state_transition<S: ProgramState>(
 
         if !state.is_valid_cashier_public_key(&input.signature_public) {
             log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
-            return Err(VerifyFailed::InvalidCashierKey(i));
+            return Err(VerifyFailed::InvalidCashierKey(i))
         }
     }
 
@@ -330,7 +324,7 @@ pub fn state_transition<S: ProgramState>(
         // Merkle is used to know whether this is a coin that existed
         // in a previous state.
         if !state.is_valid_merkle(merkle) {
-            return Err(VerifyFailed::InvalidMerkle(i));
+            return Err(VerifyFailed::InvalidMerkle(i))
         }
 
         // The nullifiers should not already exist
@@ -338,7 +332,7 @@ pub fn state_transition<S: ProgramState>(
         let nullifier = &input.revealed.nullifier;
 
         if state.nullifier_exists(nullifier) {
-            return Err(VerifyFailed::DuplicateNullifier(i));
+            return Err(VerifyFailed::DuplicateNullifier(i))
         }
     }
 
@@ -360,9 +354,5 @@ pub fn state_transition<S: ProgramState>(
         enc_notes.push(output.enc_note);
     }
 
-    Ok(StateUpdate {
-        nullifiers,
-        coins,
-        enc_notes,
-    })
+    Ok(StateUpdate { nullifiers, coins, enc_notes })
 }

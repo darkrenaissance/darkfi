@@ -82,10 +82,7 @@ impl Encodable for PartialTransactionInput {
 
 impl Decodable for PartialTransactionInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            spend_proof: Decodable::decode(&mut d)?,
-            revealed: Decodable::decode(d)?,
-        })
+        Ok(Self { spend_proof: Decodable::decode(&mut d)?, revealed: Decodable::decode(d)? })
     }
 }
 

@@ -4,9 +4,7 @@ use log::*;
 use smol::Task;
 use std::sync::Arc;
 
-use crate::error::Result;
-use crate::net::ChannelPtr;
-use crate::system::ExecutorPtr;
+use crate::{error::Result, net::ChannelPtr, system::ExecutorPtr};
 
 /// Pointer to protocol jobs manager.
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
@@ -23,11 +21,7 @@ pub struct ProtocolJobsManager {
 impl ProtocolJobsManager {
     /// Create a new protocol jobs manager.
     pub fn new(name: &'static str, channel: ChannelPtr) -> Arc<Self> {
-        Arc::new(Self {
-            name,
-            channel,
-            tasks: Mutex::new(Vec::new()),
-        })
+        Arc::new(Self { name, channel, tasks: Mutex::new(Vec::new()) })
     }
 
     /// Runs the task on an executor. Prepares to stop all tasks when the

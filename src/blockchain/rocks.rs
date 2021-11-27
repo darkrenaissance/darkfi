@@ -1,11 +1,12 @@
-use std::marker::PhantomData;
-use std::path::Path;
+use std::{marker::PhantomData, path::Path};
 
 use async_std::sync::Arc;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 
-use crate::serial::{deserialize, serialize, Decodable, Encodable};
-use crate::{Error, Result};
+use crate::{
+    serial::{deserialize, serialize, Decodable, Encodable},
+    Error, Result,
+};
 
 pub enum IteratorMode {
     Start,
@@ -71,9 +72,7 @@ impl Rocks {
     where
         C: Column,
     {
-        self.db
-            .cf_handle(C::NAME)
-            .ok_or_else(|| Error::RocksdbError("unknown column".to_string()))
+        self.db.cf_handle(C::NAME).ok_or_else(|| Error::RocksdbError("unknown column".to_string()))
     }
 
     pub fn put_cf(&self, cf: &ColumnFamily, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
@@ -112,10 +111,7 @@ pub struct RocksColumn<T: Column> {
 
 impl<T: Column> RocksColumn<T> {
     pub fn new(rocks: Arc<Rocks>) -> RocksColumn<T> {
-        RocksColumn {
-            rocks,
-            column: PhantomData,
-        }
+        RocksColumn { rocks, column: PhantomData }
     }
     fn cf_handle(&self) -> Result<&ColumnFamily> {
         self.rocks.cf_handle::<T>()

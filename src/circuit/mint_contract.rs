@@ -126,11 +126,7 @@ impl Circuit<pallas::Base> for MintContract {
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let lookup = (
-            table_idx,
-            meta.lookup_table_column(),
-            meta.lookup_table_column(),
-        );
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -254,17 +250,11 @@ impl Circuit<pallas::Base> for MintContract {
             self.pub_y,
         )?;
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         let serial = self.load_private(
             layouter.namespace(|| "load serial"),
@@ -312,10 +302,8 @@ impl Circuit<pallas::Base> for MintContract {
                     ConstantLength::<2>,
                 )?;
 
-                let poseidon_output = poseidon_hasher.hash(
-                    layouter.namespace(|| "Poseidon hash (a, b)"),
-                    poseidon_message,
-                )?;
+                let poseidon_output = poseidon_hasher
+                    .hash(layouter.namespace(|| "Poseidon hash (a, b)"), poseidon_message)?;
 
                 let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
                 poseidon_output

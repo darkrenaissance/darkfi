@@ -1,6 +1,8 @@
-use std::net::{TcpStream, ToSocketAddrs};
-use std::os::unix::net::UnixStream;
-use std::str;
+use std::{
+    net::{TcpStream, ToSocketAddrs},
+    os::unix::net::UnixStream,
+    str,
+};
 
 use async_std::io::{ReadExt, WriteExt};
 use rand::Rng;
@@ -106,45 +108,24 @@ pub struct JsonNotification {
 pub fn request(m: Value, p: Value) -> JsonRequest {
     let mut rng = rand::thread_rng();
 
-    JsonRequest {
-        jsonrpc: json!("2.0"),
-        method: m,
-        params: p,
-        id: json!(rng.gen::<u32>()),
-    }
+    JsonRequest { jsonrpc: json!("2.0"), method: m, params: p, id: json!(rng.gen::<u32>()) }
 }
 
 pub fn response(r: Value, i: Value) -> JsonResponse {
-    JsonResponse {
-        jsonrpc: json!("2.0"),
-        result: r,
-        id: i,
-    }
+    JsonResponse { jsonrpc: json!("2.0"), result: r, id: i }
 }
 
 pub fn error(c: ErrorCode, m: Option<String>, i: Value) -> JsonError {
     let ev = JsonErrorVal {
         code: json!(c.code()),
-        message: if m.is_none() {
-            json!(c.description())
-        } else {
-            json!(Some(m))
-        },
+        message: if m.is_none() { json!(c.description()) } else { json!(Some(m)) },
     };
 
-    JsonError {
-        jsonrpc: json!("2.0"),
-        error: ev,
-        id: i,
-    }
+    JsonError { jsonrpc: json!("2.0"), error: ev, id: i }
 }
 
 pub fn notification(m: Value, p: Value) -> JsonNotification {
-    JsonNotification {
-        jsonrpc: json!("2.0"),
-        method: m,
-        params: p,
-    }
+    JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
 pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Error> {
@@ -154,9 +135,7 @@ pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Erro
     match parsed_url.scheme() {
         "tcp" => use_tls = false,
         "tls" => use_tls = true,
-        _ => {
-            return Err(Error::UrlParseError)
-        }
+        _ => return Err(Error::UrlParseError),
     }
 
     // TODO: Error handling

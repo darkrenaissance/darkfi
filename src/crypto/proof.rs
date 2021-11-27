@@ -9,9 +9,11 @@ use halo2::{
 };
 use pasta_curves::vesta;
 
-use crate::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt};
-use crate::types::*;
-use crate::Result;
+use crate::{
+    serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
+    types::*,
+    Result,
+};
 
 #[derive(Debug)]
 pub struct VerifyingKey {
@@ -59,13 +61,7 @@ impl Proof {
     ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
 
-        plonk::create_proof(
-            &pk.params,
-            &pk.pk,
-            circuits,
-            &[&[pubinputs]],
-            &mut transcript,
-        )?;
+        plonk::create_proof(&pk.params, &pk.pk, circuits, &[&[pubinputs]], &mut transcript)?;
 
         Ok(Proof(transcript.finalize()))
     }

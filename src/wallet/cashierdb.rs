@@ -5,9 +5,7 @@ use log::{debug, error, info};
 use rusqlite::{named_params, params, Connection};
 
 use super::{Keypair, WalletApi};
-use crate::client::ClientFailed;
-use crate::util::NetworkName;
-use crate::{types::*, Error, Result};
+use crate::{client::ClientFailed, types::*, util::NetworkName, Error, Result};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -43,17 +41,14 @@ impl CashierDb {
         debug!(target: "CASHIERDB", "new() Constructor called");
         if password.trim().is_empty() {
             error!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword));
+            return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
         let conn = Connection::open(path)?;
         conn.pragma_update(None, "key", &password)?;
         info!(target: "CASHIERDB", "Opened connection at path: {:?}", path);
 
-        Ok(Arc::new(Self {
-            conn,
-            initialized: Mutex::new(false),
-        }))
+        Ok(Arc::new(Self { conn, initialized: Mutex::new(false) }))
     }
 
     pub async fn init_db(&self) -> Result<()> {
@@ -61,7 +56,7 @@ impl CashierDb {
             let contents = include_str!("../../sql/cashier.sql");
             self.conn.execute_batch(contents)?;
             *self.initialized.lock().await = true;
-            return Ok(());
+            return Ok(())
         }
 
         error!(target: "WALLETDB", "Wallet already initialized.");
@@ -106,10 +101,7 @@ impl CashierDb {
 
         for k in keys_iter {
             let k = k?;
-            keys.push(TokenKey {
-                private_key: k.0,
-                public_key: k.1,
-            });
+            keys.push(TokenKey { private_key: k.0, public_key: k.1 });
         }
 
         Ok(keys)
@@ -231,10 +223,10 @@ impl CashierDb {
             WHERE d_key_public = :d_key_public AND confirm = :confirm;",
         )?;
 
-        let addr_iter = stmt.query_map(
-            &[(":d_key_public", &d_key_public), (":confirm", &confirm)],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-        )?;
+        let addr_iter = stmt
+            .query_map(&[(":d_key_public", &d_key_public), (":confirm", &confirm)], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?;
 
         let mut token_addresses = vec![];
 
@@ -274,11 +266,7 @@ impl CashierDb {
         )?;
 
         let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
-            &[
-                (":d_key_public", &d_key_public),
-                (":network", &network),
-                (":confirm", &confirm),
-            ],
+            &[(":d_key_public", &d_key_public), (":network", &network), (":confirm", &confirm)],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
@@ -286,10 +274,7 @@ impl CashierDb {
 
         for k in keys_iter {
             let k = k?;
-            keys.push(TokenKey {
-                private_key: k.0,
-                public_key: k.1,
-            });
+            keys.push(TokenKey { private_key: k.0, public_key: k.1 });
         }
 
         Ok(keys)
@@ -310,15 +295,9 @@ impl CashierDb {
             AND confirm = :confirm ;",
         )?;
 
-        let keys_iter =
-            stmt.query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                ))
+        let keys_iter = stmt
+            .query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
             })?;
 
         let mut keys = vec![];
@@ -332,10 +311,7 @@ impl CashierDb {
             let mint_address: String = self.get_value_deserialized(key.4)?;
             keys.push(DepositToken {
                 drk_public_key,
-                token_key: TokenKey {
-                    private_key,
-                    public_key,
-                },
+                token_key: TokenKey { private_key, public_key },
                 token_id,
                 mint_address,
             });
@@ -428,9 +404,7 @@ impl CashierDb {
 mod tests {
 
     use super::*;
-    use crate::crypto::types::derive_publickey;
-    use crate::serial::serialize;
-    use crate::util::join_config_path;
+    use crate::{crypto::types::derive_publickey, serial::serialize, util::join_config_path};
 
     use ff::Field;
     use rand::rngs::OsRng;
@@ -444,7 +418,7 @@ mod tests {
             conn.execute_batch(contents)?;
         } else {
             debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword));
+            return Err(Error::from(ClientFailed::EmptyPassword))
         }
         Ok(())
     }
@@ -463,10 +437,7 @@ mod tests {
         let network = NetworkName::Bitcoin;
 
         wallet.put_main_keys(
-            &TokenKey {
-                private_key: token_addr_private.clone(),
-                public_key: token_addr.clone(),
-            },
+            &TokenKey { private_key: token_addr_private.clone(), public_key: token_addr.clone() },
             &network,
         )?;
 

@@ -1,15 +1,21 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use log::*;
-use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 
-use crate::error::{Error, Result};
-use crate::net::messages::Message;
-use crate::net::sessions::{InboundSession, OutboundSession, SeedSession};
-use crate::net::{Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr};
-use crate::system::{Subscriber, SubscriberPtr, Subscription};
+use crate::{
+    error::{Error, Result},
+    net::{
+        messages::Message,
+        sessions::{InboundSession, OutboundSession, SeedSession},
+        Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
+    },
+    system::{Subscriber, SubscriberPtr, Subscription},
+};
 
 /// List of channels that are awaiting connection.
 pub type PendingChannels = Mutex<HashSet<SocketAddr>>;
@@ -90,10 +96,7 @@ impl P2p {
 
     /// Add channel address to the list of connected channels.
     pub async fn store(&self, channel: ChannelPtr) {
-        self.channels
-            .lock()
-            .await
-            .insert(channel.address(), channel.clone());
+        self.channels.lock().await.insert(channel.address(), channel.clone());
         self.channel_subscriber.notify(Ok(channel)).await;
     }
 

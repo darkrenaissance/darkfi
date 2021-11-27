@@ -4,8 +4,7 @@ use std::net::{SocketAddr, TcpStream};
 
 use crate::error::{Error, Result};
 //use crate::net::error::{Error, Result};
-use crate::net::utility::sleep;
-use crate::net::{Channel, ChannelPtr, SettingsPtr};
+use crate::net::{utility::sleep, Channel, ChannelPtr, SettingsPtr};
 
 /// Create outbound socket connections.
 pub struct Connector {

@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::convert::TryInto;
+use std::{collections::HashMap, convert::TryInto};
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -18,8 +17,10 @@ use halo2_gadgets::{
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
     },
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -168,29 +169,29 @@ impl<'a> ZkCircuit<'a> {
     pub fn witness_base(&mut self, name: &str, value: pallas::Base) -> Result<()> {
         for (variable, type_id) in self.contract.witness.iter() {
             if name != variable {
-                continue;
+                continue
             }
             if *type_id != ZkType::Base {
-                return Err(Error::InvalidParamType);
+                return Err(Error::InvalidParamType)
             }
             *self.witness_base.get_mut(name).unwrap() = Some(value);
-            return Ok(());
+            return Ok(())
         }
-        return Err(Error::InvalidParamName);
+        return Err(Error::InvalidParamName)
     }
 
     pub fn witness_scalar(&mut self, name: &str, value: pallas::Scalar) -> Result<()> {
         for (variable, type_id) in self.contract.witness.iter() {
             if name != variable {
-                continue;
+                continue
             }
             if *type_id != ZkType::Scalar {
-                return Err(Error::InvalidParamType);
+                return Err(Error::InvalidParamType)
             }
             *self.witness_scalar.get_mut(name).unwrap() = Some(value);
-            return Ok(());
+            return Ok(())
         }
-        return Err(Error::InvalidParamName);
+        return Err(Error::InvalidParamName)
     }
 
     pub fn witness_merkle_path(
@@ -201,15 +202,15 @@ impl<'a> ZkCircuit<'a> {
     ) -> Result<()> {
         for (variable, type_id) in self.contract.witness.iter() {
             if name != variable {
-                continue;
+                continue
             }
             if *type_id != ZkType::MerklePath {
-                return Err(Error::InvalidParamType);
+                return Err(Error::InvalidParamType)
             }
             *self.witness_merkle_path.get_mut(name).unwrap() = (Some(leaf_pos), Some(path));
-            return Ok(());
+            return Ok(())
         }
-        return Err(Error::InvalidParamName);
+        return Err(Error::InvalidParamName)
     }
 }
 
@@ -226,16 +227,8 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
             const_fixed_points: self.const_fixed_points.clone(),
             constants: self.constants,
             contract: &self.contract,
-            witness_base: self
-                .witness_base
-                .keys()
-                .map(|key| (key.clone(), None))
-                .collect(),
-            witness_scalar: self
-                .witness_scalar
-                .keys()
-                .map(|key| (key.clone(), None))
-                .collect(),
+            witness_base: self.witness_base.keys().map(|key| (key.clone(), None)).collect(),
+            witness_scalar: self.witness_scalar.keys().map(|key| (key.clone(), None)).collect(),
             witness_merkle_path: self
                 .witness_scalar
                 .keys()
@@ -261,11 +254,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         let q_add = meta.selector();
 
         let table_idx = meta.lookup_table_column();
-        let lookup = (
-            table_idx,
-            meta.lookup_table_column(),
-            meta.lookup_table_column(),
-        );
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         let primary = meta.instance_column();
 
@@ -424,10 +413,8 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     unimplemented!();
                 }
                 ZkType::MerklePath => {
-                    let value = self
-                        .witness_merkle_path
-                        .get(variable)
-                        .expect("witness merkle path set");
+                    let value =
+                        self.witness_merkle_path.get(variable).expect("witness merkle path set");
                     stack_merkle_path.push(value.clone());
                 }
             }

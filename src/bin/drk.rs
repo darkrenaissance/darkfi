@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 #[macro_use]
 extern crate prettytable;
@@ -8,9 +7,12 @@ use log::debug;
 use prettytable::{format, Table};
 use serde_json::{json, Value};
 
-use drk::cli::{Config, DrkConfig};
-use drk::util::{join_config_path, path::expand_path, NetworkName};
-use drk::{rpc::jsonrpc, rpc::jsonrpc::JsonResult, Error, Result};
+use drk::{
+    cli::{Config, DrkConfig},
+    rpc::{jsonrpc, jsonrpc::JsonResult},
+    util::{join_config_path, path::expand_path, NetworkName},
+    Error, Result,
+};
 
 struct Drk {
     url: String,
@@ -26,25 +28,17 @@ impl Drk {
     async fn check_network(&self, network: &NetworkName) -> Result<()> {
         let features = self.features().await?;
 
-        if features.as_object().is_none()
-            && features.as_object().unwrap()["networks"]
-                .as_array()
-                .is_none()
-            && features.as_object().unwrap()["networks"]
-                .as_array()
-                .unwrap()
-                .is_empty()
+        if features.as_object().is_none() &&
+            features.as_object().unwrap()["networks"].as_array().is_none() &&
+            features.as_object().unwrap()["networks"].as_array().unwrap().is_empty()
         {
-            return Err(Error::NotSupportedNetwork);
+            return Err(Error::NotSupportedNetwork)
         }
 
-        for nets in features.as_object().unwrap()["networks"]
-            .as_array()
-            .unwrap()
-        {
+        for nets in features.as_object().unwrap()["networks"].as_array().unwrap() {
             for (net, _) in nets.as_object().unwrap() {
                 if network == &NetworkName::from_str(net.as_str())? {
-                    return Ok(());
+                    return Ok(())
                 }
             }
         }
@@ -134,8 +128,8 @@ impl Drk {
     }
 
     // --> {"jsonrpc": "2.0", "method": "withdraw",
-    //      "params": ["solana", "usdc", "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", 13.37"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
+    //      "params": ["solana", "usdc", "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", 13.37"],
+    // "id": 42} <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
     async fn withdraw(
         &self,
         network: &str,
@@ -168,7 +162,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
     if options.is_present("hello") {
         let reply = client.say_hello().await?;
         println!("Server replied: {}", &reply.to_string());
-        return Ok(());
+        return Ok(())
     }
 
     if let Some(matches) = options.subcommand_matches("wallet") {
@@ -179,7 +173,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             } else {
                 println!("Server replied: {}", &reply.to_string());
             }
-            return Ok(());
+            return Ok(())
         }
 
         if matches.is_present("keygen") {
@@ -189,13 +183,13 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             } else {
                 println!("Server replied: {}", &reply.to_string());
             }
-            return Ok(());
+            return Ok(())
         }
 
         if matches.is_present("address") {
             let reply = client.get_key().await?;
             println!("Wallet address: {}", &reply.to_string());
-            return Ok(());
+            return Ok(())
         }
 
         if matches.is_present("balances") {
@@ -207,11 +201,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
                 table.set_titles(row!["token", "amount", "network"]);
 
                 for (tkn, data) in reply.as_object().unwrap() {
-                    table.add_row(row![
-                        tkn,
-                        data[0].as_str().unwrap(),
-                        data[1].as_str().unwrap()
-                    ]);
+                    table.add_row(row![tkn, data[0].as_str().unwrap(), data[1].as_str().unwrap()]);
                 }
 
                 table.printstd();
@@ -219,7 +209,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
                 println!("Balances: {}", "0".to_string());
             }
 
-            return Ok(());
+            return Ok(())
         }
     }
 
@@ -227,38 +217,31 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let token = matches.value_of("TOKEN").unwrap();
         let network = matches.value_of("network").unwrap().to_lowercase();
 
-        client
-            .check_network(&NetworkName::from_str(&network)?)
-            .await?;
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
         let reply = client.get_token_id(&network, token).await?;
 
         println!("Token ID: {}", &reply.to_string());
-        return Ok(());
+        return Ok(())
     }
 
     if options.is_present("features") {
         let reply = client.features().await?;
         println!("Features: {}", &reply.to_string());
-        return Ok(());
+        return Ok(())
     }
 
     if let Some(matches) = options.subcommand_matches("deposit") {
         let network = matches.value_of("network").unwrap().to_lowercase();
         let token_sym = matches.value_of("TOKENSYM").unwrap();
 
-        client
-            .check_network(&NetworkName::from_str(&network)?)
-            .await?;
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
         let reply = client.deposit(&network, token_sym).await?;
 
-        println!(
-            "Deposit your coins to the following address: {}",
-            &reply.to_string()
-        );
+        println!("Deposit your coins to the following address: {}", &reply.to_string());
 
-        return Ok(());
+        return Ok(())
     }
 
     if let Some(matches) = options.subcommand_matches("withdraw") {
@@ -267,17 +250,13 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap();
 
-        client
-            .check_network(&NetworkName::from_str(&network)?)
-            .await?;
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
-        let reply = client
-            .withdraw(&network, token_sym, address, amount)
-            .await?;
+        let reply = client.withdraw(&network, token_sym, address, amount).await?;
 
         println!("{}", &reply.to_string());
 
-        return Ok(());
+        return Ok(())
     }
 
     if let Some(matches) = options.subcommand_matches("transfer") {
@@ -286,13 +265,9 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
         let address = matches.value_of("ADDRESS").unwrap();
         let amount = matches.value_of("AMOUNT").unwrap();
 
-        client
-            .check_network(&NetworkName::from_str(&network)?)
-            .await?;
+        client.check_network(&NetworkName::from_str(&network)?).await?;
 
-        client
-            .transfer(&network, token_sym, address, amount)
-            .await?;
+        client.transfer(&network, token_sym, address, amount).await?;
 
         println!(
             "{} {} Transfered successfully",
@@ -300,7 +275,7 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
             token_sym.to_string().to_uppercase(),
         );
 
-        return Ok(());
+        return Ok(())
     }
 
     println!("Please run 'drk help' to see usage.");
@@ -364,11 +339,7 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("drk.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
+    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
 
     simple_logger::init_with_level(loglevel)?;
     let config = Config::<DrkConfig>::load(config_path)?;

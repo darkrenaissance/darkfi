@@ -22,8 +22,10 @@ use halo2_gadgets::{
     },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
     },
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -101,23 +103,12 @@ fn main() -> std::result::Result<(), failure::Error> {
     let asset_commit = pedersen_commitment_u64(asset, asset_blind);
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
 
-    let mut public_inputs = vec![
-        coin,
-        *value_coords.x(),
-        *value_coords.y(),
-        *asset_coords.x(),
-        *asset_coords.y(),
-    ];
+    let mut public_inputs =
+        vec![coin, *value_coords.x(), *value_coords.y(), *asset_coords.x(), *asset_coords.y()];
 
     let mut const_fixed_points = HashMap::new();
-    const_fixed_points.insert(
-        "VALUE_COMMIT_VALUE".to_string(),
-        OrchardFixedBases::ValueCommitV,
-    );
-    const_fixed_points.insert(
-        "VALUE_COMMIT_RANDOM".to_string(),
-        OrchardFixedBases::ValueCommitR,
-    );
+    const_fixed_points.insert("VALUE_COMMIT_VALUE".to_string(), OrchardFixedBases::ValueCommitV);
+    const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
 
     let mut circuit = vm2::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
     let empty_circuit = circuit.clone();

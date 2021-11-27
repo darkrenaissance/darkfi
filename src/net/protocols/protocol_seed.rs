@@ -2,9 +2,10 @@ use log::*;
 use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::Result;
-use crate::net::messages;
-use crate::net::{ChannelPtr, HostsPtr, SettingsPtr};
+use crate::{
+    error::Result,
+    net::{messages, ChannelPtr, HostsPtr, SettingsPtr},
+};
 
 /// Implements the seed protocol.
 pub struct ProtocolSeed {
@@ -16,11 +17,7 @@ pub struct ProtocolSeed {
 impl ProtocolSeed {
     /// Create a new seed protocol.
     pub fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
-        Arc::new(Self {
-            channel,
-            hosts,
-            settings,
-        })
+        Arc::new(Self { channel, hosts, settings })
     }
 
     /// Starts the seed protocol. Creates a subscription to the address message,

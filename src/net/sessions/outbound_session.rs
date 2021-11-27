@@ -1,14 +1,20 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use log::*;
-use std::net::SocketAddr;
-use std::sync::{Arc, Weak};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Weak},
+};
 
-use crate::error::{Error, Result};
-use crate::net::protocols::{ProtocolAddress, ProtocolPing};
-use crate::net::sessions::Session;
-use crate::net::{ChannelPtr, Connector, P2p};
-use crate::system::{StoppableTask, StoppableTaskPtr};
+use crate::{
+    error::{Error, Result},
+    net::{
+        protocols::{ProtocolAddress, ProtocolPing},
+        sessions::Session,
+        ChannelPtr, Connector, P2p,
+    },
+    system::{StoppableTask, StoppableTaskPtr},
+};
 
 /// Defines outbound connections session.
 pub struct OutboundSession {
@@ -19,10 +25,7 @@ pub struct OutboundSession {
 impl OutboundSession {
     /// Create a new outbound session.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
-        Arc::new(Self {
-            p2p,
-            connect_slots: Mutex::new(Vec::new()),
-        })
+        Arc::new(Self { p2p, connect_slots: Mutex::new(Vec::new()) })
     }
     /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -81,18 +84,14 @@ impl OutboundSession {
 
                     let stop_sub = channel.subscribe_stop().await;
 
-                    self.clone()
-                        .register_channel(channel.clone(), executor.clone())
-                        .await?;
+                    self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
                     // Channel is now connected but not yet setup
 
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
 
-                    self.clone()
-                        .attach_protocols(channel, executor.clone())
-                        .await?;
+                    self.clone().attach_protocols(channel, executor.clone()).await?;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -118,28 +117,25 @@ impl OutboundSession {
             let addr = hosts.load_single().await;
 
             if addr.is_none() {
-                error!(
-                    "Hosts address pool is empty. Closing connect slot #{}",
-                    slot_number
-                );
-                return Err(Error::ServiceStopped);
+                error!("Hosts address pool is empty. Closing connect slot #{}", slot_number);
+                return Err(Error::ServiceStopped)
             }
             let addr = addr.unwrap();
 
             if Self::is_self_inbound(&addr, &inbound_addr) {
-                continue;
+                continue
             }
 
             if p2p.exists(&addr).await {
-                continue;
+                continue
             }
 
             // Obtain a lock on this address to prevent duplicate connections
             if !p2p.add_pending(addr).await {
-                continue;
+                continue
             }
 
-            return Ok(addr);
+            return Ok(addr)
         }
     }
 

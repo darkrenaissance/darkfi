@@ -1,5 +1,4 @@
-use std::iter;
-use std::time::Instant;
+use std::{iter, time::Instant};
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -25,8 +24,10 @@ use halo2_gadgets::{
     },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
     },
     utilities::{
         copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -174,11 +175,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let lookup = (
-            table_idx,
-            meta.lookup_table_column(),
-            meta.lookup_table_column(),
-        );
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -324,9 +321,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
                             || value.ok_or(Error::SynthesisError),
                         )?;
                         region.constrain_equal(var, message[i].cell())?;
-                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                            var, value,
-                        )))
+                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(var, value)))
                     };
                     Ok([message_word(0)?, message_word(1)?])
                 },
@@ -355,17 +350,11 @@ impl Circuit<pallas::Base> for BurnCircuit {
         //         scalar,
         //     )?
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         let coin_blind = self.load_private(
             layouter.namespace(|| "load coin_blind"),
@@ -415,10 +404,8 @@ impl Circuit<pallas::Base> for BurnCircuit {
                     ConstantLength::<2>,
                 )?;
 
-                let poseidon_output = poseidon_hasher.hash(
-                    layouter.namespace(|| "Poseidon hash (a, b)"),
-                    poseidon_message,
-                )?;
+                let poseidon_output = poseidon_hasher
+                    .hash(layouter.namespace(|| "Poseidon hash (a, b)"), poseidon_message)?;
 
                 let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
                 poseidon_output
@@ -489,11 +476,8 @@ impl Circuit<pallas::Base> for BurnCircuit {
             Some(pallas::Base::one()),
         )?;
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
         // v * G_1
         let (commitment, _) = {
@@ -527,11 +511,8 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // Asset commitment
         // ================
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         // a * G_1
         let (commitment, _) = {
@@ -594,11 +575,7 @@ fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::
 
     let mut node = leaf;
     for (l, (sibling, pos)) in path.iter().zip(pos_bool.iter()).enumerate() {
-        let (left, right) = if *pos {
-            (*sibling, node)
-        } else {
-            (node, *sibling)
-        };
+        let (left, right) = if *pos { (*sibling, node) } else { (node, *sibling) };
 
         let l_star = i2lebsp::<10>(l as u64);
         let left: Vec<_> = left.to_le_bits().iter().by_val().take(255).collect();

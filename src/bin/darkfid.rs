@@ -1,7 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -20,8 +18,10 @@ use drk::{
         load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
     },
     rpc::{
-        jsonrpc::{error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request},
-        jsonrpc::{ErrorCode::*, JsonRequest, JsonResult},
+        jsonrpc::{
+            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
+            ErrorCode::*, JsonRequest, JsonResult,
+        },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
@@ -45,17 +45,17 @@ pub struct Cashier {
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         if self.update_balances().await.is_err() {
             return JsonResult::Err(jsonerr(
-                    InternalError,
-                    Some("Unable to update balances".into()),
-                    req.id,
-            ));
+                InternalError,
+                Some("Unable to update balances".into()),
+                req.id,
+            ))
         }
 
         match req.method.as_str() {
@@ -108,11 +108,7 @@ impl Darkfid {
 
     async fn start(&mut self, executor: Arc<Executor<'_>>) -> Result<()> {
         self.client.lock().await.start().await?;
-        self.client
-            .lock()
-            .await
-            .connect_to_subscriber(self.state.clone(), executor)
-            .await?;
+        self.client.lock().await.connect_to_subscriber(self.state.clone(), executor).await?;
 
         Ok(())
     }
@@ -121,17 +117,10 @@ impl Darkfid {
         let own_coins = self.client.lock().await.get_own_coins()?;
 
         for own_coin in own_coins.iter() {
-            let nullifier_exists = self
-                .state
-                .lock()
-                .await
-                .nullifier_exists(&own_coin.nullifier);
+            let nullifier_exists = self.state.lock().await.nullifier_exists(&own_coin.nullifier);
 
             if nullifier_exists {
-                self.client
-                    .lock()
-                    .await
-                    .confirm_spend_coin(&own_coin.coin)?;
+                self.client.lock().await.confirm_spend_coin(&own_coin.coin)?;
             }
         }
 
@@ -186,10 +175,7 @@ impl Darkfid {
                 } else {
                     // TODO: SQL needs to have the mint address for show, not the internal hash.
                     // TODO: SQL needs to have the network name
-                    symbols.insert(
-                        balance.token_id.to_string(),
-                        (amount, String::from("UNKNOWN")),
-                    );
+                    symbols.insert(balance.token_id.to_string(), (amount, String::from("UNKNOWN")));
                 }
             }
             Ok(symbols)
@@ -207,13 +193,13 @@ impl Darkfid {
         let args = params.as_array();
 
         if args.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let args = args.unwrap();
 
         if args.len() != 2 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: &str;
@@ -225,10 +211,10 @@ impl Darkfid {
                 symbol = sym;
             }
             (None, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None) => {
-                return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id))
             }
         }
 
@@ -281,9 +267,7 @@ impl Darkfid {
         // NOTE: this just selects the first cashier in the list
         match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
-            }
+            Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
         }
 
         match rep {
@@ -301,12 +285,12 @@ impl Darkfid {
         let args = params.as_array();
 
         if args.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let args = args.unwrap();
         if args.len() != 2 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: NetworkName;
@@ -315,23 +299,29 @@ impl Darkfid {
         match (args[0].as_str(), args[1].as_str()) {
             (Some(net), Some(tkn)) => {
                 if NetworkName::from_str(net).is_err() {
-                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
                 }
                 network = NetworkName::from_str(net).unwrap();
                 token = tkn;
             }
             (None, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
             }
         }
 
-        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist, &self.btc_tokenlist) {
+        let token_id = match assign_id(
+            &network,
+            token,
+            &self.sol_tokenlist,
+            &self.eth_tokenlist,
+            &self.btc_tokenlist,
+        ) {
             Ok(t) => t,
             Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id))
             }
         };
 
@@ -349,7 +339,7 @@ impl Darkfid {
             Ok(v) => rep = v,
             Err(e) => {
                 debug!(target: "DARKFID", "REQUEST IS ERR");
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
             }
         }
 
@@ -371,13 +361,13 @@ impl Darkfid {
         let args = params.as_array();
 
         if args.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let args = args.unwrap();
 
         if args.len() != 4 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: NetworkName;
@@ -385,15 +375,10 @@ impl Darkfid {
         let address: &str;
         let amount: &str;
 
-        match (
-            args[0].as_str(),
-            args[1].as_str(),
-            args[2].as_str(),
-            args[3].as_str(),
-        ) {
+        match (args[0].as_str(), args[1].as_str(), args[2].as_str(), args[3].as_str()) {
             (Some(net), Some(tkn), Some(addr), Some(val)) => {
                 if NetworkName::from_str(net).is_err() {
-                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
                 }
                 network = NetworkName::from_str(net).unwrap();
                 token = tkn;
@@ -401,42 +386,45 @@ impl Darkfid {
                 amount = val;
             }
             (None, _, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
             }
             (_, _, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
             }
             (_, _, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id))
             }
         }
 
         let amount_in_apo = match decode_base10(amount, 8, true) {
             Ok(a) => a,
             Err(e) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id))
             }
         };
 
-        let token_id = match assign_id(&network, token, &self.sol_tokenlist, &self.eth_tokenlist,&self.btc_tokenlist ) {
+        let token_id = match assign_id(
+            &network,
+            token,
+            &self.sol_tokenlist,
+            &self.eth_tokenlist,
+            &self.btc_tokenlist,
+        ) {
             Ok(t) => t,
             Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id))
             }
         };
 
-        let req = jsonreq(
-            json!("withdraw"),
-            json!([network, token_id, address, amount_in_apo]),
-        );
+        let req = jsonreq(json!("withdraw"), json!([network, token_id, address, amount_in_apo]));
         let mut rep: JsonResult;
         match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
             Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id));
+                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
             }
         }
 
@@ -445,7 +433,7 @@ impl Darkfid {
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {
             token_id = tk_id;
         } else {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
         }
 
         // send drk to cashier_public
@@ -477,11 +465,11 @@ impl Darkfid {
                 }
                 Ok(_) => {
                     rep = JsonResult::Resp(jsonresp(
-                            json!(format!(
-                                    "Sent request to withdraw {} amount of {}",
-                                    amount, token_id
-                            )),
-                            id.clone(),
+                        json!(format!(
+                            "Sent request to withdraw {} amount of {}",
+                            amount, token_id
+                        )),
+                        id.clone(),
                     ))
                 }
             }
@@ -499,11 +487,11 @@ impl Darkfid {
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
         if args.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
         let args = args.unwrap();
         if args.len() != 4 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
 
         let network: NetworkName;
@@ -511,15 +499,10 @@ impl Darkfid {
         let address: &str;
         let amount: &str;
 
-        match (
-            args[0].as_str(),
-            args[1].as_str(),
-            args[2].as_str(),
-            args[3].as_str(),
-        ) {
+        match (args[0].as_str(), args[1].as_str(), args[2].as_str(), args[3].as_str()) {
             (Some(net), Some(tkn), Some(addr), Some(val)) => {
                 if NetworkName::from_str(net).is_err() {
-                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                    return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
                 }
                 network = NetworkName::from_str(net).unwrap();
                 token = tkn;
@@ -527,16 +510,16 @@ impl Darkfid {
                 amount = val;
             }
             (None, _, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
             }
             (_, None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
             }
             (_, _, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
             }
             (_, _, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id));
+                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id))
             }
         }
 
@@ -546,7 +529,7 @@ impl Darkfid {
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {
             token_id = tk_id;
         } else {
-            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id));
+            return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
         }
 
         let result: Result<()> = async {
@@ -559,12 +542,7 @@ impl Darkfid {
             self.client
                 .lock()
                 .await
-                .transfer(
-                    *token_id,
-                    drk_address,
-                    amount.try_into()?,
-                    self.state.clone(),
-                )
+                .transfer(*token_id, drk_address, amount.try_into()?, self.state.clone())
                 .await?;
 
             Ok(())
@@ -583,10 +561,8 @@ async fn start(
     local_cashier: Option<&str>,
     config: &DarkfidConfig,
 ) -> Result<()> {
-    let wallet = WalletDb::new(
-        expand_path(&config.wallet_path)?.as_path(),
-        config.wallet_password.clone(),
-    )?;
+    let wallet =
+        WalletDb::new(expand_path(&config.wallet_path)?.as_path(), config.wallet_password.clone())?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -606,7 +582,7 @@ async fn start(
     } else {
         for cashier in config.clone().cashiers {
             if cashier.public_key.is_empty() {
-                return Err(Error::CashierKeysNotFound);
+                return Err(Error::CashierKeysNotFound)
             }
 
             let cashier_public: jubjub::SubgroupPoint =
@@ -643,15 +619,12 @@ async fn start(
 
     let client = Client::new(
         rocks.clone(),
-        (
-            Url::parse(&config.gateway_protocol_url)?,
-            Url::parse(&config.gateway_publisher_url)?,
-        ),
+        (Url::parse(&config.gateway_protocol_url)?, Url::parse(&config.gateway_publisher_url)?),
         wallet.clone(),
         mint_params,
         spend_params,
     )
-        .await?;
+    .await?;
 
     let client = Arc::new(Mutex::new(client));
 
@@ -688,7 +661,7 @@ async fn main() -> Result<()> {
         (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
         (@arg cashier: --cashier +takes_value "Local cashier public key")
     )
-        .get_matches();
+    .get_matches();
 
     let config_path = if args.is_present("CONFIG") {
         expand_path(args.value_of("CONFIG").unwrap())?
@@ -696,11 +669,7 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("darkfid.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
-    } else {
-        log::Level::Info
-    };
+    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
 
     simple_logger::init_with_level(loglevel)?;
 
@@ -723,7 +692,7 @@ async fn main() -> Result<()> {
 
         println!("Wallet got updated successfully.");
 
-        return Ok(());
+        return Ok(())
     }
 
     let mut local_cashier: Option<&str> = None;
@@ -741,17 +710,15 @@ async fn main() -> Result<()> {
     debug!(target: "DARKFI DAEMON", "Run {} executor threads", nthreads);
 
     let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| {
-            smol::future::block_on(ex.run(shutdown.recv()))
-        })
-    // Run the main future on the current thread.
-    .finish(|| {
-        smol::future::block_on(async move {
-            start(ex2, local_cashier, &config).await?;
-            drop(signal);
-            Ok::<(), drk::Error>(())
-        })
-    });
+        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2, local_cashier, &config).await?;
+                drop(signal);
+                Ok::<(), drk::Error>(())
+            })
+        });
 
     result
 }

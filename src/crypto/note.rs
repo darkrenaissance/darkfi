@@ -73,10 +73,7 @@ impl Note {
             ENC_CIPHERTEXT_SIZE
         );
 
-        Ok(EncryptedNote {
-            ciphertext,
-            ephem_public,
-        })
+        Ok(EncryptedNote { ciphertext, ephem_public })
     }
 }
 
@@ -99,10 +96,7 @@ impl Decodable for EncryptedNote {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let mut ciphertext = [0u8; ENC_CIPHERTEXT_SIZE];
         d.read_slice(&mut ciphertext[..])?;
-        Ok(Self {
-            ciphertext,
-            ephem_public: Decodable::decode(d)?,
-        })
+        Ok(Self { ciphertext, ephem_public: Decodable::decode(d)? })
     }
 }
 
@@ -114,13 +108,7 @@ impl EncryptedNote {
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
-                .open_to(
-                    &mut plaintext,
-                    &self.ciphertext,
-                    &[],
-                    key.as_ref(),
-                    &[0u8; 12]
-                )
+                .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
                 .map_err(|_| Error::NoteDecryptionFailed)?,
             NOTE_PLAINTEXT_SIZE
         );

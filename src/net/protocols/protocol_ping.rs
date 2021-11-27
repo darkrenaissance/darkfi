@@ -1,14 +1,17 @@
 use log::*;
 use rand::Rng;
 use smol::Executor;
-use std::sync::Arc;
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
-use crate::error::{Error, Result};
-use crate::net::messages;
-use crate::net::protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
-use crate::net::utility::sleep;
-use crate::net::{ChannelPtr, SettingsPtr};
+use crate::{
+    error::{Error, Result},
+    net::{
+        messages,
+        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
+        utility::sleep,
+        ChannelPtr, SettingsPtr,
+    },
+};
 
 /// Defines ping and pong messages.
 pub struct ProtocolPing {
@@ -33,14 +36,8 @@ impl ProtocolPing {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         debug!(target: "net", "ProtocolPing::start() [START]");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman
-            .clone()
-            .spawn(self.clone().run_ping_pong(), executor.clone())
-            .await;
-        self.jobsman
-            .clone()
-            .spawn(self.reply_to_ping(), executor)
-            .await;
+        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
         debug!(target: "net", "ProtocolPing::start() [END]");
     }
 
@@ -77,7 +74,7 @@ impl ProtocolPing {
             if pong_msg.nonce != nonce {
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
-                return Err(Error::ChannelStopped);
+                return Err(Error::ChannelStopped)
             }
             let duration = start.elapsed().as_millis();
             debug!(target: "net", "Received Pong message {}ms from [{:?}]", duration, self.channel.address());

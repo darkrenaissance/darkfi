@@ -91,12 +91,7 @@ impl ArithmeticChip {
         });
         */
 
-        ArithmeticChipConfig {
-            a_col,
-            b_col,
-            /*permute,*/ s_add,
-            s_mul, /*, s_pub*/
-        }
+        ArithmeticChipConfig { a_col, b_col, /* permute, */ s_add, s_mul /* , s_pub */ }
     }
 
     pub fn add(

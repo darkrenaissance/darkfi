@@ -1,18 +1,26 @@
 use async_std::sync::Mutex;
-use futures::io::{ReadHalf, WriteHalf};
-use futures::AsyncReadExt;
+use futures::{
+    io::{ReadHalf, WriteHalf},
+    AsyncReadExt,
+};
 use log::*;
 use smol::{Async, Executor};
 
 use std::net::{SocketAddr, TcpStream};
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
-use crate::error::{Error, Result};
-use crate::net::message_subscriber::{MessageSubscription, MessageSubsystem};
-use crate::net::messages;
-use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
+use crate::{
+    error::{Error, Result},
+    net::{
+        message_subscriber::{MessageSubscription, MessageSubsystem},
+        messages,
+    },
+    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+};
 
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
@@ -76,9 +84,7 @@ impl Channel {
         self.stopped.store(false, Ordering::Relaxed);
         self.stop_subscriber.notify(Error::ChannelStopped).await;
         self.receive_task.stop().await;
-        self.message_subsystem
-            .trigger_error(Error::ChannelStopped)
-            .await;
+        self.message_subsystem.trigger_error(Error::ChannelStopped).await;
         debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
     }
 
@@ -108,7 +114,7 @@ impl Channel {
             self.address()
         );
         if self.stopped.load(Ordering::Relaxed) {
-            return Err(Error::ChannelStopped);
+            return Err(Error::ChannelStopped)
         }
 
         // Catch failure and stop channel, return a net error
@@ -135,10 +141,7 @@ impl Channel {
     async fn send_message<M: messages::Message>(&self, message: M) -> Result<()> {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
-        let packet = messages::Packet {
-            command: String::from(M::name()),
-            payload,
-        };
+        let packet = messages::Packet { command: String::from(M::name()), payload };
 
         let stream = &mut *self.writer.lock().await;
         messages::send_packet(stream, packet).await
@@ -175,24 +178,12 @@ impl Channel {
 
     /// Perform network handshake for message subsystem dispatchers.
     async fn setup_dispatchers(message_subsystem: &MessageSubsystem) {
-        message_subsystem
-            .add_dispatch::<messages::VersionMessage>()
-            .await;
-        message_subsystem
-            .add_dispatch::<messages::VerackMessage>()
-            .await;
-        message_subsystem
-            .add_dispatch::<messages::PingMessage>()
-            .await;
-        message_subsystem
-            .add_dispatch::<messages::PongMessage>()
-            .await;
-        message_subsystem
-            .add_dispatch::<messages::GetAddrsMessage>()
-            .await;
-        message_subsystem
-            .add_dispatch::<messages::AddrsMessage>()
-            .await;
+        message_subsystem.add_dispatch::<messages::VersionMessage>().await;
+        message_subsystem.add_dispatch::<messages::VerackMessage>().await;
+        message_subsystem.add_dispatch::<messages::PingMessage>().await;
+        message_subsystem.add_dispatch::<messages::PongMessage>().await;
+        message_subsystem.add_dispatch::<messages::GetAddrsMessage>().await;
+        message_subsystem.add_dispatch::<messages::AddrsMessage>().await;
     }
 
     /// Convenience function that returns the Message Subsystem.
@@ -224,14 +215,12 @@ impl Channel {
                         self.address()
                     );
                     self.stop().await;
-                    return Err(Error::ChannelStopped);
+                    return Err(Error::ChannelStopped)
                 }
             };
 
             // Send result to our subscribers
-            self.message_subsystem
-                .notify(&packet.command, packet.payload)
-                .await;
+            self.message_subsystem.notify(&packet.command, packet.payload).await;
         }
     }
 

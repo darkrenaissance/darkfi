@@ -1,12 +1,16 @@
 use log::*;
 use smol::{Async, Executor};
-use std::net::{SocketAddr, TcpListener};
-use std::sync::Arc;
+use std::{
+    net::{SocketAddr, TcpListener},
+    sync::Arc,
+};
 
 use crate::error::{Error, Result};
 //use crate::net::error::{, Result};
-use crate::net::{Channel, ChannelPtr};
-use crate::system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription};
+use crate::{
+    net::{Channel, ChannelPtr},
+    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -20,10 +24,7 @@ pub struct Acceptor {
 impl Acceptor {
     /// Create new Acceptor object.
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            channel_subscriber: Subscriber::new(),
-            task: StoppableTask::new(),
-        })
+        Arc::new(Self { channel_subscriber: Subscriber::new(), task: StoppableTask::new() })
     }
     /// Start accepting inbound socket connections. Creates a listener to start
     /// listening on a local socket address. Then runs an accept loop in a new
@@ -58,14 +59,14 @@ impl Acceptor {
             Ok(listener) => listener,
             Err(err) => {
                 error!("Bind listener failed: {}", err);
-                return Err(Error::OperationFailed);
+                return Err(Error::OperationFailed)
             }
         };
         let local_addr = match listener.get_ref().local_addr() {
             Ok(addr) => addr,
             Err(err) => {
                 error!("Failed to get local address: {}", err);
-                return Err(Error::OperationFailed);
+                return Err(Error::OperationFailed)
             }
         };
         info!("Listening on {}", local_addr);
@@ -112,7 +113,7 @@ impl Acceptor {
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped);
+                return Err(Error::ServiceStopped)
             }
         };
         info!("Accepted client: {}", peer_addr);

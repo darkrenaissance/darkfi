@@ -60,18 +60,15 @@ impl Encodable for Signature {
 
 impl Decodable for Signature {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            commit: Decodable::decode(&mut d)?,
-            response: Decodable::decode(d)?,
-        })
+        Ok(Self { commit: Decodable::decode(&mut d)?, response: Decodable::decode(d)? })
     }
 }
 
 impl PublicKey {
     pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
-        OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge
-            == signature.commit
+        OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge ==
+            signature.commit
     }
 }
 

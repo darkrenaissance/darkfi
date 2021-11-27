@@ -1,7 +1,6 @@
 use async_std::sync::Mutex;
 use rand::Rng;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 
@@ -38,9 +37,7 @@ pub struct Subscriber<T> {
 
 impl<T: Clone> Subscriber<T> {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            subs: Mutex::new(HashMap::new()),
-        })
+        Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
 
     fn random_id() -> SubscriptionId {
@@ -55,11 +52,7 @@ impl<T: Clone> Subscriber<T> {
 
         self.subs.lock().await.insert(sub_id, sender);
 
-        Subscription {
-            id: sub_id,
-            recv_queue: recvr,
-            parent: self.clone(),
-        }
+        Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
 
     async fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {

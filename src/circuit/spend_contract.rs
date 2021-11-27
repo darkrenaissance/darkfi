@@ -19,8 +19,10 @@ use halo2_gadgets::{
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-        merkle::MerklePath,
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
     },
     utilities::{
         copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
@@ -148,11 +150,7 @@ impl Circuit<pasta::Fp> for SpendContract {
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let lookup = (
-            table_idx,
-            meta.lookup_table_column(),
-            meta.lookup_table_column(),
-        );
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -298,9 +296,7 @@ impl Circuit<pasta::Fp> for SpendContract {
                             || value.ok_or(Error::SynthesisError),
                         )?;
                         region.constrain_equal(var, message[i].cell())?;
-                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                            var, value,
-                        )))
+                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(var, value)))
                     };
                     Ok([message_word(0)?, message_word(1)?])
                 },
@@ -329,17 +325,11 @@ impl Circuit<pasta::Fp> for SpendContract {
         //         scalar,
         //     )?
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         let coin_blind = self.load_private(
             layouter.namespace(|| "load coin_blind"),
@@ -389,10 +379,8 @@ impl Circuit<pasta::Fp> for SpendContract {
                     ConstantLength::<2>,
                 )?;
 
-                let poseidon_output = poseidon_hasher.hash(
-                    layouter.namespace(|| "Poseidon hash (a, b)"),
-                    poseidon_message,
-                )?;
+                let poseidon_output = poseidon_hasher
+                    .hash(layouter.namespace(|| "Poseidon hash (a, b)"), poseidon_message)?;
 
                 let poseidon_output: CellValue<pasta::Fp> = poseidon_output.inner().into();
                 poseidon_output
@@ -458,11 +446,8 @@ impl Circuit<pasta::Fp> for SpendContract {
             Some(pasta::Fp::one()),
         )?;
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
         // v * G_1
         let (commitment, _) = {
@@ -496,11 +481,8 @@ impl Circuit<pasta::Fp> for SpendContract {
         // Asset commitment
         // ================
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         // a * G_1
         let (commitment, _) = {

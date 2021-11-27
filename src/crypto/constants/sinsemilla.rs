@@ -78,9 +78,7 @@ pub fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
 #[allow(dead_code)]
 fn lebs2ip_k(bits: &[bool]) -> u32 {
     assert!(bits.len() == K);
-    bits.iter()
-        .enumerate()
-        .fold(0u32, |acc, (i, b)| acc + if *b { 1 << i } else { 0 })
+    bits.iter().enumerate().fold(0u32, |acc, (i, b)| acc + if *b { 1 << i } else { 0 })
 }
 
 /// The sequence of K bits in little-endian order representing an integer
@@ -180,26 +178,17 @@ mod tests {
     fn i2lebsp_k_round_trip() {
         {
             let bitstring = (0..K).map(|_| rand::random()).collect::<Vec<_>>();
-            assert_eq!(
-                i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(),
-                bitstring
-            );
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
         }
 
         {
             let bitstring = [false; K];
-            assert_eq!(
-                i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(),
-                bitstring
-            );
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
         }
 
         {
             let bitstring = [true; K];
-            assert_eq!(
-                i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(),
-                bitstring
-            );
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
         }
     }
 
@@ -225,14 +214,8 @@ mod tests {
         let point = domain.Q();
         let coords = point.to_affine().coordinates().unwrap();
 
-        assert_eq!(
-            *coords.x(),
-            pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.0).unwrap()
-        );
-        assert_eq!(
-            *coords.y(),
-            pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.1).unwrap()
-        );
+        assert_eq!(*coords.x(), pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.0).unwrap());
+        assert_eq!(*coords.y(), pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.1).unwrap());
     }
 
     #[test]
@@ -241,14 +224,8 @@ mod tests {
         let point = domain.Q();
         let coords = point.to_affine().coordinates().unwrap();
 
-        assert_eq!(
-            *coords.x(),
-            pallas::Base::from_bytes(&Q_MERKLE_CRH.0).unwrap()
-        );
-        assert_eq!(
-            *coords.y(),
-            pallas::Base::from_bytes(&Q_MERKLE_CRH.1).unwrap()
-        );
+        assert_eq!(*coords.x(), pallas::Base::from_bytes(&Q_MERKLE_CRH.0).unwrap());
+        assert_eq!(*coords.y(), pallas::Base::from_bytes(&Q_MERKLE_CRH.1).unwrap());
     }
 
     #[test]

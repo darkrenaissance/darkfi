@@ -2930,10 +2930,10 @@ pub fn generator() -> pallas::Affine {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{
-        test_lagrange_coeffs, test_zs_and_us, COMMIT_IVK_PERSONALIZATION, NUM_WINDOWS,
+    use super::{
+        super::{test_lagrange_coeffs, test_zs_and_us, COMMIT_IVK_PERSONALIZATION, NUM_WINDOWS},
+        *,
     };
-    use super::*;
     use group::Curve;
     use halo2_gadgets::primitives::sinsemilla::CommitDomain;
     use pasta_curves::{

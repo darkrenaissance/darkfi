@@ -70,19 +70,14 @@ impl Transaction {
         assert_ne!(self.outputs.len(), 0);
         let token_commit_value = self.outputs[0].revealed.token_commit;
 
-        let mut failed = self
-            .inputs
-            .iter()
-            .any(|input| input.revealed.token_commit != token_commit_value);
-        failed = failed
-            || self
-                .outputs
-                .iter()
-                .any(|output| output.revealed.token_commit != token_commit_value);
-        failed = failed
-            || self.clear_inputs.iter().any(|input| {
-                pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind)
-                    != token_commit_value
+        let mut failed =
+            self.inputs.iter().any(|input| input.revealed.token_commit != token_commit_value);
+        failed = failed ||
+            self.outputs.iter().any(|output| output.revealed.token_commit != token_commit_value);
+        failed = failed ||
+            self.clear_inputs.iter().any(|input| {
+                pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind) !=
+                    token_commit_value
             });
         !failed
     }
@@ -100,41 +95,40 @@ impl Transaction {
 
         for (i, input) in self.inputs.iter().enumerate() {
             if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
-                return Err(state::VerifyFailed::SpendProof(i));
+                return Err(state::VerifyFailed::SpendProof(i))
             }
             valcom_total += &input.revealed.value_commit;
         }
 
         for (i, output) in self.outputs.iter().enumerate() {
             if verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed).is_err() {
-                return Err(state::VerifyFailed::MintProof(i));
+                return Err(state::VerifyFailed::MintProof(i))
             }
             valcom_total -= &output.revealed.value_commit;
         }
 
         if valcom_total != DrkValueCommit::identity() {
-            return Err(state::VerifyFailed::MissingFunds);
+            return Err(state::VerifyFailed::MissingFunds)
         }
 
         // Verify token commitments match
         if !self.verify_token_commitments() {
-            return Err(state::VerifyFailed::AssetMismatch);
+            return Err(state::VerifyFailed::AssetMismatch)
         }
 
         // Verify signatures
         let mut unsigned_tx_data = vec![];
-        self.encode_without_signature(&mut unsigned_tx_data)
-            .expect("TODO handle this");
+        self.encode_without_signature(&mut unsigned_tx_data).expect("TODO handle this");
         for (i, input) in self.clear_inputs.iter().enumerate() {
             let public = &input.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                return Err(state::VerifyFailed::ClearInputSignature(i));
+                return Err(state::VerifyFailed::ClearInputSignature(i))
             }
         }
         for (i, input) in self.inputs.iter().enumerate() {
             let public = &input.revealed.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                return Err(state::VerifyFailed::InputSignature(i));
+                return Err(state::VerifyFailed::InputSignature(i))
             }
         }
 
@@ -173,11 +167,7 @@ impl TransactionInput {
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {
-        Self {
-            spend_proof: partial.spend_proof,
-            revealed: partial.revealed,
-            signature,
-        }
+        Self { spend_proof: partial.spend_proof, revealed: partial.revealed, signature }
     }
 
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {

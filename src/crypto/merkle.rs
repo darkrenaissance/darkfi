@@ -25,13 +25,11 @@ lazy_static! {
     pub(crate) static ref EMPTY_ROOTS: Vec<MerkleHash> = {
         iter::empty()
             .chain(Some(MerkleHash::empty_leaf()))
-            .chain(
-                (0..MERKLE_DEPTH_ORCHARD).scan(MerkleHash::empty_leaf(), |state, l| {
-                    let l = l as u8;
-                    *state = MerkleHash::combine(l.into(), state, state);
-                    Some(*state)
-                }),
-            )
+            .chain((0..MERKLE_DEPTH_ORCHARD).scan(MerkleHash::empty_leaf(), |state, l| {
+                let l = l as u8;
+                *state = MerkleHash::combine(l.into(), state, state);
+                Some(*state)
+            }))
             .collect()
     };
 }
