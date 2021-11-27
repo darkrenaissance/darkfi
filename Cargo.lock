@@ -1302,8 +1302,10 @@ dependencies = [
  "blake2s_simd",
  "bs58 0.4.0",
  "bytes 1.1.0",
+ "clap",
  "crypto_api_chachapoly",
  "dirs",
+ "easy-parallel",
  "failure",
  "futures",
  "group",
@@ -1574,6 +1576,12 @@ dependencies = [
  "winapi 0.3.9",
  "wio",
 ]
+
+[[package]]
+name = "easy-parallel"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1dd4afd79212583ff429b913ad6605242ed7eec277e950b1438f300748f948f4"
 
 [[package]]
 name = "ed25519"
