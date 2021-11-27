@@ -67,7 +67,7 @@ impl DrkTokenList {
 
         let mut tokens: HashMap<String, DrkTokenId> = sol_symbols
             .iter()
-            .filter_map(|symbol| Self::generate_hash_pair(sol_list, symbol).ok())
+            .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
         .collect();
 
          tokens.insert(

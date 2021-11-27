@@ -27,31 +27,19 @@ use crate::{
 };
 */
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone)]
 pub enum ClientFailed {
-    #[error("here is no enough value {0}")]
     NotEnoughValue(u64),
-    #[error("Invalid Address  {0}")]
     InvalidAddress(String),
-    #[error("Invalid Amount {0}")]
     InvalidAmount(u64),
-    #[error("Unable to get deposit address")]
     UnableToGetDepositAddress,
-    #[error("Unable to get withdraw address")]
     UnableToGetWithdrawAddress,
-    #[error("Does not have cashier public key")]
     DoesNotHaveCashierPublicKey,
-    #[error("Does not have keypair")]
     DoesNotHaveKeypair,
-    #[error("Password is empty. Cannot create database")]
     EmptyPassword,
-    #[error("Wallet already initalized")]
     WalletInitialized,
-    #[error("Keypair already exists")]
     KeyExists,
-    #[error("{0}")]
     ClientError(String),
-    #[error("Verify error: {0}")]
     VerifyError(String),
 }
 
@@ -548,6 +536,43 @@ impl State {
     }
 }
 */
+
+impl std::error::Error for ClientFailed {}
+
+impl std::fmt::Display for ClientFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ClientFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            ClientFailed::InvalidAddress(i) => {
+                write!(f, "Invalid Address {}", i)
+            }
+            ClientFailed::InvalidAmount(i) => {
+                write!(f, "Invalid Amount {}", i)
+            }
+            ClientFailed::UnableToGetDepositAddress => f.write_str("Unable to get deposit address"),
+            ClientFailed::UnableToGetWithdrawAddress => {
+                f.write_str("Unable to get withdraw address")
+            }
+            ClientFailed::DoesNotHaveCashierPublicKey => {
+                f.write_str("Does not have cashier public key")
+            }
+            ClientFailed::DoesNotHaveKeypair => f.write_str("Does not have keypair"),
+            ClientFailed::EmptyPassword => f.write_str("Password is empty. Cannot create database"),
+            ClientFailed::WalletInitialized => f.write_str("Wallet already initalized"),
+            ClientFailed::KeyExists => f.write_str("Keypair already exists"),
+
+            ClientFailed::ClientError(i) => {
+                write!(f, "{}", i)
+            }
+
+            ClientFailed::VerifyError(i) => {
+                write!(f, "Verify error: {}", i)
+            }
+        }
+    }
+}
 
 impl From<super::error::Error> for ClientFailed {
     fn from(err: super::error::Error) -> ClientFailed {

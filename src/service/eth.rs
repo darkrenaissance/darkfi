@@ -201,7 +201,6 @@ impl EthClient {
             notify_channel,
         })
         }
-    }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
         debug!(target: "ETH BRIDGE", "Send eth to main wallet");
@@ -287,8 +286,7 @@ impl EthClient {
             .await?;
 
         debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
-        }
-
+        
         Ok(())
     }
 

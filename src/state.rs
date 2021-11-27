@@ -28,25 +28,16 @@ pub struct StateUpdate {
 
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone)]
 pub enum VerifyFailed {
-    #[error("Invalid cashier public key for clear input {0}")]
     InvalidCashierKey(usize),
-    #[error("Invalid merkle root for input {0}")]
     InvalidMerkle(usize),
-    #[error("Duplicate nullifier for input {0}")]
     DuplicateNullifier(usize),
-    #[error("Spend proof for input {0}")]
     SpendProof(usize),
-    #[error("Mint proof for input {0}")]
     MintProof(usize),
-    #[error("Invalid signature for clear input {0}")]
     ClearInputSignature(usize),
-    #[error("Invalid signature for input {0}")]
     InputSignature(usize),
-    #[error("Money in does not match money out (value commits)")]
     MissingFunds,
-    #[error("Assets don't match some inputs or outputs (token commits)")]
     AssetMismatch,
 }
 

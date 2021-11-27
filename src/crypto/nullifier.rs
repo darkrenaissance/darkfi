@@ -1,9 +1,3 @@
-Warning: can't set `wrap_comments = true`, unstable features are only available in nightly channel.
-Warning: can't set `comment_width = 100`, unstable features are only available in nightly channel.
-Warning: can't set `imports_granularity = Crate`, unstable features are only available in nightly channel.
-Warning: can't set `binop_separator = Back`, unstable features are only available in nightly channel.
-Warning: can't set `trailing_semicolon = false`, unstable features are only available in nightly channel.
-Warning: can't set `trailing_comma = Vertical`, unstable features are only available in nightly channel.
 use std::io;
 
 use pasta_curves::{arithmetic::FieldExt, pallas};
