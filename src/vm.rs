@@ -1,445 +1,567 @@
-use bellman::{gadgets::Assignment, groth16, Circuit, ConstraintSystem, SynthesisError};
-use bls12_381::Bls12;
-use bls12_381::Scalar;
-use ff::{Field, PrimeField};
-use rand::rngs::OsRng;
-use std::ops::{AddAssign, MulAssign, SubAssign};
-use std::time::Instant;
+use std::{collections::HashMap, convert::TryInto};
 
-use crate::error::Result;
+use halo2::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    plonk,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector},
+};
+use halo2_gadgets::{
+    ecc::{
+        chip::{EccChip, EccConfig},
+        FixedPoint,
+    },
+    poseidon::{
+        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
+        StateWord, Word,
+    },
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
+    sinsemilla::{
+        chip::{SinsemillaChip, SinsemillaConfig},
+        merkle::{
+            chip::{MerkleChip, MerkleConfig},
+            MerklePath,
+        },
+    },
+    utilities::{
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+    },
+};
+use pasta_curves::pallas;
 
-pub struct ZkVirtualMachine {
-    pub constants: Vec<Scalar>,
-    pub alloc: Vec<(AllocType, VariableIndex)>,
-    pub ops: Vec<CryptoOperation>,
-    pub constraints: Vec<ConstraintInstruction>,
+use crate::{
+    crypto::{
+        arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+        constants::{
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+            OrchardFixedBases,
+        },
+    },
+    error::{Error, Result},
+};
 
-    pub aux: Vec<Scalar>,
-
-    pub params: Option<groth16::Parameters<Bls12>>,
-    pub verifying_key: Option<groth16::PreparedVerifyingKey<Bls12>>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum ZkType {
+    Base,
+    Scalar,
+    EcPoint,
+    EcFixedPoint,
+    MerklePath,
 }
 
-pub type VariableIndex = usize;
+type ArgIdx = usize;
 
-pub enum VariableRef {
-    Aux(VariableIndex),
-    Local(VariableIndex),
+#[derive(Clone, Debug)]
+pub enum ZkFunctionCall {
+    PoseidonHash(ArgIdx, ArgIdx),
+    Add(ArgIdx, ArgIdx),
+    ConstrainInstance(ArgIdx),
+    EcMulShort(ArgIdx, ArgIdx),
+    EcMul(ArgIdx, ArgIdx),
+    EcAdd(ArgIdx, ArgIdx),
+    EcGetX(ArgIdx),
+    EcGetY(ArgIdx),
+    CalculateMerkleRoot(ArgIdx, ArgIdx),
 }
 
-pub enum CryptoOperation {
-    Set(VariableRef, VariableRef),
-    Mul(VariableRef, VariableRef),
-    Add(VariableRef, VariableRef),
-    Sub(VariableRef, VariableRef),
-    Load(VariableRef, VariableIndex),
-    Divide(VariableRef, VariableRef),
-    Double(VariableRef),
-    Square(VariableRef),
-    Invert(VariableRef),
-    UnpackBits(VariableRef, VariableRef, VariableRef),
-    Local,
-    Debug(String, VariableRef),
-    DumpAlloc,
-    DumpLocal,
+pub struct ZkBinary {
+    pub constants: Vec<(String, ZkType)>,
+    pub contracts: HashMap<String, ZkContract>,
 }
 
-#[derive(Clone)]
-pub enum AllocType {
-    Private,
-    Public,
+#[derive(Clone, Debug)]
+pub struct ZkContract {
+    pub witness: Vec<(String, ZkType)>,
+    pub code: Vec<ZkFunctionCall>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ConstraintInstruction {
-    Lc0Add(VariableIndex),
-    Lc1Add(VariableIndex),
-    Lc2Add(VariableIndex),
-    Lc0Sub(VariableIndex),
-    Lc1Sub(VariableIndex),
-    Lc2Sub(VariableIndex),
-    Lc0AddOne,
-    Lc1AddOne,
-    Lc2AddOne,
-    Lc0SubOne,
-    Lc1SubOne,
-    Lc2SubOne,
-    Lc0AddCoeff(VariableIndex, VariableIndex),
-    Lc1AddCoeff(VariableIndex, VariableIndex),
-    Lc2AddCoeff(VariableIndex, VariableIndex),
-    Lc0AddConstant(VariableIndex),
-    Lc1AddConstant(VariableIndex),
-    Lc2AddConstant(VariableIndex),
-    Enforce,
-    LcCoeffReset,
-    LcCoeffDouble,
+// These is the actual structures below which interpret the structures
+// deserialized above.
+
+#[derive(Clone, Debug)]
+pub struct MintConfig {
+    pub primary: Column<InstanceColumn>,
+    pub q_add: Selector,
+    pub advices: [Column<Advice>; 10],
+    pub ecc_config: EccConfig,
+    pub merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub sinsemilla_config_1:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub sinsemilla_config_2:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    pub poseidon_config: PoseidonConfig<pallas::Base>,
+    pub arith_config: ArithmeticChipConfig,
 }
 
-#[derive(Debug, Copy, Clone, thiserror::Error)]
-pub enum ZkVmError {
-    #[error("DivisionByZero")]
-    DivisionByZero,
-    #[error("MalformedRange")]
-    MalformedRange,
+impl MintConfig {
+    pub fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
+        EccChip::construct(self.ecc_config.clone())
+    }
+
+    pub fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+        PoseidonChip::construct(self.poseidon_config.clone())
+    }
+
+    pub fn arithmetic_chip(&self) -> ArithmeticChip {
+        ArithmeticChip::construct(self.arith_config.clone())
+    }
+
+    fn merkle_chip_1(
+        &self,
+    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+        MerkleChip::construct(self.merkle_config_1.clone())
+    }
+
+    fn merkle_chip_2(
+        &self,
+    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+        MerkleChip::construct(self.merkle_config_2.clone())
+    }
 }
 
-impl ZkVirtualMachine {
-    pub fn initialize(
+#[derive(Clone, Debug)]
+pub struct ZkCircuit<'a> {
+    pub const_fixed_points: HashMap<String, OrchardFixedBases>,
+    pub constants: &'a Vec<(String, ZkType)>,
+    pub contract: &'a ZkContract,
+    // For each type create a separate stack
+    pub witness_base: HashMap<String, Option<pallas::Base>>,
+    pub witness_scalar: HashMap<String, Option<pallas::Scalar>>,
+    pub witness_merkle_path: HashMap<String, (Option<u32>, Option<[pallas::Base; 32]>)>,
+}
+
+impl<'a> ZkCircuit<'a> {
+    pub fn new(
+        const_fixed_points: HashMap<String, OrchardFixedBases>,
+        constants: &'a Vec<(String, ZkType)>,
+        contract: &'a ZkContract,
+    ) -> Self {
+        let mut witness_base = HashMap::new();
+        let mut witness_scalar = HashMap::new();
+        let mut witness_merkle_path = HashMap::new();
+        for (name, type_id) in contract.witness.iter() {
+            match type_id {
+                ZkType::Base => {
+                    witness_base.insert(name.clone(), None);
+                }
+                ZkType::Scalar => {
+                    witness_scalar.insert(name.clone(), None);
+                }
+                ZkType::MerklePath => {
+                    witness_merkle_path.insert(name.clone(), (None, None));
+                }
+                _ => {
+                    unimplemented!();
+                }
+            }
+        }
+
+        Self {
+            const_fixed_points,
+            constants,
+            contract,
+            witness_base,
+            witness_scalar,
+            witness_merkle_path,
+        }
+    }
+
+    pub fn witness_base(&mut self, name: &str, value: pallas::Base) -> Result<()> {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
+                continue
+            }
+            if *type_id != ZkType::Base {
+                return Err(Error::InvalidParamType)
+            }
+            *self.witness_base.get_mut(name).unwrap() = Some(value);
+            return Ok(())
+        }
+        return Err(Error::InvalidParamName)
+    }
+
+    pub fn witness_scalar(&mut self, name: &str, value: pallas::Scalar) -> Result<()> {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
+                continue
+            }
+            if *type_id != ZkType::Scalar {
+                return Err(Error::InvalidParamType)
+            }
+            *self.witness_scalar.get_mut(name).unwrap() = Some(value);
+            return Ok(())
+        }
+        return Err(Error::InvalidParamName)
+    }
+
+    pub fn witness_merkle_path(
         &mut self,
-        params: &Vec<(VariableIndex, Scalar)>,
-    ) -> std::result::Result<(), ZkVmError> {
-        // Resize array
-        self.aux = vec![Scalar::zero(); self.alloc.len()];
-
-        // Copy over the parameters
-        for (index, value) in params {
-            //println!("Setting {} to {:?}", index, value);
-            self.aux[*index] = *value;
-        }
-
-        let mut local_stack: Vec<Scalar> = Vec::new();
-
-        for op in &self.ops {
-            match op {
-                CryptoOperation::Set(self_, other) => {
-                    let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    *self_ = other;
-                }
-                CryptoOperation::Mul(self_, other) => {
-                    let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    self_.mul_assign(other);
-                }
-                CryptoOperation::Add(self_, other) => {
-                    let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    self_.add_assign(other);
-                }
-                CryptoOperation::Sub(self_, other) => {
-                    let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    self_.sub_assign(other);
-                }
-                CryptoOperation::Load(self_, const_index) => {
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    *self_ = self.constants[*const_index];
-                }
-                CryptoOperation::Divide(self_, other) => {
-                    let other = match other {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    let ret = other.invert().map(|other| *self_ * other);
-                    if bool::from(ret.is_some()) {
-                        *self_ = ret.unwrap();
-                    } else {
-                        return Err(ZkVmError::DivisionByZero);
-                    }
-                }
-                CryptoOperation::Double(self_) => {
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    *self_ = self_.double();
-                }
-                CryptoOperation::Square(self_) => {
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    *self_ = self_.square();
-                }
-                CryptoOperation::Invert(self_) => {
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    if self_.is_zero() {
-                        return Err(ZkVmError::DivisionByZero);
-                    } else {
-                        *self_ = self_.invert().unwrap();
-                    }
-                }
-                CryptoOperation::UnpackBits(value, start, end) => {
-                    let value = match value {
-                        VariableRef::Aux(index) => self.aux[*index],
-                        VariableRef::Local(index) => local_stack[*index],
-                    };
-                    let (self_, start_index, end_index) = match start {
-                        VariableRef::Aux(start_index) => match end {
-                            VariableRef::Aux(end_index) => (&mut self.aux, start_index, end_index),
-                            VariableRef::Local(_) => {
-                                return Err(ZkVmError::MalformedRange);
-                            }
-                        },
-                        VariableRef::Local(start_index) => match end {
-                            VariableRef::Aux(_) => {
-                                return Err(ZkVmError::MalformedRange);
-                            }
-                            VariableRef::Local(end_index) => {
-                                (&mut local_stack, start_index, end_index)
-                            }
-                        },
-                    };
-                    if start_index > end_index {
-                        return Err(ZkVmError::MalformedRange);
-                    }
-                    if (end_index + 1) - start_index != 256 {
-                        return Err(ZkVmError::MalformedRange);
-                    }
-                    if *end_index >= self_.len() {
-                        return Err(ZkVmError::MalformedRange);
-                    }
-
-                    for (i, bit) in value.to_le_bits().into_iter().cloned().enumerate() {
-                        match bit {
-                            true => self_[start_index + i] = Scalar::one(),
-                            false => self_[start_index + i] = Scalar::zero(),
-                        }
-                    }
-                }
-                CryptoOperation::Local => {
-                    local_stack.push(Scalar::zero());
-                }
-                CryptoOperation::Debug(debug_str, self_) => {
-                    let self_ = match self_ {
-                        VariableRef::Aux(index) => &mut self.aux[*index],
-                        VariableRef::Local(index) => &mut local_stack[*index],
-                    };
-                    println!("{}", debug_str);
-                    println!("value = {:?}", self_);
-                }
-                CryptoOperation::DumpAlloc => {
-                    println!("-------------------");
-                    println!("alloc");
-                    println!("-------------------");
-                    for (i, value) in self.aux.iter().enumerate() {
-                        println!("{}: {:?}", i, value);
-                    }
-                    println!("-------------------");
-                }
-                CryptoOperation::DumpLocal => {
-                    println!("-------------------");
-                    println!("local");
-                    println!("-------------------");
-                    for (i, value) in local_stack.iter().enumerate() {
-                        println!("{}: {:?}", i, value);
-                    }
-                    println!("-------------------");
-                }
+        name: &str,
+        leaf_pos: u32,
+        path: [pallas::Base; 32],
+    ) -> Result<()> {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
+                continue
             }
-        }
-
-        Ok(())
-    }
-
-    pub fn public(&self) -> Vec<(VariableIndex, Scalar)> {
-        let mut publics = Vec::new();
-        for (alloc_type, index) in &self.alloc {
-            match alloc_type {
-                AllocType::Private => {}
-                AllocType::Public => {
-                    let scalar = self.aux[*index];
-                    publics.push((*index, scalar));
-                }
+            if *type_id != ZkType::MerklePath {
+                return Err(Error::InvalidParamType)
             }
+            *self.witness_merkle_path.get_mut(name).unwrap() = (Some(leaf_pos), Some(path));
+            return Ok(())
         }
-        publics
+        return Err(Error::InvalidParamName)
+    }
+}
+
+impl<'a> UtilitiesInstructions<pallas::Base> for ZkCircuit<'a> {
+    type Var = CellValue<pallas::Base>;
+}
+
+impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
+    type Config = MintConfig;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        Self {
+            const_fixed_points: self.const_fixed_points.clone(),
+            constants: self.constants,
+            contract: &self.contract,
+            witness_base: self.witness_base.keys().map(|key| (key.clone(), None)).collect(),
+            witness_scalar: self.witness_scalar.keys().map(|key| (key.clone(), None)).collect(),
+            witness_merkle_path: self
+                .witness_scalar
+                .keys()
+                .map(|key| (key.clone(), (None, None)))
+                .collect(),
+        }
     }
 
-    pub fn setup(&mut self) -> Result<()> {
-        let start = Instant::now();
-        // Create parameters for our circuit. In a production deployment these would
-        // be generated securely using a multiparty computation.
-        self.params = Some({
-            let circuit = ZkVmCircuit {
-                aux: vec![None; self.aux.len()],
-                alloc: self.alloc.clone(),
-                constraints: self.constraints.clone(),
-                constants: self.constants.clone(),
-            };
-            groth16::generate_random_parameters::<Bls12, _, _>(circuit, &mut OsRng)?
-        });
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+        let advices = [
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+        ];
 
-        println!("Setup: [{:?}]", start.elapsed());
+        let q_add = meta.selector();
 
-        self.verifying_key = Some(groth16::prepare_verifying_key(
-            &self.params.as_ref().unwrap().vk,
-        ));
-        Ok(())
-    }
+        let table_idx = meta.lookup_table_column();
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
-    pub fn prove(&self) -> groth16::Proof<Bls12> {
-        let aux = self.aux.iter().map(|scalar| Some(*scalar)).collect();
-        // Create an instance of our circuit (with the preimage as a witness).
-        let circuit = ZkVmCircuit {
-            aux,
-            alloc: self.alloc.clone(),
-            constraints: self.constraints.clone(),
-            constants: self.constants.clone(),
+        let primary = meta.instance_column();
+
+        meta.enable_equality(primary.into());
+
+        for advice in advices.iter() {
+            meta.enable_equality((*advice).into());
+        }
+
+        let lagrange_coeffs = [
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+        ];
+
+        let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
+        let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
+
+        meta.enable_constant(lagrange_coeffs[0]);
+
+        let range_check = LookupRangeCheckConfig::configure(meta, advices[9], table_idx);
+
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices,
+            lagrange_coeffs,
+            range_check.clone(),
+        );
+
+        let poseidon_config = PoseidonChip::configure(
+            meta,
+            P128Pow5T3,
+            advices[6..9].try_into().unwrap(),
+            advices[5],
+            rc_a,
+            rc_b,
+        );
+
+        let arith_config = ArithmeticChip::configure(meta);
+
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_1, merkle_config_1) = {
+            let sinsemilla_config_1 = SinsemillaChip::configure(
+                meta,
+                advices[..5].try_into().unwrap(),
+                advices[6],
+                lagrange_coeffs[0],
+                lookup,
+                range_check.clone(),
+            );
+            let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
+            (sinsemilla_config_1, merkle_config_1)
         };
 
-        let start = Instant::now();
-        // Create a Groth16 proof with our parameters.
-        let proof =
-            groth16::create_random_proof(circuit, self.params.as_ref().unwrap(), &mut OsRng)
-                .unwrap();
-        println!("Prove: [{:?}]", start.elapsed());
-        proof
+        // Configuration for a Sinsemilla hash instantiation and a
+        // Merkle hash instantiation using this Sinsemilla instance.
+        // Since the Sinsemilla config uses only 5 advice columns,
+        // we can fit two instances side-by-side.
+        let (sinsemilla_config_2, merkle_config_2) = {
+            let sinsemilla_config_2 = SinsemillaChip::configure(
+                meta,
+                advices[5..].try_into().unwrap(),
+                advices[7],
+                lagrange_coeffs[1],
+                lookup,
+                range_check,
+            );
+            let merkle_config_2 = MerkleChip::configure(meta, sinsemilla_config_2.clone());
+
+            (sinsemilla_config_2, merkle_config_2)
+        };
+
+        MintConfig {
+            primary,
+            q_add,
+            advices,
+            ecc_config,
+            merkle_config_1,
+            merkle_config_2,
+            sinsemilla_config_1,
+            sinsemilla_config_2,
+            poseidon_config,
+            arith_config,
+        }
     }
 
-    pub fn verify(&self, proof: &groth16::Proof<Bls12>, public_values: &[Scalar]) -> bool {
-        let start = Instant::now();
-        let is_passed =
-            groth16::verify_proof(self.verifying_key.as_ref().unwrap(), proof, public_values)
-                .is_ok();
-        println!("Verify: [{:?}]", start.elapsed());
-        is_passed
-    }
-}
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<pallas::Base>,
+    ) -> std::result::Result<(), plonk::Error> {
+        // Load the Sinsemilla generator lookup table used by the whole circuit.
+        SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
 
-pub struct ZkVmCircuit {
-    aux: Vec<Option<bls12_381::Scalar>>,
-    alloc: Vec<(AllocType, VariableIndex)>,
-    constraints: Vec<ConstraintInstruction>,
-    constants: Vec<Scalar>,
-}
+        let arith_chip = config.arithmetic_chip();
 
-impl Circuit<bls12_381::Scalar> for ZkVmCircuit {
-    fn synthesize<CS: ConstraintSystem<bls12_381::Scalar>>(
-        self,
-        cs: &mut CS,
-    ) -> std::result::Result<(), SynthesisError> {
-        let mut variables = Vec::new();
+        // Construct the ECC chip.
+        let ecc_chip = config.ecc_chip();
 
-        for (alloc_type, index) in &self.alloc {
-            match alloc_type {
-                AllocType::Private => {
-                    let var = cs.alloc(|| "private alloc", || Ok(*self.aux[*index].get()?))?;
-                    variables.push(var);
+        let mut stack_base = Vec::new();
+        let mut stack_scalar = Vec::new();
+        let mut stack_ec_point = Vec::new();
+        let mut stack_ec_fixed_point = Vec::new();
+        let mut stack_merkle_path = Vec::new();
+
+        // Load constants first onto the stacks
+        for (variable, type_id) in self.constants.iter() {
+            match *type_id {
+                ZkType::Base => {
+                    unimplemented!();
                 }
-                AllocType::Public => {
-                    let var = cs.alloc_input(|| "public alloc", || Ok(*self.aux[*index].get()?))?;
-                    variables.push(var);
+                ZkType::Scalar => {
+                    unimplemented!();
+                }
+                ZkType::EcPoint => {
+                    unimplemented!();
+                }
+                ZkType::EcFixedPoint => {
+                    let value = self.const_fixed_points[variable];
+                    stack_ec_fixed_point.push(value);
+                }
+                ZkType::MerklePath => {
+                    unimplemented!();
                 }
             }
         }
 
-        let mut coeff = bls12_381::Scalar::one();
-        let mut lc0 = bellman::LinearCombination::<Scalar>::zero();
-        let mut lc1 = bellman::LinearCombination::<Scalar>::zero();
-        let mut lc2 = bellman::LinearCombination::<Scalar>::zero();
-
-        for constraint in self.constraints {
-            match constraint {
-                ConstraintInstruction::Lc0Add(index) => {
-                    lc0 = lc0 + (coeff, variables[index]);
+        // Push the witnesses onto the stacks in order
+        for (variable, type_id) in self.contract.witness.iter() {
+            match *type_id {
+                ZkType::Base => {
+                    let value = self.witness_base.get(variable).expect("witness base set");
+                    let value = self.load_private(
+                        layouter.namespace(|| "load pubkey x"),
+                        config.advices[0],
+                        *value,
+                    )?;
+                    stack_base.push(value.clone());
                 }
-                ConstraintInstruction::Lc1Add(index) => {
-                    lc1 = lc1 + (coeff, variables[index]);
+                ZkType::Scalar => {
+                    let value = self.witness_scalar.get(variable).expect("witness base set");
+                    stack_scalar.push(value.clone());
                 }
-                ConstraintInstruction::Lc2Add(index) => {
-                    lc2 = lc2 + (coeff, variables[index]);
+                ZkType::EcPoint => {
+                    unimplemented!();
                 }
-                ConstraintInstruction::Lc0Sub(index) => {
-                    lc0 = lc0 - (coeff, variables[index]);
+                ZkType::EcFixedPoint => {
+                    unimplemented!();
                 }
-                ConstraintInstruction::Lc1Sub(index) => {
-                    lc1 = lc1 - (coeff, variables[index]);
-                }
-                ConstraintInstruction::Lc2Sub(index) => {
-                    lc2 = lc2 - (coeff, variables[index]);
-                }
-                ConstraintInstruction::Lc0AddOne => {
-                    lc0 = lc0 + CS::one();
-                }
-                ConstraintInstruction::Lc1AddOne => {
-                    lc1 = lc1 + CS::one();
-                }
-                ConstraintInstruction::Lc2AddOne => {
-                    lc2 = lc2 + CS::one();
-                }
-                ConstraintInstruction::Lc0SubOne => {
-                    lc0 = lc0 - CS::one();
-                }
-                ConstraintInstruction::Lc1SubOne => {
-                    lc1 = lc1 - CS::one();
-                }
-                ConstraintInstruction::Lc2SubOne => {
-                    lc2 = lc2 - CS::one();
-                }
-                ConstraintInstruction::Lc0AddCoeff(const_index, index) => {
-                    lc0 = lc0 + (self.constants[const_index], variables[index]);
-                }
-                ConstraintInstruction::Lc1AddCoeff(const_index, index) => {
-                    lc1 = lc1 + (self.constants[const_index], variables[index]);
-                }
-                ConstraintInstruction::Lc2AddCoeff(const_index, index) => {
-                    lc2 = lc2 + (self.constants[const_index], variables[index]);
-                }
-                ConstraintInstruction::Lc0AddConstant(const_index) => {
-                    lc0 = lc0 + (self.constants[const_index], CS::one());
-                }
-                ConstraintInstruction::Lc1AddConstant(const_index) => {
-                    lc1 = lc1 + (self.constants[const_index], CS::one());
-                }
-                ConstraintInstruction::Lc2AddConstant(const_index) => {
-                    lc2 = lc2 + (self.constants[const_index], CS::one());
-                }
-                ConstraintInstruction::Enforce => {
-                    cs.enforce(
-                        || "constraint",
-                        |_| lc0.clone(),
-                        |_| lc1.clone(),
-                        |_| lc2.clone(),
-                    );
-                    coeff = bls12_381::Scalar::one();
-                    lc0 = bellman::LinearCombination::<Scalar>::zero();
-                    lc1 = bellman::LinearCombination::<Scalar>::zero();
-                    lc2 = bellman::LinearCombination::<Scalar>::zero();
-                }
-                ConstraintInstruction::LcCoeffReset => {
-                    coeff = bls12_381::Scalar::one();
-                }
-                ConstraintInstruction::LcCoeffDouble => {
-                    coeff = coeff.double();
+                ZkType::MerklePath => {
+                    let value =
+                        self.witness_merkle_path.get(variable).expect("witness merkle path set");
+                    stack_merkle_path.push(value.clone());
                 }
             }
         }
 
+        let mut current_instance_offset = 0;
+
+        for func_call in self.contract.code.iter() {
+            match func_call {
+                ZkFunctionCall::PoseidonHash(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_base.len());
+                    assert!(*rhs_idx < stack_base.len());
+                    let messages = [stack_base[*lhs_idx], stack_base[*rhs_idx]];
+                    let poseidon_message = layouter.assign_region(
+                        || "load message",
+                        |mut region| {
+                            let mut message_word = |i: usize| {
+                                let val = messages[i].value();
+                                let var = region.assign_advice(
+                                    || format!("load message_{}", i),
+                                    config.poseidon_config.state()[i],
+                                    0,
+                                    || val.ok_or(plonk::Error::SynthesisError),
+                                )?;
+                                region.constrain_equal(var, messages[i].cell())?;
+                                Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                                    var, val,
+                                )))
+                            };
+                            Ok([message_word(0)?, message_word(1)?])
+                        },
+                    )?;
+
+                    let poseidon_hasher = PoseidonHash::init(
+                        config.poseidon_chip(),
+                        layouter.namespace(|| "Poseidon init"),
+                        ConstantLength::<2>,
+                    )?;
+
+                    let poseidon_output = poseidon_hasher
+                        .hash(layouter.namespace(|| "poseidon hash"), poseidon_message)?;
+
+                    let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+                    stack_base.push(poseidon_output);
+                }
+                ZkFunctionCall::Add(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_base.len());
+                    assert!(*rhs_idx < stack_base.len());
+                    let (lhs, rhs) = (stack_base[*lhs_idx], stack_base[*rhs_idx]);
+                    let output =
+                        arith_chip.add(layouter.namespace(|| "arithmetic add"), lhs, rhs)?;
+                    stack_base.push(output);
+                }
+                ZkFunctionCall::ConstrainInstance(arg_idx) => {
+                    assert!(*arg_idx < stack_base.len());
+                    let arg = stack_base[*arg_idx];
+                    layouter.constrain_instance(
+                        arg.cell(),
+                        config.primary,
+                        current_instance_offset,
+                    )?;
+                    current_instance_offset += 1;
+                }
+                ZkFunctionCall::EcMulShort(value_idx, point_idx) => {
+                    assert!(*value_idx < stack_base.len());
+                    let value = stack_base[*value_idx];
+
+                    assert!(*point_idx < stack_ec_fixed_point.len());
+                    let fixed_point = stack_ec_fixed_point[*point_idx];
+
+                    // This constant one is used for multiplication
+                    let one = self.load_private(
+                        layouter.namespace(|| "load constant one"),
+                        config.advices[0],
+                        Some(pallas::Base::one()),
+                    )?;
+
+                    // v * G_1
+                    let (result, _) = {
+                        let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), fixed_point);
+                        value_commit_v.mul_short(
+                            layouter.namespace(|| "[value] ValueCommitV"),
+                            (value, one),
+                        )?
+                    };
+
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcMul(value_idx, point_idx) => {
+                    assert!(*value_idx < stack_scalar.len());
+                    let value = stack_scalar[*value_idx];
+
+                    assert!(*point_idx < stack_ec_fixed_point.len());
+                    let fixed_point = stack_ec_fixed_point[*point_idx];
+
+                    let (result, _) = {
+                        let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), fixed_point);
+                        value_commit_r
+                            .mul(layouter.namespace(|| "[value_blind] ValueCommitR"), value)?
+                    };
+
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcAdd(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_ec_point.len());
+                    assert!(*rhs_idx < stack_ec_point.len());
+                    let lhs = &stack_ec_point[*lhs_idx];
+                    let rhs = &stack_ec_point[*rhs_idx];
+
+                    let result = lhs.add(layouter.namespace(|| "valuecommit"), rhs)?;
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcGetX(arg_idx) => {
+                    assert!(*arg_idx < stack_ec_point.len());
+                    let arg = &stack_ec_point[*arg_idx];
+                    let x = arg.inner().x();
+                    stack_base.push(x);
+                }
+                ZkFunctionCall::EcGetY(arg_idx) => {
+                    assert!(*arg_idx < stack_ec_point.len());
+                    let arg = &stack_ec_point[*arg_idx];
+                    let y = arg.inner().y();
+                    stack_base.push(y);
+                }
+                ZkFunctionCall::CalculateMerkleRoot(path_idx, leaf_idx) => {
+                    assert!(*path_idx < stack_merkle_path.len());
+                    assert!(*leaf_idx < stack_base.len());
+
+                    let (leaf_pos, path) = &stack_merkle_path[*path_idx];
+                    let leaf = &stack_base[*leaf_idx];
+
+                    let path = MerklePath {
+                        chip_1: config.merkle_chip_1(),
+                        chip_2: config.merkle_chip_2(),
+                        domain: OrchardHashDomains::MerkleCrh,
+                        leaf_pos: leaf_pos.clone(),
+                        path: path.clone(),
+                    };
+
+                    let root =
+                        path.calculate_root(layouter.namespace(|| "calculate root"), leaf.clone())?;
+                    stack_base.push(root);
+                }
+            }
+        }
+
+        // At this point we've enforced all of our public inputs.
         Ok(())
     }
 }

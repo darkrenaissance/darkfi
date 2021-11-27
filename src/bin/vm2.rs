@@ -49,7 +49,7 @@ use drk::{
         util::{pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     serial::Decodable,
-    vm2,
+    vm,
 };
 
 fn main() -> std::result::Result<(), failure::Error> {
@@ -58,7 +58,7 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let start = Instant::now();
     let file = File::open("proof/mint.zk.bin")?;
-    let zkbin = vm2::ZkBinary::decode(file)?;
+    let zkbin = vm::ZkBinary::decode(file)?;
     for contract_name in zkbin.contracts.keys() {
         println!("Loaded '{}' contract.", contract_name);
     }
@@ -110,7 +110,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     const_fixed_points.insert("VALUE_COMMIT_VALUE".to_string(), OrchardFixedBases::ValueCommitV);
     const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
 
-    let mut circuit = vm2::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
+    let mut circuit = vm::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
     let empty_circuit = circuit.clone();
 
     circuit.witness_base("pub_x", *coords.x())?;
