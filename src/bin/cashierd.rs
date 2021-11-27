@@ -179,15 +179,9 @@ impl Cashierd {
                 mint_address = m;
                 drk_pub_key = d;
             }
-            (None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
-            }
-            (_, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
-            }
+            (None, _, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None, _) => return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id)),
+            (_, _, None) => return JsonResult::Err(jsonerr(InvalidAddressParam, None, id)),
         }
 
         // Check if the features list contains this network
@@ -307,15 +301,9 @@ impl Cashierd {
                 mint_address = m;
                 address = a;
             }
-            (None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
-            }
-            (_, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
-            }
+            (None, _, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None, _) => return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id)),
+            (_, _, None) => return JsonResult::Err(jsonerr(InvalidAddressParam, None, id)),
         }
 
         // Check if the features list contains this network

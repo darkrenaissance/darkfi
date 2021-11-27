@@ -162,9 +162,7 @@ impl GatewayService {
 
                 // GETLASTINDEX
             }
-            _ => {
-                return Err(Error::ServicesError("received wrong command"))
-            }
+            _ => return Err(Error::ServicesError("received wrong command")),
         }
         Ok(())
     }

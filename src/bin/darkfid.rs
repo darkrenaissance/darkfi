@@ -210,12 +210,8 @@ impl Darkfid {
                 network = net;
                 symbol = sym;
             }
-            (None, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None) => {
-                return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id))
-            }
+            (None, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None) => return JsonResult::Err(jsonerr(InvalidSymbolParam, None, id)),
         }
 
         let result: Result<Value> = async {
@@ -304,12 +300,8 @@ impl Darkfid {
                 network = NetworkName::from_str(net).unwrap();
                 token = tkn;
             }
-            (None, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
-            }
+            (None, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None) => return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id)),
         }
 
         let token_id = match assign_id(
@@ -320,9 +312,7 @@ impl Darkfid {
             &self.btc_tokenlist,
         ) {
             Ok(t) => t,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id))
-            }
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
         };
 
         // TODO: Optional sanity checking here, but cashier *must* do so too.
@@ -385,25 +375,15 @@ impl Darkfid {
                 address = addr;
                 amount = val;
             }
-            (None, _, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
-            }
-            (_, _, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
-            }
-            (_, _, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id))
-            }
+            (None, _, _, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None, _, _) => return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id)),
+            (_, _, None, _) => return JsonResult::Err(jsonerr(InvalidAddressParam, None, id)),
+            (_, _, _, None) => return JsonResult::Err(jsonerr(InvalidAmountParam, None, id)),
         }
 
         let amount_in_apo = match decode_base10(amount, 8, true) {
             Ok(a) => a,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id))
-            }
+            Err(e) => return JsonResult::Err(jsonerr(InvalidAmountParam, Some(e.to_string()), id)),
         };
 
         let token_id = match assign_id(
@@ -414,18 +394,14 @@ impl Darkfid {
             &self.btc_tokenlist,
         ) {
             Ok(t) => t,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id))
-            }
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
         };
 
         let req = jsonreq(json!("withdraw"), json!([network, token_id, address, amount_in_apo]));
         let mut rep: JsonResult;
         match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
             Ok(v) => rep = v,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
-            }
+            Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
         }
 
         let token_id: &jubjub::Fr;
@@ -509,18 +485,10 @@ impl Darkfid {
                 address = addr;
                 amount = val;
             }
-            (None, _, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id))
-            }
-            (_, None, _, _) => {
-                return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id))
-            }
-            (_, _, None, _) => {
-                return JsonResult::Err(jsonerr(InvalidAddressParam, None, id))
-            }
-            (_, _, _, None) => {
-                return JsonResult::Err(jsonerr(InvalidAmountParam, None, id))
-            }
+            (None, _, _, _) => return JsonResult::Err(jsonerr(InvalidNetworkParam, None, id)),
+            (_, None, _, _) => return JsonResult::Err(jsonerr(InvalidTokenIdParam, None, id)),
+            (_, _, None, _) => return JsonResult::Err(jsonerr(InvalidAddressParam, None, id)),
+            (_, _, _, None) => return JsonResult::Err(jsonerr(InvalidAmountParam, None, id)),
         }
 
         let token_id: &jubjub::Fr;
