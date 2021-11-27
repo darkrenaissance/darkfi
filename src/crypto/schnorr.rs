@@ -1,41 +1,52 @@
-use ff::Field;
-use group::GroupEncoding;
-use rand::rngs::OsRng;
 use std::io;
 
-use super::util::hash_to_scalar;
-use crate::error::Result;
-use crate::serial::{Decodable, Encodable};
+use halo2_gadgets::ecc::FixedPoints;
+use pasta_curves::{arithmetic::Field, group::GroupEncoding, pallas};
+use rand::rngs::OsRng;
 
-pub struct SecretKey(pub jubjub::Fr);
+use super::{
+    constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
+    util::{hash_to_scalar, mod_r_p},
+};
+use crate::{
+    error::Result,
+    serial::{Decodable, Encodable},
+    types::{
+        derive_public_key, DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId,
+        DrkValueBlind, DrkValueCommit,
+    },
+};
+
+#[derive(Clone)]
+pub struct SecretKey(pub pallas::Scalar);
 
 impl SecretKey {
     pub fn random() -> Self {
-        Self(jubjub::Fr::random(&mut OsRng))
+        Self(pallas::Scalar::random(&mut OsRng))
     }
 
     pub fn sign(&self, message: &[u8]) -> Signature {
-        let mask = jubjub::Fr::random(&mut OsRng);
-        let commit = zcash_primitives::constants::SPENDING_KEY_GENERATOR * mask;
+        let mask = DrkValueBlind::random(&mut OsRng);
+        let commit = OrchardFixedBases::SpendAuthG.generator() * mask;
 
-        let challenge = hash_to_scalar(b"DarkFi_Schnorr", &commit.to_bytes(), message);
-
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
         let response = mask + challenge * self.0;
 
         Signature { commit, response }
     }
 
     pub fn public_key(&self) -> PublicKey {
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * self.0;
-        PublicKey(public)
+        let public_key = OrchardFixedBases::SpendAuthG.generator() * self.0;
+        PublicKey(public_key)
     }
 }
 
-pub struct PublicKey(pub jubjub::SubgroupPoint);
+#[derive(PartialEq)]
+pub struct PublicKey(pub DrkPublicKey);
 
 pub struct Signature {
-    commit: jubjub::SubgroupPoint,
-    response: jubjub::Fr,
+    commit: DrkValueCommit,
+    response: DrkValueBlind,
 }
 
 impl Encodable for Signature {
@@ -58,10 +69,21 @@ impl Decodable for Signature {
 
 impl PublicKey {
     pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
-        let challenge = hash_to_scalar(b"DarkFi_Schnorr", &signature.commit.to_bytes(), message);
-        zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature.response
-            - self.0 * challenge
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
+        OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge
             == signature.commit
+    }
+}
+
+impl Encodable for PublicKey {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        Ok(self.0.encode(s)?)
+    }
+}
+
+impl Decodable for PublicKey {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self(Decodable::decode(&mut d)?))
     }
 }
 

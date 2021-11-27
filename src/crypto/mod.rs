@@ -1,49 +1,36 @@
+Warning: can't set `wrap_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `comment_width = 100`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Crate`, unstable features are only available in nightly channel.
+Warning: can't set `binop_separator = Back`, unstable features are only available in nightly channel.
+Warning: can't set `trailing_semicolon = false`, unstable features are only available in nightly channel.
+Warning: can't set `trailing_comma = Vertical`, unstable features are only available in nightly channel.
+pub mod arith_chip;
 pub mod coin;
+pub mod constants;
 pub mod diffie_hellman;
-pub mod fr_serial;
 pub mod merkle;
-pub mod merkle_node;
+pub mod merkle_node2;
 pub mod mint_proof;
 pub mod note;
 pub mod nullifier;
+pub mod pasta_serial;
+pub mod proof;
 pub mod schnorr;
 pub mod spend_proof;
 pub mod util;
 
-use bellman::groth16;
-use bls12_381::Bls12;
+pub(crate) use {mint_proof::MintRevealedValues, proof::Proof, spend_proof::SpendRevealedValues};
 
-use crate::error::Result;
-pub use mint_proof::{create_mint_proof, setup_mint_prover, verify_mint_proof, MintRevealedValues};
-pub use spend_proof::{
-    create_spend_proof, setup_spend_prover, verify_spend_proof, SpendRevealedValues,
-};
+use crate::types::DrkSecretKey;
 
 #[derive(Clone)]
 pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,
-    pub secret: jubjub::Fr,
-    pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
+    pub secret: DrkSecretKey,
+    //pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
+    //pub witness: BridgeFrontier<merkle::MerkleHash, 32>,
     pub nullifier: nullifier::Nullifier,
 }
 
 pub type OwnCoins = Vec<OwnCoin>;
-
-pub fn save_params(filename: &str, params: &groth16::Parameters<Bls12>) -> Result<()> {
-    let buffer = std::fs::File::create(filename)?;
-    params.write(buffer)?;
-    Ok(())
-}
-
-pub fn load_params(
-    filename: &str,
-) -> Result<(
-    groth16::Parameters<Bls12>,
-    groth16::PreparedVerifyingKey<Bls12>,
-)> {
-    let buffer = std::fs::File::open(filename)?;
-    let params = groth16::Parameters::<Bls12>::read(buffer, false)?;
-    let pvk = groth16::prepare_verifying_key(&params.vk);
-    Ok((params, pvk))
-}

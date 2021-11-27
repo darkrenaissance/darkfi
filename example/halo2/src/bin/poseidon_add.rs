@@ -9,10 +9,7 @@ use halo2::{
     poly::Rotation,
 };
 use halo2_gadgets::{
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
+    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives,
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     utilities::{copy, CellValue, UtilitiesInstructions, Var},
@@ -138,29 +135,9 @@ impl Circuit<pallas::Base> for HashCircuit {
         let c = self.load_private(layouter.namespace(|| "load c"), config.advices[0], self.c)?;
 
         let hash = {
-            let message = [a, b];
+            let poseidon_message = [a, b];
 
-            let poseidon_message = layouter.assign_region(
-                || "load message",
-                |mut region| {
-                    let mut message_word = |i: usize| {
-                        let value = message[i].value();
-                        let var = region.assign_advice(
-                            || format!("load message_{}", i),
-                            config.poseidon_config.state()[i],
-                            0,
-                            || value.ok_or(Error::SynthesisError),
-                        )?;
-                        region.constrain_equal(var, message[i].cell())?;
-                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                            var, value,
-                        )))
-                    };
-                    Ok([message_word(0)?, message_word(1)?])
-                },
-            )?;
-
-            let poseidon_hasher = PoseidonHash::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
                 ConstantLength::<2>,
@@ -235,13 +212,16 @@ fn main() {
 
     // Actual ZK proof
     let start = Instant::now();
-    let vk = VerifyingKey::build(k, HashCircuit::default());
     let pk = ProvingKey::build(k, HashCircuit::default());
-    println!("Setup: [{:?}]", start.elapsed());
+    println!("Setup Prover: [{:?}]", start.elapsed());
 
     let start = Instant::now();
     let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
     println!("Prove: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
+    let vk = VerifyingKey::build(k, HashCircuit::default());
+    println!("Setup Verifier: [{:?}]", start.elapsed());
 
     let start = Instant::now();
     assert!(proof.verify(&vk, &public_inputs).is_ok());

@@ -1,8 +1,8 @@
-use async_std::sync::{Arc, Mutex};
 use std::convert::TryInto;
 use std::time::Duration;
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
@@ -16,18 +16,13 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
     rpc::jsonrpc,
     rpc::jsonrpc::JsonResult,
-    serial::{deserialize, serialize, Decodable, Encodable},
+    serial::{deserialize, serialize},
+    types::*,
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
 };
 
 pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
-
-#[derive(Clone, Debug)]
-pub struct Keypair {
-    pub private_key: String,
-    pub public_key: String,
-}
 
 // An ERC-20 token transfer transaction's data is as follows:
 //
@@ -106,10 +101,6 @@ pub fn erc20_balanceof_data(account: &str) -> String {
     format!("0x{}{}", hex::encode(*ERC20_BALANCEOF_METHOD), acc_padded)
 }
 
-pub fn erc20_decimals_data() -> String {
-    format!("0x{}", hex::encode(*ERC20_DECIMALS_METHOD))
-}
-
 fn to_eth_hex(val: BigUint) -> String {
     let bytes = val.to_bytes_be();
     let h = hex::encode(bytes);
@@ -184,7 +175,7 @@ impl EthTx {
 //
 pub struct EthClient {
     // main_keypair (private, public)
-    main_keypair: Keypair,
+    main_keypair: (String, String),
     passphrase: String,
     socket_path: String,
     subscriptions: Arc<Mutex<Vec<String>>>,
@@ -195,42 +186,21 @@ pub struct EthClient {
 }
 
 impl EthClient {
-    pub fn new(socket_path: String, passphrase: String) -> Self {
+    pub fn new(
+        socket_path: String,
+        passphrase: String,
+        main_keypair: (String, String),
+    ) -> Arc<Self> {
         let notify_channel = async_channel::unbounded();
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
-        Self {
-            // this must set by the cashier
-            main_keypair: Keypair {
-                private_key: String::new(),
-                public_key: String::new(),
-            },
+        Arc::new(Self {
+            main_keypair,
             passphrase,
             socket_path,
             subscriptions,
             notify_channel,
+        })
         }
-    }
-
-    pub fn set_main_keypair(&mut self, keypair: &Keypair) {
-        self.main_keypair = keypair.clone();
-    }
-
-    async fn send_erc20_to_main_wallet(&self, acc: &str, amount: BigUint, mint: &str) -> Result<()> {
-        debug!(target: "ETH BRIDGE", "Send erc20 token to main wallet");
-
-        let tx = EthTx::new(
-            acc,
-            mint,
-            None,
-            None,
-            None,
-            Some(erc20_transfer_data(self.main_keypair.public_key.as_str(), amount)),
-            None,
-        );
-
-        self.send_transaction(&tx, &self.passphrase).await?;
-
-        Ok(())
     }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
@@ -238,7 +208,7 @@ impl EthClient {
 
         let tx = EthTx::new(
             acc,
-            &self.main_keypair.public_key,
+            &self.main_keypair.1,
             None,
             None,
             Some(amount),
@@ -254,39 +224,16 @@ impl EthClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         addr: String,
-        drk_pub_key: jubjub::SubgroupPoint,
-        mint: Option<String>,
+        drk_pub_key: DrkPublicKey,
     ) -> Result<()> {
-
-        let token_pubkey = if mint.is_some() {
-            mint.clone().unwrap()
-        } else {
-            addr.clone()
-        };
-
-        if mint.is_some() {
-            debug!(target: "ETH BRIDGE", "Got subscribe request for ERC20 token");
-            debug!(target: "ETH BRIDGE", "Main wallet: {}", addr);
-            debug!(target: "ETH BRIDGE", "Associated token address: {}", token_pubkey);
-        } else {
-            debug!(target: "ETH BRIDGE", "Got subscribe request for native ETH");
-            debug!(target: "ETH BRIDGE", "Main wallet: {}", addr);
-        }
-
 
         if self.subscriptions.lock().await.contains(&addr) {
             return Ok(());
         }
 
-        let decimals = if mint.is_some() {
-            let hexdecimals = self.get_erc20_decimals(&addr, &token_pubkey).await?;
-            let hexdecimals = hexdecimals.as_str().unwrap().trim_start_matches("0x");
-            18
-        } else {
-            18
-        };
+        let decimals = 18;
 
-        let prev_balance = self.get_current_balance(&addr, mint.clone()).await?;
+        let prev_balance = self.get_current_balance(&addr, None).await?;
 
         let mut current_balance;
 
@@ -303,7 +250,7 @@ impl EthClient {
             sub_iter += iter_interval;
             async_std::task::sleep(Duration::from_secs(iter_interval)).await;
 
-            current_balance = self.get_current_balance(&addr, mint.clone()).await?;
+            current_balance = self.get_current_balance(&addr, None).await?;
 
             if current_balance != prev_balance {
                 break;
@@ -316,7 +263,7 @@ impl EthClient {
 
         if current_balance < prev_balance {
             return Err(crate::Error::ClientFailed(
-                    "New balance is less than previous balance".into(),
+                "New balance is less than previous balance".into(),
             ));
         }
 
@@ -324,49 +271,28 @@ impl EthClient {
 
         let received_balance_ui = received_balance.clone() / u64::pow(10, decimals as u32);
 
-
-
-        if mint.is_some() {
-            send_notification
-                .send(TokenNotification {
-                    network: NetworkName::Ethereum,
-                    token_id: generate_id(token_pubkey.as_str(), &NetworkName::Ethereum)?,
-                    drk_pub_key,
-                    // TODO FIX
-                    received_balance: received_balance.to_u64_digits()[0],
-                    decimals: decimals as u16,
-                })
+        send_notification
+            .send(TokenNotification {
+                network: NetworkName::Ethereum,
+                token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
+                drk_pub_key,
+                // TODO FIX
+                received_balance: received_balance.to_u64_digits()[0],
+                decimals: decimals as u16,
+            })
             .await
-                .map_err(Error::from)?;
+            .map_err(Error::from)?;
 
-            self.send_erc20_to_main_wallet(&addr, received_balance, &token_pubkey)
-                .await?;
+        self.send_eth_to_main_wallet(&addr, received_balance)
+            .await?;
 
-            debug!(target: "ETH BRIDGE", "Received {} erc20 token: {}", received_balance_ui, token_pubkey);
-
-        } else {
-            send_notification
-                .send(TokenNotification {
-                    network: NetworkName::Ethereum,
-                    token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
-                    drk_pub_key,
-                    // TODO FIX
-                    received_balance: received_balance.to_u64_digits()[0],
-                    decimals: decimals as u16,
-                })
-            .await
-                .map_err(Error::from)?;
-
-            self.send_eth_to_main_wallet(&addr, received_balance)
-                .await?;
-
-            debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
+        debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
         }
 
         Ok(())
     }
 
-    async fn unsubscribe(&self, pubkey: &str) {
+    async fn unsubscribe(&self, pubkey: &String) {
         let mut subscriptions = self.subscriptions.lock().await;
         let index = subscriptions.iter().position(|p| p == pubkey);
         if let Some(ind) = index {
@@ -380,10 +306,10 @@ impl EthClient {
         let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r))
             .await
             .map_err(EthFailed::from)
-            {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
+        {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
 
         match reply {
             JsonResult::Resp(r) => {
@@ -409,11 +335,11 @@ impl EthClient {
     }
 
     /*
-       pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
-       let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
-       Ok(self.request(req).await?)
-       }
-       */
+    pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
+    let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
+    Ok(self.request(req).await?)
+    }
+    */
 
     pub async fn block_number(&self) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_blockNumber"), json!([]));
@@ -439,40 +365,18 @@ impl EthClient {
         Ok(self.request(req).await?)
     }
 
-    pub async fn get_erc20_decimals(&self, acc: &str, mint: &str) -> EthResult<Value> {
-        let tx = EthTx::new(
-            acc,
-            mint,
-            None,
-            None,
-            None,
-            Some(erc20_decimals_data()),
-            None,
-        );
-        let req = jsonrpc::request(json!("eth_call"), json!([tx, "latest"]));
-        Ok(self.request(req).await?)
-    }
+    pub async fn get_current_balance(&self, acc: &str, _mint: Option<&str>) -> EthResult<BigUint> {
+        // Latest known block, used to calculate present balance.
+        let block = self.block_number().await?;
+        let block = block.as_str().unwrap();
 
-    pub async fn get_current_balance(&self, acc: &str, mint: Option<String>) -> EthResult<BigUint> {
-
-
-        let hexbalance = if mint.is_some() {
-            // ERC20 balance
-            self.get_erc20_balance(acc, mint.unwrap().as_str()).await?
-        } else {
-            // Latest known block, used to calculate present balance.
-            let block = self.block_number().await?;
-            let block = block.as_str().unwrap();
-
-            // Native ETH balance
-            self.get_eth_balance(acc, block).await?
-        };
-
-
+        // Native ETH balance
+        let hexbalance = self.get_eth_balance(&acc, block).await?;
         let hexbalance = hexbalance.as_str().unwrap().trim_start_matches("0x");
         let balance = BigUint::parse_bytes(hexbalance.as_bytes(), 16).unwrap();
 
         Ok(balance)
+
     }
 
     pub async fn send_transaction(&self, tx: &EthTx, passphrase: &str) -> EthResult<Value> {
@@ -485,8 +389,8 @@ impl EthClient {
 impl NetworkClient for EthClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
-        mint_address: Option<String>,
+        drk_pub_key: DrkPublicKey,
+        _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
         let private_key = generate_privkey();
@@ -503,13 +407,13 @@ impl NetworkClient for EthClient {
         executor
             .spawn(async move {
                 let result = self
-                    .handle_subscribe_request(addr_cloned, drk_pub_key, mint_address)
+                    .handle_subscribe_request(addr_cloned, drk_pub_key)
                     .await;
                 if let Err(e) = result {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         let private_key: Vec<u8> = serialize(&private_key);
 
@@ -523,8 +427,8 @@ impl NetworkClient for EthClient {
         self: Arc<Self>,
         _private_key: Vec<u8>,
         public_key: Vec<u8>,
-        drk_pub_key: jubjub::SubgroupPoint,
-        mint_address: Option<String>,
+        drk_pub_key: DrkPublicKey,
+        _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {
         let public_key: String = deserialize(&public_key)?;
@@ -532,12 +436,12 @@ impl NetworkClient for EthClient {
         let address = public_key.clone();
         executor
             .spawn(async move {
-                let result = self.handle_subscribe_request(address, drk_pub_key, mint_address).await;
+                let result = self.handle_subscribe_request(address, drk_pub_key).await;
                 if let Err(e) = result {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(public_key)
     }
@@ -549,40 +453,26 @@ impl NetworkClient for EthClient {
     async fn send(
         self: Arc<Self>,
         address: Vec<u8>,
-        mint: Option<String>,
+        _mint: Option<String>,
         amount: u64,
     ) -> Result<()> {
         // Recipient address
         let dest: String = deserialize(&address)?;
 
-        // FIXME
         let decimals = 18;
 
         // reverse truncate
         let amount = truncate(amount, decimals as u16, 8)?;
 
-
-        let tx = if mint.is_some() {
-            EthTx::new(
-                &self.main_keypair.public_key,
-                &mint.unwrap(),
-                None,
-                None,
-                None,
-                Some(erc20_transfer_data(&dest, BigUint::from(amount))),
-                None,
-            )
-        } else {
-            EthTx::new(
-                &self.main_keypair.public_key,
-                &dest,
-                None,
-                None,
-                Some(BigUint::from(amount)),
-                None,
-                None,
-            )
-        };
+        let tx = EthTx::new(
+            &self.main_keypair.1,
+            &dest,
+            None,
+            None,
+            Some(BigUint::from(amount)),
+            None,
+            None,
+        );
 
         self.send_transaction(&tx, &self.passphrase).await?;
 
@@ -590,46 +480,57 @@ impl NetworkClient for EthClient {
     }
 }
 
-impl Encodable for Keypair {
-    fn encode<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.private_key.encode(&mut s)?;
-        len += self.public_key.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Keypair {
-    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            private_key: Decodable::decode(&mut d)?,
-            public_key: Decodable::decode(&mut d)?,
-        })
-    }
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug)]
 pub enum EthFailed {
-    #[error("There is no enough value {0}")]
     NotEnoughValue(u64),
-    #[error("Main Account Has no enough value")]
     MainAccountNotEnoughValue,
-    #[error("Bad Eth Address: {0}")]
     BadEthAddress(String),
-    #[error("Decode and decode keys error: {0}")]
     DecodeAndEncodeError(String),
-    #[error("Rpc Error: {0}")]
     RpcError(String),
-    #[error("Eth client error: {0}")]
     EthClientError(String),
-    #[error("Given mint is not valid: {0}")]
     MintIsNotValid(String),
-    #[error("JsonError: {0}")]
     JsonError(String),
-    #[error("Parse Error: {0}")]
     ParseError(String),
-    #[error("Unable to derive address from private key")]
     ImportPrivateError,
+}
+
+impl std::error::Error for EthFailed {}
+
+impl std::fmt::Display for EthFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EthFailed::NotEnoughValue(i) => {
+                write!(f, "There is no enough value {}", i)
+            }
+            EthFailed::MainAccountNotEnoughValue => {
+                write!(f, "Main Account Has no enough value")
+            }
+            EthFailed::BadEthAddress(ref err) => {
+                write!(f, "Bad Eth Address: {}", err)
+            }
+            EthFailed::DecodeAndEncodeError(ref err) => {
+                write!(f, "Decode and decode keys error: {}", err)
+            }
+            EthFailed::RpcError(i) => {
+                write!(f, "Rpc Error: {}", i)
+            }
+            EthFailed::ParseError(i) => {
+                write!(f, "Parse Error: {}", i)
+            }
+            EthFailed::MintIsNotValid(i) => {
+                write!(f, "Given mint is not valid: {}", i)
+            }
+            EthFailed::JsonError(i) => {
+                write!(f, "JsonError: {}", i)
+            }
+            EthFailed::ImportPrivateError => {
+                write!(f, "Unable to derive address from private key")
+            }
+            EthFailed::EthClientError(i) => {
+                write!(f, "Eth client error: {}", i)
+            }
+        }
+    }
 }
 
 impl From<crate::error::Error> for EthFailed {

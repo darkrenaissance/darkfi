@@ -1,31 +1,41 @@
 use std::io;
 
+use pasta_curves::{arithmetic::FieldExt, pallas};
+
 use crate::{
-    error::Result,
-    serial::{Decodable, Encodable},
+    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    Result,
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Coin {
-    pub repr: [u8; 32],
-}
+#[derive(Clone, Copy, Debug)]
+pub struct Coin(pub pallas::Base);
 
 impl Coin {
-    pub fn new(repr: [u8; 32]) -> Self {
-        Self { repr }
+    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        pallas::Base::from_bytes(bytes).map(Coin).unwrap()
+    }
+
+    pub fn to_bytes(self) -> [u8; 32] {
+        self.0.to_bytes()
+    }
+
+    pub(crate) fn inner(&self) -> pallas::Base {
+        self.0
     }
 }
 
 impl Encodable for Coin {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        self.repr.encode(s)
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        s.write_slice(&self.to_bytes()[..])?;
+        Ok(32)
     }
 }
 
 impl Decodable for Coin {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
-        Ok(Self {
-            repr: Decodable::decode(d)?,
-        })
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let mut bytes = [0u8; 32];
+        d.read_slice(&mut bytes)?;
+        let result = Self::from_bytes(&bytes);
+        Ok(result)
     }
 }

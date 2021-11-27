@@ -1,176 +1,114 @@
-use bellman::gadgets::multipack;
-use bellman::groth16;
-use blake2s_simd::Params as Blake2sParams;
-use bls12_381::Bls12;
-use ff::PrimeField;
-use group::{Curve, GroupEncoding};
-use rand::rngs::OsRng;
 use std::io;
 use std::time::Instant;
 
-use super::merkle_node::{merkle_hash, MerkleNode, SAPLING_COMMITMENT_TREE_DEPTH};
-use super::nullifier::Nullifier;
-use crate::circuit::spend_contract::SpendContract;
-use crate::error::Result;
-use crate::serial::{Decodable, Encodable};
+use halo2_gadgets::{
+    primitives,
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
+};
+use incrementalmerkletree::Hashable;
+use log::debug;
+use pasta_curves::{
+    arithmetic::{CurveAffine, FieldExt},
+    group::Curve,
+    pallas,
+};
+
+use super::{
+    nullifier::Nullifier,
+    proof::{Proof, ProvingKey, VerifyingKey},
+    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+};
+use crate::{
+    circuit::spend_contract::SpendContract,
+    crypto::{merkle_node2::MerkleNode, schnorr},
+    serial::{Decodable, Encodable},
+    types::*,
+    Result,
+};
 
 pub struct SpendRevealedValues {
-    pub value_commit: jubjub::SubgroupPoint,
-    pub token_commit: jubjub::SubgroupPoint,
+    pub value_commit: DrkValueCommit,
+    pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
-    // This should not be here, we just have it for debugging
-    //coin: [u8; 32],
     pub merkle_root: MerkleNode,
-    pub signature_public: jubjub::SubgroupPoint,
+    pub signature_public: schnorr::PublicKey,
 }
 
 impl SpendRevealedValues {
     #[allow(clippy::too_many_arguments)]
     fn compute(
         value: u64,
-        token_id: jubjub::Fr,
-        randomness_value: &jubjub::Fr,
-        randomness_token: &jubjub::Fr,
-        serial: &jubjub::Fr,
-        randomness_coin: &jubjub::Fr,
-        secret: &jubjub::Fr,
-        merkle_path: &[(bls12_381::Scalar, bool)],
-        signature_secret: &jubjub::Fr,
+        token_id: DrkTokenId,
+        value_blind: DrkValueBlind,
+        token_blind: DrkValueBlind,
+        serial: DrkSerial,
+        coin_blind: DrkCoinBlind,
+        secret: DrkSecretKey,
+        leaf_position: incrementalmerkletree::Position,
+        merkle_path: Vec<MerkleNode>,
+        signature_secret: schnorr::SecretKey,
     ) -> Self {
-        let value_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * jubjub::Fr::from(value))
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_value);
+        let nullifier = [secret, serial];
+        let nullifier =
+            primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
-        let token_commit = (zcash_primitives::constants::VALUE_COMMITMENT_VALUE_GENERATOR
-            * token_id)
-            + (zcash_primitives::constants::VALUE_COMMITMENT_RANDOMNESS_GENERATOR
-                * randomness_token);
+        let public_key = derive_public_key(secret);
+        let coords = public_key.to_affine().coordinates().unwrap();
+        let messages = [
+            [*coords.x(), *coords.y()],
+            [DrkValue::from_u64(value), token_id],
+            [serial, coin_blind],
+        ];
 
-        let mut nullifier = [0; 32];
-        nullifier.copy_from_slice(
-            Blake2sParams::new()
-                .hash_length(32)
-                .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
-                .to_state()
-                .update(&secret.to_bytes())
-                .update(&serial.to_bytes())
-                .finalize()
-                .as_bytes(),
-        );
-        let nullifier = Nullifier::new(nullifier);
-
-        let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-        let signature_public =
-            zcash_primitives::constants::SPENDING_KEY_GENERATOR * signature_secret;
-
-        let mut coin = [0; 32];
-        coin.copy_from_slice(
-            Blake2sParams::new()
-                .hash_length(32)
-                .personal(zcash_primitives::constants::CRH_IVK_PERSONALIZATION)
-                .to_state()
-                .update(&public.to_bytes())
-                .update(&value.to_le_bytes())
-                .update(&token_id.to_bytes())
-                .update(&serial.to_bytes())
-                .update(&randomness_coin.to_bytes())
-                .finalize()
-                .as_bytes(),
-        );
-
-        let merkle_root =
-            jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-                zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
-                multipack::bytes_to_bits_le(&coin),
-            ));
-        let affine = merkle_root.to_affine();
-        let mut merkle_root = affine.get_u();
-
-        for (i, (right, is_right)) in merkle_path.iter().enumerate() {
-            if *is_right {
-                merkle_root = merkle_hash(i, &right.to_repr(), &merkle_root.to_repr());
-            } else {
-                merkle_root = merkle_hash(i, &merkle_root.to_repr(), &right.to_repr());
-            }
+        let mut coin = DrkCoin::zero();
+        for msg in messages.iter() {
+            coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
         }
 
-        let merkle_root = MerkleNode::new(merkle_root.to_repr());
+        let merkle_root = {
+            let position: u64 = leaf_position.into();
+            let mut current = MerkleNode(coin);
+            for (level, sibling) in merkle_path.iter().enumerate() {
+                let level = level as u8;
+                current = if position & (1 << level) == 0 {
+                    MerkleNode::combine(level.into(), &current, sibling)
+                } else {
+                    MerkleNode::combine(level.into(), sibling, &current)
+                };
+            }
+            current
+        };
+
+        let value_commit = pedersen_commitment_u64(value, value_blind);
+        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
 
         SpendRevealedValues {
             value_commit,
             token_commit,
-            nullifier,
+            nullifier: Nullifier(nullifier),
             merkle_root,
-            signature_public,
+            signature_public: signature_secret.public_key(),
         }
     }
 
-    fn make_outputs(&self) -> [bls12_381::Scalar; 9] {
-        let mut public_input = [bls12_381::Scalar::zero(); 9];
+    fn make_outputs(&self) -> [DrkCircuitField; 8] {
+        let value_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let token_coords = self.token_commit.to_affine().coordinates().unwrap();
+        let merkle_root = self.merkle_root.0;
+        let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 
-        // CV
-        {
-            let result = jubjub::ExtendedPoint::from(self.value_commit);
-            let affine = result.to_affine();
-            //let (u, v) = (affine.get_u(), affine.get_v());
-            let u = affine.get_u();
-            let v = affine.get_v();
-            public_input[0] = u;
-            public_input[1] = v;
-        }
-
-        // CA
-        {
-            let result = jubjub::ExtendedPoint::from(self.token_commit);
-            let affine = result.to_affine();
-            //let (u, v) = (affine.get_u(), affine.get_v());
-            let u = affine.get_u();
-            let v = affine.get_v();
-            public_input[2] = u;
-            public_input[3] = v;
-        }
-
-        // NF
-        {
-            // Pack the hash as inputs for proof verification.
-            let hash = multipack::bytes_to_bits_le(&self.nullifier.repr);
-            let hash = multipack::compute_multipacking(&hash);
-
-            // There are 2 chunks for a blake hash
-            assert_eq!(hash.len(), 2);
-
-            public_input[4] = hash[0];
-            public_input[5] = hash[1];
-        }
-
-        // Not revealed. We leave this code here for debug
-        // Coin
-        /*{
-            // Pack the hash as inputs for proof verification.
-            let hash = multipack::bytes_to_bits_le(&self.coin);
-            let hash = multipack::compute_multipacking(&hash);
-
-            // There are 2 chunks for a blake hash
-            assert_eq!(hash.len(), 2);
-
-            public_input[4] = hash[0];
-            public_input[5] = hash[1];
-        }*/
-
-        public_input[6] = self.merkle_root.into();
-
-        {
-            let result = jubjub::ExtendedPoint::from(self.signature_public);
-            let affine = result.to_affine();
-            //let (u, v) = (affine.get_u(), affine.get_v());
-            let u = affine.get_u();
-            let v = affine.get_v();
-            public_input[7] = u;
-            public_input[8] = v;
-        }
-
-        public_input
+        vec![
+            self.nullifier.inner(),
+            *value_coords.x(),
+            *value_coords.y(),
+            *token_coords.x(),
+            *token_coords.y(),
+            merkle_root,
+            *sig_coords.x(),
+            *sig_coords.y(),
+        ]
+        .try_into()
+        .unwrap()
     }
 }
 
@@ -198,93 +136,68 @@ impl Decodable for SpendRevealedValues {
     }
 }
 
-pub fn setup_spend_prover() -> groth16::Parameters<Bls12> {
-    println!("Spend: Making random params...");
-    let start = Instant::now();
-    let params = {
-        let c = SpendContract {
-            value: None,
-            token_id: None,
-            randomness_value: None,
-            randomness_token: None,
-            serial: None,
-            randomness_coin: None,
-            secret: None,
-
-            branch: [None; SAPLING_COMMITMENT_TREE_DEPTH],
-            is_right: [None; SAPLING_COMMITMENT_TREE_DEPTH],
-
-            signature_secret: None,
-        };
-        groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
-    };
-    println!("Setup: [{:?}]", start.elapsed());
-    params
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn create_spend_proof(
-    params: &groth16::Parameters<Bls12>,
     value: u64,
-    token_id: jubjub::Fr,
-    randomness_value: jubjub::Fr,
-    randomness_token: jubjub::Fr,
-    serial: jubjub::Fr,
-    randomness_coin: jubjub::Fr,
-    secret: jubjub::Fr,
-    merkle_path: Vec<(bls12_381::Scalar, bool)>,
-    signature_secret: jubjub::Fr,
-) -> (groth16::Proof<Bls12>, SpendRevealedValues) {
-    assert_eq!(merkle_path.len(), SAPLING_COMMITMENT_TREE_DEPTH);
-    let mut branch: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
-    let mut is_right: [_; SAPLING_COMMITMENT_TREE_DEPTH] = Default::default();
-    for (i, (branch_i, is_right_i)) in merkle_path.iter().enumerate() {
-        branch[i] = Some(*branch_i);
-        is_right[i] = Some(*is_right_i);
-    }
-    let c = SpendContract {
-        value: Some(value),
-        token_id: Some(token_id),
-        randomness_value: Some(randomness_value),
-        randomness_token: Some(randomness_token),
-        serial: Some(serial),
-        randomness_coin: Some(randomness_coin),
-        secret: Some(secret),
-
-        branch,
-        is_right,
-
-        signature_secret: Some(signature_secret),
-    };
-
-    let start = Instant::now();
-    let proof = groth16::create_random_proof(c, params, &mut OsRng).unwrap();
-    println!("Prove: [{:?}]", start.elapsed());
+    token_id: DrkTokenId,
+    value_blind: DrkValueBlind,
+    token_blind: DrkValueBlind,
+    serial: DrkSerial,
+    coin_blind: DrkCoinBlind,
+    secret: DrkSecretKey,
+    leaf_position: incrementalmerkletree::Position,
+    merkle_path: Vec<MerkleNode>,
+    signature_secret: schnorr::SecretKey,
+) -> Result<(Proof, SpendRevealedValues)> {
+    const K: u32 = 11;
 
     let revealed = SpendRevealedValues::compute(
         value,
         token_id,
-        &randomness_value,
-        &randomness_token,
-        &serial,
-        &randomness_coin,
-        &secret,
-        &merkle_path,
-        &signature_secret,
+        value_blind,
+        token_blind,
+        serial,
+        coin_blind,
+        secret,
+        leaf_position,
+        merkle_path.clone(),
+        signature_secret.clone(),
     );
 
-    (proof, revealed)
+    let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
+    let leaf_position: u64 = leaf_position.into();
+
+    let c = SpendContract {
+        secret_key: Some(secret),
+        serial: Some(serial),
+        value: Some(DrkValue::from_u64(value)),
+        asset: Some(token_id),
+        coin_blind: Some(coin_blind),
+        value_blind: Some(value_blind),
+        asset_blind: Some(token_blind),
+        leaf_pos: Some(leaf_position as u32),
+        merkle_path: Some(merkle_path.try_into().unwrap()),
+        sig_secret: Some(signature_secret.0),
+    };
+
+    let start = Instant::now();
+    // TODO: Don't always build this
+    let pk = ProvingKey::build(K, SpendContract::default());
+    debug!("Setup: [{:?}]", start.elapsed());
+
+    let start = Instant::now();
+    let public_inputs = revealed.make_outputs();
+    let proof = Proof::create(&pk, &[c], &public_inputs)?;
+    debug!("Prove: [{:?}]", start.elapsed());
+
+    Ok((proof, revealed))
 }
 
 pub fn verify_spend_proof(
-    pvk: &groth16::PreparedVerifyingKey<Bls12>,
-    proof: &groth16::Proof<Bls12>,
+    vk: &VerifyingKey,
+    proof: Proof,
     revealed: &SpendRevealedValues,
-) -> bool {
-    let public_input = revealed.make_outputs();
-
-    let start = Instant::now();
-    let result = groth16::verify_proof(pvk, proof, &public_input).is_ok();
-    println!("Verify: [{:?}]", start.elapsed());
-    result
+) -> Result<()> {
+    let public_inputs = revealed.make_outputs();
+    Ok(proof.verify(vk, &public_inputs)?)
 }

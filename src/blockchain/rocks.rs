@@ -1,7 +1,7 @@
-use async_std::sync::Arc;
 use std::marker::PhantomData;
 use std::path::Path;
 
+use async_std::sync::Arc;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 
 use crate::serial::{deserialize, serialize, Decodable, Encodable};

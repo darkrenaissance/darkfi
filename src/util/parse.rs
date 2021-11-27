@@ -6,20 +6,21 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     serial::{deserialize, serialize},
+    types::*,
     util::{NetworkName, TokenList},
     Error, Result,
 };
 
 // hash the external token ID and NetworkName param.
 // if fails, change the last 4 bytes and hash it again. keep repeating until it works.
-pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
+pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
     let mut id_string = network.to_string();
 
     id_string.push_str(tkn_str);
 
     let mut data: Vec<u8> = serialize(&id_string);
 
-    let token_id = match deserialize::<jubjub::Fr>(&data) {
+    let token_id = match deserialize::<DrkTokenId>(&data) {
         Ok(v) => v,
         Err(_) => {
             let mut counter = 0;
@@ -30,7 +31,7 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<jubjub::Fr> {
                 let mut hasher = Sha256::new();
                 hasher.update(&data);
                 let hash = hasher.finalize();
-                let token_id = deserialize::<jubjub::Fr>(&hash);
+                let token_id = deserialize::<DrkTokenId>(&hash);
                 if token_id.is_err() {
                     counter += 1;
                     continue;

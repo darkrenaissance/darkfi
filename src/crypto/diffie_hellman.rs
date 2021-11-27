@@ -1,5 +1,6 @@
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
-use group::{cofactor::CofactorGroup, GroupEncoding};
+use pasta_curves as pasta;
+use pasta_curves::group::{cofactor::CofactorGroup, GroupEncoding};
 
 pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"DarkFiSaplingKDF";
 
@@ -8,7 +9,7 @@ pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"DarkFiSaplingKDF";
 /// Sapling key agreement for note encryption.
 ///
 /// Implements section 5.4.4.3 of the Zcash Protocol Specification.
-pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubjub::SubgroupPoint {
+pub fn sapling_ka_agree(esk: &pasta::Fq, pk_d: &pasta::Ep) -> pasta::Ep {
     // [8 esk] pk_d
     // <ExtendedPoint as CofactorGroup>::clear_cofactor is implemented using
     // ExtendedPoint::mul_by_cofactor in the jubjub crate.
@@ -25,7 +26,7 @@ pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubju
 /// Sapling KDF for note encryption.
 ///
 /// Implements section 5.4.4.4 of the Zcash Protocol Specification.
-pub fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::ExtendedPoint) -> Blake2bHash {
+pub fn kdf_sapling(dhsecret: pasta::Ep, epk: &pasta::Ep) -> Blake2bHash {
     Blake2bParams::new()
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)

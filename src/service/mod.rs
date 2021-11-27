@@ -1,4 +1,3 @@
-//pub mod cashier;
 pub mod bridge;
 pub mod gateway;
 pub mod reqrep;

@@ -1,13 +1,25 @@
 [package]
-name = "drk_halo2"
+name = "halo2_examples"
 version = "0.1.0"
-authors = ["Ivan Jelincic <parazyd@dyne.org>"]
+authors = ["narodnik <x@x.org>"]
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
-rand = "0.8.4"
-ff = "0.11.0"
+ff = "0.10"
+group = "0.10"
 pasta_curves = "0.2.1"
+
+rand = "0.8.4"
+hex = "0.4.3"
+
+# Can we delete these?
+bitvec = "0.22"
+arrayvec = "0.7.0"
+lazy_static = "1"
+bigint = "4"
+subtle = "2.3"
 
 [dependencies.halo2]
 version = "=0.1.0-beta.1"
@@ -17,3 +29,4 @@ features = ["dev-graph", "gadget-traces", "sanity-checks"]
 git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
 features = ["dev-graph", "test-dependencies"]
+

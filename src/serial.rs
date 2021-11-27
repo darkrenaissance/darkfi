@@ -3,8 +3,6 @@ use std::io::{Cursor, Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::{io, mem};
 
-use bls12_381 as bls;
-
 use crate::endian;
 use crate::error::{Error, Result};
 
@@ -446,7 +444,7 @@ macro_rules! impl_vec {
         }
     };
 }
-impl_vec!(bls::Scalar);
+
 impl_vec!(SocketAddr);
 impl_vec!([u8; 32]);
 
@@ -542,29 +540,26 @@ impl Decodable for Box<[u8]> {
 
 // Tuples
 macro_rules! tuple_encode {
-($($x:ident),*) => (
-impl <$($x: Encodable),*> Encodable for ($($x),*) {
-#[inline]
-#[allow(non_snake_case)]
-fn encode<S: io::Write>(
-&self,
-mut s: S,
-) -> Result<usize> {
-let &($(ref $x),*) = self;
-let mut len = 0;
-$(len += $x.encode(&mut s)?;)*
-Ok(len)
-}
-}
+    ($($x:ident),*) => (
+        impl <$($x: Encodable),*> Encodable for ($($x),*) {
+            #[inline]
+            #[allow(non_snake_case)]
+            fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+                let &($(ref $x),*) = self;
+                let mut len = 0;
+                $(len += $x.encode(&mut s)?;)*
+                Ok(len)
+            }
+        }
 
-impl<$($x: Decodable),*> Decodable for ($($x),*) {
-#[inline]
-#[allow(non_snake_case)]
-fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-Ok(($({let $x = Decodable::decode(&mut d)?; $x }),*))
-}
-}
-);
+        impl<$($x: Decodable),*> Decodable for ($($x),*) {
+            #[inline]
+            #[allow(non_snake_case)]
+            fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+                Ok(($({let $x = Decodable::decode(&mut d)?; $x }),*))
+            }
+        }
+    );
 }
 
 tuple_encode!(T0, T1);

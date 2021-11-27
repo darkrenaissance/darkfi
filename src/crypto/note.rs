@@ -1,27 +1,34 @@
-use crypto_api_chachapoly::ChachaPolyIetf;
-use ff::Field;
-use rand::rngs::OsRng;
 use std::io;
 
-use super::diffie_hellman::{kdf_sapling, sapling_ka_agree};
-use crate::error::{Error, Result};
-use crate::serial::{Decodable, Encodable, ReadExt, WriteExt};
+use crypto_api_chachapoly::ChachaPolyIetf;
+use pasta_curves::arithmetic::Field;
+use rand::rngs::OsRng;
+
+use super::{
+    diffie_hellman::{kdf_sapling, sapling_ka_agree},
+    util::mod_r_p,
+};
+use crate::{
+    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    types::*,
+    Error, Result,
+};
 
 pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
     8 +     // value
     32 +    // token_id
     32 +    // coin_blind
-    32; // valcom_blind
+    32; // value_blind
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
 #[derive(Clone)]
 pub struct Note {
-    pub serial: jubjub::Fr,
+    pub serial: DrkSerial,
     pub value: u64,
-    pub token_id: jubjub::Fr,
-    pub coin_blind: jubjub::Fr,
-    pub valcom_blind: jubjub::Fr,
+    pub token_id: DrkTokenId,
+    pub coin_blind: DrkCoinBlind,
+    pub value_blind: DrkValueBlind,
 }
 
 impl Encodable for Note {
@@ -31,7 +38,7 @@ impl Encodable for Note {
         len += self.value.encode(&mut s)?;
         len += self.token_id.encode(&mut s)?;
         len += self.coin_blind.encode(&mut s)?;
-        len += self.valcom_blind.encode(&mut s)?;
+        len += self.value_blind.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -43,17 +50,17 @@ impl Decodable for Note {
             value: Decodable::decode(&mut d)?,
             token_id: Decodable::decode(&mut d)?,
             coin_blind: Decodable::decode(&mut d)?,
-            valcom_blind: Decodable::decode(d)?,
+            value_blind: Decodable::decode(d)?,
         })
     }
 }
 
 impl Note {
-    pub fn encrypt(&self, public: &jubjub::SubgroupPoint) -> Result<EncryptedNote> {
-        let ephem_secret = jubjub::Fr::random(&mut OsRng);
-        let ephem_public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * ephem_secret;
-        let shared_secret = sapling_ka_agree(&ephem_secret, public.into());
-        let key = kdf_sapling(shared_secret, &ephem_public.into());
+    pub fn encrypt(&self, public: &DrkPublicKey) -> Result<EncryptedNote> {
+        let ephem_secret = DrkSecretKey::random(&mut OsRng);
+        let ephem_public = derive_public_key(ephem_secret);
+        let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public);
+        let key = kdf_sapling(shared_secret, &ephem_public);
 
         let mut input = Vec::new();
         self.encode(&mut input)?;
@@ -75,7 +82,7 @@ impl Note {
 
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
-    ephem_public: jubjub::SubgroupPoint,
+    ephem_public: DrkPublicKey,
 }
 
 impl Encodable for EncryptedNote {
@@ -100,9 +107,9 @@ impl Decodable for EncryptedNote {
 }
 
 impl EncryptedNote {
-    pub fn decrypt(&self, secret: &jubjub::Fr) -> Result<Note> {
-        let shared_secret = sapling_ka_agree(secret, &self.ephem_public.into());
-        let key = kdf_sapling(shared_secret, &self.ephem_public.into());
+    pub fn decrypt(&self, secret: &DrkSecretKey) -> Result<Note> {
+        let shared_secret = sapling_ka_agree(&mod_r_p(*secret), &self.ephem_public);
+        let key = kdf_sapling(shared_secret, &self.ephem_public);
 
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
         assert_eq!(
@@ -124,16 +131,18 @@ impl EncryptedNote {
 
 #[test]
 fn test_note_encdec() {
+    use crate::types::*;
+
     let note = Note {
-        serial: jubjub::Fr::random(&mut OsRng),
+        serial: DrkSerial::random(&mut OsRng),
         value: 110,
-        token_id: jubjub::Fr::random(&mut OsRng),
-        coin_blind: jubjub::Fr::random(&mut OsRng),
-        valcom_blind: jubjub::Fr::random(&mut OsRng),
+        token_id: DrkTokenId::random(&mut OsRng),
+        coin_blind: DrkCoinBlind::random(&mut OsRng),
+        value_blind: DrkValueBlind::random(&mut OsRng),
     };
 
-    let secret = jubjub::Fr::random(&mut OsRng);
-    let public = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
+    let secret = DrkSecretKey::random(&mut OsRng);
+    let public = derive_public_key(secret);
 
     let encrypted_note = note.encrypt(&public).unwrap();
     let note2 = encrypted_note.decrypt(&secret).unwrap();

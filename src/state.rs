@@ -1,19 +1,23 @@
-use bellman::groth16;
-use bls12_381::Bls12;
+use std::fmt;
+
 use log::debug;
 
 use crate::{
-    crypto::{coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier},
-    tx,
+    crypto::{
+        coin::Coin, merkle_node2::MerkleNode, note::EncryptedNote, nullifier::Nullifier,
+        proof::VerifyingKey, schnorr,
+    },
+    tx::Transaction,
+    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
 };
 
 pub trait ProgramState {
-    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool;
+    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool;
     fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
 
-    fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
-    fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12>;
+    fn mint_vk(&self) -> &VerifyingKey;
+    fn spend_vk(&self) -> &VerifyingKey;
 }
 
 pub struct StateUpdate {
@@ -46,10 +50,37 @@ pub enum VerifyFailed {
     AssetMismatch,
 }
 
-pub fn state_transition<S: ProgramState>(
-    state: &S,
-    tx: tx::Transaction,
-) -> VerifyResult<StateUpdate> {
+impl std::error::Error for VerifyFailed {}
+
+impl fmt::Display for VerifyFailed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            VerifyFailed::InvalidCashierKey(i) => {
+                write!(f, "Invalid cashier public key for clear input {}", i)
+            }
+            VerifyFailed::InvalidMerkle(i) => {
+                write!(f, "Invalid merkle root for input {}", i)
+            }
+            VerifyFailed::DuplicateNullifier(i) => {
+                write!(f, "Duplicate nullifier for input {}", i)
+            }
+            VerifyFailed::SpendProof(i) => write!(f, "Spend proof for input {}", i),
+            VerifyFailed::MintProof(i) => write!(f, "Mint proof for input {}", i),
+            VerifyFailed::ClearInputSignature(i) => {
+                write!(f, "Invalid signature for clear input {}", i)
+            }
+            VerifyFailed::InputSignature(i) => write!(f, "Invalid signature for input {}", i),
+            VerifyFailed::MissingFunds => {
+                f.write_str("Money in does not match money out (value commits)")
+            }
+            VerifyFailed::AssetMismatch => {
+                f.write_str("Assets don't match some inputs or outputs (token commits)")
+            }
+        }
+    }
+}
+
+pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
 
     debug!(target: "STATE TRANSITION", "iterate clear_inputs");
@@ -67,7 +98,6 @@ pub fn state_transition<S: ProgramState>(
     debug!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
-        // Check merkle roots
         let merkle = &input.revealed.merkle_root;
 
         // Merkle is used to know whether this is a coin that existed
@@ -87,7 +117,7 @@ pub fn state_transition<S: ProgramState>(
 
     debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
     // Check the tx verifies correctly
-    tx.verify(state.mint_pvk(), state.spend_pvk())?;
+    tx.verify(state.mint_vk(), state.spend_vk())?;
 
     let mut nullifiers = vec![];
     for input in tx.inputs {
@@ -99,7 +129,7 @@ pub fn state_transition<S: ProgramState>(
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin::new(output.revealed.coin));
+        coins.push(Coin(output.revealed.coin.clone()));
         enc_notes.push(output.enc_note);
     }
 

@@ -1,4 +1,3 @@
-use async_std::sync::{Arc, Mutex};
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::convert::{From, TryFrom, TryInto};
@@ -9,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use bdk::electrum_client::{
@@ -35,7 +35,7 @@ use secp256k1::{
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::serial::{deserialize, serialize, Decodable, Encodable};
 use crate::util::{generate_id, NetworkName};
-use crate::{Error, Result};
+use crate::{types::*, Error, Result};
 
 // Swap out these types for any future non bitcoin-rs types
 pub type PubAddress = Address;
@@ -357,7 +357,7 @@ impl BtcClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         btc_keys: Account,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
     ) -> BtcResult<()> {
         let client = self.client.clone();
 
@@ -528,7 +528,7 @@ impl BtcClient {
 impl NetworkClient for BtcClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         _mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
@@ -560,7 +560,7 @@ impl NetworkClient for BtcClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         _public_key: Vec<u8>,
-        drk_pub_key: jubjub::SubgroupPoint,
+        drk_pub_key: DrkPublicKey,
         _mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {

@@ -29,24 +29,33 @@ use halo2_gadgets::{
         merkle::MerklePath,
     },
     utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
+};
+use incrementalmerkletree::{
+    bridgetree::{BridgeTree, Frontier as BridgeFrontier},
+    Altitude, Frontier, Tree,
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve},
+    group::{
+        ff::{PrimeField, PrimeFieldBits},
+        Curve,
+    },
     pallas,
 };
 use rand::rngs::OsRng;
 
-use drk_halo2::{
+use drk::crypto::{
     constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+        sinsemilla::{
+            i2lebsp, OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION,
+        },
         OrchardFixedBases,
     },
-    crypto::pedersen_commitment,
+    merkle_node2::MerkleNode,
     proof::{Proof, ProvingKey, VerifyingKey},
-    spec::i2lebsp,
+    util::{pedersen_commitment_scalar, pedersen_commitment_u64},
 };
 
 #[derive(Clone, Debug)]
@@ -119,7 +128,6 @@ struct BurnCircuit {
     coin_blind: Option<pallas::Base>,
     value_blind: Option<pallas::Scalar>,
     asset_blind: Option<pallas::Scalar>,
-    leaf: Option<pallas::Base>,
     leaf_pos: Option<u32>,
     merkle_path: Option<[pallas::Base; 32]>,
     sig_secret: Option<pallas::Scalar>,
@@ -290,7 +298,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
         // =========
         // Nullifier
         // =========
-        let hashed_secret_key = self.load_private(
+        let secret_key = self.load_private(
             layouter.namespace(|| "load sinsemilla(secret key)"),
             config.advices[0],
             self.secret_key,
@@ -302,7 +310,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
             self.serial,
         )?;
 
-        let message = [hashed_secret_key, serial];
+        let message = [secret_key, serial];
         let hash = {
             let poseidon_message = layouter.assign_region(
                 || "load message",
@@ -341,14 +349,117 @@ impl Circuit<pallas::Base> for BurnCircuit {
 
         layouter.constrain_instance(hash.cell(), config.primary, BURN_NULLIFIER_OFFSET)?;
 
+        // let nullifier_k = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+        //     nullifier_k.mul(
+        //         layouter.namespace(|| "[poseidon_output + psi_old] NullifierK"),
+        //         scalar,
+        //     )?
+
+        let value = self.load_private(
+            layouter.namespace(|| "load value"),
+            config.advices[0],
+            self.value,
+        )?;
+
+        let asset = self.load_private(
+            layouter.namespace(|| "load asset"),
+            config.advices[0],
+            self.asset,
+        )?;
+
+        let coin_blind = self.load_private(
+            layouter.namespace(|| "load coin_blind"),
+            config.advices[0],
+            self.coin_blind,
+        )?;
+
+        let public_key = {
+            let nullifier_k = OrchardFixedBases::NullifierK;
+            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
+            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), secret_key)?
+        };
+
+        let (pub_x, pub_y) = (public_key.inner().x(), public_key.inner().y());
+
+        // =========
+        // Coin hash
+        // =========
+        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
+        let mut hashes = vec![];
+
+        for message in messages.iter() {
+            let hash = {
+                let poseidon_message = layouter.assign_region(
+                    || "load message",
+                    |mut region| {
+                        let mut message_word = |i: usize| {
+                            let value = message[i].value();
+                            let var = region.assign_advice(
+                                || format!("load message_{}", i),
+                                config.poseidon_config.state()[i],
+                                0,
+                                || value.ok_or(Error::SynthesisError),
+                            )?;
+                            region.constrain_equal(var, message[i].cell())?;
+                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
+                                var, value,
+                            )))
+                        };
+                        Ok([message_word(0)?, message_word(1)?])
+                    },
+                )?;
+
+                let poseidon_hasher = PoseidonHash::init(
+                    config.poseidon_chip(),
+                    layouter.namespace(|| "Poseidon init"),
+                    ConstantLength::<2>,
+                )?;
+
+                let poseidon_output = poseidon_hasher.hash(
+                    layouter.namespace(|| "Poseidon hash (a, b)"),
+                    poseidon_message,
+                )?;
+
+                let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+                poseidon_output
+            };
+
+            hashes.push(hash);
+        }
+
+        let coin = layouter.assign_region(
+            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
+            |mut region| {
+                config.q_add.enable(&mut region, 0)?;
+
+                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
+                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
+                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
+
+                let scalar_val = hashes[0]
+                    .value()
+                    .zip(hashes[1].value())
+                    .zip(hashes[2].value())
+                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
+
+                let cell = region.assign_advice(
+                    || "hash(a,b)+hash(c,d)+hash(e,f)",
+                    config.advices[5],
+                    0,
+                    || scalar_val.ok_or(Error::SynthesisError),
+                )?;
+                Ok(CellValue::new(cell, scalar_val))
+            },
+        )?;
+
         // ===========
         // Merkle root
         // ===========
-        let leaf = self.load_private(
-            layouter.namespace(|| "load leaf"),
-            config.advices[0],
-            self.leaf,
-        )?;
+        //let leaf = self.load_private(
+        //    layouter.namespace(|| "load leaf"),
+        //    config.advices[0],
+        //    self.leaf,
+        //)?;
 
         let path = MerklePath {
             chip_1: merkle_chip_1,
@@ -359,7 +470,7 @@ impl Circuit<pallas::Base> for BurnCircuit {
         };
 
         let computed_final_root =
-            path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
+            path.calculate_root(layouter.namespace(|| "calculate root"), coin)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -502,11 +613,15 @@ fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::
     node
 }
 
+fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
+    pallas::Scalar::from_repr(x.to_repr()).unwrap()
+}
+
 fn main() {
     // The number of rows in our circuit cannot exceed 2^k
     let k: u32 = 11;
 
-    let secret_key = pallas::Scalar::random(&mut OsRng);
+    let secret = pallas::Base::random(&mut OsRng);
     let serial = pallas::Base::random(&mut OsRng);
 
     let value = 42;
@@ -514,15 +629,15 @@ fn main() {
 
     // Nullifier = poseidon(sinsemilla(secret_key), serial)
     let domain = primitives::sinsemilla::HashDomain::new(S_PERSONALIZATION);
-    let bits_secretkey: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
-    let hashed_secret_key = domain.hash(iter::empty().chain(bits_secretkey)).unwrap();
+    //let bits_secretkey: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
+    //let hashed_secret_key = domain.hash(iter::empty().chain(bits_secretkey)).unwrap();
 
-    let nullifier = [hashed_secret_key, serial];
+    let nullifier = [secret, serial];
     let nullifier =
         primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
     // Public key derivation
-    let public_key = OrchardFixedBases::SpendAuthG.generator() * secret_key;
+    let public_key = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
     let coords = public_key.to_affine().coordinates().unwrap();
 
     // Construct Coin
@@ -539,17 +654,31 @@ fn main() {
         coin += hash;
     }
 
+    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+    for _ in 0..10 {
+        let random_node = MerkleNode(pallas::Base::random(&mut OsRng));
+        tree.append(&random_node);
+    }
+    let node = MerkleNode(coin.clone());
+    tree.append(&node);
+    tree.witness();
+    for _ in 0..10 {
+        let random_node = MerkleNode(pallas::Base::random(&mut OsRng));
+        tree.append(&random_node);
+    }
+
+    let (merkle_position, merkle_path) = tree.authentication_path(&node).unwrap();
+
     // Merkle root
-    let leaf = pallas::Base::random(&mut OsRng);
-    let pos = rand::random::<u32>();
-    let path: Vec<_> = (0..32).map(|_| pallas::Base::random(&mut OsRng)).collect();
-    let merkle_root = root(path.clone().try_into().unwrap(), pos, leaf);
+    let pos: u64 = merkle_position.into();
+    let path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
+    let merkle_root = tree.root().0;
 
     // Value and asset commitments
     let value_blind = pallas::Scalar::random(&mut OsRng);
     let asset_blind = pallas::Scalar::random(&mut OsRng);
-    let value_commit = pedersen_commitment(value, value_blind);
-    let asset_commit = pedersen_commitment(asset, asset_blind);
+    let value_commit = pedersen_commitment_u64(value, value_blind);
+    let asset_commit = pedersen_commitment_u64(asset, asset_blind);
 
     let value_coords = value_commit.to_affine().coordinates().unwrap();
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
@@ -571,15 +700,14 @@ fn main() {
     ];
 
     let circuit = BurnCircuit {
-        secret_key: Some(hashed_secret_key),
+        secret_key: Some(secret),
         serial: Some(serial),
         value: Some(pallas::Base::from(value)),
         asset: Some(pallas::Base::from(asset)),
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
         asset_blind: Some(asset_blind),
-        leaf: Some(leaf),
-        leaf_pos: Some(pos),
+        leaf_pos: Some(pos as u32),
         merkle_path: Some(path.try_into().unwrap()),
         sig_secret: Some(sig_secret),
     };
