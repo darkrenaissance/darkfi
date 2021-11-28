@@ -59,6 +59,7 @@ impl Encodable for PartialTransactionClearInput {
         Ok(len)
     }
 }
+
 impl Decodable for PartialTransactionClearInput {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self {

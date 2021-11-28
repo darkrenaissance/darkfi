@@ -1,27 +1,20 @@
+use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
-use std::{fmt, time::Instant};
-
-use halo2_gadgets::ecc::FixedPoints;
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Hashable, Tree};
-use pasta_curves::{
-    arithmetic::{CurveAffine, Field, FieldExt},
-    pallas,
-};
 
 use drk::{
     circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     crypto::{
         coin::Coin,
-        constants::OrchardFixedBases,
+        keypair::Keypair,
         merkle_node2::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
-        proof::{Proof, ProvingKey, VerifyingKey},
+        proof::VerifyingKey,
         schnorr,
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     state::{state_transition, ProgramState, StateUpdate},
-    tx,
+    tx, Result,
 };
 
 struct MemoryState {
@@ -51,9 +44,11 @@ impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
         public == &self.cashier_public
     }
+
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         self.merkle_roots.iter().any(|m| m == merkle_root)
     }
+
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
         self.nullifiers.iter().any(|n| n == nullifier)
     }
@@ -61,6 +56,7 @@ impl ProgramState for MemoryState {
     fn mint_vk(&self) -> &VerifyingKey {
         &self.mint_vk
     }
+
     fn spend_vk(&self) -> &VerifyingKey {
         &self.spend_vk
     }
@@ -80,7 +76,7 @@ impl MemoryState {
             //// Keep track of all merkle roots that have existed
             self.merkle_roots.push(self.tree.root());
 
-            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+            if let Some((note, _secret)) = self.try_decrypt_note(enc_note) {
                 self.own_coins.push((coin, note));
                 self.tree.witness();
             }
@@ -101,12 +97,11 @@ impl MemoryState {
     }
 }
 
-fn main() -> std::result::Result<(), failure::Error> {
+fn main() -> Result<()> {
     let cashier_secret = schnorr::SecretKey::random();
     let cashier_public = cashier_secret.public_key();
 
-    let secret = pallas::Base::random(&mut OsRng);
-    let public = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
+    let keypair = Keypair::random(&mut OsRng);
 
     const K: u32 = 11;
     let mint_vk = VerifyingKey::build(K, MintContract::default());
@@ -120,7 +115,7 @@ fn main() -> std::result::Result<(), failure::Error> {
         mint_vk,
         spend_vk,
         cashier_public,
-        secrets: vec![secret],
+        secrets: vec![keypair.secret],
     };
 
     let token_id = pallas::Base::from(110);
@@ -132,14 +127,18 @@ fn main() -> std::result::Result<(), failure::Error> {
             signature_secret: cashier_secret,
         }],
         inputs: vec![],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public }],
+        outputs: vec![tx::TransactionBuilderOutputInfo {
+            value: 110,
+            token_id,
+            public: keypair.public,
+        }],
     };
 
     let tx = builder.build()?;
 
     tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
 
-    let note = tx.outputs[0].enc_note.decrypt(&secret)?;
+    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
 
     let update = state_transition(&state, tx)?;
     state.apply(update);
@@ -154,10 +153,14 @@ fn main() -> std::result::Result<(), failure::Error> {
         inputs: vec![tx::TransactionBuilderInputInfo {
             leaf_position,
             merkle_path,
-            secret,
+            secret: keypair.secret,
             note: note.clone(),
         }],
-        outputs: vec![tx::TransactionBuilderOutputInfo { value: 110, token_id, public }],
+        outputs: vec![tx::TransactionBuilderOutputInfo {
+            value: 110,
+            token_id,
+            public: keypair.public,
+        }],
     };
 
     let tx = builder.build()?;

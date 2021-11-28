@@ -6,8 +6,8 @@ use crate::crypto::{constants::OrchardFixedBases, util::mod_r_p};
 
 #[derive(Clone, Debug)]
 pub struct Keypair {
-    secret: pallas::Base,
-    public: pallas::Point,
+    pub secret: pallas::Base,
+    pub public: pallas::Point,
 }
 
 impl Keypair {
