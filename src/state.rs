@@ -2,7 +2,7 @@ use log::debug;
 
 use crate::{
     crypto::{
-        coin::Coin, merkle_node2::MerkleNode, note::EncryptedNote, nullifier::Nullifier,
+        coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier,
         proof::VerifyingKey, schnorr,
     },
     tx::Transaction,

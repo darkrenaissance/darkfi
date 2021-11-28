@@ -7,7 +7,7 @@ use drk::{
     crypto::{
         coin::Coin,
         keypair::Keypair,
-        merkle_node2::MerkleNode,
+        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,

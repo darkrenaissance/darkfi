@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     crypto::{
-        merkle_node2::MerkleNode, mint_proof::create_mint_proof, note::Note, schnorr,
+        merkle_node::MerkleNode, mint_proof::create_mint_proof, note::Note, schnorr,
         spend_proof::create_spend_proof,
     },
     serial::Encodable,

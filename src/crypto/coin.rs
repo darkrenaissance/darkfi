@@ -19,9 +19,11 @@ impl Coin {
         self.0.to_bytes()
     }
 
+    /*
     pub(crate) fn inner(&self) -> pallas::Base {
         self.0
     }
+    */
 }
 
 impl Encodable for Coin {

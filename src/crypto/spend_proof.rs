@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     circuit::spend_contract::SpendContract,
-    crypto::{merkle_node2::MerkleNode, schnorr},
+    crypto::{merkle_node::MerkleNode, schnorr},
     serial::{Decodable, Encodable},
     types::*,
     Result,

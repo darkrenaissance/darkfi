@@ -1,144 +1,93 @@
-use bitvec::{order::Lsb0, view::AsBits};
-use ff::PrimeField;
-use group::Curve;
+use std::{io, iter};
+
+use halo2_gadgets::primitives::sinsemilla::HashDomain;
+use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
-use std::io;
+use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeFieldBits, pallas};
+use subtle::ConstantTimeEq;
 
-use super::{coin::Coin, merkle::Hashable};
-use crate::serial::{Decodable, Encodable};
-use crate::{Error, Result};
+use crate::{
+    crypto::constants::{
+        sinsemilla::{i2lebsp_k, MERKLE_CRH_PERSONALIZATION},
+        L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD,
+    },
+    error::Result,
+    serial::{Decodable, Encodable},
+};
 
-pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 32;
-
-/// Compute a parent node in the Sapling commitment tree given its two children.
-pub fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> bls12_381::Scalar {
-    // This thing is nasty lol
-    let lhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(lhs.as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
+lazy_static! {
+    static ref UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from_u64(2);
+    static ref EMPTY_ROOTS: Vec<MerkleNode> = {
+        iter::empty()
+            .chain(Some(MerkleNode::empty_leaf()))
+            .chain((0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
+                let l = l as u8;
+                *state = MerkleNode::combine(l.into(), state, state);
+                Some(state.clone())
+            }))
+            .collect()
     };
-
-    let rhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(rhs.as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
-
-    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-        zcash_primitives::pedersen_hash::Personalization::MerkleTree(depth),
-        lhs.iter()
-            .copied()
-            .take(bls12_381::Scalar::NUM_BITS as usize)
-            .chain(
-                rhs.iter()
-                    .copied()
-                    .take(bls12_381::Scalar::NUM_BITS as usize),
-            ),
-    ))
-    .to_affine()
-    .get_u()
 }
 
-pub fn hash_coin(coin: &[u8; 32]) -> bls12_381::Scalar {
-    let rhs = {
-        let mut tmp = [false; 256];
-        for (a, b) in tmp.iter_mut().zip(coin.as_bits::<Lsb0>()) {
-            *a = *b;
-        }
-        tmp
-    };
+#[derive(Debug, Clone, std::cmp::Eq)]
+pub struct MerkleNode(pub pallas::Base);
 
-    jubjub::ExtendedPoint::from(zcash_primitives::pedersen_hash::pedersen_hash(
-        zcash_primitives::pedersen_hash::Personalization::NoteCommitment,
-        rhs.iter().copied(),
-    ))
-    .to_affine()
-    .get_u()
-}
-
-/// A node within the Sapling commitment tree.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MerkleNode {
-    pub repr: [u8; 32],
-}
-
-impl MerkleNode {
-    pub fn new(repr: [u8; 32]) -> Self {
-        Self { repr }
+impl std::cmp::PartialEq for MerkleNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ct_eq(&other.0).into()
     }
+}
 
-    pub fn from_coin(coin: &Coin) -> Self {
-        Self {
-            repr: hash_coin(&coin.repr).to_repr(),
-        }
+impl std::hash::Hash for MerkleNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        <Option<pallas::Base>>::from(self.0).map(|b| b.to_bytes()).hash(state)
     }
 }
 
 impl Hashable for MerkleNode {
-    fn read<R: io::Read>(mut reader: R) -> Result<Self> {
-        let mut repr = [0u8; 32];
-        reader.read_exact(&mut repr)?;
-        Ok(Self::new(repr))
+    fn empty_leaf() -> Self {
+        MerkleNode(*UNCOMMITTED_ORCHARD)
     }
 
-    fn write<W: io::Write>(&self, mut writer: W) -> Result<()> {
-        writer
-            .write_all(self.repr.as_ref())
-            .map_err(|e| Error::Io(e.kind()))
+    /// Implements `MerkleCRH^Orchard` as defined in
+    /// <https://zips.z.cash/protocol/protocol.pdf#orchardmerklecrh>
+    ///
+    /// The layer with 2^n nodes is called "layer n":
+    ///      - leaves are at layer MERKLE_DEPTH_ORCHARD = 32;
+    ///      - the root is at layer 0.
+    /// `l` is MERKLE_DEPTH_ORCHARD - layer - 1.
+    ///      - when hashing two leaves, we produce a node on the layer above the leaves, i.e. layer
+    ///        = 31, l = 0
+    ///      - when hashing to the final root, we produce the anchor with layer = 0, l = 31.
+    fn combine(altitude: Altitude, left: &Self, right: &Self) -> Self {
+        // MerkleCRH Sinsemilla hash domain.
+        let domain = HashDomain::new(MERKLE_CRH_PERSONALIZATION);
+
+        MerkleNode(
+            domain
+                .hash(
+                    iter::empty()
+                        .chain(i2lebsp_k(altitude.into()).iter().copied())
+                        .chain(left.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE))
+                        .chain(right.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE)),
+                )
+                .unwrap_or(pallas::Base::zero()),
+        )
     }
 
-    fn combine(depth: usize, lhs: &Self, rhs: &Self) -> Self {
-        Self {
-            repr: merkle_hash(depth, &lhs.repr, &rhs.repr).to_repr(),
-        }
-    }
-
-    fn blank() -> Self {
-        // The smallest u-coordinate that is not on the curve
-        // is one.
-        let uncommitted_note = bls12_381::Scalar::one();
-        Self {
-            repr: uncommitted_note.to_repr(),
-        }
-    }
-
-    fn empty_root(depth: usize) -> Self {
-        EMPTY_ROOTS[depth]
-    }
-}
-
-impl From<MerkleNode> for bls12_381::Scalar {
-    fn from(node: MerkleNode) -> Self {
-        bls12_381::Scalar::from_repr(node.repr).expect("Tree nodes should be in the prime field")
+    fn empty_root(altitude: Altitude) -> Self {
+        EMPTY_ROOTS[<usize>::from(altitude)].clone()
     }
 }
 
 impl Encodable for MerkleNode {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        self.repr.encode(s)
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        self.0.encode(&mut s)
     }
 }
 
 impl Decodable for MerkleNode {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
-        Ok(Self {
-            repr: Decodable::decode(d)?,
-        })
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self(Decodable::decode(&mut d)?))
     }
-}
-
-lazy_static! {
-    static ref EMPTY_ROOTS: Vec<MerkleNode> = {
-        let mut v = vec![MerkleNode::blank()];
-        for d in 0..SAPLING_COMMITMENT_TREE_DEPTH {
-            let next = MerkleNode::combine(d, &v[d], &v[d]);
-            v.push(next);
-        }
-        v
-    };
 }
