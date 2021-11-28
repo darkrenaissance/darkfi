@@ -6,7 +6,7 @@ use crate::{
     error::Result,
     impl_vec,
     serial::{Decodable, Encodable, VarInt},
-    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
+    types::{DrkTokenId, DrkValueBlind},
 };
 
 pub struct PartialTransaction {

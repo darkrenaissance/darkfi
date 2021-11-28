@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use log::{debug, error, info};
 use pasta_curves::arithmetic::Field;

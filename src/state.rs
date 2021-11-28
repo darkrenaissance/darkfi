@@ -6,7 +6,6 @@ use crate::{
         proof::VerifyingKey, schnorr,
     },
     tx::Transaction,
-    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
 };
 
 pub trait ProgramState {
@@ -97,7 +96,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin(output.revealed.coin.clone()));
+        coins.push(Coin(output.revealed.coin));
         enc_notes.push(output.enc_note);
     }
 

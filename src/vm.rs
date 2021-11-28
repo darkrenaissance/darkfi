@@ -32,7 +32,7 @@ use crate::{
     crypto::{
         arith_chip::{ArithmeticChip, ArithmeticChipConfig},
         constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
             OrchardFixedBases,
         },
     },
@@ -122,7 +122,7 @@ impl MintConfig {
 #[derive(Clone, Debug)]
 pub struct ZkCircuit<'a> {
     pub const_fixed_points: HashMap<String, OrchardFixedBases>,
-    pub constants: &'a Vec<(String, ZkType)>,
+    pub constants: &'a [(String, ZkType)],
     pub contract: &'a ZkContract,
     // For each type create a separate stack
     pub witness_base: HashMap<String, Option<pallas::Base>>,
@@ -133,7 +133,7 @@ pub struct ZkCircuit<'a> {
 impl<'a> ZkCircuit<'a> {
     pub fn new(
         const_fixed_points: HashMap<String, OrchardFixedBases>,
-        constants: &'a Vec<(String, ZkType)>,
+        constants: &'a [(String, ZkType)],
         contract: &'a ZkContract,
     ) -> Self {
         let mut witness_base = HashMap::new();
@@ -177,7 +177,7 @@ impl<'a> ZkCircuit<'a> {
             *self.witness_base.get_mut(name).unwrap() = Some(value);
             return Ok(())
         }
-        return Err(Error::InvalidParamName)
+        Err(Error::InvalidParamName)
     }
 
     pub fn witness_scalar(&mut self, name: &str, value: pallas::Scalar) -> Result<()> {
@@ -191,7 +191,7 @@ impl<'a> ZkCircuit<'a> {
             *self.witness_scalar.get_mut(name).unwrap() = Some(value);
             return Ok(())
         }
-        return Err(Error::InvalidParamName)
+        Err(Error::InvalidParamName)
     }
 
     pub fn witness_merkle_path(
@@ -210,7 +210,7 @@ impl<'a> ZkCircuit<'a> {
             *self.witness_merkle_path.get_mut(name).unwrap() = (Some(leaf_pos), Some(path));
             return Ok(())
         }
-        return Err(Error::InvalidParamName)
+        Err(Error::InvalidParamName)
     }
 }
 
@@ -226,7 +226,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         Self {
             const_fixed_points: self.const_fixed_points.clone(),
             constants: self.constants,
-            contract: &self.contract,
+            contract: self.contract,
             witness_base: self.witness_base.keys().map(|key| (key.clone(), None)).collect(),
             witness_scalar: self.witness_scalar.keys().map(|key| (key.clone(), None)).collect(),
             witness_merkle_path: self
@@ -400,11 +400,11 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                         config.advices[0],
                         *value,
                     )?;
-                    stack_base.push(value.clone());
+                    stack_base.push(value);
                 }
                 ZkType::Scalar => {
                     let value = self.witness_scalar.get(variable).expect("witness base set");
-                    stack_scalar.push(value.clone());
+                    stack_scalar.push(*value);
                 }
                 ZkType::EcPoint => {
                     unimplemented!();
@@ -415,7 +415,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 ZkType::MerklePath => {
                     let value =
                         self.witness_merkle_path.get(variable).expect("witness merkle path set");
-                    stack_merkle_path.push(value.clone());
+                    stack_merkle_path.push(*value);
                 }
             }
         }
@@ -550,12 +550,12 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                         chip_1: config.merkle_chip_1(),
                         chip_2: config.merkle_chip_2(),
                         domain: OrchardHashDomains::MerkleCrh,
-                        leaf_pos: leaf_pos.clone(),
-                        path: path.clone(),
+                        leaf_pos: *leaf_pos,
+                        path: *path,
                     };
 
                     let root =
-                        path.calculate_root(layouter.namespace(|| "calculate root"), leaf.clone())?;
+                        path.calculate_root(layouter.namespace(|| "calculate root"), *leaf)?;
                     stack_base.push(root);
                 }
             }

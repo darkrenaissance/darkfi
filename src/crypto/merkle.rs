@@ -42,9 +42,11 @@ impl MerkleHash {
         MerkleHash(value.inner())
     }
 
+    /*
     pub(crate) fn inner(&self) -> pallas::Base {
         self.0
     }
+    */
 
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()

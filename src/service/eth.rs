@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    serial::{deserialize, serialize, Decodable, Encodable},
+    serial::{deserialize, serialize},
     types::*,
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
@@ -265,7 +265,7 @@ impl EthClient {
         Ok(())
     }
 
-    async fn unsubscribe(&self, pubkey: &String) {
+    async fn unsubscribe(&self, pubkey: &str) {
         let mut subscriptions = self.subscriptions.lock().await;
         let index = subscriptions.iter().position(|p| p == pubkey);
         if let Some(ind) = index {
@@ -336,7 +336,7 @@ impl EthClient {
         let block = block.as_str().unwrap();
 
         // Native ETH balance
-        let hexbalance = self.get_eth_balance(&acc, block).await?;
+        let hexbalance = self.get_eth_balance(acc, block).await?;
         let hexbalance = hexbalance.as_str().unwrap().trim_start_matches("0x");
         let balance = BigUint::parse_bytes(hexbalance.as_bytes(), 16).unwrap();
 

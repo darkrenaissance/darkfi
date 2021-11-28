@@ -65,7 +65,7 @@ impl MintRevealedValues {
 
         vec![
             //DrkCircuitField::from_bytes(&self.coin).unwrap(),
-            self.coin.clone(),
+            self.coin,
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),

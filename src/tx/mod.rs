@@ -19,10 +19,7 @@ use crate::{
     impl_vec,
     serial::{Decodable, Encodable, VarInt},
     state,
-    types::{
-        DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind,
-        DrkValueCommit,
-    },
+    types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
 };
 
 pub use self::builder::{

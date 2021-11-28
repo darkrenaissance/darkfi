@@ -31,10 +31,8 @@ impl Address {
     pub fn pkh_address(raw: &DrkPublicKey) -> String {
         let mut hash = Self::get_hash(raw);
 
-        let mut payload = vec![];
-
         // add version
-        payload.push(0x00 as u8);
+        let mut payload = vec![0x00_u8];
 
         // add public key hash
         payload.append(&mut hash);

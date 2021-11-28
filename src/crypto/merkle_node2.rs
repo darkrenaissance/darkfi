@@ -1,12 +1,9 @@
-use halo2_gadgets::{primitives::sinsemilla::HashDomain, utilities::Var};
+use std::{io, iter};
+
+use halo2_gadgets::primitives::sinsemilla::HashDomain;
 use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
-use pasta_curves::{
-    arithmetic::{Field, FieldExt},
-    group::ff::PrimeFieldBits,
-    pallas,
-};
-use std::{io, iter};
+use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeFieldBits, pallas};
 use subtle::ConstantTimeEq;
 
 use crate::{
@@ -49,7 +46,7 @@ impl std::hash::Hash for MerkleNode {
 
 impl Hashable for MerkleNode {
     fn empty_leaf() -> Self {
-        MerkleNode(UNCOMMITTED_ORCHARD.clone())
+        MerkleNode(*UNCOMMITTED_ORCHARD)
     }
 
     /// Implements `MerkleCRH^Orchard` as defined in
@@ -85,7 +82,7 @@ impl Hashable for MerkleNode {
 
 impl Encodable for MerkleNode {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        Ok(self.0.encode(&mut s)?)
+        self.0.encode(&mut s)
     }
 }
 

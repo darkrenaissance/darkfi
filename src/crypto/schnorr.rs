@@ -6,15 +6,12 @@ use rand::rngs::OsRng;
 
 use super::{
     constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
-    util::{hash_to_scalar, mod_r_p},
+    util::hash_to_scalar,
 };
 use crate::{
     error::Result,
     serial::{Decodable, Encodable},
-    types::{
-        derive_public_key, DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId,
-        DrkValueBlind, DrkValueCommit,
-    },
+    types::{DrkPublicKey, DrkValueBlind, DrkValueCommit},
 };
 
 #[derive(Clone)]
@@ -73,8 +70,8 @@ impl PublicKey {
 }
 
 impl Encodable for PublicKey {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        Ok(self.0.encode(s)?)
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        self.0.encode(s)
     }
 }
 
