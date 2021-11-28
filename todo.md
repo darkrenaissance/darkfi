@@ -35,11 +35,11 @@
 ## halo2
 
 - [x] mint circuit poc
-- [ ] burn circuit poc
+- [x] burn circuit poc
 - [x] research port from jubjub to pasta (success)
 - [x] research port from blake2b to sinsemilla and/or poseidon
-- [ ] solve poseidon gadget to hash >2 elements at a time
-- [ ] integrate with actual codebase
+- [x] solve poseidon gadget to hash >2 elements at a time
+- [x] integrate with actual codebase
 
 ## bridges
 
