@@ -2,6 +2,7 @@ pub mod arith_chip;
 pub mod coin;
 pub mod constants;
 pub mod diffie_hellman;
+pub mod keypair;
 pub mod merkle;
 pub mod merkle_node2;
 pub mod mint_proof;
