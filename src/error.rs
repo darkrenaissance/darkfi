@@ -24,7 +24,7 @@ pub enum Error {
     ParseFloatError(#[from] std::num::ParseFloatError),
     #[error(transparent)]
     FromHexError(#[from] hex::FromHexError),
-    #[error("Url parse erro `{0}`")]
+    #[error("Url parse error `{0}`")]
     UrlParseError(String),
     #[error("No url found")]
     NoUrlFound,
@@ -70,8 +70,8 @@ pub enum Error {
     BadContract,
     #[error("Operation failed")]
     OperationFailed,
-    #[error("PLONK error")]
-    PlonkError,
+    #[error("PLONK error: `{0}`")]
+    PlonkError(String),
     #[error("Unable to decrypt mint note")]
     NoteDecryptionFailed,
     #[error(transparent)]
@@ -223,7 +223,7 @@ impl From<crate::service::SolFailed> for Error {
 }
 
 impl From<halo2::plonk::Error> for Error {
-    fn from(_err: halo2::plonk::Error) -> Error {
-        Error::PlonkError
+    fn from(err: halo2::plonk::Error) -> Error {
+        Error::PlonkError(format!("{:?}", err))
     }
 }
