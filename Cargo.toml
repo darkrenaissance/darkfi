@@ -13,7 +13,7 @@ name = "drk"
 
 [dependencies.halo2_gadgets]
 git = "https://github.com/parazyd/halo2_gadgets.git"
-rev = "8238cb3471b798c76dd53b278524fc80685c7d4f"
+rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 features = ["dev-graph", "test-dependencies"]
 
 [dependencies.incrementalmerkletree]
@@ -74,6 +74,7 @@ signal-hook = "0.3.10"
 signal-hook-async-std = "0.2.1"
 subtle = "2.4.1"
 thiserror = "1.0.30"
+prettytable-rs = "0.8.0"
 
 # Used for Websockets client implementation.
 async-tungstenite = "0.16.0"
