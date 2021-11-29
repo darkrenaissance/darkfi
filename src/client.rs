@@ -1,31 +1,22 @@
-/*
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
-
-use bellman::groth16;
-use blake2s_simd::Params as Blake2sParams;
-use bls12_381::Bls12;
-use log::{debug, info, warn};
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{debug, info};
+use pasta_curves::pallas;
 use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
-        coin::Coin,
-        merkle::{CommitmentTree, IncrementalWitness},
-        merkle_node::MerkleNode,
-        note::{EncryptedNote, Note},
-        nullifier::Nullifier,
-        OwnCoin,
+        coin::Coin, merkle_node::MerkleNode, mint_proof::MintProofKeys, nullifier::Nullifier,
+        proof::VerifyingKey, schnorr, spend_proof::SpendProofKeys,
     },
-    serial::{serialize, Decodable, Encodable},
-    service::{GatewayClient, GatewaySlabsSubscriber},
-    state::{state_transition, ProgramState, StateUpdate},
+    serial::{serialize, Encodable},
+    service::GatewayClient,
+    state::{state_transition, ProgramState},
     tx,
-    wallet::{walletdb::Balances, CashierDbPtr, Keypair, WalletPtr},
+    wallet::{Keypair, WalletPtr},
     Result,
 };
-*/
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ClientFailed {
@@ -55,13 +46,12 @@ pub enum ClientFailed {
     VerifyError(String),
 }
 
-/*
 pub struct Client {
-    mint_params: bellman::groth16::Parameters<Bls12>,
-    spend_params: bellman::groth16::Parameters<Bls12>,
+    main_keypair: Keypair,
     gateway: GatewayClient,
     wallet: WalletPtr,
-    pub main_keypair: Keypair,
+    mint_proof_keys: MintProofKeys,
+    spend_proof_keys: SpendProofKeys,
 }
 
 impl Client {
@@ -69,35 +59,27 @@ impl Client {
         rocks: Arc<Rocks>,
         gateway_addrs: (Url, Url),
         wallet: WalletPtr,
-        mint_params: bellman::groth16::Parameters<Bls12>,
-        spend_params: bellman::groth16::Parameters<Bls12>,
+        mint_proof_keys: MintProofKeys,
+        spend_proof_keys: SpendProofKeys,
     ) -> Result<Self> {
         wallet.init_db()?;
 
+        // Generate a new keypair if we don't have any.
         if wallet.get_keypairs()?.is_empty() {
             wallet.key_gen()?;
         }
 
+        // TODO: Think about multiple keypairs.
         let main_keypair = wallet.get_keypairs()?[0].clone();
-
-        info!(
-            target: "CLIENT", "Main Keypair: {}",
-            bs58::encode(&serialize(&main_keypair.public)).into_string()
-        );
+        info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
 
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
 
-        // create gateway client
-        debug!(target: "CLIENT", "Creating GatewayClient");
+        debug!("Creating GatewayClient");
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
-        Ok(Self {
-            mint_params,
-            spend_params,
-            wallet,
-            gateway,
-            main_keypair,
-        })
+        let client = Client { main_keypair, gateway, wallet, mint_proof_keys, spend_proof_keys };
+        Ok(client)
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -105,60 +87,11 @@ impl Client {
         Ok(())
     }
 
-    pub async fn transfer(
-        &mut self,
-        token_id: jubjub::Fr,
-        pub_key: jubjub::SubgroupPoint,
-        amount: u64,
-        state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
-        debug!(target: "CLIENT", "Start transfer {}", amount);
-
-        let token_id_exists = self.wallet.token_id_exists(&token_id)?;
-
-        if token_id_exists {
-            self.send(pub_key, amount, token_id, false, state).await?;
-        } else {
-            return Err(ClientFailed::NotEnoughValue(amount));
-        }
-
-        debug!(target: "CLIENT", "End transfer {}", amount);
-
-        Ok(())
-    }
-
-    pub async fn send(
-        &mut self,
-        pub_key: jubjub::SubgroupPoint,
-        amount: u64,
-        token_id: jubjub::Fr,
-        clear_input: bool,
-        state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
-        debug!(target: "CLIENT", "Start send {}", amount);
-
-        if amount == 0 {
-            return Err(ClientFailed::InvalidAmount(amount as u64));
-        }
-
-        let coins = self
-            .build_slab_from_tx(pub_key, amount, token_id, clear_input, state)
-            .await?;
-
-        for coin in coins.iter() {
-            self.wallet.confirm_spend_coin(coin)?;
-        }
-
-        debug!(target: "CLIENT", "End send {}", amount);
-
-        Ok(())
-    }
-
     async fn build_slab_from_tx(
         &mut self,
-        pub_key: jubjub::SubgroupPoint,
+        pub_key: pallas::Point,
         value: u64,
-        token_id: jubjub::Fr,
+        token_id: pallas::Base,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Vec<Coin>> {
@@ -171,11 +104,7 @@ impl Client {
 
         if clear_input {
             let signature_secret = self.main_keypair.private;
-            let input = tx::TransactionBuilderClearInputInfo {
-                value,
-                token_id,
-                signature_secret,
-            };
+            let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
             debug!(target: "CLIENT", "Start build inputs");
@@ -186,8 +115,9 @@ impl Client {
 
             for own_coin in own_coins.iter() {
                 if inputs_value >= value {
-                    break;
+                    break
                 }
+
                 let witness = &own_coin.witness;
                 let merkle_path = witness.path().unwrap();
                 inputs_value += own_coin.note.value;
@@ -203,7 +133,7 @@ impl Client {
             }
 
             if inputs_value < value {
-                return Err(ClientFailed::NotEnoughValue(inputs_value));
+                return Err(ClientFailed::NotEnoughValue(inputs_value))
             }
 
             if inputs_value > value {
@@ -219,23 +149,15 @@ impl Client {
             debug!(target: "CLIENT", "End build inputs");
         }
 
-        outputs.push(tx::TransactionBuilderOutputInfo {
-            value,
-            token_id,
-            public: pub_key,
-        });
+        outputs.push(tx::TransactionBuilderOutputInfo { value, token_id, public: pub_key });
 
-        let builder = tx::TransactionBuilder {
-            clear_inputs,
-            inputs,
-            outputs,
-        };
+        let builder = tx::TransactionBuilder { clear_inputs, inputs, outputs };
 
         let tx: tx::Transaction;
 
         let mut tx_data = vec![];
         {
-            tx = builder.build(&self.mint_params, &self.spend_params);
+            tx = builder.build()?;
             tx.encode(&mut tx_data).expect("encode tx");
         }
 
@@ -252,6 +174,105 @@ impl Client {
 
         Ok(coins)
     }
+
+    pub async fn send(
+        &mut self,
+        pub_key: pallas::Point,
+        amount: u64,
+        token_id: pallas::Base,
+        clear_input: bool,
+        state: Arc<Mutex<State>>,
+    ) -> ClientResult<()> {
+        debug!(target: "CLIENT", "Start send {}", amount);
+
+        if amount == 0 {
+            return Err(ClientFailed::InvalidAmount(amount as u64))
+        }
+
+        let coins = self.build_slab_from_tx(pub_key, amount, token_id, clear_input, state).await?;
+
+        for coin in coins.iter() {
+            self.wallet.confirm_spend_coin(coin)?;
+        }
+
+        debug!(target: "CLIENT", "End send {}", amount);
+
+        Ok(())
+    }
+
+    pub async fn transfer(
+        &mut self,
+        token_id: pallas::Base,
+        pub_key: pallas::Point,
+        amount: u64,
+        state: Arc<Mutex<State>>,
+    ) -> ClientResult<()> {
+        debug!(target: "CLIENT", "Start transfer {}", amount);
+
+        let token_id_exists = self.wallet.token_id_exists(&token_id)?;
+
+        if token_id_exists {
+            self.send(pub_key, amount, token_id, false, state).await?;
+        } else {
+            return Err(ClientFailed::NotEnoughValue(amount))
+        }
+
+        debug!(target: "CLIENT", "End transfer {}", amount);
+
+        Ok(())
+    }
+}
+
+pub struct State {
+    // The entire merkle tree state
+    pub tree: BridgeTree<MerkleNode, 32>,
+    // List of all previous and the current merkle roots
+    // This is the hashed value of all the children.
+    pub merkle_roots: RocksColumn<columns::MerkleRoots>,
+    // Nullifiers prevent double spending
+    pub nullifiers: RocksColumn<columns::Nullifiers>,
+    // Mint verifying key used by ZK
+    pub mint_vk: VerifyingKey,
+    // Spend verifying key used by ZK
+    pub spend_vk: VerifyingKey,
+    // List of cashier public keys
+    pub public_keys: Vec<pallas::Point>,
+}
+
+impl ProgramState for State {
+    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
+        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
+        self.public_keys.contains(public)
+    }
+
+    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
+        debug!(target: "CLIENT STATE", "Check if it is valid merkle");
+
+        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
+            return mr
+        }
+        false
+    }
+
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+        debug!(target: "CLIENT STATE", "Check if nullifier exists");
+        if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
+            return nl
+        }
+        false
+    }
+
+    fn mint_vk(&self) -> &VerifyingKey {
+        &self.mint_vk
+    }
+
+    fn spend_vk(&self) -> &VerifyingKey {
+        &self.spend_vk
+    }
+}
+
+/*
+impl Client {
 
     pub async fn connect_to_subscriber_from_cashier(
         &self,
@@ -410,40 +431,6 @@ pub struct State {
     pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
     // List of cashier public keys
     pub public_keys: Vec<jubjub::SubgroupPoint>,
-}
-
-impl ProgramState for State {
-    fn is_valid_cashier_public_key(&self, public: &jubjub::SubgroupPoint) -> bool {
-        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
-        self.public_keys.contains(public)
-    }
-
-    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        debug!(target: "CLIENT STATE", "Check if it is valid merkle");
-
-        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
-            return mr;
-        }
-        false
-    }
-
-    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        debug!(target: "CLIENT STATE", "Check if nullifier exists");
-
-        if let Ok(nl) = self.nullifiers.key_exist(nullifier.repr) {
-            return nl;
-        }
-        false
-    }
-
-    // load from disk
-    fn mint_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
-        &self.mint_pvk
-    }
-
-    fn spend_pvk(&self) -> &groth16::PreparedVerifyingKey<Bls12> {
-        &self.spend_pvk
-    }
 }
 
 impl State {

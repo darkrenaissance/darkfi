@@ -4,7 +4,7 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::*;
+use log::{debug, error};
 
 use crate::{types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error, Result};
 
