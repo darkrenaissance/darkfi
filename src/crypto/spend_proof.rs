@@ -25,6 +25,23 @@ use crate::{
     Result,
 };
 
+pub struct SpendProofKeys {
+    pub vk: VerifyingKey,
+    pub pk: ProvingKey,
+}
+
+impl SpendProofKeys {
+    pub fn initialize() -> Self {
+        let start = Instant::now();
+        debug!("Building proof verifying key for the spend contract...");
+        let vk = VerifyingKey::build(11, SpendContract::default());
+        debug!("Building proof proving key for the spend contract...");
+        let pk = ProvingKey::build(11, SpendContract::default());
+        debug!("Setup: [{:?}]", start.elapsed());
+        SpendProofKeys { vk, pk }
+    }
+}
+
 pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,

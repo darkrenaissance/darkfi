@@ -22,6 +22,23 @@ use crate::{
     Result,
 };
 
+pub struct MintProofKeys {
+    pub vk: VerifyingKey,
+    pub pk: ProvingKey,
+}
+
+impl MintProofKeys {
+    pub fn initialize() -> Self {
+        let start = Instant::now();
+        debug!("Building proof verifying key for the mint contract...");
+        let vk = VerifyingKey::build(11, MintContract::default());
+        debug!("Building proof proving key for the mint contract...");
+        let pk = ProvingKey::build(11, MintContract::default());
+        debug!("Setup: [{:?}]", start.elapsed());
+        MintProofKeys { vk, pk }
+    }
+}
+
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
