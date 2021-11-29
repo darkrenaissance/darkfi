@@ -35,14 +35,14 @@ struct MemoryState {
     spend_vk: VerifyingKey,
 
     // Public key of the cashier
-    cashier_public: schnorr::PublicKey,
+    cashier_signature_public: schnorr::PublicKey,
     // List of all our secret keys
     secrets: Vec<pallas::Base>,
 }
 
 impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
-        public == &self.cashier_public
+        public == &self.cashier_signature_public
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -98,8 +98,8 @@ impl MemoryState {
 }
 
 fn main() -> Result<()> {
-    let cashier_secret = schnorr::SecretKey::random();
-    let cashier_public = cashier_secret.public_key();
+    let cashier_signature_secret = schnorr::SecretKey::random();
+    let cashier_signature_public = cashier_secret.public_key();
 
     let keypair = Keypair::random(&mut OsRng);
 
@@ -114,8 +114,8 @@ fn main() -> Result<()> {
         own_coins: vec![],
         mint_vk,
         spend_vk,
-        cashier_public,
-        secrets: vec![keypair.secret],
+        cashier_signature_public,
+        secrets: vec![keypair.secret.inner()],
     };
 
     let token_id = pallas::Base::from(110);
@@ -124,13 +124,13 @@ fn main() -> Result<()> {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
             value: 110,
             token_id,
-            signature_secret: cashier_secret,
+            signature_secret: cashier_signature_secret,
         }],
         inputs: vec![],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
-            public: keypair.public,
+            public: keypair.public.inner(),
         }],
     };
 
@@ -138,7 +138,7 @@ fn main() -> Result<()> {
 
     tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
 
-    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret.inner())?;
 
     let update = state_transition(&state, tx)?;
     state.apply(update);
@@ -153,13 +153,13 @@ fn main() -> Result<()> {
         inputs: vec![tx::TransactionBuilderInputInfo {
             leaf_position,
             merkle_path,
-            secret: keypair.secret,
+            secret: keypair.secret.inner(),
             note: note.clone(),
         }],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
-            public: keypair.public,
+            public: keypair.public.inner(),
         }],
     };
 

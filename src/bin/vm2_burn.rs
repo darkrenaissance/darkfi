@@ -1,41 +1,17 @@
 use std::iter;
 
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    dev::MockProver,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
-    },
-    poly::Rotation,
-};
+use halo2::dev::MockProver;
 use halo2_gadgets::{
-    ecc::{
-        chip::{EccChip, EccConfig},
-        FixedPoint, FixedPoints,
-    },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
+    ecc::FixedPoints,
     primitives,
     primitives::{
         poseidon::{ConstantLength, P128Pow5T3},
         sinsemilla::S_PERSONALIZATION,
     },
-    sinsemilla::{
-        chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::{
-            chip::{MerkleChip, MerkleConfig},
-            MerklePath,
-        },
-    },
-    utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-    },
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve, Group},
+    group::{ff::PrimeFieldBits, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -44,16 +20,14 @@ use std::{collections::HashMap, fs::File, time::Instant};
 use drk::{
     crypto::{
         constants::{
-            sinsemilla::{
-                i2lebsp, OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION,
-            },
+            sinsemilla::{i2lebsp, MERKLE_CRH_PERSONALIZATION},
             OrchardFixedBases,
         },
         proof::{Proof, ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::pedersen_commitment_u64,
     },
     serial::Decodable,
-    vm2,
+    vm,
 };
 
 fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::Base {
@@ -84,7 +58,7 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let start = Instant::now();
     let file = File::open("proof/burn.zk.bin")?;
-    let zkbin = vm2::ZkBinary::decode(file)?;
+    let zkbin = vm::ZkBinary::decode(file)?;
     for contract_name in zkbin.contracts.keys() {
         println!("Loaded '{}' contract.", contract_name);
     }
@@ -167,7 +141,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
     const_fixed_points.insert("SPEND_AUTH_G".to_string(), OrchardFixedBases::SpendAuthG);
 
-    let mut circuit = vm2::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
+    let mut circuit = vm::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
     let empty_circuit = circuit.clone();
 
     circuit.witness_base("secret", hashed_secret_key)?;

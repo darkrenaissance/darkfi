@@ -1,39 +1,11 @@
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    dev::MockProver,
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
-    },
-    poly::Rotation,
-};
+use halo2::dev::MockProver;
 use halo2_gadgets::{
-    ecc::{
-        chip::{EccChip, EccConfig},
-        FixedPoint, FixedPoints,
-    },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
     primitives,
-    primitives::{
-        poseidon::{ConstantLength, P128Pow5T3},
-        sinsemilla::S_PERSONALIZATION,
-    },
-    sinsemilla::{
-        chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::{
-            chip::{MerkleChip, MerkleConfig},
-            MerklePath,
-        },
-    },
-    utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-    },
+    primitives::poseidon::{ConstantLength, P128Pow5T3},
 };
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
-    group::{ff::PrimeFieldBits, Curve, Group},
+    group::{Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -41,12 +13,9 @@ use std::{collections::HashMap, fs::File, time::Instant};
 
 use drk::{
     crypto::{
-        constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains, MERKLE_CRH_PERSONALIZATION},
-            OrchardFixedBases,
-        },
+        constants::OrchardFixedBases,
         proof::{Proof, ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::pedersen_commitment_u64,
     },
     serial::Decodable,
     vm,
@@ -94,7 +63,7 @@ fn main() -> std::result::Result<(), failure::Error> {
         coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
     }
 
-    let coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>)
+    let _coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>)
         .hash([*coords.x(), *coords.y()]);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
@@ -103,7 +72,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let asset_commit = pedersen_commitment_u64(asset, asset_blind);
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
 
-    let mut public_inputs =
+    let public_inputs =
         vec![coin, *value_coords.x(), *value_coords.y(), *asset_coords.x(), *asset_coords.y()];
 
     let mut const_fixed_points = HashMap::new();

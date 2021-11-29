@@ -1,28 +1,26 @@
-use async_std::sync::{Arc, Mutex};
 use std::{path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use ff::Field;
 use log::debug;
-use rand::rngs::OsRng;
+use pasta_curves::pallas;
 use serde_json::{json, Value};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CashierdConfig, Config},
     client::{Client, State},
-    crypto::{
-        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
-    },
+    crypto::{mint_proof::MintProofKeys, schnorr, spend_proof::SpendProofKeys},
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
+    types::DrkTokenId,
     util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
     wallet::{cashierdb::TokenKey, CashierDb, WalletDb},
     Error, Result,
@@ -97,10 +95,11 @@ impl Cashierd {
 
         Ok(Self { bridge, cashier_wallet, networks, public_key: String::from(""), config })
     }
+
     async fn listen_for_receiving_coins(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
-        recv_coin: async_channel::Receiver<(jubjub::SubgroupPoint, u64)>,
+        recv_coin: async_channel::Receiver<(pallas::Point, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // received drk coin
@@ -109,7 +108,8 @@ impl Cashierd {
         debug!(target: "CASHIER DAEMON", "Receive coin with amount: {}", amount);
 
         // get public key, and token_id of the token
-        let token = cashier_wallet.get_withdraw_token_public_key_by_dkey_public(&drk_pub_key)?;
+        let token =
+            cashier_wallet.get_withdraw_token_public_key_by_dkey_public(&drk_pub_key).await?;
 
         // send a request to bridge to send equivalent amount of
         // received drk coin to token publickey
@@ -143,10 +143,12 @@ impl Cashierd {
 
             match res.payload {
                 bridge::BridgeResponsePayload::Send => {
-                    cashier_wallet.confirm_withdraw_key_record(
-                        &withdraw_token.token_public_key,
-                        &withdraw_token.network,
-                    )?;
+                    cashier_wallet
+                        .confirm_withdraw_key_record(
+                            &withdraw_token.token_public_key,
+                            &withdraw_token.network,
+                        )
+                        .await?;
                 }
                 _ => {
                     return Err(Error::BridgeError("Receive unknown value from Subscription".into()))
@@ -202,12 +204,13 @@ impl Cashierd {
                 mint_address = "";
             }
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
-            let drk_pub_key: jubjub::SubgroupPoint = deserialize(&drk_pub_key)?;
+            let drk_pub_key: pallas::Point = deserialize(&drk_pub_key)?;
 
             // check if the drk public key already exist
             let check = self
                 .cashier_wallet
-                .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)?;
+                .get_deposit_token_keys_by_dkey_public(&drk_pub_key, &network)
+                .await?;
 
             // start new subscription from the bridge and then cashierd will
             // send a request to the bridge to generate keypair for the desired token
@@ -256,14 +259,16 @@ impl Cashierd {
             match bridge_res.payload {
                 bridge::BridgeResponsePayload::Watch(token_key) => {
                     // add pairings to db
-                    self.cashier_wallet.put_deposit_keys(
-                        &drk_pub_key,
-                        &token_key.private_key,
-                        &serialize(&token_key.public_key),
-                        &network,
-                        &token_id,
-                        mint_address.into(),
-                    )?;
+                    self.cashier_wallet
+                        .put_deposit_keys(
+                            &drk_pub_key,
+                            &token_key.private_key,
+                            &serialize(&token_key.public_key),
+                            &network,
+                            &token_id,
+                            mint_address.into(),
+                        )
+                        .await?;
 
                     Ok(token_key.public_key)
                 }
@@ -316,7 +321,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            let token_id = generate_id(mint_address, &network)?;
+            let token_id: DrkTokenId = generate_id(mint_address, &network)?;
 
             let mint_address_opt = Self::check_token_id(&network, mint_address)?;
 
@@ -327,25 +332,28 @@ impl Cashierd {
 
             let address = serialize(&address.to_string());
 
-            let cashier_public: jubjub::SubgroupPoint;
+            let cashier_public: pallas::Point;
 
-            if let Some(addr) =
-                self.cashier_wallet.get_withdraw_keys_by_token_public_key(&address, &network)?
+            if let Some(addr) = self
+                .cashier_wallet
+                .get_withdraw_keys_by_token_public_key(&address, &network)
+                .await?
             {
                 cashier_public = addr.public;
             } else {
-                let cashier_secret = jubjub::Fr::random(&mut OsRng);
-                cashier_public =
-                    zcash_primitives::constants::SPENDING_KEY_GENERATOR * cashier_secret;
+                let cashier_secret = schnorr::SecretKey::random();
+                cashier_public = cashier_secret.public_key();
 
-                self.cashier_wallet.put_withdraw_keys(
-                    &address,
-                    &cashier_public,
-                    &cashier_secret,
-                    &network,
-                    &token_id,
-                    mint_address.into(),
-                )?;
+                self.cashier_wallet
+                    .put_withdraw_keys(
+                        &address,
+                        &cashier_public,
+                        &cashier_secret,
+                        &network,
+                        &token_id,
+                        mint_address.into(),
+                    )
+                    .await?;
             }
 
             let cashier_public_str = bs58::encode(serialize(&cashier_public)).into_string();
@@ -452,18 +460,21 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Solana)?;
+                    let main_keypairs =
+                        self.cashier_wallet.get_main_keys(&NetworkName::Solana).await?;
 
                     if network.keypair.is_empty() {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
-                            self.cashier_wallet.put_main_keys(
-                                &TokenKey {
-                                    private_key: serialize(&main_keypair),
-                                    public_key: serialize(&main_keypair.pubkey()),
-                                },
-                                &NetworkName::Solana,
-                            )?;
+                            self.cashier_wallet
+                                .put_main_keys(
+                                    &TokenKey {
+                                        private_key: serialize(&main_keypair),
+                                        public_key: serialize(&main_keypair.pubkey()),
+                                    },
+                                    &NetworkName::Solana,
+                                )
+                                .await?;
                         } else {
                             main_keypair =
                                 deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
@@ -495,7 +506,7 @@ impl Cashierd {
                     let main_keypair: Keypair;
 
                     let main_keypairs =
-                        self.cashier_wallet.get_main_keys(&NetworkName::Ethereum)?;
+                        self.cashier_wallet.get_main_keys(&NetworkName::Ethereum).await?;
 
                     let passphrase = self.config.geth_passphrase.clone();
 
@@ -513,13 +524,15 @@ impl Cashierd {
                             .unwrap()
                             .to_string();
 
-                        self.cashier_wallet.put_main_keys(
-                            &TokenKey {
-                                private_key: serialize(&main_private_key),
-                                public_key: serialize(&main_public_key),
-                            },
-                            &NetworkName::Ethereum,
-                        )?;
+                        self.cashier_wallet
+                            .put_main_keys(
+                                &TokenKey {
+                                    private_key: serialize(&main_private_key),
+                                    public_key: serialize(&main_public_key),
+                                },
+                                &NetworkName::Ethereum,
+                            )
+                            .await?;
 
                         main_keypair =
                             Keypair { private_key: main_private_key, public_key: main_public_key };
@@ -546,18 +559,21 @@ impl Cashierd {
 
                     let main_keypair: Keypair;
 
-                    let main_keypairs = self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin)?;
+                    let main_keypairs =
+                        self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin).await?;
 
                     if network.keypair.is_empty() {
                         if main_keypairs.is_empty() {
                             main_keypair = Keypair::new();
-                            self.cashier_wallet.put_main_keys(
-                                &TokenKey {
-                                    private_key: serialize(&main_keypair),
-                                    public_key: serialize(&main_keypair.pubkey()),
-                                },
-                                &NetworkName::Bitcoin,
-                            )?;
+                            self.cashier_wallet
+                                .put_main_keys(
+                                    &TokenKey {
+                                        private_key: serialize(&main_keypair),
+                                        public_key: serialize(&main_keypair.pubkey()),
+                                    },
+                                    &NetworkName::Bitcoin,
+                                )
+                                .await?;
                         } else {
                             main_keypair =
                                 deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
@@ -581,7 +597,7 @@ impl Cashierd {
 
         client.start().await?;
 
-        let (notify, recv_coin) = async_channel::unbounded::<(jubjub::SubgroupPoint, u64)>();
+        let (notify, recv_coin) = async_channel::unbounded::<(pallas::Point, u64)>();
 
         client
             .connect_to_subscriber_from_cashier(
@@ -653,33 +669,15 @@ async fn start(
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
-    let params_paths = (
-        expand_path(&config.mint_params_path.clone())?,
-        expand_path(&config.spend_params_path.clone())?,
-    );
-
-    let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
-    let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
-    // Auto create trusted ceremony parameters if they don't exist
-    if !params_paths.0.exists() {
-        let params = setup_mint_prover();
-        save_params(mint_params_path, &params)?;
-    }
-    if !params_paths.1.exists() {
-        let params = setup_spend_prover();
-        save_params(spend_params_path, &params)?;
-    }
-
-    // Load trusted setup parameters
-    let (mint_params, mint_pvk) = load_params(mint_params_path)?;
-    let (spend_params, spend_pvk) = load_params(spend_params_path)?;
+    let mint_proof_keys = MintProofKeys::initialize();
+    let spend_proof_keys = SpendProofKeys::initialize();
 
     let client = Client::new(
         rocks.clone(),
         (config.gateway_protocol_url.parse()?, config.gateway_publisher_url.parse()?),
         client_wallet.clone(),
-        mint_params,
-        spend_params,
+        mint_proof_keys,
+        spend_proof_keys,
     )
     .await?;
 
@@ -693,11 +691,11 @@ async fn start(
     let cashier_public_keys = vec![cashier_public];
 
     let state = Arc::new(Mutex::new(State {
-        tree: CommitmentTree::empty(),
+        tree: BridgeTree::<MerkleNode, 32>::new(100),
         merkle_roots,
         nullifiers,
-        mint_pvk,
-        spend_pvk,
+        mint_vk: mint_proof_keys.vk,
+        spend_vk: spend_proof_keys.vk,
         public_keys: cashier_public_keys,
     }));
 
@@ -759,7 +757,7 @@ async fn main() -> Result<()> {
             config.cashier_wallet_password.clone(),
         )?;
 
-        wallet.remove_withdraw_and_deposit_keys()?;
+        wallet.remove_withdraw_and_deposit_keys().await?;
 
         if let Some(path) = expand_path(&config.database_path)?.to_str() {
             debug!(target: "CASHIER DAEMON", "Remove database: {}", path);
