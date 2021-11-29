@@ -2,6 +2,7 @@ use std::path::Path;
 
 use async_std::sync::{Arc, Mutex};
 use log::{debug, error, info};
+use pasta_curves::pallas;
 use rusqlite::{named_params, params, Connection};
 
 use super::{Keypair, WalletApi};
@@ -10,7 +11,7 @@ use crate::{client::ClientFailed, types::*, util::NetworkName, Error, Result};
 pub type CashierDbPtr = Arc<CashierDb>;
 
 pub struct CashierDb {
-    pub conn: Connection,
+    pub conn: Mutex<Connection>,
     pub initialized: Mutex<bool>,
 }
 
@@ -48,13 +49,14 @@ impl CashierDb {
         conn.pragma_update(None, "key", &password)?;
         info!(target: "CASHIERDB", "Opened connection at path: {:?}", path);
 
-        Ok(Arc::new(Self { conn, initialized: Mutex::new(false) }))
+        Ok(Arc::new(Self { conn: Mutex::new(conn), initialized: Mutex::new(false) }))
     }
 
     pub async fn init_db(&self) -> Result<()> {
         if !*self.initialized.lock().await {
             let contents = include_str!("../../sql/cashier.sql");
-            self.conn.execute_batch(contents)?;
+            let conn = self.conn.lock().await;
+            conn.execute_batch(contents)?;
             *self.initialized.lock().await = true;
             return Ok(())
         }
@@ -63,11 +65,12 @@ impl CashierDb {
         Err(Error::from(ClientFailed::WalletInitialized))
     }
 
-    pub fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
+    pub async fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
         debug!(target: "CASHIERDB", "Put main keys");
         let network = self.get_value_serialized(network)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO main_keypairs
             (token_key_private, token_key_public, network)
             VALUES
@@ -82,11 +85,12 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
+    pub async fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
         debug!(target: "CASHIERDB", "Get main keys");
         let network = self.get_value_serialized(network)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT token_key_private, token_key_public
             FROM main_keypairs
             WHERE network = :network ;",
@@ -107,18 +111,19 @@ impl CashierDb {
         Ok(keys)
     }
 
-    pub fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
+    pub async fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
         debug!(target: "CASHIERDB", "Remove withdraw and deposit keys");
-        self.conn.execute("DROP TABLE deposit_keypairs;", [])?;
-        self.conn.execute("DROP TABLE withdraw_keypairs;", [])?;
+        let conn = self.conn.lock().await;
+        conn.execute("DROP TABLE deposit_keypairs;", [])?;
+        conn.execute("DROP TABLE withdraw_keypairs;", [])?;
         Ok(())
     }
 
-    pub fn put_withdraw_keys(
+    pub async fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
-        d_key_public: &DrkPublicKey,
-        d_key_private: &DrkSecretKey,
+        d_key_public: &pallas::Point,
+        d_key_private: &pallas::Scalar,
         network: &NetworkName,
         token_id: &DrkTokenId,
         mint_address: String,
@@ -132,7 +137,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
         let mint_address = self.get_value_serialized(&mint_address)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO withdraw_keypairs
             (token_key_public, d_key_private, d_key_public, network,  token_id, mint_address, confirm)
             VALUES
@@ -151,7 +157,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn put_deposit_keys(
+    pub async fn put_deposit_keys(
         &self,
         d_key_public: &DrkPublicKey,
         token_key_private: &[u8],
@@ -168,7 +174,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
         let mint_address = self.get_value_serialized(&mint_address)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO deposit_keypairs
             (d_key_public, token_key_private, token_key_public, network, token_id, mint_address, confirm)
             VALUES
@@ -187,11 +194,12 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn get_withdraw_private_keys(&self) -> Result<Vec<DrkSecretKey>> {
+    pub async fn get_withdraw_private_keys(&self) -> Result<Vec<DrkSecretKey>> {
         debug!(target: "CASHIERDB", "Get withdraw private keys");
         let confirm = self.get_value_serialized(&false)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT d_key_private
                 FROM withdraw_keypairs
                 WHERE confirm = :confirm",
@@ -209,7 +217,7 @@ impl CashierDb {
         Ok(private_keys)
     }
 
-    pub fn get_withdraw_token_public_key_by_dkey_public(
+    pub async fn get_withdraw_token_public_key_by_dkey_public(
         &self,
         pub_key: &DrkPublicKey,
     ) -> Result<Option<WithdrawToken>> {
@@ -217,7 +225,8 @@ impl CashierDb {
         let d_key_public = self.get_value_serialized(pub_key)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT token_key_public, network, token_id, mint_address
             FROM withdraw_keypairs
             WHERE d_key_public = :d_key_public AND confirm = :confirm;",
@@ -247,7 +256,7 @@ impl CashierDb {
         Ok(token_addresses.pop())
     }
 
-    pub fn get_deposit_token_keys_by_dkey_public(
+    pub async fn get_deposit_token_keys_by_dkey_public(
         &self,
         d_key_public: &DrkPublicKey,
         network: &NetworkName,
@@ -257,7 +266,8 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT token_key_private, token_key_public
             FROM deposit_keypairs
             WHERE d_key_public = :d_key_public
@@ -280,7 +290,7 @@ impl CashierDb {
         Ok(keys)
     }
 
-    pub fn get_deposit_token_keys_by_network(
+    pub async fn get_deposit_token_keys_by_network(
         &self,
         network: &NetworkName,
     ) -> Result<Vec<DepositToken>> {
@@ -288,7 +298,8 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT d_key_public, token_key_private, token_key_public, token_id, mint_address
             FROM deposit_keypairs
             WHERE network = :network
@@ -320,7 +331,7 @@ impl CashierDb {
         Ok(keys)
     }
 
-    pub fn get_withdraw_keys_by_token_public_key(
+    pub async fn get_withdraw_keys_by_token_public_key(
         &self,
         token_key_public: &[u8],
         network: &NetworkName,
@@ -329,7 +340,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&false)?;
         let network = self.get_value_serialized(network)?;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT d_key_private, d_key_public FROM withdraw_keypairs
                 WHERE token_key_public = :token_key_public
                 AND network = :network
@@ -358,7 +370,7 @@ impl CashierDb {
         Ok(keypairs.pop())
     }
 
-    pub fn confirm_withdraw_key_record(
+    pub async fn confirm_withdraw_key_record(
         &self,
         token_address: &[u8],
         network: &NetworkName,
@@ -367,7 +379,8 @@ impl CashierDb {
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&true)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "UPDATE withdraw_keypairs
             SET confirm = ?1
             WHERE token_key_public = ?2
@@ -378,7 +391,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub fn confirm_deposit_key_record(
+    pub async fn confirm_deposit_key_record(
         &self,
         d_key_public: &DrkPublicKey,
         network: &NetworkName,
@@ -388,7 +401,8 @@ impl CashierDb {
         let confirm = self.get_value_serialized(&true)?;
         let d_key_public = self.get_value_serialized(d_key_public)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "UPDATE deposit_keypairs
             SET confirm = ?1
             WHERE d_key_public = ?2
