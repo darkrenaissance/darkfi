@@ -1,29 +1,24 @@
-use pasta_curves::pallas;
-
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
     plonk,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector},
-    poly::Rotation,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
         FixedPoint,
     },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
+    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::chip::{MerkleChip, MerkleConfig},
     },
     utilities::{
-        copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
+use pasta_curves::pallas;
 
 use crate::crypto::constants::{
     sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
@@ -33,7 +28,6 @@ use crate::crypto::constants::{
 #[derive(Clone, Debug)]
 pub struct MintConfig {
     primary: Column<InstanceColumn>,
-    q_add: Selector,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig,
     merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
@@ -100,29 +94,6 @@ impl Circuit<pallas::Base> for MintContract {
             meta.advice_column(),
             meta.advice_column(),
         ];
-
-        // Addition of two field elements
-        /*
-        let q_add = meta.selector();
-        meta.create_gate("poseidon_hash(a, b) + c", |meta| {
-            let q_add = meta.query_selector(q_add);
-            let sum = meta.query_advice(advices[6], Rotation::cur());
-            let hash = meta.query_advice(advices[7], Rotation::cur());
-            let c = meta.query_advice(advices[8], Rotation::cur());
-
-            vec![q_add * (hash + c - sum)]
-        });
-        */
-        let q_add = meta.selector();
-        meta.create_gate("a+b+c", |meta| {
-            let q_add = meta.query_selector(q_add);
-            let sum = meta.query_advice(advices[5], Rotation::cur());
-            let a = meta.query_advice(advices[6], Rotation::cur());
-            let b = meta.query_advice(advices[7], Rotation::cur());
-            let c = meta.query_advice(advices[8], Rotation::cur());
-
-            vec![q_add * (a + b + c - sum)]
-        });
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
@@ -217,7 +188,6 @@ impl Circuit<pallas::Base> for MintContract {
 
         MintConfig {
             primary,
-            q_add,
             advices,
             ecc_config,
             merkle_config_1,
@@ -271,71 +241,21 @@ impl Circuit<pallas::Base> for MintContract {
         // =========
         // Coin hash
         // =========
-        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
-        let mut hashes = vec![];
+        let coin = {
+            let poseidon_message = [pub_x, pub_y, value, asset, serial, coin_blind];
 
-        for message in messages.iter() {
-            let hash = {
-                let poseidon_message = layouter.assign_region(
-                    || "load message",
-                    |mut region| {
-                        let mut message_word = |i: usize| {
-                            let value = message[i].value();
-                            let var = region.assign_advice(
-                                || format!("load message_{}", i),
-                                config.poseidon_config.state()[i],
-                                0,
-                                || value.ok_or(plonk::Error::SynthesisError),
-                            )?;
-                            region.constrain_equal(var, message[i].cell())?;
-                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                                var, value,
-                            )))
-                        };
-                        Ok([message_word(0)?, message_word(1)?])
-                    },
-                )?;
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+                ConstantLength::<6>,
+            )?;
 
-                let poseidon_hasher = PoseidonHash::init(
-                    config.poseidon_chip(),
-                    layouter.namespace(|| "Poseidon init"),
-                    ConstantLength::<2>,
-                )?;
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-                let poseidon_output = poseidon_hasher
-                    .hash(layouter.namespace(|| "Poseidon hash (a, b)"), poseidon_message)?;
-
-                let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
-                poseidon_output
-            };
-
-            hashes.push(hash);
-        }
-
-        let coin = layouter.assign_region(
-            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
-            |mut region| {
-                config.q_add.enable(&mut region, 0)?;
-
-                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
-                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
-                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
-
-                let scalar_val = hashes[0]
-                    .value()
-                    .zip(hashes[1].value())
-                    .zip(hashes[2].value())
-                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
-
-                let cell = region.assign_advice(
-                    || "hash(a,b)+hash(c,d)+hash(e,f)",
-                    config.advices[5],
-                    0,
-                    || scalar_val.ok_or(plonk::Error::SynthesisError),
-                )?;
-                Ok(CellValue::new(cell, scalar_val))
-            },
-        )?;
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            poseidon_output
+        };
 
         // Constrain the coin C
         layouter.constrain_instance(coin.cell(), config.primary, MINT_COIN_OFFSET)?;
@@ -366,13 +286,15 @@ impl Circuit<pallas::Base> for MintContract {
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
 
-        // Constrain the value commitment coordinates
         let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
+
+        // Constrain the value commitment coordinates
         layouter.constrain_instance(
             value_commit.inner().x().cell(),
             config.primary,
             MINT_VALCOMX_OFFSET,
         )?;
+
         layouter.constrain_instance(
             value_commit.inner().y().cell(),
             config.primary,
@@ -397,13 +319,15 @@ impl Circuit<pallas::Base> for MintContract {
             asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
         };
 
-        // Constrain the asset commitment coordinates
         let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+
+        // Constrain the asset commitment coordinates
         layouter.constrain_instance(
             asset_commit.inner().x().cell(),
             config.primary,
             MINT_ASSCOMX_OFFSET,
         )?;
+
         layouter.constrain_instance(
             asset_commit.inner().y().cell(),
             config.primary,

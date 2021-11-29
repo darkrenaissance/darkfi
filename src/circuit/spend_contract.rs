@@ -1,5 +1,3 @@
-use pasta_curves as pasta;
-
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
     plonk::{
@@ -12,10 +10,7 @@ use halo2_gadgets::{
         chip::{EccChip, EccConfig},
         FixedPoint,
     },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
+    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
@@ -25,9 +20,10 @@ use halo2_gadgets::{
         },
     },
     utilities::{
-        copy, lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
+        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
+use pasta_curves::pallas;
 
 use crate::crypto::constants::{
     sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
@@ -46,7 +42,7 @@ pub struct SpendConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    poseidon_config: PoseidonConfig<pasta::Fp>,
+    poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
 impl SpendConfig {
@@ -80,7 +76,7 @@ impl SpendConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pasta::Fp> {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
@@ -97,23 +93,23 @@ const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 pub struct SpendContract {
-    pub secret_key: Option<pasta::Fp>,
-    pub serial: Option<pasta::Fp>,
-    pub value: Option<pasta::Fp>,
-    pub asset: Option<pasta::Fp>,
-    pub coin_blind: Option<pasta::Fp>,
-    pub value_blind: Option<pasta::Fq>,
-    pub asset_blind: Option<pasta::Fq>,
+    pub secret_key: Option<pallas::Base>,
+    pub serial: Option<pallas::Base>,
+    pub value: Option<pallas::Base>,
+    pub asset: Option<pallas::Base>,
+    pub coin_blind: Option<pallas::Base>,
+    pub value_blind: Option<pallas::Scalar>,
+    pub asset_blind: Option<pallas::Scalar>,
     pub leaf_pos: Option<u32>,
-    pub merkle_path: Option<[pasta::Fp; 32]>,
-    pub sig_secret: Option<pasta::Fq>,
+    pub merkle_path: Option<[pallas::Base; 32]>,
+    pub sig_secret: Option<pallas::Scalar>,
 }
 
-impl UtilitiesInstructions<pasta::Fp> for SpendContract {
-    type Var = CellValue<pasta::Fp>;
+impl UtilitiesInstructions<pallas::Base> for SpendContract {
+    type Var = CellValue<pallas::Base>;
 }
 
-impl Circuit<pasta::Fp> for SpendContract {
+impl Circuit<pallas::Base> for SpendContract {
     type Config = SpendConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -121,7 +117,7 @@ impl Circuit<pasta::Fp> for SpendContract {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<pasta::Fp>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
         // Advice columns used in the circuit
         let advices = [
             meta.advice_column(),
@@ -255,7 +251,7 @@ impl Circuit<pasta::Fp> for SpendContract {
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<pasta::Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
         // Load the Sinsemilla generator lookup table used by the whole circuit.
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
@@ -282,38 +278,19 @@ impl Circuit<pasta::Fp> for SpendContract {
             self.serial,
         )?;
 
-        let message = [secret_key, serial];
         let hash = {
-            let poseidon_message = layouter.assign_region(
-                || "load message",
-                |mut region| {
-                    let mut message_word = |i: usize| {
-                        let value = message[i].value();
-                        let var = region.assign_advice(
-                            || format!("load message_{}", i),
-                            config.poseidon_config.state()[i],
-                            0,
-                            || value.ok_or(Error::SynthesisError),
-                        )?;
-                        region.constrain_equal(var, message[i].cell())?;
-                        Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(var, value)))
-                    };
-                    Ok([message_word(0)?, message_word(1)?])
-                },
-            )?;
+            let poseidon_message = [secret_key, serial];
 
-            let poseidon_hasher = PoseidonHash::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
                 ConstantLength::<2>,
             )?;
 
-            let poseidon_output = poseidon_hasher.hash(
-                layouter.namespace(|| "Poseidon hash (secretkey, serial)"),
-                poseidon_message,
-            )?;
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: CellValue<pasta::Fp> = poseidon_output.inner().into();
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
             poseidon_output
         };
 
@@ -348,71 +325,21 @@ impl Circuit<pasta::Fp> for SpendContract {
         // =========
         // Coin hash
         // =========
-        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
-        let mut hashes = vec![];
+        let coin = {
+            let poseidon_message = [pub_x, pub_y, value, asset, serial, coin_blind];
 
-        for message in messages.iter() {
-            let hash = {
-                let poseidon_message = layouter.assign_region(
-                    || "load message",
-                    |mut region| {
-                        let mut message_word = |i: usize| {
-                            let value = message[i].value();
-                            let var = region.assign_advice(
-                                || format!("load message_{}", i),
-                                config.poseidon_config.state()[i],
-                                0,
-                                || value.ok_or(Error::SynthesisError),
-                            )?;
-                            region.constrain_equal(var, message[i].cell())?;
-                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                                var, value,
-                            )))
-                        };
-                        Ok([message_word(0)?, message_word(1)?])
-                    },
-                )?;
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+                ConstantLength::<6>,
+            )?;
 
-                let poseidon_hasher = PoseidonHash::init(
-                    config.poseidon_chip(),
-                    layouter.namespace(|| "Poseidon init"),
-                    ConstantLength::<2>,
-                )?;
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-                let poseidon_output = poseidon_hasher
-                    .hash(layouter.namespace(|| "Poseidon hash (a, b)"), poseidon_message)?;
-
-                let poseidon_output: CellValue<pasta::Fp> = poseidon_output.inner().into();
-                poseidon_output
-            };
-
-            hashes.push(hash);
-        }
-
-        let coin = layouter.assign_region(
-            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
-            |mut region| {
-                config.q_add.enable(&mut region, 0)?;
-
-                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
-                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
-                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
-
-                let scalar_val = hashes[0]
-                    .value()
-                    .zip(hashes[1].value())
-                    .zip(hashes[2].value())
-                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
-
-                let cell = region.assign_advice(
-                    || "hash(a,b)+hash(c,d)+hash(e,f)",
-                    config.advices[5],
-                    0,
-                    || scalar_val.ok_or(Error::SynthesisError),
-                )?;
-                Ok(CellValue::new(cell, scalar_val))
-            },
-        )?;
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            poseidon_output
+        };
 
         // ===========
         // Merkle root
@@ -443,7 +370,7 @@ impl Circuit<pasta::Fp> for SpendContract {
         let one = self.load_private(
             layouter.namespace(|| "load constant one"),
             config.advices[0],
-            Some(pasta::Fp::one()),
+            Some(pallas::Base::one()),
         )?;
 
         let value =
