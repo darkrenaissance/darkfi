@@ -10,10 +10,7 @@ use halo2_gadgets::{
         chip::{EccChip, EccConfig},
         FixedPoint,
     },
-    poseidon::{
-        Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig,
-        StateWord, Word,
-    },
+    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
@@ -427,28 +424,9 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 ZkFunctionCall::PoseidonHash(lhs_idx, rhs_idx) => {
                     assert!(*lhs_idx < stack_base.len());
                     assert!(*rhs_idx < stack_base.len());
-                    let messages = [stack_base[*lhs_idx], stack_base[*rhs_idx]];
-                    let poseidon_message = layouter.assign_region(
-                        || "load message",
-                        |mut region| {
-                            let mut message_word = |i: usize| {
-                                let val = messages[i].value();
-                                let var = region.assign_advice(
-                                    || format!("load message_{}", i),
-                                    config.poseidon_config.state()[i],
-                                    0,
-                                    || val.ok_or(plonk::Error::SynthesisError),
-                                )?;
-                                region.constrain_equal(var, messages[i].cell())?;
-                                Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                                    var, val,
-                                )))
-                            };
-                            Ok([message_word(0)?, message_word(1)?])
-                        },
-                    )?;
+                    let poseidon_message = [stack_base[*lhs_idx], stack_base[*rhs_idx]];
 
-                    let poseidon_hasher = PoseidonHash::init(
+                    let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                         config.poseidon_chip(),
                         layouter.namespace(|| "Poseidon init"),
                         ConstantLength::<2>,
