@@ -1,22 +1,23 @@
-use async_std::sync::{Arc, Mutex};
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use log::debug;
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{debug, info};
 use num_bigint::BigUint;
+use pasta_curves::pallas;
 use serde_json::{json, Value};
 use url::Url;
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
+    circuit::{MintContract, SpendContract},
     cli::{Config, DarkfidConfig},
-    client::{Client, State},
-    crypto::{
-        load_params, merkle::CommitmentTree, save_params, setup_mint_prover, setup_spend_prover,
-    },
+    client::Client,
+    crypto::{merkle_node::MerkleNode, proof::VerifyingKey},
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -25,7 +26,7 @@ use drk::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
-    state::ProgramState,
+    state::{ProgramState, State},
     util::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
         NetworkName, TokenList,
@@ -38,7 +39,7 @@ use drk::{
 pub struct Cashier {
     pub name: String,
     pub rpc_url: String,
-    pub public_key: jubjub::SubgroupPoint,
+    pub public_key: pallas::Point,
 }
 
 #[async_trait]
@@ -62,6 +63,7 @@ impl RequestHandler for Darkfid {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
+            /*
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
@@ -69,6 +71,7 @@ impl RequestHandler for Darkfid {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
+            */
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         };
     }
@@ -114,13 +117,13 @@ impl Darkfid {
     }
 
     async fn update_balances(&self) -> Result<()> {
-        let own_coins = self.client.lock().await.get_own_coins()?;
+        let own_coins = self.client.lock().await.get_own_coins().await?;
 
         for own_coin in own_coins.iter() {
             let nullifier_exists = self.state.lock().await.nullifier_exists(&own_coin.nullifier);
 
             if nullifier_exists {
-                self.client.lock().await.confirm_spend_coin(&own_coin.coin)?;
+                self.client.lock().await.confirm_spend_coin(&own_coin.coin).await?;
             }
         }
 
@@ -136,7 +139,7 @@ impl Darkfid {
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
-        match self.client.lock().await.init_db() {
+        match self.client.lock().await.init_db().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32001), Some(e.to_string()), id)),
         }
@@ -145,7 +148,8 @@ impl Darkfid {
     // --> {"method": "key_gen", "params": []}
     // <-- {"result": true}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
-        match self.client.lock().await.key_gen() {
+        let client = self.client.lock().await;
+        match client.key_gen().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id)),
         }
@@ -163,7 +167,7 @@ impl Darkfid {
     // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, (String, String)>> = async {
-            let balances = self.client.lock().await.get_balances()?;
+            let balances = self.client.lock().await.get_balances().await?;
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
             for balance in balances.list.iter() {
@@ -175,7 +179,12 @@ impl Darkfid {
                 } else {
                     // TODO: SQL needs to have the mint address for show, not the internal hash.
                     // TODO: SQL needs to have the network name
-                    symbols.insert(balance.token_id.to_string(), (amount, String::from("UNKNOWN")));
+                    //symbols.insert(balance.token_id.to_string(), (amount,
+                    // String::from("UNKNOWN")));
+                    symbols.insert(
+                        format!("{:?}", balance.token_id),
+                        (amount, String::from("UNKNONW")),
+                    );
                 }
             }
             Ok(symbols)
@@ -404,7 +413,7 @@ impl Darkfid {
             Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
         }
 
-        let token_id: &jubjub::Fr;
+        let token_id: &pallas::Base;
 
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {
             token_id = tk_id;
@@ -417,7 +426,7 @@ impl Darkfid {
             let result: Result<()> = async {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
-                let cashier_public: jubjub::SubgroupPoint =
+                let cashier_public: pallas::Point =
                     deserialize(&bs58::decode(cashier_public).into_vec()?)?;
 
                 self.client
@@ -442,7 +451,7 @@ impl Darkfid {
                 Ok(_) => {
                     rep = JsonResult::Resp(jsonresp(
                         json!(format!(
-                            "Sent request to withdraw {} amount of {}",
+                            "Sent request to withdraw {} amount of {:?}",
                             amount, token_id
                         )),
                         id.clone(),
@@ -491,7 +500,7 @@ impl Darkfid {
             (_, _, _, None) => return JsonResult::Err(jsonerr(InvalidAmountParam, None, id)),
         }
 
-        let token_id: &jubjub::Fr;
+        let token_id: &pallas::Base;
 
         // get the id for the token
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {
@@ -502,7 +511,7 @@ impl Darkfid {
 
         let result: Result<()> = async {
             let drk_address = bs58::decode(&address).into_vec()?;
-            let drk_address: jubjub::SubgroupPoint = deserialize(&drk_address)?;
+            let drk_address: pallas::Point = deserialize(&drk_address)?;
 
             let decimals: usize = 8;
             let amount = decode_base10(amount, decimals, true)?;
@@ -538,7 +547,7 @@ async fn start(
     let mut cashier_keys = Vec::new();
 
     if let Some(cpub) = local_cashier {
-        let cashier_public: jubjub::SubgroupPoint = deserialize(&bs58::decode(cpub).into_vec()?)?;
+        let cashier_public: pallas::Point = deserialize(&bs58::decode(cpub).into_vec()?)?;
 
         cashiers.push(Cashier {
             name: "localCashier".into(),
@@ -553,7 +562,7 @@ async fn start(
                 return Err(Error::CashierKeysNotFound)
             }
 
-            let cashier_public: jubjub::SubgroupPoint =
+            let cashier_public: pallas::Point =
                 deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
 
             cashiers.push(Cashier {
@@ -566,31 +575,10 @@ async fn start(
         }
     }
 
-    // Load trusted setup parameters
-    let params_paths = (
-        expand_path(&config.mint_params_path.clone())?,
-        expand_path(&config.spend_params_path.clone())?,
-    );
-    let mint_params_path = params_paths.0.to_str().unwrap_or("mint.params");
-    let spend_params_path = params_paths.1.to_str().unwrap_or("spend.params");
-    // Auto create trusted ceremony parameters if they don't exist
-    if !params_paths.0.exists() {
-        let params = setup_mint_prover();
-        save_params(mint_params_path, &params)?;
-    }
-    if !params_paths.1.exists() {
-        let params = setup_spend_prover();
-        save_params(spend_params_path, &params)?;
-    }
-    let (mint_params, mint_pvk) = load_params(mint_params_path)?;
-    let (spend_params, spend_pvk) = load_params(spend_params_path)?;
-
     let client = Client::new(
         rocks.clone(),
         (Url::parse(&config.gateway_protocol_url)?, Url::parse(&config.gateway_publisher_url)?),
         wallet.clone(),
-        mint_params,
-        spend_params,
     )
     .await?;
 
@@ -599,12 +587,17 @@ async fn start(
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
+    info!("Building verifying key for the mint contract...");
+    let mint_vk = VerifyingKey::build(11, MintContract::default());
+    info!("Building verifying key for the spend contract...");
+    let spend_vk = VerifyingKey::build(11, SpendContract::default());
+
     let state = Arc::new(Mutex::new(State {
-        tree: CommitmentTree::empty(),
+        tree: BridgeTree::<MerkleNode, 32>::new(100),
         merkle_roots,
         nullifiers,
-        mint_pvk,
-        spend_pvk,
+        mint_vk,
+        spend_vk,
         public_keys: cashier_keys,
     }));
 
@@ -651,7 +644,7 @@ async fn main() -> Result<()> {
             config.wallet_password.clone(),
         )?;
 
-        wallet.remove_own_coins()?;
+        wallet.remove_own_coins().await?;
 
         if let Some(path) = expand_path(&config.database_path)?.to_str() {
             debug!(target: "DARKFI DAEMON", "Remove database: {}", path);

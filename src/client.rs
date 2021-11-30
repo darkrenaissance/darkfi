@@ -7,12 +7,12 @@ use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
-    crypto::{coin::Coin, merkle_node::MerkleNode, schnorr, util::mod_r_p},
+    crypto::{coin::Coin, merkle_node::MerkleNode, schnorr, util::mod_r_p, OwnCoin},
     serial::{serialize, Decodable, Encodable},
     service::GatewayClient,
     state::{state_transition, State},
     tx,
-    wallet::{CashierDbPtr, Keypair, WalletPtr},
+    wallet::{walletdb::Balances, CashierDbPtr, Keypair, WalletPtr},
     Result,
 };
 
@@ -201,6 +201,26 @@ impl Client {
         Ok(())
     }
 
+    pub async fn transfer(
+        &mut self,
+        token_id: pallas::Base,
+        pubkey: pallas::Point,
+        amount: u64,
+        state: Arc<Mutex<State>>,
+    ) -> ClientResult<()> {
+        debug!("Start transfer {}", amount);
+        let token_id_exists = self.wallet.token_id_exists(&token_id).await?;
+
+        if token_id_exists {
+            self.send(pubkey, amount, token_id, false, state).await?;
+        } else {
+            return Err(ClientFailed::NotEnoughValue(amount))
+        }
+
+        debug!("End transfer {}", amount);
+        Ok(())
+    }
+
     async fn update_state(
         secret_keys: Vec<pallas::Base>,
         slab: &Slab,
@@ -259,5 +279,61 @@ impl Client {
 
         task.detach();
         Ok(())
+    }
+
+    pub async fn connect_to_subscriber(
+        &self,
+        state: Arc<Mutex<State>>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        debug!("Start subscriber for darkfid");
+        let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
+
+        let secret_key = self.main_keypair.private;
+        let wallet = self.wallet.clone();
+
+        let task: smol::Task<Result<()>> = executor.spawn(async move {
+            loop {
+                let slab = gateway_slabs_sub.recv().await?;
+                debug!("Received new slab");
+
+                let update_state = Self::update_state(
+                    vec![secret_key],
+                    &slab,
+                    state.clone(),
+                    wallet.clone(),
+                    None,
+                )
+                .await;
+
+                if let Err(e) = update_state {
+                    warn!("Update state: {}", e);
+                    continue
+                }
+            }
+        });
+
+        task.detach();
+        Ok(())
+    }
+
+    pub async fn init_db(&self) -> Result<()> {
+        self.wallet.init_db().await
+    }
+
+    pub async fn get_own_coins(&self) -> Result<Vec<OwnCoin>> {
+        self.wallet.get_own_coins().await
+    }
+
+    pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
+        self.wallet.confirm_spend_coin(coin).await
+    }
+
+    pub async fn key_gen(&self) -> Result<()> {
+        self.wallet.key_gen().await
+    }
+
+    pub async fn get_balances(&self) -> Result<Balances> {
+        self.wallet.get_balances().await
     }
 }
