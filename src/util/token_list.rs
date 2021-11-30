@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use pasta_curves::pallas;
 use serde_json::Value;
 
 use crate::{
-    types::*,
     util::{generate_id, NetworkName},
     Error, Result,
 };
@@ -55,46 +55,67 @@ impl TokenList {
 
 #[derive(Debug, Clone)]
 pub struct DrkTokenList {
-    pub tokens: HashMap<String, DrkTokenId>,
+    pub tokens: HashMap<NetworkName, HashMap<String, pallas::Base>>,
 }
 
 impl DrkTokenList {
-    pub fn new(sol_list: TokenList) -> Result<Self> {
+    pub fn new(sol_list: &TokenList, eth_list: &TokenList, btc_list: &TokenList) -> Result<Self> {
         let sol_symbols = sol_list.get_symbols()?;
+        let eth_symbols = eth_list.get_symbols()?;
+        let btc_symbols = btc_list.get_symbols()?;
 
-        let mut tokens: HashMap<String, DrkTokenId> = sol_symbols
+        let sol_tokens: HashMap<String, pallas::Base> = sol_symbols
             .iter()
-            .filter_map(|symbol| Self::generate_hash_pair(&sol_list, symbol).ok())
+            .filter_map(|symbol| {
+                Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
+            })
             .collect();
 
-        tokens.insert(
-            "BTC".to_string(),
-            generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
-        );
+        let eth_tokens: HashMap<String, pallas::Base> = eth_symbols
+            .iter()
+            .filter_map(|symbol| {
+                Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
+            })
+            .collect();
+
+        let btc_tokens: HashMap<String, pallas::Base> = btc_symbols
+            .iter()
+            .filter_map(|symbol| {
+                Self::generate_hash_pair(btc_list, &NetworkName::Bitcoin, symbol).ok()
+            })
+            .collect();
+
+        let tokens: HashMap<NetworkName, HashMap<String, pallas::Base>> = HashMap::from([
+            (NetworkName::Solana, sol_tokens),
+            (NetworkName::Ethereum, eth_tokens),
+            (NetworkName::Bitcoin, btc_tokens),
+        ]);
 
         Ok(Self { tokens })
     }
 
-    fn generate_hash_pair(sol_list: &TokenList, symbol: &str) -> Result<(String, DrkTokenId)> {
-        if let Some(token_id) = &sol_list.search_id(symbol)? {
-            Ok((symbol.to_string(), generate_id(token_id, &NetworkName::Solana)?))
-        } else {
-            Err(Error::NotSupportedToken)
-        }
+    fn generate_hash_pair(
+        token_list: &TokenList,
+        network_name: &NetworkName,
+        symbol: &str,
+    ) -> Result<(String, pallas::Base)> {
+        if let Some(token_id) = &token_list.search_id(symbol)? {
+            return Ok((symbol.to_string(), generate_id(token_id, network_name)?))
+        };
+
+        Err(Error::NotSupportedToken)
     }
 
-    pub fn symbol_from_id(&self, id: DrkTokenId) -> Result<Option<String>> {
-        // TODO:
-        /*
-        if id.to_string() == "0x01300f9bce0f9ba7168dc001a67bcbda3a5bf4bdb4c56ae900fe4698cee9a7bd" {
-            return Ok(Some("BTC".to_string()));
+    pub fn symbol_from_id(&self, id: &pallas::Base) -> Result<Option<(NetworkName, String)>> {
+        for (network, tokens) in self.tokens.iter() {
+            for (key, val) in tokens.iter() {
+                if val == id {
+                    return Ok(Some((network.clone(), key.clone())))
+                }
+            }
         }
-        */
 
-        Ok(self
-            .tokens
-            .iter()
-            .find_map(|(key, &val)| if val == id { Some(key.clone()) } else { None }))
+        Ok(None)
     }
 }
 
