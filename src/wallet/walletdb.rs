@@ -1,5 +1,6 @@
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
+use async_std::sync::{Arc, Mutex};
 use log::{debug, error, info};
 use pasta_curves::arithmetic::Field;
 use rand::rngs::OsRng;
@@ -46,7 +47,7 @@ impl Balances {
 }
 
 pub struct WalletDb {
-    pub conn: Connection,
+    pub conn: Mutex<Connection>,
 }
 
 impl WalletApi for WalletDb {}
@@ -63,25 +64,27 @@ impl WalletDb {
         conn.pragma_update(None, "key", &password)?;
         info!(target: "WALLETDB", "Opened connection at path: {:?}", path);
 
-        Ok(Arc::new(Self { conn }))
+        Ok(Arc::new(Self { conn: Mutex::new(conn) }))
     }
 
-    pub fn init_db(&self) -> Result<()> {
+    pub async fn init_db(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Initialize...");
         let contents = include_str!("../../sql/schema.sql");
-        Ok(self.conn.execute_batch(contents)?)
+        let conn = self.conn.lock().await;
+        Ok(conn.execute_batch(contents)?)
     }
 
-    pub fn key_gen(&self) -> Result<()> {
+    pub async fn key_gen(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Attempting to generate keys...");
-        let mut stmt = self.conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
 
         let key_check = stmt.exists(params!["0"])?;
 
         if !key_check {
             let secret = DrkSecretKey::random(&mut OsRng);
             let public = derive_public_key(secret);
-            self.put_keypair(&public, &secret)?;
+            self.put_keypair(&public, &secret).await?;
             return Ok(())
         }
 
@@ -89,12 +92,17 @@ impl WalletDb {
         Err(Error::from(ClientFailed::KeyExists))
     }
 
-    pub fn put_keypair(&self, key_public: &DrkPublicKey, key_private: &DrkSecretKey) -> Result<()> {
+    pub async fn put_keypair(
+        &self,
+        key_public: &DrkPublicKey,
+        key_private: &DrkSecretKey,
+    ) -> Result<()> {
         debug!(target: "WALLETDB", "put_keypair()");
         let key_public = serial::serialize(key_public);
         let key_private = serial::serialize(key_private);
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
             params![key_public, key_private],
         )?;
@@ -102,9 +110,10 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn get_keypairs(&self) -> Result<Vec<Keypair>> {
+    pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         debug!(target: "WALLETDB", "Returning keypairs...");
-        let mut stmt = self.conn.prepare("SELECT * FROM keys")?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT * FROM keys")?;
 
         // this just gets the first key. maybe we should randomize this
         let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
@@ -122,11 +131,12 @@ impl WalletDb {
         Ok(keypairs)
     }
 
-    pub fn get_own_coins(&self) -> Result<OwnCoins> {
+    pub async fn get_own_coins(&self) -> Result<OwnCoins> {
         debug!(target: "WALLETDB", "Get own coins");
         let is_spent = 0;
 
-        let mut coins = self.conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+        let conn = self.conn.lock().await;
+        let mut coins = conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
 
         let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
             Ok((
@@ -178,7 +188,7 @@ impl WalletDb {
         Ok(own_coins)
     }
 
-    pub fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
+    pub async fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
         debug!(target: "WALLETDB", "Put own coins");
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
@@ -191,7 +201,8 @@ impl WalletDb {
         let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT OR REPLACE INTO coins
             (coin, serial, value, token_id, coin_blind,
             valcom_blind, witness, secret, is_spent, nullifier)
@@ -215,18 +226,20 @@ impl WalletDb {
         Ok(())
     }
 
-    pub fn remove_own_coins(&self) -> Result<()> {
+    pub async fn remove_own_coins(&self) -> Result<()> {
         debug!(target: "WALLETDB", "Remove own coins");
-        let _rows = self.conn.execute("DROP TABLE coins;", [])?;
+        let conn = self.conn.lock().await;
+        let _rows = conn.execute("DROP TABLE coins;", [])?;
         Ok(())
     }
 
-    pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
+    pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!(target: "WALLETDB", "Confirm spend coin");
         let is_spent = 1;
         let coin = self.get_value_serialized(coin)?;
 
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "UPDATE coins
             SET is_spent = ?1
             WHERE coin = ?2 ;",
@@ -284,11 +297,12 @@ impl WalletDb {
     }
     */
 
-    pub fn get_balances(&self) -> Result<Balances> {
+    pub async fn get_balances(&self) -> Result<Balances> {
         debug!(target: "WALLETDB", "Get token and balances...");
         let is_spent = 0;
 
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
             "SELECT value, token_id, nullifier FROM coins  WHERE is_spent = :is_spent ;",
         )?;
 
@@ -309,12 +323,12 @@ impl WalletDb {
         Ok(balances)
     }
 
-    pub fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
+    pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
         debug!(target: "WALLETDB", "Get token ID...");
         let is_spent = 0;
 
-        let mut stmt =
-            self.conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
 
         let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
 
@@ -329,21 +343,22 @@ impl WalletDb {
         Ok(token_ids)
     }
 
-    pub fn token_id_exists(&self, token_id: &DrkTokenId) -> Result<bool> {
+    pub async fn token_id_exists(&self, token_id: &DrkTokenId) -> Result<bool> {
         debug!(target: "WALLETDB", "Check tokenID exists");
         let is_spent = 0;
         let id = self.get_value_serialized(token_id)?;
 
-        let mut stmt =
-            self.conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
 
         let id_check = stmt.exists(params![id, is_spent])?;
 
         Ok(id_check)
     }
 
-    pub fn test_wallet(&self) -> Result<()> {
-        let mut stmt = self.conn.prepare("SELECT * FROM keys")?;
+    pub async fn test_wallet(&self) -> Result<()> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT * FROM keys")?;
         let _rows = stmt.query([])?;
         Ok(())
     }

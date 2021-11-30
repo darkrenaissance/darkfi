@@ -1,26 +1,24 @@
 use async_std::sync::{Arc, Mutex};
-use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{debug, info};
+use incrementalmerkletree::Tree;
+use log::{debug, info, warn};
 use pasta_curves::pallas;
+use smol::Executor;
 use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
-    crypto::{
-        coin::Coin, merkle_node::MerkleNode, mint_proof::MintProofKeys, nullifier::Nullifier,
-        proof::VerifyingKey, schnorr, spend_proof::SpendProofKeys,
-    },
-    serial::{serialize, Encodable},
+    crypto::{coin::Coin, merkle_node::MerkleNode, schnorr, util::mod_r_p},
+    serial::{serialize, Decodable, Encodable},
     service::GatewayClient,
-    state::{state_transition, ProgramState},
+    state::{state_transition, State},
     tx,
-    wallet::{Keypair, WalletPtr},
+    wallet::{CashierDbPtr, Keypair, WalletPtr},
     Result,
 };
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ClientFailed {
-    #[error("here is no enough value {0}")]
+    #[error("Here is not enough value {0}")]
     NotEnoughValue(u64),
     #[error("Invalid Address  {0}")]
     InvalidAddress(String),
@@ -46,12 +44,24 @@ pub enum ClientFailed {
     VerifyError(String),
 }
 
+pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
+
+impl From<super::error::Error> for ClientFailed {
+    fn from(err: super::error::Error) -> ClientFailed {
+        ClientFailed::ClientError(err.to_string())
+    }
+}
+
+impl From<crate::state::VerifyFailed> for ClientFailed {
+    fn from(err: crate::state::VerifyFailed) -> ClientFailed {
+        ClientFailed::VerifyError(err.to_string())
+    }
+}
+
 pub struct Client {
-    main_keypair: Keypair,
+    pub main_keypair: Keypair,
     gateway: GatewayClient,
     wallet: WalletPtr,
-    mint_proof_keys: MintProofKeys,
-    spend_proof_keys: SpendProofKeys,
 }
 
 impl Client {
@@ -59,70 +69,69 @@ impl Client {
         rocks: Arc<Rocks>,
         gateway_addrs: (Url, Url),
         wallet: WalletPtr,
-        mint_proof_keys: MintProofKeys,
-        spend_proof_keys: SpendProofKeys,
     ) -> Result<Self> {
-        wallet.init_db()?;
+        wallet.init_db().await?;
 
         // Generate a new keypair if we don't have any.
-        if wallet.get_keypairs()?.is_empty() {
-            wallet.key_gen()?;
+        if wallet.get_keypairs().await?.is_empty() {
+            wallet.key_gen().await?;
         }
 
-        // TODO: Think about multiple keypairs.
-        let main_keypair = wallet.get_keypairs()?[0].clone();
+        // TODO: Think about multiple keypairs
+        let main_keypair = wallet.get_keypairs().await?[0].clone();
         info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
 
-        let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
-
         debug!("Creating GatewayClient");
+        let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
-        let client = Client { main_keypair, gateway, wallet, mint_proof_keys, spend_proof_keys };
+        let client = Client { main_keypair, gateway, wallet };
         Ok(client)
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        self.gateway.start().await?;
-        Ok(())
+        self.gateway.start().await
     }
 
     async fn build_slab_from_tx(
         &mut self,
-        pub_key: pallas::Point,
+        pubkey: pallas::Point,
         value: u64,
         token_id: pallas::Base,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Vec<Coin>> {
-        debug!(target: "CLIENT", "Start build slab from tx");
-
+        debug!("Start build slab from tx");
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
         let mut coins: Vec<Coin> = vec![];
 
         if clear_input {
-            let signature_secret = self.main_keypair.private;
+            // TODO: FIXME:
+            let base_secret = self.main_keypair.private;
+            let signature_secret = schnorr::SecretKey(mod_r_p(base_secret));
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
-            debug!(target: "CLIENT", "Start build inputs");
-
-            let mut inputs_value: u64 = 0;
-
-            let own_coins = self.wallet.get_own_coins()?;
+            debug!("Start build inputs");
+            let mut inputs_value = 0_u64;
+            let state_m = state.lock().await;
+            let own_coins = self.wallet.get_own_coins().await?;
 
             for own_coin in own_coins.iter() {
                 if inputs_value >= value {
                     break
                 }
 
-                let witness = &own_coin.witness;
-                let merkle_path = witness.path().unwrap();
+                let node = MerkleNode(own_coin.coin.inner());
+                let (leaf_position, merkle_path) = state_m.tree.authentication_path(&node).unwrap();
+                // TODO: What is this counting? Is it everything or does it know to separate
+                // different tokens?
                 inputs_value += own_coin.note.value;
 
                 let input = tx::TransactionBuilderInputInfo {
+                    leaf_position,
                     merkle_path,
                     secret: own_coin.secret,
                     note: own_coin.note.clone(),
@@ -146,157 +155,90 @@ impl Client {
                 });
             }
 
-            debug!(target: "CLIENT", "End build inputs");
+            debug!("End build inputs");
         }
 
-        outputs.push(tx::TransactionBuilderOutputInfo { value, token_id, public: pub_key });
+        outputs.push(tx::TransactionBuilderOutputInfo { value, token_id, public: pubkey });
 
         let builder = tx::TransactionBuilder { clear_inputs, inputs, outputs };
-
         let tx: tx::Transaction;
-
         let mut tx_data = vec![];
-        {
-            tx = builder.build()?;
-            tx.encode(&mut tx_data).expect("encode tx");
-        }
+        tx = builder.build()?;
+        tx.encode(&mut tx_data).expect("encode tx");
 
         let slab = Slab::new(tx_data);
+        debug!("End build slab from tx");
 
-        debug!(target: "CLIENT", "End build slab from tx");
-
-        // check if it's valid before send it to gateway
+        // Check if it's valid before sending to gateway
         let state = &*state.lock().await;
-
         state_transition(state, tx)?;
 
         self.gateway.put_slab(slab).await?;
-
         Ok(coins)
     }
 
     pub async fn send(
         &mut self,
-        pub_key: pallas::Point,
+        pubkey: pallas::Point,
         amount: u64,
         token_id: pallas::Base,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
-        debug!(target: "CLIENT", "Start send {}", amount);
+        // TODO: TOKEN debug
+        debug!("Start send {}", amount);
 
         if amount == 0 {
-            return Err(ClientFailed::InvalidAmount(amount as u64))
+            return Err(ClientFailed::InvalidAmount(0))
         }
 
-        let coins = self.build_slab_from_tx(pub_key, amount, token_id, clear_input, state).await?;
-
+        let coins = self.build_slab_from_tx(pubkey, amount, token_id, clear_input, state).await?;
         for coin in coins.iter() {
-            self.wallet.confirm_spend_coin(coin)?;
+            self.wallet.confirm_spend_coin(coin).await?;
         }
 
-        debug!(target: "CLIENT", "End send {}", amount);
-
+        debug!("End send {}", amount);
         Ok(())
     }
 
-    pub async fn transfer(
-        &mut self,
-        token_id: pallas::Base,
-        pub_key: pallas::Point,
-        amount: u64,
+    async fn update_state(
+        secret_keys: Vec<pallas::Base>,
+        slab: &Slab,
         state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
-        debug!(target: "CLIENT", "Start transfer {}", amount);
+        wallet: WalletPtr,
+        notify: Option<async_channel::Sender<(pallas::Point, u64)>>,
+    ) -> Result<()> {
+        debug!("Build tx from slab and update the state");
+        let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
 
-        let token_id_exists = self.wallet.token_id_exists(&token_id)?;
-
-        if token_id_exists {
-            self.send(pub_key, amount, token_id, false, state).await?;
-        } else {
-            return Err(ClientFailed::NotEnoughValue(amount))
-        }
-
-        debug!(target: "CLIENT", "End transfer {}", amount);
-
+        let st = &*state.lock().await;
+        let update = state_transition(st, tx)?;
+        let mut st = state.lock().await;
+        st.apply(update, secret_keys, notify, wallet).await?;
         Ok(())
     }
-}
-
-pub struct State {
-    // The entire merkle tree state
-    pub tree: BridgeTree<MerkleNode, 32>,
-    // List of all previous and the current merkle roots
-    // This is the hashed value of all the children.
-    pub merkle_roots: RocksColumn<columns::MerkleRoots>,
-    // Nullifiers prevent double spending
-    pub nullifiers: RocksColumn<columns::Nullifiers>,
-    // Mint verifying key used by ZK
-    pub mint_vk: VerifyingKey,
-    // Spend verifying key used by ZK
-    pub spend_vk: VerifyingKey,
-    // List of cashier public keys
-    pub public_keys: Vec<pallas::Point>,
-}
-
-impl ProgramState for State {
-    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
-        debug!(target: "CLIENT STATE", "Check if it is valid cashier public key");
-        self.public_keys.contains(public)
-    }
-
-    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        debug!(target: "CLIENT STATE", "Check if it is valid merkle");
-
-        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
-            return mr
-        }
-        false
-    }
-
-    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        debug!(target: "CLIENT STATE", "Check if nullifier exists");
-        if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
-            return nl
-        }
-        false
-    }
-
-    fn mint_vk(&self) -> &VerifyingKey {
-        &self.mint_vk
-    }
-
-    fn spend_vk(&self) -> &VerifyingKey {
-        &self.spend_vk
-    }
-}
-
-/*
-impl Client {
 
     pub async fn connect_to_subscriber_from_cashier(
         &self,
         state: Arc<Mutex<State>>,
         cashier_wallet: CashierDbPtr,
-        notify: async_channel::Sender<(jubjub::SubgroupPoint, u64)>,
+        notify: async_channel::Sender<(pallas::Point, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        // start subscribing
-        debug!(target: "CLIENT", "Start subscriber for cashier");
-        let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber(executor.clone()).await?;
+        debug!("Start subscriber for cashier");
+        let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
         let secret_key = self.main_keypair.private;
         let wallet = self.wallet.clone();
 
+        //let task: smol::Task<Result<()>> = executor.spawn(async move {
         let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
+                debug!("Received new slab");
 
-                debug!(target: "CLIENT", "Received new slab");
-
-                let mut secret_keys: Vec<jubjub::Fr> = vec![secret_key];
-                let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys()?;
+                let mut secret_keys: Vec<pallas::Base> = vec![secret_key];
+                let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys().await?;
                 secret_keys.append(&mut withdraw_keys);
 
                 let update_state = Self::update_state(
@@ -306,246 +248,16 @@ impl Client {
                     wallet.clone(),
                     Some(notify.clone()),
                 )
-                    .await;
+                .await;
 
                 if let Err(e) = update_state {
-                    warn!("Update state: {}", e.to_string());
-                    continue;
+                    warn!("Update state: {}", e);
+                    continue
                 }
             }
         });
 
         task.detach();
-
         Ok(())
     }
-
-    pub async fn connect_to_subscriber(
-        &self,
-        state: Arc<Mutex<State>>,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        // start subscribing
-        debug!(target: "CLIENT", "Start subscriber");
-        let gateway_slabs_sub: GatewaySlabsSubscriber =
-            self.gateway.start_subscriber(executor.clone()).await?;
-
-        let secret_key = self.main_keypair.private;
-        let wallet = self.wallet.clone();
-
-        let task: smol::Task<Result<()>> = executor.spawn(async move {
-            loop {
-                let slab = gateway_slabs_sub.recv().await?;
-
-                debug!(target: "CLIENT", "Received new slab");
-
-                let update_state = Self::update_state(
-                    vec![secret_key],
-                    &slab,
-                    state.clone(),
-                    wallet.clone(),
-                    None,
-                )
-                    .await;
-
-                if let Err(e) = update_state {
-                    warn!("Update state: {}", e.to_string());
-                    continue;
-                }
-            }
-        });
-
-        task.detach();
-
-        Ok(())
-    }
-
-    async fn update_state(
-        secret_keys: Vec<jubjub::Fr>,
-        slab: &Slab,
-        state: Arc<Mutex<State>>,
-        wallet: WalletPtr,
-        notify: Option<async_channel::Sender<(jubjub::SubgroupPoint, u64)>>,
-    ) -> Result<()> {
-        debug!(target: "CLIENT", "Build tx from slab and update the state");
-
-        let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
-
-
-        let update: StateUpdate;
-
-        {
-            let state = &*state.lock().await;
-            update = state_transition(state, tx)?;
-        }
-
-        let mut state = state.lock().await;
-
-        state
-            .apply(update, secret_keys.clone(), notify, wallet)
-            .await?;
-
-        Ok(())
-    }
-
-    pub fn init_db(&self) -> Result<()> {
-        self.wallet.init_db()
-    }
-
-    pub fn get_own_coins(&self) -> Result<Vec<OwnCoin>> {
-        self.wallet.get_own_coins()
-    }
-
-    pub fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
-        self.wallet.confirm_spend_coin(coin)
-    }
-
-    pub fn key_gen(&self) -> Result<()> {
-        self.wallet.key_gen()
-    }
-
-    pub fn get_balances(&self) -> Result<Balances> {
-        self.wallet.get_balances()
-    }
-
-    pub fn token_id_exists(&self, token_id: &jubjub::Fr) -> Result<bool> {
-        self.wallet.token_id_exists(token_id)
-    }
-
-    pub fn get_token_id(&self) -> Result<Vec<jubjub::Fr>> {
-        self.wallet.get_token_id()
-    }
 }
-
-pub struct State {
-    // The entire merkle tree state
-    pub tree: CommitmentTree<MerkleNode>,
-    // List of all previous and the current merkle roots
-    // This is the hashed value of all the children.
-    pub merkle_roots: RocksColumn<columns::MerkleRoots>,
-    // Nullifiers prevent double spending
-    pub nullifiers: RocksColumn<columns::Nullifiers>,
-    // Mint verifying key used by ZK
-    pub mint_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    // Spend verifying key used by ZK
-    pub spend_pvk: groth16::PreparedVerifyingKey<Bls12>,
-    // List of cashier public keys
-    pub public_keys: Vec<jubjub::SubgroupPoint>,
-}
-
-impl State {
-    pub async fn apply(
-        &mut self,
-        update: StateUpdate,
-        secret_keys: Vec<jubjub::Fr>,
-        notify: Option<async_channel::Sender<(jubjub::SubgroupPoint, u64)>>,
-        wallet: WalletPtr,
-    ) -> Result<()> {
-        // Extend our list of nullifiers with the ones from the update
-
-        debug!(target: "CLIENT STATE", "Extend nullifiers");
-        for nullifier in update.nullifiers {
-            self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
-        }
-
-        debug!(target: "CLIENT STATE", "Update merkle tree and witness ");
-        // Update merkle tree and witnesses
-        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
-            // Add the new coins to the merkle tree
-            let node = MerkleNode::from_coin(&coin);
-            self.tree.append(node).expect("Append to merkle tree");
-
-            debug!(target: "CLIENT STATE", "Keep track of all merkle roots");
-
-            // Keep track of all merkle roots that have existed
-            self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
-
-            debug!(target: "CLIENT STATE", "Update witness");
-
-            // Also update all the coin witnesses
-            let mut updated_witnesses = wallet.get_witnesses()?;
-
-            updated_witnesses.iter_mut().for_each(|(_, witness)| {
-                witness.append(node).expect("Append to witness");
-            });
-
-            wallet.update_witnesses(updated_witnesses)?;
-
-            debug!(target: "CLIENT STATE", "iterate over secret_keys to decrypt note");
-
-            for secret in secret_keys.iter() {
-                if let Some(note) = Self::try_decrypt_note(enc_note, *secret) {
-                    // We need to keep track of the witness for this coin.
-                    // This allows us to prove inclusion of the coin in the merkle tree with ZK.
-                    // Just as we update the merkle tree with every new coin, so we do the same with
-                    // the witness.
-
-                    // Derive the current witness from the current tree.
-                    // This is done right after we add our coin to the tree (but before any other
-                    // coins are added)
-
-                    // Make a new witness for this coin
-                    let witness = IncrementalWitness::from_tree(&self.tree);
-
-                    let mut nullifier = [0; 32];
-                    nullifier.copy_from_slice(
-                        Blake2sParams::new()
-                        .hash_length(32)
-                        .personal(zcash_primitives::constants::PRF_NF_PERSONALIZATION)
-                        .to_state()
-                        .update(&secret.to_bytes())
-                        .update(&note.serial.to_bytes())
-                        .finalize()
-                        .as_bytes(),
-                    );
-
-                    let nullifier = Nullifier::new(nullifier);
-
-                    let own_coin = OwnCoin {
-                        coin: coin.clone(),
-                        note: note.clone(),
-                        secret: *secret,
-                        witness: witness.clone(),
-                        nullifier,
-                    };
-
-                    wallet.put_own_coins(own_coin)?;
-                    let pub_key = zcash_primitives::constants::SPENDING_KEY_GENERATOR * secret;
-
-                    debug!(target: "CLIENT STATE", "Received a coin: amount {} ", note.value);
-
-                    debug!(target: "CLIENT STATE", "Send a notification");
-
-                    if let Some(ch) = notify.clone() {
-                        ch.send((pub_key, note.value)).await?
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: jubjub::Fr) -> Option<Note> {
-        match ciphertext.decrypt(&secret) {
-            // ... and return the decrypted note for this coin.
-            Ok(note) => Some(note),
-            // We weren't able to decrypt the note with our key.
-            Err(_) => None,
-        }
-    }
-}
-*/
-
-impl From<super::error::Error> for ClientFailed {
-    fn from(err: super::error::Error) -> ClientFailed {
-        ClientFailed::ClientError(err.to_string())
-    }
-}
-
-impl From<crate::state::VerifyFailed> for ClientFailed {
-    fn from(err: crate::state::VerifyFailed) -> ClientFailed {
-        ClientFailed::VerifyError(err.to_string())
-    }
-}
-
-pub type ClientResult<T> = std::result::Result<T, ClientFailed>;

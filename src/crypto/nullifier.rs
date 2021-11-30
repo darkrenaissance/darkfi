@@ -1,5 +1,9 @@
 use std::io;
 
+use halo2_gadgets::primitives::{
+    poseidon,
+    poseidon::{ConstantLength, P128Pow5T3},
+};
 use pasta_curves::{arithmetic::FieldExt, pallas};
 
 use crate::{
@@ -11,6 +15,12 @@ use crate::{
 pub struct Nullifier(pub(crate) pallas::Base);
 
 impl Nullifier {
+    pub fn new(secret: pallas::Base, serial: pallas::Base) -> Self {
+        let nullifier = [secret, serial];
+        let nullifier = poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
+        Nullifier(nullifier)
+    }
+
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
         pallas::Base::from_bytes(bytes).map(Nullifier).unwrap()
     }

@@ -5,21 +5,24 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use log::debug;
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{debug, info};
 use pasta_curves::pallas;
 use serde_json::{json, Value};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
+    circuit::{MintContract, SpendContract},
     cli::{CashierdConfig, Config},
-    client::{Client, State},
-    crypto::{mint_proof::MintProofKeys, schnorr, spend_proof::SpendProofKeys},
+    client::Client,
+    crypto::{merkle_node::MerkleNode, proof::VerifyingKey, schnorr},
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::{deserialize, serialize},
     service::{bridge, bridge::Bridge},
+    state::State,
     types::DrkTokenId,
     util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
     wallet::{cashierdb::TokenKey, CashierDb, WalletDb},
@@ -342,13 +345,13 @@ impl Cashierd {
                 cashier_public = addr.public;
             } else {
                 let cashier_secret = schnorr::SecretKey::random();
-                cashier_public = cashier_secret.public_key();
+                cashier_public = cashier_secret.public_key().inner();
 
                 self.cashier_wallet
                     .put_withdraw_keys(
                         &address,
                         &cashier_public,
-                        &cashier_secret,
+                        &cashier_secret.inner(),
                         &network,
                         &token_id,
                         mint_address.into(),
@@ -669,15 +672,19 @@ async fn start(
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
-    let mint_proof_keys = MintProofKeys::initialize();
-    let spend_proof_keys = SpendProofKeys::initialize();
+    /*
+    let mint_pk = ProvingKey::build(11, MintContract::default());
+    let spend_pk = ProvingKey::build(11, SpendContract::default());
+    */
+    info!("Building verifying key for the mint contract...");
+    let mint_vk = VerifyingKey::build(11, MintContract::default());
+    info!("Building verifying key for the spend contract...");
+    let spend_vk = VerifyingKey::build(11, SpendContract::default());
 
     let client = Client::new(
         rocks.clone(),
         (config.gateway_protocol_url.parse()?, config.gateway_publisher_url.parse()?),
         client_wallet.clone(),
-        mint_proof_keys,
-        spend_proof_keys,
     )
     .await?;
 
@@ -694,13 +701,13 @@ async fn start(
         tree: BridgeTree::<MerkleNode, 32>::new(100),
         merkle_roots,
         nullifiers,
-        mint_vk: mint_proof_keys.vk,
-        spend_vk: spend_proof_keys.vk,
+        mint_vk,
+        spend_vk,
         public_keys: cashier_public_keys,
     }));
 
     if get_address_flag {
-        println!("Public Key: {}", cashier_public_str);
+        info!("Public Key: {}", cashier_public_str);
         return Ok(())
     };
 
@@ -750,7 +757,7 @@ async fn main() -> Result<()> {
             config.client_wallet_password.clone(),
         )?;
 
-        client_wallet.remove_own_coins()?;
+        client_wallet.remove_own_coins().await?;
 
         let wallet = CashierDb::new(
             expand_path(&config.cashier_wallet_path)?.as_path(),
@@ -764,7 +771,7 @@ async fn main() -> Result<()> {
             std::fs::remove_dir_all(path)?;
         }
 
-        println!("Wallet got updated successfully.");
+        info!("Wallet got updated successfully.");
 
         return Ok(())
     }

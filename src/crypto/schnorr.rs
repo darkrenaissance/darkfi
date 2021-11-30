@@ -36,6 +36,10 @@ impl SecretKey {
         let public_key = OrchardFixedBases::SpendAuthG.generator() * self.0;
         PublicKey(public_key)
     }
+
+    pub fn inner(&self) -> pallas::Scalar {
+        self.0
+    }
 }
 
 #[derive(PartialEq)]
@@ -66,6 +70,10 @@ impl PublicKey {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
         OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge ==
             signature.commit
+    }
+
+    pub fn inner(&self) -> pallas::Point {
+        self.0
     }
 }
 

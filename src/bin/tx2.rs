@@ -99,7 +99,7 @@ impl MemoryState {
 
 fn main() -> Result<()> {
     let cashier_signature_secret = schnorr::SecretKey::random();
-    let cashier_signature_public = cashier_secret.public_key();
+    let cashier_signature_public = cashier_signature_secret.public_key();
 
     let keypair = Keypair::random(&mut OsRng);
 

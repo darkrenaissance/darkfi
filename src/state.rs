@@ -1,18 +1,30 @@
+use halo2_gadgets::ecc::FixedPoints;
+use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use log::debug;
+use pasta_curves::pallas;
 
 use crate::{
+    blockchain::{rocks::columns, RocksColumn},
     crypto::{
-        coin::Coin, merkle_node::MerkleNode, note::EncryptedNote, nullifier::Nullifier,
-        proof::VerifyingKey, schnorr,
+        coin::Coin,
+        constants::OrchardFixedBases,
+        merkle_node::MerkleNode,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
+        proof::VerifyingKey,
+        schnorr,
+        util::mod_r_p,
+        OwnCoin,
     },
     tx::Transaction,
+    wallet::WalletPtr,
+    Result,
 };
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool;
     fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
-
     fn mint_vk(&self) -> &VerifyingKey;
     fn spend_vk(&self) -> &VerifyingKey;
 }
@@ -101,4 +113,115 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     }
 
     Ok(StateUpdate { nullifiers, coins, enc_notes })
+}
+
+pub struct State {
+    /// The entire Merkle tree state
+    pub tree: BridgeTree<MerkleNode, 32>,
+    /// List of all previous and the current merkle roots.
+    /// This is the hashed value of all the children.
+    pub merkle_roots: RocksColumn<columns::MerkleRoots>,
+    /// Nullifiers prevent double-spending
+    pub nullifiers: RocksColumn<columns::Nullifiers>,
+    /// List of Cashier public keys
+    pub public_keys: Vec<pallas::Point>,
+    /// Verifying key for the Mint contract
+    pub mint_vk: VerifyingKey,
+    /// Verifying key for the Spend contract
+    pub spend_vk: VerifyingKey,
+}
+
+impl State {
+    pub async fn apply(
+        &mut self,
+        update: StateUpdate,
+        secret_keys: Vec<pallas::Base>,
+        notify: Option<async_channel::Sender<(pallas::Point, u64)>>,
+        wallet: WalletPtr,
+    ) -> Result<()> {
+        // Extend our list of nullifiers with the ones from the update.
+        debug!("Extend nullifiers");
+        for nullifier in update.nullifiers {
+            self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
+        }
+
+        debug!("Update Merkle tree and witness");
+        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
+            // Add the new coins to the Merkle tree
+            let node = MerkleNode(coin.0);
+            self.tree.append(&node);
+
+            // Keep track of all Merkle roots that have existed
+            self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
+
+            for secret in secret_keys.iter() {
+                if let Some(note) = State::try_decrypt_note(enc_note, *secret) {
+                    // TODO: What to do with witnesses?
+                    self.tree.witness();
+                    let nullifier = Nullifier::new(*secret, note.serial);
+
+                    let own_coin = OwnCoin {
+                        coin: coin.clone(),
+                        note: note.clone(),
+                        secret: *secret,
+                        // witness: witness.clone(),
+                        nullifier,
+                    };
+
+                    wallet.put_own_coins(own_coin).await?;
+
+                    // TODO: Place somewhere proper
+                    let pubkey = OrchardFixedBases::NullifierK.generator() * mod_r_p(*secret);
+
+                    debug!("Received a coin: amount {}", note.value);
+                    debug!("Send a notification");
+                    if let Some(ch) = notify.clone() {
+                        ch.send((pubkey, note.value)).await?;
+                    }
+                }
+            }
+        }
+
+        debug!("apply() exiting successfully");
+        Ok(())
+    }
+
+    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: pallas::Base) -> Option<Note> {
+        match ciphertext.decrypt(&secret) {
+            Ok(note) => Some(note),
+            Err(_) => None,
+        }
+    }
+}
+
+impl ProgramState for State {
+    // TODO: Proper keypair type
+    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
+        debug!("Check if it is a valid cashier public key");
+        self.public_keys.contains(&public.inner())
+    }
+
+    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
+        debug!("Check if it is valid merkle");
+        if let Ok(mr) = self.merkle_roots.key_exist(merkle_root.clone()) {
+            return mr
+        }
+        false
+    }
+
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+        debug!("Check if nullifier exists");
+        if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
+            return nl
+        }
+        false
+    }
+
+    fn mint_vk(&self) -> &VerifyingKey {
+        &self.mint_vk
+    }
+
+    fn spend_vk(&self) -> &VerifyingKey {
+        &self.spend_vk
+    }
 }
