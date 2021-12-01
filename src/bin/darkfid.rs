@@ -63,7 +63,6 @@ impl RequestHandler for Darkfid {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
-            /*
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
@@ -71,7 +70,6 @@ impl RequestHandler for Darkfid {
             Some("deposit") => return self.deposit(req.id, req.params).await,
             Some("withdraw") => return self.withdraw(req.id, req.params).await,
             Some("transfer") => return self.transfer(req.id, req.params).await,
-            */
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         };
     }
@@ -539,7 +537,8 @@ async fn start(
     config: &DarkfidConfig,
 ) -> Result<()> {
     let wallet =
-        WalletDb::new(expand_path(&config.wallet_path)?.as_path(), config.wallet_password.clone())?;
+        WalletDb::new(expand_path(&config.wallet_path)?.as_path(), config.wallet_password.clone())
+            .await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -642,7 +641,8 @@ async fn main() -> Result<()> {
         let wallet = WalletDb::new(
             expand_path(&config.wallet_path)?.as_path(),
             config.wallet_password.clone(),
-        )?;
+        )
+        .await?;
 
         wallet.remove_own_coins().await?;
 
