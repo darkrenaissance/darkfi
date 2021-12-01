@@ -81,7 +81,8 @@ impl Cashierd {
         let cashier_wallet = CashierDb::new(
             expand_path(&config.cashier_wallet_path)?.as_path(),
             config.cashier_wallet_password.clone(),
-        )?;
+        )
+        .await?;
 
         let mut networks = Vec::new();
 
@@ -472,7 +473,7 @@ impl Cashierd {
                             self.cashier_wallet
                                 .put_main_keys(
                                     &TokenKey {
-                                        private_key: serialize(&main_keypair),
+                                        secret_key: serialize(&main_keypair),
                                         public_key: serialize(&main_keypair.pubkey()),
                                     },
                                     &NetworkName::Solana,
@@ -480,7 +481,7 @@ impl Cashierd {
                                 .await?;
                         } else {
                             main_keypair =
-                                deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
+                                deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
@@ -530,7 +531,7 @@ impl Cashierd {
                         self.cashier_wallet
                             .put_main_keys(
                                 &TokenKey {
-                                    private_key: serialize(&main_private_key),
+                                    secret_key: serialize(&main_private_key),
                                     public_key: serialize(&main_public_key),
                                 },
                                 &NetworkName::Ethereum,
@@ -543,7 +544,7 @@ impl Cashierd {
                         let last_keypair = &main_keypairs[main_keypairs.len() - 1];
 
                         main_keypair = Keypair {
-                            private_key: deserialize(&last_keypair.private_key)?,
+                            private_key: deserialize(&last_keypair.secret_key)?,
                             public_key: deserialize(&last_keypair.public_key)?,
                         }
                     }
@@ -571,7 +572,7 @@ impl Cashierd {
                             self.cashier_wallet
                                 .put_main_keys(
                                     &TokenKey {
-                                        private_key: serialize(&main_keypair),
+                                        secret_key: serialize(&main_keypair),
                                         public_key: serialize(&main_keypair.pubkey()),
                                     },
                                     &NetworkName::Bitcoin,
@@ -579,7 +580,7 @@ impl Cashierd {
                                 .await?;
                         } else {
                             main_keypair =
-                                deserialize(&main_keypairs[main_keypairs.len() - 1].private_key)?;
+                                deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
                         }
                     } else {
                         let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
@@ -668,7 +669,8 @@ async fn start(
     let client_wallet = WalletDb::new(
         expand_path(&config.client_wallet_path.clone())?.as_path(),
         config.client_wallet_password.clone(),
-    )?;
+    )
+    .await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -755,14 +757,16 @@ async fn main() -> Result<()> {
         let client_wallet = WalletDb::new(
             expand_path(&config.client_wallet_path)?.as_path(),
             config.client_wallet_password.clone(),
-        )?;
+        )
+        .await?;
 
         client_wallet.remove_own_coins().await?;
 
         let wallet = CashierDb::new(
             expand_path(&config.cashier_wallet_path)?.as_path(),
             config.cashier_wallet_password.clone(),
-        )?;
+        )
+        .await?;
 
         wallet.remove_withdraw_and_deposit_keys().await?;
 
