@@ -1,24 +1,22 @@
-use std::path::Path;
+use std::{path::Path, str::FromStr};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use log::{debug, error, info};
 use pasta_curves::pallas;
-use rusqlite::{named_params, params, Connection};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 
 use super::{Keypair, WalletApi};
 use crate::{client::ClientFailed, types::*, util::NetworkName, Error, Result};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
-pub struct CashierDb {
-    pub conn: Mutex<Connection>,
-    pub initialized: Mutex<bool>,
-}
-
 #[derive(Debug, Clone)]
 pub struct TokenKey {
     pub public_key: Vec<u8>,
-    pub private_key: Vec<u8>,
+    pub secret_key: Vec<u8>,
 }
 
 pub struct WithdrawToken {
@@ -35,87 +33,97 @@ pub struct DepositToken {
     pub mint_address: String,
 }
 
+pub struct CashierDb {
+    pub conn: SqlitePool,
+}
+
 impl WalletApi for CashierDb {}
 
 impl CashierDb {
-    pub fn new(path: &Path, password: String) -> Result<CashierDbPtr> {
-        debug!(target: "CASHIERDB", "new() Constructor called");
+    pub async fn new(path: &Path, password: String) -> Result<CashierDbPtr> {
+        debug!("new() Constructor called");
         if password.trim().is_empty() {
-            error!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
+            error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
-        let conn = Connection::open(path)?;
-        conn.pragma_update(None, "key", &password)?;
-        info!(target: "CASHIERDB", "Opened connection at path: {:?}", path);
+        let p = format!("sqlite://{}", path.to_str().unwrap());
 
-        Ok(Arc::new(Self { conn: Mutex::new(conn), initialized: Mutex::new(false) }))
+        let connect_opts = SqliteConnectOptions::from_str(&p)?
+            .pragma("key", password)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Off);
+
+        let conn = SqlitePoolOptions::new().connect_with(connect_opts).await?;
+
+        info!("Opened connection at path: {:?}", path);
+        Ok(Arc::new(CashierDb { conn }))
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        if !*self.initialized.lock().await {
-            let contents = include_str!("../../sql/cashier.sql");
-            let conn = self.conn.lock().await;
-            conn.execute_batch(contents)?;
-            *self.initialized.lock().await = true;
-            return Ok(())
-        }
-
-        error!(target: "WALLETDB", "Wallet already initialized.");
-        Err(Error::from(ClientFailed::WalletInitialized))
+        let main_kps = include_str!("../../sql/cashier_main_keypairs.sql");
+        let deposit_kps = include_str!("../../sql/cashier_deposit_keypairs.sql");
+        let withdraw_kps = include_str!("../../sql/cashier_withdraw_keypairs.sql");
+        let mut conn = self.conn.acquire().await?;
+        debug!("Initializing main keypairs table");
+        sqlx::query(main_kps).execute(&mut conn).await?;
+        debug!("Initializing deposit keypairs table");
+        sqlx::query(deposit_kps).execute(&mut conn).await?;
+        debug!("Initializing withdraw keypairs table");
+        sqlx::query(withdraw_kps).execute(&mut conn).await?;
+        Ok(())
     }
 
     pub async fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
-        debug!(target: "CASHIERDB", "Put main keys");
+        debug!("Writing main keys into the database");
         let network = self.get_value_serialized(network)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "INSERT INTO main_keypairs
-            (token_key_private, token_key_public, network)
+            (token_key_secret, token_key_public, network)
             VALUES
-            (:token_key_private, :token_key_public, :network)",
-            named_params! {
-                ":token_key_private": token_key.private_key,
-                ":token_key_public": token_key.public_key,
-                ":network": &network,
-            },
-        )?;
+            (?1, ?2, ?3);",
+        )
+        .bind(token_key.secret_key.clone())
+        .bind(token_key.public_key.clone())
+        .bind(network)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
 
     pub async fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
-        debug!(target: "CASHIERDB", "Get main keys");
+        debug!("Returning main keypairs");
         let network = self.get_value_serialized(network)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public
-            FROM main_keypairs
-            WHERE network = :network ;",
-        )?;
+        let mut conn = self.conn.acquire().await?;
 
-        let keys_iter = stmt
-            .query_map::<(Vec<u8>, Vec<u8>), _, _>(&[(":network", &network)], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })?;
+        let rows = sqlx::query(
+            "SELECT token_key_secret, token_key_public
+             FROM main_keypairs WHERE network = ?1;",
+        )
+        .bind(network)
+        .fetch_all(&mut conn)
+        .await?;
 
         let mut keys = vec![];
-
-        for k in keys_iter {
-            let k = k?;
-            keys.push(TokenKey { private_key: k.0, public_key: k.1 });
+        for row in rows {
+            let secret_key = row.get("token_key_secret");
+            let public_key = row.get("token_key_public");
+            keys.push(TokenKey { secret_key, public_key })
         }
 
         Ok(keys)
     }
 
     pub async fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
-        debug!(target: "CASHIERDB", "Remove withdraw and deposit keys");
-        let conn = self.conn.lock().await;
-        conn.execute("DROP TABLE deposit_keypairs;", [])?;
-        conn.execute("DROP TABLE withdraw_keypairs;", [])?;
+        debug!("Removing withdraw and deposit keys");
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("DROP TABLE deposit_keypairs;").execute(&mut conn).await?;
+        sqlx::query("DROP TABLE withdraw_keypairs;").execute(&mut conn).await?;
+
         Ok(())
     }
 
@@ -123,36 +131,36 @@ impl CashierDb {
         &self,
         token_key_public: &[u8],
         d_key_public: &pallas::Point,
-        d_key_private: &pallas::Scalar,
+        d_key_secret: &pallas::Scalar,
         network: &NetworkName,
         token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Put withdraw keys");
-
-        let d_key_public = self.get_value_serialized(d_key_public)?;
-        let d_key_private = self.get_value_serialized(d_key_private)?;
+        debug!("Writing withdraw keys to database");
+        let public = self.get_value_serialized(d_key_public)?;
+        let secret = self.get_value_serialized(d_key_secret)?;
         let network = self.get_value_serialized(network)?;
         let token_id = self.get_value_serialized(token_id)?;
         let confirm = self.get_value_serialized(&false)?;
         let mint_address = self.get_value_serialized(&mint_address)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "INSERT INTO withdraw_keypairs
-            (token_key_public, d_key_private, d_key_public, network,  token_id, mint_address, confirm)
+            (token_key_public, d_key_secret, d_key_public,
+             network, token_id, mint_address, confirm)
             VALUES
-            (:token_key_public, :d_key_private, :d_key_public,:network, :token_id, :mint_address, :confirm);",
-            named_params! {
-                ":token_key_public": token_key_public,
-                ":d_key_private": d_key_private,
-                ":d_key_public": d_key_public,
-                ":network": network,
-                ":token_id": token_id,
-                ":mint_address": mint_address,
-                ":confirm": confirm,
-            },
-        )?;
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
+        )
+        .bind(token_key_public)
+        .bind(secret)
+        .bind(public)
+        .bind(network)
+        .bind(token_id)
+        .bind(mint_address)
+        .bind(confirm)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
@@ -160,100 +168,93 @@ impl CashierDb {
     pub async fn put_deposit_keys(
         &self,
         d_key_public: &DrkPublicKey,
-        token_key_private: &[u8],
+        token_key_secret: &[u8],
         token_key_public: &[u8],
         network: &NetworkName,
         token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Put exchange keys");
-
+        debug!("Writing deposit keys to database");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let token_id = self.get_value_serialized(token_id)?;
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
         let mint_address = self.get_value_serialized(&mint_address)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "INSERT INTO deposit_keypairs
-            (d_key_public, token_key_private, token_key_public, network, token_id, mint_address, confirm)
+            (d_key_public, token_key_secret, token_key_public,
+             network, token_id, mint_address, confirm)
             VALUES
-            (:d_key_public, :token_key_private, :token_key_public, :network, :token_id, :mint_address, :confirm)",
-            named_params! {
-                ":d_key_public": &d_key_public,
-                ":token_key_private": token_key_private,
-                ":token_key_public": token_key_public,
-                ":network": &network,
-                ":token_id": &token_id,
-                ":mint_address": &mint_address,
-                ":confirm": &confirm,
-            },
-        )?;
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
+        )
+        .bind(d_key_public)
+        .bind(token_key_secret)
+        .bind(token_key_public)
+        .bind(network)
+        .bind(token_id)
+        .bind(mint_address)
+        .bind(confirm)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
 
     pub async fn get_withdraw_private_keys(&self) -> Result<Vec<DrkSecretKey>> {
-        debug!(target: "CASHIERDB", "Get withdraw private keys");
+        debug!("Getting withdraw private keys");
         let confirm = self.get_value_serialized(&false)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT d_key_private
-                FROM withdraw_keypairs
-                WHERE confirm = :confirm",
-        )?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query(
+            "SELECT d_key_secret FROM withdraw_keypairs
+             WHERE confirm = ?1",
+        )
+        .bind(confirm)
+        .fetch_all(&mut conn)
+        .await?;
 
-        let keys = stmt.query_map(&[(":confirm", &confirm)], |row| Ok(row.get(0)))?;
-
-        let mut private_keys: Vec<DrkSecretKey> = vec![];
-
-        for k in keys {
-            let private_key: DrkSecretKey = self.get_value_deserialized(k??)?;
-            private_keys.push(private_key);
+        let mut secret_keys = vec![];
+        for row in rows {
+            let key = self.get_value_deserialized(row.get("d_key_secret"))?;
+            secret_keys.push(key);
         }
 
-        Ok(private_keys)
+        Ok(secret_keys)
     }
 
     pub async fn get_withdraw_token_public_key_by_dkey_public(
         &self,
-        pub_key: &DrkPublicKey,
+        pubkey: &DrkPublicKey,
     ) -> Result<Option<WithdrawToken>> {
-        debug!(target: "CASHIERDB", "Get token address by pub_key");
-        let d_key_public = self.get_value_serialized(pub_key)?;
+        debug!("Get token address by pubkey");
+        let d_key_public = self.get_value_serialized(pubkey)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query(
             "SELECT token_key_public, network, token_id, mint_address
-            FROM withdraw_keypairs
-            WHERE d_key_public = :d_key_public AND confirm = :confirm;",
-        )?;
+             FROM withdraw_keypairs
+             WHERE d_key_public = ?1
+             AND confirm = ?2;",
+        )
+        .bind(d_key_public)
+        .bind(confirm)
+        .fetch_all(&mut conn)
+        .await?;
 
-        let addr_iter = stmt
-            .query_map(&[(":d_key_public", &d_key_public), (":confirm", &confirm)], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-            })?;
+        let mut token_addrs = vec![];
+        for row in rows {
+            let token_public_key = row.get("token_key_public");
+            let network = self.get_value_deserialized(row.get("network"))?;
+            let token_id = self.get_value_deserialized(row.get("token_id"))?;
+            let mint_address = self.get_value_deserialized(row.get("mint_address"))?;
 
-        let mut token_addresses = vec![];
-
-        for addr in addr_iter {
-            let addr = addr?;
-            let token_public_key = addr.0;
-            let network: NetworkName = self.get_value_deserialized(addr.1)?;
-            let token_id: DrkTokenId = self.get_value_deserialized(addr.2)?;
-            let mint_address: String = self.get_value_deserialized(addr.3)?;
-            token_addresses.push(WithdrawToken {
-                token_public_key,
-                network,
-                token_id,
-                mint_address,
-            });
+            token_addrs.push(WithdrawToken { token_public_key, network, token_id, mint_address });
         }
 
-        Ok(token_addresses.pop())
+        Ok(token_addrs.pop())
     }
 
     pub async fn get_deposit_token_keys_by_dkey_public(
@@ -261,71 +262,30 @@ impl CashierDb {
         d_key_public: &DrkPublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
-        debug!(target: "CASHIERDB", "Check for existing dkey");
+        debug!("Checking for existing dkey");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT token_key_private, token_key_public
-            FROM deposit_keypairs
-            WHERE d_key_public = :d_key_public
-            AND network = :network
-            AND confirm = :confirm ;",
-        )?;
-
-        let keys_iter = stmt.query_map::<(Vec<u8>, Vec<u8>), _, _>(
-            &[(":d_key_public", &d_key_public), (":network", &network), (":confirm", &confirm)],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-
-        let mut keys = vec![];
-
-        for k in keys_iter {
-            let k = k?;
-            keys.push(TokenKey { private_key: k.0, public_key: k.1 });
-        }
-
-        Ok(keys)
-    }
-
-    pub async fn get_deposit_token_keys_by_network(
-        &self,
-        network: &NetworkName,
-    ) -> Result<Vec<DepositToken>> {
-        debug!(target: "CASHIERDB", "Check for existing dkey");
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&false)?;
-
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT d_key_public, token_key_private, token_key_public, token_id, mint_address
-            FROM deposit_keypairs
-            WHERE network = :network
-            AND confirm = :confirm ;",
-        )?;
-
-        let keys_iter = stmt
-            .query_map(&[(":network", &network), (":confirm", &confirm)], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
-            })?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query(
+            "SELECT token_key_secret, token_key_public
+             FROM deposit_keypairs
+             WHERE d_key_public = ?1
+             AND network = ?2
+             AND confirm = ?3;",
+        )
+        .bind(d_key_public)
+        .bind(network)
+        .bind(confirm)
+        .fetch_all(&mut conn)
+        .await?;
 
         let mut keys = vec![];
-
-        for key in keys_iter {
-            let key = key?;
-            let drk_public_key: DrkPublicKey = self.get_value_deserialized(key.0)?;
-            let private_key = key.1;
-            let public_key = key.2;
-            let token_id: DrkTokenId = self.get_value_deserialized(key.3)?;
-            let mint_address: String = self.get_value_deserialized(key.4)?;
-            keys.push(DepositToken {
-                drk_public_key,
-                token_key: TokenKey { private_key, public_key },
-                token_id,
-                mint_address,
-            });
+        for row in rows {
+            let secret_key = row.get("token_key_secret");
+            let public_key = row.get("token_key_public");
+            keys.push(TokenKey { secret_key, public_key });
         }
 
         Ok(keys)
@@ -336,35 +296,28 @@ impl CashierDb {
         token_key_public: &[u8],
         network: &NetworkName,
     ) -> Result<Option<Keypair>> {
-        debug!(target: "CASHIERDB", "Check for existing token address");
+        debug!("Checking for existing token address");
         let confirm = self.get_value_serialized(&false)?;
         let network = self.get_value_serialized(network)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT d_key_private, d_key_public FROM withdraw_keypairs
-                WHERE token_key_public = :token_key_public
-                AND network = :network
-                AND confirm = :confirm;",
-        )?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query(
+            "SELECT d_key_secret, d_key_public FROM withdraw_keypairs
+             WHERE token_key_public = ?1
+             AND network = ?2
+             AND confirm = ?3;",
+        )
+        .bind(token_key_public)
+        .bind(network)
+        .bind(confirm)
+        .fetch_all(&mut conn)
+        .await?;
 
-        let keypair_iter = stmt.query_map(
-            &[
-                (":token_key_public", &token_key_public),
-                (":network", &network.as_ref()),
-                (":confirm", &confirm.as_ref()),
-            ],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-
-        let mut keypairs: Vec<Keypair> = vec![];
-
-        for kp in keypair_iter {
-            let kp = kp?;
-            let public: DrkPublicKey = self.get_value_deserialized(kp.1)?;
-            let private: DrkSecretKey = self.get_value_deserialized(kp.0)?;
-            let keypair = Keypair { public, private };
-            keypairs.push(keypair);
+        let mut keypairs = vec![];
+        for row in rows {
+            let public = self.get_value_deserialized(row.get("d_key_public"))?;
+            let secret = self.get_value_deserialized(row.get("d_key_secret"))?;
+            keypairs.push(Keypair { public, secret });
         }
 
         Ok(keypairs.pop())
@@ -375,18 +328,22 @@ impl CashierDb {
         token_address: &[u8],
         network: &NetworkName,
     ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Confirm withdraw keys");
+        debug!("Confirm withdraw keys");
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&true)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "UPDATE withdraw_keypairs
-            SET confirm = ?1
-            WHERE token_key_public = ?2
-            AND network = ?3;",
-            params![confirm, token_address, network],
-        )?;
+             SET confirm = ?1
+             WHERE token_key_public = ?2
+             AND network = ?3;",
+        )
+        .bind(confirm)
+        .bind(token_address)
+        .bind(network)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
@@ -396,19 +353,23 @@ impl CashierDb {
         d_key_public: &DrkPublicKey,
         network: &NetworkName,
     ) -> Result<()> {
-        debug!(target: "CASHIERDB", "Confirm withdraw keys");
+        debug!("Confirm deposit keys");
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&true)?;
         let d_key_public = self.get_value_serialized(d_key_public)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "UPDATE deposit_keypairs
-            SET confirm = ?1
-            WHERE d_key_public = ?2
-            AND network = ?3;",
-            params![confirm, d_key_public, network],
-        )?;
+             SET confirm = ?1
+             WHERE d_key_public = ?2
+             AND network = ?3;",
+        )
+        .bind(confirm)
+        .bind(d_key_public)
+        .bind(network)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }

@@ -81,7 +81,8 @@ async-tungstenite = "0.16.0"
 tungstenite = "0.16.0"
 
 # Used for wallet management.
-rusqlite = {version = "0.26.1", features = ["bundled-sqlcipher"]}
+sqlx = {version = "0.5.9", features = ["runtime-async-std-native-tls", "sqlite"]}
+libsqlite3-sys = {version = "0.22.0", features = ["bundled-sqlcipher"]}
 
 # Used for gatewayd network transport.
 zeromq = {version = "0.3.0", default-features = false, features = ["async-std-runtime", "all-transport"]}
@@ -105,3 +106,7 @@ spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 btc = ["bdk", "bitcoin", "secp256k1"]
 eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
+
+[patch.crates-io.libsqlite3-sys]
+git = "https://github.com/rusqlite/rusqlite"
+rev = "b612c6d7278f4243c2c66d30cc84d4f9eaae6e71"

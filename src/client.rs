@@ -109,7 +109,7 @@ impl Client {
 
         if clear_input {
             // TODO: FIXME:
-            let base_secret = self.main_keypair.private;
+            let base_secret = self.main_keypair.secret;
             let signature_secret = schnorr::SecretKey(mod_r_p(base_secret));
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
@@ -138,7 +138,7 @@ impl Client {
                 };
 
                 inputs.push(input);
-                coins.push(own_coin.coin.clone());
+                coins.push(own_coin.coin);
             }
 
             if inputs_value < value {
@@ -209,7 +209,7 @@ impl Client {
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
         debug!("Start transfer {}", amount);
-        let token_id_exists = self.wallet.token_id_exists(&token_id).await?;
+        let token_id_exists = self.wallet.token_id_exists(token_id).await?;
 
         if token_id_exists {
             self.send(pubkey, amount, token_id, false, state).await?;
@@ -248,7 +248,7 @@ impl Client {
         debug!("Start subscriber for cashier");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
-        let secret_key = self.main_keypair.private;
+        let secret_key = self.main_keypair.secret;
         let wallet = self.wallet.clone();
 
         //let task: smol::Task<Result<()>> = executor.spawn(async move {
@@ -289,7 +289,8 @@ impl Client {
         debug!("Start subscriber for darkfid");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
-        let secret_key = self.main_keypair.private;
+        let secret_key = self.main_keypair.secret;
+
         let wallet = self.wallet.clone();
 
         let task: smol::Task<Result<()>> = executor.spawn(async move {

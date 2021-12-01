@@ -101,8 +101,8 @@ pub enum Error {
     /// Database/Sql errors
     #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
-    #[error("Rusqlite error: `{0}`")]
-    RusqliteError(String),
+    #[error("sqlx error: `{0}`")]
+    SqlxError(String),
     #[error("SlabsStore Error: `{0}`")]
     SlabsStore(String),
 
@@ -161,9 +161,9 @@ impl From<rocksdb::Error> for Error {
     }
 }
 
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
-        Error::RusqliteError(err.to_string())
+impl From<sqlx::error::Error> for Error {
+    fn from(err: sqlx::error::Error) -> Error {
+        Error::SqlxError(err.to_string())
     }
 }
 

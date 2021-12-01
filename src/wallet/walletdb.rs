@@ -1,365 +1,300 @@
-use std::path::Path;
+use std::{path::Path, str::FromStr};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
+use halo2::arithmetic::Field;
+use halo2_gadgets::ecc::FixedPoints;
 use log::{debug, error, info};
-use pasta_curves::arithmetic::Field;
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
-use rusqlite::{named_params, params, Connection};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode},
+    Row, SqlitePool,
+};
 
-use super::WalletApi;
 use crate::{
     client::ClientFailed,
-    crypto::{coin::Coin, note::Note, nullifier::Nullifier, OwnCoin, OwnCoins},
-    serial,
-    types::*,
+    crypto::{
+        coin::Coin, constants::OrchardFixedBases, note::Note, nullifier::Nullifier, util::mod_r_p,
+        OwnCoin, OwnCoins,
+    },
+    serial::serialize,
+    wallet::WalletApi,
     Error, Result,
 };
 
 pub type WalletPtr = Arc<WalletDb>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Keypair {
-    pub public: DrkPublicKey,
-    pub private: DrkSecretKey,
+    pub public: pallas::Point,
+    pub secret: pallas::Base,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Balance {
-    pub token_id: DrkTokenId,
+    pub token_id: pallas::Base,
     pub value: u64,
     pub nullifier: Nullifier,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Balances {
     pub list: Vec<Balance>,
 }
-impl Balances {
-    pub fn add(&mut self, balance: &Balance) {
-        if let Some(mut saved_balance) =
-            self.list.iter_mut().find(|b| b.token_id == balance.token_id)
-        {
-            saved_balance.value += balance.value;
-        } else {
-            self.list.push(balance.clone());
-        }
-    }
-}
 
 pub struct WalletDb {
-    pub conn: Mutex<Connection>,
+    pub conn: SqlitePool,
 }
 
 impl WalletApi for WalletDb {}
 
 impl WalletDb {
-    pub fn new(path: &Path, password: String) -> Result<WalletPtr> {
-        debug!(target: "WALLETDB", "new() Constructor called");
+    pub async fn new(path: &Path, password: String) -> Result<WalletPtr> {
+        debug!("new() Constructor called");
         if password.trim().is_empty() {
-            error!(target: "WALLETDB", "Password is empty. You must set a password to use the wallet.");
+            error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
-        let conn = Connection::open(path)?;
-        conn.pragma_update(None, "key", &password)?;
-        info!(target: "WALLETDB", "Opened connection at path: {:?}", path);
+        let p = format!("sqlite://{}", path.to_str().unwrap());
 
-        Ok(Arc::new(Self { conn: Mutex::new(conn) }))
+        let connect_opts = SqliteConnectOptions::from_str(&p)?
+            .pragma("key", password)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Off);
+
+        let conn = SqlitePool::connect_with(connect_opts).await?;
+
+        info!("Opened connection at path sqlite://{:?}", path);
+        Ok(Arc::new(WalletDb { conn }))
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        debug!(target: "WALLETDB", "Initialize...");
-        let contents = include_str!("../../sql/schema.sql");
-        let conn = self.conn.lock().await;
-        Ok(conn.execute_batch(contents)?)
+        debug!("Initializing wallet database");
+        let keys = include_str!("../../sql/keys.sql");
+        let coins = include_str!("../../sql/coins.sql");
+        let mut conn = self.conn.acquire().await?;
+        debug!("Initializing keys table");
+        sqlx::query(keys).execute(&mut conn).await?;
+        debug!("Initializing coins table");
+        sqlx::query(coins).execute(&mut conn).await?;
+        Ok(())
     }
 
     pub async fn key_gen(&self) -> Result<()> {
-        debug!(target: "WALLETDB", "Attempting to generate keys...");
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT * FROM keys WHERE key_id > ?")?;
+        debug!("Attempting to generate keypairs");
+        let mut conn = self.conn.acquire().await?;
 
-        let key_check = stmt.exists(params!["0"])?;
-
-        if !key_check {
-            let secret = DrkSecretKey::random(&mut OsRng);
-            let public = derive_public_key(secret);
-            self.put_keypair(&public, &secret).await?;
-            return Ok(())
+        // TODO: Think about multiple keys
+        match sqlx::query("SELECT * FROM keys WHERE key_id > ?").fetch_one(&mut conn).await {
+            Ok(_) => {
+                error!("Keys already exist");
+                Err(Error::from(ClientFailed::KeyExists))
+            }
+            Err(_) => {
+                let secret = pallas::Base::random(&mut OsRng);
+                let public = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
+                self.put_keypair(&public, &secret).await?;
+                Ok(())
+            }
         }
-
-        error!(target: "WALLETDB", "Keys already exist.");
-        Err(Error::from(ClientFailed::KeyExists))
     }
 
-    pub async fn put_keypair(
-        &self,
-        key_public: &DrkPublicKey,
-        key_private: &DrkSecretKey,
-    ) -> Result<()> {
-        debug!(target: "WALLETDB", "put_keypair()");
-        let key_public = serial::serialize(key_public);
-        let key_private = serial::serialize(key_private);
+    pub async fn put_keypair(&self, public: &pallas::Point, secret: &pallas::Base) -> Result<()> {
+        debug!("Writing keypair into the wallet database");
+        let p = serialize(public);
+        let s = serialize(secret);
 
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT INTO keys(key_public, key_private) VALUES (?1, ?2)",
-            params![key_public, key_private],
-        )?;
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("INSERT INTO keys(public, secret) VALUES (?1, ?2)")
+            .bind(p)
+            .bind(s)
+            .execute(&mut conn)
+            .await?;
 
         Ok(())
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
-        debug!(target: "WALLETDB", "Returning keypairs...");
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
+        debug!("Returning keypairs");
+        let mut conn = self.conn.acquire().await?;
 
-        // this just gets the first key. maybe we should randomize this
-        let key_iter = stmt.query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?;
-        let mut keypairs = Vec::new();
+        // TODO: Think about multiple keys
+        let row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
+        let public: pallas::Point = self.get_value_deserialized(row.get("public"))?;
+        let secret: pallas::Base = self.get_value_deserialized(row.get("secret"))?;
 
-        for key in key_iter {
-            let key = key?;
-            let public = key.0;
-            let private = key.1;
-            let public: DrkPublicKey = self.get_value_deserialized(public)?;
-            let private: DrkSecretKey = self.get_value_deserialized(private)?;
-            keypairs.push(Keypair { public, private });
-        }
-
-        Ok(keypairs)
+        Ok(vec![Keypair { public, secret }])
     }
 
     pub async fn get_own_coins(&self) -> Result<OwnCoins> {
-        debug!(target: "WALLETDB", "Get own coins");
+        debug!("Finding own coins");
         let is_spent = 0;
 
-        let conn = self.conn.lock().await;
-        let mut coins = conn.prepare("SELECT * FROM coins WHERE is_spent = :is_spent ;")?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query("SELECT * FROM coins WHERE is_spent = ?1;")
+            .bind(is_spent)
+            .fetch_all(&mut conn)
+            .await?;
 
-        let rows = coins.query_map(&[(":is_spent", &is_spent)], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                // TODO: row.get(6)?,
-                row.get(7)?,
-                row.get(9)?,
-            ))
-        })?;
-
-        let mut own_coins = Vec::new();
-
+        let mut own_coins = vec![];
         for row in rows {
-            let row = row?;
-            let coin = self.get_value_deserialized(row.0)?;
+            let coin = self.get_value_deserialized(row.get("coin"))?;
 
-            // note
-            let serial = self.get_value_deserialized(row.1)?;
-            let coin_blind = self.get_value_deserialized(row.2)?;
-            let value_blind = self.get_value_deserialized(row.3)?;
-            let value: u64 = row.4;
-            let token_id = self.get_value_deserialized(row.5)?;
+            // Note
+            let serial = self.get_value_deserialized(row.get("serial"))?;
+            let coin_blind = self.get_value_deserialized(row.get("coin_blind"))?;
+            let value_blind = self.get_value_deserialized(row.get("valcom_blind"))?;
+            // TODO: FIXME:
+            let value_bytes: Vec<u8> = row.get("value");
+            let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
+            let token_id = self.get_value_deserialized(row.get("token_id"))?;
 
             let note = Note { serial, value, token_id, coin_blind, value_blind };
 
             // TODO:
-            // let witness = self.get_value_deserialized(row.6)?;
-            // let secret: DrkSecretKey = self.get_value_deserialized(row.7)?;
-            // let nullifier: Nullifier = self.get_value_deserialized(row.8)?;
-            let secret: DrkSecretKey = self.get_value_deserialized(row.6)?;
-            let nullifier: Nullifier = self.get_value_deserialized(row.7)?;
+            // let witness = deserialized(row.6)
+            let secret = self.get_value_deserialized(row.get("secret"))?;
+            let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
 
             let oc = OwnCoin {
                 coin,
                 note,
                 secret,
-                // TODO: witness,
+                // witness,
                 nullifier,
             };
 
-            own_coins.push(oc)
+            own_coins.push(oc);
         }
 
         Ok(own_coins)
     }
 
     pub async fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
-        debug!(target: "WALLETDB", "Put own coins");
+        debug!("Putting own coin into wallet database");
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
         let value_blind = self.get_value_serialized(&own_coin.note.value_blind)?;
-        let value: u64 = own_coin.note.value;
+        let value = own_coin.note.value.to_le_bytes();
         let token_id = self.get_value_serialized(&own_coin.note.token_id)?;
-        // TODO: let witness = self.get_value_serialized(&own_coin.witness)?;
+        // TODO: let witness
         let secret = self.get_value_serialized(&own_coin.secret)?;
         let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query(
             "INSERT OR REPLACE INTO coins
             (coin, serial, value, token_id, coin_blind,
-            valcom_blind, witness, secret, is_spent, nullifier)
+             valcom_blind, secret, is_spent, nullifier)
             VALUES
-            (:coin, :serial, :value, :token_id, :coin_blind,
-             :valcom_blind, :witness, :secret, :is_spent, :nullifier);",
-            named_params! {
-                ":coin": coin,
-                ":serial": serial,
-                ":value": value,
-                ":token_id": token_id,
-                ":coin_blind": coin_blind,
-                ":valcom_blind": value_blind,
-                // TODO: ":witness": witness,
-                ":secret": secret,
-                ":is_spent": is_spent,
-                ":nullifier": nullifier,
-            },
-        )?;
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
+        )
+        .bind(coin)
+        .bind(serial)
+        .bind(value.to_vec())
+        .bind(token_id)
+        .bind(coin_blind)
+        .bind(value_blind)
+        .bind(secret)
+        .bind(is_spent)
+        .bind(nullifier)
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
 
     pub async fn remove_own_coins(&self) -> Result<()> {
-        debug!(target: "WALLETDB", "Remove own coins");
-        let conn = self.conn.lock().await;
-        let _rows = conn.execute("DROP TABLE coins;", [])?;
+        debug!("Removing own coins from wallet database");
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("DROP TABLE coins;").execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
-        debug!(target: "WALLETDB", "Confirm spend coin");
+        debug!("Confirm spend coin");
         let is_spent = 1;
         let coin = self.get_value_serialized(coin)?;
 
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "UPDATE coins
-            SET is_spent = ?1
-            WHERE coin = ?2 ;",
-            params![is_spent, coin],
-        )?;
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("UPDATE coins SET is_spent = ?1 WHERE coin = ?2;")
+            .bind(is_spent)
+            .bind(coin)
+            .execute(&mut conn)
+            .await?;
 
         Ok(())
     }
-
-    /* TODO:
-    pub fn get_witnesses(&self) -> Result<HashMap<Vec<u8>, IncrementalWitness<MerkleNode>>> {
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-
-        let is_spent = 0;
-
-        let mut witnesses =
-            conn.prepare("SELECT coin, witness FROM coins WHERE is_spent = :is_spent;")?;
-
-        let rows = witnesses.query_map(&[(":is_spent", &is_spent)], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?;
-
-        let mut witnesses = HashMap::new();
-        for i in rows {
-            let i = i?;
-            let coin: Vec<u8> = i.0;
-            let witness: IncrementalWitness<MerkleNode> = self.get_value_deserialized(i.1)?;
-            witnesses.insert(coin, witness);
-        }
-
-        Ok(witnesses)
-    }
-
-    pub fn update_witnesses(
-        &self,
-        witnesses: HashMap<Vec<u8>, IncrementalWitness<MerkleNode>>,
-    ) -> Result<()> {
-        debug!(target: "WALLETDB", "Updating witness");
-
-        let conn = Connection::open(&self.path)?;
-        conn.pragma_update(None, "key", &self.password)?;
-
-        for (coin, witness) in witnesses.iter() {
-            let witness = self.get_value_serialized(witness)?;
-            let is_spent = 0;
-
-            conn.execute(
-                "UPDATE coins SET witness = ?1  WHERE coin = ?2 AND is_spent = ?3",
-                params![witness, coin, is_spent],
-            )?;
-        }
-
-        Ok(())
-    }
-    */
 
     pub async fn get_balances(&self) -> Result<Balances> {
-        debug!(target: "WALLETDB", "Get token and balances...");
+        debug!("Getting tokens and balances");
         let is_spent = 0;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT value, token_id, nullifier FROM coins  WHERE is_spent = :is_spent ;",
-        )?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query("SELECT value, token_id, nullifier FROM coins WHERE is_spent = ?1;")
+            .bind(is_spent)
+            .fetch_all(&mut conn)
+            .await?;
 
-        let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        })?;
-
-        let mut balances = Balances { list: Vec::new() };
-
+        let mut list = vec![];
         for row in rows {
-            let row = row?;
-            let value: u64 = row.0;
-            let token_id: DrkTokenId = self.get_value_deserialized(row.1)?;
-            let nullifier: Nullifier = self.get_value_deserialized(row.2)?;
-            balances.add(&Balance { token_id, value, nullifier });
+            // TODO: FIXME:
+            let value_bytes: Vec<u8> = row.get("value");
+            let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
+            let token_id = self.get_value_deserialized(row.get("token_id"))?;
+            let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
+            list.push(Balance { token_id, value, nullifier });
         }
 
-        Ok(balances)
+        if list.is_empty() {
+            debug!("Did not find any unspent coins");
+        }
+
+        Ok(Balances { list })
     }
 
-    pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
-        debug!(target: "WALLETDB", "Get token ID...");
+    pub async fn get_token_id(&self) -> Result<Vec<pallas::Base>> {
+        debug!("Getting token ID");
         let is_spent = 0;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT token_id FROM coins WHERE is_spent = :is_spent ;")?;
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query("SELECT token_id FROM coins WHERE is_spent = ?1;")
+            .bind(is_spent)
+            .fetch_all(&mut conn)
+            .await?;
 
-        let rows = stmt.query_map(&[(":is_spent", &is_spent)], |row| row.get(0))?;
-
-        let mut token_ids = Vec::new();
+        let mut token_ids = vec![];
         for row in rows {
-            let row = row?;
-            let token_id = self.get_value_deserialized(row).unwrap();
-
+            let token_id = self.get_value_deserialized(row.get("token_id"))?;
             token_ids.push(token_id);
         }
 
         Ok(token_ids)
     }
 
-    pub async fn token_id_exists(&self, token_id: &DrkTokenId) -> Result<bool> {
-        debug!(target: "WALLETDB", "Check tokenID exists");
+    pub async fn token_id_exists(&self, token_id: pallas::Base) -> Result<bool> {
+        debug!("Checking if token ID exists");
         let is_spent = 0;
-        let id = self.get_value_serialized(token_id)?;
+        let id = self.get_value_serialized(&token_id)?;
 
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT * FROM coins WHERE token_id = ? AND is_spent = ? ;")?;
+        let mut conn = self.conn.acquire().await?;
 
-        let id_check = stmt.exists(params![id, is_spent])?;
+        let id_check = sqlx::query("SELECT * FROM coins WHERE token_id = ?1 AND is_spent = ?2;")
+            .bind(id)
+            .bind(is_spent)
+            .fetch_optional(&mut conn)
+            .await?;
 
-        Ok(id_check)
+        Ok(id_check.is_some())
     }
 
     pub async fn test_wallet(&self) -> Result<()> {
-        let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT * FROM keys")?;
-        let _rows = stmt.query([])?;
+        debug!("Testing wallet");
+        let mut conn = self.conn.acquire().await?;
+        let _row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
         Ok(())
     }
 }

@@ -161,7 +161,7 @@ impl State {
                     let nullifier = Nullifier::new(*secret, note.serial);
 
                     let own_coin = OwnCoin {
-                        coin: coin.clone(),
+                        coin,
                         note: note.clone(),
                         secret: *secret,
                         // witness: witness.clone(),
