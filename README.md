@@ -6,6 +6,8 @@
 
 ## Build
 
+#### NOTE: Use the v0.0.1 git tag if you want to try out the software.
+
 This project requires the Rust compiler to be installed. 
 Please visit https://rustup.rs/ for instructions.
 
