@@ -5,9 +5,8 @@ target
 .direnv/
 result
 
+tx
 drk
 darkfid
 cashierd
 gatewayd
-mint.params
-spend.params
