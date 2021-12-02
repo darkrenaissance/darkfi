@@ -81,8 +81,8 @@ async-tungstenite = "0.16.0"
 tungstenite = "0.16.0"
 
 # Used for wallet management.
-sqlx = {version = "0.5.9", features = ["runtime-async-std-native-tls", "sqlite"]}
-libsqlite3-sys = {version = "0.22.0", features = ["bundled-sqlcipher"]}
+sqlx = {git = "https://github.com/parazyd/sqlx", rev = "0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867", features = ["runtime-async-std-native-tls", "sqlite"]}
+libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"]}
 
 # Used for gatewayd network transport.
 zeromq = {version = "0.3.0", default-features = false, features = ["async-std-runtime", "all-transport"]}
@@ -97,8 +97,8 @@ hash-db = {version = "0.15.2", optional = true}
 keccak-hasher = {version = "0.15.3", optional = true}
 
 # Cashier Solana dependencies
-solana-client = {version = "1.8.5", optional = true}
-solana-sdk = {version = "1.8.5", optional = true}
+solana-client = {version = "1.8.6", optional = true}
+solana-sdk = {version = "1.8.6", optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 
@@ -106,7 +106,3 @@ spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 btc = ["bdk", "bitcoin", "secp256k1"]
 eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
-
-[patch.crates-io.libsqlite3-sys]
-git = "https://github.com/rusqlite/rusqlite"
-rev = "b612c6d7278f4243c2c66d30cc84d4f9eaae6e71"
