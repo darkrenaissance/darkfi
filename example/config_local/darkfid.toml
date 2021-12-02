@@ -23,12 +23,6 @@ gateway_protocol_url = "tcp://127.0.0.1:3333"
 # The endpoint to a gatewayd publisher API
 gateway_publisher_url = "tcp://127.0.0.1:4444"
 
-# Path to mint.params
-mint_params_path = "/usr/local/share/darkfi/mint.params"
-
-# Path to spend.params
-spend_params_path = "/usr/local/share/darkfi/spend.params"
-
 # Path to the client database
 database_path = "~/.config/darkfi/localdata/darkfid_client.db"
 
