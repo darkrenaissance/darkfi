@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use pasta_curves::pallas;
 use serde_json::Value;
 
 use crate::{
+    types::DrkTokenId,
     util::{generate_id, NetworkName},
     Error, Result,
 };
@@ -55,7 +55,7 @@ impl TokenList {
 
 #[derive(Debug, Clone)]
 pub struct DrkTokenList {
-    pub tokens: HashMap<NetworkName, HashMap<String, pallas::Base>>,
+    pub tokens: HashMap<NetworkName, HashMap<String, DrkTokenId>>,
 }
 
 impl DrkTokenList {
@@ -64,28 +64,28 @@ impl DrkTokenList {
         let eth_symbols = eth_list.get_symbols()?;
         let btc_symbols = btc_list.get_symbols()?;
 
-        let sol_tokens: HashMap<String, pallas::Base> = sol_symbols
+        let sol_tokens: HashMap<String, DrkTokenId> = sol_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
             })
             .collect();
 
-        let eth_tokens: HashMap<String, pallas::Base> = eth_symbols
+        let eth_tokens: HashMap<String, DrkTokenId> = eth_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
             })
             .collect();
 
-        let btc_tokens: HashMap<String, pallas::Base> = btc_symbols
+        let btc_tokens: HashMap<String, DrkTokenId> = btc_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(btc_list, &NetworkName::Bitcoin, symbol).ok()
             })
             .collect();
 
-        let tokens: HashMap<NetworkName, HashMap<String, pallas::Base>> = HashMap::from([
+        let tokens: HashMap<NetworkName, HashMap<String, DrkTokenId>> = HashMap::from([
             (NetworkName::Solana, sol_tokens),
             (NetworkName::Ethereum, eth_tokens),
             (NetworkName::Bitcoin, btc_tokens),
@@ -98,7 +98,7 @@ impl DrkTokenList {
         token_list: &TokenList,
         network_name: &NetworkName,
         symbol: &str,
-    ) -> Result<(String, pallas::Base)> {
+    ) -> Result<(String, DrkTokenId)> {
         if let Some(token_id) = &token_list.search_id(symbol)? {
             return Ok((symbol.to_string(), generate_id(token_id, network_name)?))
         };
@@ -106,7 +106,7 @@ impl DrkTokenList {
         Err(Error::NotSupportedToken)
     }
 
-    pub fn symbol_from_id(&self, id: &pallas::Base) -> Result<Option<(NetworkName, String)>> {
+    pub fn symbol_from_id(&self, id: &DrkTokenId) -> Result<Option<(NetworkName, String)>> {
         for (network, tokens) in self.tokens.iter() {
             for (key, val) in tokens.iter() {
                 if val == id {

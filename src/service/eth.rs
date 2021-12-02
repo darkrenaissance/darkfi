@@ -13,9 +13,9 @@ use serde_json::{json, Value};
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
+    crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
-    types::*,
     util::{generate_id, parse::truncate, NetworkName},
     Error, Result,
 };
@@ -228,7 +228,7 @@ impl EthClient {
     async fn handle_subscribe_request(
         self: Arc<Self>,
         addr: String,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
     ) -> Result<()> {
         if self.subscriptions.lock().await.contains(&addr) {
             return Ok(())
@@ -381,7 +381,7 @@ impl EthClient {
 impl NetworkClient for EthClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion> {
@@ -414,7 +414,7 @@ impl NetworkClient for EthClient {
         self: Arc<Self>,
         _private_key: Vec<u8>,
         public_key: Vec<u8>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         _mint_address: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String> {

@@ -7,6 +7,7 @@ use halo2_gadgets::primitives::{
 use pasta_curves::{arithmetic::FieldExt, pallas};
 
 use crate::{
+    crypto::keypair::SecretKey,
     serial::{Decodable, Encodable, ReadExt, WriteExt},
     Result,
 };
@@ -15,8 +16,8 @@ use crate::{
 pub struct Nullifier(pub(crate) pallas::Base);
 
 impl Nullifier {
-    pub fn new(secret: pallas::Base, serial: pallas::Base) -> Self {
-        let nullifier = [secret, serial];
+    pub fn new(secret: SecretKey, serial: pallas::Base) -> Self {
+        let nullifier = [secret.0, serial];
         let nullifier = poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
         Nullifier(nullifier)
     }

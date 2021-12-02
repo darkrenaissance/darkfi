@@ -2,7 +2,7 @@ use std::io;
 
 use super::TransactionOutput;
 use crate::{
-    crypto::{schnorr, spend_proof::SpendRevealedValues, Proof},
+    crypto::{keypair::PublicKey, spend_proof::SpendRevealedValues, Proof},
     error::Result,
     impl_vec,
     serial::{Decodable, Encodable, VarInt},
@@ -20,7 +20,7 @@ pub struct PartialTransactionClearInput {
     pub token_id: DrkTokenId,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
-    pub signature_public: schnorr::PublicKey,
+    pub signature_public: PublicKey,
 }
 
 pub struct PartialTransactionInput {

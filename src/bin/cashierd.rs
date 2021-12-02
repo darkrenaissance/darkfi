@@ -7,7 +7,7 @@ use clap::clap_app;
 use easy_parallel::Parallel;
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, info};
-use pasta_curves::pallas;
+use rand::rngs::OsRng;
 use serde_json::{json, Value};
 
 use drk::{
@@ -15,7 +15,11 @@ use drk::{
     circuit::{MintContract, SpendContract},
     cli::{CashierdConfig, Config},
     client::Client,
-    crypto::{merkle_node::MerkleNode, proof::VerifyingKey, schnorr},
+    crypto::{
+        keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+        proof::VerifyingKey,
+    },
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
@@ -25,7 +29,10 @@ use drk::{
     state::State,
     types::DrkTokenId,
     util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
-    wallet::{cashierdb::TokenKey, CashierDb, WalletDb},
+    wallet::{
+        cashierdb::{CashierDb, TokenKey},
+        walletdb::WalletDb,
+    },
     Error, Result,
 };
 
@@ -103,7 +110,7 @@ impl Cashierd {
     async fn listen_for_receiving_coins(
         bridge: Arc<Bridge>,
         cashier_wallet: Arc<CashierDb>,
-        recv_coin: async_channel::Receiver<(pallas::Point, u64)>,
+        recv_coin: async_channel::Receiver<(PublicKey, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // received drk coin
@@ -208,7 +215,7 @@ impl Cashierd {
                 mint_address = "";
             }
             let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
-            let drk_pub_key: pallas::Point = deserialize(&drk_pub_key)?;
+            let drk_pub_key: PublicKey = deserialize(&drk_pub_key)?;
 
             // check if the drk public key already exist
             let check = self
@@ -336,7 +343,7 @@ impl Cashierd {
 
             let address = serialize(&address.to_string());
 
-            let cashier_public: pallas::Point;
+            let cashier_public: PublicKey;
 
             if let Some(addr) = self
                 .cashier_wallet
@@ -345,14 +352,14 @@ impl Cashierd {
             {
                 cashier_public = addr.public;
             } else {
-                let cashier_secret = schnorr::SecretKey::random();
-                cashier_public = cashier_secret.public_key().inner();
+                let cashier_secret = SecretKey::random(&mut OsRng);
+                cashier_public = PublicKey::from_secret(cashier_secret);
 
                 self.cashier_wallet
                     .put_withdraw_keys(
                         &address,
                         &cashier_public,
-                        &cashier_secret.inner(),
+                        &cashier_secret,
                         &network,
                         &token_id,
                         mint_address.into(),
@@ -601,7 +608,7 @@ impl Cashierd {
 
         client.start().await?;
 
-        let (notify, recv_coin) = async_channel::unbounded::<(pallas::Point, u64)>();
+        let (notify, recv_coin) = async_channel::unbounded::<(PublicKey, u64)>();
 
         client
             .connect_to_subscriber_from_cashier(
@@ -703,9 +710,9 @@ async fn start(
         tree: BridgeTree::<MerkleNode, 32>::new(100),
         merkle_roots,
         nullifiers,
+        public_keys: cashier_public_keys,
         mint_vk,
         spend_vk,
-        public_keys: cashier_public_keys,
     }));
 
     if get_address_flag {

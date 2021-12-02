@@ -1,21 +1,21 @@
-use crate::types::*;
-use group::GroupEncoding;
 use sha2::Digest;
+
+use crate::crypto::keypair::PublicKey;
 
 #[derive(Clone, Debug)]
 pub struct Address {
-    pub raw: DrkPublicKey,
+    pub raw: PublicKey,
     pub pkh: String,
 }
 
 impl Address {
-    pub fn new(raw: DrkPublicKey) -> Self {
+    pub fn new(raw: PublicKey) -> Self {
         let pkh = Self::pkh_address(&raw);
 
         Address { raw, pkh }
     }
 
-    fn get_hash(raw: &DrkPublicKey) -> Vec<u8> {
+    fn get_hash(raw: &PublicKey) -> Vec<u8> {
         // sha256
         let mut hasher = sha2::Sha256::new();
         hasher.update(raw.to_bytes());
@@ -28,7 +28,7 @@ impl Address {
         hash.to_vec()
     }
 
-    pub fn pkh_address(raw: &DrkPublicKey) -> String {
+    pub fn pkh_address(raw: &PublicKey) -> String {
         let mut hash = Self::get_hash(raw);
 
         // add version
@@ -44,7 +44,7 @@ impl Address {
 
         payload.append(&mut payload_hash[0..4].to_vec());
 
-        // base56 encoding
+        // base58 encoding
         let address: String = bs58::encode(payload).into_string();
 
         address

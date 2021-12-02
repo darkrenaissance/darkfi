@@ -7,11 +7,15 @@ use super::{
 };
 use crate::{
     crypto::{
-        merkle_node::MerkleNode, mint_proof::create_mint_proof, note::Note, schnorr,
+        keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+        mint_proof::create_mint_proof,
+        note::Note,
+        schnorr::SchnorrSecret,
         spend_proof::create_spend_proof,
     },
     serial::Encodable,
-    types::{DrkCoinBlind, DrkPublicKey, DrkSecretKey, DrkSerial, DrkTokenId, DrkValueBlind},
+    types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     Result,
 };
 
@@ -24,20 +28,20 @@ pub struct TransactionBuilder {
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
-    pub signature_secret: schnorr::SecretKey,
+    pub signature_secret: SecretKey,
 }
 
 pub struct TransactionBuilderInputInfo {
     pub leaf_position: incrementalmerkletree::Position,
     pub merkle_path: Vec<MerkleNode>,
-    pub secret: DrkSecretKey,
+    pub secret: SecretKey,
     pub note: Note,
 }
 
 pub struct TransactionBuilderOutputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
-    pub public: DrkPublicKey,
+    pub public: PublicKey,
 }
 
 impl TransactionBuilder {
@@ -63,11 +67,12 @@ impl TransactionBuilder {
         total
     }
 
+    // TODO: pass proving keys as args to this function
     pub fn build(self) -> Result<Transaction> {
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
-            let signature_public = input.signature_secret.public_key();
+            let signature_public = PublicKey::from_secret(input.signature_secret);
             let value_blind = DrkValueBlind::random(&mut OsRng);
 
             let clear_input = PartialTransactionClearInput {
@@ -86,7 +91,7 @@ impl TransactionBuilder {
         for input in self.inputs {
             input_blinds.push(input.note.value_blind);
 
-            let signature_secret = schnorr::SecretKey::random();
+            let signature_secret = SecretKey::random(&mut OsRng);
 
             let (proof, revealed) = create_spend_proof(
                 input.note.value,

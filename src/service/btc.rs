@@ -1,3 +1,5 @@
+// TODO: This module needs cleanup related to PublicKey/SecretKey types.
+
 use std::{
     cmp::max,
     collections::BTreeMap,
@@ -40,8 +42,8 @@ use secp256k1::{
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
+    crypto::keypair::PublicKey as DrkPublicKey,
     serial::{deserialize, serialize, Decodable, Encodable},
-    types::*,
     util::{generate_id, NetworkName},
     Error, Result,
 };

@@ -8,15 +8,16 @@ use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
-    pallas,
 };
 
-use super::{
-    proof::{Proof, ProvingKey, VerifyingKey},
-    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
-};
 use crate::{
     circuit::mint_contract::MintContract,
+    crypto::{
+        coin::Coin,
+        keypair::PublicKey,
+        proof::{Proof, ProvingKey, VerifyingKey},
+        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+    },
     serial::{Decodable, Encodable},
     types::*,
     Result,
@@ -42,8 +43,7 @@ impl MintProofKeys {
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
-    //pub coin: [u8; 32],
-    pub coin: pallas::Base,
+    pub coin: Coin,
 }
 
 impl MintRevealedValues {
@@ -54,26 +54,18 @@ impl MintRevealedValues {
         token_blind: DrkValueBlind,
         serial: DrkSerial,
         coin_blind: DrkCoinBlind,
-        public_key: DrkPublicKey,
+        public_key: PublicKey,
     ) -> Self {
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
 
-        let coords = public_key.to_affine().coordinates().unwrap();
-        let messages = [
-            [*coords.x(), *coords.y()],
-            [DrkValue::from_u64(value), token_id],
-            [serial, coin_blind],
-        ];
+        let coords = public_key.0.to_affine().coordinates().unwrap();
+        let messages =
+            [*coords.x(), *coords.y(), DrkValue::from_u64(value), token_id, serial, coin_blind];
 
-        let mut coin = DrkCoin::zero();
-        for msg in messages.iter() {
-            coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
-        }
+        let coin = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages);
 
-        //let coin = hash.to_bytes();
-
-        MintRevealedValues { value_commit, token_commit, coin }
+        MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
 
     fn make_outputs(&self) -> [DrkCircuitField; 5] {
@@ -81,8 +73,7 @@ impl MintRevealedValues {
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         vec![
-            //DrkCircuitField::from_bytes(&self.coin).unwrap(),
-            self.coin,
+            self.coin.0,
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),
@@ -121,7 +112,7 @@ pub fn create_mint_proof(
     token_blind: DrkValueBlind,
     serial: DrkSerial,
     coin_blind: DrkCoinBlind,
-    public_key: DrkPublicKey,
+    public_key: PublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {
     const K: u32 = 11;
 
@@ -135,7 +126,7 @@ pub fn create_mint_proof(
         public_key,
     );
 
-    let coords = public_key.to_affine().coordinates().unwrap();
+    let coords = public_key.0.to_affine().coordinates().unwrap();
 
     let c = MintContract {
         pub_x: Some(*coords.x()),

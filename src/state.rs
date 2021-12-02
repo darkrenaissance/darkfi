@@ -1,28 +1,25 @@
-use halo2_gadgets::ecc::FixedPoints;
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use log::debug;
-use pasta_curves::pallas;
 
 use crate::{
     blockchain::{rocks::columns, RocksColumn},
     crypto::{
         coin::Coin,
-        constants::OrchardFixedBases,
+        keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
-        schnorr,
-        util::mod_r_p,
         OwnCoin,
     },
+    serial::serialize,
     tx::Transaction,
-    wallet::WalletPtr,
+    wallet::walletdb::WalletPtr,
     Result,
 };
 
 pub trait ProgramState {
-    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool;
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool;
     fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
     fn mint_vk(&self) -> &VerifyingKey;
@@ -61,15 +58,17 @@ pub enum VerifyFailed {
 
 pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
-
     debug!(target: "STATE TRANSITION", "iterate clear_inputs");
 
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
-
         if !state.is_valid_cashier_public_key(&input.signature_public) {
-            log::error!(target: "STATE TRANSITION", "Not valid cashier public key");
+            debug!(
+                "CASHIER PUBLIC: {}",
+                bs58::encode(serialize(&input.signature_public)).into_string()
+            );
+            log::error!(target: "STATE TRANSITION", "Invalid cashier public key");
             return Err(VerifyFailed::InvalidCashierKey(i))
         }
     }
@@ -108,7 +107,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     let mut enc_notes = vec![];
     for output in tx.outputs {
         // Gather all the coins
-        coins.push(Coin(output.revealed.coin));
+        coins.push(output.revealed.coin);
         enc_notes.push(output.enc_note);
     }
 
@@ -124,7 +123,7 @@ pub struct State {
     /// Nullifiers prevent double-spending
     pub nullifiers: RocksColumn<columns::Nullifiers>,
     /// List of Cashier public keys
-    pub public_keys: Vec<pallas::Point>,
+    pub public_keys: Vec<PublicKey>,
     /// Verifying key for the Mint contract
     pub mint_vk: VerifyingKey,
     /// Verifying key for the Spend contract
@@ -135,8 +134,8 @@ impl State {
     pub async fn apply(
         &mut self,
         update: StateUpdate,
-        secret_keys: Vec<pallas::Base>,
-        notify: Option<async_channel::Sender<(pallas::Point, u64)>>,
+        secret_keys: Vec<SecretKey>,
+        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
     ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update.
@@ -170,8 +169,7 @@ impl State {
 
                     wallet.put_own_coins(own_coin).await?;
 
-                    // TODO: Place somewhere proper
-                    let pubkey = OrchardFixedBases::NullifierK.generator() * mod_r_p(*secret);
+                    let pubkey = PublicKey::from_secret(*secret);
 
                     debug!("Received a coin: amount {}", note.value);
                     debug!("Send a notification");
@@ -186,7 +184,7 @@ impl State {
         Ok(())
     }
 
-    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: pallas::Base) -> Option<Note> {
+    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
             Ok(note) => Some(note),
             Err(_) => None,
@@ -195,10 +193,9 @@ impl State {
 }
 
 impl ProgramState for State {
-    // TODO: Proper keypair type
-    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
         debug!("Check if it is a valid cashier public key");
-        self.public_keys.contains(&public.inner())
+        self.public_keys.contains(&public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {

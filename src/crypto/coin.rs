@@ -18,10 +18,6 @@ impl Coin {
     pub fn to_bytes(self) -> [u8; 32] {
         self.0.to_bytes()
     }
-
-    pub(crate) fn inner(&self) -> pallas::Base {
-        self.0
-    }
 }
 
 impl Encodable for Coin {

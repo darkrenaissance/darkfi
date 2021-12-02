@@ -2,14 +2,19 @@ use std::{path::Path, str::FromStr};
 
 use async_std::sync::Arc;
 use log::{debug, error, info};
-use pasta_curves::pallas;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Row, SqlitePool,
 };
 
-use super::{Keypair, WalletApi};
-use crate::{client::ClientFailed, types::*, util::NetworkName, Error, Result};
+use super::wallet_api::WalletApi;
+use crate::{
+    client::ClientFailed,
+    crypto::keypair::{Keypair, PublicKey, SecretKey},
+    types::DrkTokenId,
+    util::NetworkName,
+    Error, Result,
+};
 
 pub type CashierDbPtr = Arc<CashierDb>;
 
@@ -27,7 +32,7 @@ pub struct WithdrawToken {
 }
 
 pub struct DepositToken {
-    pub drk_public_key: DrkPublicKey,
+    pub drk_public_key: PublicKey,
     pub token_key: TokenKey,
     pub token_id: DrkTokenId,
     pub mint_address: String,
@@ -64,11 +69,15 @@ impl CashierDb {
         let main_kps = include_str!("../../sql/cashier_main_keypairs.sql");
         let deposit_kps = include_str!("../../sql/cashier_deposit_keypairs.sql");
         let withdraw_kps = include_str!("../../sql/cashier_withdraw_keypairs.sql");
+
         let mut conn = self.conn.acquire().await?;
+
         debug!("Initializing main keypairs table");
         sqlx::query(main_kps).execute(&mut conn).await?;
+
         debug!("Initializing deposit keypairs table");
         sqlx::query(deposit_kps).execute(&mut conn).await?;
+
         debug!("Initializing withdraw keypairs table");
         sqlx::query(withdraw_kps).execute(&mut conn).await?;
         Ok(())
@@ -130,8 +139,8 @@ impl CashierDb {
     pub async fn put_withdraw_keys(
         &self,
         token_key_public: &[u8],
-        d_key_public: &pallas::Point,
-        d_key_secret: &pallas::Scalar,
+        d_key_public: &PublicKey,
+        d_key_secret: &SecretKey,
         network: &NetworkName,
         token_id: &DrkTokenId,
         mint_address: String,
@@ -167,7 +176,7 @@ impl CashierDb {
 
     pub async fn put_deposit_keys(
         &self,
-        d_key_public: &DrkPublicKey,
+        d_key_public: &PublicKey,
         token_key_secret: &[u8],
         token_key_public: &[u8],
         network: &NetworkName,
@@ -202,7 +211,7 @@ impl CashierDb {
         Ok(())
     }
 
-    pub async fn get_withdraw_private_keys(&self) -> Result<Vec<DrkSecretKey>> {
+    pub async fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
         debug!("Getting withdraw private keys");
         let confirm = self.get_value_serialized(&false)?;
 
@@ -217,7 +226,7 @@ impl CashierDb {
 
         let mut secret_keys = vec![];
         for row in rows {
-            let key = self.get_value_deserialized(row.get("d_key_secret"))?;
+            let key: SecretKey = self.get_value_deserialized(row.get("d_key_secret"))?;
             secret_keys.push(key);
         }
 
@@ -226,7 +235,7 @@ impl CashierDb {
 
     pub async fn get_withdraw_token_public_key_by_dkey_public(
         &self,
-        pubkey: &DrkPublicKey,
+        pubkey: &PublicKey,
     ) -> Result<Option<WithdrawToken>> {
         debug!("Get token address by pubkey");
         let d_key_public = self.get_value_serialized(pubkey)?;
@@ -259,7 +268,7 @@ impl CashierDb {
 
     pub async fn get_deposit_token_keys_by_dkey_public(
         &self,
-        d_key_public: &DrkPublicKey,
+        d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
         debug!("Checking for existing dkey");
@@ -350,7 +359,7 @@ impl CashierDb {
 
     pub async fn confirm_deposit_key_record(
         &self,
-        d_key_public: &DrkPublicKey,
+        d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<()> {
         debug!("Confirm deposit keys");

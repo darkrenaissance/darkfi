@@ -19,7 +19,10 @@ use super::{
 };
 use crate::{
     circuit::spend_contract::SpendContract,
-    crypto::{merkle_node::MerkleNode, schnorr},
+    crypto::{
+        keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+    },
     serial::{Decodable, Encodable},
     types::*,
     Result,
@@ -47,7 +50,7 @@ pub struct SpendRevealedValues {
     pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
-    pub signature_public: schnorr::PublicKey,
+    pub signature_public: PublicKey,
 }
 
 impl SpendRevealedValues {
@@ -59,27 +62,22 @@ impl SpendRevealedValues {
         token_blind: DrkValueBlind,
         serial: DrkSerial,
         coin_blind: DrkCoinBlind,
-        secret: DrkSecretKey,
+        secret: SecretKey,
         leaf_position: incrementalmerkletree::Position,
         merkle_path: Vec<MerkleNode>,
-        signature_secret: schnorr::SecretKey,
+        signature_secret: SecretKey,
     ) -> Self {
-        let nullifier = [secret, serial];
+        let nullifier = [secret.0, serial];
         let nullifier =
             primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
 
-        let public_key = derive_public_key(secret);
-        let coords = public_key.to_affine().coordinates().unwrap();
-        let messages = [
-            [*coords.x(), *coords.y()],
-            [DrkValue::from_u64(value), token_id],
-            [serial, coin_blind],
-        ];
+        let public_key = PublicKey::from_secret(secret);
+        let coords = public_key.0.to_affine().coordinates().unwrap();
 
-        let mut coin = DrkCoin::zero();
-        for msg in messages.iter() {
-            coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
-        }
+        let messages =
+            [*coords.x(), *coords.y(), DrkValue::from_u64(value), token_id, serial, coin_blind];
+
+        let coin = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages);
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
@@ -103,7 +101,7 @@ impl SpendRevealedValues {
             token_commit,
             nullifier: Nullifier(nullifier),
             merkle_root,
-            signature_public: signature_secret.public_key(),
+            signature_public: PublicKey::from_secret(signature_secret),
         }
     }
 
@@ -160,10 +158,10 @@ pub fn create_spend_proof(
     token_blind: DrkValueBlind,
     serial: DrkSerial,
     coin_blind: DrkCoinBlind,
-    secret: DrkSecretKey,
+    secret: SecretKey,
     leaf_position: incrementalmerkletree::Position,
     merkle_path: Vec<MerkleNode>,
-    signature_secret: schnorr::SecretKey,
+    signature_secret: SecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
     const K: u32 = 11;
 
@@ -184,7 +182,7 @@ pub fn create_spend_proof(
     let leaf_position: u64 = leaf_position.into();
 
     let c = SpendContract {
-        secret_key: Some(secret),
+        secret_key: Some(secret.0),
         serial: Some(serial),
         value: Some(DrkValue::from_u64(value)),
         asset: Some(token_id),

@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 
-use crate::{types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error, Result};
+use crate::{
+    crypto::keypair::PublicKey, types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error,
+    Result,
+};
 
 pub struct BridgeRequests {
     pub network: NetworkName,
@@ -53,7 +56,7 @@ pub struct TokenSubscribtion {
 pub struct TokenNotification {
     pub network: NetworkName,
     pub token_id: DrkTokenId,
-    pub drk_pub_key: DrkPublicKey,
+    pub drk_pub_key: PublicKey,
     pub received_balance: u64,
     pub decimals: u16,
 }
@@ -109,7 +112,7 @@ impl Bridge {
 
     pub async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> BridgeSubscribtion {
@@ -128,7 +131,7 @@ impl Bridge {
         self: Arc<Self>,
         req: async_channel::Receiver<BridgeRequests>,
         rep: async_channel::Sender<BridgeResponse>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
@@ -232,7 +235,7 @@ impl Bridge {
 pub trait NetworkClient {
     async fn subscribe(
         self: Arc<Self>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<TokenSubscribtion>;
@@ -242,7 +245,7 @@ pub trait NetworkClient {
         self: Arc<Self>,
         private_key: Vec<u8>,
         public_key: Vec<u8>,
-        drk_pub_key: DrkPublicKey,
+        drk_pub_key: PublicKey,
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<String>;

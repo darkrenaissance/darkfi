@@ -17,7 +17,7 @@ use drk::{
     circuit::{MintContract, SpendContract},
     cli::{Config, DarkfidConfig},
     client::Client,
-    crypto::{merkle_node::MerkleNode, proof::VerifyingKey},
+    crypto::{keypair::PublicKey, merkle_node::MerkleNode, proof::VerifyingKey},
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -31,7 +31,7 @@ use drk::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
         NetworkName, TokenList,
     },
-    wallet::WalletDb,
+    wallet::walletdb::WalletDb,
     Error, Result,
 };
 
@@ -39,7 +39,7 @@ use drk::{
 pub struct Cashier {
     pub name: String,
     pub rpc_url: String,
-    pub public_key: pallas::Point,
+    pub public_key: PublicKey,
 }
 
 #[async_trait]
@@ -424,7 +424,7 @@ impl Darkfid {
             let result: Result<()> = async {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
-                let cashier_public: pallas::Point =
+                let cashier_public: PublicKey =
                     deserialize(&bs58::decode(cashier_public).into_vec()?)?;
 
                 self.client
@@ -509,7 +509,7 @@ impl Darkfid {
 
         let result: Result<()> = async {
             let drk_address = bs58::decode(&address).into_vec()?;
-            let drk_address: pallas::Point = deserialize(&drk_address)?;
+            let drk_address: PublicKey = deserialize(&drk_address)?;
 
             let decimals: usize = 8;
             let amount = decode_base10(amount, decimals, true)?;
@@ -546,7 +546,7 @@ async fn start(
     let mut cashier_keys = Vec::new();
 
     if let Some(cpub) = local_cashier {
-        let cashier_public: pallas::Point = deserialize(&bs58::decode(cpub).into_vec()?)?;
+        let cashier_public: PublicKey = deserialize(&bs58::decode(cpub).into_vec()?)?;
 
         cashiers.push(Cashier {
             name: "localCashier".into(),
@@ -561,7 +561,7 @@ async fn start(
                 return Err(Error::CashierKeysNotFound)
             }
 
-            let cashier_public: pallas::Point =
+            let cashier_public: PublicKey =
                 deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
 
             cashiers.push(Cashier {

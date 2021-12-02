@@ -102,7 +102,8 @@ pub struct SpendContract {
     pub asset_blind: Option<pallas::Scalar>,
     pub leaf_pos: Option<u32>,
     pub merkle_path: Option<[pallas::Base; 32]>,
-    pub sig_secret: Option<pallas::Scalar>,
+    //pub sig_secret: Option<pallas::Scalar>,
+    pub sig_secret: Option<pallas::Base>,
 }
 
 impl UtilitiesInstructions<pallas::Base> for SpendContract {
@@ -442,11 +443,16 @@ impl Circuit<pallas::Base> for SpendContract {
         // ========================
         // Signature key derivation
         // ========================
-        let (sig_pub, _) = {
-            let spend_auth_g = OrchardFixedBases::SpendAuthG;
-            let spend_auth_g = FixedPoint::from_inner(ecc_chip, spend_auth_g);
-            // TODO: Do we need to load sig_secret somewhere first?
-            spend_auth_g.mul(layouter.namespace(|| "[x_s] SpendAuthG"), self.sig_secret)?
+        let sig_secret = self.load_private(
+            layouter.namespace(|| "load sig_secret"),
+            config.advices[0],
+            self.sig_secret,
+        )?;
+
+        let sig_pub = {
+            let nullifier_k = OrchardFixedBases::NullifierK;
+            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
+            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), sig_secret)?
         };
 
         layouter.constrain_instance(

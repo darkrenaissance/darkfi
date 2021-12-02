@@ -1,14 +1,13 @@
 use std::io;
 
 use crypto_api_chachapoly::ChachaPolyIetf;
-use pasta_curves::arithmetic::Field;
 use rand::rngs::OsRng;
 
-use super::{
-    diffie_hellman::{kdf_sapling, sapling_ka_agree},
-    util::mod_r_p,
-};
 use crate::{
+    crypto::{
+        diffie_hellman::{kdf_sapling, sapling_ka_agree},
+        keypair::{PublicKey, SecretKey},
+    },
     serial::{Decodable, Encodable, ReadExt, WriteExt},
     types::*,
     Error, Result,
@@ -56,11 +55,11 @@ impl Decodable for Note {
 }
 
 impl Note {
-    pub fn encrypt(&self, public: &DrkPublicKey) -> Result<EncryptedNote> {
-        let ephem_secret = DrkSecretKey::random(&mut OsRng);
-        let ephem_public = derive_public_key(ephem_secret);
-        let shared_secret = sapling_ka_agree(&mod_r_p(ephem_secret), public);
-        let key = kdf_sapling(shared_secret, &ephem_public);
+    pub fn encrypt(&self, public: &PublicKey) -> Result<EncryptedNote> {
+        let ephem_secret = SecretKey::random(&mut OsRng);
+        let ephem_public = PublicKey::from_secret(ephem_secret);
+        let shared_secret = sapling_ka_agree(&ephem_secret, public);
+        let key = kdf_sapling(&shared_secret, &ephem_public);
 
         let mut input = Vec::new();
         self.encode(&mut input)?;
@@ -79,7 +78,7 @@ impl Note {
 
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
-    ephem_public: DrkPublicKey,
+    ephem_public: PublicKey,
 }
 
 impl Encodable for EncryptedNote {
@@ -101,9 +100,9 @@ impl Decodable for EncryptedNote {
 }
 
 impl EncryptedNote {
-    pub fn decrypt(&self, secret: &DrkSecretKey) -> Result<Note> {
-        let shared_secret = sapling_ka_agree(&mod_r_p(*secret), &self.ephem_public);
-        let key = kdf_sapling(shared_secret, &self.ephem_public);
+    pub fn decrypt(&self, secret: &SecretKey) -> Result<Note> {
+        let shared_secret = sapling_ka_agree(&secret, &self.ephem_public);
+        let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
         assert_eq!(

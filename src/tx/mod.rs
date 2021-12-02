@@ -7,10 +7,12 @@ use pasta_curves::group::Group;
 
 use crate::{
     crypto::{
+        keypair::PublicKey,
         mint_proof::verify_mint_proof,
         note::EncryptedNote,
         proof::{Proof, VerifyingKey},
         schnorr,
+        schnorr::SchnorrPublic,
         spend_proof::verify_spend_proof,
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
         MintRevealedValues, SpendRevealedValues,
@@ -38,7 +40,7 @@ pub struct TransactionClearInput {
     pub token_id: DrkTokenId,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
-    pub signature_public: schnorr::PublicKey,
+    pub signature_public: PublicKey,
     pub signature: schnorr::Signature,
 }
 

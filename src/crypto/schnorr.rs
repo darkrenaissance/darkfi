@@ -4,50 +4,47 @@ use halo2_gadgets::ecc::FixedPoints;
 use pasta_curves::{arithmetic::Field, group::GroupEncoding, pallas};
 use rand::rngs::OsRng;
 
-use super::{
-    constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
-    util::hash_to_scalar,
-};
 use crate::{
-    error::Result,
+    crypto::{
+        constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
+        keypair::{PublicKey, SecretKey},
+        util::{hash_to_scalar, mod_r_p},
+    },
     serial::{Decodable, Encodable},
-    types::{DrkPublicKey, DrkValueBlind, DrkValueCommit},
+    Result,
 };
 
-#[derive(Clone)]
-pub struct SecretKey(pub pallas::Scalar);
+pub struct Signature {
+    commit: pallas::Point,
+    response: pallas::Scalar,
+}
 
-impl SecretKey {
-    pub fn random() -> Self {
-        Self(pallas::Scalar::random(&mut OsRng))
-    }
+pub trait SchnorrSecret {
+    fn sign(&self, message: &[u8]) -> Signature;
+}
 
-    pub fn sign(&self, message: &[u8]) -> Signature {
-        let mask = DrkValueBlind::random(&mut OsRng);
-        let commit = OrchardFixedBases::SpendAuthG.generator() * mask;
+pub trait SchnorrPublic {
+    fn verify(&self, message: &[u8], signature: &Signature) -> bool;
+}
+
+impl SchnorrSecret for SecretKey {
+    fn sign(&self, message: &[u8]) -> Signature {
+        let mask = pallas::Scalar::random(&mut OsRng);
+        let commit = OrchardFixedBases::NullifierK.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
-        let response = mask + challenge * self.0;
+        let response = mask + challenge * mod_r_p(self.0);
 
         Signature { commit, response }
     }
-
-    pub fn public_key(&self) -> PublicKey {
-        let public_key = OrchardFixedBases::SpendAuthG.generator() * self.0;
-        PublicKey(public_key)
-    }
-
-    pub fn inner(&self) -> pallas::Scalar {
-        self.0
-    }
 }
 
-#[derive(PartialEq)]
-pub struct PublicKey(pub DrkPublicKey);
-
-pub struct Signature {
-    commit: DrkValueCommit,
-    response: DrkValueBlind,
+impl SchnorrPublic for PublicKey {
+    fn verify(&self, message: &[u8], signature: &Signature) -> bool {
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
+        OrchardFixedBases::NullifierK.generator() * signature.response - self.0 * challenge ==
+            signature.commit
+    }
 }
 
 impl Encodable for Signature {
@@ -65,35 +62,16 @@ impl Decodable for Signature {
     }
 }
 
-impl PublicKey {
-    pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
-        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
-        OrchardFixedBases::SpendAuthG.generator() * signature.response - self.0 * challenge ==
-            signature.commit
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    pub fn inner(&self) -> pallas::Point {
-        self.0
+    #[test]
+    fn test_schnorr() {
+        let secret = SecretKey::random();
+        let message = b"Foo bar";
+        let signature = secret.sign(&message[..]);
+        let public = PublicKey::from_secret(secret);
+        assert!(public.verify(&message[..], &signature));
     }
-}
-
-impl Encodable for PublicKey {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        self.0.encode(s)
-    }
-}
-
-impl Decodable for PublicKey {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self(Decodable::decode(&mut d)?))
-    }
-}
-
-#[test]
-fn test_schnorr() {
-    let secret = SecretKey::random();
-    let message = b"Foo bar";
-    let signature = secret.sign(&message[..]);
-    let public = secret.public_key();
-    assert!(public.verify(&message[..], &signature));
 }

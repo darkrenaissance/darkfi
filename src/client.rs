@@ -7,12 +7,20 @@ use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
-    crypto::{coin::Coin, merkle_node::MerkleNode, schnorr, util::mod_r_p, OwnCoin},
+    crypto::{
+        coin::Coin,
+        keypair::{Keypair, PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+        OwnCoin,
+    },
     serial::{serialize, Decodable, Encodable},
     service::GatewayClient,
     state::{state_transition, State},
     tx,
-    wallet::{walletdb::Balances, CashierDbPtr, Keypair, WalletPtr},
+    wallet::{
+        cashierdb::CashierDbPtr,
+        walletdb::{Balances, WalletPtr},
+    },
     Result,
 };
 
@@ -95,7 +103,7 @@ impl Client {
 
     async fn build_slab_from_tx(
         &mut self,
-        pubkey: pallas::Point,
+        pubkey: PublicKey,
         value: u64,
         token_id: pallas::Base,
         clear_input: bool,
@@ -109,8 +117,9 @@ impl Client {
 
         if clear_input {
             // TODO: FIXME:
-            let base_secret = self.main_keypair.secret;
-            let signature_secret = schnorr::SecretKey(mod_r_p(base_secret));
+            let signature_secret = self.main_keypair.clone().secret;
+            let signature_public = PublicKey::from_secret(signature_secret);
+            debug!("SIGNATURE PUBLIC: {:?}", signature_public);
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
@@ -124,7 +133,7 @@ impl Client {
                     break
                 }
 
-                let node = MerkleNode(own_coin.coin.inner());
+                let node = MerkleNode(own_coin.coin.0);
                 let (leaf_position, merkle_path) = state_m.tree.authentication_path(&node).unwrap();
                 // TODO: What is this counting? Is it everything or does it know to separate
                 // different tokens?
@@ -179,7 +188,7 @@ impl Client {
 
     pub async fn send(
         &mut self,
-        pubkey: pallas::Point,
+        pubkey: PublicKey,
         amount: u64,
         token_id: pallas::Base,
         clear_input: bool,
@@ -204,7 +213,7 @@ impl Client {
     pub async fn transfer(
         &mut self,
         token_id: pallas::Base,
-        pubkey: pallas::Point,
+        pubkey: PublicKey,
         amount: u64,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
@@ -222,11 +231,11 @@ impl Client {
     }
 
     async fn update_state(
-        secret_keys: Vec<pallas::Base>,
+        secret_keys: Vec<SecretKey>,
         slab: &Slab,
         state: Arc<Mutex<State>>,
         wallet: WalletPtr,
-        notify: Option<async_channel::Sender<(pallas::Point, u64)>>,
+        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
     ) -> Result<()> {
         debug!("Build tx from slab and update the state");
         let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
@@ -242,7 +251,7 @@ impl Client {
         &self,
         state: Arc<Mutex<State>>,
         cashier_wallet: CashierDbPtr,
-        notify: async_channel::Sender<(pallas::Point, u64)>,
+        notify: async_channel::Sender<(PublicKey, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!("Start subscriber for cashier");
@@ -251,13 +260,12 @@ impl Client {
         let secret_key = self.main_keypair.secret;
         let wallet = self.wallet.clone();
 
-        //let task: smol::Task<Result<()>> = executor.spawn(async move {
         let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
                 debug!("Received new slab");
 
-                let mut secret_keys: Vec<pallas::Base> = vec![secret_key];
+                let mut secret_keys = vec![secret_key];
                 let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys().await?;
                 secret_keys.append(&mut withdraw_keys);
 
@@ -289,8 +297,7 @@ impl Client {
         debug!("Start subscriber for darkfid");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
-        let secret_key = self.main_keypair.secret;
-
+        let secret_key = self.main_keypair.secret.clone();
         let wallet = self.wallet.clone();
 
         let task: smol::Task<Result<()>> = executor.spawn(async move {

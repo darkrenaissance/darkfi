@@ -1,10 +1,7 @@
 use std::{path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use halo2::arithmetic::Field;
-use halo2_gadgets::ecc::FixedPoints;
 use log::{debug, error, info};
-use pasta_curves::pallas;
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -14,25 +11,23 @@ use sqlx::{
 use crate::{
     client::ClientFailed,
     crypto::{
-        coin::Coin, constants::OrchardFixedBases, note::Note, nullifier::Nullifier, util::mod_r_p,
+        coin::Coin,
+        keypair::{Keypair, PublicKey, SecretKey},
+        note::Note,
+        nullifier::Nullifier,
         OwnCoin, OwnCoins,
     },
     serial::serialize,
-    wallet::WalletApi,
+    types::DrkTokenId,
+    wallet::wallet_api::WalletApi,
     Error, Result,
 };
 
 pub type WalletPtr = Arc<WalletDb>;
 
 #[derive(Clone, Debug)]
-pub struct Keypair {
-    pub public: pallas::Point,
-    pub secret: pallas::Base,
-}
-
-#[derive(Clone, Debug)]
 pub struct Balance {
-    pub token_id: pallas::Base,
+    pub token_id: DrkTokenId,
     pub value: u64,
     pub nullifier: Nullifier,
 }
@@ -73,9 +68,12 @@ impl WalletDb {
         debug!("Initializing wallet database");
         let keys = include_str!("../../sql/keys.sql");
         let coins = include_str!("../../sql/coins.sql");
+
         let mut conn = self.conn.acquire().await?;
+
         debug!("Initializing keys table");
         sqlx::query(keys).execute(&mut conn).await?;
+
         debug!("Initializing coins table");
         sqlx::query(coins).execute(&mut conn).await?;
         Ok(())
@@ -92,23 +90,22 @@ impl WalletDb {
                 Err(Error::from(ClientFailed::KeyExists))
             }
             Err(_) => {
-                let secret = pallas::Base::random(&mut OsRng);
-                let public = OrchardFixedBases::NullifierK.generator() * mod_r_p(secret);
-                self.put_keypair(&public, &secret).await?;
+                let keypair = Keypair::random(&mut OsRng);
+                self.put_keypair(&keypair.public, &keypair.secret).await?;
                 Ok(())
             }
         }
     }
 
-    pub async fn put_keypair(&self, public: &pallas::Point, secret: &pallas::Base) -> Result<()> {
+    pub async fn put_keypair(&self, public: &PublicKey, secret: &SecretKey) -> Result<()> {
         debug!("Writing keypair into the wallet database");
-        let p = serialize(public);
-        let s = serialize(secret);
+        let pubkey = serialize(&public.0);
+        let secret = serialize(&secret.0);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query("INSERT INTO keys(public, secret) VALUES (?1, ?2)")
-            .bind(p)
-            .bind(s)
+            .bind(pubkey)
+            .bind(secret)
             .execute(&mut conn)
             .await?;
 
@@ -121,8 +118,8 @@ impl WalletDb {
 
         // TODO: Think about multiple keys
         let row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
-        let public: pallas::Point = self.get_value_deserialized(row.get("public"))?;
-        let secret: pallas::Base = self.get_value_deserialized(row.get("secret"))?;
+        let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
+        let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
 
         Ok(vec![Keypair { public, secret }])
     }
@@ -256,7 +253,7 @@ impl WalletDb {
         Ok(Balances { list })
     }
 
-    pub async fn get_token_id(&self) -> Result<Vec<pallas::Base>> {
+    pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
         debug!("Getting token ID");
         let is_spent = 0;
 
@@ -275,7 +272,7 @@ impl WalletDb {
         Ok(token_ids)
     }
 
-    pub async fn token_id_exists(&self, token_id: pallas::Base) -> Result<bool> {
+    pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
         debug!("Checking if token ID exists");
         let is_spent = 0;
         let id = self.get_value_serialized(&token_id)?;

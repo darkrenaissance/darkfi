@@ -6,12 +6,11 @@ use drk::{
     circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     crypto::{
         coin::Coin,
-        keypair::Keypair,
+        keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
-        schnorr,
     },
     state::{state_transition, ProgramState, StateUpdate},
     tx, Result,
@@ -35,13 +34,13 @@ struct MemoryState {
     spend_vk: VerifyingKey,
 
     // Public key of the cashier
-    cashier_signature_public: schnorr::PublicKey,
+    cashier_signature_public: PublicKey,
     // List of all our secret keys
-    secrets: Vec<pallas::Base>,
+    secrets: Vec<SecretKey>,
 }
 
 impl ProgramState for MemoryState {
-    fn is_valid_cashier_public_key(&self, public: &schnorr::PublicKey) -> bool {
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
         public == &self.cashier_signature_public
     }
 
@@ -73,7 +72,7 @@ impl MemoryState {
             let node = MerkleNode(coin.0);
             self.tree.append(&node);
 
-            //// Keep track of all merkle roots that have existed
+            // Keep track of all merkle roots that have existed
             self.merkle_roots.push(self.tree.root());
 
             if let Some((note, _secret)) = self.try_decrypt_note(enc_note) {
@@ -83,7 +82,7 @@ impl MemoryState {
         }
     }
 
-    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, pallas::Base)> {
+    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, SecretKey)> {
         // Loop through all our secret keys...
         for secret in &self.secrets {
             // ... attempt to decrypt the note ...
@@ -98,8 +97,8 @@ impl MemoryState {
 }
 
 fn main() -> Result<()> {
-    let cashier_signature_secret = schnorr::SecretKey::random();
-    let cashier_signature_public = cashier_signature_secret.public_key();
+    let cashier_signature_secret = SecretKey::random(&mut OsRng);
+    let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
 
     let keypair = Keypair::random(&mut OsRng);
 
@@ -115,7 +114,7 @@ fn main() -> Result<()> {
         mint_vk,
         spend_vk,
         cashier_signature_public,
-        secrets: vec![keypair.secret.inner()],
+        secrets: vec![keypair.secret],
     };
 
     let token_id = pallas::Base::from(110);
@@ -130,7 +129,7 @@ fn main() -> Result<()> {
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
-            public: keypair.public.inner(),
+            public: keypair.public,
         }],
     };
 
@@ -138,7 +137,7 @@ fn main() -> Result<()> {
 
     tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
 
-    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret.inner())?;
+    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
 
     let update = state_transition(&state, tx)?;
     state.apply(update);
@@ -153,13 +152,13 @@ fn main() -> Result<()> {
         inputs: vec![tx::TransactionBuilderInputInfo {
             leaf_position,
             merkle_path,
-            secret: keypair.secret.inner(),
+            secret: keypair.secret,
             note: note.clone(),
         }],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,
             token_id,
-            public: keypair.public.inner(),
+            public: keypair.public,
         }],
     };
 
