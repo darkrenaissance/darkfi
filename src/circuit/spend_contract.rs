@@ -85,8 +85,8 @@ impl SpendConfig {
 const BURN_NULLIFIER_OFFSET: usize = 0;
 const BURN_VALCOMX_OFFSET: usize = 1;
 const BURN_VALCOMY_OFFSET: usize = 2;
-const BURN_ASSCOMX_OFFSET: usize = 3;
-const BURN_ASSCOMY_OFFSET: usize = 4;
+const BURN_TOKCOMX_OFFSET: usize = 3;
+const BURN_TOKCOMY_OFFSET: usize = 4;
 const BURN_MERKLEROOT_OFFSET: usize = 5;
 const BURN_SIGKEYX_OFFSET: usize = 6;
 const BURN_SIGKEYY_OFFSET: usize = 7;
@@ -96,10 +96,10 @@ pub struct SpendContract {
     pub secret_key: Option<pallas::Base>,
     pub serial: Option<pallas::Base>,
     pub value: Option<pallas::Base>,
-    pub asset: Option<pallas::Base>,
+    pub token: Option<pallas::Base>,
     pub coin_blind: Option<pallas::Base>,
     pub value_blind: Option<pallas::Scalar>,
-    pub asset_blind: Option<pallas::Scalar>,
+    pub token_blind: Option<pallas::Scalar>,
     pub leaf_pos: Option<u32>,
     pub merkle_path: Option<[pallas::Base; 32]>,
     //pub sig_secret: Option<pallas::Scalar>,
@@ -306,8 +306,8 @@ impl Circuit<pallas::Base> for SpendContract {
         let value =
             self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset =
-            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
+        let token =
+            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
         let coin_blind = self.load_private(
             layouter.namespace(|| "load coin_blind"),
@@ -327,7 +327,7 @@ impl Circuit<pallas::Base> for SpendContract {
         // Coin hash
         // =========
         let coin = {
-            let poseidon_message = [pub_x, pub_y, value, asset, serial, coin_blind];
+            let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
 
             let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                 config.poseidon_chip(),
@@ -406,38 +406,40 @@ impl Circuit<pallas::Base> for SpendContract {
         )?;
 
         // ================
-        // Asset commitment
+        // Token commitment
         // ================
 
-        let asset =
-            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
+        let token =
+            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
         // a * G_1
         let (commitment, _) = {
-            let asset_commit_v = OrchardFixedBases::ValueCommitV;
-            let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
-            asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+            let token_commit_v = OrchardFixedBases::ValueCommitV;
+            let token_commit_v = FixedPoint::from_inner(ecc_chip.clone(), token_commit_v);
+            token_commit_v.mul_short(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
-            let rca = self.asset_blind;
-            let asset_commit_r = OrchardFixedBases::ValueCommitR;
-            let asset_commit_r = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_r);
-            asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
+            let rca = self.token_blind;
+            let token_commit_r = OrchardFixedBases::ValueCommitR;
+            let token_commit_r = FixedPoint::from_inner(ecc_chip.clone(), token_commit_r);
+            token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };
 
-        // Constrain the asset commitment coordinates
-        let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+        // Constrain the token commitment coordinates
+        let token_commit = commitment.add(layouter.namespace(|| "tokencommit"), &blind)?;
+
         layouter.constrain_instance(
-            asset_commit.inner().x().cell(),
+            token_commit.inner().x().cell(),
             config.primary,
-            BURN_ASSCOMX_OFFSET,
+            BURN_TOKCOMX_OFFSET,
         )?;
+
         layouter.constrain_instance(
-            asset_commit.inner().y().cell(),
+            token_commit.inner().y().cell(),
             config.primary,
-            BURN_ASSCOMY_OFFSET,
+            BURN_TOKCOMY_OFFSET,
         )?;
 
         // ========================

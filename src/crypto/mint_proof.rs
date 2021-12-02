@@ -114,11 +114,11 @@ pub fn create_mint_proof(
         pub_x: Some(*coords.x()),
         pub_y: Some(*coords.y()),
         value: Some(DrkValue::from_u64(value)),
-        asset: Some(token_id),
+        token: Some(token_id),
         serial: Some(serial),
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
-        asset_blind: Some(token_blind),
+        token_blind: Some(token_blind),
     };
 
     let start = Instant::now();

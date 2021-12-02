@@ -53,19 +53,19 @@ impl MintConfig {
 const MINT_COIN_OFFSET: usize = 0;
 const MINT_VALCOMX_OFFSET: usize = 1;
 const MINT_VALCOMY_OFFSET: usize = 2;
-const MINT_ASSCOMX_OFFSET: usize = 3;
-const MINT_ASSCOMY_OFFSET: usize = 4;
+const MINT_TOKCOMX_OFFSET: usize = 3;
+const MINT_TOKCOMY_OFFSET: usize = 4;
 
 #[derive(Default, Debug)]
 pub struct MintContract {
     pub pub_x: Option<pallas::Base>,         // x coordinate for pubkey
     pub pub_y: Option<pallas::Base>,         // y coordinate for pubkey
     pub value: Option<pallas::Base>,         // The value of this coin
-    pub asset: Option<pallas::Base>,         // The asset ID
+    pub token: Option<pallas::Base>,         // The token ID
     pub serial: Option<pallas::Base>,        // Unique serial number corresponding to this coin
     pub coin_blind: Option<pallas::Base>,    // Random blinding factor for coin
     pub value_blind: Option<pallas::Scalar>, // Random blinding factor for value commitment
-    pub asset_blind: Option<pallas::Scalar>, // Random blinding factor for the asset ID
+    pub token_blind: Option<pallas::Scalar>, // Random blinding factor for the token ID
 }
 
 impl UtilitiesInstructions<pallas::Base> for MintContract {
@@ -223,8 +223,8 @@ impl Circuit<pallas::Base> for MintContract {
         let value =
             self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset =
-            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
+        let token =
+            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
         let serial = self.load_private(
             layouter.namespace(|| "load serial"),
@@ -242,7 +242,7 @@ impl Circuit<pallas::Base> for MintContract {
         // Coin hash
         // =========
         let coin = {
-            let poseidon_message = [pub_x, pub_y, value, asset, serial, coin_blind];
+            let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
 
             let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                 config.poseidon_chip(),
@@ -302,36 +302,36 @@ impl Circuit<pallas::Base> for MintContract {
         )?;
 
         // ================
-        // Asset commitment
+        // Token commitment
         // ================
         // a * G_1
         let (commitment, _) = {
-            let asset_commit_v = OrchardFixedBases::ValueCommitV;
-            let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
-            asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+            let token_commit_v = OrchardFixedBases::ValueCommitV;
+            let token_commit_v = FixedPoint::from_inner(ecc_chip.clone(), token_commit_v);
+            token_commit_v.mul_short(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
-            let rca = self.asset_blind;
-            let asset_commit_r = OrchardFixedBases::ValueCommitR;
-            let asset_commit_r = FixedPoint::from_inner(ecc_chip, asset_commit_r);
-            asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
+            let rca = self.token_blind;
+            let token_commit_r = OrchardFixedBases::ValueCommitR;
+            let token_commit_r = FixedPoint::from_inner(ecc_chip, token_commit_r);
+            token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };
 
-        let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+        let token_commit = commitment.add(layouter.namespace(|| "tokencommit"), &blind)?;
 
-        // Constrain the asset commitment coordinates
+        // Constrain the token commitment coordinates
         layouter.constrain_instance(
-            asset_commit.inner().x().cell(),
+            token_commit.inner().x().cell(),
             config.primary,
-            MINT_ASSCOMX_OFFSET,
+            MINT_TOKCOMX_OFFSET,
         )?;
 
         layouter.constrain_instance(
-            asset_commit.inner().y().cell(),
+            token_commit.inner().y().cell(),
             config.primary,
-            MINT_ASSCOMY_OFFSET,
+            MINT_TOKCOMY_OFFSET,
         )?;
 
         // At this point we've enforced all of our public inputs.
