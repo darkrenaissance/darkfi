@@ -8,7 +8,6 @@ use easy_parallel::Parallel;
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, info};
 use num_bigint::BigUint;
-use pasta_curves::pallas;
 use serde_json::{json, Value};
 use url::Url;
 
@@ -27,6 +26,7 @@ use drk::{
     },
     serial::{deserialize, serialize},
     state::{ProgramState, State},
+    types::DrkTokenId,
     util::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
         NetworkName, TokenList,
@@ -411,7 +411,7 @@ impl Darkfid {
             Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
         }
 
-        let token_id: &pallas::Base;
+        let token_id: &DrkTokenId;
 
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {
             token_id = tk_id;
@@ -498,7 +498,7 @@ impl Darkfid {
             (_, _, _, None) => return JsonResult::Err(jsonerr(InvalidAmountParam, None, id)),
         }
 
-        let token_id: &pallas::Base;
+        let token_id: &DrkTokenId;
 
         // get the id for the token
         if let Some(tk_id) = self.drk_tokenlist.tokens[&network].get(&token.to_uppercase()) {

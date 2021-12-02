@@ -1,5 +1,4 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
-use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use drk::{
@@ -13,7 +12,9 @@ use drk::{
         proof::{ProvingKey, VerifyingKey},
     },
     state::{state_transition, ProgramState, StateUpdate},
-    tx, Result,
+    tx,
+    types::DrkTokenId,
+    Result,
 };
 
 struct MemoryState {
@@ -117,7 +118,7 @@ fn main() -> Result<()> {
         secrets: vec![keypair.secret],
     };
 
-    let token_id = pallas::Base::from(110);
+    let token_id = DrkTokenId::from(110);
 
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {

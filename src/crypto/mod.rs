@@ -18,7 +18,7 @@ pub(crate) use spend_proof::SpendRevealedValues;
 
 use keypair::SecretKey;
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,

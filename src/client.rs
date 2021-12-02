@@ -1,7 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use incrementalmerkletree::Tree;
 use log::{debug, info, warn};
-use pasta_curves::pallas;
 use smol::Executor;
 use url::Url;
 
@@ -19,6 +18,7 @@ use crate::{
     service::GatewayClient,
     state::{state_transition, State},
     tx,
+    types::DrkTokenId,
     wallet::{
         cashierdb::CashierDbPtr,
         walletdb::{Balances, WalletPtr},
@@ -98,7 +98,9 @@ impl Client {
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
         // TODO: These should go to a better place.
+        debug!("Building proving key for the mint contract...");
         let mint_pk = ProvingKey::build(11, MintContract::default());
+        debug!("Building proving key for the spend contract...");
         let spend_pk = ProvingKey::build(11, SpendContract::default());
 
         let client = Client { main_keypair, gateway, wallet, mint_pk, spend_pk };
@@ -113,7 +115,7 @@ impl Client {
         &mut self,
         pubkey: PublicKey,
         value: u64,
-        token_id: pallas::Base,
+        token_id: DrkTokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Vec<Coin>> {
@@ -126,8 +128,6 @@ impl Client {
         if clear_input {
             // TODO: FIXME:
             let signature_secret = self.main_keypair.clone().secret;
-            let signature_public = PublicKey::from_secret(signature_secret);
-            debug!("SIGNATURE PUBLIC: {:?}", signature_public);
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
@@ -200,7 +200,7 @@ impl Client {
         &mut self,
         pubkey: PublicKey,
         amount: u64,
-        token_id: pallas::Base,
+        token_id: DrkTokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
@@ -222,7 +222,7 @@ impl Client {
 
     pub async fn transfer(
         &mut self,
-        token_id: pallas::Base,
+        token_id: DrkTokenId,
         pubkey: PublicKey,
         amount: u64,
         state: Arc<Mutex<State>>,

@@ -21,7 +21,7 @@ pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,

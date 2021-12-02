@@ -88,9 +88,9 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         }
     }
 
-    debug!(target: "STATE TRANSITION", "Check the tx Verifies correctly");
-    // Check the tx verifies correctly
+    debug!(target: "STATE TRANSITION", "Check the tx verifies correctly");
     tx.verify(state.mint_vk(), state.spend_vk())?;
+    debug!(target: "STATE TRANSITION", "Verified successfully");
 
     let mut nullifiers = vec![];
     for input in tx.inputs {

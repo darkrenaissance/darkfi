@@ -14,7 +14,7 @@ use crate::{
     Error, Result,
 };
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Keypair {
     pub secret: SecretKey,
     pub public: PublicKey,
@@ -32,7 +32,7 @@ impl Keypair {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct SecretKey(pub pallas::Base);
 
 impl SecretKey {
