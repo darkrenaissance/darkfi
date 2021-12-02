@@ -296,288 +296,79 @@ impl WalletDb {
 
 #[cfg(test)]
 mod tests {
-    // TODO: Clean up, there's a lot of duplicated code here.
     use super::*;
-    use crate::{
-        crypto::{
-            coin::Coin,
-            types::{derive_public_key, CoinBlind, NullifierSerial, ValueCommitBlind},
-            OwnCoin,
-        },
-        util::join_config_path,
-    };
-    use ff::PrimeField;
+    use crate::types::{DrkCoinBlind, DrkSerial, DrkValueBlind};
+    use pasta_curves::{arithmetic::Field, pallas};
+    use rand::rngs::OsRng;
 
-    pub fn init_db(path: &Path, password: String) -> Result<()> {
-        if !password.trim().is_empty() {
-            let contents = include_str!("../../sql/schema.sql");
-            let conn = Connection::open(path)?;
-            debug!(target: "WALLETDB", "OPENED CONNECTION AT PATH {:?}", path);
-            conn.pragma_update(None, "key", &password)?;
-            conn.execute_batch(contents)?;
-        } else {
-            debug!(
-                target: "WALLETDB", "Password is empty. You must set a password to use the wallet."
-            );
-            return Err(Error::from(ClientFailed::EmptyPassword))
-        }
-        Ok(())
+    const WPASS: &str = "darkfi";
+
+    fn dummy_coin(s: &SecretKey, v: u64, t: &DrkTokenId) -> OwnCoin {
+        let serial = DrkSerial::random(&mut OsRng);
+        let note = Note {
+            serial,
+            value: v,
+            token_id: t.clone(),
+            coin_blind: DrkCoinBlind::random(&mut OsRng),
+            value_blind: DrkValueBlind::random(&mut OsRng),
+        };
+
+        let coin = Coin(pallas::Base::random(&mut OsRng));
+        let nullifier = Nullifier::new(s.clone(), serial);
+        OwnCoin { coin, note, secret: s.clone(), nullifier }
     }
 
-    #[test]
-    pub fn test_get_token_id() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
+    #[async_std::test]
+    async fn test_walletdb() -> Result<()> {
+        let wallet = WalletDb::new("sqlite::memory:", WPASS.to_string()).await?;
+        let keypair = Keypair::random(&mut OsRng);
 
-        let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_public_key();
+        // init_db()
+        wallet.init_db().await?;
 
-        wallet.put_keypair(&public, &secret)?;
+        // put_keypair()
+        wallet.put_keypair(&keypair.public, &keypair.secret).await?;
 
         let token_id = DrkTokenId::random(&mut OsRng);
 
-        let note = Note {
-            serial: NullifierSerial::random(&mut OsRng),
-            value: 110,
-            token_id,
-            coin_blind: CoinBlind::random(&mut OsRng),
-            valcom_blind: ValueCommitBlind::random(&mut OsRng),
-        };
+        let c0 = dummy_coin(&keypair.secret, 69, &token_id);
+        let c1 = dummy_coin(&keypair.secret, 420, &token_id);
+        let c2 = dummy_coin(&keypair.secret, 42, &token_id);
+        let c3 = dummy_coin(&keypair.secret, 11, &token_id);
 
-        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
+        // put_own_coins()
+        wallet.put_own_coins(c0).await?;
+        wallet.put_own_coins(c1).await?;
+        wallet.put_own_coins(c2).await?;
+        wallet.put_own_coins(c3).await?;
 
-        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
-        tree.append(MerkleNode::from_coin(&coin))?;
-
-        let witness = IncrementalWitness::from_tree(&tree);
-
-        let nullifier = Nullifier::new(coin.repr);
-
-        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
-
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin)?;
-
-        let id = wallet.get_token_id()?;
-
-        assert_eq!(id.len(), 1);
+        // get_token_id()
+        let id = wallet.get_token_id().await?;
+        assert_eq!(id.len(), 4);
 
         for i in id {
             assert_eq!(i, token_id);
-            assert!(wallet.token_id_exists(&i)?);
+            assert!(wallet.token_id_exists(i).await?);
         }
 
-        std::fs::remove_file(walletdb_path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_get_balances() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test2_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_public_key();
-
-        wallet.put_keypair(&public, &secret)?;
-
-        let token_id = DrkTokenId::random(&mut OsRng);
-
-        let note = Note {
-            serial: NullifierSerial::random(&mut OsRng),
-            value: 110,
-            token_id,
-            coin_blind: CoinBlind::random(&mut OsRng),
-            valcom_blind: ValueCommitBlind::random(&mut OsRng),
-        };
-
-        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-
-        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
-        tree.append(MerkleNode::from_coin(&coin))?;
-
-        let witness = IncrementalWitness::from_tree(&tree);
-
-        let nullifier = Nullifier::new(coin.repr);
-
-        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
-
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin)?;
-
-        let balances = wallet.get_balances()?;
-
-        assert_eq!(balances.list.len(), 1);
-        assert_eq!(balances.list[0].value, 110);
-        assert_eq!(balances.list[0].token_id, token_id);
-
-        std::fs::remove_file(walletdb_path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_save_and_load_keypair() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test3_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_public_key();
-
-        wallet.put_keypair(&public, &secret)?;
-
-        let keypair = wallet.get_keypairs()?[0].clone();
-
-        assert_eq!(public, keypair.public);
-        assert_eq!(secret, keypair.private);
-
-        std::fs::remove_file(walletdb_path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_put_and_get_own_coins() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test4_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_public_key();
-
-        wallet.put_keypair(&public, &secret)?;
-
-        let note = Note {
-            serial: NullifierSerial::random(&mut OsRng),
-            value: 110,
-            token_id: DrkTokenId::random(&mut OsRng),
-            coin_blind: CoinBlind::random(&mut OsRng),
-            valcom_blind: ValueCommitBlind::random(&mut OsRng),
-        };
-
-        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-
-        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
-        tree.append(MerkleNode::from_coin(&coin))?;
-
-        let witness = IncrementalWitness::from_tree(&tree);
-
-        let coin_ser = crate::serial::serialize(&coin.repr);
-
-        assert_eq!(coin, crate::serial::deserialize(&coin_ser)?);
-
-        let nullifier = Nullifier::new(coin.repr);
-
-        let own_coin = OwnCoin {
-            coin,
-            note: note.clone(),
-            secret,
-            witness: witness.clone(),
-            nullifier: nullifier.clone(),
-        };
-
-        wallet.put_own_coins(own_coin)?;
-
-        let own_coin = wallet.get_own_coins()?[0].clone();
-
-        assert_eq!(&own_coin.note.valcom_blind, &note.valcom_blind);
-        assert_eq!(&own_coin.note.coin_blind, &note.coin_blind);
-        assert_eq!(own_coin.secret, secret);
-        assert_eq!(own_coin.witness.root(), witness.root());
-        assert_eq!(own_coin.witness.path(), witness.path());
-        assert_eq!(own_coin.nullifier, nullifier);
-
-        wallet.confirm_spend_coin(&own_coin.coin)?;
-
-        let own_coins = wallet.get_own_coins()?;
-
-        assert_eq!(own_coins.len(), 0);
-
-        wallet.put_own_coins(own_coin)?;
-
-        let own_coins = wallet.get_own_coins()?;
-
-        assert_eq!(own_coins.len(), 1);
-
-        wallet.remove_own_coins()?;
-
-        std::fs::remove_file(walletdb_path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_get_witnesses_and_update_them() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("test5_wallet.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = WalletDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        let secret = DrkSecretKey::random(&mut OsRng);
-        let public = secret.derive_public_key();
-
-        wallet.put_keypair(&public, &secret)?;
-
-        let mut tree = crate::crypto::merkle::CommitmentTree::empty();
-
-        let note = Note {
-            serial: NullifierSerial::random(&mut OsRng),
-            value: 110,
-            token_id: DrkTokenId::random(&mut OsRng),
-            coin_blind: CoinBlind::random(&mut OsRng),
-            valcom_blind: ValueCommitBlind::random(&mut OsRng),
-        };
-
-        let coin = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-
-        let node = MerkleNode::from_coin(&coin);
-        tree.append(node)?;
-        tree.append(node)?;
-        tree.append(node)?;
-        tree.append(node)?;
-
-        let witness = IncrementalWitness::from_tree(&tree);
-
-        // for testing
-        let nullifier = Nullifier::new(coin.repr);
-
-        let own_coin = OwnCoin { coin, note, secret, witness, nullifier };
-
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin.clone())?;
-        wallet.put_own_coins(own_coin)?;
-
-        let coin2 = Coin::new(bls12_381::Scalar::random(&mut OsRng).to_repr());
-
-        let node2 = MerkleNode::from_coin(&coin2);
-        tree.append(node2)?;
-
-        let mut updated_witnesses = wallet.get_witnesses()?;
-
-        updated_witnesses.iter_mut().for_each(|(_, witness)| {
-            witness.append(node2).expect("Append to witness");
-        });
-
-        wallet.update_witnesses(updated_witnesses)?;
-
-        for (_, witness) in wallet.get_witnesses()?.iter() {
-            assert_eq!(tree.root(), witness.root());
-        }
-
-        std::fs::remove_file(walletdb_path)?;
+        // get_balances()
+        let balances = wallet.get_balances().await?;
+        assert_eq!(balances.list.len(), 4);
+        assert_eq!(balances.list[1].value, 420);
+        assert_eq!(balances.list[2].value, 42);
+        assert_eq!(balances.list[3].token_id, token_id);
+
+        // get_keypairs()
+        let keypair_r = wallet.get_keypairs().await?[0].clone();
+        assert_eq!(keypair, keypair_r);
+
+        // get_own_coins()
+        let own_coins = wallet.get_own_coins().await?;
+        assert_eq!(own_coins.len(), 4);
+        assert_eq!(own_coins[0], c0);
+        assert_eq!(own_coins[1], c1);
+        assert_eq!(own_coins[2], c2);
+        assert_eq!(own_coins[3], c3);
 
         Ok(())
     }

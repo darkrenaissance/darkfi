@@ -118,7 +118,11 @@ impl EncryptedNote {
 
 #[test]
 fn test_note_encdec() {
-    use crate::types::*;
+    use crate::{
+        crypto::keypair::Keypair,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+    };
+    use pasta_curves::arithmetic::Field;
 
     let note = Note {
         serial: DrkSerial::random(&mut OsRng),
@@ -128,11 +132,10 @@ fn test_note_encdec() {
         value_blind: DrkValueBlind::random(&mut OsRng),
     };
 
-    let secret = DrkSecretKey::random(&mut OsRng);
-    let public = derive_public_key(secret);
+    let keypair = Keypair::random(&mut OsRng);
 
-    let encrypted_note = note.encrypt(&public).unwrap();
-    let note2 = encrypted_note.decrypt(&secret).unwrap();
+    let encrypted_note = note.encrypt(&keypair.public).unwrap();
+    let note2 = encrypted_note.decrypt(&keypair.secret).unwrap();
     assert_eq!(note.value, note2.value);
     assert_eq!(note.token_id, note2.token_id);
 }

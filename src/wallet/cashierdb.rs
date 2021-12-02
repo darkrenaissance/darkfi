@@ -380,163 +380,141 @@ impl CashierDb {
 
         Ok(())
     }
+
+    pub async fn get_deposit_token_keys_by_network(
+        &self,
+        network: &NetworkName,
+    ) -> Result<Vec<DepositToken>> {
+        debug!("Checking for existing dkey");
+        let network = self.get_value_serialized(network)?;
+        let confirm = self.get_value_serialized(&false)?;
+
+        let mut conn = self.conn.acquire().await?;
+        let rows = sqlx::query(
+            "SELECT d_key_public, token_key_secret, token_key_public, token_id, mint_address
+             FROM deposit_keypairs
+             WHERE network = ?1
+             AND confirm = ?2;",
+        )
+        .bind(network)
+        .bind(confirm)
+        .fetch_all(&mut conn)
+        .await?;
+
+        let mut keys = vec![];
+
+        for row in rows {
+            let drk_public_key = self.get_value_deserialized(row.get("d_key_public"))?;
+            let secret_key = row.get("token_key_secret");
+            let public_key = row.get("token_key_public");
+            let token_id = self.get_value_deserialized(row.get("token_id"))?;
+            let mint_address = self.get_value_deserialized(row.get("mint_address"))?;
+            keys.push(DepositToken {
+                drk_public_key,
+                token_key: TokenKey { secret_key, public_key },
+                token_id,
+                mint_address,
+            });
+        }
+
+        Ok(keys)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use crate::{crypto::types::derive_publickey, serial::serialize, util::join_config_path};
-
-    use ff::Field;
+    use crate::serial::serialize;
+    use pasta_curves::arithmetic::Field;
     use rand::rngs::OsRng;
 
-    pub fn init_db(path: &Path, password: String) -> Result<()> {
-        if !password.trim().is_empty() {
-            let contents = include_str!("../../sql/cashier.sql");
-            let conn = Connection::open(path)?;
-            debug!(target: "CASHIERDB", "OPENED CONNECTION AT PATH {:?}", path);
-            conn.pragma_update(None, "key", &password)?;
-            conn.execute_batch(contents)?;
-        } else {
-            debug!(target: "CASHIERDB", "Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword))
-        }
-        Ok(())
-    }
+    const WPASS: &str = "darkfi";
 
-    #[test]
-    pub fn test_put_main_keys_and_load_them_with_network_name() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test2.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
+    #[async_std::test]
+    async fn test_cashierdb() -> Result<()> {
+        let wallet = CashierDb::new("sqlite::memory:", WPASS.to_string()).await?;
 
-        // btc addr testnet
-        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
-        let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
+        // init_db()
+        wallet.init_db().await?;
 
-        let network = NetworkName::Bitcoin;
+        // BTC testnet address
+        let token_addr_secret = serialize(&String::from("2222222222222222222222222222222222"));
+        let token_addr_public = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
 
-        wallet.put_main_keys(
-            &TokenKey { private_key: token_addr_private.clone(), public_key: token_addr.clone() },
-            &network,
-        )?;
-
-        let keys = wallet.get_main_keys(&network)?;
-
-        assert_eq!(keys.len(), 1);
-
-        assert_eq!(keys[0].private_key, token_addr_private);
-        assert_eq!(keys[0].public_key, token_addr);
-
-        std::fs::remove_file(walletdb_path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_put_deposit_keys_and_load_them() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test3.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        // btc addr testnet
-        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
-        let token_addr_private = serialize(&String::from("2222222222222222222222222222222222"));
-
-        let network = NetworkName::Bitcoin;
-
-        let secret2 = DrkSecretKey::random(&mut OsRng);
-        let public2 = derive_publickey(secret2);
+        let keypair = Keypair::random(&mut OsRng);
         let token_id = DrkTokenId::random(&mut OsRng);
 
-        wallet.put_deposit_keys(
-            &public2,
-            &token_addr_private,
-            &token_addr,
-            &network,
-            &token_id,
-            String::new(),
-        )?;
+        let network = NetworkName::Bitcoin;
 
-        let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;
+        // put_main_keys()
+        wallet
+            .put_main_keys(
+                &TokenKey {
+                    secret_key: token_addr_secret.clone(),
+                    public_key: token_addr_public.clone(),
+                },
+                &network,
+            )
+            .await?;
 
+        // get_main_keys()
+        let keys = wallet.get_main_keys(&network).await?;
         assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].secret_key, token_addr_secret);
+        assert_eq!(keys[0].public_key, token_addr_public);
 
-        assert_eq!(keys[0].private_key, token_addr_private);
-        assert_eq!(keys[0].public_key, token_addr);
+        // put_deposit_keys()
+        wallet
+            .put_deposit_keys(
+                &keypair.public,
+                &token_addr_secret,
+                &token_addr_public,
+                &network,
+                &token_id,
+                String::new(),
+            )
+            .await?;
 
-        let resumed_keys = wallet.get_deposit_token_keys_by_network(&network)?;
+        // get_deposit_token_keys_by_dkey_public()
+        let keys = wallet.get_deposit_token_keys_by_dkey_public(&keypair.public, &network).await?;
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].secret_key, token_addr_secret);
+        assert_eq!(keys[0].public_key, token_addr_public);
 
-        assert_eq!(resumed_keys[0].drk_public_key, public2);
-        assert_eq!(resumed_keys[0].token_key.private_key, token_addr_private);
-        assert_eq!(resumed_keys[0].token_key.public_key, token_addr);
+        // get_deposit_token_keys_by_network()
+        let resumed_keys = wallet.get_deposit_token_keys_by_network(&network).await?;
+        assert_eq!(resumed_keys[0].drk_public_key, keypair.public);
+        assert_eq!(resumed_keys[0].token_key.secret_key, token_addr_secret);
+        assert_eq!(resumed_keys[0].token_key.public_key, token_addr_public);
         assert_eq!(resumed_keys[0].token_id, token_id);
 
-        wallet.confirm_deposit_key_record(&public2, &network)?;
-
-        let keys = wallet.get_deposit_token_keys_by_dkey_public(&public2, &network)?;
-
+        // confirm_deposit_key_record()
+        wallet.confirm_deposit_key_record(&keypair.public, &network).await?;
+        let keys = wallet.get_deposit_token_keys_by_dkey_public(&keypair.public, &network).await?;
         assert_eq!(keys.len(), 0);
 
-        std::fs::remove_file(walletdb_path)?;
+        // put_withdraw_keys()
+        wallet
+            .put_withdraw_keys(
+                &token_addr_public,
+                &keypair.public,
+                &keypair.secret,
+                &network,
+                &token_id,
+                String::new(),
+            )
+            .await?;
 
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_put_withdraw_keys_and_load_them_with_token_key() -> Result<()> {
-        let walletdb_path = join_config_path(&PathBuf::from("cashier_wallet_test.db"))?;
-        let password: String = "darkfi".into();
-        let wallet = CashierDb::new(&walletdb_path, password.clone())?;
-        init_db(&walletdb_path, password)?;
-
-        let secret2 = DrkSecretKey::random(&mut OsRng);
-        let public2 = derive_publickey(secret2);
-        let token_id = DrkTokenId::random(&mut OsRng);
-
-        // btc addr testnet
-        let token_addr = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
-
-        let network = NetworkName::Bitcoin;
-
-        wallet.put_withdraw_keys(
-            &token_addr,
-            &public2,
-            &secret2,
-            &network,
-            &token_id,
-            String::new(),
-        )?;
-
-        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
-
+        // get_withdraw_keys_by_token_public_key()
+        let addr =
+            wallet.get_withdraw_keys_by_token_public_key(&token_addr_public, &network).await?;
         assert!(addr.is_some());
 
-        wallet.confirm_withdraw_key_record(&token_addr, &network)?;
-
-        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
-
+        // confirm_withdraw_key_record()
+        wallet.confirm_withdraw_key_record(&token_addr_public, &network).await?;
+        let addr =
+            wallet.get_withdraw_keys_by_token_public_key(&token_addr_public, &network).await?;
         assert!(addr.is_none());
-
-        wallet.put_withdraw_keys(
-            &token_addr,
-            &public2,
-            &secret2,
-            &network,
-            &token_id,
-            String::new(),
-        )?;
-
-        let addr = wallet.get_withdraw_keys_by_token_public_key(&token_addr, &network)?;
-
-        assert!(addr.is_some());
-
-        wallet.remove_withdraw_and_deposit_keys()?;
-
-        std::fs::remove_file(walletdb_path)?;
 
         Ok(())
     }

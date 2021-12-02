@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_schnorr() {
-        let secret = SecretKey::random();
+        let secret = SecretKey::random(&mut OsRng);
         let message = b"Foo bar";
         let signature = secret.sign(&message[..]);
         let public = PublicKey::from_secret(secret);
