@@ -3,6 +3,7 @@ pub mod partial;
 
 use std::io;
 
+use log::debug;
 use pasta_curves::group::Group;
 
 use crate::{
@@ -94,6 +95,7 @@ impl Transaction {
 
         for (i, input) in self.inputs.iter().enumerate() {
             if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
+                debug!(target: "TX VERIFY", "Failed to verify Spend proof {}", i);
                 return Err(state::VerifyFailed::SpendProof(i))
             }
             valcom_total += &input.revealed.value_commit;
@@ -101,17 +103,20 @@ impl Transaction {
 
         for (i, output) in self.outputs.iter().enumerate() {
             if verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed).is_err() {
+                debug!(target: "TX VERIFY", "Failed to verify Mint proof {}", i);
                 return Err(state::VerifyFailed::MintProof(i))
             }
             valcom_total -= &output.revealed.value_commit;
         }
 
         if valcom_total != DrkValueCommit::identity() {
+            debug!(target: "TX VERIFY", "Missing funds");
             return Err(state::VerifyFailed::MissingFunds)
         }
 
         // Verify token commitments match
         if !self.verify_token_commitments() {
+            debug!(target: "TX VERIFY", "Asset mismatch");
             return Err(state::VerifyFailed::AssetMismatch)
         }
 
@@ -121,12 +126,14 @@ impl Transaction {
         for (i, input) in self.clear_inputs.iter().enumerate() {
             let public = &input.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
+                debug!(target: "TX VERIFY", "Failed to verify Clear Input signature {}", i);
                 return Err(state::VerifyFailed::ClearInputSignature(i))
             }
         }
         for (i, input) in self.inputs.iter().enumerate() {
             let public = &input.revealed.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {
+                debug!(target: "TX VERIFY", "Failed to verify Input signature {}", i);
                 return Err(state::VerifyFailed::InputSignature(i))
             }
         }
