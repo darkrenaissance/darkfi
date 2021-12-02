@@ -22,7 +22,7 @@ pub struct Keypair {
 
 impl Keypair {
     pub fn new(secret: SecretKey) -> Self {
-        let public = PublicKey::from_secret(secret.clone());
+        let public = PublicKey::from_secret(secret);
         Keypair { secret, public }
     }
 

@@ -451,7 +451,7 @@ impl Circuit<pallas::Base> for SpendContract {
 
         let sig_pub = {
             let nullifier_k = OrchardFixedBases::NullifierK;
-            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
+            let nullifier_k = FixedPoint::from_inner(ecc_chip, nullifier_k);
             nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), sig_secret)?
         };
 

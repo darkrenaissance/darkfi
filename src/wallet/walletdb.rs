@@ -308,14 +308,14 @@ mod tests {
         let note = Note {
             serial,
             value: v,
-            token_id: t.clone(),
+            token_id: *t,
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
         };
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
-        let nullifier = Nullifier::new(s.clone(), serial);
-        OwnCoin { coin, note, secret: s.clone(), nullifier }
+        let nullifier = Nullifier::new(*s, serial);
+        OwnCoin { coin, note, secret: *s, nullifier }
     }
 
     #[async_std::test]
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(balances.list[3].token_id, token_id);
 
         // get_keypairs()
-        let keypair_r = wallet.get_keypairs().await?[0].clone();
+        let keypair_r = wallet.get_keypairs().await?[0];
         assert_eq!(keypair, keypair_r);
 
         // get_own_coins()

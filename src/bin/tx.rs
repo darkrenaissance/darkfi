@@ -147,7 +147,7 @@ fn main() -> Result<()> {
 
     // Now spend
     let (coin, note) = &state.own_coins[0];
-    let node = MerkleNode(coin.0.clone());
+    let node = MerkleNode(coin.0);
     let (leaf_position, merkle_path) = state.tree.authentication_path(&node).unwrap();
 
     let builder = tx::TransactionBuilder {
@@ -156,7 +156,7 @@ fn main() -> Result<()> {
             leaf_position,
             merkle_path,
             secret: keypair.secret,
-            note: note.clone(),
+            note: *note,
         }],
         outputs: vec![tx::TransactionBuilderOutputInfo {
             value: 110,

@@ -123,7 +123,7 @@ pub fn create_mint_proof(
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    let proof = Proof::create(&pk, &[c], &public_inputs)?;
+    let proof = Proof::create(pk, &[c], &public_inputs)?;
     debug!("Prove: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))

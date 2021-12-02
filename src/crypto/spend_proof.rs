@@ -157,7 +157,7 @@ pub fn create_spend_proof(
         secret,
         leaf_position,
         merkle_path.clone(),
-        signature_secret.clone(),
+        signature_secret,
     );
 
     let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
@@ -178,7 +178,7 @@ pub fn create_spend_proof(
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    let proof = Proof::create(&pk, &[c], &public_inputs)?;
+    let proof = Proof::create(pk, &[c], &public_inputs)?;
     debug!("Prove: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))

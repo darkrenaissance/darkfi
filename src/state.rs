@@ -156,7 +156,7 @@ impl State {
 
                     let own_coin = OwnCoin {
                         coin,
-                        note: note.clone(),
+                        note,
                         secret: *secret,
                         // witness: witness.clone(),
                         nullifier,
@@ -190,7 +190,7 @@ impl State {
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
         debug!("Check if it is a valid cashier public key");
-        self.public_keys.contains(&public)
+        self.public_keys.contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {

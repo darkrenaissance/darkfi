@@ -90,7 +90,7 @@ impl Client {
         }
 
         // TODO: Think about multiple keypairs
-        let main_keypair = wallet.get_keypairs().await?[0].clone();
+        let main_keypair = wallet.get_keypairs().await?[0];
         info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
 
         debug!("Creating GatewayClient");
@@ -127,7 +127,7 @@ impl Client {
 
         if clear_input {
             // TODO: FIXME:
-            let signature_secret = self.main_keypair.clone().secret;
+            let signature_secret = self.main_keypair.secret;
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
@@ -151,7 +151,7 @@ impl Client {
                     leaf_position,
                     merkle_path,
                     secret: own_coin.secret,
-                    note: own_coin.note.clone(),
+                    note: own_coin.note,
                 };
 
                 inputs.push(input);
@@ -307,7 +307,7 @@ impl Client {
         debug!("Start subscriber for darkfid");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
-        let secret_key = self.main_keypair.secret.clone();
+        let secret_key = self.main_keypair.secret;
         let wallet = self.wallet.clone();
 
         let task: smol::Task<Result<()>> = executor.spawn(async move {

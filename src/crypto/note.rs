@@ -101,7 +101,7 @@ impl Decodable for EncryptedNote {
 
 impl EncryptedNote {
     pub fn decrypt(&self, secret: &SecretKey) -> Result<Note> {
-        let shared_secret = sapling_ka_agree(&secret, &self.ephem_public);
+        let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
         let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];

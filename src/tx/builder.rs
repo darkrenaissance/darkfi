@@ -104,7 +104,7 @@ impl TransactionBuilder {
                 input.secret,
                 input.leaf_position,
                 input.merkle_path,
-                signature_secret.clone(),
+                signature_secret,
             )?;
 
             // First we make the tx then sign after
