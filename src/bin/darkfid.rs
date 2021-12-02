@@ -536,9 +536,8 @@ async fn start(
     local_cashier: Option<&str>,
     config: &DarkfidConfig,
 ) -> Result<()> {
-    let wallet =
-        WalletDb::new(expand_path(&config.wallet_path)?.as_path(), config.wallet_password.clone())
-            .await?;
+    let wallet_path = format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
+    let wallet = WalletDb::new(&wallet_path, config.wallet_password.clone()).await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -637,12 +636,9 @@ async fn main() -> Result<()> {
 
     if args.is_present("refresh") {
         debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
-
-        let wallet = WalletDb::new(
-            expand_path(&config.wallet_path)?.as_path(),
-            config.wallet_password.clone(),
-        )
-        .await?;
+        let wallet_path =
+            format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
+        let wallet = WalletDb::new(&wallet_path, config.wallet_password.clone()).await?;
 
         wallet.remove_own_coins().await?;
 

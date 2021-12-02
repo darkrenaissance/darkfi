@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr};
+use std::str::FromStr;
 
 use async_std::sync::Arc;
 use log::{debug, error, info};
@@ -45,16 +45,14 @@ pub struct CashierDb {
 impl WalletApi for CashierDb {}
 
 impl CashierDb {
-    pub async fn new(path: &Path, password: String) -> Result<CashierDbPtr> {
+    pub async fn new(path: &str, password: String) -> Result<CashierDbPtr> {
         debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
-        let p = format!("sqlite://{}", path.to_str().unwrap());
-
-        let connect_opts = SqliteConnectOptions::from_str(&p)?
+        let connect_opts = SqliteConnectOptions::from_str(path)?
             .pragma("key", password)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);

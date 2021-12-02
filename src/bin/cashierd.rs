@@ -85,11 +85,10 @@ impl Cashierd {
     async fn new(config: CashierdConfig) -> Result<Self> {
         debug!(target: "CASHIER DAEMON", "Initialize");
 
-        let cashier_wallet = CashierDb::new(
-            expand_path(&config.cashier_wallet_path)?.as_path(),
-            config.cashier_wallet_password.clone(),
-        )
-        .await?;
+        let wallet_path =
+            format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
+        let cashier_wallet =
+            CashierDb::new(&wallet_path, config.cashier_wallet_password.clone()).await?;
 
         let mut networks = Vec::new();
 
@@ -673,11 +672,10 @@ async fn start(
 ) -> Result<()> {
     let mut cashierd = Cashierd::new(config.clone()).await?;
 
-    let client_wallet = WalletDb::new(
-        expand_path(&config.client_wallet_path.clone())?.as_path(),
-        config.client_wallet_password.clone(),
-    )
-    .await?;
+    let client_wallet_path =
+        format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
+    let client_wallet =
+        WalletDb::new(&client_wallet_path, config.client_wallet_password.clone()).await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -757,19 +755,16 @@ async fn main() -> Result<()> {
     if args.is_present("refresh") {
         debug!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
 
-        let client_wallet = WalletDb::new(
-            expand_path(&config.client_wallet_path)?.as_path(),
-            config.client_wallet_password.clone(),
-        )
-        .await?;
+        let client_wallet_path =
+            format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
+        let client_wallet =
+            WalletDb::new(&client_wallet_path, config.client_wallet_password.clone()).await?;
 
         client_wallet.remove_own_coins().await?;
 
-        let wallet = CashierDb::new(
-            expand_path(&config.cashier_wallet_path)?.as_path(),
-            config.cashier_wallet_password.clone(),
-        )
-        .await?;
+        let wallet_path =
+            format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
+        let wallet = CashierDb::new(&wallet_path, config.cashier_wallet_password.clone()).await?;
 
         wallet.remove_withdraw_and_deposit_keys().await?;
 

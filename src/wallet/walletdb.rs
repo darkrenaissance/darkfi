@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr};
+use std::str::FromStr;
 
 use async_std::sync::Arc;
 use log::{debug, error, info};
@@ -44,23 +44,21 @@ pub struct WalletDb {
 impl WalletApi for WalletDb {}
 
 impl WalletDb {
-    pub async fn new(path: &Path, password: String) -> Result<WalletPtr> {
+    pub async fn new(path: &str, password: String) -> Result<WalletPtr> {
         debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
-        let p = format!("sqlite://{}", path.to_str().unwrap());
-
-        let connect_opts = SqliteConnectOptions::from_str(&p)?
+        let connect_opts = SqliteConnectOptions::from_str(path)?
             .pragma("key", password)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
 
         let conn = SqlitePool::connect_with(connect_opts).await?;
 
-        info!("Opened connection at path sqlite://{:?}", path);
+        info!("Opened connection at path {}", path);
         Ok(Arc::new(WalletDb { conn }))
     }
 
