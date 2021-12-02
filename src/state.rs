@@ -12,7 +12,6 @@ use crate::{
         proof::VerifyingKey,
         OwnCoin,
     },
-    serial::serialize,
     tx::Transaction,
     wallet::walletdb::WalletPtr,
     Result,
@@ -64,10 +63,6 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
         if !state.is_valid_cashier_public_key(&input.signature_public) {
-            debug!(
-                "CASHIER PUBLIC: {}",
-                bs58::encode(serialize(&input.signature_public)).into_string()
-            );
             log::error!(target: "STATE TRANSITION", "Invalid cashier public key");
             return Err(VerifyFailed::InvalidCashierKey(i))
         }

@@ -28,23 +28,6 @@ use crate::{
     Result,
 };
 
-pub struct SpendProofKeys {
-    pub vk: VerifyingKey,
-    pub pk: ProvingKey,
-}
-
-impl SpendProofKeys {
-    pub fn initialize() -> Self {
-        let start = Instant::now();
-        debug!("Building proof verifying key for the spend contract...");
-        let vk = VerifyingKey::build(11, SpendContract::default());
-        debug!("Building proof proving key for the spend contract...");
-        let pk = ProvingKey::build(11, SpendContract::default());
-        debug!("Setup: [{:?}]", start.elapsed());
-        SpendProofKeys { vk, pk }
-    }
-}
-
 pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
@@ -152,6 +135,7 @@ impl Decodable for SpendRevealedValues {
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_spend_proof(
+    pk: &ProvingKey,
     value: u64,
     token_id: DrkTokenId,
     value_blind: DrkValueBlind,
@@ -163,8 +147,6 @@ pub fn create_spend_proof(
     merkle_path: Vec<MerkleNode>,
     signature_secret: SecretKey,
 ) -> Result<(Proof, SpendRevealedValues)> {
-    const K: u32 = 11;
-
     let revealed = SpendRevealedValues::compute(
         value,
         token_id,
@@ -193,11 +175,6 @@ pub fn create_spend_proof(
         merkle_path: Some(merkle_path.try_into().unwrap()),
         sig_secret: Some(signature_secret.0),
     };
-
-    let start = Instant::now();
-    // TODO: Don't always build this
-    let pk = ProvingKey::build(K, SpendContract::default());
-    debug!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();

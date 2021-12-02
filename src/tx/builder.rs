@@ -11,6 +11,7 @@ use crate::{
         merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
         note::Note,
+        proof::ProvingKey,
         schnorr::SchnorrSecret,
         spend_proof::create_spend_proof,
     },
@@ -67,8 +68,7 @@ impl TransactionBuilder {
         total
     }
 
-    // TODO: pass proving keys as args to this function
-    pub fn build(self) -> Result<Transaction> {
+    pub fn build(self, mint_pk: &ProvingKey, spend_pk: &ProvingKey) -> Result<Transaction> {
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
@@ -94,6 +94,7 @@ impl TransactionBuilder {
             let signature_secret = SecretKey::random(&mut OsRng);
 
             let (proof, revealed) = create_spend_proof(
+                spend_pk,
                 input.note.value,
                 input.note.token_id,
                 input.note.value_blind,
@@ -128,6 +129,7 @@ impl TransactionBuilder {
             let coin_blind = DrkCoinBlind::random(&mut OsRng);
 
             let (mint_proof, revealed) = create_mint_proof(
+                mint_pk,
                 output.value,
                 output.token_id,
                 value_blind,

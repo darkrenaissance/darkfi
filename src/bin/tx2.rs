@@ -10,7 +10,7 @@ use drk::{
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
-        proof::VerifyingKey,
+        proof::{ProvingKey, VerifyingKey},
     },
     state::{state_transition, ProgramState, StateUpdate},
     tx, Result,
@@ -133,7 +133,9 @@ fn main() -> Result<()> {
         }],
     };
 
-    let tx = builder.build()?;
+    let mint_pk = ProvingKey::build(K, MintContract::default());
+    let spend_pk = ProvingKey::build(K, SpendContract::default());
+    let tx = builder.build(&mint_pk, &spend_pk)?;
 
     tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
 
@@ -162,7 +164,7 @@ fn main() -> Result<()> {
         }],
     };
 
-    let tx = builder.build()?;
+    let tx = builder.build(&mint_pk, &spend_pk)?;
 
     let update = state_transition(&state, tx)?;
     state.apply(update);

@@ -23,23 +23,6 @@ use crate::{
     Result,
 };
 
-pub struct MintProofKeys {
-    pub vk: VerifyingKey,
-    pub pk: ProvingKey,
-}
-
-impl MintProofKeys {
-    pub fn initialize() -> Self {
-        let start = Instant::now();
-        debug!("Building proof verifying key for the mint contract...");
-        let vk = VerifyingKey::build(11, MintContract::default());
-        debug!("Building proof proving key for the mint contract...");
-        let pk = ProvingKey::build(11, MintContract::default());
-        debug!("Setup: [{:?}]", start.elapsed());
-        MintProofKeys { vk, pk }
-    }
-}
-
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
@@ -106,6 +89,7 @@ impl Decodable for MintRevealedValues {
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_mint_proof(
+    pk: &ProvingKey,
     value: u64,
     token_id: DrkTokenId,
     value_blind: DrkValueBlind,
@@ -114,8 +98,6 @@ pub fn create_mint_proof(
     coin_blind: DrkCoinBlind,
     public_key: PublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {
-    const K: u32 = 11;
-
     let revealed = MintRevealedValues::compute(
         value,
         token_id,
@@ -138,11 +120,6 @@ pub fn create_mint_proof(
         value_blind: Some(value_blind),
         asset_blind: Some(token_blind),
     };
-
-    let start = Instant::now();
-    // TODO: Don't always build this
-    let pk = ProvingKey::build(K, MintContract::default());
-    debug!("Setup: [{:?}]", start.elapsed());
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();

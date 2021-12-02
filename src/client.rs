@@ -7,10 +7,12 @@ use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
+    circuit::{MintContract, SpendContract},
     crypto::{
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
+        proof::ProvingKey,
         OwnCoin,
     },
     serial::{serialize, Decodable, Encodable},
@@ -70,6 +72,8 @@ pub struct Client {
     pub main_keypair: Keypair,
     gateway: GatewayClient,
     wallet: WalletPtr,
+    mint_pk: ProvingKey,
+    spend_pk: ProvingKey,
 }
 
 impl Client {
@@ -93,7 +97,11 @@ impl Client {
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
-        let client = Client { main_keypair, gateway, wallet };
+        // TODO: These should go to a better place.
+        let mint_pk = ProvingKey::build(11, MintContract::default());
+        let spend_pk = ProvingKey::build(11, SpendContract::default());
+
+        let client = Client { main_keypair, gateway, wallet, mint_pk, spend_pk };
         Ok(client)
     }
 
@@ -172,7 +180,7 @@ impl Client {
         let builder = tx::TransactionBuilder { clear_inputs, inputs, outputs };
         let tx: tx::Transaction;
         let mut tx_data = vec![];
-        tx = builder.build()?;
+        tx = builder.build(&self.mint_pk, &self.spend_pk)?;
         tx.encode(&mut tx_data).expect("encode tx");
 
         let slab = Slab::new(tx_data);
@@ -182,7 +190,9 @@ impl Client {
         let state = &*state.lock().await;
         state_transition(state, tx)?;
 
+        debug!("Sending slab to gateway");
         self.gateway.put_slab(slab).await?;
+        debug!("Sent successfully");
         Ok(coins)
     }
 
