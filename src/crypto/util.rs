@@ -10,16 +10,16 @@ use super::constants::fixed_bases::{
 };
 use crate::types::*;
 
-pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> DrkScalar {
+pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
     let mut hasher = Params::new().hash_length(64).personal(persona).to_state();
     hasher.update(a);
     hasher.update(b);
     let ret = hasher.finalize();
-    DrkScalar::from_bytes_wide(ret.as_array())
+    pallas::Scalar::from_bytes_wide(ret.as_array())
 }
 
 #[allow(non_snake_case)]
-pub fn pedersen_commitment_scalar(value: DrkScalar, blind: DrkValueBlind) -> DrkValueCommit {
+pub fn pedersen_commitment_scalar(value: pallas::Scalar, blind: DrkValueBlind) -> DrkValueCommit {
     let hasher = DrkValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
     let V = hasher(&VALUE_COMMITMENT_V_BYTES);
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
