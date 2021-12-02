@@ -7,7 +7,7 @@ PREFIX = /usr/local
 CARGO = cargo
 
 # Here it's possible to append "cashierd" and "gatewayd".
-BINS = drk darkfid cashierd gatewayd
+BINS = drk darkfid
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -16,22 +16,20 @@ BINDEPS = \
 	$(shell find token -type f) \
 	$(shell find sql -type f)
 
-#all: $(BINS)
-all:
-	cargo build --release --all-features --lib
+all: $(BINS)
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@
-	cp target/release/$@ $@
+	cp -f target/release/$@ $@
 
 test:
-	$(CARGO) test --release --all-features --lib
+	$(CARGO) test --release --all-features
 
 fix:
 	$(CARGO) fix --release --all-features --allow-dirty
 
 clippy:
-	$(CARGO) clippy --release --all-features --lib
+	$(CARGO) clippy --release --all-features
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
