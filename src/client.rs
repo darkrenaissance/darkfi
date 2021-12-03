@@ -261,6 +261,7 @@ impl Client {
         let update = state_transition(st, tx)?;
         debug!("Successfully passed state_transition");
         let mut st = state.lock().await;
+        debug!("Trying to apply the new state");
         st.apply(update, secret_keys, notify, wallet).await?;
         debug!("Successfully passed state.apply");
         Ok(())
