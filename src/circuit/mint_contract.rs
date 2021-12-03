@@ -10,32 +10,19 @@ use halo2_gadgets::{
     },
     poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
-    sinsemilla::{
-        chip::{SinsemillaChip, SinsemillaConfig},
-        merkle::chip::{MerkleChip, MerkleConfig},
-    },
     utilities::{
         lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
     },
 };
 use pasta_curves::pallas;
 
-use crate::crypto::constants::{
-    sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-    OrchardFixedBases,
-};
+use crate::crypto::constants::OrchardFixedBases;
 
 #[derive(Clone, Debug)]
 pub struct MintConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig,
-    merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_1:
-        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_2:
-        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
@@ -95,9 +82,7 @@ impl Circuit<pallas::Base> for MintContract {
             meta.advice_column(),
         ];
 
-        // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -151,51 +136,7 @@ impl Circuit<pallas::Base> for MintContract {
             rc_b,
         );
 
-        // Configuration for a Sinsemilla hash instantiation and a
-        // Merkle hash instantiation using this Sinsemilla instance.
-        // Since the Sinsemilla config uses only 5 advice columns,
-        // we can fit two instances side-by-side.
-        let (sinsemilla_config_1, merkle_config_1) = {
-            let sinsemilla_config_1 = SinsemillaChip::configure(
-                meta,
-                advices[..5].try_into().unwrap(),
-                advices[6],
-                lagrange_coeffs[0],
-                lookup,
-                range_check.clone(),
-            );
-            let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
-            (sinsemilla_config_1, merkle_config_1)
-        };
-
-        // Configuration for a Sinsemilla hash instantiation and a
-        // Merkle hash instantiation using this Sinsemilla instance.
-        // Since the Sinsemilla config uses only 5 advice columns,
-        // we can fit two instances side-by-side.
-        let (sinsemilla_config_2, merkle_config_2) = {
-            let sinsemilla_config_2 = SinsemillaChip::configure(
-                meta,
-                advices[5..].try_into().unwrap(),
-                advices[7],
-                lagrange_coeffs[1],
-                lookup,
-                range_check,
-            );
-            let merkle_config_2 = MerkleChip::configure(meta, sinsemilla_config_2.clone());
-
-            (sinsemilla_config_2, merkle_config_2)
-        };
-
-        MintConfig {
-            primary,
-            advices,
-            ecc_config,
-            merkle_config_1,
-            merkle_config_2,
-            sinsemilla_config_1,
-            sinsemilla_config_2,
-            poseidon_config,
-        }
+        MintConfig { primary, advices, ecc_config, poseidon_config }
     }
 
     fn synthesize(
@@ -203,9 +144,6 @@ impl Circuit<pallas::Base> for MintContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), plonk::Error> {
-        // Load the Sinsemilla generator lookup table used by the whole circuit.
-        SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
-
         let ecc_chip = config.ecc_chip();
 
         let pub_x = self.load_private(

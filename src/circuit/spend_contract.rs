@@ -1,9 +1,6 @@
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn, Selector,
-    },
-    poly::Rotation,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 use halo2_gadgets::{
     ecc::{
@@ -30,10 +27,10 @@ use crate::crypto::constants::{
     OrchardFixedBases,
 };
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct SpendConfig {
     primary: Column<InstanceColumn>,
-    q_add: Selector,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig,
     merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
@@ -133,18 +130,6 @@ impl Circuit<pallas::Base> for SpendContract {
             meta.advice_column(),
         ];
 
-        // Addition of three field elements
-        let q_add = meta.selector();
-        meta.create_gate("a+b+c", |meta| {
-            let q_add = meta.query_selector(q_add);
-            let sum = meta.query_advice(advices[5], Rotation::cur());
-            let a = meta.query_advice(advices[6], Rotation::cur());
-            let b = meta.query_advice(advices[7], Rotation::cur());
-            let c = meta.query_advice(advices[8], Rotation::cur());
-
-            vec![q_add * (a + b + c - sum)]
-        });
-
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
         let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
@@ -238,7 +223,6 @@ impl Circuit<pallas::Base> for SpendContract {
 
         SpendConfig {
             primary,
-            q_add,
             advices,
             ecc_config,
             merkle_config_1,
