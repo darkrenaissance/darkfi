@@ -254,12 +254,15 @@ impl Client {
         let mut file = std::fs::File::create("/tmp/payload.txt")?;
         file.write_all(&payload)?;
         */
+        debug!("Decoding payload");
         let tx = tx::Transaction::decode(&payload[..])?;
 
         let st = &*state.lock().await;
         let update = state_transition(st, tx)?;
+        debug!("Successfully passed state_transition");
         let mut st = state.lock().await;
         st.apply(update, secret_keys, notify, wallet).await?;
+        debug!("Successfully passed state.apply");
         Ok(())
     }
 

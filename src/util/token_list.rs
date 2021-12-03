@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::{
     types::DrkTokenId,
-    util::{generate_id, NetworkName},
+    util::{generate_id2, NetworkName},
     Error, Result,
 };
 
@@ -100,7 +100,7 @@ impl DrkTokenList {
         symbol: &str,
     ) -> Result<(String, DrkTokenId)> {
         if let Some(token_id) = &token_list.search_id(symbol)? {
-            return Ok((symbol.to_string(), generate_id(token_id, network_name)?))
+            return Ok((symbol.to_string(), generate_id2(token_id, network_name)?))
         };
 
         Err(Error::NotSupportedToken)
@@ -197,17 +197,17 @@ mod tests {
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Solana]["SOL"],
-            generate_id(&sol_tokens2.search_id("SOL")?.unwrap(), &NetworkName::Solana)?
+            generate_id2(&sol_tokens2.search_id("SOL")?.unwrap(), &NetworkName::Solana)?
         );
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Bitcoin]["BTC"],
-            generate_id(&btc_tokens2.search_id("BTC")?.unwrap(), &NetworkName::Bitcoin)?
+            generate_id2(&btc_tokens2.search_id("BTC")?.unwrap(), &NetworkName::Bitcoin)?
         );
 
         assert_eq!(
             drk_token.tokens[&NetworkName::Ethereum]["WBTC"],
-            generate_id(&eth_tokens2.search_id("WBTC")?.unwrap(), &NetworkName::Ethereum)?
+            generate_id2(&eth_tokens2.search_id("WBTC")?.unwrap(), &NetworkName::Ethereum)?
         );
 
         Ok(())

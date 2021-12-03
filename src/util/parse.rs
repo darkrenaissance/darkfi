@@ -43,6 +43,36 @@ pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
     Ok(token_id)
 }
 
+// YOLO
+pub fn generate_id2(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
+    let mut num = 0_u64;
+
+    match network {
+        NetworkName::Solana => {
+            for i in ['s', 'o', 'l'] {
+                num += i as u64;
+            }
+        }
+        NetworkName::Bitcoin => {
+            for i in ['b', 't', 'c'] {
+                num += i as u64;
+            }
+        }
+        NetworkName::Ethereum => {
+            for i in ['e', 't', 'h'] {
+                num += i as u64;
+            }
+        }
+        NetworkName::Empty => unimplemented!(),
+    }
+
+    for i in tkn_str.chars() {
+        num += i as u64;
+    }
+
+    Ok(DrkTokenId::from(num))
+}
+
 pub fn assign_id(
     network: &NetworkName,
     token: &str,

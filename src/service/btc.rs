@@ -44,7 +44,7 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use crate::{
     crypto::keypair::PublicKey as DrkPublicKey,
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id, NetworkName},
+    util::{generate_id2, NetworkName},
     Error, Result,
 };
 
@@ -410,7 +410,10 @@ impl BtcClient {
             .send(TokenNotification {
                 network: NetworkName::Bitcoin,
                 // is btc an acceptable token name?
-                token_id: generate_id("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", &NetworkName::Bitcoin)?,
+                token_id: generate_id2(
+                    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                    &NetworkName::Bitcoin,
+                )?,
                 drk_pub_key,
                 received_balance: amnt as u64,
                 decimals: 8,

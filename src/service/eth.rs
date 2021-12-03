@@ -16,7 +16,7 @@ use crate::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id, parse::truncate, NetworkName},
+    util::{generate_id2, parse::truncate, NetworkName},
     Error, Result,
 };
 
@@ -277,7 +277,7 @@ impl EthClient {
         send_notification
             .send(TokenNotification {
                 network: NetworkName::Ethereum,
-                token_id: generate_id(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
+                token_id: generate_id2(ETH_NATIVE_TOKEN_ID, &NetworkName::Ethereum)?,
                 drk_pub_key,
                 // TODO FIX
                 received_balance: received_balance.to_u64_digits()[0],

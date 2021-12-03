@@ -28,7 +28,7 @@ use drk::{
     service::{bridge, bridge::Bridge},
     state::State,
     types::DrkTokenId,
-    util::{expand_path, generate_id, join_config_path, parse::truncate, NetworkName},
+    util::{expand_path, generate_id2, join_config_path, parse::truncate, NetworkName},
     wallet::{
         cashierdb::{CashierDb, TokenKey},
         walletdb::WalletDb,
@@ -206,7 +206,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            let token_id = generate_id(mint_address, &network)?;
+            let token_id = generate_id2(mint_address, &network)?;
 
             let mint_address_opt = Self::check_token_id(&network, mint_address)?;
 
@@ -331,7 +331,7 @@ impl Cashierd {
         }
 
         let result: Result<String> = async {
-            let token_id: DrkTokenId = generate_id(mint_address, &network)?;
+            let token_id: DrkTokenId = generate_id2(mint_address, &network)?;
 
             let mint_address_opt = Self::check_token_id(&network, mint_address)?;
 

@@ -26,7 +26,7 @@ use crate::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id, parse::truncate, NetworkName},
+    util::{generate_id2, parse::truncate, NetworkName},
     Error, Result,
 };
 
@@ -231,7 +231,7 @@ impl SolClient {
             send_notification
                 .send(TokenNotification {
                     network: NetworkName::Solana,
-                    token_id: generate_id(&mint.unwrap().to_string(), &NetworkName::Solana)?,
+                    token_id: generate_id2(&mint.unwrap().to_string(), &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
                     decimals: decimals as u16,
@@ -247,7 +247,7 @@ impl SolClient {
             send_notification
                 .send(TokenNotification {
                     network: NetworkName::Solana,
-                    token_id: generate_id(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
+                    token_id: generate_id2(SOL_NATIVE_TOKEN_ID, &NetworkName::Solana)?,
                     drk_pub_key,
                     received_balance: amnt,
                     decimals: decimals as u16,

@@ -13,7 +13,7 @@ use drk::{
     },
     state::{state_transition, ProgramState, StateUpdate},
     tx,
-    types::DrkTokenId,
+    util::{generate_id2, NetworkName},
     Result,
 };
 
@@ -118,7 +118,8 @@ fn main() -> Result<()> {
         secrets: vec![keypair.secret],
     };
 
-    let token_id = DrkTokenId::from(110);
+    let token_id =
+        generate_id2("So11111111111111111111111111111111111111112", &NetworkName::Solana)?;
 
     let builder = tx::TransactionBuilder {
         clear_inputs: vec![tx::TransactionBuilderClearInputInfo {
