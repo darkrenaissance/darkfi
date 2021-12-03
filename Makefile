@@ -26,7 +26,7 @@ test:
 	$(CARGO) test --release --all-features
 
 fix:
-	$(CARGO) fix --release --all-features --allow-dirty
+	$(CARGO) clippy --release --all-features --fix --allow-dirty
 
 clippy:
 	$(CARGO) clippy --release --all-features
