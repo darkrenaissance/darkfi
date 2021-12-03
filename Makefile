@@ -24,6 +24,8 @@ $(BINS): $(BINDEPS)
 
 test:
 	$(CARGO) test --release --all-features
+	$(CARGO) build --release --all-features --bin tx
+	./target/release/tx
 
 fix:
 	$(CARGO) clippy --release --all-features --fix --allow-dirty
