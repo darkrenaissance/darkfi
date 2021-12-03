@@ -16,7 +16,7 @@ use crate::{
     },
     serial::{serialize, Decodable, Encodable},
     service::GatewayClient,
-    state::{state_transition, State},
+    state::{state_transition, State, StateUpdate},
     tx,
     types::DrkTokenId,
     wallet::{
@@ -257,13 +257,22 @@ impl Client {
         debug!("Decoding payload");
         let tx = tx::Transaction::decode(&payload[..])?;
 
-        let st = &*state.lock().await;
-        let update = state_transition(st, tx)?;
-        debug!("Successfully passed state_transition");
-        let mut st = state.lock().await;
+        let update: StateUpdate;
+
+        // This is separate because otherwise the mutex is never unlocked.
+        {
+            debug!("Acquiring state lock");
+            let state = &*state.lock().await;
+            update = state_transition(state, tx)?;
+            debug!("Successfully passed state_transition");
+        }
+
+        debug!("Acquiring state lock");
+        let mut state = state.lock().await;
         debug!("Trying to apply the new state");
-        st.apply(update, secret_keys, notify, wallet).await?;
+        state.apply(update, secret_keys, notify, wallet).await?;
         debug!("Successfully passed state.apply");
+
         Ok(())
     }
 
