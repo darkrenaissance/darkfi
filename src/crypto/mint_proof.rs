@@ -8,6 +8,7 @@ use log::debug;
 use pasta_curves::{
     arithmetic::{CurveAffine, FieldExt},
     group::Curve,
+    pallas,
 };
 
 use crate::{
@@ -19,10 +20,11 @@ use crate::{
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     serial::{Decodable, Encodable},
-    types::*,
+    types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
     Result,
 };
 
+#[derive(Debug)]
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
@@ -51,7 +53,7 @@ impl MintRevealedValues {
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
 
-    fn make_outputs(&self) -> [DrkCircuitField; 5] {
+    fn make_outputs(&self) -> [pallas::Base; 5] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 

@@ -14,6 +14,7 @@ use crate::{
     Result,
 };
 
+#[derive(Debug)]
 pub struct Signature {
     commit: pallas::Point,
     response: pallas::Scalar,

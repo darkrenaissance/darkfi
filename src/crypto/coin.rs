@@ -31,7 +31,6 @@ impl Decodable for Coin {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
-        let result = Self::from_bytes(&bytes);
-        Ok(result)
+        Ok(Self::from_bytes(&bytes))
     }
 }

@@ -160,7 +160,57 @@ impl Decodable for PublicKey {
         if result.is_some().into() {
             Ok(PublicKey(result.unwrap()))
         } else {
+            log::debug!("Failed decoding PublicKey");
             Err(Error::BadOperationType)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crypto::util::pedersen_commitment_scalar,
+        serial::{deserialize, serialize},
+    };
+
+    #[test]
+    fn test_pasta_serialization() -> Result<()> {
+        let fifty_five = pallas::Base::from(55);
+        let serialized = serialize(&fifty_five);
+        assert_eq!(
+            serialized,
+            vec![
+                55, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0
+            ]
+        );
+        assert_eq!(deserialize(&serialized).ok(), Some(fifty_five));
+
+        let fourtwenty = pallas::Scalar::from(42069);
+        let serialized = serialize(&fourtwenty);
+        assert_eq!(
+            serialized,
+            vec![
+                85, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0
+            ]
+        );
+        assert_eq!(deserialize(&serialized).ok(), Some(fourtwenty));
+
+        let a = pallas::Scalar::from(420);
+        let b = pallas::Scalar::from(69);
+        let pc: pallas::Point = pedersen_commitment_scalar(a, b);
+        let serialized = serialize(&pc);
+        assert_eq!(
+            serialized,
+            vec![
+                55, 48, 126, 42, 114, 27, 18, 55, 155, 141, 83, 75, 44, 50, 244, 223, 254, 216, 22,
+                167, 208, 59, 212, 201, 150, 149, 96, 207, 216, 74, 60, 131
+            ]
+        );
+        assert_eq!(deserialize(&serialized).ok(), Some(pc));
+
+        Ok(())
     }
 }

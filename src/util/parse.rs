@@ -195,11 +195,10 @@ pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> 
     Ok(amount)
 }
 
-#[allow(unused_imports)]
+#[cfg(test)]
 mod tests {
-    use num_bigint::ToBigUint;
-
     use super::{decode_base10, encode_base10, truncate};
+    use num_bigint::ToBigUint;
 
     #[test]
     fn test_decode_base10() {

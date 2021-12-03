@@ -248,7 +248,13 @@ impl Client {
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
     ) -> Result<()> {
         debug!("Build tx from slab and update the state");
-        let tx = tx::Transaction::decode(&slab.get_payload()[..])?;
+        let payload = slab.get_payload();
+        /*
+        use std::io::Write;
+        let mut file = std::fs::File::create("/tmp/payload.txt")?;
+        file.write_all(&payload)?;
+        */
+        let tx = tx::Transaction::decode(&payload[..])?;
 
         let st = &*state.lock().await;
         let update = state_transition(st, tx)?;

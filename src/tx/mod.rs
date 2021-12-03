@@ -36,6 +36,7 @@ pub struct Transaction {
     pub outputs: Vec<TransactionOutput>,
 }
 
+#[derive(Debug)]
 pub struct TransactionClearInput {
     pub value: u64,
     pub token_id: DrkTokenId,
@@ -45,12 +46,14 @@ pub struct TransactionClearInput {
     pub signature: schnorr::Signature,
 }
 
+#[derive(Debug)]
 pub struct TransactionInput {
     pub spend_proof: Proof,
     pub revealed: SpendRevealedValues,
     pub signature: schnorr::Signature,
 }
 
+#[derive(Debug)]
 pub struct TransactionOutput {
     pub mint_proof: Proof,
     pub revealed: MintRevealedValues,

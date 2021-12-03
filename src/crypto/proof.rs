@@ -10,7 +10,7 @@ use halo2::{
 use pasta_curves::vesta;
 
 use crate::{
-    serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
+    serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
     types::*,
     Result,
 };
@@ -89,9 +89,8 @@ impl Proof {
 }
 
 impl Encodable for Proof {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(self.as_ref())?;
-        Ok(self.as_ref().len())
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        encode_with_size(self.as_ref(), s)
     }
 }
 
@@ -101,5 +100,46 @@ impl Decodable for Proof {
         let mut r = vec![0u8; len];
         d.read_slice(&mut r)?;
         Ok(Proof::new(r))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        circuit::MintContract,
+        crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
+    };
+    use halo2::arithmetic::Field;
+    use rand::rngs::OsRng;
+
+    #[test]
+    fn test_proof_serialization() -> Result<()> {
+        let value = 110_u64;
+        let token_id = DrkTokenId::from(42);
+        let value_blind = DrkValueBlind::random(&mut OsRng);
+        let token_blind = DrkValueBlind::random(&mut OsRng);
+        let serial = DrkSerial::random(&mut OsRng);
+        let coin_blind = DrkCoinBlind::random(&mut OsRng);
+        let public_key = PublicKey::random(&mut OsRng);
+
+        let pk = ProvingKey::build(11, MintContract::default());
+        let (proof, _) = create_mint_proof(
+            &pk,
+            value,
+            token_id,
+            value_blind,
+            token_blind,
+            serial,
+            coin_blind,
+            public_key,
+        )?;
+
+        let mut buf = vec![];
+        proof.encode(&mut buf)?;
+        let deserialized_proof: Proof = Decodable::decode(&mut buf.as_slice())?;
+        assert_eq!(proof.as_ref(), deserialized_proof.as_ref());
+
+        Ok(())
     }
 }

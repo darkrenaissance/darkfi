@@ -76,6 +76,7 @@ impl Note {
     }
 }
 
+#[derive(Debug)]
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
     ephem_public: PublicKey,
@@ -116,26 +117,27 @@ impl EncryptedNote {
     }
 }
 
-#[test]
-fn test_note_encdec() {
-    use crate::{
-        crypto::keypair::Keypair,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::keypair::Keypair;
     use pasta_curves::arithmetic::Field;
 
-    let note = Note {
-        serial: DrkSerial::random(&mut OsRng),
-        value: 110,
-        token_id: DrkTokenId::random(&mut OsRng),
-        coin_blind: DrkCoinBlind::random(&mut OsRng),
-        value_blind: DrkValueBlind::random(&mut OsRng),
-    };
+    #[test]
+    fn test_note_encdec() {
+        let note = Note {
+            serial: DrkSerial::random(&mut OsRng),
+            value: 110,
+            token_id: DrkTokenId::random(&mut OsRng),
+            coin_blind: DrkCoinBlind::random(&mut OsRng),
+            value_blind: DrkValueBlind::random(&mut OsRng),
+        };
 
-    let keypair = Keypair::random(&mut OsRng);
+        let keypair = Keypair::random(&mut OsRng);
 
-    let encrypted_note = note.encrypt(&keypair.public).unwrap();
-    let note2 = encrypted_note.decrypt(&keypair.secret).unwrap();
-    assert_eq!(note.value, note2.value);
-    assert_eq!(note.token_id, note2.token_id);
+        let encrypted_note = note.encrypt(&keypair.public).unwrap();
+        let note2 = encrypted_note.decrypt(&keypair.secret).unwrap();
+        assert_eq!(note.value, note2.value);
+        assert_eq!(note.token_id, note2.token_id);
+    }
 }

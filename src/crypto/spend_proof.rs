@@ -28,6 +28,7 @@ use crate::{
     Result,
 };
 
+#[derive(Debug)]
 pub struct SpendRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
