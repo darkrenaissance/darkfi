@@ -54,14 +54,6 @@ $ mkdir -p ~/.config/darkfi
 $ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
-## Formatting
-
-```
-cargo +nightly fmt
-cargo clippy
-```
-Try `cargo +nightly clippy --fix --all-features -Z unstable-options` to let clippy autofix some lints.
-
 ## Usage
 
 After the installation, you should have `drk` and `darkfid`
@@ -107,6 +99,14 @@ SUBCOMMANDS:
 ### Examples
 
 See [doc/tutorial.md](doc/tutorial.md).
+
+## Code Formatting
+
+```
+cargo +nightly fmt
+cargo clippy
+```
+Try `cargo +nightly clippy --fix --all-features -Z unstable-options` to let clippy autofix some lints.
 
 ## Go Dark
 
