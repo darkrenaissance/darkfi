@@ -11,6 +11,9 @@
 - [ ] integrate eth / erc20 tokens for the cashier 
 - [ ] switch to p2p network 
 - [ ] make cashier a multisig
+- [ ] make different loglevels
+- [ ] daemon startup cleanup
+- [ ] make daemon look uniform
 
 ## documentation
 
@@ -44,6 +47,7 @@
 ## bridges
 
 - [ ] evaluate arbitrum vs optics
+- [ ] evaluate layerzero
 
 # general-research
 
