@@ -54,6 +54,12 @@ $ mkdir -p ~/.config/darkfi
 $ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
+## Bash Completion
+This will add the options auto completion of `drk` and `darkfid`.
+```
+echo source $(pwd)'/auto-complete' >> ~/.bashrc
+```
+
 ## Usage
 
 After the installation, you should have `drk` and `darkfid`
