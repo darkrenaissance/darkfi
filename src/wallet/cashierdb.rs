@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
 use log::{debug, error, info};
@@ -50,6 +50,12 @@ impl CashierDb {
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
+        }
+
+        let p = Path::new(path.strip_prefix("sqlite://").unwrap());
+        if let Some(dirname) = p.parent() {
+            debug!("Creating path to database: {}", dirname.display());
+            create_dir_all(&dirname)?;
         }
 
         let connect_opts = SqliteConnectOptions::from_str(path)?
