@@ -52,10 +52,12 @@ impl CashierDb {
             return Err(Error::from(ClientFailed::EmptyPassword))
         }
 
-        let p = Path::new(path.strip_prefix("sqlite://").unwrap());
-        if let Some(dirname) = p.parent() {
-            debug!("Creating path to database: {}", dirname.display());
-            create_dir_all(&dirname)?;
+        if path != "sqlite::memory:" {
+            let p = Path::new(path.strip_prefix("sqlite://").unwrap());
+            if let Some(dirname) = p.parent() {
+                debug!("Creating path to database: {}", dirname.display());
+                create_dir_all(&dirname)?;
+            }
         }
 
         let connect_opts = SqliteConnectOptions::from_str(path)?
