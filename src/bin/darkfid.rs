@@ -635,7 +635,7 @@ async fn main() -> Result<()> {
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
 
     if args.is_present("refresh") {
-        debug!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
+        info!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
         let wallet = WalletDb::new(&wallet_path, config.wallet_password.clone()).await?;
@@ -643,7 +643,7 @@ async fn main() -> Result<()> {
         wallet.remove_own_coins().await?;
 
         if let Some(path) = expand_path(&config.database_path)?.to_str() {
-            debug!(target: "DARKFI DAEMON", "Remove database: {}", path);
+            info!(target: "DARKFI DAEMON", "Remove database: {}", path);
             std::fs::remove_dir_all(path)?;
         }
 

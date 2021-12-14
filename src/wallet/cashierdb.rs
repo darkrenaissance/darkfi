@@ -55,7 +55,7 @@ impl CashierDb {
         if path != "sqlite::memory:" {
             let p = Path::new(path.strip_prefix("sqlite://").unwrap());
             if let Some(dirname) = p.parent() {
-                debug!("Creating path to database: {}", dirname.display());
+                info!("Creating path to database: {}", dirname.display());
                 create_dir_all(&dirname)?;
             }
         }

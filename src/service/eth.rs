@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug, info, error};
 use num_bigint::{BigUint, RandBigInt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -215,7 +215,7 @@ impl EthClient {
     }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
-        debug!(target: "ETH BRIDGE", "Send eth to main wallet");
+        info!(target: "ETH BRIDGE", "Sending eth to main wallet");
 
         let tx =
             EthTx::new(acc, &self.main_keypair.public_key, None, None, Some(amount), None, None);
@@ -288,7 +288,7 @@ impl EthClient {
 
         self.send_eth_to_main_wallet(&addr, received_balance).await?;
 
-        debug!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
+        info!(target: "ETH BRIDGE", "Received {} eth", received_balance_ui );
 
         Ok(())
     }

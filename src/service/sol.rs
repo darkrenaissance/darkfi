@@ -239,7 +239,7 @@ impl SolClient {
                 .await
                 .map_err(Error::from)?;
 
-            debug!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
+            info!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
             let _ = self.send_tok_to_main_wallet(&rpc, &mint.unwrap(), amnt, decimals, &keypair)?;
         } else {
             let ui_amnt = lamports_to_sol(amnt);
@@ -255,7 +255,7 @@ impl SolClient {
                 .await
                 .map_err(Error::from)?;
 
-            debug!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
+            info!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
             let _ = self.send_sol_to_main_wallet(&rpc, amnt, &keypair)?;
         }
 

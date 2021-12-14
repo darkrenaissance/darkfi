@@ -421,7 +421,7 @@ impl BtcClient {
             .await
             .map_err(Error::from)?;
 
-        debug!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
+        info!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
         let _ = self.send_btc_to_main_wallet(amnt as u64, btc_keys).await;
 
         Ok(())
@@ -432,7 +432,7 @@ impl BtcClient {
         amount: u64,
         btc_keys: Account,
     ) -> BtcResult<()> {
-        debug!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
+        info!(target: "BTC BRIDGE", "Sending {} BTC to main wallet", amount);
         let client = self.client.lock().await;
         let electrum = &client.electrum;
         let keys_clone = btc_keys.clone();
@@ -490,12 +490,12 @@ impl BtcClient {
         let _txid = signed_tx.txid();
         let _serialized_tx = serialize(&signed_tx);
 
-        debug!(target: "BTC BRIDGE", "Signed tx: {:?}",
+        info!(target: "BTC BRIDGE", "Signed tx: {:?}",
                serialize_hex(&signed_tx));
 
         let txid = electrum.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
 
-        debug!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
+        info!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
     }
 }
@@ -603,7 +603,7 @@ impl NetworkClient for BtcClient {
             .transaction_broadcast_raw(&signed_tx.serialize().to_vec())
             .map_err(|e| Error::from(BtcFailed::from(e)))?;
 
-        debug!(target: "BTC BRIDGE", "Sent {} satoshi to external wallet, txid: {}", amount, txid);
+        info!(target: "BTC BRIDGE", "Sent {} satoshi to external wallet, txid: {}", amount, txid);
         Ok(())
     }
 }

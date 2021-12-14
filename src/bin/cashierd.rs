@@ -170,7 +170,7 @@ impl Cashierd {
     }
 
     async fn deposit(&self, id: Value, params: Value, executor: Arc<Executor<'_>>) -> JsonResult {
-        debug!(target: "CASHIER DAEMON", "RECEIVED DEPOSIT REQUEST");
+        info!(target: "CASHIER DAEMON", "Received deposit request");
 
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
@@ -295,7 +295,7 @@ impl Cashierd {
     }
 
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
-        debug!(target: "CASHIER DAEMON", "RECEIVED WITHDRAW REQUEST");
+        info!(target: "CASHIER DAEMON", "Received withdraw request");
 
         let args: &Vec<serde_json::Value> = params.as_array().unwrap();
 
@@ -462,7 +462,7 @@ impl Cashierd {
             match network.name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
-                    debug!(target: "CASHIER DAEMON", "Add sol network");
+                    debug!(target: "CASHIER DAEMON", "Adding solana network");
                     use drk::service::{sol::SolFailed, SolClient};
                     use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
@@ -505,7 +505,7 @@ impl Cashierd {
 
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
-                    debug!(target: "CASHIER DAEMON", "Add eth network");
+                    debug!(target: "CASHIER DAEMON", "Adding ethereum network");
                     use drk::service::{
                         eth::{generate_privkey, Keypair},
                         EthClient,
@@ -562,7 +562,7 @@ impl Cashierd {
 
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
-                    debug!(target: "CASHIER DAEMON", "Add btc network");
+                    debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
                     use drk::service::btc::{BtcClient, BtcFailed, Keypair};
 
                     let bridge2 = self.bridge.clone();
@@ -638,7 +638,7 @@ impl Cashierd {
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> =
             executor.spawn(async move {
                 while let Some(token_notification) = bridge2.clone().listen().await {
-                    debug!(target: "CASHIER DAEMON", "Notification from birdge");
+                    debug!(target: "CASHIER DAEMON", "Received notification from bridge");
 
                     let token_notification = token_notification?;
 
@@ -753,7 +753,7 @@ async fn main() -> Result<()> {
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
     if args.is_present("refresh") {
-        debug!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
+        info!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
 
         let client_wallet_path =
             format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
@@ -769,11 +769,11 @@ async fn main() -> Result<()> {
         wallet.remove_withdraw_and_deposit_keys().await?;
 
         if let Some(path) = expand_path(&config.database_path)?.to_str() {
-            debug!(target: "CASHIER DAEMON", "Remove database: {}", path);
+            info!(target: "CASHIER DAEMON", "Remove database: {}", path);
             std::fs::remove_dir_all(path)?;
         }
 
-        info!("Wallet got updated successfully.");
+        info!("Wallet updated successfully.");
 
         return Ok(())
     }

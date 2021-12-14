@@ -7,7 +7,7 @@ use std::{
 use async_executor::Executor;
 use async_native_tls::{Identity, TlsAcceptor};
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, info};
 use smol::{
     io::{AsyncReadExt, AsyncWriteExt},
     Async,
@@ -123,10 +123,10 @@ async fn listen(
 ) -> Result<()> {
     match &tls {
         None => {
-            debug!(target: "RPC SERVER", "Listening on tcp://{}", listener.get_ref().local_addr()?)
+            info!(target: "RPC SERVER", "Listening on tcp://{}", listener.get_ref().local_addr()?)
         }
         Some(_) => {
-            debug!(target: "RPC SERVER", "Listening on tls://{}", listener.get_ref().local_addr()?)
+            info!(target: "RPC SERVER", "Listening on tls://{}", listener.get_ref().local_addr()?)
         }
     }
 
