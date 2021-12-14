@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
 use lazy_static::lazy_static;
-use log::{debug, info, error};
+use log::{debug, error, info};
 use num_bigint::{BigUint, RandBigInt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

@@ -736,6 +736,7 @@ async fn main() -> Result<()> {
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg ADDRESS: -a --address "Get Cashier Public key")
         (@arg verbose: -v --verbose "Increase verbosity")
+        (@arg trace: -t --trace "Show event trace")
         (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
     )
     .get_matches();
@@ -746,7 +747,13 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else if args.is_present("trace") {
+        log::Level::Trace
+    } else {
+        log::Level::Info
+    };
 
     simple_logger::init_with_level(loglevel)?;
 

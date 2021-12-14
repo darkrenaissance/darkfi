@@ -287,6 +287,7 @@ async fn main() -> Result<()> {
     let args = clap_app!(drk =>
     (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
     (@arg verbose: -v --verbose "Increase verbosity")
+    (@arg trace: -t --trace "Show event trace")
     (@subcommand hello =>
      (about: "Say hello to the RPC")
     )
@@ -339,7 +340,13 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("drk.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else if args.is_present("trace") {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
 
     simple_logger::init_with_level(loglevel)?;
     let config = Config::<DrkConfig>::load(config_path)?;
