@@ -1,6 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use incrementalmerkletree::Tree;
-use log::{debug, info, warn};
+use log::{debug, trace, info, warn};
 use smol::Executor;
 use url::Url;
 
@@ -93,7 +93,7 @@ impl Client {
         let main_keypair = wallet.get_keypairs().await?[0];
         info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
 
-        debug!("Creating GatewayClient");
+        trace!("Creating GatewayClient");
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
         let gateway = GatewayClient::new(gateway_addrs.0, gateway_addrs.1, slabstore)?;
 
@@ -119,7 +119,7 @@ impl Client {
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Vec<Coin>> {
-        debug!("Start build slab from tx");
+        trace!("Begin building slab from tx");
         let mut clear_inputs: Vec<tx::TransactionBuilderClearInputInfo> = vec![];
         let mut inputs: Vec<tx::TransactionBuilderInputInfo> = vec![];
         let mut outputs: Vec<tx::TransactionBuilderOutputInfo> = vec![];
@@ -131,7 +131,7 @@ impl Client {
             let input = tx::TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
-            debug!("Start build inputs");
+            trace!("Start building tx inputs");
             let mut inputs_value = 0_u64;
             let state_m = state.lock().await;
             let own_coins = self.wallet.get_own_coins().await?;
@@ -172,7 +172,7 @@ impl Client {
                 });
             }
 
-            debug!("End build inputs");
+            trace!("Finish building inputs");
         }
 
         outputs.push(tx::TransactionBuilderOutputInfo { value, token_id, public: pubkey });
@@ -184,15 +184,15 @@ impl Client {
         tx.encode(&mut tx_data).expect("encode tx");
 
         let slab = Slab::new(tx_data);
-        debug!("End build slab from tx");
+        trace!("Finish building slab from tx");
 
         // Check if it's valid before sending to gateway
         let state = &*state.lock().await;
         state_transition(state, tx)?;
 
-        debug!("Sending slab to gateway");
+        trace!("Sending slab to gateway");
         self.gateway.put_slab(slab).await?;
-        debug!("Sent successfully");
+        trace!("Slab sent to gateway successfully");
         Ok(coins)
     }
 
@@ -205,7 +205,7 @@ impl Client {
         state: Arc<Mutex<State>>,
     ) -> ClientResult<()> {
         // TODO: TOKEN debug
-        debug!("Start send {}", amount);
+        debug!("Sending {}", amount);
 
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(0))
@@ -216,7 +216,7 @@ impl Client {
             self.wallet.confirm_spend_coin(coin).await?;
         }
 
-        debug!("End send {}", amount);
+        debug!("Sent {}", amount);
         Ok(())
     }
 
@@ -236,7 +236,7 @@ impl Client {
             return Err(ClientFailed::NotEnoughValue(amount))
         }
 
-        debug!("End transfer {}", amount);
+        debug!("Finish transfer {}", amount);
         Ok(())
     }
 
@@ -247,31 +247,31 @@ impl Client {
         wallet: WalletPtr,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
     ) -> Result<()> {
-        debug!("Build tx from slab and update the state");
+        trace!("Building tx from slab and updating the state");
         let payload = slab.get_payload();
         /*
         use std::io::Write;
         let mut file = std::fs::File::create("/tmp/payload.txt")?;
         file.write_all(&payload)?;
         */
-        debug!("Decoding payload");
+        trace!("Decoding payload");
         let tx = tx::Transaction::decode(&payload[..])?;
 
         let update: StateUpdate;
 
         // This is separate because otherwise the mutex is never unlocked.
         {
-            debug!("Acquiring state lock");
+            trace!("Acquiring state lock");
             let state = &*state.lock().await;
             update = state_transition(state, tx)?;
-            debug!("Successfully passed state_transition");
+            trace!("Successfully passed state_transition");
         }
 
-        debug!("Acquiring state lock");
+        trace!("Acquiring state lock");
         let mut state = state.lock().await;
-        debug!("Trying to apply the new state");
+        trace!("Trying to apply the new state");
         state.apply(update, secret_keys, notify, wallet).await?;
-        debug!("Successfully passed state.apply");
+        trace!("Successfully passed state.apply");
 
         Ok(())
     }
@@ -283,7 +283,7 @@ impl Client {
         notify: async_channel::Sender<(PublicKey, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!("Start subscriber for cashier");
+        trace!("Start subscriber for cashier");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
         let secret_key = self.main_keypair.secret;
@@ -292,7 +292,7 @@ impl Client {
         let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
-                debug!("Received new slab");
+                trace!("Received new slab");
 
                 let mut secret_keys = vec![secret_key];
                 let mut withdraw_keys = cashier_wallet.get_withdraw_private_keys().await?;
@@ -323,7 +323,7 @@ impl Client {
         state: Arc<Mutex<State>>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!("Start subscriber for darkfid");
+        trace!("Start subscriber for darkfid");
         let gateway_slabs_sub = self.gateway.start_subscriber(executor.clone()).await?;
 
         let secret_key = self.main_keypair.secret;
@@ -332,7 +332,7 @@ impl Client {
         let task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 let slab = gateway_slabs_sub.recv().await?;
-                debug!("Received new slab");
+                trace!("Received new slab");
 
                 let update_state = Self::update_state(
                     vec![secret_key],

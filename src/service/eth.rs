@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use hash_db::Hasher;
 use keccak_hasher::KeccakHasher;
 use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{debug, trace, error, info};
 use num_bigint::{BigUint, RandBigInt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -297,7 +297,7 @@ impl EthClient {
         let mut subscriptions = self.subscriptions.lock().await;
         let index = subscriptions.iter().position(|p| p == pubkey);
         if let Some(ind) = index {
-            debug!(target: "ETH BRIDGE", "Removing subscription from list");
+            trace!(target: "ETH BRIDGE", "Removing subscription from list");
             subscriptions.remove(ind);
         }
     }

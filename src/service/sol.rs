@@ -5,7 +5,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, info, warn};
+use log::{debug, trace, error, info, warn};
 use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
@@ -88,7 +88,7 @@ impl SolClient {
         drk_pub_key: PublicKey,
         mint: Option<Pubkey>,
     ) -> SolResult<()> {
-        debug!(target: "SOL BRIDGE", "handle_subscribe_request()");
+        trace!(target: "SOL BRIDGE", "handle_subscribe_request()");
 
         // Derive token pubkey if mint was provided.
         let pubkey = if mint.is_some() {
@@ -272,7 +272,7 @@ impl SolClient {
             let mut subscriptions = self.subscriptions.lock().await;
             let index = subscriptions.iter().position(|p| p == pubkey);
             if let Some(ind) = index {
-                debug!(target: "SOL BRIDGE", "Removing subscription from list");
+                trace!(target: "SOL BRIDGE", "Removing subscription from list");
                 subscriptions.remove(ind);
             }
         }

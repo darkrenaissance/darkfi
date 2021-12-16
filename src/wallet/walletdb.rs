@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use log::{debug, error, info};
+use log::{trace, error, info};
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -45,7 +45,6 @@ impl WalletApi for WalletDb {}
 
 impl WalletDb {
     pub async fn new(path: &str, password: String) -> Result<WalletPtr> {
-        debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
@@ -77,16 +76,16 @@ impl WalletDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        debug!("Initializing keys table");
+        trace!("Initializing keys table");
         sqlx::query(keys).execute(&mut conn).await?;
 
-        debug!("Initializing coins table");
+        trace!("Initializing coins table");
         sqlx::query(coins).execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn key_gen(&self) -> Result<()> {
-        debug!("Attempting to generate keypairs");
+        trace!("Attempting to generate keypairs");
         let mut conn = self.conn.acquire().await?;
 
         // TODO: Think about multiple keys
@@ -104,7 +103,7 @@ impl WalletDb {
     }
 
     pub async fn put_keypair(&self, public: &PublicKey, secret: &SecretKey) -> Result<()> {
-        debug!("Writing keypair into the wallet database");
+        trace!("Writing keypair into the wallet database");
         let pubkey = serialize(&public.0);
         let secret = serialize(&secret.0);
 
@@ -119,7 +118,7 @@ impl WalletDb {
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
-        debug!("Returning keypairs");
+        trace!("Returning keypairs");
         let mut conn = self.conn.acquire().await?;
 
         // TODO: Think about multiple keys
@@ -131,7 +130,7 @@ impl WalletDb {
     }
 
     pub async fn get_own_coins(&self) -> Result<OwnCoins> {
-        debug!("Finding own coins");
+        trace!("Finding own coins");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -175,7 +174,7 @@ impl WalletDb {
     }
 
     pub async fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
-        debug!("Putting own coin into wallet database");
+        trace!("Putting own coin into wallet database");
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
@@ -211,14 +210,14 @@ impl WalletDb {
     }
 
     pub async fn remove_own_coins(&self) -> Result<()> {
-        debug!("Removing own coins from wallet database");
+        trace!("Removing own coins from wallet database");
         let mut conn = self.conn.acquire().await?;
         sqlx::query("DROP TABLE coins;").execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
-        debug!("Confirm spend coin");
+        trace!("Confirm spend coin");
         let is_spent = 1;
         let coin = self.get_value_serialized(coin)?;
 
@@ -233,7 +232,7 @@ impl WalletDb {
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {
-        debug!("Getting tokens and balances");
+        trace!("Getting tokens and balances");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -253,14 +252,15 @@ impl WalletDb {
         }
 
         if list.is_empty() {
-            debug!("Did not find any unspent coins");
+            trace!("Did not find any unspent coins");
+
         }
 
         Ok(Balances { list })
     }
 
     pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
-        debug!("Getting token ID");
+        trace!("Getting token ID");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -279,7 +279,8 @@ impl WalletDb {
     }
 
     pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
-        debug!("Checking if token ID exists");
+        trace!("Checking if token ID exists");
+    
         let is_spent = 0;
         let id = self.get_value_serialized(&token_id)?;
 
@@ -295,7 +296,7 @@ impl WalletDb {
     }
 
     pub async fn test_wallet(&self) -> Result<()> {
-        debug!("Testing wallet");
+        trace!("Testing wallet");
         let mut conn = self.conn.acquire().await?;
         let _row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
         Ok(())

@@ -1,5 +1,5 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
-use log::debug;
+use log::{debug, trace};
 
 use crate::{
     blockchain::{rocks::columns, RocksColumn},
@@ -57,7 +57,7 @@ pub enum VerifyFailed {
 
 pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
-    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
+    trace!(target: "STATE TRANSITION", "iterate clear_inputs");
 
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
@@ -68,7 +68,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         }
     }
 
-    debug!(target: "STATE TRANSITION", "iterate inputs");
+    trace!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
         let merkle = &input.revealed.merkle_root;
@@ -88,9 +88,9 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         }
     }
 
-    debug!(target: "STATE TRANSITION", "Check the tx verifies correctly");
+    trace!(target: "STATE TRANSITION", "Check the tx verifies correctly");
     tx.verify(state.mint_vk(), state.spend_vk())?;
-    debug!(target: "STATE TRANSITION", "Verified successfully");
+    trace!(target: "STATE TRANSITION", "Verified successfully");
 
     let mut nullifiers = vec![];
     for input in tx.inputs {
@@ -134,12 +134,12 @@ impl State {
         wallet: WalletPtr,
     ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update.
-        debug!("Extend nullifiers");
+        trace!("Extend nullifiers");
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
         }
 
-        debug!("Update Merkle tree and witness");
+        trace!("Update Merkle tree and witness");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
             let node = MerkleNode(coin.0);
@@ -167,7 +167,7 @@ impl State {
                     let pubkey = PublicKey::from_secret(*secret);
 
                     debug!("Received a coin: amount {}", note.value);
-                    debug!("Send a notification");
+                    trace!("Send a notification");
                     if let Some(ch) = notify.clone() {
                         ch.send((pubkey, note.value)).await?;
                     }
@@ -175,7 +175,7 @@ impl State {
             }
         }
 
-        debug!("apply() exiting successfully");
+        trace!("apply() exiting successfully");
         Ok(())
     }
 
@@ -189,12 +189,12 @@ impl State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
-        debug!("Check if it is a valid cashier public key");
+        trace!("Check if it is a valid cashier public key");
         self.public_keys.contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        debug!("Check if it is valid merkle");
+        trace!("Check if it is valid merkle");
         if let Ok(mr) = self.merkle_roots.key_exist(merkle_root.clone()) {
             return mr
         }
@@ -202,7 +202,7 @@ impl ProgramState for State {
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        debug!("Check if nullifier exists");
+        trace!("Check if nullifier exists");
         if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
             return nl
         }

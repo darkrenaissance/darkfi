@@ -392,7 +392,7 @@ impl BtcClient {
         let index = &mut client.lock().await.subscriptions.iter().position(|p| p == &script);
 
         if let Some(ind) = index {
-            debug!(target: "BTC BRIDGE", "Removing subscription from list");
+            trace!(target: "BTC BRIDGE", "Removing subscription from list");
             let _ = &mut client.lock().await.subscriptions.remove(*ind);
         }
 
@@ -515,7 +515,7 @@ impl NetworkClient for BtcClient {
         let public_key = btc_keys.address.to_string();
 
         // start scheduler for checking balance
-        debug!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
+        trace!(target: "BRIDGE BITCOIN", "Subscribing for deposit");
 
         executor
             .spawn(async move {

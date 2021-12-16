@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use log::{debug, error, info};
+use log::{trace, error, info};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Row, SqlitePool,
@@ -46,7 +46,7 @@ impl WalletApi for CashierDb {}
 
 impl CashierDb {
     pub async fn new(path: &str, password: String) -> Result<CashierDbPtr> {
-        debug!("new() Constructor called");
+        trace!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
@@ -78,19 +78,19 @@ impl CashierDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        debug!("Initializing main keypairs table");
+        trace!("Initializing main keypairs table");
         sqlx::query(main_kps).execute(&mut conn).await?;
 
-        debug!("Initializing deposit keypairs table");
+        trace!("Initializing deposit keypairs table");
         sqlx::query(deposit_kps).execute(&mut conn).await?;
 
-        debug!("Initializing withdraw keypairs table");
+        trace!("Initializing withdraw keypairs table");
         sqlx::query(withdraw_kps).execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
-        debug!("Writing main keys into the database");
+        trace!("Writing main keys into the database");
         let network = self.get_value_serialized(network)?;
 
         let mut conn = self.conn.acquire().await?;
@@ -110,7 +110,7 @@ impl CashierDb {
     }
 
     pub async fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
-        debug!("Returning main keypairs");
+        trace!("Returning main keypairs");
         let network = self.get_value_serialized(network)?;
 
         let mut conn = self.conn.acquire().await?;
@@ -134,7 +134,7 @@ impl CashierDb {
     }
 
     pub async fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
-        debug!("Removing withdraw and deposit keys");
+        trace!("Removing withdraw and deposit keys");
         let mut conn = self.conn.acquire().await?;
         sqlx::query("DROP TABLE deposit_keypairs;").execute(&mut conn).await?;
         sqlx::query("DROP TABLE withdraw_keypairs;").execute(&mut conn).await?;
@@ -151,7 +151,7 @@ impl CashierDb {
         token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!("Writing withdraw keys to database");
+        trace!("Writing withdraw keys to database");
         let public = self.get_value_serialized(d_key_public)?;
         let secret = self.get_value_serialized(d_key_secret)?;
         let network = self.get_value_serialized(network)?;
@@ -189,7 +189,7 @@ impl CashierDb {
         token_id: &DrkTokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!("Writing deposit keys to database");
+        trace!("Writing deposit keys to database");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let token_id = self.get_value_serialized(token_id)?;
         let network = self.get_value_serialized(network)?;
@@ -218,7 +218,7 @@ impl CashierDb {
     }
 
     pub async fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
-        debug!("Getting withdraw private keys");
+        trace!("Getting withdraw private keys");
         let confirm = self.get_value_serialized(&false)?;
 
         let mut conn = self.conn.acquire().await?;
@@ -243,7 +243,7 @@ impl CashierDb {
         &self,
         pubkey: &PublicKey,
     ) -> Result<Option<WithdrawToken>> {
-        debug!("Get token address by pubkey");
+        trace!("Get token address by pubkey");
         let d_key_public = self.get_value_serialized(pubkey)?;
         let confirm = self.get_value_serialized(&false)?;
 
@@ -277,7 +277,7 @@ impl CashierDb {
         d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
-        debug!("Checking for existing dkey");
+        trace!("Checking for existing dkey");
         let d_key_public = self.get_value_serialized(d_key_public)?;
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
@@ -311,7 +311,7 @@ impl CashierDb {
         token_key_public: &[u8],
         network: &NetworkName,
     ) -> Result<Option<Keypair>> {
-        debug!("Checking for existing token address");
+        trace!("Checking for existing token address");
         let confirm = self.get_value_serialized(&false)?;
         let network = self.get_value_serialized(network)?;
 
@@ -343,7 +343,7 @@ impl CashierDb {
         token_address: &[u8],
         network: &NetworkName,
     ) -> Result<()> {
-        debug!("Confirm withdraw keys");
+        trace!("Confirm withdraw keys");
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&true)?;
 
@@ -368,7 +368,7 @@ impl CashierDb {
         d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<()> {
-        debug!("Confirm deposit keys");
+        trace!("Confirm deposit keys");
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&true)?;
         let d_key_public = self.get_value_serialized(d_key_public)?;
@@ -393,7 +393,7 @@ impl CashierDb {
         &self,
         network: &NetworkName,
     ) -> Result<Vec<DepositToken>> {
-        debug!("Checking for existing dkey");
+        trace!("Checking for existing dkey");
         let network = self.get_value_serialized(network)?;
         let confirm = self.get_value_serialized(&false)?;
 

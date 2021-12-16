@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
 use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{debug, info};
+use log::{debug, trace, info};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 
@@ -83,7 +83,7 @@ impl RequestHandler for Cashierd {
 
 impl Cashierd {
     async fn new(config: CashierdConfig) -> Result<Self> {
-        debug!(target: "CASHIER DAEMON", "Initialize");
+        trace!(target: "CASHIER DAEMON", "Initialize");
 
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
@@ -462,7 +462,7 @@ impl Cashierd {
             match network.name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
-                    debug!(target: "CASHIER DAEMON", "Adding solana network");
+                    trace!(target: "CASHIER DAEMON", "Adding solana network");
                     use drk::service::{sol::SolFailed, SolClient};
                     use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
@@ -505,7 +505,7 @@ impl Cashierd {
 
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
-                    debug!(target: "CASHIER DAEMON", "Adding ethereum network");
+                    trace!(target: "CASHIER DAEMON", "Adding ethereum network");
                     use drk::service::{
                         eth::{generate_privkey, Keypair},
                         EthClient,
@@ -562,7 +562,7 @@ impl Cashierd {
 
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
-                    debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
+                    trace!(target: "CASHIER DAEMON", "Adding bitcoin network");
                     use drk::service::btc::{BtcClient, BtcFailed, Keypair};
 
                     let bridge2 = self.bridge.clone();
@@ -638,7 +638,7 @@ impl Cashierd {
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> =
             executor.spawn(async move {
                 while let Some(token_notification) = bridge2.clone().listen().await {
-                    debug!(target: "CASHIER DAEMON", "Received notification from bridge");
+                    trace!(target: "CASHIER DAEMON", "Received notification from bridge");
 
                     let token_notification = token_notification?;
 
