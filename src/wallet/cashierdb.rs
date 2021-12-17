@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use log::{trace, error, info};
+use log::{error, info, trace};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Row, SqlitePool,

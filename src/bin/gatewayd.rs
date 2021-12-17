@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
     let args = clap_app!(gatewayd =>
         (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
         (@arg verbose: -v --verbose "Increase verbosity")
+        (@arg trace: -t --trace "Show event trace")
     )
     .get_matches();
 
@@ -40,16 +41,20 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") { log::Level::Debug } else { log::Level::Info };
+    let loglevel = if args.is_present("verbose") {
+        log::Level::Debug
+    } else if args.is_present("trace") {
+        log::Level::Trace
+    } else {
+        log::Level::Info
+    };
 
     simple_logger::init_with_level(loglevel)?;
 
-    let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;
 
-    let config_ptr = Arc::new(&config);
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let ex2 = ex.clone();
 
@@ -61,7 +66,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, &config_ptr).await?;
+                start(ex2, &config).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

@@ -42,6 +42,16 @@ pub struct Cashier {
     pub public_key: PublicKey,
 }
 
+struct Darkfid {
+    client: Arc<Mutex<Client>>,
+    state: Arc<Mutex<State>>,
+    sol_tokenlist: TokenList,
+    eth_tokenlist: TokenList,
+    btc_tokenlist: TokenList,
+    drk_tokenlist: DrkTokenList,
+    cashiers: Vec<Cashier>,
+}
+
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
@@ -73,16 +83,6 @@ impl RequestHandler for Darkfid {
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         };
     }
-}
-
-struct Darkfid {
-    client: Arc<Mutex<Client>>,
-    state: Arc<Mutex<State>>,
-    sol_tokenlist: TokenList,
-    eth_tokenlist: TokenList,
-    btc_tokenlist: TokenList,
-    drk_tokenlist: DrkTokenList,
-    cashiers: Vec<Cashier>,
 }
 
 impl Darkfid {
@@ -654,7 +654,7 @@ async fn main() -> Result<()> {
             std::fs::remove_dir_all(path)?;
         }
 
-        println!("Wallet got updated successfully.");
+        info!("Wallet updated successfully.");
 
         return Ok(())
     }

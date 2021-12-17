@@ -1,6 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use incrementalmerkletree::Tree;
-use log::{debug, trace, info, warn};
+use log::{debug, info, trace, warn};
 use smol::Executor;
 use url::Url;
 

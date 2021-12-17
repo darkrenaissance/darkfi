@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use log::{trace, error, info};
+use log::{error, info, trace};
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -253,7 +253,6 @@ impl WalletDb {
 
         if list.is_empty() {
             trace!("Did not find any unspent coins");
-
         }
 
         Ok(Balances { list })
@@ -280,7 +279,7 @@ impl WalletDb {
 
     pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
         trace!("Checking if token ID exists");
-    
+
         let is_spent = 0;
         let id = self.get_value_serialized(&token_id)?;
 

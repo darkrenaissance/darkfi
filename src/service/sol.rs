@@ -5,7 +5,7 @@ use async_native_tls::TlsConnector;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use log::{debug, trace, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
