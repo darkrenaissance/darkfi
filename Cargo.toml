@@ -58,7 +58,7 @@ easy-parallel = "3.1.0"
 native-tls = "0.2.8"
 async-native-tls = "0.4.0"
 async-executor = "1.4.1"
-futures = "0.3.18"
+futures = "0.3.17"
 smol = "1.2.5"
 
 # Utilities
@@ -102,7 +102,23 @@ solana-sdk = {version = "1.8.6", optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 
+aes-gcm = {version = "0.9.4", optional = true}
+simplelog = {version = "0.11.1", optional = true}
+chrono = {version = "0.4.19", optional = true}
+rusqlite = {version = "0.26.3", optional = true}
+
 [features]
 btc = ["bdk", "bitcoin", "secp256k1"]
 eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
+darkpulse = ["aes-gcm", "simplelog", "chrono","rusqlite"]
+
+
+
+[[bin]]         
+name = "darkpulse"    
+required-features = ["darkpulse"]
+
+[[bin]]         
+name = "eth"    
+required-features = ["eth"]

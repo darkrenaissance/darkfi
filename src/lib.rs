@@ -19,4 +19,7 @@ pub mod vm;
 pub mod vm_serial;
 pub mod wallet;
 
+#[cfg(feature = "darkpulse")]
+pub mod darkpulse;
+
 pub use crate::error::{Error, Result};

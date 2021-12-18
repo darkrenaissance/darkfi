@@ -227,3 +227,10 @@ impl From<halo2::plonk::Error> for Error {
         Error::PlonkError(format!("{:?}", err))
     }
 }
+
+#[cfg(feature = "darkpulse")]
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Error {
+        Error::SqlxError(err.to_string())
+    }
+}
