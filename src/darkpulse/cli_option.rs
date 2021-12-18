@@ -2,9 +2,8 @@ use std::net::SocketAddr;
 
 use clap::{App, Arg, SubCommand};
 
-use super::channel::Channel;
-use crate::net::Settings;
-use crate::Result;
+use super::Channel;
+use crate::{net::Settings, Result};
 
 pub struct CliOption {
     pub network_settings: Settings,

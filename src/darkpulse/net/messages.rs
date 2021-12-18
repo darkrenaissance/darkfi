@@ -5,8 +5,7 @@ use crate::{
     serial::{Decodable, Encodable},
     Result
 };
-
-use crate::darkpulse::aes::Ciphertext;
+use crate::darkpulse::Ciphertext;
 
 #[derive(Clone)]
 pub struct GetSlabsMessage {

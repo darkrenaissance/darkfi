@@ -1,17 +1,14 @@
 use async_std::sync::{Arc, Mutex};
-
-use drk::darkpulse::{
-    dbsql, net::messages, utility, CiphertextHash, cli_option::CliOption, control_message::ControlCommand, MemPool,
-    slabs_manager::SlabsManager,
-};
-
-use drk::Result;
-
 use async_executor::Executor;
 use easy_parallel::Parallel;
 use log::*;
-use drk::net::P2p;
 use smol::Unblock;
+
+use drk::darkpulse::{
+    dbsql, messages, utility, CiphertextHash, CliOption, ControlCommand, MemPool,
+    SlabsManager,
+};
+use drk::{Result, net::P2p};
 
 async fn on_receive_slab(
     p2p: Arc<P2p>,

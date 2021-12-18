@@ -1,3 +1,4 @@
+
 use bs58;
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -89,7 +90,8 @@ impl Channel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Channel, Result};
+    use super::Channel;
+    use crate::Result;
 
     #[test]
     fn create_channel_form_address() -> Result<()> {

@@ -5,7 +5,6 @@ use log::*;
 use sha2::{Digest, Sha256};
 
 use crate:: Result;
-
 use super::{dbsql, net::messages::SlabMessage, channel::Channel, CiphertextHash, aes::Ciphertext};
 
 pub fn cipher_hash(ciphertext: &Ciphertext) -> CiphertextHash {

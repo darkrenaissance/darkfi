@@ -10,9 +10,8 @@ use async_executor::Executor;
 use futures::prelude::*;
 use log::*;
 
-use super::{aes::aes_encrypt, dbsql, net::messages, net::protocol_slab::ProtocolSlab,
-control_message::ControlMessage, control_message::ControlCommand, channel::Channel,
-slabs_manager::SlabsManagerSafe, control_message::MessagePayload};
+use super::{aes_encrypt, Dbsql, messages, ProtocolSlab, ControlMessage, ControlCommand, Channel,
+SlabsManagerSafe, MessagePayload};
 
 
 use crate::{ serial::{serialize, deserialize}, net::ChannelPtr, Result};
@@ -109,7 +108,7 @@ pub async fn pack_slab(
     Ok(slab)
 }
 
-pub fn setup_username(newname: Option<String>, db: &dbsql::Dbsql) -> Result<String> {
+pub fn setup_username(newname: Option<String>, db: &Dbsql) -> Result<String> {
     let mut _username: String = String::new();
     match newname {
         Some(nm) => {
@@ -132,7 +131,7 @@ pub async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<String
     Ok(buf.trim().to_string())
 }
 
-pub fn choose_channel(db: &dbsql::Dbsql, channel_name: Option<String>) -> Result<Channel> {
+pub fn choose_channel(db: &Dbsql, channel_name: Option<String>) -> Result<Channel> {
     let channels = db.get_channels()?;
     let mut main_channel = Channel::gen_new(String::from("test_channel"));
     if channels.len() > 0 {

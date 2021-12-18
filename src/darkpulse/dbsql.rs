@@ -6,10 +6,8 @@ use std::io::prelude::*;
 use rusqlite::{params, Connection};
 
 use crate::Result;
-
-use super::{net::messages::SlabMessage, CiphertextHash,utility::default_config_dir, 
-    channel::Channel};
-
+use super::{SlabMessage, CiphertextHash,utility::default_config_dir,
+Channel};
 
 #[derive(Debug)]
 pub struct Dbsql {

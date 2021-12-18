@@ -1,7 +1,6 @@
 use std::io;
 
-use crate::serial::{Decodable, Encodable};
-use crate::Result;
+use crate::{serial::{Decodable, Encodable}, Result};
 
 #[derive(Copy, Clone)]
 pub enum ControlCommand {
