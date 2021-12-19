@@ -1,18 +1,15 @@
 Notes for developers
 ====================
 
-## `cargo fmt` pre-commit hook
+## cargo fmt pre-commit hook
 
 To ensure every contributor uses the same code style, make sure
 you run `cargo fmt` before committing. You can force yourself to do
 this by creating a git `pre-commit` hook like the following:
 
 ```shell
-#!/bin/bash
-diff="$(cargo fmt -- --check)
-result=$?
-
-if [[ "$result" -ne 0 ]]; then
+#!/bin/sh
+if ! cargo fmt -- --check >/dev/null; then
     echo "There are some code style issues. Run 'cargo fmt' to fix it."
     exit 1
 fi
