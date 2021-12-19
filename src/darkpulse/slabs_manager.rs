@@ -40,7 +40,7 @@ impl SlabsManager {
         let mut slabs: HashMap<CiphertextHash, SlabMessage> = HashMap::new();
 
         if let Some(channel_id) = main_channel.get_channel_id() {
-            slabs = db.get_channel_slabs(channel_id.clone()).unwrap_or(slabs);
+            slabs = db.get_channel_slabs(*channel_id).unwrap_or(slabs);
         }
 
         Arc::new(async_std::sync::Mutex::new(SlabsManager {
@@ -82,7 +82,7 @@ impl SlabsManager {
         let default_slabs: HashMap<CiphertextHash, SlabMessage> = HashMap::new();
 
         if let Some(channel_id) = self.main_channel.get_channel_id() {
-            self.slabs = self.db.get_channel_slabs(channel_id.clone()).unwrap_or(default_slabs);
+            self.slabs = self.db.get_channel_slabs(*channel_id).unwrap_or(default_slabs);
         }
     }
 

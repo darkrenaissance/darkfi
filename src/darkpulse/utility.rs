@@ -30,9 +30,8 @@ pub fn get_current_time() -> u64 {
     let start = SystemTime::now();
     let since_the_epoch =
         start.duration_since(UNIX_EPOCH).expect("Incorrect system clock: time went backwards");
-    let in_ms =
-        since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000;
-    return in_ms
+
+    since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000
 }
 
 pub fn save_to_addrs_store(stored_addrs: &Vec<SocketAddr>) -> Result<()> {
@@ -88,7 +87,7 @@ pub async fn pack_slab(
     let timestamp = chrono::offset::Utc::now();
     let timestamp: i64 = timestamp.timestamp_millis() / 1000;
 
-    let msg_payload = MessagePayload { nickname: username.clone(), text: message, timestamp };
+    let msg_payload = MessagePayload { nickname: username, text: message, timestamp };
 
     let control_message = ControlMessage { control: control_command, payload: msg_payload };
 
@@ -128,14 +127,13 @@ pub async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<String
 pub fn choose_channel(db: &Dbsql, channel_name: Option<String>) -> Result<Channel> {
     let channels = db.get_channels()?;
     let mut main_channel = Channel::gen_new(String::from("test_channel"));
-    if channels.len() > 0 {
+    if !channels.is_empty() {
         match channel_name {
             Some(name) => {
                 main_channel = channels
                     .iter()
-                    .filter(|ch| ch.get_channel_name() == &name)
-                    .next()
-                    .expect(format!("there is no channel with the name {}: ", name).as_str())
+                    .find(|ch| ch.get_channel_name() == &name)
+                    .unwrap_or_else(|| panic!("there is no channel with the name {}: ", name))
                     .clone();
             }
             None => {

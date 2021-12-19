@@ -99,7 +99,7 @@ impl ProtocolSlab {
             let slabs_hash = self.slabman.lock().await.get_slabs_hash();
             for slab in inv_msg.slabs_hash.iter() {
                 if !slabs_hash.contains(slab) {
-                    list_of_hash.push(slab.clone());
+                    list_of_hash.push(*slab);
                 }
             }
             let getslabs_msg = messages::GetSlabsMessage { slabs_hash: list_of_hash };
@@ -114,7 +114,7 @@ impl ProtocolSlab {
             let get_slabs_msg = self.get_slabs_sub.receive().await?;
             for slab_hash in get_slabs_msg.slabs_hash.iter() {
                 let slabman = self.slabman.lock().await;
-                let slab = slabman.get_slab(&slab_hash);
+                let slab = slabman.get_slab(slab_hash);
                 if let Some(slab) = slab {
                     self.channel.send(slab.clone()).await?;
                 }
@@ -129,7 +129,7 @@ impl ProtocolSlab {
             let slab_msg = self.slab_sub.receive().await?;
             info!("receive slab message!");
 
-            let channels = self.slabman.lock().await.get_channels().unwrap_or(vec![]);
+            let channels = self.slabman.lock().await.get_channels().unwrap_or_default();
 
             let slab = messages::SlabMessage {
                 nonce: slab_msg.nonce,

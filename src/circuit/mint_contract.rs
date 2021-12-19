@@ -119,12 +119,8 @@ impl Circuit<pallas::Base> for MintContract {
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config = EccChip::<OrchardFixedBases>::configure(
-            meta,
-            advices,
-            lagrange_coeffs,
-            range_check.clone(),
-        );
+        let ecc_config =
+            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure(
