@@ -343,7 +343,7 @@ async fn main() -> Result<()> {
     let loglevel = if args.is_present("verbose") {
         log::Level::Debug
     } else if args.is_present("trace") {
-        log::Level::Debug
+        log::Level::Trace
     } else {
         log::Level::Info
     };
