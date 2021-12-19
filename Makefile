@@ -13,8 +13,8 @@ BINS = drk darkfid
 BINDEPS = \
 	Cargo.toml \
 	$(shell find src -type f) \
-	$(shell find token -type f) \
-	$(shell find sql -type f)
+	$(shell find sql -type f) \
+	$(shell find contrib/token -type f) \
 
 all: $(BINS)
 

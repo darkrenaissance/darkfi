@@ -91,9 +91,12 @@ impl Darkfid {
         state: Arc<Mutex<State>>,
         cashiers: Vec<Cashier>,
     ) -> Result<Self> {
-        let sol_tokenlist = TokenList::new(include_bytes!("../../token/solana_token_list.json"))?;
-        let eth_tokenlist = TokenList::new(include_bytes!("../../token/erc20_token_list.json"))?;
-        let btc_tokenlist = TokenList::new(include_bytes!("../../token/bitcoin_token_list.json"))?;
+        let sol_tokenlist =
+            TokenList::new(include_bytes!("../../contrib/token/solana_token_list.json"))?;
+        let eth_tokenlist =
+            TokenList::new(include_bytes!("../../contrib/token/erc20_token_list.json"))?;
+        let btc_tokenlist =
+            TokenList::new(include_bytes!("../../contrib/token/bitcoin_token_list.json"))?;
         let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
         Ok(Self {
