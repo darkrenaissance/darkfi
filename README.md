@@ -26,9 +26,11 @@ The following dependencies are also required:
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
+
 ```shell
 % sudo apt-get update
-% sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+% sudo apt-get install -y build-essential clang libclang-dev llvm-dev \
+    libudev-dev pkg-config wget
 ```
 
 To build the necessary binaries, we can just clone the repo, and use the 
@@ -39,6 +41,13 @@ setup params, and compile the source code.
 % git clone https://github.com/darkrenaissance/darkfi
 % make
 ```
+
+## Development
+
+If you want to hack on the source code, make sure to read some
+introductory advice in the
+[DarkFi book](https://darkrenaissance.github.io/darkfi/development.html).
+
 
 ## Install
 
@@ -58,7 +67,7 @@ the testnet if you're following this document.
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
-echo source ./auto-complete >> ~/.bashrc
+% echo source ./auto-complete >> ~/.bashrc
 ```
 
 ## Usage
@@ -79,7 +88,6 @@ called `drk`:
 
 ```shell
 % drk -h
-drk
 
 USAGE:
     drk [FLAGS] [OPTIONS] [SUBCOMMAND]
@@ -106,14 +114,6 @@ SUBCOMMANDS:
 ### Examples
 
 See the [DarkFi book](https://darkrenaissance.github.io/darkfi)
-
-## Code Formatting
-
-```shell
-cargo +nightly fmt
-cargo clippy
-```
-Try `cargo +nightly clippy --fix --all-features -Z unstable-options` to let clippy autofix some lints.
 
 ## Go Dark
 
