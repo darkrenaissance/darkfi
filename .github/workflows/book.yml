@@ -1,0 +1,49 @@
+name: Generate DarkFi Book
+
+on:
+    push:
+        branches:
+            - master
+
+jobs:
+    compile-book:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                persist-credentials: false
+                fetch-depth: 0
+
+            - name: Install Python
+              uses: actions/setup-python@v1
+              with:
+                python-version: 3.9
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                toolchain: stable
+                override: true
+                components: rustfmt, clippy
+
+            - name: Install ghp-import and mdbook
+              run: |
+                pip install ghp-import
+                cargo install mdbook
+                export PATH="$HOME/.cargo/bin:$PATH"
+                cargo install --git "https://github.com/lzanini/mdbook-katex"
+                sudo apt -y install make
+
+            - name: Compile and publish the book
+              run: |
+                git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                git config --local user.name "parazyd"
+                cd book
+                make github
+                git checkout gh-pages
+
+            - name: Push changes
+              uses: ad-m/github-push-action@master
+              with:
+                github_token: ${{ secrets.GITHUB_TOKEN }}
+                branch: gh-pages
