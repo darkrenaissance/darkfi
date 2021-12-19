@@ -27,8 +27,8 @@ The following dependencies are also required:
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
 ```shell
-$ sudo apt-get update
-$ sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+% sudo apt-get update
+% sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
 ```
 
 To build the necessary binaries, we can just clone the repo, and use the 
@@ -36,8 +36,8 @@ provided Makefile to build the project. This will download the trusted
 setup params, and compile the source code.
 
 ```shell
-$ git clone https://github.com/darkrenaissance/darkfi
-$ make
+% git clone https://github.com/darkrenaissance/darkfi
+% make
 ```
 
 ## Install
@@ -45,20 +45,20 @@ $ make
 This will install the binaries and configurations in the configured
 namespace (`/usr/local` by default). The configurations are installed
 as TOML files in `/usr/local/share/doc/darkfi`. They have to be copied
-in your user's `$HOME/.config/darkfi` directory. You can review the
+in your user's `HOME/.config/darkfi` directory. You can review the
 installed config files, but the defaults should be good for using
 the testnet if you're following this document.
 
 ```shell
-$ sudo make install
-$ mkdir -p ~/.config/darkfi
-$ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
+% sudo make install
+% mkdir -p ~/.config/darkfi
+% cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
-echo source $(pwd)'/auto-complete' >> ~/.bashrc
+echo source ./auto-complete >> ~/.bashrc
 ```
 
 ## Usage
@@ -71,14 +71,14 @@ In one terminal, start `darkfid`, which is the daemon that will
 communicate with the DarkFi network:
 
 ```shell
-$ darkfid -v
+% darkfid -v
 ```
 
 And in the other terminal, we can use the CLI interface to `darkfid`
 called `drk`:
 
 ```shell
-$ drk -h
+% drk -h
 drk
 
 USAGE:

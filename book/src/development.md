@@ -7,7 +7,7 @@ To ensure every contributor uses the same code style, make sure
 you run `cargo fmt` before committing. You can force yourself to do
 this by creating a git `pre-commit` hook like the following:
 
-```
+```shell
 #!/bin/bash
 diff="$(cargo fmt -- --check)
 result=$?
