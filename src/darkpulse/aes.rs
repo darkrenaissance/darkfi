@@ -24,7 +24,7 @@ pub fn aes_encrypt(
 pub fn aes_decrypt(
     shared_secret: &AesKey,
     nonce: &[u8; 12],
-    ciphertext: &Ciphertext,
+    ciphertext: Ciphertext,
 ) -> Option<Plaintext> {
     // Rust is gay, I need to convert to 'GenericArray' whatever the fuck that is...
     let key = GenericArray::from_slice(&shared_secret[..]);
@@ -47,7 +47,7 @@ fn test_aes() {
 
     let ciphertext = aes_encrypt(&channel_secret, &nonce, b"plaintext message").unwrap();
 
-    let plaintext = aes_decrypt(&channel_secret, &nonce, &ciphertext).unwrap();
+    let plaintext = aes_decrypt(&channel_secret, &nonce, ciphertext).unwrap();
     // OK it works!
     assert_eq!(&plaintext, b"plaintext message");
 }

@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use super::{aes::Ciphertext, channel::Channel, dbsql, net::messages::SlabMessage, CiphertextHash};
 use crate::Result;
 
-pub fn cipher_hash(ciphertext: &Ciphertext) -> CiphertextHash {
+pub fn cipher_hash(ciphertext: Ciphertext) -> CiphertextHash {
     let mut cipher_hash = [0u8; 32];
     let mut hasher = Sha256::new();
     for chunk in ciphertext.chunks(32) {
@@ -18,7 +18,7 @@ pub fn cipher_hash(ciphertext: &Ciphertext) -> CiphertextHash {
 
 impl SlabMessage {
     pub fn cipher_hash(&self) -> CiphertextHash {
-        cipher_hash(&self.ciphertext)
+        cipher_hash(self.ciphertext.clone())
     }
 }
 
@@ -95,12 +95,12 @@ impl SlabsManager {
         Ok(())
     }
 
-    pub fn delete_channel(&mut self, channel_id: &String) -> Result<()> {
+    pub fn delete_channel(&mut self, channel_id: &str) -> Result<()> {
         self.db.delete_channel(channel_id)?;
         Ok(())
     }
 
-    pub fn add_username(&mut self, username: &String) -> Result<()> {
+    pub fn add_username(&mut self, username: &str) -> Result<()> {
         self.db.add_username(username)?;
         Ok(())
     }

@@ -34,7 +34,7 @@ impl Dbsql {
         Ok(())
     }
 
-    pub fn add_username(&self, username: &String) -> Result<()> {
+    pub fn add_username(&self, username: &str) -> Result<()> {
         self.connection
             .execute("INSERT OR IGNORE INTO node (username) VALUES (?1)", params![username])?;
         Ok(())
@@ -76,7 +76,7 @@ impl Dbsql {
         Ok(())
     }
 
-    pub fn delete_channel(&self, channel_name: &String) -> Result<()> {
+    pub fn delete_channel(&self, channel_name: &str) -> Result<()> {
         self.connection
             .execute("DELETE FROM channel WHERE channel_name = (?1)", params![channel_name,])?;
         Ok(())
@@ -141,12 +141,12 @@ impl Dbsql {
     pub fn get_username(&self) -> Result<String> {
         let mut username = String::new();
         let mut stmt3 = self.connection.prepare("SELECT * FROM node")?;
-        let mut uname_iter = stmt3.query_map(params![], |row| {
+        let uname_iter = stmt3.query_map(params![], |row| {
             let username: String = row.get(1)?;
             Ok(username)
         })?;
 
-        for name in uname_iter.next() {
+        for name in uname_iter {
             username = name?;
         }
 

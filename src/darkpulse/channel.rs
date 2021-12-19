@@ -29,9 +29,9 @@ impl Channel {
     }
 
     pub fn gen_new_with_addr(channel_name: String, channel_address: String) -> Result<Channel> {
-        let mut decoded = bs58::decode(channel_address.clone()).into_vec()?;
+        let decoded = bs58::decode(channel_address.clone()).into_vec()?;
         let mut channel_secret: [u8; 32] = [0; 32];
-        channel_secret.copy_from_slice(&mut decoded[4..36]);
+        channel_secret.copy_from_slice(&decoded[4..36]);
         Ok(Channel { channel_secret, channel_name, address: channel_address, id: None })
     }
 

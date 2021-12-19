@@ -137,40 +137,37 @@ impl ProtocolSlab {
             };
 
             for channel in channels.iter() {
-                match aes_decrypt(
+                if let Some(plaintext) = aes_decrypt(
                     &channel.get_channel_secret(),
                     &slab_msg.nonce,
-                    &slab_msg.ciphertext,
+                    slab_msg.ciphertext.clone(),
                 ) {
-                    Some(plaintext) => {
-                        self.slabman
-                            .lock()
-                            .await
-                            .add_new_slab(slab.clone())
-                            .await
-                            .expect("error during adding new slab to database");
+                    self.slabman
+                        .lock()
+                        .await
+                        .add_new_slab(slab.clone())
+                        .await
+                        .expect("error during adding new slab to database");
 
-                        let des_plaintext: ControlMessage = deserialize(&plaintext[..])
-                            .expect("error during deserializing the message");
+                    let des_plaintext: ControlMessage = deserialize(&plaintext[..])
+                        .expect("error during deserializing the message");
 
-                        match des_plaintext.control {
-                            ControlCommand::Join => {
-                                info!("{} joined the group", des_plaintext.payload.nickname);
-                            }
-                            ControlCommand::Leave => {
-                                info!("{} left the group", des_plaintext.payload.nickname);
-                            }
-                            ControlCommand::Message => {
-                                info!(
-                                    "{} -> {}: {}",
-                                    des_plaintext.payload.timestamp,
-                                    des_plaintext.payload.nickname,
-                                    des_plaintext.payload.text
-                                );
-                            }
+                    match des_plaintext.control {
+                        ControlCommand::Join => {
+                            info!("{} joined the group", des_plaintext.payload.nickname);
+                        }
+                        ControlCommand::Leave => {
+                            info!("{} left the group", des_plaintext.payload.nickname);
+                        }
+                        ControlCommand::Message => {
+                            info!(
+                                "{} -> {}: {}",
+                                des_plaintext.payload.timestamp,
+                                des_plaintext.payload.nickname,
+                                des_plaintext.payload.text
+                            );
                         }
                     }
-                    None => {}
                 }
             }
         }

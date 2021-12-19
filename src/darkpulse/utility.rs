@@ -34,10 +34,10 @@ pub fn get_current_time() -> u64 {
     since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000
 }
 
-pub fn save_to_addrs_store(stored_addrs: &Vec<SocketAddr>) -> Result<()> {
+pub fn save_to_addrs_store(stored_addrs: &[SocketAddr]) -> Result<()> {
     let path = default_config_dir()?.join("addrs.add");
     let mut writer = OpenOptions::new().write(true).create(true).open(path)?;
-    let buffer = serialize(stored_addrs);
+    let buffer = serialize(&stored_addrs.to_vec());
     writer.write_all(&buffer)?;
     Ok(())
 }
