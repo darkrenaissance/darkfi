@@ -148,7 +148,7 @@ mod tests {
     }
 
     fn _get_btc_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../token/bitcoin_token_list.json");
+        let file_contents = include_bytes!("../../contrib/token/bitcoin_token_list.json");
         let btc_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
         let tokens = btc_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
