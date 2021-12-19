@@ -16,10 +16,6 @@ git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 features = ["dev-graph", "test-dependencies"]
 
-[dependencies.incrementalmerkletree]
-git = "https://github.com/zcash/incrementalmerkletree.git"
-rev = "b7bd6246122a6e9ace8edb51553fbf5228906cbb"
-
 [dependencies.rocksdb]
 # TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
 git = "https://github.com/parazyd/rust-rocksdb"
@@ -30,11 +26,11 @@ features = ["lz4"]
 [dependencies]
 # Crypto
 halo2 = {version = "=0.1.0-beta.1", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
+incrementalmerkletree = "0.2.0"
 pasta_curves = "0.2.1"
 rand = "0.8.4"
 num-bigint = {version = "0.4.3", features = ["rand", "serde"]}
 blake2b_simd = "1.0.0"
-blake2s_simd = "1.0.0"
 group = "0.11.0"
 crypto_api_chachapoly = "0.5.0"
 arrayvec = "0.7.2"
