@@ -3,6 +3,7 @@
 ![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/rust-build.yml/badge.svg)
 [![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-lightgrey?logo=firefox-browser&logoColor=white)](https://dark.fi)
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-lightgrey?logo=firefox-browser&logoColor=white)](https://lists.dyne.org/lurker/message/20211021.123016.3dccaf0c.en.html)
+[![Book](https://img.shields.io/badge/Book-mdbook-lightgrey?logo=firefox-browser&logoColor=white)](https://darkrenaissance.github.io/darkfi)
 
 ## Build
 
@@ -25,7 +26,7 @@ The following dependencies are also required:
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
-```
+```shell
 $ sudo apt-get update
 $ sudo apt-get install -y build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
 ```
@@ -34,7 +35,7 @@ To build the necessary binaries, we can just clone the repo, and use the
 provided Makefile to build the project. This will download the trusted 
 setup params, and compile the source code.
 
-```
+```shell
 $ git clone https://github.com/darkrenaissance/darkfi
 $ make
 ```
@@ -48,7 +49,7 @@ in your user's `$HOME/.config/darkfi` directory. You can review the
 installed config files, but the defaults should be good for using
 the testnet if you're following this document.
 
-```
+```shell
 $ sudo make install
 $ mkdir -p ~/.config/darkfi
 $ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
@@ -56,7 +57,7 @@ $ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
-```
+```shell
 echo source $(pwd)'/auto-complete' >> ~/.bashrc
 ```
 
@@ -69,14 +70,14 @@ binaries in `/usr/local`. Also, the configuration files should be in
 In one terminal, start `darkfid`, which is the daemon that will
 communicate with the DarkFi network:
 
-```
+```shell
 $ darkfid -v
 ```
 
 And in the other terminal, we can use the CLI interface to `darkfid`
 called `drk`:
 
-```
+```shell
 $ drk -h
 drk
 
@@ -104,11 +105,11 @@ SUBCOMMANDS:
 
 ### Examples
 
-See [doc/tutorial.md](doc/tutorial.md).
+See the [DarkFi book](https://darkrenaissance.github.io/darkfi)
 
 ## Code Formatting
 
-```
+```shell
 cargo +nightly fmt
 cargo clippy
 ```
