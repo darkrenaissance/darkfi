@@ -10,7 +10,7 @@ To run darkfi, we must first install the software. Do this by cloning
 the darkfi repo:
 
 ```
-$ git clone https://github.com/darkrenaissance/darkfi
+% git clone https://github.com/darkrenaissance/darkfi
 ```
 
 ## Build
@@ -20,7 +20,7 @@ the trusted setup params and compile the source code. This might take
 a while.
 
 ```
-$ make
+% make
 ```
 
 ## Install
@@ -29,15 +29,15 @@ We will now install the project. This will install the binaries
 and configurations in the configured namespace (`/usr/local`
 by default). The configurations are installed as TOML files in
 `/usr/local/share/doc/darkfi`. They have to be copied in your user's
-`$HOME/.config/darkfi` directory.
+`HOME/.config/darkfi` directory.
 
 Feel free to review the installed config files, but you don't need to
 change anything to run the testnet. The defaults will work fine.
 
 ```
-$ sudo make install
-$ mkdir -p ~/.config/darkfi
-$ cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
+% sudo make install
+% mkdir -p ~/.config/darkfi
+% cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
 ## Run
@@ -58,14 +58,14 @@ We're now ready to use the testnet.
 Open two terminal windows. In one terminal, start `darkfid`:
 
 ```
-$ darkfid -v
+% darkfid -v
 ```
 
 And another terminal, run `drk`. This is the command-line interface to
 interact with `darkfid`.
 
 ```
-$ drk -h
+% drk -h
 drk
 
 USAGE:
@@ -124,19 +124,19 @@ or darkened SOL.
 To deposit testnet BTC:
 
 ```
-$ drk deposit btc --network bitcoin
+% drk deposit btc --network bitcoin
 ```
 
 To deposit testnet SOL:
 
 ```
-$ drk deposit sol --network solana
+% drk deposit sol --network solana
 ```
 
 To deposit any other asset:
 
 ```
-$ drk deposit [ASSET] --network solana
+% drk deposit [ASSET] --network solana
 ```
 
 This command will send a deposit request to the cashier. After running
@@ -152,7 +152,7 @@ deposit. You can follow the progress on the terminal window where you ran
 `darkfid`. Then check your updated balance, like so:
 
 ```
-$ drk wallet --balances
+% drk wallet --balances
 
 +-------+--------+---------+
 | token | amount | network |
@@ -171,7 +171,7 @@ Find a friend with an account on darkfi and ask them for their darkfi
 address. Then run the transfer command:
 
 ```
-$ drk transfer <TOKEN> <ADDRESS> <AMOUNT>
+% drk transfer <TOKEN> <ADDRESS> <AMOUNT>
 ```
 
 For example, to transfer 1 SOL to a user at
@@ -179,7 +179,7 @@ For example, to transfer 1 SOL to a user at
 following command:
 
 ```
-$ drk transfer sol 9GmLk7kkbxhsbLTYFMeg6FyuQJV9Na2GcJYFNrs3VLkv 1
+% drk transfer sol 9GmLk7kkbxhsbLTYFMeg6FyuQJV9Na2GcJYFNrs3VLkv 1
 ```
 
 ## Receive
@@ -188,8 +188,7 @@ To receive anonymous tokens your darkfid account, you must retrieve your
 darkfi address. Send this address to others so they can send you tokens.
 
 ```
-$ drk wallet --address
-    
+% drk wallet --address
 Wallet address: "9GmLk7kkbxhsbLTYFMeg6FyuQJV9Na2GcJYFNrs3VLkv"
 ```
 
@@ -202,20 +201,20 @@ you have 1 dBTC you will receive 1 BTC.
 To do so, simply send the following request to the cashier:
 
 ```
-$ drk withdraw <TOKENSYM> <ADDRESS> <AMOUNT> --network <network>
+% drk withdraw <TOKENSYM> <ADDRESS> <AMOUNT> --network <network>
 ```
 
 For example, if you want to withdraw 0.5 SOL to the Solana address
 4q7rkNvH5BVs6VLz6nyhKLvqXmwDyjGnUsE5sZzRNgp4, you would write:
 
 ```
-$ drk withdraw sol 4q7rkNvH5BVs6VLz6nyhKLvqXmwDyjGnUsE5sZzRNgp4 0.5 --network solana
+% drk withdraw sol 4q7rkNvH5BVs6VLz6nyhKLvqXmwDyjGnUsE5sZzRNgp4 0.5 --network solana
 ```
 
 For Bitcoin, the command would look like this:
 
 ```
-$ drk withdraw btc bc1qw7nt2yca0zykh8a5sc6nmy3r3clx4ha206wepn 0.5 --network bitcoin
+% drk withdraw btc bc1qw7nt2yca0zykh8a5sc6nmy3r3clx4ha206wepn 0.5 --network bitcoin
 ```
 
 ## Configure
