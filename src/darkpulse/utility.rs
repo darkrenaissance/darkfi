@@ -1,20 +1,26 @@
-use std::fs::OpenOptions;
-use std::io::prelude::*;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fs::OpenOptions,
+    io::prelude::*,
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{atomic::AtomicU64, Arc},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use async_executor::Executor;
 use futures::prelude::*;
 use log::*;
 
-use super::{aes_encrypt, Dbsql, messages, ProtocolSlab, ControlMessage, ControlCommand, Channel,
-SlabsManagerSafe, MessagePayload};
+use super::{
+    aes_encrypt, messages, Channel, ControlCommand, ControlMessage, Dbsql, MessagePayload,
+    ProtocolSlab, SlabsManagerSafe,
+};
 
-
-use crate::{ serial::{serialize, deserialize}, net::ChannelPtr, Result};
+use crate::{
+    net::ChannelPtr,
+    serial::{deserialize, serialize},
+    Result,
+};
 
 pub type AddrsStorage = Arc<async_std::sync::Mutex<Vec<SocketAddr>>>;
 
@@ -22,12 +28,11 @@ pub type Clock = Arc<AtomicU64>;
 
 pub fn get_current_time() -> u64 {
     let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Incorrect system clock: time went backwards");
+    let since_the_epoch =
+        start.duration_since(UNIX_EPOCH).expect("Incorrect system clock: time went backwards");
     let in_ms =
         since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000;
-    return in_ms;
+    return in_ms
 }
 
 pub fn save_to_addrs_store(stored_addrs: &Vec<SocketAddr>) -> Result<()> {
@@ -62,11 +67,7 @@ pub fn default_config_dir() -> Result<PathBuf> {
 pub fn load_stored_addrs() -> Result<Vec<SocketAddr>> {
     let path = default_config_dir()?.join("addrs.add");
     println!("{:?}", path);
-    let mut reader = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(path)?;
+    let mut reader = OpenOptions::new().read(true).write(true).create(true).open(path)?;
     let mut buffer = Vec::new();
     reader.read_to_end(&mut buffer)?;
     if !buffer.is_empty() {
@@ -87,16 +88,9 @@ pub async fn pack_slab(
     let timestamp = chrono::offset::Utc::now();
     let timestamp: i64 = timestamp.timestamp_millis() / 1000;
 
-    let msg_payload = MessagePayload {
-        nickname: username.clone(),
-        text: message,
-        timestamp,
-    };
+    let msg_payload = MessagePayload { nickname: username.clone(), text: message, timestamp };
 
-    let control_message = ControlMessage {
-        control: control_command,
-        payload: msg_payload,
-    };
+    let control_message = ControlMessage { control: control_command, payload: msg_payload };
 
     let ser_message = serialize(&control_message);
 
@@ -143,7 +137,7 @@ pub fn choose_channel(db: &Dbsql, channel_name: Option<String>) -> Result<Channe
                     .next()
                     .expect(format!("there is no channel with the name {}: ", name).as_str())
                     .clone();
-                }
+            }
             None => {
                 main_channel = channels.first().unwrap().clone();
             }
@@ -162,18 +156,10 @@ pub async fn setup_network_channel(
 ) {
     let message_subsytem = channel.get_message_subsystem();
 
-    message_subsytem
-        .add_dispatch::<messages::SyncMessage>()
-        .await;
-    message_subsytem
-        .add_dispatch::<messages::InvMessage>()
-        .await;
-    message_subsytem
-        .add_dispatch::<messages::GetSlabsMessage>()
-        .await;
-    message_subsytem
-        .add_dispatch::<messages::SlabMessage>()
-        .await;
+    message_subsytem.add_dispatch::<messages::SyncMessage>().await;
+    message_subsytem.add_dispatch::<messages::InvMessage>().await;
+    message_subsytem.add_dispatch::<messages::GetSlabsMessage>().await;
+    message_subsytem.add_dispatch::<messages::SlabMessage>().await;
 
     let protocol_slab = ProtocolSlab::new(slabman, channel.clone()).await;
     protocol_slab.clone().start(executor.clone()).await;

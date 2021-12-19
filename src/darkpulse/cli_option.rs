@@ -28,12 +28,7 @@ impl CliOption {
                     .long("accept")
                     .required(true),
             )
-            .arg(
-                Arg::with_name("slots")
-                    .value_name("SLOTS")
-                    .long("slots")
-                    .help("Connection slots"),
-            )
+            .arg(Arg::with_name("slots").value_name("SLOTS").long("slots").help("Connection slots"))
             .arg(
                 Arg::with_name("verbose")
                     .takes_value(false)
@@ -142,10 +137,7 @@ impl CliOption {
             if let Some(channeladdress) = newch.value_of("address") {
                 new_channel_address = String::from(channeladdress);
             }
-            new_channel = Some(Channel::gen_new_with_addr(
-                new_channel_name,
-                new_channel_address,
-            )?);
+            new_channel = Some(Channel::gen_new_with_addr(new_channel_name, new_channel_address)?);
         }
 
         let verbose = mat.is_present("verbose");
@@ -171,14 +163,7 @@ impl CliOption {
             seeds: seed_addresses,
         };
 
-        Ok(CliOption {
-            network_settings,
-            username,
-            channel_name,
-            new_channel,
-            verbose,
-            log_path,
-        })
+        Ok(CliOption { network_settings, username, channel_name, new_channel, verbose, log_path })
     }
 
     fn collect_addrs(addrs: Vec<&str>) -> Vec<SocketAddr> {

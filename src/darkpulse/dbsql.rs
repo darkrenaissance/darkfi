@@ -1,13 +1,9 @@
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fs::File;
-use std::io::prelude::*;
+use std::{collections::HashMap, convert::TryInto, fs::File, io::prelude::*};
 
 use rusqlite::{params, Connection};
 
+use super::{utility::default_config_dir, Channel, CiphertextHash, SlabMessage};
 use crate::Result;
-use super::{SlabMessage, CiphertextHash,utility::default_config_dir,
-Channel};
 
 #[derive(Debug)]
 pub struct Dbsql {
@@ -20,10 +16,7 @@ impl Dbsql {
         let path = default_config_dir()?.join("data.db");
         let connection = Connection::open(path)?;
         let username = String::new();
-        Ok(Dbsql {
-            connection,
-            username,
-        })
+        Ok(Dbsql { connection, username })
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -42,10 +35,8 @@ impl Dbsql {
     }
 
     pub fn add_username(&self, username: &String) -> Result<()> {
-        self.connection.execute(
-            "INSERT OR IGNORE INTO node (username) VALUES (?1)",
-            params![username],
-        )?;
+        self.connection
+            .execute("INSERT OR IGNORE INTO node (username) VALUES (?1)", params![username])?;
         Ok(())
     }
 
@@ -86,10 +77,8 @@ impl Dbsql {
     }
 
     pub fn delete_channel(&self, channel_name: &String) -> Result<()> {
-        self.connection.execute(
-            "DELETE FROM channel WHERE channel_name = (?1)",
-            params![channel_name,],
-        )?;
+        self.connection
+            .execute("DELETE FROM channel WHERE channel_name = (?1)", params![channel_name,])?;
         Ok(())
     }
 
@@ -138,12 +127,7 @@ impl Dbsql {
                 .expect("error when converting vector to slice with size [u8; 32]");
 
             let address = row.get(3)?;
-            Ok(Channel::new(
-                    channel_name,
-                    channel_secret,
-                    address,
-                    channel_id,
-            ))
+            Ok(Channel::new(channel_name, channel_secret, address, channel_id))
         })?;
 
         for channel in channel_iter {

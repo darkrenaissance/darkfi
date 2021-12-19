@@ -1,14 +1,16 @@
-use async_std::sync::{Arc, Mutex};
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 use log::*;
 use smol::Unblock;
 
-use drk::darkpulse::{
-    dbsql, messages, utility, CiphertextHash, CliOption, ControlCommand, MemPool,
-    SlabsManager,
+use drk::{
+    darkpulse::{
+        dbsql, messages, utility, CiphertextHash, CliOption, ControlCommand, MemPool, SlabsManager,
+    },
+    net::P2p,
+    Result,
 };
-use drk::{Result, net::P2p};
 
 async fn on_receive_slab(
     p2p: Arc<P2p>,
@@ -16,11 +18,8 @@ async fn on_receive_slab(
 ) -> Result<()> {
     loop {
         let slab = slab_rx.recv().await?;
-        p2p.broadcast(messages::InvMessage {
-            slabs_hash: vec![slab],
-        })
-        .await?;
-        }
+        p2p.broadcast(messages::InvMessage { slabs_hash: vec![slab] }).await?;
+    }
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: CliOption, db: dbsql::Dbsql) -> Result<()> {
@@ -34,10 +33,7 @@ async fn start(executor: Arc<Executor<'_>>, options: CliOption, db: dbsql::Dbsql
 
     // choose a channel
     if let Some(new_channel) = options.new_channel {
-        info!(
-            "channel added with the name {}",
-            new_channel.get_channel_name()
-        );
+        info!("channel added with the name {}", new_channel.get_channel_name());
         db.add_channel(&new_channel).unwrap();
     }
     let main_channel = utility::choose_channel(&db, options.channel_name)?;
@@ -56,7 +52,7 @@ async fn start(executor: Arc<Executor<'_>>, options: CliOption, db: dbsql::Dbsql
             let network_channel = subscribtion.receive().await.unwrap();
             utility::setup_network_channel(executor2.clone(), network_channel, slabman.clone())
                 .await;
-            }
+        }
     });
 
     let receive_slab = executor.spawn(on_receive_slab(p2p.clone(), slab_rx.clone()));
@@ -83,7 +79,7 @@ async fn start(executor: Arc<Executor<'_>>, options: CliOption, db: dbsql::Dbsql
                     String::from("Hello"),
                     ControlCommand::Message,
                 )
-                    .await?;
+                .await?;
 
                 p2p.broadcast(slab).await?;
             }
@@ -120,11 +116,7 @@ pub fn main() -> Result<()> {
 
     let cli_option = CliOption::get()?;
 
-    let debug_level = if cli_option.verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Off
-    };
+    let debug_level = if cli_option.verbose { LevelFilter::Debug } else { LevelFilter::Off };
 
     CombinedLogger::init(vec![
         TermLogger::new(debug_level, Config::default(), TerminalMode::Mixed, ColorChoice::Always),
@@ -134,7 +126,7 @@ pub fn main() -> Result<()> {
             std::fs::File::create("/tmp/darkpulsenode.log").unwrap(),
         ),
     ])
-        .unwrap();
+    .unwrap();
 
     let mut db = dbsql::Dbsql::new()?;
     db.start()?;

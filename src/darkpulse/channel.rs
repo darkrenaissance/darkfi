@@ -1,4 +1,3 @@
-
 use bs58;
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -20,35 +19,20 @@ impl Channel {
         address: String,
         id: u32,
     ) -> Channel {
-        Channel {
-            channel_secret,
-            channel_name,
-            address,
-            id: Some(id),
-        }
+        Channel { channel_secret, channel_name, address, id: Some(id) }
     }
 
     pub fn gen_new(channel_name: String) -> Channel {
         let channel_secret = rand::thread_rng().gen::<[u8; 32]>();
         let address = Self::gen_address(channel_secret);
-        Channel {
-            channel_secret,
-            channel_name,
-            address,
-            id: None,
-        }
+        Channel { channel_secret, channel_name, address, id: None }
     }
 
     pub fn gen_new_with_addr(channel_name: String, channel_address: String) -> Result<Channel> {
         let mut decoded = bs58::decode(channel_address.clone()).into_vec()?;
         let mut channel_secret: [u8; 32] = [0; 32];
         channel_secret.copy_from_slice(&mut decoded[4..36]);
-        Ok(Channel {
-            channel_secret,
-            channel_name,
-            address: channel_address,
-            id: None,
-        })
+        Ok(Channel { channel_secret, channel_name, address: channel_address, id: None })
     }
 
     pub fn gen_address(channel_secret: [u8; 32]) -> String {
@@ -99,10 +83,7 @@ mod tests {
         let channel_address = channel.get_channel_address();
         let channel2 = Channel::gen_new_with_addr(String::from("test"), channel_address.clone())?;
         assert_eq!(channel.get_channel_secret(), channel2.get_channel_secret());
-        assert_eq!(
-            channel.get_channel_address(),
-            channel2.get_channel_address()
-        );
+        assert_eq!(channel.get_channel_address(), channel2.get_channel_address());
         Ok(())
     }
 }

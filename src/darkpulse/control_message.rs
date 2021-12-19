@@ -1,6 +1,9 @@
 use std::io;
 
-use crate::{serial::{Decodable, Encodable}, Result};
+use crate::{
+    serial::{Decodable, Encodable},
+    Result,
+};
 
 #[derive(Copy, Clone)]
 pub enum ControlCommand {
@@ -56,9 +59,6 @@ impl Decodable for ControlMessage {
             1 => ControlCommand::Leave,
             _ => ControlCommand::Message,
         };
-        Ok(Self {
-            control,
-            payload: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { control, payload: Decodable::decode(&mut d)? })
     }
 }

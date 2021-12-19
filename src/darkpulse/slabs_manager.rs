@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use log::*;
 use sha2::{Digest, Sha256};
 
-use crate:: Result;
-use super::{dbsql, net::messages::SlabMessage, channel::Channel, CiphertextHash, aes::Ciphertext};
+use super::{aes::Ciphertext, channel::Channel, dbsql, net::messages::SlabMessage, CiphertextHash};
+use crate::Result;
 
 pub fn cipher_hash(ciphertext: &Ciphertext) -> CiphertextHash {
     let mut cipher_hash = [0u8; 32];
@@ -83,10 +82,7 @@ impl SlabsManager {
         let default_slabs: HashMap<CiphertextHash, SlabMessage> = HashMap::new();
 
         if let Some(channel_id) = self.main_channel.get_channel_id() {
-            self.slabs = self
-                .db
-                .get_channel_slabs(channel_id.clone())
-                .unwrap_or(default_slabs);
+            self.slabs = self.db.get_channel_slabs(channel_id.clone()).unwrap_or(default_slabs);
         }
     }
 

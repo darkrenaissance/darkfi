@@ -1,6 +1,7 @@
-
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
-use aes_gcm::Aes256Gcm;
+use aes_gcm::{
+    aead::{generic_array::GenericArray, Aead, NewAead},
+    Aes256Gcm,
+};
 
 pub type AesKey = [u8; 32];
 pub type Plaintext = Vec<u8>;

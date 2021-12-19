@@ -3,11 +3,18 @@ use std::sync::Arc;
 use log::*;
 use smol::Executor;
 
-use crate::error::Result as NetResult;
-use crate::serial::deserialize;
-use crate::net::{message_subscriber::MessageSubscription, protocols::ProtocolJobsManager,
-protocols::ProtocolJobsManagerPtr ,ChannelPtr};
-use crate::darkpulse::{aes_decrypt, messages, ControlCommand, ControlMessage, SlabsManagerSafe, CiphertextHash};
+use crate::{
+    darkpulse::{
+        aes_decrypt, messages, CiphertextHash, ControlCommand, ControlMessage, SlabsManagerSafe,
+    },
+    error::Result as NetResult,
+    net::{
+        message_subscriber::MessageSubscription,
+        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
+        ChannelPtr,
+    },
+    serial::deserialize,
+};
 
 pub struct ProtocolSlab {
     channel: ChannelPtr,
@@ -62,23 +69,11 @@ impl ProtocolSlab {
         debug!(target: "net", "ProtocolSlab::start() [START]");
         self.jobsman.clone().start(executor.clone());
 
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_sync(), executor.clone())
-            .await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_inv(), executor.clone())
-            .await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_sync(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_inv(), executor.clone()).await;
 
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_get_slabs(), executor.clone())
-            .await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_slab(), executor)
-            .await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_get_slabs(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_slab(), executor).await;
 
         let _ = self.channel.send(messages::SyncMessage {}).await;
 
@@ -90,9 +85,7 @@ impl ProtocolSlab {
         loop {
             let _sync_msg = self.sync_sub.receive().await?;
             let slab_hashs = self.slabman.lock().await.get_slabs_hash();
-            let inv_msg = messages::InvMessage {
-                slabs_hash: slab_hashs.clone(),
-            };
+            let inv_msg = messages::InvMessage { slabs_hash: slab_hashs.clone() };
             self.channel.send(inv_msg).await?;
             info!("receive sync message!");
         }
@@ -109,9 +102,7 @@ impl ProtocolSlab {
                     list_of_hash.push(slab.clone());
                 }
             }
-            let getslabs_msg = messages::GetSlabsMessage {
-                slabs_hash: list_of_hash,
-            };
+            let getslabs_msg = messages::GetSlabsMessage { slabs_hash: list_of_hash };
             self.channel.send(getslabs_msg).await?;
             info!("receive inv message!");
         }

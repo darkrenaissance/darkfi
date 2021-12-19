@@ -1,11 +1,11 @@
 use std::io;
 
 use crate::{
+    darkpulse::Ciphertext,
     net::messages::Message,
     serial::{Decodable, Encodable},
-    Result
+    Result,
 };
-use crate::darkpulse::Ciphertext;
 
 #[derive(Clone)]
 pub struct GetSlabsMessage {
@@ -58,9 +58,7 @@ impl Encodable for GetSlabsMessage {
 
 impl Decodable for GetSlabsMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            slabs_hash: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { slabs_hash: Decodable::decode(&mut d)? })
     }
 }
 
@@ -75,10 +73,7 @@ impl Encodable for SlabMessage {
 
 impl Decodable for SlabMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            nonce: Decodable::decode(&mut d)?,
-            ciphertext: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { nonce: Decodable::decode(&mut d)?, ciphertext: Decodable::decode(&mut d)? })
     }
 }
 
@@ -92,9 +87,7 @@ impl Encodable for InvMessage {
 
 impl Decodable for InvMessage {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            slabs_hash: Decodable::decode(&mut d)?,
-        })
+        Ok(Self { slabs_hash: Decodable::decode(&mut d)? })
     }
 }
 
