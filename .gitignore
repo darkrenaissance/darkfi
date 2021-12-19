@@ -1,13 +1,9 @@
-target
+target/*
 *.pyc
 *.sage.py
-.confdir
-.direnv/
-result
 
-drk
-darkfid
-cashierd
-gatewayd
-vm
-vm_burn
+/drk
+/darkfid
+/cashierd
+/gatewayd
+/tx
