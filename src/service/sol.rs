@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
 use solana_sdk::{
-    native_token::lamports_to_sol,
+    native_token::{lamports_to_sol, sol_to_lamports},
     program_pack::Pack,
     pubkey::Pubkey,
     signature::{Signature, Signer},
@@ -75,8 +75,8 @@ impl SolClient {
         let main_sol_balance =
             rpc.get_balance(&self.main_keypair.pubkey()).map_err(SolFailed::from)?;
 
-        let fees = rpc.get_fees()?;
-        let lamports_per_signature = fees.fee_calculator.lamports_per_signature;
+        // 0.0001 is the maximum that could happen
+        let lamports_per_signature = sol_to_lamports(0.0001);
         let required_funds = lamports_per_signature * 3;
 
         Ok(main_sol_balance > required_funds)
@@ -492,9 +492,9 @@ impl NetworkClient for SolClient {
 
         let mut tx = Transaction::new_with_payer(&[instruction], Some(&self.main_keypair.pubkey()));
         let bhq = BlockhashQuery::default();
-        match bhq.get_blockhash_and_fee_calculator(&rpc, rpc.commitment()) {
+        match bhq.get_blockhash(&rpc, rpc.commitment()) {
             Err(_) => panic!("Couldn't connect to RPC"),
-            Ok(v) => tx.sign(&[&self.main_keypair], v.0),
+            Ok(v) => tx.sign(&[&self.main_keypair], v),
         }
 
         let _signature = rpc.send_and_confirm_transaction(&tx).map_err(SolFailed::from)?;
@@ -532,9 +532,9 @@ pub fn sign_and_send_transaction(
     signers: Vec<&Keypair>,
 ) -> SolResult<Signature> {
     let bhq = BlockhashQuery::default();
-    match bhq.get_blockhash_and_fee_calculator(rpc, rpc.commitment()) {
+    match bhq.get_blockhash(rpc, rpc.commitment()) {
         Err(_) => return Err(SolFailed::RpcError("Couldn't connect to RPC".into())),
-        Ok(v) => tx.sign(&signers, v.0),
+        Ok(v) => tx.sign(&signers, v),
     }
 
     match rpc.send_and_confirm_transaction(&tx) {
