@@ -1,0 +1,13 @@
+[package]
+name = "zkas"
+version = "0.0.1"
+homepage = "https://dark.fi"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.49"
+clap = "2.34.0"
+colour = "0.6.0"
