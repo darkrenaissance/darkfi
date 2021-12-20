@@ -10,7 +10,7 @@ $C$, and we use the burn proof to spend a previously minted _coin_.
 constant "Mint" {
     EcFixedPoint VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
-};
+}
 
 contract "Mint" {
     Base pub_x,
@@ -21,7 +21,7 @@ contract "Mint" {
     Base coin_blind,
     Scalar value_blind,
     Scalar asset_blind,
-};
+}
 
 circuit "Mint" {
     # Poseidon hash of the coin
@@ -51,7 +51,7 @@ circuit "Mint" {
     constrain_instance(token_commit_y);
 
     # At this point we've enforced all of our public inputs.
-};
+}
 ```
 
 As you can see, the `Mint` contract/circuit basically consists of
@@ -154,7 +154,7 @@ constant "Burn" {
     EcFixedPoint VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPoint NULLIFIER_K,
-};
+}
 
 contract "Burn" {
     Base secret,
@@ -166,7 +166,7 @@ contract "Burn" {
     Scalar value_blind,
     Scalar token_blind,
     Base signature_secret,
-};
+}
 
 circuit "Burn" {
     # Poseidon hash of the Nullifier
@@ -208,7 +208,7 @@ circuit "Burn" {
     constrain_instance(signature_y);
 
     # At this point we've enforced all of our public inputs.
-};
+}
 ```
 
 The `Burn` contract/circuit consists of operations similar to the

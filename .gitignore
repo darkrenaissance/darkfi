@@ -1,6 +1,8 @@
-target/*
 *.pyc
 *.sage.py
+target/*
+/zkas/target
+/zkas/zkas
 
 /drk
 /darkfid
