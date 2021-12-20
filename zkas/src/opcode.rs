@@ -7,5 +7,7 @@ pub enum OpCode {
 
     PoseidonHash = 0x10,
 
+    CalculateMerkleRoot = 0x20,
+
     ConstrainInstance = 0xf0,
 }
