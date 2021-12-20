@@ -1339,6 +1339,7 @@ dependencies = [
  "async-trait",
  "async-tungstenite",
  "bdk",
+ "bincode",
  "bitcoin",
  "blake2b_simd 1.0.0",
  "bs58",

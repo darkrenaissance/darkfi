@@ -3,8 +3,17 @@ use std::{io, iter};
 use halo2_gadgets::primitives::sinsemilla::HashDomain;
 use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
-use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeFieldBits, pallas};
-use subtle::ConstantTimeEq;
+use pasta_curves::{
+    arithmetic::FieldExt,
+    group::ff::{PrimeField, PrimeFieldBits},
+    pallas,
+};
+use serde::{
+    de::{Deserializer, Error},
+    ser::Serializer,
+    Deserialize, Serialize,
+};
+use subtle::{ConstantTimeEq, CtOption};
 
 use crate::{
     crypto::constants::{
@@ -29,8 +38,33 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, std::cmp::Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct MerkleNode(pub pallas::Base);
+
+impl MerkleNode {
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+
+    pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Self> {
+        pallas::Base::from_repr(*bytes).map(MerkleNode)
+    }
+}
+
+impl Serialize for MerkleNode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.to_bytes().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for MerkleNode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let parsed = <[u8; 32]>::deserialize(deserializer)?;
+        <Option<_>>::from(Self::from_bytes(&parsed)).ok_or_else(|| {
+            Error::custom("Attempted to deserialize a non-canonical representation of a Pallas base field element")
+        })
+    }
+}
 
 impl std::cmp::PartialEq for MerkleNode {
     fn eq(&self, other: &Self) -> bool {
