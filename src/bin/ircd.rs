@@ -76,11 +76,11 @@ impl ServerConnection {
         if !self.is_init && self.is_nick_init && self.is_user_init {
             debug!("Initializing peer connection");
             self.write_stream.write_all(b":behemoth 001 fifififif :Hi, welcome to IRC\n").await?;
-            self.write_stream.write_all(b":behemoth 002 fifififif :Your host is behemoth, running version miniircd-2.1\n").await?;
-            self.write_stream.write_all(b":behemoth 003 fifififif :This server was created sometime\n").await?;
-            self.write_stream.write_all(b":behemoth 004 fifififif behemoth miniircd-2.1 o o\n").await?;
-            self.write_stream.write_all(b":behemoth 251 fifififif :There are 1 users and 0 services on 1 server\n").await?;
-            self.write_stream.write_all(b":behemoth 422 fifififif :MOTD File is missing\n").await?;
+            //self.write_stream.write_all(b":behemoth 002 fifififif :Your host is behemoth, running version miniircd-2.1\n").await?;
+            //self.write_stream.write_all(b":behemoth 003 fifififif :This server was created sometime\n").await?;
+            //self.write_stream.write_all(b":behemoth 004 fifififif behemoth miniircd-2.1 o o\n").await?;
+            //self.write_stream.write_all(b":behemoth 251 fifififif :There are 1 users and 0 services on 1 server\n").await?;
+            //self.write_stream.write_all(b":behemoth 422 fifififif :MOTD File is missing\n").await?;
             self.is_init = true;
         }
 
