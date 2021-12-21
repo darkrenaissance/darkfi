@@ -6,6 +6,7 @@ use clap::{clap_app, ArgMatches};
 use log::debug;
 use prettytable::{format, Table};
 use serde_json::{json, Value};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use drk::{
     cli::{Config, DrkConfig},
@@ -341,14 +342,19 @@ async fn main() -> Result<()> {
     };
 
     let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
+        LevelFilter::Debug
     } else if args.is_present("trace") {
-        log::Level::Trace
+        LevelFilter::Trace
     } else {
-        log::Level::Info
+        LevelFilter::Info
     };
 
-    simple_logger::init_with_level(loglevel)?;
+    TermLogger::init(
+        loglevel,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
     let config = Config::<DrkConfig>::load(config_path)?;
 
     start(&config, args).await

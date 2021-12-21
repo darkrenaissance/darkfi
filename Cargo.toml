@@ -66,7 +66,7 @@ failure = "0.1.8"
 lazy_static = "1.4.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
-simple_logger = "1.15.0"
+simplelog = "0.11.1"
 signal-hook = "0.3.10"
 signal-hook-async-std = "0.2.1"
 subtle = "2.4.1"
@@ -78,7 +78,7 @@ async-tungstenite = "0.16.0"
 tungstenite = "0.16.0"
 
 # Used for wallet management.
-sqlx = {git = "https://github.com/parazyd/sqlx", rev = "0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867", features = ["runtime-async-std-native-tls", "sqlite"]}
+sqlx = {git = "https://github.com/parazyd/sqlx", rev = "94a600cced8e3a2dea78f506f9325494d68b771a", features = ["runtime-async-std-native-tls", "sqlite"]}
 libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"]}
 
 # Used for gatewayd network transport.
@@ -100,7 +100,6 @@ spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"],
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 
 aes-gcm = {version = "0.9.4", optional = true}
-simplelog = {version = "0.11.1", optional = true}
 chrono = {version = "0.4.19", optional = true}
 rusqlite = {version = "0.26.3", optional = true}
 
@@ -108,7 +107,7 @@ rusqlite = {version = "0.26.3", optional = true}
 btc = ["bdk", "bitcoin", "secp256k1"]
 eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
-darkpulse = ["aes-gcm", "simplelog", "chrono","rusqlite"]
+darkpulse = ["aes-gcm", "chrono","rusqlite"]
 
 
 

@@ -1,3 +1,9 @@
+use std::{
+    io,
+    net::{SocketAddr, TcpListener, TcpStream},
+    sync::Arc,
+};
+
 use async_executor::Executor;
 use async_std::io::BufReader;
 use futures::{
@@ -5,12 +11,8 @@ use futures::{
     AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt,
 };
 use log::{debug, error, info, warn};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use smol::Async;
-use std::{
-    io,
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::Arc,
-};
 
 use drk::{Error, Result};
 
@@ -173,11 +175,12 @@ async fn async_main(executor: Arc<Executor<'_>>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    //simple_logger::init_with_level(log::Level::Trace)?;
-    simple_logger::SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
-        .with_utc_timestamps()
-        .init()?;
+    TermLogger::init(
+        LevelFilter::Debug,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(async_main(ex.clone())))

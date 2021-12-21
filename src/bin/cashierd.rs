@@ -9,6 +9,7 @@ use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
@@ -748,14 +749,19 @@ async fn main() -> Result<()> {
     };
 
     let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
+        LevelFilter::Debug
     } else if args.is_present("trace") {
-        log::Level::Trace
+        LevelFilter::Trace
     } else {
-        log::Level::Info
+        LevelFilter::Info
     };
 
-    simple_logger::init_with_level(loglevel)?;
+    TermLogger::init(
+        loglevel,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
 
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 

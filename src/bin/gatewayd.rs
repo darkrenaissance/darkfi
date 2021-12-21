@@ -4,6 +4,7 @@ use async_executor::Executor;
 use clap::clap_app;
 use easy_parallel::Parallel;
 use log::debug;
+use simplelog::{LevelFilter, SimpleLogger};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
@@ -42,14 +43,14 @@ async fn main() -> Result<()> {
     };
 
     let loglevel = if args.is_present("verbose") {
-        log::Level::Debug
+        LevelFilter::Debug
     } else if args.is_present("trace") {
-        log::Level::Trace
+        LevelFilter::Trace
     } else {
-        log::Level::Info
+        LevelFilter::Info
     };
 
-    simple_logger::init_with_level(loglevel)?;
+    SimpleLogger::init(loglevel, simplelog::Config::default())?;
 
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;
 

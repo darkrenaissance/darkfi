@@ -856,7 +856,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "serde",
- "time 0.1.44",
+ "time",
  "winapi 0.3.9",
 ]
 
@@ -918,17 +918,6 @@ name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
-
-[[package]]
-name = "colored"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ffc801dacf156c5854b9df4f425a626539c3a6ef7893cc0c5084a23f0b6c59"
-dependencies = [
- "atty",
- "lazy_static",
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "concurrent-queue"
@@ -1376,7 +1365,6 @@ dependencies = [
  "sha2",
  "signal-hook",
  "signal-hook-async-std",
- "simple_logger",
  "simplelog",
  "smol",
  "solana-client",
@@ -4246,19 +4234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02658e48d89f2bec991f9a78e69cfa4c316f8d6a6c4ec12fae1aeb263d486788"
 
 [[package]]
-name = "simple_logger"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45b60258a35dc3cb8a16890b8fd6723349bfa458d7960e25e633f1b1c19d7b5e"
-dependencies = [
- "atty",
- "colored",
- "log",
- "time 0.3.5",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "simplelog"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4973,7 +4948,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.5.9"
-source = "git+https://github.com/parazyd/sqlx?rev=0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867#0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867"
+source = "git+https://github.com/parazyd/sqlx?rev=94a600cced8e3a2dea78f506f9325494d68b771a#94a600cced8e3a2dea78f506f9325494d68b771a"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -4982,7 +4957,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.5.9"
-source = "git+https://github.com/parazyd/sqlx?rev=0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867#0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867"
+source = "git+https://github.com/parazyd/sqlx?rev=94a600cced8e3a2dea78f506f9325494d68b771a#94a600cced8e3a2dea78f506f9325494d68b771a"
 dependencies = [
  "ahash 0.7.6",
  "atoi",
@@ -5016,13 +4991,12 @@ dependencies = [
  "stringprep",
  "thiserror",
  "url",
- "whoami",
 ]
 
 [[package]]
 name = "sqlx-macros"
 version = "0.5.9"
-source = "git+https://github.com/parazyd/sqlx?rev=0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867#0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867"
+source = "git+https://github.com/parazyd/sqlx?rev=94a600cced8e3a2dea78f506f9325494d68b771a#94a600cced8e3a2dea78f506f9325494d68b771a"
 dependencies = [
  "dotenv",
  "either",
@@ -5040,7 +5014,7 @@ dependencies = [
 [[package]]
 name = "sqlx-rt"
 version = "0.5.9"
-source = "git+https://github.com/parazyd/sqlx?rev=0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867#0fbdc4f5d7334568e375c9ce4aa45a6cd3ea9867"
+source = "git+https://github.com/parazyd/sqlx?rev=94a600cced8e3a2dea78f506f9325494d68b771a#94a600cced8e3a2dea78f506f9325494d68b771a"
 dependencies = [
  "async-native-tls 0.3.3",
  "async-std",
@@ -5238,23 +5212,6 @@ dependencies = [
  "wasi 0.10.0+wasi-snapshot-preview1",
  "winapi 0.3.9",
 ]
-
-[[package]]
-name = "time"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
-dependencies = [
- "itoa 0.4.8",
- "libc",
- "time-macros",
-]
-
-[[package]]
-name = "time-macros"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
 
 [[package]]
 name = "tiny-bip39"
@@ -5745,16 +5702,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d743fdedc5c64377b5fc2bc036b01c7fd642205a0d96356034ae3404d49eb7fb"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "whoami"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524b58fa5a20a2fb3014dd6358b70e6579692a56ef6fce928834e488f42f65e8"
-dependencies = [
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]

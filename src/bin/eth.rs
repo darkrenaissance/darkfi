@@ -1,4 +1,5 @@
 use num_bigint::BigUint;
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use drk::{
     service::eth::{erc20_transfer_data, EthClient, EthTx, Keypair},
@@ -8,7 +9,12 @@ use drk::{
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    simple_logger::init_with_level(log::Level::Debug)?;
+    TermLogger::init(
+        LevelFilter::Trace,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
 
     let acc = "0x113b6648f34f4d0340d04ff171cbcf0b49d47827".to_string();
     let key = "67cbb73cb293eea5fa2a7025d5479dbd50319010c03fd8821917ad0d9d53276c".to_string();
