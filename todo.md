@@ -4,17 +4,6 @@
 
 - [ ] git grep TODO
 
-## post v0-release
-
-- [ ] sollet btc / btc has same interface on drk
-- [ ] add hdwallets to btc
-- [ ] integrate eth / erc20 tokens for the cashier 
-- [ ] switch to p2p network 
-- [ ] make cashier a multisig
-- [ ] make different loglevels
-- [ ] daemon startup cleanup
-- [ ] make daemon look uniform
-
 ## documentation
 
 - [ ] document v0 architecture 
@@ -35,15 +24,6 @@
 - [ ] research polygon design
 - [ ] code up a simple demo
 
-## halo2
-
-- [x] mint circuit poc
-- [x] burn circuit poc
-- [x] research port from jubjub to pasta (success)
-- [x] research port from blake2b to sinsemilla and/or poseidon
-- [x] solve poseidon gadget to hash >2 elements at a time
-- [x] integrate with actual codebase
-
 ## bridges
 
 - [ ] evaluate arbitrum vs optics
@@ -60,8 +40,6 @@ Open research questions.
 
 ## cryptography
 
-- [x] FFT for polynomial multiplication
-- [x] finish bulletproofs impl
 - [ ] halo2 lookup
 - [ ] read groth permutation paper
 - [ ] fflonk
@@ -80,7 +58,6 @@ Open research questions.
 - [ ] first MPC services
 - [ ] DAO
 - [ ] auctions
-- [x] staking. Look up how TORN was distributed anonymously.
 - [ ] swaps
 - [ ] token issuance
 - [ ] NFTs
@@ -89,7 +66,6 @@ Open research questions.
 
 - [ ] make bitreich halo2 impl
 - [ ] doc on circuit design
-- [x] jsonrpc interface for ETH bridge (interface with geth)
 
 # org
 
