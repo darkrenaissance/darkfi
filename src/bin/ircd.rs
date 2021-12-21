@@ -1,10 +1,13 @@
 use async_executor::Executor;
 use async_std::io::BufReader;
-use futures::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt, io::{ReadHalf, WriteHalf}};
-use log::{debug, info, error, warn};
-use std::io;
+use futures::{
+    io::{ReadHalf, WriteHalf},
+    AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt,
+};
+use log::{debug, error, info, warn};
 use smol::Async;
 use std::{
+    io,
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
 };
@@ -32,16 +35,20 @@ struct ServerConnection {
     write_stream: WriteHalf<Async<TcpStream>>,
     is_nick_init: bool,
     is_user_init: bool,
-    is_init: bool,
+    is_registered: bool,
+    nickname: String,
+    channels: Vec<String>,
 }
 
 impl ServerConnection {
     fn new(write_stream: WriteHalf<Async<TcpStream>>) -> Self {
-        ServerConnection { 
+        ServerConnection {
             write_stream,
             is_nick_init: false,
             is_user_init: false,
-            is_init: false,
+            is_registered: false,
+            nickname: "".to_string(),
+            channels: vec![],
         }
     }
 
@@ -57,35 +64,41 @@ impl ServerConnection {
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
                 self.is_nick_init = true;
-            },
+                self.nickname = nickname.to_string();
+            }
             "USER" => {
                 // We can stuff any extra things like public keys in here
+                // Ignore it for now
                 self.is_user_init = true;
-            },
+            }
             "JOIN" => {
                 let channel = tokens.next().ok_or(Error::MalformedPacket)?;
-                self.write_stream.write_all(b":fifififif!username@127.0.0.1 JOIN #dev\n").await?;
+                self.channels.push(channel.to_string());
 
-                // :narodnik!narodnik@127.0.0.1 JOIN #dev
-                self.write_stream.write_all(b":f00!f00@127.0.0.1 PRIVMSG #dev :y0\n").await?;
+                let join_reply = format!(":{}!darkfi@127.0.0.1 JOIN {}\n", self.nickname, channel);
+                self.reply(&join_reply).await?;
+
+                //self.write_stream.write_all(b":f00!f00@127.0.0.1 PRIVMSG #dev :y0\n").await?;
             }
-            _ => {
+            "PING" => {
+                self.reply("PONG").await?;
             }
+            _ => {}
         }
 
-        if !self.is_init && self.is_nick_init && self.is_user_init {
+        if !self.is_registered && self.is_nick_init && self.is_user_init {
             debug!("Initializing peer connection");
-            self.write_stream.write_all(b":behemoth 001 fifififif :Hi, welcome to IRC\n").await?;
-            //self.write_stream.write_all(b":behemoth 002 fifififif :Your host is behemoth, running version miniircd-2.1\n").await?;
-            //self.write_stream.write_all(b":behemoth 003 fifififif :This server was created sometime\n").await?;
-            //self.write_stream.write_all(b":behemoth 004 fifififif behemoth miniircd-2.1 o o\n").await?;
-            //self.write_stream.write_all(b":behemoth 251 fifififif :There are 1 users and 0 services on 1 server\n").await?;
-            //self.write_stream.write_all(b":behemoth 422 fifififif :MOTD File is missing\n").await?;
-            self.is_init = true;
+            let register_reply = format!(":darkfi 001 {} :Let there be dark\n", self.nickname);
+            self.reply(&register_reply).await?;
+            self.is_registered = true;
         }
 
-        //println!("Recv: {}", line);
+        Ok(())
+    }
 
+    async fn reply(&mut self, message: &str) -> Result<()> {
+        debug!("Sending {}", message);
+        self.write_stream.write_all(message.as_bytes()).await?;
         Ok(())
     }
 }
@@ -108,11 +121,11 @@ async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
         let mut line = String::new();
         if let Err(err) = reader.read_line(&mut line).await {
             warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
-            return;
+            return
         }
         if line.len() == 0 {
             warn!("Received empty line from {}. Closing connection.", peer_addr);
-            return;
+            return
         }
         assert!(&line[(line.len() - 1)..] == "\n");
         // Remove the \n character
@@ -122,7 +135,7 @@ async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
 
         if let Err(err) = connection.update(line).await {
             warn!("Connection error: {} for {}", err, peer_addr);
-            return;
+            return
         }
     }
 }
@@ -169,4 +182,3 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(async_main(ex.clone())))
 }
-
