@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::io::BufReader;
-use futures::{AsyncBufReadExt, AsyncWriteExt, Future, FutureExt};
-use log::{info, error, warn};
+use futures::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt, io::{ReadHalf, WriteHalf}};
+use log::{debug, info, error, warn};
 use std::io;
 use smol::Async;
 use std::{
@@ -28,21 +28,86 @@ JOIN #dev
 PRIVMSG #dev hihi
 */
 
-async fn process(mut stream: Async<TcpStream>, peer_addr: SocketAddr) {
+struct ServerConnection {
+    write_stream: WriteHalf<Async<TcpStream>>,
+    is_nick_init: bool,
+    is_user_init: bool,
+    is_init: bool,
+}
+
+impl ServerConnection {
+    fn new(write_stream: WriteHalf<Async<TcpStream>>) -> Self {
+        ServerConnection { 
+            write_stream,
+            is_nick_init: false,
+            is_user_init: false,
+            is_init: false,
+        }
+    }
+
+    async fn update(&mut self, line: String) -> Result<()> {
+        let mut tokens = line.split_ascii_whitespace();
+        // Commands can begin with :garbage but we will reject clients doing that for now
+        // to keep the protocol simple and focused.
+        let command = tokens.next().ok_or(Error::MalformedPacket)?;
+
+        debug!("Received command: {}", command);
+
+        match command {
+            "NICK" => {
+                let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
+                self.is_nick_init = true;
+            },
+            "USER" => {
+                // We can stuff any extra things like public keys in here
+                self.is_user_init = true;
+            },
+            "JOIN" => {
+                let channel = tokens.next().ok_or(Error::MalformedPacket)?;
+                self.write_stream.write_all(b":fifififif!username@127.0.0.1 JOIN #dev\n").await?;
+
+                // :narodnik!narodnik@127.0.0.1 JOIN #dev
+                self.write_stream.write_all(b":f00!f00@127.0.0.1 PRIVMSG #dev :y0\n").await?;
+            }
+            _ => {
+            }
+        }
+
+        if !self.is_init && self.is_nick_init && self.is_user_init {
+            debug!("Initializing peer connection");
+            self.write_stream.write_all(b":behemoth 001 fifififif :Hi, welcome to IRC\n").await?;
+            self.write_stream.write_all(b":behemoth 002 fifififif :Your host is behemoth, running version miniircd-2.1\n").await?;
+            self.write_stream.write_all(b":behemoth 003 fifififif :This server was created sometime\n").await?;
+            self.write_stream.write_all(b":behemoth 004 fifififif behemoth miniircd-2.1 o o\n").await?;
+            self.write_stream.write_all(b":behemoth 251 fifififif :There are 1 users and 0 services on 1 server\n").await?;
+            self.write_stream.write_all(b":behemoth 422 fifififif :MOTD File is missing\n").await?;
+            self.is_init = true;
+        }
+
+        //println!("Recv: {}", line);
+
+        Ok(())
+    }
+}
+
+async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
     //stream.write_all(b":behemoth 001 fifififif :Hi, welcome to IRC").await;
-    //stream.write_all(b"NICK fofofofofo");
-    //stream.write_all(b"USER username 0 * :Real");
+    //stream.write_all(b"NICK username");
+    //stream.write_all(b"USER username 0 * :username");
     //stream.write_all(b"JOIN #dev");
     //stream.write_all(b"PRIVMSG #dev y0");
 
     // PING :behemoth
 
-    let mut reader = BufReader::new(stream);
+    let (reader, writer) = stream.split();
+
+    let mut reader = BufReader::new(reader);
+    let mut connection = ServerConnection::new(writer);
 
     loop {
         let mut line = String::new();
         if let Err(err) = reader.read_line(&mut line).await {
-            warn!("Read line ended. Closing stream for {}", peer_addr);
+            warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
             return;
         }
         if line.len() == 0 {
@@ -52,7 +117,13 @@ async fn process(mut stream: Async<TcpStream>, peer_addr: SocketAddr) {
         assert!(&line[(line.len() - 1)..] == "\n");
         // Remove the \n character
         line.pop();
-        println!("Recv: {}", line);
+
+        debug!("Received '{}' from {}", line, peer_addr);
+
+        if let Err(err) = connection.update(line).await {
+            warn!("Connection error: {} for {}", err, peer_addr);
+            return;
+        }
     }
 }
 
@@ -89,24 +160,13 @@ async fn async_main(executor: Arc<Executor<'_>>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    simple_logger::init_with_level(log::Level::Trace)?;
+    //simple_logger::init_with_level(log::Level::Trace)?;
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Debug)
+        .with_utc_timestamps()
+        .init()?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(async_main(ex.clone())))
-        //let acceptor = Acceptor::new();
-        //let listener = match Async::<TcpListener>::bind(accept_addr) {
-        //    Ok(listener) => listener,
-        //    Err(err) => {
-        //        error!("Bind listener failed: {}", err);
-        //        return Err(Error::OperationFailed)
-        //    }
-        //};
-        //let local_addr = match listener.get_ref().local_addr() {
-        //    Ok(addr) => addr,
-        //    Err(err) => {
-        //        error!("Failed to get local address: {}", err);
-        //        return Err(Error::OperationFailed)
-        //    }
-        //};
 }
 
