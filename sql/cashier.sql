@@ -28,5 +28,5 @@ CREATE TABLE IF NOT EXISTS withdraw_keypairs(
 );
 
 CREATE TABLE IF NOT EXISTS tree(
-	tree BLOB NOT NULL,
+	tree BLOB NOT NULL
 );
