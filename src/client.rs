@@ -1,5 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use incrementalmerkletree::Tree;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, info, trace, warn};
 use smol::Executor;
 use url::Url;
@@ -52,6 +52,8 @@ pub enum ClientFailed {
     ClientError(String),
     #[error("Verify error: {0}")]
     VerifyError(String),
+    #[error("Merkle tree already exists")]
+    TreeExists,
 }
 
 pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
@@ -87,6 +89,11 @@ impl Client {
         // Generate a new keypair if we don't have any.
         if wallet.get_keypairs().await.is_err() {
             wallet.key_gen().await?;
+        }
+
+        // Generate merkle tree if we don't have one.
+        if wallet.get_tree().await.is_err() {
+            wallet.tree_gen().await?;
         }
 
         // TODO: Think about multiple keypairs
@@ -372,5 +379,9 @@ impl Client {
 
     pub async fn get_balances(&self) -> Result<Balances> {
         self.wallet.get_balances().await
+    }
+
+    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
+        self.wallet.get_tree().await
     }
 }
