@@ -344,7 +344,7 @@ mod tests {
         crypto::merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
-    use incrementalmerkletree::bridgetree::BridgeTree;
+    use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
     use pasta_curves::{arithmetic::Field, pallas};
     use rand::rngs::OsRng;
 
@@ -370,7 +370,7 @@ mod tests {
     async fn test_walletdb() -> Result<()> {
         let wallet = WalletDb::new("sqlite::memory:", WPASS.to_string()).await?;
         let keypair = Keypair::random(&mut OsRng);
-        let tree1 = BridgeTree::<MerkleNode, 32>::new(100);
+        let mut tree1 = BridgeTree::<MerkleNode, 32>::new(100);
 
         // init_db()
         wallet.init_db().await?;
@@ -387,9 +387,23 @@ mod tests {
 
         // put_own_coins()
         wallet.put_own_coins(c0).await?;
+        tree1.append(&MerkleNode::from_coin(&c0.coin));
+        tree1.witness();
+
         wallet.put_own_coins(c1).await?;
+        tree1.append(&MerkleNode::from_coin(&c1.coin));
+        tree1.witness();
+
         wallet.put_own_coins(c2).await?;
+        tree1.append(&MerkleNode::from_coin(&c2.coin));
+        tree1.witness();
+
         wallet.put_own_coins(c3).await?;
+        tree1.append(&MerkleNode::from_coin(&c3.coin));
+        tree1.witness();
+
+        // We'll check this merkle root corresponds to the one we'll retrieve.
+        let root1 = tree1.root();
 
         // put_tree()
         wallet.put_tree(&tree1).await?;
@@ -424,7 +438,14 @@ mod tests {
 
         // get_tree()
         let tree2 = wallet.get_tree().await?;
-        //assert_eq!(tree1, tree2);
+        let root2 = tree2.root();
+        assert_eq!(root1, root2);
+
+        // Let's try it once more to test sql replacing.
+        wallet.put_tree(&tree2).await?;
+        let tree3 = wallet.get_tree().await?;
+        let root3 = tree3.root();
+        assert_eq!(root2, root3);
 
         Ok(())
     }

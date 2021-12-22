@@ -16,9 +16,12 @@ use serde::{
 use subtle::{ConstantTimeEq, CtOption};
 
 use crate::{
-    crypto::constants::{
-        sinsemilla::{i2lebsp_k, MERKLE_CRH_PERSONALIZATION},
-        L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD,
+    crypto::{
+        coin::Coin,
+        constants::{
+            sinsemilla::{i2lebsp_k, MERKLE_CRH_PERSONALIZATION},
+            L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD,
+        },
     },
     error::Result,
     serial::{Decodable, Encodable},
@@ -48,6 +51,10 @@ impl MerkleNode {
 
     pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Self> {
         pallas::Base::from_repr(*bytes).map(MerkleNode)
+    }
+
+    pub fn from_coin(coin: &Coin) -> Self {
+        MerkleNode(coin.0)
     }
 }
 
