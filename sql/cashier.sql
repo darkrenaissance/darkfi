@@ -26,3 +26,7 @@ CREATE TABLE IF NOT EXISTS withdraw_keypairs(
 	mint_address BLOB NOT NULL,
 	confirm BLOB NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tree(
+	tree BLOB NOT NULL,
+);
