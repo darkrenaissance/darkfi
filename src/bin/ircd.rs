@@ -142,7 +142,7 @@ async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
     }
 }
 
-async fn async_main(executor: Arc<Executor<'_>>) -> Result<()> {
+async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let accept_addr = ([127, 0, 0, 1], 6667);
     let listener = match Async::<TcpListener>::bind(accept_addr) {
         Ok(listener) => listener,
@@ -183,5 +183,5 @@ fn main() -> Result<()> {
     )?;
 
     let ex = Arc::new(Executor::new());
-    smol::block_on(ex.run(async_main(ex.clone())))
+    smol::block_on(ex.run(start(ex.clone())))
 }

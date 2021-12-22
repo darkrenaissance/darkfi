@@ -109,8 +109,6 @@ eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
 darkpulse = ["aes-gcm", "chrono","rusqlite"]
 
-
-
 [[bin]]         
 name = "darkpulse"    
 required-features = ["darkpulse"]
@@ -118,3 +116,7 @@ required-features = ["darkpulse"]
 [[bin]]         
 name = "eth"    
 required-features = ["eth"]
+
+[[example]]
+name = "net"
+path = "example/net.rs"
