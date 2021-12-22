@@ -52,6 +52,8 @@ pub enum Error {
     TomlDeserializeError(#[from] toml::de::Error),
     #[error(transparent)]
     TomlSerializeError(#[from] toml::ser::Error),
+    #[error("Bincode serialization error: `{0}`")]
+    BincodeError(String),
 
     /// Contract
     #[error("Bad variable ref type byte")]
@@ -232,5 +234,11 @@ impl From<halo2::plonk::Error> for Error {
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Error {
         Error::SqlxError(err.to_string())
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for Error {
+    fn from(err: Box<bincode::ErrorKind>) -> Error {
+        Error::BincodeError(err.to_string())
     }
 }
