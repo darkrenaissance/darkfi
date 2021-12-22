@@ -2,7 +2,7 @@ use incrementalmerkletree::bridgetree::BridgeTree;
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
-use log::{error, info, trace};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -79,19 +79,19 @@ impl WalletDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        trace!("Initalizing merkle tree table");
+        debug!("Initalizing merkle tree table");
         sqlx::query(tree).execute(&mut conn).await?;
 
-        trace!("Initializing keys table");
+        debug!("Initializing keys table");
         sqlx::query(keys).execute(&mut conn).await?;
 
-        trace!("Initializing coins table");
+        debug!("Initializing coins table");
         sqlx::query(coins).execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn key_gen(&self) -> Result<()> {
-        trace!("Attempting to generate keypairs");
+        debug!("Attempting to generate keypairs");
         let mut conn = self.conn.acquire().await?;
 
         // TODO: Think about multiple keys
@@ -109,7 +109,7 @@ impl WalletDb {
     }
 
     pub async fn put_keypair(&self, public: &PublicKey, secret: &SecretKey) -> Result<()> {
-        trace!("Writing keypair into the wallet database");
+        debug!("Writing keypair into the wallet database");
         let pubkey = serialize(&public.0);
         let secret = serialize(&secret.0);
 
@@ -124,7 +124,7 @@ impl WalletDb {
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
-        trace!("Returning keypairs");
+        debug!("Returning keypairs");
         let mut conn = self.conn.acquire().await?;
 
         // TODO: Think about multiple keys
@@ -136,12 +136,12 @@ impl WalletDb {
     }
 
     pub async fn tree_gen(&self) -> Result<()> {
-        trace!("Attempting to generate merkle tree");
+        debug!("Attempting to generate merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
-                error!("Tree already exist");
+                error!("Tree already exists");
                 Err(Error::from(ClientFailed::TreeExists))
             }
             Err(_) => {
@@ -153,7 +153,7 @@ impl WalletDb {
     }
 
     pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
-        trace!("Getting merkle tree");
+        debug!("Getting merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let row = sqlx::query("SELECT tree FROM tree").fetch_one(&mut conn).await?;
@@ -162,20 +162,16 @@ impl WalletDb {
     }
 
     pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, 32>) -> Result<()> {
-        trace!("Attempting to write merkle tree");
+        debug!("Attempting to write merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let tree_bytes = bincode::serialize(tree)?;
-        sqlx::query("INSERT INTO tree(tree) VALUES (?1)")
-            .bind(tree_bytes)
-            .execute(&mut conn)
-            .await?;
-
+        sqlx::query("UPDATE tree SET tree = ?1").bind(tree_bytes).execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn get_own_coins(&self) -> Result<OwnCoins> {
-        trace!("Finding own coins");
+        debug!("Finding own coins");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -210,7 +206,7 @@ impl WalletDb {
     }
 
     pub async fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
-        trace!("Putting own coin into wallet database");
+        debug!("Putting own coin into wallet database");
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
         let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
@@ -245,14 +241,14 @@ impl WalletDb {
     }
 
     pub async fn remove_own_coins(&self) -> Result<()> {
-        trace!("Removing own coins from wallet database");
+        debug!("Removing own coins from wallet database");
         let mut conn = self.conn.acquire().await?;
         sqlx::query("DROP TABLE coins;").execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
-        trace!("Confirm spend coin");
+        debug!("Confirm spend coin");
         let is_spent = 1;
         let coin = self.get_value_serialized(coin)?;
 
@@ -267,7 +263,7 @@ impl WalletDb {
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {
-        trace!("Getting tokens and balances");
+        debug!("Getting tokens and balances");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -287,14 +283,14 @@ impl WalletDb {
         }
 
         if list.is_empty() {
-            trace!("Did not find any unspent coins");
+            debug!("Did not find any unspent coins");
         }
 
         Ok(Balances { list })
     }
 
     pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
-        trace!("Getting token ID");
+        debug!("Getting token ID");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
@@ -313,7 +309,7 @@ impl WalletDb {
     }
 
     pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
-        trace!("Checking if token ID exists");
+        debug!("Checking if token ID exists");
 
         let is_spent = 0;
         let id = self.get_value_serialized(&token_id)?;
@@ -330,7 +326,7 @@ impl WalletDb {
     }
 
     pub async fn test_wallet(&self) -> Result<()> {
-        trace!("Testing wallet");
+        debug!("Testing wallet");
         let mut conn = self.conn.acquire().await?;
         let _row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
         Ok(())
