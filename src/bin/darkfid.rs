@@ -586,6 +586,7 @@ async fn start(
 
     let client = Arc::new(Mutex::new(client));
 
+    let tree = client.lock().await.get_tree().await?;
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
@@ -595,7 +596,7 @@ async fn start(
     let spend_vk = VerifyingKey::build(11, SpendContract::default());
 
     let state = Arc::new(Mutex::new(State {
-        tree: BridgeTree::<MerkleNode, 32>::new(100),
+        tree,
         merkle_roots,
         nullifiers,
         mint_vk,
