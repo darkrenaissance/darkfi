@@ -145,6 +145,9 @@ impl State {
             let node = MerkleNode(coin.0);
             self.tree.append(&node);
 
+            // Save updated merkle tree into wallet.
+            wallet.put_tree(&self.tree).await?;
+
             // Keep track of all Merkle roots that have existed
             self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
 
