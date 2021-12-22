@@ -23,8 +23,6 @@ pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,
     pub secret: SecretKey,
-    //pub witness: merkle::IncrementalWitness<merkle_node::MerkleNode>,
-    //pub witness: BridgeFrontier<merkle::MerkleHash, 32>,
     pub nullifier: nullifier::Nullifier,
 }
 

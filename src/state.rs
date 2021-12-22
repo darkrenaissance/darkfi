@@ -150,17 +150,10 @@ impl State {
 
             for secret in secret_keys.iter() {
                 if let Some(note) = State::try_decrypt_note(enc_note, *secret) {
-                    // TODO: What to do with witnesses?
                     self.tree.witness();
                     let nullifier = Nullifier::new(*secret, note.serial);
 
-                    let own_coin = OwnCoin {
-                        coin,
-                        note,
-                        secret: *secret,
-                        // witness: witness.clone(),
-                        nullifier,
-                    };
+                    let own_coin = OwnCoin { coin, note, secret: *secret, nullifier };
 
                     wallet.put_own_coins(own_coin).await?;
 
