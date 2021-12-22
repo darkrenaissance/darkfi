@@ -135,7 +135,7 @@ impl WalletDb {
         Ok(vec![Keypair { public, secret }])
     }
 
-    pub async fn tree_gen(&self) -> Result<()> {
+    pub async fn tree_gen(&self) -> Result<BridgeTree<MerkleNode, 32>> {
         debug!("Attempting to generate merkle tree");
         let mut conn = self.conn.acquire().await?;
 
@@ -147,7 +147,7 @@ impl WalletDb {
             Err(_) => {
                 let tree = BridgeTree::<MerkleNode, 32>::new(100);
                 self.put_tree(&tree).await?;
-                Ok(())
+                Ok(tree)
             }
         }
     }
@@ -156,7 +156,7 @@ impl WalletDb {
         debug!("Getting merkle tree");
         let mut conn = self.conn.acquire().await?;
 
-        let row = sqlx::query("SELECT tree FROM tree").fetch_one(&mut conn).await?;
+        let row = sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await?;
         let tree: BridgeTree<MerkleNode, 32> = bincode::deserialize(row.get("tree"))?;
         Ok(tree)
     }
@@ -166,7 +166,16 @@ impl WalletDb {
         let mut conn = self.conn.acquire().await?;
 
         let tree_bytes = bincode::serialize(tree)?;
-        sqlx::query("UPDATE tree SET tree = ?1").bind(tree_bytes).execute(&mut conn).await?;
+
+        debug!("Deleting old row");
+        sqlx::query("DELETE FROM tree;").execute(&mut conn).await?;
+
+        debug!("Inserting new tree");
+        sqlx::query("INSERT INTO tree (tree) VALUES (?1);")
+            .bind(tree_bytes)
+            .execute(&mut conn)
+            .await?;
+
         Ok(())
     }
 
@@ -340,7 +349,7 @@ mod tests {
         crypto::merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
-    use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+    use incrementalmerkletree::{Frontier, Tree};
     use pasta_curves::{arithmetic::Field, pallas};
     use rand::rngs::OsRng;
 
@@ -366,10 +375,12 @@ mod tests {
     async fn test_walletdb() -> Result<()> {
         let wallet = WalletDb::new("sqlite::memory:", WPASS.to_string()).await?;
         let keypair = Keypair::random(&mut OsRng);
-        let mut tree1 = BridgeTree::<MerkleNode, 32>::new(100);
 
         // init_db()
         wallet.init_db().await?;
+
+        // tree_gen()
+        let mut tree1 = wallet.tree_gen().await?;
 
         // put_keypair()
         wallet.put_keypair(&keypair.public, &keypair.secret).await?;
