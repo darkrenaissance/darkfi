@@ -1,3 +1,4 @@
+use incrementalmerkletree::bridgetree::BridgeTree;
 use std::{fs::create_dir_all, path::Path, str::FromStr};
 
 use async_std::sync::Arc;
@@ -10,7 +11,10 @@ use sqlx::{
 use super::wallet_api::WalletApi;
 use crate::{
     client::ClientFailed,
-    crypto::keypair::{Keypair, PublicKey, SecretKey},
+    crypto::{
+        keypair::{Keypair, PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+    },
     types::DrkTokenId,
     util::NetworkName,
     Error, Result,
@@ -86,6 +90,45 @@ impl CashierDb {
 
         trace!("Initializing withdraw keypairs table");
         sqlx::query(withdraw_kps).execute(&mut conn).await?;
+        Ok(())
+    }
+
+    pub async fn tree_gen(&self) -> Result<()> {
+        trace!("Attempting to generate merkle tree");
+        let mut conn = self.conn.acquire().await?;
+
+        match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
+            Ok(_) => {
+                error!("Tree already exist");
+                Err(Error::from(ClientFailed::TreeExists))
+            }
+            Err(_) => {
+                let tree = BridgeTree::<MerkleNode, 32>::new(100);
+                self.put_tree(&tree).await?;
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
+        trace!("Getting merkle tree");
+        let mut conn = self.conn.acquire().await?;
+
+        let row = sqlx::query("SELECT tree FROM tree").fetch_one(&mut conn).await?;
+        let tree: BridgeTree<MerkleNode, 32> = bincode::deserialize(row.get("tree"))?;
+        Ok(tree)
+    }
+
+    pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, 32>) -> Result<()> {
+        trace!("Attempting to write merkle tree");
+        let mut conn = self.conn.acquire().await?;
+
+        let tree_bytes = bincode::serialize(tree)?;
+        sqlx::query("INSERT INTO tree(tree) VALUES (?1)")
+            .bind(tree_bytes)
+            .execute(&mut conn)
+            .await?;
+
         Ok(())
     }
 

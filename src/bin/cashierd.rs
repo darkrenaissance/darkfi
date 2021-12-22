@@ -692,6 +692,7 @@ async fn start(
     )
     .await?;
 
+    let tree = client.get_tree().await?;
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
@@ -702,7 +703,7 @@ async fn start(
     let cashier_public_keys = vec![cashier_public];
 
     let state = Arc::new(Mutex::new(State {
-        tree: BridgeTree::<MerkleNode, 32>::new(100),
+        tree,
         merkle_roots,
         nullifiers,
         public_keys: cashier_public_keys,
