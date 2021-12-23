@@ -14,7 +14,7 @@ use crate::{
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,
-    Result,
+    Result, error,
 };
 
 pub trait ProgramState {
@@ -53,6 +53,14 @@ pub enum VerifyFailed {
     MissingFunds,
     #[error("Assets don't match some inputs or outputs (token commits)")]
     AssetMismatch,
+    #[error("Inetrnal error: {0}")]
+    InternalError(String),
+}
+
+impl From<error::Error> for VerifyFailed {
+    fn from(err: error::Error) -> Self {
+        VerifyFailed::InternalError(err.to_string())
+    }
 }
 
 pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {

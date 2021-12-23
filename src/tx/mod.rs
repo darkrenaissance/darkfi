@@ -125,7 +125,7 @@ impl Transaction {
 
         // Verify signatures
         let mut unsigned_tx_data = vec![];
-        self.encode_without_signature(&mut unsigned_tx_data).expect("TODO handle this");
+        self.encode_without_signature(&mut unsigned_tx_data)?;
         for (i, input) in self.clear_inputs.iter().enumerate() {
             let public = &input.signature_public;
             if !public.verify(&unsigned_tx_data[..], &input.signature) {

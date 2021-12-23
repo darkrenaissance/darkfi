@@ -39,6 +39,7 @@ setup params, and compile the source code.
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
+% cd darkfi/
 % make
 ```
 
