@@ -44,7 +44,7 @@ pub enum ClientFailed {
     DoesNotHaveKeypair,
     #[error("Password is empty. Cannot create database")]
     EmptyPassword,
-    #[error("Wallet already initalized")]
+    #[error("Wallet already initialized")]
     WalletInitialized,
     #[error("Keypair already exists")]
     KeyExists,
