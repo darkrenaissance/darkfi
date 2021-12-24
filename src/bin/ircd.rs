@@ -16,7 +16,11 @@ use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use smol::Async;
 
-use drk::{Error, Result, net};
+use drk::{
+    net,
+    serial::{Decodable, Encodable},
+    Error, Result,
+};
 
 /*
 NICK fifififif
@@ -56,7 +60,7 @@ impl ServerConnection {
         }
     }
 
-    async fn update(&mut self, line: String) -> Result<()> {
+    async fn update(&mut self, line: String, p2p: net::P2pPtr) -> Result<()> {
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing that for now
         // to keep the protocol simple and focused.
@@ -80,8 +84,8 @@ impl ServerConnection {
                 //let channel = tokens.next().ok_or(Error::MalformedPacket)?;
                 //self.channels.push(channel.to_string());
 
-                //let join_reply = format!(":{}!darkfi@127.0.0.1 JOIN {}\n", self.nickname, channel);
-                //self.reply(&join_reply).await?;
+                //let join_reply = format!(":{}!darkfi@127.0.0.1 JOIN {}\n", self.nickname,
+                // channel); self.reply(&join_reply).await?;
 
                 //self.write_stream.write_all(b":f00!f00@127.0.0.1 PRIVMSG #dev :y0\n").await?;
             }
@@ -97,6 +101,13 @@ impl ServerConnection {
                 }
                 let message = &line[substr_idx + 1..];
                 info!("Message {}: {}", channel, message);
+
+                let protocol_msg = PrivMsg {
+                    nickname: self.nickname.clone(),
+                    channel: channel.to_string(),
+                    message: message.to_string(),
+                };
+                p2p.broadcast(protocol_msg).await?;
             }
             _ => {}
         }
@@ -118,13 +129,87 @@ impl ServerConnection {
     }
 
     async fn reply(&mut self, message: &str) -> Result<()> {
-        debug!("Sending {}", message);
         self.write_stream.write_all(message.as_bytes()).await?;
+        debug!("Sent {}", message);
         Ok(())
     }
 }
 
-async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
+#[derive(Debug, Clone)]
+struct PrivMsg {
+    nickname: String,
+    channel: String,
+    message: String,
+}
+
+impl net::Message for PrivMsg {
+    fn name() -> &'static str {
+        "privmsg"
+    }
+}
+
+impl Encodable for PrivMsg {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.nickname.encode(&mut s)?;
+        len += self.channel.encode(&mut s)?;
+        len += self.message.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for PrivMsg {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            nickname: Decodable::decode(&mut d)?,
+            channel: Decodable::decode(&mut d)?,
+            message: Decodable::decode(&mut d)?,
+        })
+    }
+}
+
+async fn channel_loop(
+    p2p: net::P2pPtr,
+    sender: async_channel::Sender<Arc<PrivMsg>>,
+    executor: Arc<Executor<'_>>,
+) -> Result<()> {
+    debug!("CHANNEL SUBS LOOP");
+    let new_channel_sub = p2p.subscribe_channel().await;
+
+    loop {
+        let channel = new_channel_sub.receive().await?;
+
+        debug!("NEWCHANNEL");
+
+        let message_subsytem = channel.get_message_subsystem();
+        message_subsytem.add_dispatch::<PrivMsg>().await;
+
+        debug!("ADDED DISPATCH");
+
+        let privmsg_sub = channel.subscribe_msg::<PrivMsg>().await?;
+        executor.spawn(catch_privmsgs(privmsg_sub, sender.clone())).detach();
+    }
+}
+
+async fn catch_privmsgs(
+    privmsg_sub: net::MessageSubscription<PrivMsg>,
+    sender: async_channel::Sender<Arc<PrivMsg>>,
+) -> Result<()> {
+    loop {
+        let privmsg = privmsg_sub.receive().await?;
+        debug!("GOTIT {:?}", privmsg);
+        sender.send(privmsg).await.expect("send message");
+        debug!("SENT OVER THE TUBES");
+    }
+}
+
+async fn process(
+    recvr: async_channel::Receiver<Arc<PrivMsg>>,
+    stream: Async<TcpStream>,
+    peer_addr: SocketAddr,
+    p2p: net::P2pPtr,
+    executor: Arc<Executor<'_>>,
+) -> Result<()> {
     //stream.write_all(b":behemoth 001 fifififif :Hi, welcome to IRC").await;
     //stream.write_all(b"NICK username");
     //stream.write_all(b"USER username 0 * :username");
@@ -140,30 +225,54 @@ async fn process(stream: Async<TcpStream>, peer_addr: SocketAddr) {
 
     loop {
         let mut line = String::new();
-        if let Err(err) = reader.read_line(&mut line).await {
-            warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
-            return
-        }
-        if line.len() == 0 {
-            warn!("Received empty line from {}. Closing connection.", peer_addr);
-            return
-        }
-        assert!(&line[(line.len() - 1)..] == "\n");
-        // Remove the \n character
-        line.pop();
+        futures::select! {
+            privmsg = recvr.recv().fuse() => {
+                let privmsg = privmsg.expect("internal message queue error");
+                debug!("ABOUT TO SEND {:?}", privmsg);
+                let irc_msg = format!(
+                    ":{}!darkfi@127.0.0.1 PRIVMSG {} :{}\n",
+                    privmsg.nickname,
+                    privmsg.channel,
+                    privmsg.message
+                );
 
-        debug!("Received '{}' from {}", line, peer_addr);
+                connection.reply(&irc_msg).await?;
+            }
+            err = reader.read_line(&mut line).fuse() => {
+                if let Err(err) = err {
+                    warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
+                    return Ok(())
+                }
+                process_user_input(line, peer_addr, &mut connection, p2p.clone()).await;
+            }
+        };
+    }
+}
 
-        if let Err(err) = connection.update(line).await {
-            warn!("Connection error: {} for {}", err, peer_addr);
-            return
-        }
+async fn process_user_input(
+    mut line: String,
+    peer_addr: SocketAddr,
+    connection: &mut ServerConnection,
+    p2p: net::P2pPtr,
+) {
+    if line.len() == 0 {
+        warn!("Received empty line from {}. Closing connection.", peer_addr);
+        return
+    }
+    assert!(&line[(line.len() - 1)..] == "\n");
+    // Remove the \n character
+    line.pop();
+
+    debug!("Received '{}' from {}", line, peer_addr);
+
+    if let Err(err) = connection.update(line, p2p.clone()).await {
+        warn!("Connection error: {} for {}", err, peer_addr);
+        return
     }
 }
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let accept_addr = ([127, 0, 0, 1], 6667);
-    let listener = match Async::<TcpListener>::bind(accept_addr) {
+    let listener = match Async::<TcpListener>::bind(options.irc_accept_addr) {
         Ok(listener) => listener,
         Err(err) => {
             error!("Bind listener failed: {}", err);
@@ -179,18 +288,25 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     };
     info!("Listening on {}", local_addr);
 
-    /*
     let p2p = net::P2p::new(options.network_settings);
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
     // Actual main p2p session
     let ex2 = executor.clone();
-    executor.spawn(async move {
-        if let Err(err) = p2p.run(ex2).await {
-            error!("Error: p2p run failed {}", err);
-        }
-    }).detach();
-    */
+    let p2p2 = p2p.clone();
+    executor
+        .spawn(async move {
+            if let Err(err) = p2p2.run(ex2).await {
+                error!("Error: p2p run failed {}", err);
+            }
+        })
+        .detach();
+
+    let (sender, recvr) = async_channel::unbounded();
+
+    // todo: be careful of zombie processes
+    // for now we just want things to work
+    executor.spawn(channel_loop(p2p.clone(), sender, executor.clone())).detach();
 
     loop {
         let (stream, peer_addr) = match listener.accept().await {
@@ -202,13 +318,16 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         };
         info!("Accepted client: {}", peer_addr);
 
-        executor.spawn(process(stream, peer_addr)).detach();
+        let p2p2 = p2p.clone();
+        let ex2 = executor.clone();
+        executor.spawn(process(recvr.clone(), stream, peer_addr, p2p2, ex2)).detach();
     }
 }
 
 struct ProgramOptions {
     network_settings: net::Settings,
     log_path: Box<std::path::PathBuf>,
+    irc_accept_addr: SocketAddr,
 }
 
 impl ProgramOptions {
@@ -218,11 +337,11 @@ impl ProgramOptions {
             (author: "Amir Taaki <amir@dyne.org>")
             (about: "Dark node")
             (@arg ACCEPT: -a --accept +takes_value "Accept address")
-            (@arg SEED_NODES: -s --seeds ... "Seed nodes")
-            (@arg CONNECTS: -c --connect ... "Manual connections")
+            (@arg SEED_NODES: -s --seeds +takes_value ... "Seed nodes")
+            (@arg CONNECTS: -c --connect +takes_value ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
-            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
+            (@arg IRC_ACCEPT: -r --irc +takes_value "IRC accept address")
         )
         .get_matches();
 
@@ -261,6 +380,12 @@ impl ProgramOptions {
             .to_path_buf(),
         );
 
+        let irc_accept_addr = if let Some(accept_addr) = app.value_of("IRC_ACCEPT") {
+            accept_addr.parse()?
+        } else {
+            ([127, 0, 0, 1], 6667).into()
+        };
+
         Ok(ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
@@ -271,6 +396,7 @@ impl ProgramOptions {
                 ..Default::default()
             },
             log_path,
+            irc_accept_addr,
         })
     }
 }
@@ -288,4 +414,3 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(ex.clone(), options)))
 }
-

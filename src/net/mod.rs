@@ -92,5 +92,7 @@ pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
 pub use hosts::{Hosts, HostsPtr};
-pub use p2p::P2p;
+pub use message_subscriber::MessageSubscription;
+pub use messages::Message;
+pub use p2p::{P2p, P2pPtr};
 pub use settings::{Settings, SettingsPtr};
