@@ -48,11 +48,10 @@ impl Drk {
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult;
-        match jsonrpc::send_raw_request(&self.url, json!(r)).await {
-            Ok(v) => reply = v,
+        let reply: JsonResult = match jsonrpc::send_raw_request(&self.url, json!(r)).await {
+            Ok(v) => v,
             Err(e) => return Err(e),
-        }
+        };
 
         match reply {
             JsonResult::Resp(r) => {
