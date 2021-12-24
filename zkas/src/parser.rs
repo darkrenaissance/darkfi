@@ -1,4 +1,7 @@
-use std::str::Chars;
+use std::{
+    collections::{hash_map, HashMap},
+    str::Chars,
+};
 
 use itertools::Itertools;
 
@@ -22,6 +25,9 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
     let mut contract_tokens = vec![];
     let mut circuit_tokens = vec![];
 
+    let mut ast: HashMap<String, Vec<HashMap<String, HashMap<String, (Token, Token)>>>> =
+        HashMap::new();
+
     let mut iter = tokens.iter();
     while let Some(t) = iter.next() {
         // Start by declaring a section
@@ -37,7 +43,7 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
                 "constant" => {
                     declaring_constant = true;
                     for inner in iter.by_ref() {
-                        constant_tokens.push(inner);
+                        constant_tokens.push(inner.clone());
                         if inner.token_type == TokenType::RightBrace {
                             break
                         }
@@ -47,7 +53,7 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
                 "contract" => {
                     declaring_contract = true;
                     for inner in iter.by_ref() {
-                        contract_tokens.push(inner);
+                        contract_tokens.push(inner.clone());
                         if inner.token_type == TokenType::RightBrace {
                             break
                         }
@@ -57,7 +63,7 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
                 "circuit" => {
                     declaring_circuit = true;
                     for inner in iter.by_ref() {
-                        circuit_tokens.push(inner);
+                        circuit_tokens.push(inner.clone());
                         if inner.token_type == TokenType::RightBrace {
                             break
                         }
@@ -90,14 +96,37 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
                 );
             }
 
-            let mut constants = vec![];
+            let namespace = constant_tokens[0].token.clone();
+            let mut constants_map = HashMap::new();
 
-            let mut constants_inner = constant_tokens[2..constant_tokens.len() - 1].iter();
+            let constants_cloned = constant_tokens.clone();
+            let mut constants_inner = constants_cloned[2..constant_tokens.len() - 1].iter();
             while let Some((typ, name, comma)) = constants_inner.next_tuple() {
                 if comma.token_type != TokenType::Comma {
                     parser_error.separator_not_a_comma(comma.line, comma.column);
                 }
-                constants.push((typ, name));
+
+                if constants_map.contains_key(name.token.as_str()) {
+                    parser_error.declaration_already_contains_token(
+                        "constant",
+                        &name.token,
+                        name.line,
+                        name.column,
+                    );
+                }
+
+                constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
+            }
+
+            let mut c_map = HashMap::new();
+            c_map.insert("constant".to_string(), constants_map);
+
+            if let hash_map::Entry::Vacant(e) = ast.entry(namespace.clone()) {
+                let v = vec![c_map];
+                e.insert(v);
+            } else {
+                let v = ast.get_mut(&namespace).unwrap();
+                v.push(c_map);
             }
 
             declaring_constant = false;
@@ -113,14 +142,37 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
                 );
             }
 
-            let mut contract = vec![];
+            let namespace = contract_tokens[0].token.clone();
+            let mut contract_map = HashMap::new();
 
-            let mut contract_inner = contract_tokens[2..contract_tokens.len() - 1].iter();
+            let contract_cloned = contract_tokens.clone();
+            let mut contract_inner = contract_cloned[2..contract_tokens.len() - 1].iter();
             while let Some((typ, name, comma)) = contract_inner.next_tuple() {
                 if comma.token_type != TokenType::Comma {
                     parser_error.separator_not_a_comma(comma.line, comma.column);
                 }
-                contract.push((typ, name));
+
+                if contract_map.contains_key(&name.token) {
+                    parser_error.declaration_already_contains_token(
+                        "contract",
+                        &name.token,
+                        name.line,
+                        name.column,
+                    );
+                }
+
+                contract_map.insert(name.token.clone(), (name.clone(), typ.clone()));
+            }
+
+            let mut c_map = HashMap::new();
+            c_map.insert("contract".to_string(), contract_map);
+
+            if let hash_map::Entry::Vacant(e) = ast.entry(namespace.clone()) {
+                let v = vec![c_map];
+                e.insert(v);
+            } else {
+                let v = ast.get_mut(&namespace).unwrap();
+                v.push(c_map);
             }
 
             declaring_contract = false;
@@ -129,10 +181,12 @@ pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
         if declaring_circuit {
             declaring_circuit = false;
         }
+
+        println!("{:#?}", ast);
     }
 }
 
-fn check_section_structure(tokens: Vec<&Token>) -> Option<&str> {
+fn check_section_structure(tokens: Vec<Token>) -> Option<&'static str> {
     if tokens[0].token_type != TokenType::String {
         return Some("Section declaration must start with a naming string.")
     }

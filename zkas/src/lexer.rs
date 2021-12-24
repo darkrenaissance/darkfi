@@ -2,7 +2,7 @@ use std::str::Chars;
 
 use crate::error::LexerError;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum TokenType {
     Symbol,
     String,
@@ -18,7 +18,7 @@ pub enum TokenType {
 
 const SPECIAL_CHARS: [char; 7] = ['{', '}', '(', ')', ',', ';', '='];
 
-#[derive(Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct Token {
     pub token: String,
     pub token_type: TokenType,

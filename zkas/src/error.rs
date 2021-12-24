@@ -65,6 +65,18 @@ impl ParserError {
         ParserError::parser_error(&msg);
     }
 
+    pub fn declaration_already_contains_token(&self, s: &str, t: &str, ln: usize, col: usize) {
+        let err_msg = format!(
+            "`{}` section declaration already contains token `{}` on line {} (column {})",
+            s, t, ln, col
+        );
+        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
+        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
+        let caret = format!("{:width$}^", "", width = pad);
+        let msg = format!("{}\n{}\n{}", err_msg, dbg_msg, caret);
+        ParserError::parser_error(&msg);
+    }
+
     pub fn separator_not_a_comma(&self, ln: usize, col: usize) {
         let err_msg = format!("Invalid separator on line {} (column {})", ln, col);
         let err_msg = format!("{}\nShould be a comma `,`", err_msg);
