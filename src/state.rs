@@ -12,9 +12,10 @@ use crate::{
         proof::VerifyingKey,
         OwnCoin,
     },
+    error,
     tx::Transaction,
     wallet::walletdb::WalletPtr,
-    Result, error,
+    Result,
 };
 
 pub trait ProgramState {
