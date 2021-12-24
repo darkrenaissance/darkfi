@@ -82,7 +82,7 @@ impl P2p {
         inbound.stop().await;
         outbound.stop().await;
 
-        debug!(target: "net", "P2p::run() [BEGIN]");
+        debug!(target: "net", "P2p::run() [END]");
         Ok(())
     }
 
