@@ -1,0 +1,34 @@
+In a random terminal run the seed node:
+
+    cargo run --bin ircd -- --accept 127.0.0.1:9999 --log /tmp/seed.log --irc 127.0.0.1:6699
+
+In two other terminals run first the server:
+
+    cargo run --bin ircd -- --accept 127.0.0.1:10005 --seeds 127.0.0.1:9999 --log /tmp/server.log --irc 127.0.0.1:6688
+
+And a client node:
+
+    cargo run --bin ircd -- --slots 1 --seeds 127.0.0.1:9999 --log /tmp/client.log --irc 127.0.0.1:6667
+
+Then you now need to open two weechat instances.
+
+First just run weechat and make sure temporary connections option is set:
+
+    /set irc.look.temporary_servers on
+
+To run a second weechat instance, use the --dir option
+
+    weechat --dir /tmp/
+
+And also set temporary servers for this instance as well:
+
+    /set irc.look.temporary_servers on
+
+Now connect to both nodes (in each weechat instance) using:
+
+    /connect localhost
+
+    /connect localhost/6688
+
+Now you can message between them both.
+
