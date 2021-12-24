@@ -6,52 +6,8 @@ $C$, and we use the burn proof to spend a previously minted _coin_.
 
 ## Mint
 
-```python
-constant "Mint" {
-    EcFixedPoint VALUE_COMMIT_VALUE,
-    EcFixedPoint VALUE_COMMIT_RANDOM,
-}
-
-contract "Mint" {
-    Base pub_x,
-    Base pub_y,
-    Base value,
-    Base token,
-    Base serial,
-    Base coin_blind,
-    Scalar value_blind,
-    Scalar asset_blind,
-}
-
-circuit "Mint" {
-    # Poseidon hash of the coin
-    C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
-    constrain_instance(C);
-
-    # Pedersen commitment for coin's value.
-    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    # Since value_commit is a curve point, we fetch its coordinates
-    # and constrain them.
-    value_commit_x = ec_get_x(value_commit);
-    value_commit_y = ec_get_x(value_commit);
-    constrain_instance(value_commit_x);
-    constrain_instance(value_commit_y);
-
-    # Pedersen commitment for coin's token ID.
-    tcv = ec_mul_short(token, VALUE_COMMIT_VALUE);
-    tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
-    token_commit = ec_add(tcv, tcr);
-    # Since token_commit is also a curve point, we'll do the same
-    # coordinate dance.
-    token_commit_x = ec_get_x(token_commit);
-    token_commit_y = ec_get_y(token_commit);
-    constrain_instance(token_commit_x);
-    constrain_instance(token_commit_y);
-
-    # At this point we've enforced all of our public inputs.
-}
+```
+{{#include ../../../../zkas/proofs/mint.zk}}
 ```
 
 As you can see, the `Mint` contract/circuit basically consists of
@@ -149,66 +105,8 @@ let public_inputs = vec![
 
 ## Burn
 
-```python
-constant "Burn" {
-    EcFixedPoint VALUE_COMMIT_VALUE,
-    EcFixedPoint VALUE_COMMIT_RANDOM,
-    EcFixedPoint NULLIFIER_K,
-}
-
-contract "Burn" {
-    Base secret,
-    Base serial,
-    MerklePath path,
-    Base leaf,
-    Base value,
-    Base token,
-    Scalar value_blind,
-    Scalar token_blind,
-    Base signature_secret,
-}
-
-circuit "Burn" {
-    # Poseidon hash of the Nullifier
-    nullifier = poseidon_hash(secret, serial);
-    constrain_instance(nullifier);
-
-    # Merkle root
-    root = calculate_merkle_root(path, leaf);
-    constrain_instance(root);
-
-    # Pedersen commitment for coin's value
-    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    # Since value_commit is a curve point, we fetch its coordinates
-    # and constrain them.
-    value_commit_x = ec_get_x(value_commit);
-    value_commit_y = ec_get_y(value_commit);
-    constrain_instance(value_commit_x);
-    constrain_instance(value_commit_y);
-
-    # Pedersen commitment for coin's token ID
-    tcv = ec_mul_short(token, VALUE_COMMIT_VALUE);
-    tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
-    token_commit = ec_add(tcv, tcr);
-    # Since token_commit is also a curve point, we'll do the same
-    # coordinate dance.
-    token_commit_x = ec_get_x(token_commit);
-    token_commit_y = ec_get_y(token_commit);
-    constrain_instance(token_commit_x);
-    constrain_instance(token_commit_y);
-
-    # Finally, we derive a public key for the signature and
-    # constrain its coordinates.
-    signature_public = ec_mul(signature_secret, NULLIFIER_K);
-    signature_x = ec_get_x(signature_public);
-    signature_y = ec_get_y(signature_public);
-    constrain_instance(signature_x);
-    constrain_instance(signature_y);
-
-    # At this point we've enforced all of our public inputs.
-}
+```
+{{#include ../../../../zkas/proofs/burn.zk}}
 ```
 
 The `Burn` contract/circuit consists of operations similar to the
