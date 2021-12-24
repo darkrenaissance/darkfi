@@ -21,7 +21,7 @@ features = ["dev-graph", "test-dependencies"]
 git = "https://github.com/parazyd/rust-rocksdb"
 rev = "bd966750ec861d687913d59a9939a1408ac53131"
 default-features = false
-features = ["lz4"]
+features = ["zstd"]
 
 [dependencies]
 # Crypto
