@@ -5,7 +5,6 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, info};
 use num_bigint::BigUint;
 use serde_json::{json, Value};
@@ -17,7 +16,7 @@ use drk::{
     circuit::{MintContract, SpendContract},
     cli::{Config, DarkfidConfig},
     client::Client,
-    crypto::{keypair::PublicKey, merkle_node::MerkleNode, proof::VerifyingKey},
+    crypto::{keypair::PublicKey, proof::VerifyingKey},
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,

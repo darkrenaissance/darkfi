@@ -145,9 +145,11 @@ pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Erro
 
     let host = parsed_url
         .host()
-        .ok_or(Error::UrlParseError(format!("Missing host in {}", url)))?
+        .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", url)))?
         .to_string();
-    let port = parsed_url.port().ok_or(Error::UrlParseError(format!("Missing port in {}", url)))?;
+    let port = parsed_url
+        .port()
+        .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", url)))?;
 
     let socket_addr = {
         let host = host.clone();

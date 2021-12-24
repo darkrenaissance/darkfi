@@ -5,7 +5,6 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::clap_app;
 use easy_parallel::Parallel;
-use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
@@ -18,7 +17,6 @@ use drk::{
     client::Client,
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         proof::VerifyingKey,
     },
     rpc::{
