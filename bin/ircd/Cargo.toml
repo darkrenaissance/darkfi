@@ -1,0 +1,16 @@
+[package]
+name = "ircd"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+darkfi = { path = "../../" }
+clap = "2.34.0"
+smol = "1.2.5"
+simplelog = "0.11.1"
+async-std = "1.10.0"
+async-executor = "1.4.1"
+async-channel = "1.6.1"
+futures = "0.3.17"
+log = "0.4.14"
+
