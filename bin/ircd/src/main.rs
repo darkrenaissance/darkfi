@@ -22,6 +22,12 @@ use drk::{
     Error, Result,
 };
 
+mod privmsg;
+mod protocol_privmsg;
+
+use crate::privmsg::PrivMsg;
+use crate::protocol_privmsg::ProtocolPrivMsg;
+
 /*
 NICK fifififif
 USER username 0 * :Real
@@ -135,39 +141,6 @@ impl ServerConnection {
     }
 }
 
-#[derive(Debug, Clone)]
-struct PrivMsg {
-    nickname: String,
-    channel: String,
-    message: String,
-}
-
-impl net::Message for PrivMsg {
-    fn name() -> &'static str {
-        "privmsg"
-    }
-}
-
-impl Encodable for PrivMsg {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.nickname.encode(&mut s)?;
-        len += self.channel.encode(&mut s)?;
-        len += self.message.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for PrivMsg {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            nickname: Decodable::decode(&mut d)?,
-            channel: Decodable::decode(&mut d)?,
-            message: Decodable::decode(&mut d)?,
-        })
-    }
-}
-
 async fn process(
     recvr: async_channel::Receiver<Arc<PrivMsg>>,
     stream: Async<TcpStream>,
@@ -233,55 +206,6 @@ async fn process_user_input(
     if let Err(err) = connection.update(line, p2p.clone()).await {
         warn!("Connection error: {} for {}", err, peer_addr);
         return
-    }
-}
-
-struct ProtocolPrivMsg {
-    notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
-    privmsg_sub: net::MessageSubscription<PrivMsg>,
-    jobsman: net::ProtocolJobsManagerPtr,
-}
-
-impl ProtocolPrivMsg {
-    async fn new(
-        channel: net::ChannelPtr,
-        notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
-    ) -> Arc<Self> {
-        let message_subsytem = channel.get_message_subsystem();
-        message_subsytem.add_dispatch::<PrivMsg>().await;
-
-        debug!("ADDED DISPATCH");
-
-        let privmsg_sub =
-            channel.subscribe_msg::<PrivMsg>().await.expect("Missing PrivMsg dispatcher!");
-
-        Arc::new(Self {
-            notify_queue_sender,
-            privmsg_sub,
-            jobsman: net::ProtocolJobsManager::new("PrivMsgProtocol", channel),
-        })
-    }
-
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "ircd", "ProtocolPrivMsg::start() [START]");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_privmsg(), executor.clone()).await;
-        debug!(target: "ircd", "ProtocolPrivMsg::start() [END]");
-    }
-
-    async fn handle_receive_privmsg(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolAddress::handle_receive_privmsg() [START]");
-        loop {
-            let privmsg = self.privmsg_sub.receive().await?;
-
-            debug!(
-                target: "ircd",
-                "ProtocolPrivMsg::handle_receive_privmsg() received {:?}",
-                privmsg
-            );
-
-            self.notify_queue_sender.send(privmsg).await.expect("notify_queue_sender send failed!");
-        }
     }
 }
 
