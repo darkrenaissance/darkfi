@@ -95,4 +95,5 @@ pub use hosts::{Hosts, HostsPtr};
 pub use message_subscriber::MessageSubscription;
 pub use messages::Message;
 pub use p2p::{P2p, P2pPtr};
+pub use protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 pub use settings::{Settings, SettingsPtr};
