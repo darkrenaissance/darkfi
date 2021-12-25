@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate clap;
 use std::{
-    io,
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
 };
@@ -9,8 +8,7 @@ use std::{
 use async_executor::Executor;
 use async_std::io::BufReader;
 use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt,
+    AsyncBufReadExt, AsyncReadExt, FutureExt,
 };
 use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -18,7 +16,6 @@ use smol::Async;
 
 use drk::{
     net,
-    serial::{Decodable, Encodable},
     Error, Result,
 };
 
@@ -37,7 +34,7 @@ async fn process(
     stream: Async<TcpStream>,
     peer_addr: SocketAddr,
     p2p: net::P2pPtr,
-    executor: Arc<Executor<'_>>,
+    _executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 

@@ -1,14 +1,10 @@
 use std::{
-    io,
-    net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
 };
-use log::{debug, error, info, warn};
+use log::debug;
 use async_executor::Executor;
 use drk::{
-    net,
-    serial::{Decodable, Encodable},
-    Error, Result,
+    net, Result,
 };
 
 use crate::privmsg::PrivMsg;

@@ -1,8 +1,7 @@
 use std::io;
 use drk::{
     net,
-    serial::{Decodable, Encodable},
-    Error, Result,
+    serial::{Decodable, Encodable}, Result,
 };
 
 #[derive(Debug, Clone)]

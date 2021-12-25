@@ -1,23 +1,16 @@
 use std::{
-    io,
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::Arc,
+    net::{SocketAddr},
 };
 
-use async_executor::Executor;
-use async_std::io::BufReader;
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, Future, FutureExt,
-};
-use log::{debug, error, info, warn};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use smol::Async;
+
+
+
+
+
+
 
 use drk::{
-    net,
-    serial::{Decodable, Encodable},
-    Error, Result,
+    net, Result,
 };
 
 pub struct ProgramOptions {
