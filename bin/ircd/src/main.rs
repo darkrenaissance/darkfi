@@ -1,21 +1,29 @@
 #[macro_use]
 extern crate clap;
+use async_trait::async_trait;
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
 };
-
 use async_executor::Executor;
 use async_std::io::BufReader;
 use futures::{
     AsyncBufReadExt, AsyncReadExt, FutureExt,
 };
+use serde_json::{json, Value};
 use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use smol::Async;
 
 use drk::{
     net,
+    rpc::{
+        jsonrpc::{
+            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
+            ErrorCode::*, JsonRequest, JsonResult,
+        },
+        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
+    },
     Error, Result,
 };
 
@@ -102,7 +110,7 @@ async fn channel_loop(
 
         debug!("NEWCHANNEL");
 
-        let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone()).await;
+        let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone(), p2p.clone()).await;
         protocol_privmsg.start(executor.clone()).await;
     }
 }
@@ -143,6 +151,11 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     // so detach them as background processes.
     executor.spawn(channel_loop(p2p.clone(), sender, executor.clone())).detach();
 
+    let rpc_interface = Arc::new(JsonRpcInterface {});
+    executor.spawn(async move {
+        listen_and_serve(server_config, rpc_interface, executor).await
+    }).detach();
+
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),
@@ -156,6 +169,33 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         let p2p2 = p2p.clone();
         let ex2 = executor.clone();
         executor.spawn(process(recvr.clone(), stream, peer_addr, p2p2, ex2)).detach();
+    }
+}
+
+struct JsonRpcInterface {
+}
+
+#[async_trait]
+impl RequestHandler for JsonRpcInterface {
+    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
+        if req.params.as_array().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
+        }
+
+        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
+
+        match req.method.as_str() {
+            Some("say_hello") => return self.say_hello(req.id, req.params).await,
+            Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
+        }
+    }
+}
+
+impl JsonRpcInterface {
+    // --> {"method": "say_hello", "params": []}
+    // <-- {"result": "hello world"}
+    async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
+        JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
 }
 

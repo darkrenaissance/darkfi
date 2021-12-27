@@ -1,14 +1,11 @@
 use std::{
     net::{TcpStream},
 };
-
-
-
+use rand::{RngCore, rngs::OsRng};
 use futures::{
     io::{WriteHalf}, AsyncWriteExt,
 };
 use log::{debug, info};
-
 use smol::Async;
 
 use drk::{
@@ -98,7 +95,9 @@ impl IrcServerConnection {
                 let message = &line[substr_idx + 1..];
                 info!("Message {}: {}", channel, message);
 
+
                 let protocol_msg = PrivMsg {
+                    id: OsRng.next_u32(),
                     nickname: self.nickname.clone(),
                     channel: channel.to_string(),
                     message: message.to_string(),
