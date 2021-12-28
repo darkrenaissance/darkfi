@@ -1,3 +1,4 @@
+/// Types supported by the VM
 #[derive(Clone, Debug)]
 pub enum Type {
     EcFixedPoint = 0x00,

@@ -39,6 +39,10 @@ impl Parser {
         let mut constant_tokens = vec![];
         let mut contract_tokens = vec![];
         let mut circuit_tokens = vec![];
+        // Single statement in the circuit
+        let mut circuit_statement = vec![];
+        // All the circuit statements
+        let mut circuit_statements = vec![];
 
         let mut ast = HashMap::new();
         let mut namespace = String::new();
@@ -207,6 +211,41 @@ impl Parser {
             }
 
             if declaring_circuit {
+                self.check_section_structure("circuit", contract_tokens.clone());
+
+                if circuit_tokens[circuit_tokens.len() - 2].token_type != TokenType::Semicolon {
+                    self.error(
+                        "Circuit section does not end with a semicolon. Would never finish parsing.".to_string(),
+                        circuit_tokens[circuit_tokens.len()-2].line,
+                        circuit_tokens[circuit_tokens.len()-2].column
+                    );
+                }
+
+                // TODO: Do we need this?
+                if namespace_found && namespace != circuit_tokens[0].token {
+                    self.error(
+                        format!(
+                            "Found `{}` namespace. Expected `{}`.",
+                            circuit_tokens[0].token, namespace
+                        ),
+                        circuit_tokens[0].line,
+                        circuit_tokens[0].column,
+                    );
+                } else {
+                    namespace = circuit_tokens[0].token.clone();
+                    namespace_found = true;
+                }
+
+                for i in circuit_tokens.clone() {
+                    if i.token_type == TokenType::Semicolon {
+                        circuit_statements.push(circuit_statement.clone());
+                        // println!("{:?}", circuit_statement);
+                        circuit_statement = vec![];
+                        continue
+                    }
+                    circuit_statement.push(i);
+                }
+
                 declaring_circuit = false;
             }
         }
@@ -215,22 +254,16 @@ impl Parser {
         self.verify_initial_ast(&ast);
 
         // Clean up the `constant` section
-        let (constants, err) =
-            Parser::parse_ast_constants(ast.get(&namespace).unwrap().get("constant").unwrap());
-        if let Some(err_msg) = err {
-            // TODO: Return problematic token from parse_ast_constants()
-            self.error(err_msg, 1, 1);
-        }
+        let c = ast.get(&namespace).unwrap().get("constant").unwrap();
+        let constants = self.parse_ast_constants(c);
 
-        // Clean up the `contract section
-        let (contract, err) =
-            Parser::parse_ast_contract(ast.get(&namespace).unwrap().get("contract").unwrap());
-        if let Some(err_msg) = err {
-            // TODO: Return problematic token from parse_ast_contract()
-            self.error(err_msg, 1, 1);
-        }
+        // Clean up the `contract` section
+        let c = ast.get(&namespace).unwrap().get("contract").unwrap();
+        let contract = self.parse_ast_contract(c);
 
-        // Return
+        // Clean up the `circuit` section
+        // TODO
+
         (constants, contract, HashMap::new())
     }
 
@@ -284,7 +317,9 @@ impl Parser {
             );
         }
 
-        if tokens[2..tokens.len() - 1].len() % 3 != 0 {
+        if section == "constant" ||
+            section == "contract" && tokens[2..tokens.len() - 1].len() % 3 != 0
+        {
             self.error(
                 format!(
                     "Invalid number of elements in `{}` section. Must be pairs of `type:name` separated with a comma `,`",
@@ -296,20 +331,32 @@ impl Parser {
         }
     }
 
-    fn parse_ast_constants(ast: &UnparsedConstants) -> (Constants, Option<String>) {
+    fn parse_ast_constants(&self, ast: &UnparsedConstants) -> Constants {
         let mut ret = vec![];
 
         for (k, v) in ast {
             if &v.0.token != k {
-                return (vec![], Some("Constant name doesn't match token".to_string()))
+                self.error(
+                    format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
+                    v.0.line,
+                    v.0.column,
+                );
             }
 
             if v.0.token_type != TokenType::Symbol {
-                return (vec![], Some("Constant name is not a symbol".to_string()))
+                self.error(
+                    format!("Constant name `{}` is not a symbol.", v.0.token),
+                    v.0.line,
+                    v.0.column,
+                );
             }
 
             if v.1.token_type != TokenType::Symbol {
-                return (vec![], Some("Constant type is not a symbol".to_string()))
+                self.error(
+                    format!("Constant type `{}` is not a symbol.", v.1.token),
+                    v.1.line,
+                    v.1.column,
+                );
             }
 
             match v.1.token.as_str() {
@@ -323,29 +370,44 @@ impl Parser {
                 }
 
                 x => {
-                    let err_msg = format!("`{}` is an illegal constant type", x);
-                    return (vec![], Some(err_msg))
+                    self.error(
+                        format!("`{}` is an illegal constant type", x),
+                        v.1.line,
+                        v.1.column,
+                    );
                 }
             }
         }
 
-        (ret, None)
+        ret
     }
 
-    fn parse_ast_contract(ast: &UnparsedWitnesses) -> (Witnesses, Option<String>) {
+    fn parse_ast_contract(&self, ast: &UnparsedWitnesses) -> Witnesses {
         let mut ret = vec![];
 
         for (k, v) in ast {
             if &v.0.token != k {
-                return (vec![], Some("Contract input name doesn't match token".to_string()))
+                self.error(
+                    format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
+                    v.0.line,
+                    v.0.column,
+                );
             }
 
             if v.0.token_type != TokenType::Symbol {
-                return (vec![], Some("Contract input name is not a symbol".to_string()))
+                self.error(
+                    format!("Witness name `{}` is not a symbol.", v.0.token),
+                    v.0.line,
+                    v.0.column,
+                );
             }
 
             if v.1.token_type != TokenType::Symbol {
-                return (vec![], Some("Contract input type is not a symbol".to_string()))
+                self.error(
+                    format!("Witness type `{}` is not a symbol.", v.1.token),
+                    v.1.line,
+                    v.1.column,
+                );
             }
 
             match v.1.token.as_str() {
@@ -357,6 +419,7 @@ impl Parser {
                         column: v.0.column,
                     });
                 }
+
                 "Scalar" => {
                     ret.push(Witness {
                         name: k.to_string(),
@@ -365,6 +428,7 @@ impl Parser {
                         column: v.0.column,
                     });
                 }
+
                 "MerklePath" => {
                     ret.push(Witness {
                         name: k.to_string(),
@@ -373,14 +437,14 @@ impl Parser {
                         column: v.0.column,
                     });
                 }
+
                 x => {
-                    let err_msg = format!("`{}` is an illegal witness type", x);
-                    return (vec![], Some(err_msg))
+                    self.error(format!("`{}` is an illegal witness type", x), v.1.line, v.1.column);
                 }
             }
         }
 
-        (ret, None)
+        ret
     }
 
     fn error(&self, msg: String, ln: usize, col: usize) {

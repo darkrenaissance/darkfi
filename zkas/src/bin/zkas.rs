@@ -21,9 +21,9 @@ fn main() -> Result<()> {
     let parser = Parser::new(filename, source.chars(), tokens);
     let (constants, witnesses, circuit) = parser.parse();
 
-    println!("{:#?}", constants);
-    println!("{:#?}", witnesses);
-    println!("{:#?}", circuit);
+    // println!("{:#?}", constants);
+    // println!("{:#?}", witnesses);
+    // println!("{:#?}", circuit);
 
     Ok(())
 }

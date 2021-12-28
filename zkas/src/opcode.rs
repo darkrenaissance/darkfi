@@ -1,3 +1,4 @@
+// Opcodes supported by the VM
 pub enum OpCode {
     EcAdd = 0x00,
     EcMul = 0x01,
