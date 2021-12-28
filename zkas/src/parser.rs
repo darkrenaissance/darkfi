@@ -1,205 +1,410 @@
-use std::{
-    collections::{hash_map, HashMap},
-    str::Chars,
-};
+use std::{collections::HashMap, io, io::Write, process, str::Chars};
 
 use itertools::Itertools;
+use termion::{color, style};
 
 use crate::{
-    error::ParserError,
     lexer::{Token, TokenType},
+    types::{Constant, Type, Witness},
 };
 
-pub fn parse(filename: &str, source: Chars, tokens: Vec<Token>) {
-    // For nice error reporting, we'll load everything into a string vector
-    // so we have references to lines.
-    let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
-    let parser_error = ParserError::new(filename, lines);
+pub type Ast = HashMap<String, HashMap<String, HashMap<String, (Token, Token)>>>;
 
-    // We use these to keep state when iterating
-    let mut declaring_constant = false;
-    let mut declaring_contract = false;
-    let mut declaring_circuit = false;
+pub type UnparsedConstants = HashMap<String, (Token, Token)>;
+pub type Constants = Vec<Constant>;
 
-    let mut constant_tokens = vec![];
-    let mut contract_tokens = vec![];
-    let mut circuit_tokens = vec![];
+pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
+pub type Witnesses = Vec<Witness>;
 
-    let mut ast: HashMap<String, Vec<HashMap<String, HashMap<String, (Token, Token)>>>> =
-        HashMap::new();
-
-    let mut iter = tokens.iter();
-    while let Some(t) = iter.next() {
-        // Start by declaring a section
-        if !declaring_constant && !declaring_contract && !declaring_circuit {
-            if t.token_type != TokenType::Symbol {
-                // TODO: Revisit
-                // TODO: Visit this again when we are allowing imports
-                panic!();
-            }
-
-            // The sections we are declaring in our source code
-            match t.token.as_str() {
-                "constant" => {
-                    declaring_constant = true;
-                    for inner in iter.by_ref() {
-                        constant_tokens.push(inner.clone());
-                        if inner.token_type == TokenType::RightBrace {
-                            break
-                        }
-                    }
-                }
-
-                "contract" => {
-                    declaring_contract = true;
-                    for inner in iter.by_ref() {
-                        contract_tokens.push(inner.clone());
-                        if inner.token_type == TokenType::RightBrace {
-                            break
-                        }
-                    }
-                }
-
-                "circuit" => {
-                    declaring_circuit = true;
-                    for inner in iter.by_ref() {
-                        circuit_tokens.push(inner.clone());
-                        if inner.token_type == TokenType::RightBrace {
-                            break
-                        }
-                    }
-                }
-
-                _ => unreachable!(),
-            }
-        }
-
-        // We shouldn't be reaching these states
-        if declaring_constant && (declaring_contract || declaring_circuit) {
-            unreachable!()
-        }
-        if declaring_contract && (declaring_constant || declaring_circuit) {
-            unreachable!()
-        }
-        if declaring_circuit && (declaring_constant || declaring_contract) {
-            unreachable!()
-        }
-
-        // Now go through the token vectors and work it through
-        if declaring_constant {
-            if let Some(err_msg) = check_section_structure(constant_tokens.clone()) {
-                parser_error.invalid_section_declaration(
-                    "constant",
-                    err_msg,
-                    constant_tokens[0].line,
-                    constant_tokens[0].column,
-                );
-            }
-
-            let namespace = constant_tokens[0].token.clone();
-            let mut constants_map = HashMap::new();
-
-            let constants_cloned = constant_tokens.clone();
-            let mut constants_inner = constants_cloned[2..constant_tokens.len() - 1].iter();
-            while let Some((typ, name, comma)) = constants_inner.next_tuple() {
-                if comma.token_type != TokenType::Comma {
-                    parser_error.separator_not_a_comma(comma.line, comma.column);
-                }
-
-                if constants_map.contains_key(name.token.as_str()) {
-                    parser_error.declaration_already_contains_token(
-                        "constant",
-                        &name.token,
-                        name.line,
-                        name.column,
-                    );
-                }
-
-                constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
-            }
-
-            let mut c_map = HashMap::new();
-            c_map.insert("constant".to_string(), constants_map);
-
-            if let hash_map::Entry::Vacant(e) = ast.entry(namespace.clone()) {
-                let v = vec![c_map];
-                e.insert(v);
-            } else {
-                let v = ast.get_mut(&namespace).unwrap();
-                v.push(c_map);
-            }
-
-            declaring_constant = false;
-        }
-
-        if declaring_contract {
-            if let Some(err_msg) = check_section_structure(contract_tokens.clone()) {
-                parser_error.invalid_section_declaration(
-                    "contract",
-                    err_msg,
-                    contract_tokens[0].line,
-                    contract_tokens[0].column,
-                );
-            }
-
-            let namespace = contract_tokens[0].token.clone();
-            let mut contract_map = HashMap::new();
-
-            let contract_cloned = contract_tokens.clone();
-            let mut contract_inner = contract_cloned[2..contract_tokens.len() - 1].iter();
-            while let Some((typ, name, comma)) = contract_inner.next_tuple() {
-                if comma.token_type != TokenType::Comma {
-                    parser_error.separator_not_a_comma(comma.line, comma.column);
-                }
-
-                if contract_map.contains_key(&name.token) {
-                    parser_error.declaration_already_contains_token(
-                        "contract",
-                        &name.token,
-                        name.line,
-                        name.column,
-                    );
-                }
-
-                contract_map.insert(name.token.clone(), (name.clone(), typ.clone()));
-            }
-
-            let mut c_map = HashMap::new();
-            c_map.insert("contract".to_string(), contract_map);
-
-            if let hash_map::Entry::Vacant(e) = ast.entry(namespace.clone()) {
-                let v = vec![c_map];
-                e.insert(v);
-            } else {
-                let v = ast.get_mut(&namespace).unwrap();
-                v.push(c_map);
-            }
-
-            declaring_contract = false;
-        }
-
-        if declaring_circuit {
-            declaring_circuit = false;
-        }
-
-        println!("{:#?}", ast);
-    }
+pub struct Parser {
+    file: String,
+    lines: Vec<String>,
+    tokens: Vec<Token>,
 }
 
-fn check_section_structure(tokens: Vec<Token>) -> Option<&'static str> {
-    if tokens[0].token_type != TokenType::String {
-        return Some("Section declaration must start with a naming string.")
-    }
-    if tokens[1].token_type != TokenType::LeftBrace {
-        return Some("Section opening is not correct. Must be opened with a left brace `{`")
-    }
-    if tokens[tokens.len() - 1].token_type != TokenType::RightBrace {
-        return Some("Section closing is not correct. Must be closed with a right brace `}`")
+impl Parser {
+    pub fn new(filename: &str, source: Chars, tokens: Vec<Token>) -> Self {
+        // For nice error reporting, we'll load everything into a string
+        // vector so we have references to lines.
+        let lines = source.as_str().lines().map(|x| x.to_string()).collect();
+        Parser { file: filename.to_string(), lines, tokens }
     }
 
-    if tokens[2..tokens.len() - 1].len() % 3 != 0 {
-        return Some("Invalid number of elements in section. Must be pairs of `type:name` separated with a comma `,`")
+    pub fn parse(self) -> (Constants, Witnesses, Ast) {
+        // We use these to keep state when iterating
+        let mut declaring_constant = false;
+        let mut declaring_contract = false;
+        let mut declaring_circuit = false;
+
+        let mut constant_tokens = vec![];
+        let mut contract_tokens = vec![];
+        let mut circuit_tokens = vec![];
+
+        let mut ast = HashMap::new();
+        let mut namespace = String::new();
+        let mut ast_inner = HashMap::new();
+        let mut namespace_found = false; // Nasty
+
+        let mut iter = self.tokens.iter();
+        while let Some(t) = iter.next() {
+            // Start by declaring a section
+            if !declaring_constant && !declaring_contract && !declaring_circuit {
+                if t.token_type != TokenType::Symbol {
+                    // TODO: Revisit
+                    // TODO: Visit this again when we are allowing imports
+                    unimplemented!();
+                }
+
+                // The sections we must be declaring in our source code
+                match t.token.as_str() {
+                    "constant" => {
+                        declaring_constant = true;
+                        // Eat all the tokens within the `constant` section
+                        for inner in iter.by_ref() {
+                            constant_tokens.push(inner.clone());
+                            if inner.token_type == TokenType::RightBrace {
+                                break
+                            }
+                        }
+                    }
+
+                    "contract" => {
+                        declaring_contract = true;
+                        // Eat all the tokens within the `contract` section
+                        for inner in iter.by_ref() {
+                            contract_tokens.push(inner.clone());
+                            if inner.token_type == TokenType::RightBrace {
+                                break
+                            }
+                        }
+                    }
+
+                    "circuit" => {
+                        declaring_circuit = true;
+                        // Eat all the tokens within the `circuit` section
+                        for inner in iter.by_ref() {
+                            circuit_tokens.push(inner.clone());
+                            if inner.token_type == TokenType::RightBrace {
+                                break
+                            }
+                        }
+                    }
+
+                    x => self.error(format!("Unknown `{}` proof section", x), t.line, t.column),
+                }
+            }
+
+            // We shouldn't be reaching these states
+            if declaring_constant && (declaring_contract || declaring_circuit) {
+                unreachable!()
+            }
+            if declaring_contract && (declaring_constant || declaring_circuit) {
+                unreachable!()
+            }
+            if declaring_circuit && (declaring_constant || declaring_contract) {
+                unreachable!()
+            }
+
+            // Now go through the token vectors and work it through
+            if declaring_constant {
+                self.check_section_structure("constant", constant_tokens.clone());
+
+                // TODO: Do we need this?
+                if namespace_found && namespace != constant_tokens[0].token {
+                    self.error(
+                        format!(
+                            "Found `{}` namespace. Expected `{}`.",
+                            constant_tokens[0].token, namespace
+                        ),
+                        constant_tokens[0].line,
+                        constant_tokens[0].column,
+                    );
+                } else {
+                    namespace = constant_tokens[0].token.clone();
+                    namespace_found = true;
+                }
+
+                let constants_cloned = constant_tokens.clone();
+                let mut constants_map = HashMap::new();
+                // This is everything between the braces: { .. }
+                let mut constants_inner = constants_cloned[2..constant_tokens.len() - 1].iter();
+
+                while let Some((typ, name, comma)) = constants_inner.next_tuple() {
+                    if comma.token_type != TokenType::Comma {
+                        self.error(
+                            "Separator is not a comma".to_string(),
+                            comma.line,
+                            comma.column,
+                        );
+                    }
+
+                    if constants_map.contains_key(name.token.as_str()) {
+                        self.error(
+                            format!(
+                                "Section `constant` already contains the token `{}`.",
+                                &name.token
+                            ),
+                            name.line,
+                            name.column,
+                        );
+                    }
+
+                    constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
+                }
+
+                ast_inner.insert("constant".to_string(), constants_map);
+                declaring_constant = false;
+            }
+
+            if declaring_contract {
+                self.check_section_structure("contract", contract_tokens.clone());
+
+                // TODO: Do we need this?
+                if namespace_found && namespace != contract_tokens[0].token {
+                    self.error(
+                        format!(
+                            "Found `{}` namespace. Expected `{}`.",
+                            contract_tokens[0].token, namespace
+                        ),
+                        contract_tokens[0].line,
+                        contract_tokens[0].column,
+                    );
+                } else {
+                    namespace = contract_tokens[0].token.clone();
+                    namespace_found = true;
+                }
+
+                let contract_cloned = contract_tokens.clone();
+                let mut contract_map = HashMap::new();
+                // This is everything between the braces: { .. }
+                let mut contract_inner = contract_cloned[2..contract_tokens.len() - 1].iter();
+
+                while let Some((typ, name, comma)) = contract_inner.next_tuple() {
+                    if comma.token_type != TokenType::Comma {
+                        self.error(
+                            "Separator is not a comma".to_string(),
+                            comma.line,
+                            comma.column,
+                        );
+                    }
+
+                    if contract_map.contains_key(name.token.as_str()) {
+                        self.error(
+                            format!(
+                                "Section `contract` already contains the token `{}`.",
+                                &name.token
+                            ),
+                            name.line,
+                            name.column,
+                        );
+                    }
+
+                    contract_map.insert(name.token.clone(), (name.clone(), typ.clone()));
+                }
+
+                ast_inner.insert("contract".to_string(), contract_map);
+                declaring_contract = false;
+            }
+
+            if declaring_circuit {
+                declaring_circuit = false;
+            }
+        }
+
+        ast.insert(namespace.clone(), ast_inner);
+        self.verify_initial_ast(&ast);
+
+        // Clean up the `constant` section
+        let (constants, err) =
+            Parser::parse_ast_constants(ast.get(&namespace).unwrap().get("constant").unwrap());
+        if let Some(err_msg) = err {
+            // TODO: Return problematic token from parse_ast_constants()
+            self.error(err_msg, 1, 1);
+        }
+
+        // Clean up the `contract section
+        let (contract, err) =
+            Parser::parse_ast_contract(ast.get(&namespace).unwrap().get("contract").unwrap());
+        if let Some(err_msg) = err {
+            // TODO: Return problematic token from parse_ast_contract()
+            self.error(err_msg, 1, 1);
+        }
+
+        // Return
+        (constants, contract, HashMap::new())
     }
 
-    None
+    fn verify_initial_ast(&self, ast: &Ast) {
+        // Verify that there are all 3 sections
+        for v in ast.values() {
+            if !v.contains_key("constant") {
+                self.error("Missing `constant` section in the source.".to_string(), 1, 1);
+            }
+
+            if !v.contains_key("contract") {
+                self.error("Missing `contract` section in the source.".to_string(), 1, 1);
+            }
+
+            /*
+            if !v.contains_key("circuit") {
+                self.error("Missing `circuit` section in the source.".to_string(), 1, 1);
+            }
+            */
+        }
+    }
+
+    fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
+        if tokens[0].token_type != TokenType::String {
+            self.error(
+                format!("{} section declaration must start with a naming string.", section),
+                tokens[0].line,
+                tokens[0].column,
+            );
+        }
+
+        if tokens[1].token_type != TokenType::LeftBrace {
+            self.error(
+                format!(
+                    "{} section opening is not correct. Must be opened with a left brace `{{`",
+                    section
+                ),
+                tokens[0].line,
+                tokens[0].column,
+            );
+        }
+
+        if tokens[tokens.len() - 1].token_type != TokenType::RightBrace {
+            self.error(
+                format!(
+                    "{} section closing is not correct. Must be closed with a right brace `}}`",
+                    section
+                ),
+                tokens[0].line,
+                tokens[0].column,
+            );
+        }
+
+        if tokens[2..tokens.len() - 1].len() % 3 != 0 {
+            self.error(
+                format!(
+                    "Invalid number of elements in `{}` section. Must be pairs of `type:name` separated with a comma `,`",
+                    section
+                ),
+                tokens[0].line,
+                tokens[0].column,
+            );
+        }
+    }
+
+    fn parse_ast_constants(ast: &UnparsedConstants) -> (Constants, Option<String>) {
+        let mut ret = vec![];
+
+        for (k, v) in ast {
+            if &v.0.token != k {
+                return (vec![], Some("Constant name doesn't match token".to_string()))
+            }
+
+            if v.0.token_type != TokenType::Symbol {
+                return (vec![], Some("Constant name is not a symbol".to_string()))
+            }
+
+            if v.1.token_type != TokenType::Symbol {
+                return (vec![], Some("Constant type is not a symbol".to_string()))
+            }
+
+            match v.1.token.as_str() {
+                "EcFixedPoint" => {
+                    ret.push(Constant {
+                        name: k.to_string(),
+                        typ: Type::EcFixedPoint,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                x => {
+                    let err_msg = format!("`{}` is an illegal constant type", x);
+                    return (vec![], Some(err_msg))
+                }
+            }
+        }
+
+        (ret, None)
+    }
+
+    fn parse_ast_contract(ast: &UnparsedWitnesses) -> (Witnesses, Option<String>) {
+        let mut ret = vec![];
+
+        for (k, v) in ast {
+            if &v.0.token != k {
+                return (vec![], Some("Contract input name doesn't match token".to_string()))
+            }
+
+            if v.0.token_type != TokenType::Symbol {
+                return (vec![], Some("Contract input name is not a symbol".to_string()))
+            }
+
+            if v.1.token_type != TokenType::Symbol {
+                return (vec![], Some("Contract input type is not a symbol".to_string()))
+            }
+
+            match v.1.token.as_str() {
+                "Base" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: Type::Base,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+                "Scalar" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: Type::Scalar,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+                "MerklePath" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: Type::MerklePath,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+                x => {
+                    let err_msg = format!("`{}` is an illegal witness type", x);
+                    return (vec![], Some(err_msg))
+                }
+            }
+        }
+
+        (ret, None)
+    }
+
+    fn error(&self, msg: String, ln: usize, col: usize) {
+        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
+        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
+        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
+        let caret = format!("{:width$}^", "", width = pad);
+        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
+        Parser::abort(&msg);
+    }
+
+    fn abort(msg: &str) {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        write!(
+            handle,
+            "{}{}Parser error:{} {}",
+            style::Bold,
+            color::Fg(color::Red),
+            style::Reset,
+            msg,
+        )
+        .unwrap();
+        handle.flush().unwrap();
+        process::exit(1);
+    }
 }
