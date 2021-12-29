@@ -86,6 +86,7 @@ impl Parser {
                     "circuit" => {
                         declaring_circuit = true;
                         // Eat all the tokens within the `circuit` section
+                        // TODO: Revisit when we support if/else and loops
                         for inner in iter.by_ref() {
                             circuit_tokens.push(inner.clone());
                             if inner.token_type == TokenType::RightBrace {
@@ -236,14 +237,14 @@ impl Parser {
                     namespace_found = true;
                 }
 
-                for i in circuit_tokens.clone() {
+                for i in circuit_tokens.clone()[2..circuit_tokens.len() - 1].iter() {
                     if i.token_type == TokenType::Semicolon {
                         circuit_statements.push(circuit_statement.clone());
                         // println!("{:?}", circuit_statement);
                         circuit_statement = vec![];
                         continue
                     }
-                    circuit_statement.push(i);
+                    circuit_statement.push(i.clone());
                 }
 
                 declaring_circuit = false;
@@ -454,6 +455,26 @@ impl Parser {
         witnesses: Witnesses,
         statements: Vec<Vec<Token>>,
     ) -> Ast {
+        // 1. Scan the tokens to map opcodes (function calls)
+        // 2. For each statement, see if there are variable assignments
+        // 3. When referencing, check if they're in Constants, Witnesses
+        //    and finally, or they've been assigned
+        for statement in statements {
+            /*
+            let mut iter = statement.iter().peekable();
+            while let Some(token) = iter.next() {
+                if let Some(next_token) = iter.peek() {
+                    if next_token.token_type == TokenType::Assign {
+                        variables.push(token);
+                    }
+                }
+            }
+            */
+            println!("{:?}", statement);
+
+            break
+        }
+
         HashMap::new()
     }
 
