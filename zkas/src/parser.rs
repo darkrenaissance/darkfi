@@ -318,8 +318,8 @@ impl Parser {
             );
         }
 
-        if section == "constant" ||
-            section == "contract" && tokens[2..tokens.len() - 1].len() % 3 != 0
+        if (section == "constant" || section == "contract") &&
+            tokens[2..tokens.len() - 1].len() % 3 != 0
         {
             self.error(
                 format!(
