@@ -259,23 +259,24 @@ impl Parser {
 
         // Clean up the `contract` section
         let c = ast.get(&namespace).unwrap().get("contract").unwrap();
-        let contract = self.parse_ast_contract(c);
+        let witnesses = self.parse_ast_contract(c);
 
         // Clean up the `circuit` section
-        // TODO
+        let circuit =
+            self.parse_ast_circuit(constants.clone(), witnesses.clone(), circuit_statements);
 
-        (constants, contract, HashMap::new())
+        (constants, witnesses, circuit)
     }
 
     fn verify_initial_ast(&self, ast: &Ast) {
         // Verify that there are all 3 sections
         for v in ast.values() {
             if !v.contains_key("constant") {
-                self.error("Missing `constant` section in the source.".to_string(), 1, 1);
+                self.error("Missing `constant` section in the source.".to_string(), 1, 0);
             }
 
             if !v.contains_key("contract") {
-                self.error("Missing `contract` section in the source.".to_string(), 1, 1);
+                self.error("Missing `contract` section in the source.".to_string(), 1, 0);
             }
 
             /*
@@ -445,6 +446,15 @@ impl Parser {
         }
 
         ret
+    }
+
+    fn parse_ast_circuit(
+        &self,
+        constants: Constants,
+        witnesses: Witnesses,
+        statements: Vec<Vec<Token>>,
+    ) -> Ast {
+        HashMap::new()
     }
 
     fn error(&self, msg: String, ln: usize, col: usize) {
