@@ -4,7 +4,9 @@ use itertools::Itertools;
 use termion::{color, style};
 
 use crate::{
+    ast::{Statement, StatementType, Variable},
     lexer::{Token, TokenType},
+    opcode::Opcode,
     types::{Constant, Type, Witness},
 };
 
@@ -459,19 +461,100 @@ impl Parser {
         // 2. For each statement, see if there are variable assignments
         // 3. When referencing, check if they're in Constants, Witnesses
         //    and finally, or they've been assigned
+
         for statement in statements {
-            /*
+            // TODO: If there are parentheses, verify that there are both
+            //       openings and closings.
+
+            // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind)
+            // | |         |                     |
+            // V V         V                     V
+            // variable   opcode                args
+            // assign
+
+            // constrain_instance(C)
+            //     |              |
+            //     V              V
+            //   opcode         args
+
             let mut iter = statement.iter().peekable();
+            let mut stmt = Statement::default();
             while let Some(token) = iter.next() {
                 if let Some(next_token) = iter.peek() {
                     if next_token.token_type == TokenType::Assign {
-                        variables.push(token);
+                        stmt.typ = StatementType::Assignment;
+                        stmt.variable = Some(Variable {
+                            name: token.token.clone(),
+                            line: token.line,
+                            column: token.column,
+                        });
+                        // Skip over the `=` token.
+                        iter.next();
+                    }
+                } else {
+                    panic!();
+                }
+
+                match token.token.as_str() {
+                    "poseidon_hash" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // The function call opening is correct, so skip the
+                            // opening parenthesis:
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        stmt.opcode = Opcode::PoseidonHash;
+
+                        // Eat up function arguments
+                    }
+
+                    "constrain_instance" => {
+                        stmt.opcode = Opcode::ConstrainInstance;
+                        unimplemented!();
+                    }
+
+                    "calculate_merkle_root" => {
+                        stmt.opcode = Opcode::CalculateMerkleRoot;
+                        unimplemented!();
+                    }
+
+                    "ec_mul_short" => {
+                        stmt.opcode = Opcode::EcMulShort;
+                        unimplemented!();
+                    }
+
+                    "ec_mul" => {
+                        stmt.opcode = Opcode::EcMul;
+                        unimplemented!();
+                    }
+
+                    "ec_get_x" => {
+                        stmt.opcode = Opcode::EcGetX;
+                        unimplemented!();
+                    }
+
+                    "ec_get_y" => {
+                        stmt.opcode = Opcode::EcGetY;
+                        unimplemented!();
+                    }
+
+                    "ec_add" => {
+                        stmt.opcode = Opcode::EcAdd;
+                        unimplemented!();
+                    }
+
+                    x => {
+                        unimplemented!();
                     }
                 }
             }
-            */
-            println!("{:?}", statement);
 
+            println!("{:?}", statement);
             break
         }
 

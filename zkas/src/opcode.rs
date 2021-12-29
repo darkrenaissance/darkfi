@@ -1,5 +1,5 @@
 // Opcodes supported by the VM
-pub enum OpCode {
+pub enum Opcode {
     EcAdd = 0x00,
     EcMul = 0x01,
     EcMulShort = 0x02,
@@ -11,4 +11,6 @@ pub enum OpCode {
     CalculateMerkleRoot = 0x20,
 
     ConstrainInstance = 0xf0,
+
+    Noop = 0xff,
 }

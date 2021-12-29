@@ -1,3 +1,5 @@
+/// AST
+pub mod ast;
 /// Lexer module
 pub mod lexer;
 /// Language opcodes

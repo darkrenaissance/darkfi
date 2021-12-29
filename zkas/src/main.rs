@@ -6,6 +6,9 @@ use zkas::{lexer::Lexer, parser::Parser};
 
 fn main() -> Result<()> {
     let args = clap_app!(zkas =>
+        (@arg strip: -s "Strip debug symbols")
+        (@arg preprocess: -E "Preprocess only; do not compile")
+        (@arg OUTPUT: -o +takes_value "Place the output into <OUTPUT>")
         (@arg INPUT: +required "ZK script to compile")
     )
     .get_matches();
