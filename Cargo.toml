@@ -99,15 +99,20 @@ solana-sdk = {version = "1.8.11", optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 
+# Darkpulse and tui dependencies
 aes-gcm = {version = "0.9.4", optional = true}
 chrono = {version = "0.4.19", optional = true}
 rusqlite = {version = "0.26.3", optional = true}
+crossbeam-channel = { version = "0.5.1", optional = true}
+libc = { version = "0.2.112", optional = true}
+termion = { version = "1.5.6", optional = true}
 
 [features]
 btc = ["bdk", "bitcoin", "secp256k1"]
 eth = ["keccak-hasher", "hash-db"]
 sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
 darkpulse = ["aes-gcm", "chrono","rusqlite"]
+tui = ["termion", "chrono","libc", "crossbeam-channel"]
 
 [[bin]]         
 name = "darkpulse"    
@@ -116,6 +121,10 @@ required-features = ["darkpulse"]
 [[bin]]         
 name = "eth"    
 required-features = ["eth"]
+
+[[bin]]         
+name = "tui_ex"    
+required-features = ["tui"]
 
 [[example]]
 name = "net"

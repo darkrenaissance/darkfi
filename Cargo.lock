@@ -1335,6 +1335,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "crossbeam-channel 0.5.1",
  "crypto_api_chachapoly",
  "dirs 4.0.0",
  "easy-parallel",
@@ -1348,6 +1349,7 @@ dependencies = [
  "incrementalmerkletree",
  "keccak-hasher",
  "lazy_static",
+ "libc",
  "libsqlite3-sys",
  "log",
  "native-tls",
@@ -1373,6 +1375,7 @@ dependencies = [
  "spl-token",
  "sqlx",
  "subtle",
+ "termion",
  "thiserror",
  "toml",
  "tungstenite",
@@ -3009,6 +3012,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
+name = "numtoa"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
+
+[[package]]
 name = "object"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3703,6 +3712,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8383f39639269cde97d255a32bdb68c047337295414940c68bdd30c2e13203ff"
 dependencies = [
  "bitflags",
+]
+
+[[package]]
+name = "redox_termios"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8440d8acb4fd3d277125b4bd01a6f38aee8d814b3b5fc09b3f2b825d37d3fe8f"
+dependencies = [
+ "redox_syscall 0.2.10",
 ]
 
 [[package]]
@@ -5171,6 +5189,18 @@ checksum = "633c1a546cee861a1a6d0dc69ebeca693bf4296661ba7852b9d21d159e0506df"
 dependencies = [
  "libc",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "termion"
+version = "1.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "077185e2eac69c3f8379a4298e1e07cd36beb962290d4a51199acf0fdc10607e"
+dependencies = [
+ "libc",
+ "numtoa",
+ "redox_syscall 0.2.10",
+ "redox_termios",
 ]
 
 [[package]]
