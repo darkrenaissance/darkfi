@@ -1,17 +1,20 @@
 use crate::opcode::Opcode;
 
+#[derive(PartialEq, Clone, Debug)]
 pub enum StatementType {
     Assignment,
     Call,
     Noop,
 }
 
+#[derive(Clone, Debug)]
 pub struct Variable {
     pub name: String,
     pub line: usize,
     pub column: usize,
 }
 
+#[derive(Clone, Debug)]
 pub struct Statement {
     pub typ: StatementType,
     pub variable: Option<Variable>,

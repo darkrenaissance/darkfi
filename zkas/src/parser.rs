@@ -268,7 +268,7 @@ impl Parser {
         let circuit =
             self.parse_ast_circuit(constants.clone(), witnesses.clone(), circuit_statements);
 
-        (constants, witnesses, circuit)
+        (constants, witnesses, HashMap::new())
     }
 
     fn verify_initial_ast(&self, ast: &Ast) {
@@ -456,11 +456,13 @@ impl Parser {
         constants: Constants,
         witnesses: Witnesses,
         statements: Vec<Vec<Token>>,
-    ) -> Ast {
+    ) -> Vec<Statement> {
         // 1. Scan the tokens to map opcodes (function calls)
         // 2. For each statement, see if there are variable assignments
         // 3. When referencing, check if they're in Constants, Witnesses
         //    and finally, or they've been assigned
+
+        let mut stmts = vec![];
 
         for statement in statements {
             // TODO: If there are parentheses, verify that there are both
@@ -479,86 +481,360 @@ impl Parser {
 
             let mut iter = statement.iter().peekable();
             let mut stmt = Statement::default();
+
+            let mut parsing = false;
+
             while let Some(token) = iter.next() {
-                if let Some(next_token) = iter.peek() {
-                    if next_token.token_type == TokenType::Assign {
-                        stmt.typ = StatementType::Assignment;
-                        stmt.variable = Some(Variable {
-                            name: token.token.clone(),
-                            line: token.line,
-                            column: token.column,
-                        });
-                        // Skip over the `=` token.
-                        iter.next();
+                if !parsing {
+                    if let Some(next_token) = iter.peek() {
+                        if next_token.token_type == TokenType::Assign {
+                            stmt.typ = StatementType::Assignment;
+                            stmt.variable = Some(Variable {
+                                name: token.token.clone(),
+                                line: token.line,
+                                column: token.column,
+                            });
+                            // Skip over the `=` token.
+                            iter.next();
+                            parsing = true;
+                            continue
+                        }
+
+                        if next_token.token_type == TokenType::LeftParen {
+                            stmt.typ = StatementType::Call;
+                            stmt.variable = None;
+                            parsing = true;
+                        }
+
+                        if !parsing {
+                            panic!("illegal token");
+                        }
                     }
-                } else {
-                    panic!();
                 }
 
+                // TODO: Clean up this redundancy
                 match token.token.as_str() {
                     "poseidon_hash" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
                                 panic!();
                             }
-                            // The function call opening is correct, so skip the
-                            // opening parenthesis:
+                            // Skip the opening parenthesis
                             iter.next();
                         } else {
                             panic!();
                         }
 
-                        stmt.opcode = Opcode::PoseidonHash;
-
                         // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
+                        stmt.opcode = Opcode::PoseidonHash;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "constrain_instance" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::ConstrainInstance;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "calculate_merkle_root" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::CalculateMerkleRoot;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "ec_mul_short" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::EcMulShort;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "ec_mul" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::EcMul;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "ec_get_x" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::EcGetX;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "ec_get_y" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::EcGetY;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     "ec_add" => {
+                        if let Some(next_token) = iter.peek() {
+                            if next_token.token_type != TokenType::LeftParen {
+                                panic!();
+                            }
+                            // Skip the opening parenthesis
+                            iter.next();
+                        } else {
+                            panic!();
+                        }
+
+                        // Eat up function arguments
+                        let mut args = vec![];
+                        while let Some((arg, sep)) = iter.next_tuple() {
+                            args.push(Variable {
+                                name: arg.token.clone(),
+                                line: arg.line,
+                                column: arg.column,
+                            });
+
+                            if sep.token_type == TokenType::RightParen {
+                                // Reached end of args
+                                break
+                            }
+
+                            if sep.token_type != TokenType::Comma {
+                                panic!();
+                            }
+                        }
+
+                        stmt.args = args.clone();
                         stmt.opcode = Opcode::EcAdd;
-                        unimplemented!();
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
                     }
 
                     x => {
-                        unimplemented!();
+                        panic!("{:?}", x);
                     }
                 }
             }
-
-            println!("{:?}", statement);
-            break
         }
 
-        HashMap::new()
+        println!("{:#?}", stmts);
+        stmts
     }
 
     fn error(&self, msg: String, ln: usize, col: usize) {
