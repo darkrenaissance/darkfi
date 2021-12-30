@@ -18,6 +18,8 @@ pub mod util;
 pub mod vm;
 pub mod vm_serial;
 pub mod wallet;
+
+#[cfg(feature = "tui")]
 pub mod tui;
 
 #[cfg(feature = "darkpulse")]
