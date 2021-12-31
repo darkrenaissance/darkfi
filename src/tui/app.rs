@@ -11,6 +11,7 @@ use termion::{
 use crate::Result;
 use super::Layout;
 
+#[allow(dead_code)]
 pub struct App {
     layouts: Vec<Box<dyn Layout>>,
     stdin: Mutex<Keys<Stdin>>,

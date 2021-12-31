@@ -5,6 +5,7 @@ use rusqlite::{params, Connection};
 use super::{utility::default_config_dir, Channel, CiphertextHash, SlabMessage};
 use crate::Result;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Dbsql {
     connection: Connection,

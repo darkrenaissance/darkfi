@@ -69,8 +69,8 @@ impl ContractLoader {
 
     pub fn create_prk(name: String) -> Result<()> {
         // TODO: implement this
-        let mint_vk = ProvingKey::build(11, MintContract::default());
-        let mut file = File::create(name + ".prk")?;
+        let _mint_vk = ProvingKey::build(11, MintContract::default());
+        let _file = File::create(name + ".prk")?;
         // TODO: serialize and save file
         Ok(())
     }
@@ -78,7 +78,7 @@ impl ContractLoader {
     pub fn create_vrk(name: String) -> Result<()> {
         // TODO: implement this
         let _mint_vk = VerifyingKey::build(11, MintContract::default());
-        let mut file = File::create(name + ".vrk")?;
+        let _file = File::create(name + ".vrk")?;
         // TODO: serialize and save file
         Ok(())
     }
