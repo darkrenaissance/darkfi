@@ -1,6 +1,5 @@
-pub mod widget;
 pub mod app;
+pub mod widget;
 
-pub use widget::{HBox, VBox, Widget, Layout};
 pub use app::App;
-
+pub use widget::{HBox, Layout, VBox, Widget};

@@ -1,6 +1,7 @@
-
-use drk::tui::{App, HBox, VBox, Widget};
-use drk::Result;
+use drk::{
+    tui::{App, HBox, VBox, Widget},
+    Result,
+};
 
 async fn start() -> Result<()> {
     let wv1 = vec![Widget::new("V1".into())?];

@@ -8,8 +8,8 @@ use termion::{
     raw::{IntoRawMode, RawTerminal},
 };
 
-use crate::Result;
 use super::Layout;
+use crate::Result;
 
 #[allow(dead_code)]
 pub struct App {
@@ -25,11 +25,7 @@ impl App {
         let stdout = std::io::stdout();
         let stdout = stdout.into_raw_mode()?;
 
-        Ok(Self {
-            stdin,
-            stdout,
-            layouts: vec![],
-        })
+        Ok(Self { stdin, stdout, layouts: vec![] })
     }
 
     fn clear(&mut self) -> Result<()> {
@@ -93,7 +89,7 @@ impl App {
                 if terminal_width > box_x {
                     terminal_width -= box_x;
                 } else {
-                    break;
+                    break
                 }
             }
 
@@ -102,7 +98,7 @@ impl App {
                 if terminal_height > box_y {
                     terminal_height -= box_y;
                 } else {
-                    break;
+                    break
                 }
             }
         }

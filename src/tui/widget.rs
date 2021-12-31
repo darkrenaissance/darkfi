@@ -15,13 +15,7 @@ pub struct Widget {
 
 impl Widget {
     pub fn new(title: String) -> Result<Widget> {
-        Ok(Widget {
-            width: 0,
-            height: 0,
-            x: 0,
-            y: 0,
-            title,
-        })
+        Ok(Widget { width: 0, height: 0, x: 0, y: 0, title })
     }
 
     pub fn print(
@@ -31,12 +25,7 @@ impl Widget {
         y: usize,
         text: &str,
     ) -> Result<()> {
-        write!(
-            stdout,
-            "{}{}",
-            cursor::Goto(1 + x as u16, 1 + y as u16),
-            text
-        )?;
+        write!(stdout, "{}{}", cursor::Goto(1 + x as u16, 1 + y as u16), text)?;
         Ok(())
     }
 
@@ -82,12 +71,7 @@ impl Widget {
 
     pub fn draw(&self, stdout: &mut RawTerminal<Stdout>) -> Result<()> {
         self.print_border(stdout)?;
-        self.print(
-            stdout,
-            self.x + 3,
-            self.y,
-            &format!(" {} ", &self.title.clone()),
-        )?;
+        self.print(stdout, self.x + 3, self.y, &format!(" {} ", &self.title.clone()))?;
         Ok(())
     }
 }
@@ -159,13 +143,12 @@ impl Layout for HBox {
         layout_width: usize,
         layout_height: usize,
     ) -> Result<(usize, usize)> {
-
         let len = self.widgets.len();
 
         let widget_height = layout_height / self.height;
 
         for (i, widget) in self.widgets.iter_mut().enumerate() {
-            widget.width = layout_width  / len - 1;
+            widget.width = layout_width / len - 1;
             widget.height = widget_height - 1;
             widget.x = (widget.width + 1) * i + x;
             widget.y = y;
