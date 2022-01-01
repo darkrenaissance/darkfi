@@ -1,14 +1,14 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
-use clap::clap_app;
+use clap::Parser;
 use easy_parallel::Parallel;
 use log::debug;
 use simplelog::{LevelFilter, SimpleLogger};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{Config, GatewaydConfig},
+    cli::{CliGatewayd, Config, GatewaydConfig},
     service::GatewayService,
     util::{expand_path, join_config_path},
     Result,
@@ -29,22 +29,17 @@ async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<(
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = clap_app!(gatewayd =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg verbose: -v --verbose "Increase verbosity")
-        (@arg trace: -t --trace "Show event trace")
-    )
-    .get_matches();
+    let args = CliGatewayd::parse();
 
-    let config_path = if args.is_present("CONFIG") {
-        expand_path(args.value_of("CONFIG").unwrap())?
+    let config_path = if args.config.is_some() {
+        expand_path(&args.config.unwrap())?
     } else {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
+    let loglevel = if args.verbose {
         LevelFilter::Debug
-    } else if args.is_present("trace") {
+    } else if args.trace {
         LevelFilter::Trace
     } else {
         LevelFilter::Info

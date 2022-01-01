@@ -60,7 +60,7 @@ smol = "1.2.5"
 
 # Utilities
 anyhow = "1.0.49"
-clap = "2.34.0"
+clap = { version = "3.0.0", features = ["derive"] }
 dirs = "4.0.0"
 failure = "0.1.8"
 lazy_static = "1.4.0"

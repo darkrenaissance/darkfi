@@ -2,14 +2,14 @@ use std::{path::PathBuf, str::FromStr};
 
 #[macro_use]
 extern crate prettytable;
-use clap::{clap_app, ArgMatches};
+use clap::Parser;
 use log::debug;
 use prettytable::{format, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use drk::{
-    cli::{Config, DrkConfig},
+    cli::{CliDrk, CliDrkSubCommands, Config, DrkConfig},
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{join_config_path, path::expand_path, NetworkName},
     Error, Result,
@@ -156,126 +156,120 @@ impl Drk {
     }
 }
 
-async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
+async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
     let client = Drk::new(config.darkfid_rpc_url.clone());
 
-    if options.is_present("hello") {
-        let reply = client.say_hello().await?;
-        println!("Server replied: {}", &reply.to_string());
-        return Ok(())
-    }
-
-    if let Some(matches) = options.subcommand_matches("wallet") {
-        if matches.is_present("create") {
-            let reply = client.create_wallet().await?;
-            if reply.as_bool().unwrap() {
-                println!("Wallet created successfully.")
-            } else {
-                println!("Server replied: {}", &reply.to_string());
+    match options.command {
+        Some(CliDrkSubCommands::Hello {}) => {
+            let reply = client.say_hello().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDrkSubCommands::Features {}) => {
+            let reply = client.features().await?;
+            println!("Features: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDrkSubCommands::Wallet { create, keygen, address, balances }) => {
+            if create {
+                let reply = client.create_wallet().await?;
+                if reply.as_bool().unwrap() {
+                    println!("Wallet created successfully.")
+                } else {
+                    println!("Server replied: {}", &reply.to_string());
+                }
+                return Ok(())
             }
-            return Ok(())
-        }
 
-        if matches.is_present("keygen") {
-            let reply = client.key_gen().await?;
-            if reply.as_bool().unwrap() {
-                println!("Key generation successful.")
-            } else {
-                println!("Server replied: {}", &reply.to_string());
+            if keygen {
+                let reply = client.key_gen().await?;
+                if reply.as_bool().unwrap() {
+                    println!("Key generation successful.")
+                } else {
+                    println!("Server replied: {}", &reply.to_string());
+                }
+                return Ok(())
             }
-            return Ok(())
-        }
 
-        if matches.is_present("address") {
-            let reply = client.get_key().await?;
-            println!("Wallet address: {}", &reply.to_string());
-            return Ok(())
-        }
+            if address {
+                let reply = client.get_key().await?;
+                println!("Wallet address: {}", &reply.to_string());
+                return Ok(())
+            }
 
-        if matches.is_present("balances") {
-            let reply = client.get_balances().await?;
+            if balances {
+                let reply = client.get_balances().await?;
 
-            if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-                table.set_titles(row!["token", "amount", "network"]);
+                if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                    let mut table = Table::new();
+                    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+                    table.set_titles(row!["token", "amount", "network"]);
 
-                for (tkn, data) in reply.as_object().unwrap() {
-                    table.add_row(row![tkn, data[0].as_str().unwrap(), data[1].as_str().unwrap()]);
+                    for (tkn, data) in reply.as_object().unwrap() {
+                        table.add_row(row![
+                            tkn,
+                            data[0].as_str().unwrap(),
+                            data[1].as_str().unwrap()
+                        ]);
+                    }
+
+                    table.printstd();
+                } else {
+                    println!("Balances: {}", "0".to_string());
                 }
 
-                table.printstd();
-            } else {
-                println!("Balances: {}", "0".to_string());
+                return Ok(())
             }
+        }
+        Some(CliDrkSubCommands::Id { network, token }) => {
+            let network = network.to_lowercase();
+            client.check_network(&NetworkName::from_str(&network)?).await?;
+
+            let reply = client.get_token_id(&network, &token).await?;
+
+            println!("Token ID: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDrkSubCommands::Deposit { network, token_sym }) => {
+            let network = network.to_lowercase();
+
+            client.check_network(&NetworkName::from_str(&network)?).await?;
+
+            let reply = client.deposit(&network, &token_sym).await?;
+
+            println!("Deposit your coins to the following address: {}", &reply.to_string());
 
             return Ok(())
         }
-    }
+        Some(CliDrkSubCommands::Transfer { network, token_sym, address, amount }) => {
+            let network = network.to_lowercase();
 
-    if let Some(matches) = options.subcommand_matches("id") {
-        let token = matches.value_of("TOKEN").unwrap();
-        let network = matches.value_of("network").unwrap().to_lowercase();
+            client.check_network(&NetworkName::from_str(&network)?).await?;
 
-        client.check_network(&NetworkName::from_str(&network)?).await?;
+            client.transfer(&network, &token_sym, &address, &amount.to_string()).await?;
 
-        let reply = client.get_token_id(&network, token).await?;
+            println!(
+                "{} {} Transfered successfully",
+                amount.to_string(),
+                token_sym.to_string().to_uppercase(),
+            );
 
-        println!("Token ID: {}", &reply.to_string());
-        return Ok(())
-    }
+            return Ok(())
+        }
 
-    if options.is_present("features") {
-        let reply = client.features().await?;
-        println!("Features: {}", &reply.to_string());
-        return Ok(())
-    }
+        Some(CliDrkSubCommands::Withdraw { network, token_sym, address, amount }) => {
+            let network = network.to_lowercase();
 
-    if let Some(matches) = options.subcommand_matches("deposit") {
-        let network = matches.value_of("network").unwrap().to_lowercase();
-        let token_sym = matches.value_of("TOKENSYM").unwrap();
+            client.check_network(&NetworkName::from_str(&network)?).await?;
 
-        client.check_network(&NetworkName::from_str(&network)?).await?;
+            let reply =
+                client.withdraw(&network, &token_sym, &address, &amount.to_string()).await?;
 
-        let reply = client.deposit(&network, token_sym).await?;
+            println!("{}", &reply.to_string());
 
-        println!("Deposit your coins to the following address: {}", &reply.to_string());
-
-        return Ok(())
-    }
-
-    if let Some(matches) = options.subcommand_matches("withdraw") {
-        let network = matches.value_of("network").unwrap().to_lowercase();
-        let token_sym = matches.value_of("TOKENSYM").unwrap();
-        let address = matches.value_of("ADDRESS").unwrap();
-        let amount = matches.value_of("AMOUNT").unwrap();
-
-        client.check_network(&NetworkName::from_str(&network)?).await?;
-
-        let reply = client.withdraw(&network, token_sym, address, amount).await?;
-
-        println!("{}", &reply.to_string());
-
-        return Ok(())
-    }
-
-    if let Some(matches) = options.subcommand_matches("transfer") {
-        let network = matches.value_of("network").unwrap().to_lowercase();
-        let token_sym = matches.value_of("TOKENSYM").unwrap();
-        let address = matches.value_of("ADDRESS").unwrap();
-        let amount = matches.value_of("AMOUNT").unwrap();
-
-        client.check_network(&NetworkName::from_str(&network)?).await?;
-
-        client.transfer(&network, token_sym, address, amount).await?;
-
-        println!(
-            "{} {} Transfered successfully",
-            amount.to_string(),
-            token_sym.to_string().to_uppercase(),
-        );
-
-        return Ok(())
+            return Ok(())
+        }
+        None => {}
     }
 
     println!("Please run 'drk help' to see usage.");
@@ -284,65 +278,17 @@ async fn start(config: &DrkConfig, options: ArgMatches<'_>) -> Result<()> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = clap_app!(drk =>
-    (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-    (@arg verbose: -v --verbose "Increase verbosity")
-    (@arg trace: -t --trace "Show event trace")
-    (@subcommand hello =>
-     (about: "Say hello to the RPC")
-    )
-    (@subcommand wallet =>
-     (about: "Wallet operations")
-     (@arg create: --create "Initialize a new wallet")
-     (@arg keygen: --keygen "Generate wallet keypair")
-     (@arg address: --address "Get wallet address")
-     (@arg balances: --balances "Get wallet balances")
-    )
-    (@subcommand id =>
-     (about: "Get hexidecimal ID for token symbol")
-     (@arg network: +required +takes_value --network
-      "Which network to use (bitcoin/solana/...)")
-     (@arg TOKEN: +required
-      "Which token to query (btc/sol/usdc/...)")
-    )
-    (@subcommand features =>
-     (about: "Show what features the cashier supports")
-    )
-    (@subcommand deposit =>
-     (about: "Deposit clear tokens for Dark tokens")
-     (@arg network: +required +takes_value --network
-      "Which network to use (bitcoin/solana/...)")
-     (@arg TOKENSYM: +required
-      "Which token symbol to deposit (btc/sol/usdc...)")
-    )
-    (@subcommand transfer =>
-     (about: "Transfer Dark tokens to address")
-     (@arg network: +required +takes_value --network
-      "Which network to use (bitcoin/solana/...)")
-     (@arg TOKENSYM: +required "Desired token (btc/sol/usdc...)")
-     (@arg ADDRESS: +required "Recipient address")
-     (@arg AMOUNT: +required "Amount to send")
-    )
-    (@subcommand withdraw =>
-     (about: "Withdraw Dark tokens for clear tokens")
-     (@arg network: +required +takes_value --network
-      "Which network to use (bitcoin/solana/...)")
-     (@arg TOKENSYM: +required "Which token to receive (btc/sol/usdc...)")
-     (@arg ADDRESS: +required "Recipient address")
-     (@arg AMOUNT: +required "Amount to withdraw")
-    )
-    )
-    .get_matches();
+    let args = CliDrk::parse();
 
-    let config_path = if args.is_present("CONFIG") {
-        expand_path(args.value_of("CONFIG").unwrap())?
+    let config_path = if args.config.is_some() {
+        expand_path(&args.config.clone().unwrap())?
     } else {
         join_config_path(&PathBuf::from("drk.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
+    let loglevel = if args.verbose {
         LevelFilter::Debug
-    } else if args.is_present("trace") {
+    } else if args.trace {
         LevelFilter::Trace
     } else {
         LevelFilter::Info
@@ -354,6 +300,7 @@ async fn main() -> Result<()> {
         TerminalMode::Mixed,
         ColorChoice::Auto,
     )?;
+
     let config = Config::<DrkConfig>::load(config_path)?;
 
     start(&config, args).await

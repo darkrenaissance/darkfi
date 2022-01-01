@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg};
 
 use super::Channel;
 use crate::{net::Settings, Result};
@@ -21,71 +21,66 @@ impl CliOption {
             .author("Dark Renaissance Technologies")
             .about("An anonymous p2p chat application")
             .arg(
-                Arg::with_name("accept")
-                    .short("a")
+                Arg::new("accept")
+                    .short('a')
                     .value_name("ADDRESSES")
                     .help("accept address")
                     .long("accept")
                     .required(true),
             )
-            .arg(Arg::with_name("slots").value_name("SLOTS").long("slots").help("Connection slots"))
+            .arg(Arg::new("slots").value_name("SLOTS").long("slots").help("Connection slots"))
+            .arg(Arg::new("verbose").takes_value(false).long("verbose").help("increase verbosity"))
             .arg(
-                Arg::with_name("verbose")
-                    .takes_value(false)
-                    .long("verbose")
-                    .help("increase verbosity"),
-            )
-            .arg(
-                Arg::with_name("connects")
+                Arg::new("connects")
                     .value_name("MANUAL_CONNECTS")
-                    .multiple(true)
+                    .multiple_occurrences(true)
                     .takes_value(true)
-                    .short("c")
+                    .short('c')
                     .long("connects")
                     .help("Manual connections"),
             )
             .arg(
-                Arg::with_name("seed")
+                Arg::new("seed")
                     .value_name("ADDRESSES")
-                    .multiple(true)
+                    .multiple_occurrences(true)
                     .takes_value(true)
-                    .short("s")
+                    .short('s')
                     .long("seed")
                     .help("Connect to the seed node"),
             )
             .arg(
-                Arg::with_name("log")
+                Arg::new("log")
                     .value_name("LOG_PATH")
                     .takes_value(true)
                     .long("log")
                     .help("Log file path"),
             )
             .arg(
-                Arg::with_name("username")
+                Arg::new("username")
                     .value_name("USERNAME")
-                    .short("u")
+                    .short('u')
                     .long("username")
                     .help("node's username"),
             )
             .arg(
-                Arg::with_name("channel")
+                Arg::new("channel")
                     .value_name("CHANNEL")
-                    .short("h")
+                    .short('h')
                     .long("channel")
                     .help("switch to one of available channels"),
             )
             .subcommand(
-                SubCommand::with_name("newchannel")
+                App::new("newchannel")
                     .about("add new channel")
                     .arg(
-                        Arg::with_name("name")
+                        Arg::new("name")
                             .long("channelname")
                             .required(true)
                             .value_name("CHANNELNAME")
                             .help("name for the new channel"),
                     )
                     .arg(
-                        Arg::with_name("address")
+                        Arg::new("address")
                             .long("channeladdress")
                             .required(true)
                             .value_name("CHANNELADDRESS")

@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use clap::clap_app;
+use clap::Parser;
 use easy_parallel::Parallel;
 use log::{debug, info};
 use num_bigint::BigUint;
@@ -14,7 +14,7 @@ use url::Url;
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
-    cli::{Config, DarkfidConfig},
+    cli::{CliDarkfid, Config, DarkfidConfig},
     client::Client,
     crypto::{keypair::PublicKey, proof::VerifyingKey},
     rpc::{
@@ -536,7 +536,7 @@ impl Darkfid {
 
 async fn start(
     executor: Arc<Executor<'_>>,
-    local_cashier: Option<&str>,
+    local_cashier: Option<String>,
     config: &DarkfidConfig,
 ) -> Result<()> {
     let wallet_path = format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
@@ -618,24 +618,17 @@ async fn start(
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = clap_app!(darkfid =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg verbose: -v --verbose "Increase verbosity")
-        (@arg trace: -t --trace "Show event trace")
-        (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
-        (@arg cashier: --cashier +takes_value "Local cashier public key")
-    )
-    .get_matches();
+    let args = CliDarkfid::parse();
 
-    let config_path = if args.is_present("CONFIG") {
-        expand_path(args.value_of("CONFIG").unwrap())?
+    let config_path = if args.config.is_some() {
+        expand_path(&args.config.unwrap())?
     } else {
         join_config_path(&PathBuf::from("darkfid.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
+    let loglevel = if args.verbose {
         LevelFilter::Debug
-    } else if args.is_present("trace") {
+    } else if args.trace {
         LevelFilter::Trace
     } else {
         LevelFilter::Info
@@ -650,7 +643,7 @@ async fn main() -> Result<()> {
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
 
-    if args.is_present("refresh") {
+    if args.refresh {
         info!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
@@ -668,12 +661,6 @@ async fn main() -> Result<()> {
         return Ok(())
     }
 
-    let mut local_cashier: Option<&str> = None;
-
-    if args.is_present("cashier") {
-        local_cashier = Some(args.value_of("cashier").unwrap())
-    }
-
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
@@ -687,7 +674,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2, local_cashier, &config).await?;
+                start(ex2, args.cashier, &config).await?;
                 drop(signal);
                 Ok::<(), drk::Error>(())
             })

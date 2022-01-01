@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use clap::clap_app;
+use clap::Parser;
 use easy_parallel::Parallel;
 use log::{debug, info, trace};
 use rand::rngs::OsRng;
@@ -13,7 +13,7 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
-    cli::{CashierdConfig, Config},
+    cli::{CashierdConfig, CliCashierd, Config},
     client::Client,
     crypto::{
         keypair::{PublicKey, SecretKey},
@@ -732,24 +732,17 @@ async fn start(
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = clap_app!(cashierd =>
-        (@arg CONFIG: -c --config +takes_value "Sets a custom config file")
-        (@arg ADDRESS: -a --address "Get Cashier Public key")
-        (@arg verbose: -v --verbose "Increase verbosity")
-        (@arg trace: -t --trace "Show event trace")
-        (@arg refresh: -r --refresh "Refresh the wallet and slabstore")
-    )
-    .get_matches();
+    let args = CliCashierd::parse();
 
-    let config_path = if args.is_present("CONFIG") {
-        expand_path(args.value_of("CONFIG").unwrap())?
+    let config_path = if args.config.is_some() {
+        expand_path(&args.config.unwrap())?
     } else {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
 
-    let loglevel = if args.is_present("verbose") {
+    let loglevel = if args.verbose {
         LevelFilter::Debug
-    } else if args.is_present("trace") {
+    } else if args.trace {
         LevelFilter::Trace
     } else {
         LevelFilter::Info
@@ -764,7 +757,7 @@ async fn main() -> Result<()> {
 
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
 
-    if args.is_present("refresh") {
+    if args.refresh {
         info!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
         let client_wallet_path =
             format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
@@ -789,7 +782,7 @@ async fn main() -> Result<()> {
         return Ok(())
     }
 
-    let get_address_flag = args.is_present("ADDRESS");
+    let get_address_flag = args.address;
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
