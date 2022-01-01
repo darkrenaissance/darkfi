@@ -148,13 +148,12 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     let mut s: Vec<char> = amount.to_string().chars().collect();
 
     // Get rid of the decimal point:
-    let point: usize;
-    if let Some(p) = amount.find('.') {
+    let point: usize = if let Some(p) = amount.find('.') {
         s.remove(p);
-        point = p;
+        p
     } else {
-        point = s.len();
-    }
+        s.len()
+    };
 
     // Only digits should remain
     for i in &s {

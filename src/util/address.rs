@@ -23,7 +23,7 @@ impl Address {
 
         // ripemd160
         let mut hasher = ripemd160::Ripemd160::new();
-        hasher.update(hash.to_vec());
+        hasher.update(hash);
         let hash = hasher.finalize();
         hash.to_vec()
     }

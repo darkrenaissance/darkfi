@@ -361,7 +361,6 @@ impl BtcClient {
         }
         //Fetch any current balance
         let prev_balance = client.lock().await.electrum.script_get_balance(&script)?;
-        let cur_balance: GetBalanceRes;
         let mut last_status = None;
 
         loop {
@@ -396,7 +395,8 @@ impl BtcClient {
             let _ = &mut client.lock().await.subscriptions.remove(*ind);
         }
 
-        cur_balance = client.lock().await.electrum.script_get_balance(&script)?;
+        let cur_balance: GetBalanceRes =
+            client.lock().await.electrum.script_get_balance(&script)?;
 
         let send_notification = self.notify_channel.0.clone();
         //FIXME: dev
@@ -491,7 +491,7 @@ impl BtcClient {
         let _serialized_tx = serialize(&signed_tx);
 
         info!(target: "BTC BRIDGE", "Signed tx: {:?}",
-               serialize_hex(&signed_tx));
+            serialize_hex(&signed_tx));
 
         let txid = electrum.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
 

@@ -180,12 +180,12 @@ pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Erro
 
 pub async fn send_unix_request(path: &str, data: Value) -> Result<JsonResult, Error> {
     let mut buf = [0; 2048];
-    let bytes_read: usize;
     let data_str = serde_json::to_string(&data)?;
 
     let mut stream = Async::<UnixStream>::connect(path).await?;
     stream.write_all(data_str.as_bytes()).await?;
-    bytes_read = stream.read(&mut buf[..]).await?;
+
+    let bytes_read: usize = stream.read(&mut buf[..]).await?;
 
     let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
     Ok(reply)

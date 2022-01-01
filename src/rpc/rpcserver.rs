@@ -151,15 +151,13 @@ pub async fn listen_and_serve(
     rh: Arc<impl RequestHandler + 'static>,
     executor: Arc<Executor<'_>>,
 ) -> Result<()> {
-    let tls: Option<TlsAcceptor>;
-
-    if cfg.use_tls {
+    let tls: Option<TlsAcceptor> = if cfg.use_tls {
         let ident_bytes = std::fs::read(cfg.identity_path)?;
         let identity = Identity::from_pkcs12(&ident_bytes, &cfg.identity_pass)?;
-        tls = Some(TlsAcceptor::from(native_tls::TlsAcceptor::new(identity)?));
+        Some(TlsAcceptor::from(native_tls::TlsAcceptor::new(identity)?))
     } else {
-        tls = None;
-    }
+        None
+    };
 
     let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh, executor);
     listener.await

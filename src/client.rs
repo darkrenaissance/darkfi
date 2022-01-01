@@ -185,9 +185,10 @@ impl Client {
         outputs.push(tx::TransactionBuilderOutputInfo { value, token_id, public: pubkey });
 
         let builder = tx::TransactionBuilder { clear_inputs, inputs, outputs };
-        let tx: tx::Transaction;
+
         let mut tx_data = vec![];
-        tx = builder.build(&self.mint_pk, &self.spend_pk)?;
+
+        let tx: tx::Transaction = builder.build(&self.mint_pk, &self.spend_pk)?;
         tx.encode(&mut tx_data).expect("encode tx");
 
         let slab = Slab::new(tx_data);

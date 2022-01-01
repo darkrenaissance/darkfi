@@ -27,7 +27,7 @@ enum NetEvent {
 }
 
 pub fn addr_to_string(addr: SocketAddr) -> String {
-    format!("tcp://{}", addr.to_string())
+    format!("tcp://{}", addr)
 }
 
 pub struct RepProtocol {

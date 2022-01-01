@@ -215,7 +215,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
 
                     table.printstd();
                 } else {
-                    println!("Balances: {}", "0".to_string());
+                    println!("Balances: {}", 0);
                 }
 
                 return Ok(())
@@ -248,11 +248,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
 
             client.transfer(&network, &token_sym, &address, &amount.to_string()).await?;
 
-            println!(
-                "{} {} Transfered successfully",
-                amount.to_string(),
-                token_sym.to_string().to_uppercase(),
-            );
+            println!("{} {} Transfered successfully", amount, token_sym.to_uppercase(),);
 
             return Ok(())
         }
