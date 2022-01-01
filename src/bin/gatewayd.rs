@@ -4,7 +4,7 @@ use async_executor::Executor;
 use clap::Parser;
 use easy_parallel::Parallel;
 use log::debug;
-use simplelog::{LevelFilter, SimpleLogger};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use drk::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
@@ -45,7 +45,12 @@ async fn main() -> Result<()> {
         LevelFilter::Info
     };
 
-    SimpleLogger::init(loglevel, simplelog::Config::default())?;
+    TermLogger::init(
+        loglevel,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
 
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;
 
