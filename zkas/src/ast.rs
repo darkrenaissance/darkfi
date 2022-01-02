@@ -1,4 +1,6 @@
-use crate::opcode::Opcode;
+use std::collections::HashMap;
+
+use crate::{lexer::Token, opcode::Opcode, types::Type};
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum StatementType {
@@ -33,4 +35,27 @@ impl Default for Statement {
             line: 0,
         }
     }
+}
+
+pub type UnparsedConstants = HashMap<String, (Token, Token)>;
+pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
+
+pub type Constants = Vec<Constant>;
+pub type Witnesses = Vec<Witness>;
+pub type Statements = Vec<Statement>;
+
+#[derive(Clone, Debug)]
+pub struct Constant {
+    pub name: String,
+    pub typ: Type,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Witness {
+    pub name: String,
+    pub typ: Type,
+    pub line: usize,
+    pub column: usize,
 }

@@ -4,19 +4,14 @@ use itertools::Itertools;
 use termion::{color, style};
 
 use crate::{
-    ast::{Statement, StatementType, Variable},
+    ast::{
+        Constant, Constants, Statement, StatementType, Statements, UnparsedConstants,
+        UnparsedWitnesses, Variable, Witness, Witnesses,
+    },
     lexer::{Token, TokenType},
     opcode::Opcode,
-    types::{Constant, Type, Witness},
+    types::Type,
 };
-
-pub type Ast = HashMap<String, HashMap<String, HashMap<String, (Token, Token)>>>;
-
-pub type UnparsedConstants = HashMap<String, (Token, Token)>;
-pub type Constants = Vec<Constant>;
-
-pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
-pub type Witnesses = Vec<Witness>;
 
 pub struct Parser {
     file: String,
@@ -32,7 +27,7 @@ impl Parser {
         Parser { file: filename.to_string(), lines, tokens }
     }
 
-    pub fn parse(self) -> (Constants, Witnesses, Ast) {
+    pub fn parse(self) -> (Constants, Witnesses, Statements) {
         // We use these to keep state when iterating
         let mut declaring_constant = false;
         let mut declaring_contract = false;
@@ -254,7 +249,8 @@ impl Parser {
         }
 
         ast.insert(namespace.clone(), ast_inner);
-        self.verify_initial_ast(&ast);
+        // TODO: Verify there are both constant/contract sections
+        // TODO: Verify there is a circuit section
 
         // Clean up the `constant` section
         let c = ast.get(&namespace).unwrap().get("constant").unwrap();
@@ -265,29 +261,9 @@ impl Parser {
         let witnesses = self.parse_ast_contract(c);
 
         // Clean up the `circuit` section
-        let circuit =
-            self.parse_ast_circuit(constants.clone(), witnesses.clone(), circuit_statements);
+        let stmt = self.parse_ast_circuit(circuit_statements);
 
-        (constants, witnesses, HashMap::new())
-    }
-
-    fn verify_initial_ast(&self, ast: &Ast) {
-        // Verify that there are all 3 sections
-        for v in ast.values() {
-            if !v.contains_key("constant") {
-                self.error("Missing `constant` section in the source.".to_string(), 1, 0);
-            }
-
-            if !v.contains_key("contract") {
-                self.error("Missing `contract` section in the source.".to_string(), 1, 0);
-            }
-
-            /*
-            if !v.contains_key("circuit") {
-                self.error("Missing `circuit` section in the source.".to_string(), 1, 1);
-            }
-            */
-        }
+        (constants, witnesses, stmt)
     }
 
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
@@ -451,12 +427,7 @@ impl Parser {
         ret
     }
 
-    fn parse_ast_circuit(
-        &self,
-        constants: Constants,
-        witnesses: Witnesses,
-        statements: Vec<Vec<Token>>,
-    ) -> Vec<Statement> {
+    fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
         // 1. Scan the tokens to map opcodes (function calls)
         // 2. For each statement, see if there are variable assignments
         // 3. When referencing, check if they're in Constants, Witnesses
