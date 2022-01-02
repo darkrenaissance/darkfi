@@ -9,9 +9,16 @@ pub enum StatementType {
     Noop,
 }
 
+pub enum Var {
+    Constant(Constant),
+    Witness(Witness),
+    Variable(Variable),
+}
+
 #[derive(Clone, Debug)]
 pub struct Variable {
     pub name: String,
+    pub typ: Type,
     pub line: usize,
     pub column: usize,
 }
@@ -42,6 +49,7 @@ pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
 
 pub type Constants = Vec<Constant>;
 pub type Witnesses = Vec<Witness>;
+pub type Variables = Vec<Variable>;
 pub type Statements = Vec<Statement>;
 
 #[derive(Clone, Debug)]

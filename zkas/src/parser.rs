@@ -251,6 +251,8 @@ impl Parser {
         ast.insert(namespace.clone(), ast_inner);
         // TODO: Verify there are both constant/contract sections
         // TODO: Verify there is a circuit section
+        // TODO: Check that there are no duplicate names in constants, contract
+        //       and circuit assignments
 
         // Clean up the `constant` section
         let c = ast.get(&namespace).unwrap().get("constant").unwrap();
@@ -470,6 +472,7 @@ impl Parser {
                             stmt.typ = StatementType::Assignment;
                             stmt.variable = Some(Variable {
                                 name: token.token.clone(),
+                                typ: Type::Dummy,
                                 line: token.line,
                                 column: token.column,
                             });
@@ -495,6 +498,11 @@ impl Parser {
                     }
                 }
 
+                // This matching could be moved over into the semantic analyzer.
+                // We could just parse any kind of symbol here, and then do lookup
+                // from the analyzer, to see if the calls actually exist and are
+                // supported.
+                // But for now, we'll just leave it here and expand later.
                 match token.token.as_str() {
                     "poseidon_hash" => {
                         stmt.args = self.parse_function_call(token, &mut iter);
@@ -613,7 +621,12 @@ impl Parser {
         // Eat up function arguments
         let mut args = vec![];
         while let Some((arg, sep)) = iter.next_tuple() {
-            args.push(Variable { name: arg.token.clone(), line: arg.line, column: arg.column });
+            args.push(Variable {
+                name: arg.token.clone(),
+                typ: Type::Dummy,
+                line: arg.line,
+                column: arg.column,
+            });
 
             if sep.token_type == TokenType::RightParen {
                 // Reached end of args

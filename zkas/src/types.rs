@@ -1,9 +1,17 @@
 /// Types supported by the VM
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Type {
     EcPoint = 0x00,
+
     EcFixedPoint = 0x01,
+
     Base = 0x10,
-    Scalar = 0x11,
+    BaseArray = 0x11,
+
+    Scalar = 0x12,
+    ScalarArray = 0x13,
+
     MerklePath = 0x20,
+
+    Dummy = 0xff,
 }

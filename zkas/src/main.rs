@@ -41,8 +41,8 @@ fn main() -> Result<()> {
     // println!("{:#?}", witnesses);
     // println!("{:#?}", statements);
 
-    let analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
-    analyzer.analyze();
+    let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
+    analyzer.analyze_types();
 
     Ok(())
 }
