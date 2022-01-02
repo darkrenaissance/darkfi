@@ -1,4 +1,5 @@
 use async_std::sync::{Arc, Mutex};
+
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, info, trace, warn};
 use smol::Executor;
@@ -372,6 +373,10 @@ impl Client {
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         self.wallet.confirm_spend_coin(coin).await
+    }
+
+    pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
+        self.wallet.get_keypairs().await
     }
 
     pub async fn key_gen(&self) -> Result<()> {

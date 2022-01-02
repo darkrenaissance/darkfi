@@ -92,26 +92,15 @@ impl WalletDb {
 
     pub async fn key_gen(&self) -> Result<()> {
         debug!("Attempting to generate keypairs");
-        let mut conn = self.conn.acquire().await?;
-
-        // TODO: Think about multiple keys
-        match sqlx::query("SELECT * FROM keys WHERE key_id > ?").fetch_one(&mut conn).await {
-            Ok(_) => {
-                error!("Keys already exist");
-                Err(Error::from(ClientFailed::KeyExists))
-            }
-            Err(_) => {
-                let keypair = Keypair::random(&mut OsRng);
-                self.put_keypair(&keypair.public, &keypair.secret).await?;
-                Ok(())
-            }
-        }
+        let keypair = Keypair::random(&mut OsRng);
+        self.put_keypair(&keypair).await?;
+        Ok(())
     }
 
-    pub async fn put_keypair(&self, public: &PublicKey, secret: &SecretKey) -> Result<()> {
+    pub async fn put_keypair(&self, keypair: &Keypair) -> Result<()> {
         debug!("Writing keypair into the wallet database");
-        let pubkey = serialize(&public.0);
-        let secret = serialize(&secret.0);
+        let pubkey = serialize(&keypair.public);
+        let secret = serialize(&keypair.secret);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query("INSERT INTO keys(public, secret) VALUES (?1, ?2)")
@@ -127,12 +116,15 @@ impl WalletDb {
         debug!("Returning keypairs");
         let mut conn = self.conn.acquire().await?;
 
-        // TODO: Think about multiple keys
-        let row = sqlx::query("SELECT * FROM keys").fetch_one(&mut conn).await?;
-        let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
-        let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
+        let mut keypairs = vec![];
 
-        Ok(vec![Keypair { public, secret }])
+        for row in sqlx::query("SELECT * FROM keys").fetch_all(&mut conn).await? {
+            let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
+            let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
+            keypairs.push(Keypair { public, secret });
+        }
+
+        Ok(keypairs)
     }
 
     pub async fn tree_gen(&self) -> Result<BridgeTree<MerkleNode, 32>> {
@@ -383,7 +375,7 @@ mod tests {
         let mut tree1 = wallet.tree_gen().await?;
 
         // put_keypair()
-        wallet.put_keypair(&keypair.public, &keypair.secret).await?;
+        wallet.put_keypair(&keypair).await?;
 
         let token_id = DrkTokenId::random(&mut OsRng);
 
@@ -432,8 +424,11 @@ mod tests {
         assert_eq!(balances.list[3].token_id, token_id);
 
         // get_keypairs()
-        let keypair_r = wallet.get_keypairs().await?[0];
-        assert_eq!(keypair, keypair_r);
+        let keypair2 = Keypair::random(&mut OsRng);
+        wallet.put_keypair(&keypair2).await?;
+        let keypairs = wallet.get_keypairs().await?;
+        assert_eq!(keypair, keypairs[0]);
+        assert_eq!(keypair2, keypairs[1]);
 
         // get_own_coins()
         let own_coins = wallet.get_own_coins().await?;

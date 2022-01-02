@@ -164,6 +164,18 @@ impl Darkfid {
         JsonResult::Resp(jsonresp(json!(b58), id))
     }
 
+    // --> {"method": "get_keys", "params": []}
+    // <-- {"result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC, ... ]"}
+    async fn get_keys(&self, id: Value, _params: Value) -> JsonResult {
+        match self.client.lock().await.get_keypairs().await {
+            Ok(_) => {
+                // TODO
+                JsonResult::Resp(jsonresp(json!(vec!["ADDRESS", "ADDRESS"]), id))
+            }
+            Err(err) => JsonResult::Err(jsonerr(ServerError(-32002), Some(err.to_string()), id)),
+        }
+    }
+
     // --> {"method": "get_balances", "params": []}
     // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
@@ -270,11 +282,11 @@ impl Darkfid {
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult =
-        // NOTE: this just selects the first cashier in the list
-        match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
-            Ok(v) => v,
-            Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
-        };
+            // NOTE: this just selects the first cashier in the list
+            match send_raw_request(&self.cashiers[0].rpc_url, json!(req)).await {
+                Ok(v) => v,
+                Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
+            };
 
         match rep {
             JsonResult::Resp(r) => JsonResult::Resp(r),
