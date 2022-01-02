@@ -478,7 +478,11 @@ impl Parser {
                         }
 
                         if !parsing {
-                            panic!("illegal token");
+                            self.error(
+                                format!("Illegal token `{}`", next_token.token),
+                                next_token.line,
+                                next_token.column,
+                            );
                         }
                     }
                 }
@@ -488,12 +492,21 @@ impl Parser {
                     "poseidon_hash" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -511,7 +524,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -527,12 +544,21 @@ impl Parser {
                     "constrain_instance" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -550,7 +576,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -566,12 +596,21 @@ impl Parser {
                     "calculate_merkle_root" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -589,7 +628,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -605,12 +648,21 @@ impl Parser {
                     "ec_mul_short" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -628,7 +680,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -644,12 +700,21 @@ impl Parser {
                     "ec_mul" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -667,7 +732,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -683,12 +752,21 @@ impl Parser {
                     "ec_get_x" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -706,7 +784,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -722,12 +804,21 @@ impl Parser {
                     "ec_get_y" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -745,7 +836,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -761,12 +856,21 @@ impl Parser {
                     "ec_add" => {
                         if let Some(next_token) = iter.peek() {
                             if next_token.token_type != TokenType::LeftParen {
-                                panic!();
+                                self.error(
+                                    "Invalid function call opening. Must start with a `(`"
+                                        .to_string(),
+                                    next_token.line,
+                                    next_token.column,
+                                );
                             }
                             // Skip the opening parenthesis
                             iter.next();
                         } else {
-                            panic!();
+                            self.error(
+                                "Premature ending of statement".to_string(),
+                                token.line,
+                                token.column,
+                            );
                         }
 
                         // Eat up function arguments
@@ -784,7 +888,11 @@ impl Parser {
                             }
 
                             if sep.token_type != TokenType::Comma {
-                                panic!();
+                                self.error(
+                                    "Argument separator is not a comma (`,`)".to_string(),
+                                    sep.line,
+                                    sep.column,
+                                );
                             }
                         }
 
@@ -798,13 +906,17 @@ impl Parser {
                     }
 
                     x => {
-                        panic!("{:?}", x);
+                        self.error(
+                            format!("Unimplemented function call `{}`", x),
+                            token.line,
+                            token.column,
+                        );
                     }
                 }
             }
         }
 
-        println!("{:#?}", stmts);
+        // println!("{:#?}", stmts);
         stmts
     }
 
