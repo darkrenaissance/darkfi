@@ -7,6 +7,7 @@ use pasta_curves::{
     pallas,
 };
 use rand::RngCore;
+use sha2::Digest;
 
 use crate::{
     crypto::{constants::OrchardFixedBases, util::mod_r_p},
@@ -62,6 +63,37 @@ impl PublicKey {
 
     pub fn to_bytes(self) -> [u8; 32] {
         self.0.to_bytes()
+    }
+}
+
+impl std::fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // sha256
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(self.to_bytes());
+        let hash = hasher.finalize();
+
+        // ripemd160
+        let mut hasher = ripemd160::Ripemd160::new();
+        hasher.update(hash);
+        let mut hash = hasher.finalize().to_vec();
+
+        // add version
+        let mut payload = vec![0x00_u8];
+
+        // add public key hash
+        payload.append(&mut hash);
+
+        // hash the payload + version
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(payload.clone());
+        let payload_hash = hasher.finalize().to_vec();
+
+        payload.append(&mut payload_hash[0..4].to_vec());
+
+        // base58 encoding
+        let address: String = bs58::encode(payload).into_string();
+        write!(f, "{}", address)
     }
 }
 
