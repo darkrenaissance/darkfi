@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io, io::Write, process, str::Chars};
+use std::{collections::HashMap, io, io::Write, iter::Peekable, process, str::Chars};
 
 use itertools::Itertools;
 use termion::{color, style};
@@ -487,52 +487,9 @@ impl Parser {
                     }
                 }
 
-                // TODO: Clean up this redundancy
                 match token.token.as_str() {
                     "poseidon_hash" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::PoseidonHash;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -542,49 +499,7 @@ impl Parser {
                     }
 
                     "constrain_instance" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::ConstrainInstance;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -594,49 +509,7 @@ impl Parser {
                     }
 
                     "calculate_merkle_root" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::CalculateMerkleRoot;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -646,49 +519,7 @@ impl Parser {
                     }
 
                     "ec_mul_short" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcMulShort;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -698,49 +529,7 @@ impl Parser {
                     }
 
                     "ec_mul" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcMul;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -750,49 +539,7 @@ impl Parser {
                     }
 
                     "ec_get_x" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcGetX;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -802,49 +549,7 @@ impl Parser {
                     }
 
                     "ec_get_y" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcGetY;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -854,49 +559,7 @@ impl Parser {
                     }
 
                     "ec_add" => {
-                        if let Some(next_token) = iter.peek() {
-                            if next_token.token_type != TokenType::LeftParen {
-                                self.error(
-                                    "Invalid function call opening. Must start with a `(`"
-                                        .to_string(),
-                                    next_token.line,
-                                    next_token.column,
-                                );
-                            }
-                            // Skip the opening parenthesis
-                            iter.next();
-                        } else {
-                            self.error(
-                                "Premature ending of statement".to_string(),
-                                token.line,
-                                token.column,
-                            );
-                        }
-
-                        // Eat up function arguments
-                        let mut args = vec![];
-                        while let Some((arg, sep)) = iter.next_tuple() {
-                            args.push(Variable {
-                                name: arg.token.clone(),
-                                line: arg.line,
-                                column: arg.column,
-                            });
-
-                            if sep.token_type == TokenType::RightParen {
-                                // Reached end of args
-                                break
-                            }
-
-                            if sep.token_type != TokenType::Comma {
-                                self.error(
-                                    "Argument separator is not a comma (`,`)".to_string(),
-                                    sep.line,
-                                    sep.column,
-                                );
-                            }
-                        }
-
-                        stmt.args = args.clone();
+                        stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcAdd;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
@@ -918,6 +581,47 @@ impl Parser {
 
         // println!("{:#?}", stmts);
         stmts
+    }
+
+    fn parse_function_call(
+        &self,
+        token: &Token,
+        iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+    ) -> Vec<Variable> {
+        if let Some(next_token) = iter.peek() {
+            if next_token.token_type != TokenType::LeftParen {
+                self.error(
+                    "Invalid function call opening. Must start with a `(`".to_string(),
+                    next_token.line,
+                    next_token.column,
+                );
+            }
+            // Skip the opening parenthesis
+            iter.next();
+        } else {
+            self.error("Premature ending of statement".to_string(), token.line, token.column);
+        }
+
+        // Eat up function arguments
+        let mut args = vec![];
+        while let Some((arg, sep)) = iter.next_tuple() {
+            args.push(Variable { name: arg.token.clone(), line: arg.line, column: arg.column });
+
+            if sep.token_type == TokenType::RightParen {
+                // Reached end of args
+                break
+            }
+
+            if sep.token_type != TokenType::Comma {
+                self.error(
+                    "Argument separator is not a comma (`,`)".to_string(),
+                    sep.line,
+                    sep.column,
+                );
+            }
+        }
+
+        args
     }
 
     fn error(&self, msg: String, ln: usize, col: usize) {
