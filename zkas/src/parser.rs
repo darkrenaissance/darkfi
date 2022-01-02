@@ -431,8 +431,21 @@ impl Parser {
         let mut stmts = vec![];
 
         for statement in statements {
-            // TODO: If there are parentheses, verify that there are both
-            //       openings and closings.
+            let (mut left_paren, mut right_paren) = (0, 0);
+            for i in &statement {
+                match i.token.as_str() {
+                    "(" => left_paren += 1,
+                    ")" => right_paren += 1,
+                    _ => {}
+                }
+            }
+            if left_paren != right_paren {
+                self.error(
+                    "Incorrect number of left and right parenthesis for statement.".to_string(),
+                    statement[0].line,
+                    statement[0].column,
+                );
+            }
 
             // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind)
             // | |         |                     |
