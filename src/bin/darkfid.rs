@@ -173,7 +173,7 @@ impl Darkfid {
                 // TODO
                 JsonResult::Resp(jsonresp(json!(vec!["ADDRESS", "ADDRESS"]), id))
             }
-            Err(err) => JsonResult::Err(jsonerr(ServerError(-32002), Some(err.to_string()), id)),
+            Err(err) => JsonResult::Err(jsonerr(ServerError(-32003), Some(err.to_string()), id)),
         }
     }
 
