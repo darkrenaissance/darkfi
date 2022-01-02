@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::clap_app;
 use std::fs::read_to_string;
 
-use zkas::{lexer::Lexer, parser::Parser};
+use zkas::{analyzer::Analyzer, lexer::Lexer, parser::Parser};
 
 fn main() -> Result<()> {
     let args = clap_app!(zkas =>
@@ -22,11 +22,14 @@ fn main() -> Result<()> {
     // println!("{:#?}", tokens);
 
     let parser = Parser::new(filename, source.chars(), tokens);
-    let (constants, witnesses, circuit) = parser.parse();
+    let (constants, witnesses, statements) = parser.parse();
 
     // println!("{:#?}", constants);
     // println!("{:#?}", witnesses);
-    // println!("{:#?}", circuit);
+    // println!("{:#?}", statements);
+
+    let analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
+    analyzer.analyze();
 
     Ok(())
 }

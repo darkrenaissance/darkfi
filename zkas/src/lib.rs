@@ -1,3 +1,5 @@
+/// Semantic analyzer
+pub mod analyzer;
 /// AST
 pub mod ast;
 /// Lexer module
