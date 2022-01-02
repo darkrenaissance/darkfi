@@ -74,6 +74,7 @@ impl RequestHandler for Darkfid {
             Some("create_wallet") => return self.create_wallet(req.id, req.params).await,
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
+            Some("get_keys") => return self.get_keys(req.id, req.params).await,
             Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,

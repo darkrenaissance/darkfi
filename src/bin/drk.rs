@@ -99,6 +99,14 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    // --> {"jsonrpc": "2.0", "method": "get_keys", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC, ...]", "id":
+    // 42}
+    async fn get_keys(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_keys"), json!([]));
+        Ok(self.request(req).await?)
+    }
+
     // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
     async fn get_token_id(&self, network: &str, token: &str) -> Result<Value> {
@@ -170,7 +178,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
             println!("Features: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDrkSubCommands::Wallet { create, keygen, address, balances }) => {
+        Some(CliDrkSubCommands::Wallet { create, keygen, address, balances, addresses }) => {
             if create {
                 let reply = client.create_wallet().await?;
                 if reply.as_bool().unwrap() {
@@ -194,6 +202,19 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
             if address {
                 let reply = client.get_key().await?;
                 println!("Wallet address: {}", &reply.to_string());
+                return Ok(())
+            }
+
+            if addresses {
+                let reply = client.get_keys().await?;
+                println!("Wallet addresses: ");
+                if reply.as_array().is_some() {
+                    for address in reply.as_array().unwrap() {
+                        println!("- {}", address);
+                    }
+                } else {
+                    println!("Empty!!",);
+                }
                 return Ok(())
             }
 

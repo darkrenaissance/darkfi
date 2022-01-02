@@ -14,9 +14,12 @@ pub enum CliDrkSubCommands {
         /// Generate wallet keypair
         #[clap(long)]
         keygen: bool,
-        /// Get wallet address
+        /// Get default wallet address
         #[clap(long)]
         address: bool,
+        /// Get wallet addresses
+        #[clap(long)]
+        addresses: bool,
         /// Get wallet balances
         #[clap(long)]
         balances: bool,
