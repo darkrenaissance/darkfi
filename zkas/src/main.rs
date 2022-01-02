@@ -1,19 +1,32 @@
 use anyhow::Result;
-use clap::clap_app;
+use clap::Parser as ClapParser;
 use std::fs::read_to_string;
 
 use zkas::{analyzer::Analyzer, lexer::Lexer, parser::Parser};
 
-fn main() -> Result<()> {
-    let args = clap_app!(zkas =>
-        (@arg strip: -s "Strip debug symbols")
-        (@arg preprocess: -E "Preprocess only; do not compile")
-        (@arg OUTPUT: -o +takes_value "Place the output into <OUTPUT>")
-        (@arg INPUT: +required "ZK script to compile")
-    )
-    .get_matches();
+#[derive(clap::Parser)]
+#[clap(name = "zkas", version)]
+struct Cli {
+    /// Place the output into <FILE>
+    #[clap(short, value_name = "FILE")]
+    output: Option<String>,
 
-    let filename = args.value_of("INPUT").unwrap();
+    /// Strip debug symbols
+    #[clap(short)]
+    strip: bool,
+
+    /// Preprocess only; do not compile
+    #[clap(short)]
+    evaluate: bool,
+
+    /// ZK script to compile
+    input: String,
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let filename = cli.input.as_str();
     let source = read_to_string(filename)?;
 
     let lexer = Lexer::new(filename, source.chars());
