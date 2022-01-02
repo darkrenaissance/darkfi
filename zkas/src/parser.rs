@@ -428,11 +428,6 @@ impl Parser {
     }
 
     fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
-        // 1. Scan the tokens to map opcodes (function calls)
-        // 2. For each statement, see if there are variable assignments
-        // 3. When referencing, check if they're in Constants, Witnesses
-        //    and finally, or they've been assigned
-
         let mut stmts = vec![];
 
         for statement in statements {
