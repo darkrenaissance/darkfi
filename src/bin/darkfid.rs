@@ -75,6 +75,10 @@ impl RequestHandler for Darkfid {
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_keys") => return self.get_keys(req.id, req.params).await,
+            Some("export_keypair") => return self.get_keys(req.id, req.params).await,
+            Some("set_default_address") => {
+                return self.set_default_address(req.id, req.params).await
+            }
             Some("get_balances") => return self.get_balances(req.id, req.params).await,
             Some("get_token_id") => return self.get_token_id(req.id, req.params).await,
             Some("features") => return self.features(req.id, req.params).await,
@@ -175,6 +179,20 @@ impl Darkfid {
             }
             Err(err) => JsonResult::Err(jsonerr(ServerError(-32003), Some(err.to_string()), id)),
         }
+    }
+
+    // --> {"method": "export_keypair", "params": "path/"}
+    // <-- {"result": true}
+    async fn export_keypair(&self, _id: Value, _params: Value) -> JsonResult {
+        // TODO
+        unimplemented!()
+    }
+
+    // --> {"method": "set_default_address", "params":
+    // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"} <-- {"result": true}
+    async fn set_default_address(&self, _id: Value, _params: Value) -> JsonResult {
+        // TODO
+        unimplemented!()
     }
 
     // --> {"method": "get_balances", "params": []}

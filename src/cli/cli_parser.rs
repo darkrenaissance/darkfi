@@ -20,6 +20,12 @@ pub enum CliDrkSubCommands {
         /// Get wallet addresses
         #[clap(long)]
         addresses: bool,
+        /// Set default address
+        #[clap(long, value_name = "ADDRESS")]
+        set_default_address: Option<String>,
+        /// Export default address
+        #[clap(long, value_name = "PATH")]
+        export_keypair: Option<String>,
         /// Get wallet balances
         #[clap(long)]
         balances: bool,
