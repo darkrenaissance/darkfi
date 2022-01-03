@@ -149,6 +149,12 @@ pub enum Error {
     AsyncChannelSenderError,
     #[error(transparent)]
     AsyncChannelReceiverError(#[from] async_channel::RecvError),
+
+    /// Address
+    #[error("Error converting Address to PublicKey")]
+    AddressToPublicKeyError,
+    #[error("Invalid Address")]
+    InvalidAddress,
 }
 
 impl From<zeromq::ZmqError> for Error {

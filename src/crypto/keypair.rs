@@ -7,11 +7,11 @@ use pasta_curves::{
     pallas,
 };
 use rand::RngCore;
-use sha2::Digest;
 
 use crate::{
     crypto::{constants::OrchardFixedBases, util::mod_r_p},
     serial::{Decodable, Encodable, ReadExt, WriteExt},
+    util::Address,
     Error, Result,
 };
 
@@ -24,12 +24,12 @@ pub struct Keypair {
 impl Keypair {
     pub fn new(secret: SecretKey) -> Self {
         let public = PublicKey::from_secret(secret);
-        Keypair { secret, public }
+        Self { secret, public }
     }
 
     pub fn random(mut rng: impl RngCore) -> Self {
         let secret = SecretKey::random(&mut rng);
-        Keypair::new(secret)
+        Self::new(secret)
     }
 }
 
@@ -39,7 +39,7 @@ pub struct SecretKey(pub pallas::Base);
 impl SecretKey {
     pub fn random(mut rng: impl RngCore) -> Self {
         let x = pallas::Base::random(&mut rng);
-        SecretKey(x)
+        Self(x)
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
@@ -53,12 +53,12 @@ pub struct PublicKey(pub pallas::Point);
 impl PublicKey {
     pub fn random(mut rng: impl RngCore) -> Self {
         let p = pallas::Point::random(&mut rng);
-        PublicKey(p)
+        Self(p)
     }
 
     pub fn from_secret(s: SecretKey) -> Self {
         let p = OrchardFixedBases::NullifierK.generator() * mod_r_p(s.0);
-        PublicKey(p)
+        Self(p)
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
@@ -66,34 +66,12 @@ impl PublicKey {
     }
 }
 
-impl std::fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // sha256
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(self.to_bytes());
-        let hash = hasher.finalize();
-
-        // ripemd160
-        let mut hasher = ripemd160::Ripemd160::new();
-        hasher.update(hash);
-        let mut hash = hasher.finalize().to_vec();
-
-        // add version
-        let mut payload = vec![0x00_u8];
-
-        // add public key hash
-        payload.append(&mut hash);
-
-        // hash the payload + version
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(payload.clone());
-        let payload_hash = hasher.finalize().to_vec();
-
-        payload.append(&mut payload_hash[0..4].to_vec());
-
-        // base58 encoding
-        let address: String = bs58::encode(payload).into_string();
-        write!(f, "{}", address)
+impl From<Address> for PublicKey {
+    fn from(address: Address) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&address.0[1..33]);
+        let publickey = pallas::Point::from_bytes(&bytes).unwrap();
+        Self(publickey)
     }
 }
 
