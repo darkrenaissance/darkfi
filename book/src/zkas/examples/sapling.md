@@ -166,3 +166,49 @@ Merkle tree $R$:
 
 $$ C = H(P, v, t, \rho, r_C) $$
 $$ C \in R $$
+
+Knowing this, we can extend our code example and build the
+before-mentioned public inputs for the circuit:
+
+```rust
+let secret_key = pallas::Base::random(&mut OsRng);
+let serial = pallas::Base::random(&mut OsRng);
+
+let nullifier = poseidon::Hash(secret_key, serial);
+
+let value = 42;
+let token = 1;
+let value_blind = pallas::Scalar::random(&mut OsRng);
+let token_blind = pallas::Scalar::random(&mut OsRng);
+
+let value_commit = pedersen_commitment_u64(value, valie_blind);
+let value_coords = value_commit.to_affine().coordinates().unwrap();
+
+let token_commit = pedersen_commitment_u64(token, token_blind);
+let token_coords = token_commit.to_affine().coordinates().unwrap();
+
+let tree = BridgeTree::<MerkleNode, 32>::new(100);
+let some_coin_0 = pallas::Base::random(&mut OsRng);
+let some_coin_1 = pallas::Base::random(&mut OsRng);
+tree.append(some_coin_0);
+tree.witness();
+tree.append(some_coin_1);
+tree.witness();
+
+let merkle_root = tree.root();
+
+let sig_secret = pallas::Base::random(&mut OsRng);
+let sig_public = OrchardFixedBases::NullifierK.generator() * mod_r_p(sig_secret);
+let sig_coords = sig_public.to_affine().coordinates().unwrap();
+
+let public_inputs = vec![
+    nullifier,
+    *value_commit_coords.x(),
+    *value_commit_coords.y(),
+    *token_commit_coords.x(),
+    *token_commit_coords.y(),
+    merkle_root,
+    *sig_coords.x(),
+    *sig_coords.y(),
+];
+```
