@@ -65,6 +65,8 @@ the testnet if you're following this document.
 % cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
 
+N.B. On OSX this is `/Users/x/Library/Application Support/darkfi`.
+
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
