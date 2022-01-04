@@ -29,6 +29,7 @@ impl ProgramOptions {
             (@arg SEED_NODES: -s --seeds +takes_value ... "Seed nodes")
             (@arg CONNECTS: -c --connect +takes_value ... "Manual connections")
             (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
+            (@arg EXTERNAL_ADDR: -e --external +takes_value "External address")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
             (@arg IRC_ACCEPT: -r --irc +takes_value "IRC accept address")
         )
@@ -60,6 +61,12 @@ impl ProgramOptions {
             0
         };
 
+        let external_addr = if let Some(external_addr) = app.value_of("EXTERNAL_ADDR") {
+            Some(external_addr.parse()?)
+        } else {
+            None
+        };
+
         let log_path = Box::new(
             if let Some(log_path) = app.value_of("LOG_PATH") {
                 std::path::Path::new(log_path)
@@ -79,7 +86,7 @@ impl ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
                 outbound_connections: connection_slots,
-                external_addr: accept_addr,
+                external_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
                 ..Default::default()
