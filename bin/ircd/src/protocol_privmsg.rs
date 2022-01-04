@@ -1,3 +1,4 @@
+use async_std::sync::Mutex;
 use std::{
     sync::Arc,
     collections::HashSet,
@@ -14,7 +15,7 @@ pub struct ProtocolPrivMsg {
     notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
     privmsg_sub: net::MessageSubscription<PrivMsg>,
     jobsman: net::ProtocolJobsManagerPtr,
-    privmsg_ids: HashSet<PrivMsgId>,
+    privmsg_ids: Mutex<HashSet<PrivMsgId>>,
     p2p: net::P2pPtr,
 }
 
@@ -36,7 +37,7 @@ impl ProtocolPrivMsg {
             notify_queue_sender,
             privmsg_sub,
             jobsman: net::ProtocolJobsManager::new("PrivMsgProtocol", channel),
-            privmsg_ids: HashSet::new(),
+            privmsg_ids: Mutex::new(HashSet::new()),
             p2p,
         })
     }
@@ -60,10 +61,15 @@ impl ProtocolPrivMsg {
             );
 
             // Do we already have this message?
-            if self.privmsg_ids.contains(&privmsg.id) {
+            if self.privmsg_ids.lock().await.contains(&privmsg.id) {
                 continue
             }
+
             // If not then broadcast to everybody else
+
+            // First update list of privmsg ids
+            self.privmsg_ids.lock().await.insert(privmsg.id);
+
             let privmsg_copy = (*privmsg).clone();
             self.p2p.broadcast(privmsg_copy).await?;
 

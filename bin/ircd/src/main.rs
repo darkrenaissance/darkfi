@@ -153,7 +153,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     let rpc_interface = Arc::new(JsonRpcInterface {});
     executor.spawn(async move {
-        listen_and_serve(server_config, rpc_interface, executor).await
+        //listen_and_serve(server_config, rpc_interface, executor).await
     }).detach();
 
     loop {
