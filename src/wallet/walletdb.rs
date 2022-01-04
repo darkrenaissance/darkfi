@@ -1,12 +1,12 @@
-use incrementalmerkletree::bridgetree::BridgeTree;
-use std::{fs::create_dir_all, path::Path, str::FromStr};
+use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
-use log::{debug, error, info};
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{debug, error, info, LevelFilter};
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
-    Row, SqlitePool,
+    ConnectOptions, Row, SqlitePool,
 };
 
 use crate::{
@@ -60,10 +60,13 @@ impl WalletDb {
             }
         }
 
-        let connect_opts = SqliteConnectOptions::from_str(path)?
+        let mut connect_opts = SqliteConnectOptions::from_str(path)?
             .pragma("key", password)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
+
+        connect_opts.log_statements(LevelFilter::Trace);
+        connect_opts.log_slow_statements(LevelFilter::Trace, Duration::from_micros(10));
 
         let conn = SqlitePool::connect_with(connect_opts).await?;
 

@@ -1,11 +1,11 @@
-use incrementalmerkletree::bridgetree::BridgeTree;
-use std::{fs::create_dir_all, path::Path, str::FromStr};
+use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
-use log::{error, info, trace};
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{error, info, trace, LevelFilter};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-    Row, SqlitePool,
+    ConnectOptions, Row, SqlitePool,
 };
 
 use super::wallet_api::WalletApi;
@@ -64,10 +64,13 @@ impl CashierDb {
             }
         }
 
-        let connect_opts = SqliteConnectOptions::from_str(path)?
+        let mut connect_opts = SqliteConnectOptions::from_str(path)?
             .pragma("key", password)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
+
+        connect_opts.log_statements(LevelFilter::Trace);
+        connect_opts.log_slow_statements(LevelFilter::Trace, Duration::from_micros(10));
 
         let conn = SqlitePoolOptions::new().connect_with(connect_opts).await?;
 
