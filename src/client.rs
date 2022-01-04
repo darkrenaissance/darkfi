@@ -87,9 +87,14 @@ impl Client {
     ) -> Result<Self> {
         wallet.init_db().await?;
 
-        // Generate a new keypair if we don't have any.
-        if wallet.get_keypairs().await?.is_empty() {
-            wallet.key_gen().await?;
+        // Check if there is a default keypair
+        if wallet.get_default_keypair().await.is_err() {
+            // Generate a new keypair if we don't have any.
+            if wallet.get_keypairs().await?.is_empty() {
+                wallet.key_gen().await?;
+            }
+            // set the first keypair as the default one
+            wallet.set_default_keypair(&wallet.get_keypairs().await?[0].public).await?;
         }
 
         // Generate merkle tree if we don't have one.
@@ -97,8 +102,7 @@ impl Client {
             wallet.tree_gen().await?;
         }
 
-        // TODO: Think about multiple keypairs
-        let main_keypair = wallet.get_keypairs().await?[0];
+        let main_keypair = wallet.get_default_keypair().await?;
         info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
 
         trace!("Creating GatewayClient");

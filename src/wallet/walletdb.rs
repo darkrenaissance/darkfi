@@ -104,15 +104,53 @@ impl WalletDb {
         debug!("Writing keypair into the wallet database");
         let pubkey = serialize(&keypair.public);
         let secret = serialize(&keypair.secret);
+        let is_default = 0;
 
         let mut conn = self.conn.acquire().await?;
-        sqlx::query("INSERT INTO keys(public, secret) VALUES (?1, ?2)")
+
+        sqlx::query("INSERT INTO keys(public, secret, is_default) VALUES (?1, ?2, ?3)")
             .bind(pubkey)
             .bind(secret)
+            .bind(is_default)
             .execute(&mut conn)
             .await?;
 
         Ok(())
+    }
+
+    pub async fn set_default_keypair(&self, public: &PublicKey) -> Result<()> {
+        debug!("Set default keypair");
+        let mut conn = self.conn.acquire().await?;
+
+        let pubkey = serialize(public);
+
+        // unset previous default keypair
+        sqlx::query("UPDATE keys SET is_default = 0;").execute(&mut conn).await?;
+
+        // set new default keypair
+        sqlx::query("UPDATE keys SET is_default = 1 WHERE public = ?1;")
+            .bind(pubkey)
+            .execute(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_default_keypair(&self) -> Result<Keypair> {
+        debug!("Returning default keypair");
+        let mut conn = self.conn.acquire().await?;
+
+        let is_default = 1;
+
+        let row = sqlx::query("SELECT * FROM keys WHERE is_default = ?1;")
+            .bind(is_default)
+            .fetch_one(&mut conn)
+            .await?;
+
+        let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
+        let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
+
+        Ok(Keypair { secret, public })
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
@@ -426,12 +464,20 @@ mod tests {
         assert_eq!(balances.list[2].value, 42);
         assert_eq!(balances.list[3].token_id, token_id);
 
-        // get_keypairs()
+        /////////////////
+        //// keypair ////
+        /////////////////
         let keypair2 = Keypair::random(&mut OsRng);
+        // add new keypair
         wallet.put_keypair(&keypair2).await?;
+        // get all keypairs
         let keypairs = wallet.get_keypairs().await?;
         assert_eq!(keypair, keypairs[0]);
         assert_eq!(keypair2, keypairs[1]);
+        // set the keypair at index 1 as the default keypair
+        wallet.set_default_keypair(&keypair2.public).await?;
+        // get default keypair
+        assert_eq!(keypair2, wallet.get_default_keypair().await?);
 
         // get_own_coins()
         let own_coins = wallet.get_own_coins().await?;
