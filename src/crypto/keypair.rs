@@ -1,4 +1,4 @@
-use std::io;
+use std::{convert::TryFrom, io};
 
 use halo2_gadgets::ecc::FixedPoints;
 use pasta_curves::{
@@ -80,12 +80,12 @@ impl PublicKey {
     }
 }
 
-// TODO maybe it's better to use TryFrom
-impl From<Address> for PublicKey {
-    fn from(address: Address) -> PublicKey {
+impl TryFrom<Address> for PublicKey {
+    type Error = Error;
+    fn try_from(address: Address) -> Result<Self> {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&address.0[1..33]);
-        Self::from_bytes(&bytes).unwrap()
+        Self::from_bytes(&bytes)
     }
 }
 

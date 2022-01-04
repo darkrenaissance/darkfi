@@ -292,7 +292,7 @@ impl Darkfid {
         let addr_str = args.unwrap()[0].as_str().unwrap();
 
         let result: Result<()> = async {
-            let public = PublicKey::from(Address::from_str(addr_str.into())?);
+            let public = PublicKey::try_from(Address::from_str(addr_str.into())?)?;
             self.client.lock().await.set_default_keypair(&public).await?;
             Ok(())
         }
@@ -566,7 +566,7 @@ impl Darkfid {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
                 let cashier_public: PublicKey =
-                    PublicKey::from(Address::from_str(cashier_public.into())?);
+                    PublicKey::try_from(Address::from_str(cashier_public.into())?)?;
 
                 self.client
                     .lock()
@@ -649,7 +649,7 @@ impl Darkfid {
         }
 
         let result: Result<()> = async {
-            let drk_address: PublicKey = PublicKey::from(Address::from_str(address.into())?);
+            let drk_address: PublicKey = PublicKey::try_from(Address::from_str(address.into())?)?;
 
             let decimals: usize = 8;
             let amount = decode_base10(amount, decimals, true)?;
@@ -685,7 +685,7 @@ async fn start(
     let mut cashier_keys = Vec::new();
 
     if let Some(cpub) = local_cashier {
-        let cashier_public: PublicKey = PublicKey::from(Address::from_str(cpub.into())?);
+        let cashier_public: PublicKey = PublicKey::try_from(Address::from_str(cpub.into())?)?;
 
         cashiers.push(Cashier {
             name: "localCashier".into(),
@@ -701,7 +701,7 @@ async fn start(
             }
 
             let cashier_public: PublicKey =
-                PublicKey::from(Address::from_str(cashier.public_key.into())?);
+                PublicKey::try_from(Address::from_str(cashier.public_key.into())?)?;
 
             cashiers.push(Cashier {
                 name: cashier.name,

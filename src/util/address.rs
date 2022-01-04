@@ -101,7 +101,7 @@ mod tests {
         // from/to PublicKey
         let keypair = Keypair::random(&mut OsRng);
         let address = Address::from(keypair.public);
-        assert_eq!(keypair.public, PublicKey::from(address));
+        assert_eq!(keypair.public, PublicKey::try_from(address)?);
 
         // from/to string
         let address_str = address.to_string();

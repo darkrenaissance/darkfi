@@ -451,7 +451,7 @@ impl Cashierd {
                 mint_address = "";
             }
             let drk_pub_key = Address::from_str(drk_pub_key.into())?;
-            let drk_pub_key: PublicKey = PublicKey::from(drk_pub_key);
+            let drk_pub_key: PublicKey = PublicKey::try_from(drk_pub_key)?;
 
             // check if the drk public key already exist
             let check = self
