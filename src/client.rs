@@ -384,8 +384,10 @@ impl Client {
         self.wallet.get_keypairs().await
     }
 
-    pub async fn get_default_keypair(&self) -> Result<Keypair> {
-        self.wallet.get_default_keypair().await
+    pub async fn set_default_keypair(&mut self, public: &PublicKey) -> Result<()> {
+        self.wallet.set_default_keypair(public).await?;
+        self.main_keypair = self.wallet.get_default_keypair().await?;
+        Ok(())
     }
 
     pub async fn key_gen(&self) -> Result<()> {

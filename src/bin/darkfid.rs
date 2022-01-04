@@ -174,7 +174,7 @@ impl Darkfid {
     async fn get_keys(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<Vec<String>> = async {
             let keypairs = self.client.lock().await.get_keypairs().await?;
-            let default_keypair = self.client.lock().await.get_default_keypair().await?;
+            let default_keypair = self.client.lock().await.main_keypair;
 
             let mut addresses: Vec<String> = keypairs
                 .iter()
@@ -198,7 +198,7 @@ impl Darkfid {
         }
     }
 
-    // --> {"method": "export_keypair", "params": "path/"}
+    // --> {"method": "export_keypair", "params": "[path/]"}
     // <-- {"result": true}
     async fn export_keypair(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
@@ -234,11 +234,28 @@ impl Darkfid {
     }
 
     // --> {"method": "set_default_address", "params":
-    // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
+    // "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC]"}
     // <-- {"result": true}
-    async fn set_default_address(&self, _id: Value, _params: Value) -> JsonResult {
-        // TODO
-        unimplemented!()
+    async fn set_default_address(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array();
+
+        if args.is_none() && args.unwrap()[0].as_str().is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let addr_str = args.unwrap()[0].as_str().unwrap();
+
+        let result: Result<()> = async {
+            let public = PublicKey::from(Address::from_str(addr_str.into())?);
+            self.client.lock().await.set_default_keypair(&public).await?;
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(_) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(err) => JsonResult::Err(jsonerr(ServerError(-32005), Some(err.to_string()), id)),
+        }
     }
 
     // --> {"method": "get_balances", "params": []}

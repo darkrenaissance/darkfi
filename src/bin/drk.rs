@@ -108,14 +108,15 @@ impl Drk {
     }
 
     // --> {"jsonrpc": "2.0", "method": "set_default_address", "params":
-    // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42} <-- {"jsonrpc": "2.0", "result":
+    // "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC]", "id": 42}
+    // <-- {"jsonrpc": "2.0", "result":
     // true, "id": 42}
     async fn set_default_address(&self, address: &str) -> Result<Value> {
         let req = jsonrpc::request(json!("set_default_address"), json!([address]));
         Ok(self.request(req).await?)
     }
 
-    // --> {"jsonrpc": "2.0", "method": "export_keypair", "params": "path/", "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "export_keypair", "params": "[path/]", "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn export_keypair(&self, path: &str) -> Result<Value> {
         let req = jsonrpc::request(json!("export_keypair"), json!([path]));
