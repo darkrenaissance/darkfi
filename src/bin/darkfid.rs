@@ -24,12 +24,11 @@ use drk::{
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    serial::{deserialize, serialize},
     state::{ProgramState, State},
     types::DrkTokenId,
     util::{
-        assign_id, decode_base10, encode_base10, expand_path, join_config_path, DrkTokenList,
-        NetworkName, TokenList,
+        assign_id, decode_base10, encode_base10, expand_path, join_config_path, Address,
+        DrkTokenList, NetworkName, TokenList,
     },
     wallet::walletdb::WalletDb,
     Error, Result,
@@ -165,8 +164,8 @@ impl Darkfid {
     // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
     async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
         let pk = self.client.lock().await.main_keypair.public;
-        let b58 = bs58::encode(serialize(&pk)).into_string();
-        JsonResult::Resp(jsonresp(json!(b58), id))
+        let addr = Address::from(pk).to_string();
+        JsonResult::Resp(jsonresp(json!(addr), id))
     }
 
     // --> {"method": "get_keys", "params": []}
@@ -385,10 +384,8 @@ impl Darkfid {
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
         };
 
-        // TODO: Optional sanity checking here, but cashier *must* do so too.
-
         let pk = self.client.lock().await.main_keypair.public;
-        let pubkey = bs58::encode(serialize(&pk)).into_string();
+        let pubkey = Address::from(pk).to_string();
 
         // Send request to cashier. If the cashier supports the requested network
         // (and token), it shall return a valid address where tokens can be deposited.
@@ -488,7 +485,7 @@ impl Darkfid {
                 let cashier_public = cashier_public.result.as_str().unwrap();
 
                 let cashier_public: PublicKey =
-                    deserialize(&bs58::decode(cashier_public).into_vec()?)?;
+                    PublicKey::from(Address::from_str(cashier_public.into())?);
 
                 self.client
                     .lock()
@@ -571,8 +568,7 @@ impl Darkfid {
         }
 
         let result: Result<()> = async {
-            let drk_address = bs58::decode(&address).into_vec()?;
-            let drk_address: PublicKey = deserialize(&drk_address)?;
+            let drk_address: PublicKey = PublicKey::from(Address::from_str(address.into())?);
 
             let decimals: usize = 8;
             let amount = decode_base10(amount, decimals, true)?;
@@ -608,7 +604,7 @@ async fn start(
     let mut cashier_keys = Vec::new();
 
     if let Some(cpub) = local_cashier {
-        let cashier_public: PublicKey = deserialize(&bs58::decode(cpub).into_vec()?)?;
+        let cashier_public: PublicKey = PublicKey::from(Address::from_str(cpub.into())?);
 
         cashiers.push(Cashier {
             name: "localCashier".into(),
@@ -624,7 +620,7 @@ async fn start(
             }
 
             let cashier_public: PublicKey =
-                deserialize(&bs58::decode(cashier.public_key).into_vec()?)?;
+                PublicKey::from(Address::from_str(cashier.public_key.into())?);
 
             cashiers.push(Cashier {
                 name: cashier.name,

@@ -27,7 +27,7 @@ use drk::{
     service::{bridge, bridge::Bridge},
     state::State,
     types::DrkTokenId,
-    util::{expand_path, generate_id2, join_config_path, parse::truncate, NetworkName},
+    util::{expand_path, generate_id2, join_config_path, parse::truncate, Address, NetworkName},
     wallet::{
         cashierdb::{CashierDb, TokenKey},
         walletdb::WalletDb,
@@ -450,8 +450,8 @@ impl Cashierd {
             if mint_address_opt.is_none() {
                 mint_address = "";
             }
-            let drk_pub_key = bs58::decode(&drk_pub_key).into_vec()?;
-            let drk_pub_key: PublicKey = deserialize(&drk_pub_key)?;
+            let drk_pub_key = Address::from_str(drk_pub_key.into())?;
+            let drk_pub_key: PublicKey = PublicKey::from(drk_pub_key);
 
             // check if the drk public key already exist
             let check = self
@@ -603,7 +603,7 @@ impl Cashierd {
                     .await?;
             }
 
-            let cashier_public_str = bs58::encode(serialize(&cashier_public)).into_string();
+            let cashier_public_str = Address::from(cashier_public).to_string();
             Ok(cashier_public_str)
         }
         .await;
@@ -695,7 +695,7 @@ async fn start(
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
     let cashier_public = client.main_keypair.public;
-    let cashier_public_str = bs58::encode(&serialize(&cashier_public)).into_string();
+    let cashier_public_str = Address::from(cashier_public).to_string();
     cashierd.public_key = cashier_public_str.clone();
 
     let cashier_public_keys = vec![cashier_public];

@@ -15,11 +15,12 @@ use crate::{
         proof::ProvingKey,
         OwnCoin,
     },
-    serial::{serialize, Decodable, Encodable},
+    serial::{Decodable, Encodable},
     service::GatewayClient,
     state::{state_transition, State, StateUpdate},
     tx,
     types::DrkTokenId,
+    util::Address,
     wallet::{
         cashierdb::CashierDbPtr,
         walletdb::{Balances, WalletPtr},
@@ -103,7 +104,7 @@ impl Client {
         }
 
         let main_keypair = wallet.get_default_keypair().await?;
-        info!("Main keypair: {}", bs58::encode(&serialize(&main_keypair.public)).into_string());
+        info!("Main keypair: {}", Address::from(main_keypair.public).to_string());
 
         trace!("Creating GatewayClient");
         let slabstore = RocksColumn::<columns::Slabs>::new(rocks);
