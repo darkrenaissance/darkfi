@@ -123,6 +123,13 @@ impl Drk {
         Ok(self.request(req).await?)
     }
 
+    // --> {"jsonrpc": "2.0", "method": "import_keypair", "params": "[path/]", "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn import_keypair(&self, path: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("import_keypair"), json!([path]));
+        Ok(self.request(req).await?)
+    }
+
     // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["solana", "usdc"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
     async fn get_token_id(&self, network: &str, token: &str) -> Result<Value> {
@@ -201,6 +208,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
             balances,
             addresses,
             export_keypair,
+            import_keypair,
             set_default_address,
         }) => {
             if create {
@@ -279,6 +287,12 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
             if export_keypair.is_some() {
                 let path = export_keypair.unwrap();
                 client.export_keypair(&path).await?;
+                return Ok(())
+            }
+
+            if import_keypair.is_some() {
+                let path = import_keypair.unwrap();
+                client.import_keypair(&path).await?;
                 return Ok(())
             }
         }

@@ -26,6 +26,9 @@ pub enum CliDrkSubCommands {
         /// Export default address
         #[clap(long, value_name = "PATH")]
         export_keypair: Option<String>,
+        /// Import address
+        #[clap(long, value_name = "PATH")]
+        import_keypair: Option<String>,
         /// Get wallet balances
         #[clap(long)]
         balances: bool,

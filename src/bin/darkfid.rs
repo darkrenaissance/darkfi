@@ -16,7 +16,10 @@ use drk::{
     circuit::{MintContract, SpendContract},
     cli::{CliDarkfid, Config, DarkfidConfig},
     client::Client,
-    crypto::{keypair::PublicKey, proof::VerifyingKey},
+    crypto::{
+        keypair::{Keypair, PublicKey, SecretKey},
+        proof::VerifyingKey,
+    },
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -75,6 +78,7 @@ impl RequestHandler for Darkfid {
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_keys") => return self.get_keys(req.id, req.params).await,
             Some("export_keypair") => return self.export_keypair(req.id, req.params).await,
+            Some("import_keypair") => return self.import_keypair(req.id, req.params).await,
             Some("set_default_address") => {
                 return self.set_default_address(req.id, req.params).await
             }
@@ -195,6 +199,48 @@ impl Darkfid {
         match result {
             Ok(addresses) => JsonResult::Resp(jsonresp(json!(addresses), id)),
             Err(err) => JsonResult::Err(jsonerr(ServerError(-32003), Some(err.to_string()), id)),
+        }
+    }
+
+    // --> {"method": "import_keypair", "params": "[path/]"}
+    // <-- {"result": true}
+    async fn import_keypair(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array();
+
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let arg = args.unwrap()[0].clone();
+
+        if arg.as_str().is_none() &&
+            expand_path(arg.as_str().unwrap()).is_ok() &&
+            expand_path(arg.as_str().unwrap()).unwrap().to_str().is_some()
+        {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid path".into()), id))
+        }
+
+        let path = expand_path(arg.as_str().unwrap()).unwrap();
+        let path = path.to_str().unwrap();
+
+        let result: Result<()> = async {
+            let keypair_str: String = std::fs::read_to_string(path)?;
+
+            let mut bytes = [0u8; 32];
+            let bytes_vec: Vec<u8> = serde_json::from_str(&keypair_str)?;
+            bytes.copy_from_slice(&bytes_vec.as_slice());
+
+            let secret: SecretKey = SecretKey::from_bytes(&bytes)?;
+            let public: PublicKey = PublicKey::from_secret(secret);
+
+            self.client.lock().await.put_keypair(&Keypair { secret, public }).await?;
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(_) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(err) => JsonResult::Err(jsonerr(ServerError(-32004), Some(err.to_string()), id)),
         }
     }
 
