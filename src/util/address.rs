@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, str::FromStr};
 
 use sha2::Digest;
 
@@ -16,22 +16,11 @@ enum AddressType {
 pub struct Address(pub [u8; 37]);
 
 impl Address {
-    pub fn from_str(address: String) -> Result<Self> {
-        let bytes = bs58::decode(&address).into_vec();
-        if bytes.is_ok() && Self::is_valid_address(bytes.as_ref().unwrap().clone()) {
-            let mut bytes_arr = [0u8; 37];
-            bytes_arr.copy_from_slice(bytes.unwrap().as_slice());
-            Ok(Self(bytes_arr))
-        } else {
-            return Err(Error::InvalidAddress)
-        }
-    }
-
     fn is_valid_address(address: Vec<u8>) -> bool {
         if address.starts_with(&[AddressType::Payment as u8]) && address.len() == 37 {
             // hash the version + publickey to check the checksum
             let mut hasher = sha2::Sha256::new();
-            hasher.update(address[..33].to_vec());
+            hasher.update(&address[..33]);
             let payload_hash = hasher.finalize().to_vec();
 
             payload_hash[..4] == address[33..]
@@ -46,6 +35,21 @@ impl std::fmt::Display for Address {
         // base58 encoding
         let address: String = bs58::encode(self.0).into_string();
         write!(f, "{}", address)
+    }
+}
+
+impl FromStr for Address {
+    type Err = Error;
+
+    fn from_str(address: &str) -> Result<Self> {
+        let bytes = bs58::decode(&address).into_vec();
+        if bytes.is_ok() && Self::is_valid_address(bytes.as_ref().unwrap().clone()) {
+            let mut bytes_arr = [0u8; 37];
+            bytes_arr.copy_from_slice(bytes.unwrap().as_slice());
+            Ok(Self(bytes_arr))
+        } else {
+            Err(Error::InvalidAddress)
+        }
     }
 }
 
@@ -105,7 +109,7 @@ mod tests {
 
         // from/to string
         let address_str = address.to_string();
-        let from_str = Address::from_str(address_str.clone())?;
+        let from_str = Address::from_str(&address_str)?;
         assert_eq!(from_str, address);
 
         Ok(())
