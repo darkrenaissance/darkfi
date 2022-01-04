@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::debug;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -30,6 +30,7 @@ async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliGatewayd::parse();
+    let matches = CliGatewayd::into_app().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?
@@ -37,12 +38,12 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
 
-    let loglevel = if args.verbose {
-        LevelFilter::Debug
-    } else if args.trace {
-        LevelFilter::Trace
-    } else {
-        LevelFilter::Info
+    let mut verbosity_level = 0;
+    verbosity_level += matches.occurrences_of("verbose");
+    let loglevel = match verbosity_level {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
     };
 
     TermLogger::init(

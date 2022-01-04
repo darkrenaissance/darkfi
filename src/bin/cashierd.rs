@@ -3,9 +3,9 @@ use std::{path::PathBuf, str::FromStr};
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
-use log::{debug, info, trace};
+use log::{debug, info};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -82,7 +82,7 @@ impl RequestHandler for Cashierd {
 
 impl Cashierd {
     async fn new(config: CashierdConfig) -> Result<Self> {
-        trace!(target: "CASHIER DAEMON", "Initialize");
+        debug!(target: "CASHIER DAEMON", "Initialize");
 
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
@@ -117,7 +117,7 @@ impl Cashierd {
             match network.name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
-                    trace!(target: "CASHIER DAEMON", "Adding solana network");
+                    debug!(target: "CASHIER DAEMON", "Adding solana network");
                     use drk::service::{sol::SolFailed, SolClient};
                     use solana_sdk::{signature::Signer, signer::keypair::Keypair};
 
@@ -160,7 +160,7 @@ impl Cashierd {
 
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
-                    trace!(target: "CASHIER DAEMON", "Adding ethereum network");
+                    debug!(target: "CASHIER DAEMON", "Adding ethereum network");
                     use drk::service::{
                         eth::{generate_privkey, Keypair},
                         EthClient,
@@ -217,7 +217,7 @@ impl Cashierd {
 
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
-                    trace!(target: "CASHIER DAEMON", "Adding bitcoin network");
+                    debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
                     use drk::service::btc::{BtcClient, BtcFailed, Keypair};
 
                     let bridge2 = self.bridge.clone();
@@ -293,7 +293,7 @@ impl Cashierd {
         let listen_for_notification_from_bridge_task: smol::Task<Result<()>> =
             executor.spawn(async move {
                 while let Some(token_notification) = bridge2.clone().listen().await {
-                    trace!(target: "CASHIER DAEMON", "Received notification from bridge");
+                    debug!(target: "CASHIER DAEMON", "Received notification from bridge");
 
                     let token_notification = token_notification?;
 
@@ -733,6 +733,7 @@ async fn start(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliCashierd::parse();
+    let matches = CliCashierd::into_app().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?
@@ -740,12 +741,12 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
 
-    let loglevel = if args.verbose {
-        LevelFilter::Debug
-    } else if args.trace {
-        LevelFilter::Trace
-    } else {
-        LevelFilter::Info
+    let mut verbosity_level = 0;
+    verbosity_level += matches.occurrences_of("verbose");
+    let loglevel = match verbosity_level {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
     };
 
     TermLogger::init(

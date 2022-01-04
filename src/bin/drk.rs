@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 #[macro_use]
 extern crate prettytable;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use log::debug;
 use prettytable::{format, Table};
 use serde_json::{json, Value};
@@ -331,6 +331,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDrk::parse();
+    let matches = CliDrk::into_app().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.clone().unwrap())?
@@ -338,12 +339,12 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("drk.toml"))?
     };
 
-    let loglevel = if args.verbose {
-        LevelFilter::Debug
-    } else if args.trace {
-        LevelFilter::Trace
-    } else {
-        LevelFilter::Info
+    let mut verbosity_level = 0;
+    verbosity_level += matches.occurrences_of("verbose");
+    let loglevel = match verbosity_level {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
     };
 
     TermLogger::init(

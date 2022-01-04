@@ -92,11 +92,8 @@ pub struct CliDrk {
     #[clap(short, long)]
     pub config: Option<String>,
     /// Increase verbosity
-    #[clap(short, long)]
-    pub verbose: bool,
-    /// Show event trace
-    #[clap(short, long)]
-    pub trace: bool,
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
     #[clap(subcommand)]
     pub command: Option<CliDrkSubCommands>,
 }
@@ -109,8 +106,8 @@ pub struct CliGatewayd {
     #[clap(short, long)]
     pub config: Option<String>,
     /// Increase verbosity
-    #[clap(short, long)]
-    pub verbose: bool,
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
     /// Show event trace
     #[clap(short, long)]
     pub trace: bool,
@@ -127,11 +124,8 @@ pub struct CliDarkfid {
     #[clap(long)]
     pub cashier: Option<String>,
     /// Increase verbosity
-    #[clap(short, long)]
-    pub verbose: bool,
-    /// Show event trace
-    #[clap(short, long)]
-    pub trace: bool,
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
     /// Refresh the wallet and slabstore
     #[clap(short, long)]
     pub refresh: bool,
@@ -148,11 +142,8 @@ pub struct CliCashierd {
     #[clap(short, long)]
     pub address: bool,
     /// Increase verbosity
-    #[clap(short, long)]
-    pub verbose: bool,
-    /// Show event trace
-    #[clap(short, long)]
-    pub trace: bool,
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
     /// Refresh the wallet and slabstore
     #[clap(short, long)]
     pub refresh: bool,

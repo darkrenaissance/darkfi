@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::{debug, info};
 use num_bigint::BigUint;
@@ -650,6 +650,7 @@ async fn start(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDarkfid::parse();
+    let matches = CliDarkfid::into_app().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?
@@ -657,12 +658,12 @@ async fn main() -> Result<()> {
         join_config_path(&PathBuf::from("darkfid.toml"))?
     };
 
-    let loglevel = if args.verbose {
-        LevelFilter::Debug
-    } else if args.trace {
-        LevelFilter::Trace
-    } else {
-        LevelFilter::Info
+    let mut verbosity_level = 0;
+    verbosity_level += matches.occurrences_of("verbose");
+    let loglevel = match verbosity_level {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
     };
 
     TermLogger::init(
