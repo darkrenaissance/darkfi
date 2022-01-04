@@ -75,7 +75,7 @@ impl RequestHandler for Darkfid {
             Some("key_gen") => return self.key_gen(req.id, req.params).await,
             Some("get_key") => return self.get_key(req.id, req.params).await,
             Some("get_keys") => return self.get_keys(req.id, req.params).await,
-            Some("export_keypair") => return self.get_keys(req.id, req.params).await,
+            Some("export_keypair") => return self.export_keypair(req.id, req.params).await,
             Some("set_default_address") => {
                 return self.set_default_address(req.id, req.params).await
             }
@@ -183,13 +183,42 @@ impl Darkfid {
 
     // --> {"method": "export_keypair", "params": "path/"}
     // <-- {"result": true}
-    async fn export_keypair(&self, _id: Value, _params: Value) -> JsonResult {
-        // TODO
-        unimplemented!()
+    async fn export_keypair(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array();
+
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let arg = args.unwrap()[0].clone();
+
+        if arg.as_str().is_none() &&
+            expand_path(arg.as_str().unwrap()).is_ok() &&
+            expand_path(arg.as_str().unwrap()).unwrap().to_str().is_some()
+        {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid path".into()), id))
+        }
+
+        let path = expand_path(arg.as_str().unwrap()).unwrap();
+        let path = path.to_str().unwrap();
+
+        let result: Result<()> = async {
+            let keypair: String =
+                serde_json::to_string(&self.client.lock().await.main_keypair.secret.to_bytes())?;
+            std::fs::write(path, &keypair)?;
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(_) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(err) => JsonResult::Err(jsonerr(ServerError(-32004), Some(err.to_string()), id)),
+        }
     }
 
     // --> {"method": "set_default_address", "params":
-    // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"} <-- {"result": true}
+    // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
+    // <-- {"result": true}
     async fn set_default_address(&self, _id: Value, _params: Value) -> JsonResult {
         // TODO
         unimplemented!()

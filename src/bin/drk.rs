@@ -110,15 +110,15 @@ impl Drk {
     // --> {"jsonrpc": "2.0", "method": "set_default_address", "params":
     // "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42} <-- {"jsonrpc": "2.0", "result":
     // true, "id": 42}
-    async fn set_default_address(&self, address: String) -> Result<Value> {
-        let req = jsonrpc::request(json!("set_default_address"), json!(address));
+    async fn set_default_address(&self, address: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("set_default_address"), json!([address]));
         Ok(self.request(req).await?)
     }
 
     // --> {"jsonrpc": "2.0", "method": "export_keypair", "params": "path/", "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn export_keypair(&self, path: String) -> Result<Value> {
-        let req = jsonrpc::request(json!("export_keypair"), json!(path));
+    async fn export_keypair(&self, path: &str) -> Result<Value> {
+        let req = jsonrpc::request(json!("export_keypair"), json!([path]));
         Ok(self.request(req).await?)
     }
 
@@ -267,13 +267,13 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
 
             if set_default_address.is_some() {
                 let default_address = set_default_address.unwrap();
-                client.set_default_address(default_address).await?;
+                client.set_default_address(&default_address).await?;
                 return Ok(())
             }
 
             if export_keypair.is_some() {
                 let path = export_keypair.unwrap();
-                client.export_keypair(path).await?;
+                client.export_keypair(&path).await?;
                 return Ok(())
             }
         }
