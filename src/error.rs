@@ -150,9 +150,13 @@ pub enum Error {
     #[error(transparent)]
     AsyncChannelReceiverError(#[from] async_channel::RecvError),
 
-    /// Address
+    /// Keypari & Address
     #[error("Error converting Address to PublicKey")]
     AddressToPublicKeyError,
+    #[error("Error converting bytes to PublicKey")]
+    PublicKeyFromBytes,
+    #[error("Error converting bytes to SecretKey")]
+    SecretKeyFromBytes,
     #[error("Invalid Address")]
     InvalidAddress,
 }

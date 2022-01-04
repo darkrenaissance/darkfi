@@ -45,6 +45,13 @@ impl SecretKey {
     pub fn to_bytes(self) -> [u8; 32] {
         self.0.to_bytes()
     }
+
+    pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
+        match pallas::Base::from_bytes(bytes).into() {
+            Some(k) => Ok(Self(k)),
+            None => Err(Error::SecretKeyFromBytes),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -64,14 +71,21 @@ impl PublicKey {
     pub fn to_bytes(self) -> [u8; 32] {
         self.0.to_bytes()
     }
+
+    pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
+        match pallas::Point::from_bytes(bytes).into() {
+            Some(k) => Ok(Self(k)),
+            None => Err(Error::PublicKeyFromBytes),
+        }
+    }
 }
 
+// TODO maybe it's better to use TryFrom
 impl From<Address> for PublicKey {
-    fn from(address: Address) -> Self {
+    fn from(address: Address) -> PublicKey {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&address.0[1..33]);
-        let publickey = pallas::Point::from_bytes(&bytes).unwrap();
-        Self(publickey)
+        Self::from_bytes(&bytes).unwrap()
     }
 }
 
