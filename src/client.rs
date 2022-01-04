@@ -88,7 +88,7 @@ impl Client {
         wallet.init_db().await?;
 
         // Generate a new keypair if we don't have any.
-        if wallet.get_keypairs().await.is_err() {
+        if wallet.get_keypairs().await?.is_empty() {
             wallet.key_gen().await?;
         }
 
