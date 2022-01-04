@@ -17,6 +17,7 @@ use smol::Async;
 
 use drk::{
     net,
+    util::expand_path,
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -132,6 +133,15 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     };
     info!("Listening on {}", local_addr);
 
+    let server_config = RpcServerConfig {
+        socket_addr: local_addr,
+        use_tls: false,
+        // this is all random filler that is meaningless bc tls is disabled
+        // TODO: cleanup
+        identity_path: expand_path("../..")?,
+        identity_pass: "test".to_string(),
+    };
+
     let p2p = net::P2p::new(options.network_settings);
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
@@ -151,9 +161,11 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     // so detach them as background processes.
     executor.spawn(channel_loop(p2p.clone(), sender, executor.clone())).detach();
 
+    let ex2 = executor.clone();
+    let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {});
     executor.spawn(async move {
-        //listen_and_serve(server_config, rpc_interface, executor).await
+        listen_and_serve(server_config, rpc_interface, ex3).await
     }).detach();
 
     loop {
