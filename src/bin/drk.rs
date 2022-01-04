@@ -232,8 +232,12 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
                 let reply = client.get_keys().await?;
                 println!("Wallet addresses: ");
                 if reply.as_array().is_some() {
-                    for address in reply.as_array().unwrap() {
-                        println!("- {}", address);
+                    for (i, address) in reply.as_array().unwrap().iter().enumerate() {
+                        if i == 0 {
+                            println!("- [X] {}", address);
+                        } else {
+                            println!("- [ ] {}", address);
+                        }
                     }
                 } else {
                     println!("Empty!!",);

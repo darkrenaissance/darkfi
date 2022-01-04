@@ -170,12 +170,30 @@ impl Darkfid {
 
     // --> {"method": "get_keys", "params": []}
     // <-- {"result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC, ... ]"}
+    // Note: the first address in the returned vector is the default address
     async fn get_keys(&self, id: Value, _params: Value) -> JsonResult {
-        match self.client.lock().await.get_keypairs().await {
-            Ok(_) => {
-                // TODO
-                JsonResult::Resp(jsonresp(json!(vec!["ADDRESS", "ADDRESS"]), id))
-            }
+        let result: Result<Vec<String>> = async {
+            let keypairs = self.client.lock().await.get_keypairs().await?;
+            let default_keypair = self.client.lock().await.get_default_keypair().await?;
+
+            let mut addresses: Vec<String> = keypairs
+                .iter()
+                .filter_map(|k| {
+                    if *k == default_keypair {
+                        return None
+                    }
+                    Some(Address::from(k.public).to_string())
+                })
+                .collect();
+
+            addresses.insert(0, Address::from(default_keypair.public).to_string());
+
+            Ok(addresses)
+        }
+        .await;
+
+        match result {
+            Ok(addresses) => JsonResult::Resp(jsonresp(json!(addresses), id)),
             Err(err) => JsonResult::Err(jsonerr(ServerError(-32003), Some(err.to_string()), id)),
         }
     }
