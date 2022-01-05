@@ -11,7 +11,7 @@ use crate::{
     error::{Error, Result},
     net::{
         messages::Message,
-        sessions::{InboundSession, OutboundSession, SeedSession},
+        sessions::{InboundSession, OutboundSession, SeedSession, ManualSession},
         Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
     },
     system::{Subscriber, SubscriberPtr, Subscription},
@@ -52,7 +52,6 @@ impl P2p {
     /// Invoke startup and seeding sequence. Call from constructing thread.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::start() [BEGIN]");
-        // Start manual connections
 
         // Start seed session
         let seed = SeedSession::new(Arc::downgrade(&self));
@@ -67,6 +66,13 @@ impl P2p {
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
+
+        let manual = ManualSession::new(Arc::downgrade(&self));
+        manual.clone().start(executor.clone())?;
+
+        for peer in &self.settings.peers {
+            manual.clone().connect(peer);
+        }
 
         let inbound = InboundSession::new(Arc::downgrade(&self));
         inbound.clone().start(executor.clone())?;
