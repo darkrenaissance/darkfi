@@ -180,7 +180,12 @@ pub struct GatewayClient {
 impl GatewayClient {
     pub fn new(addr: Url, sub_addr: Url, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
         // TODO: We'll want differentiation between TCP and TLS here.
-        let addr_sock = (addr.host().unwrap().to_string(), addr.port().unwrap())
+        let addr_sock = (
+            addr.host()
+                .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", addr)))?
+                .to_string(),
+            addr.port().ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", addr)))?,
+        )
             .to_socket_addrs()?
             .next()
             .ok_or(Error::NoUrlFound)?;
@@ -190,7 +195,15 @@ impl GatewayClient {
 
         let (gateway_slabs_sub_s, gateway_slabs_sub_rv) = async_channel::unbounded::<Slab>();
 
-        let sub_addr_sock = (sub_addr.host().unwrap().to_string(), sub_addr.port().unwrap())
+        let sub_addr_sock = (
+            sub_addr
+                .host()
+                .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", sub_addr)))?
+                .to_string(),
+            sub_addr
+                .port()
+                .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", sub_addr)))?,
+        )
             .to_socket_addrs()?
             .next()
             .ok_or(Error::NoUrlFound)?;

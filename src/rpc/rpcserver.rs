@@ -65,7 +65,7 @@ async fn serve(
             };
 
             let reply = rh.handle_request(r, executor.clone()).await;
-            let j = serde_json::to_string(&reply).unwrap();
+            let j = serde_json::to_string(&reply)?;
             debug!(target: "RPC", "<-- {}", j);
 
             if let Err(e) = stream.write_all(j.as_bytes()).await {
@@ -99,7 +99,7 @@ async fn serve(
                 };
 
                 let reply = rh.handle_request(r, executor.clone()).await;
-                let j = serde_json::to_string(&reply).unwrap();
+                let j = serde_json::to_string(&reply)?;
                 debug!(target: "RPC", "<-- {}", j);
 
                 if let Err(e) = stream.write_all(j.as_bytes()).await {
