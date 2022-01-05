@@ -5,9 +5,8 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use crate::error::{Error, Result};
-//use crate::net::error::{Error, Result};
 use crate::{
+    error::{Error, Result},
     net::{
         protocols::{ProtocolAddress, ProtocolPing},
         sessions::Session,
@@ -39,7 +38,7 @@ impl InboundSession {
                 self.clone().start_accept_session(accept_addr, executor.clone())?;
             }
             None => {
-                info!("Not configured for accepting incoming connections.");
+                info!(target: "net", "Not configured for accepting incoming connections.");
                 return Ok(())
             }
         }
@@ -65,10 +64,10 @@ impl InboundSession {
         accept_addr: SocketAddr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!("Starting inbound session on {}", accept_addr);
+        info!(target: "net", "Starting inbound session on {}", accept_addr);
         let result = self.acceptor.clone().start(accept_addr, executor);
         if let Err(err) = result.clone() {
-            error!("Error starting listener: {}", err);
+            error!(target: "net", "Error starting listener: {}", err);
         }
         result
     }
@@ -93,7 +92,7 @@ impl InboundSession {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!("Connected inbound [{}]", channel.address());
+        info!(target: "net", "Connected inbound [{}]", channel.address());
 
         self.clone().register_channel(channel.clone(), executor.clone()).await?;
 

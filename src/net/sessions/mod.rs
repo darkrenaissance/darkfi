@@ -27,8 +27,8 @@ pub mod outbound_session;
 /// channel and initializing the channel by performing a network handshake.
 pub mod session;
 
-pub use seed_session::SeedSession;
-pub use manual_session::ManualSession;
 pub use inbound_session::InboundSession;
+pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;
+pub use seed_session::SeedSession;
 pub use session::Session;

@@ -30,7 +30,7 @@ impl OutboundSession {
     /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let slots_count = self.p2p().settings().outbound_connections;
-        info!("Starting {} outbound connection slots.", slots_count);
+        info!(target: "net", "Starting {} outbound connection slots.", slots_count);
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
@@ -74,13 +74,13 @@ impl OutboundSession {
 
         loop {
             let addr = self.load_address(slot_number).await?;
-            info!("#{} connecting to outbound [{}]", slot_number, addr);
+            info!(target: "net", "#{} connecting to outbound [{}]", slot_number, addr);
 
             match connector.connect(addr).await {
                 Ok(channel) => {
                     // Blacklist goes here
 
-                    info!("#{} connected to outbound [{}]", slot_number, addr);
+                    info!(target: "net", "#{} connected to outbound [{}]", slot_number, addr);
 
                     let stop_sub = channel.subscribe_stop().await;
 
@@ -97,7 +97,7 @@ impl OutboundSession {
                     stop_sub.receive().await;
                 }
                 Err(err) => {
-                    info!("Unable to connect to outbound [{}]: {}", addr, err);
+                    info!(target: "net", "Unable to connect to outbound [{}]: {}", addr, err);
                 }
             }
         }
@@ -117,7 +117,7 @@ impl OutboundSession {
             let addr = hosts.load_single().await;
 
             if addr.is_none() {
-                error!("Hosts address pool is empty. Closing connect slot #{}", slot_number);
+                error!(target: "net", "Hosts address pool is empty. Closing connect slot #{}", slot_number);
                 return Err(Error::ServiceStopped)
             }
             let addr = addr.unwrap();

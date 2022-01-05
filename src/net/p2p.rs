@@ -11,7 +11,7 @@ use crate::{
     error::{Error, Result},
     net::{
         messages::Message,
-        sessions::{InboundSession, OutboundSession, SeedSession, ManualSession},
+        sessions::{InboundSession, ManualSession, OutboundSession, SeedSession},
         Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
     },
     system::{Subscriber, SubscriberPtr, Subscription},
@@ -68,10 +68,8 @@ impl P2p {
         debug!(target: "net", "P2p::run() [BEGIN]");
 
         let manual = ManualSession::new(Arc::downgrade(&self));
-        manual.clone().start(executor.clone())?;
-
         for peer in &self.settings.peers {
-            manual.clone().connect(peer);
+            manual.clone().connect(peer, executor.clone()).await;
         }
 
         let inbound = InboundSession::new(Arc::downgrade(&self));
@@ -85,6 +83,7 @@ impl P2p {
         stop_sub.receive().await;
 
         // Stop the sessions
+        manual.stop().await;
         inbound.stop().await;
         outbound.stop().await;
 

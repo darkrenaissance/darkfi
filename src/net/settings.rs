@@ -8,6 +8,7 @@ pub type SettingsPtr = Arc<Settings>;
 pub struct Settings {
     pub inbound: Option<SocketAddr>,
     pub outbound_connections: u32,
+    pub manual_attempt_limit: u32,
 
     pub seed_query_timeout_seconds: u32,
     pub connect_timeout_seconds: u32,
@@ -24,6 +25,7 @@ impl Default for Settings {
         Self {
             inbound: None,
             outbound_connections: 0,
+            manual_attempt_limit: 0,
             seed_query_timeout_seconds: 8,
             connect_timeout_seconds: 10,
             channel_handshake_seconds: 4,
