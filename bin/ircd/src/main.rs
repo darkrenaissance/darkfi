@@ -33,22 +33,25 @@ mod program_options;
 mod protocol_privmsg;
 mod irc_server;
 
-use crate::privmsg::PrivMsg;
-use crate::program_options::ProgramOptions;
-use crate::protocol_privmsg::ProtocolPrivMsg;
-use crate::irc_server::IrcServerConnection;
+use crate::{
+    privmsg::{PrivMsg, PrivMsgId, SeenPrivMsgIds, SeenPrivMsgIdsPtr},
+    program_options::ProgramOptions,
+    protocol_privmsg::ProtocolPrivMsg,
+    irc_server::IrcServerConnection,
+};
 
 async fn process(
     recvr: async_channel::Receiver<Arc<PrivMsg>>,
     stream: Async<TcpStream>,
     peer_addr: SocketAddr,
     p2p: net::P2pPtr,
+    seen_privmsg_ids: SeenPrivMsgIdsPtr,
     _executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
     let mut reader = BufReader::new(reader);
-    let mut connection = IrcServerConnection::new(writer);
+    let mut connection = IrcServerConnection::new(writer, seen_privmsg_ids);
 
     loop {
         let mut line = String::new();
@@ -70,7 +73,7 @@ async fn process(
                     warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
                     return Ok(())
                 }
-                process_user_input(line, peer_addr, &mut connection, p2p.clone()).await;
+                process_user_input(line, peer_addr, &mut connection, p2p.clone()).await?;
             }
         };
     }
@@ -81,10 +84,10 @@ async fn process_user_input(
     peer_addr: SocketAddr,
     connection: &mut IrcServerConnection,
     p2p: net::P2pPtr,
-) {
+) -> Result<()> {
     if line.len() == 0 {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
-        return
+        return Err(Error::ChannelStopped)
     }
     assert!(&line[(line.len() - 1)..] == "\n");
     // Remove the \n character
@@ -94,13 +97,16 @@ async fn process_user_input(
 
     if let Err(err) = connection.update(line, p2p.clone()).await {
         warn!("Connection error: {} for {}", err, peer_addr);
-        return
+        return Err(Error::ChannelStopped)
     }
+
+    Ok(())
 }
 
 async fn channel_loop(
     p2p: net::P2pPtr,
     sender: async_channel::Sender<Arc<PrivMsg>>,
+    seen_privmsg_ids: SeenPrivMsgIdsPtr,
     executor: Arc<Executor<'_>>,
 ) -> Result<()> {
     debug!("CHANNEL SUBS LOOP");
@@ -111,7 +117,7 @@ async fn channel_loop(
 
         debug!("NEWCHANNEL");
 
-        let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone(), p2p.clone()).await;
+        let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone(), seen_privmsg_ids.clone(), p2p.clone()).await;
         protocol_privmsg.start(executor.clone()).await;
     }
 }
@@ -142,6 +148,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         identity_pass: "test".to_string(),
     };
 
+    let seen_privmsg_ids = SeenPrivMsgIds::new();
+
     let p2p = net::P2p::new(options.network_settings);
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
@@ -159,7 +167,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let (sender, recvr) = async_channel::unbounded();
     // for now the p2p and channel sub sessions just run forever
     // so detach them as background processes.
-    executor.spawn(channel_loop(p2p.clone(), sender, executor.clone())).detach();
+    executor.spawn(channel_loop(p2p.clone(), sender, seen_privmsg_ids.clone(), executor.clone())).detach();
 
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
@@ -180,7 +188,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
         let p2p2 = p2p.clone();
         let ex2 = executor.clone();
-        executor.spawn(process(recvr.clone(), stream, peer_addr, p2p2, ex2)).detach();
+        executor.spawn(process(recvr.clone(), stream, peer_addr, p2p2, seen_privmsg_ids.clone(), ex2)).detach();
     }
 }
 

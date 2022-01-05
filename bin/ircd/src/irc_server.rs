@@ -13,7 +13,7 @@ use drk::{
     Error, Result,
 };
 
-use crate::privmsg::PrivMsg;
+use crate::privmsg::{PrivMsg, SeenPrivMsgIdsPtr};
 
 /*
 NICK fifififif
@@ -34,6 +34,7 @@ PRIVMSG #dev hihi
 
 pub struct IrcServerConnection {
     write_stream: WriteHalf<Async<TcpStream>>,
+    seen_privmsg_ids: SeenPrivMsgIdsPtr,
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
@@ -42,9 +43,10 @@ pub struct IrcServerConnection {
 }
 
 impl IrcServerConnection {
-    pub fn new(write_stream: WriteHalf<Async<TcpStream>>) -> Self {
+    pub fn new(write_stream: WriteHalf<Async<TcpStream>>, seen_privmsg_ids: SeenPrivMsgIdsPtr) -> Self {
         Self {
             write_stream,
+            seen_privmsg_ids,
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
@@ -95,9 +97,11 @@ impl IrcServerConnection {
                 let message = &line[substr_idx + 1..];
                 info!("Message {}: {}", channel, message);
 
+                let random_id = OsRng.next_u32();
+                self.seen_privmsg_ids.add_seen(random_id).await;
 
                 let protocol_msg = PrivMsg {
-                    id: OsRng.next_u32(),
+                    id: random_id,
                     nickname: self.nickname.clone(),
                     channel: channel.to_string(),
                     message: message.to_string(),

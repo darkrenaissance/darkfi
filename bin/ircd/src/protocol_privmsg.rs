@@ -9,13 +9,13 @@ use drk::{
     net, Result,
 };
 
-use crate::privmsg::{PrivMsgId, PrivMsg};
+use crate::privmsg::{PrivMsgId, PrivMsg, SeenPrivMsgIdsPtr};
 
 pub struct ProtocolPrivMsg {
     notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
     privmsg_sub: net::MessageSubscription<PrivMsg>,
     jobsman: net::ProtocolJobsManagerPtr,
-    privmsg_ids: Mutex<HashSet<PrivMsgId>>,
+    seen_privmsg_ids: SeenPrivMsgIdsPtr,
     p2p: net::P2pPtr,
 }
 
@@ -23,6 +23,7 @@ impl ProtocolPrivMsg {
     pub async fn new(
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
+        seen_privmsg_ids: SeenPrivMsgIdsPtr,
         p2p: net::P2pPtr,
     ) -> Arc<Self> {
         let message_subsytem = channel.get_message_subsystem();
@@ -37,7 +38,7 @@ impl ProtocolPrivMsg {
             notify_queue_sender,
             privmsg_sub,
             jobsman: net::ProtocolJobsManager::new("PrivMsgProtocol", channel),
-            privmsg_ids: Mutex::new(HashSet::new()),
+            seen_privmsg_ids,
             p2p,
         })
     }
@@ -61,15 +62,13 @@ impl ProtocolPrivMsg {
             );
 
             // Do we already have this message?
-            if self.privmsg_ids.lock().await.contains(&privmsg.id) {
+            if self.seen_privmsg_ids.is_seen(privmsg.id).await {
                 continue
             }
 
+            self.seen_privmsg_ids.add_seen(privmsg.id).await;
+
             // If not then broadcast to everybody else
-
-            // First update list of privmsg ids
-            self.privmsg_ids.lock().await.insert(privmsg.id);
-
             let privmsg_copy = (*privmsg).clone();
             self.p2p.broadcast(privmsg_copy).await?;
 

@@ -12,6 +12,7 @@ use crate::{
         protocols::{ProtocolAddress, ProtocolPing},
         sessions::Session,
         ChannelPtr, Connector, P2p,
+        utility::sleep,
     },
     system::{StoppableTask, StoppableTaskPtr},
 };
@@ -56,8 +57,9 @@ impl ManualSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let connector = Connector::new(self.p2p().settings());
+        let settings = self.p2p().settings();
 
-        let attempts = self.p2p().settings().manual_attempt_limit;
+        let attempts = settings.manual_attempt_limit;
         let mut remaining = attempts;
 
         loop {
@@ -94,6 +96,8 @@ impl ManualSession {
                 }
                 Err(err) => {
                     info!(target: "net", "Unable to connect to manual outbound [{}]: {}", addr, err);
+
+                    sleep(settings.connect_timeout_seconds).await;
                 }
             }
         }

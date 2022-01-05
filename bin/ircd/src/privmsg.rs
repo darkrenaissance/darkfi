@@ -1,4 +1,9 @@
-use std::io;
+use async_std::sync::Mutex;
+use std::{
+    collections::HashSet,
+    io,
+    sync::Arc,
+};
 use drk::{
     net,
     serial::{Decodable, Encodable}, Result,
@@ -39,6 +44,26 @@ impl Decodable for PrivMsg {
             channel: Decodable::decode(&mut d)?,
             message: Decodable::decode(&mut d)?,
         })
+    }
+}
+
+pub struct SeenPrivMsgIds {
+    privmsg_ids: Mutex<HashSet<PrivMsgId>>,
+}
+
+pub type SeenPrivMsgIdsPtr = Arc<SeenPrivMsgIds>;
+
+impl SeenPrivMsgIds {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self { privmsg_ids: Mutex::new(HashSet::new()) })
+    }
+
+    pub async fn add_seen(&self, id: u32) {
+        self.privmsg_ids.lock().await.insert(id);
+    }
+
+    pub async fn is_seen(&self, id: u32) -> bool {
+        self.privmsg_ids.lock().await.contains(&id)
     }
 }
 
