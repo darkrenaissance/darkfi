@@ -13,10 +13,10 @@ use crate::{
 pub struct Analyzer {
     file: String,
     lines: Vec<String>,
-    constants: Constants,
-    witnesses: Witnesses,
-    statements: Statements,
-    stack: Variables,
+    pub constants: Constants,
+    pub witnesses: Witnesses,
+    pub statements: Statements,
+    pub stack: Variables,
 }
 
 impl Analyzer {
@@ -203,9 +203,9 @@ impl Analyzer {
     }
 
     pub fn analyze_semantic(&mut self) {
-        println!("{:#?}", self.constants);
-        println!("{:#?}", self.witnesses);
-        println!("{:#?}", self.statements);
+        // println!("{:#?}", self.constants);
+        // println!("{:#?}", self.witnesses);
+        // println!("{:#?}", self.statements);
     }
 
     fn lookup_var(&self, name: &str) -> Option<Var> {
