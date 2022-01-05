@@ -164,8 +164,7 @@ impl SolClient {
             let message = read
                 .next()
                 .await
-                .ok_or_else(|| Error::TungsteniteError("No more messages".to_string()))?;
-            let message = message?;
+                .ok_or_else(|| Error::TungsteniteError("No more messages".to_string()))??;
 
             if let Message::Pong(_) = message.clone() {
                 if sub_iter > 60 * 10 {

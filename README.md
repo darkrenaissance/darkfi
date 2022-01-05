@@ -70,7 +70,7 @@ N.B. On OSX this is `/Users/x/Library/Application Support/darkfi`.
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
-% echo source ./auto-complete >> ~/.bashrc
+% echo source $(pwd)/contrib/auto-complete >> ~/.bashrc
 ```
 
 ## Usage
