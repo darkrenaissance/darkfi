@@ -200,7 +200,11 @@ impl Analyzer {
         }
 
         self.statements = statements;
+    }
 
+    pub fn analyze_semantic(&mut self) {
+        println!("{:#?}", self.constants);
+        println!("{:#?}", self.witnesses);
         println!("{:#?}", self.statements);
     }
 

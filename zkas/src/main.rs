@@ -43,6 +43,7 @@ fn main() -> Result<()> {
 
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
     analyzer.analyze_types();
+    analyzer.analyze_semantic();
 
     Ok(())
 }
