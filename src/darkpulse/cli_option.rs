@@ -156,6 +156,7 @@ impl CliOption {
             external_addr: accept_addr,
             peers: manual_connects,
             seeds: seed_addresses,
+            manual_attempt_limit: 10,
         };
 
         Ok(CliOption { network_settings, username, channel_name, new_channel, verbose, log_path })
