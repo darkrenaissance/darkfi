@@ -40,9 +40,9 @@ impl Compiler {
         bincode.extend_from_slice(b".constant");
         for i in &self.constants {
             tmp_stack.push(i.name.as_str());
-            bincode.extend_from_slice(i.name.as_bytes());
             bincode.push(i.typ as u8);
             bincode.extend_from_slice(&stack_idx.to_le_bytes());
+            bincode.extend_from_slice(i.name.as_bytes());
             stack_idx += 1;
         }
 
