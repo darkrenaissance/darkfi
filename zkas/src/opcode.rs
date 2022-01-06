@@ -1,7 +1,8 @@
 use crate::types::Type;
 
 /// Opcodes supported by the VM
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum Opcode {
     EcAdd = 0x00,
     EcMul = 0x01,

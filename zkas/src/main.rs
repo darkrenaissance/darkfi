@@ -53,7 +53,6 @@ fn main() -> Result<()> {
         analyzer.constants,
         analyzer.witnesses,
         analyzer.statements,
-        analyzer.stack,
         !cli.strip,
     );
 
