@@ -6,8 +6,8 @@ PREFIX = /usr/local
 # Cargo binary
 CARGO = cargo
 
-# Here it's possible to append "cashierd" and "gatewayd".
-BINS = drk darkfid
+# Binaries to be built
+BINS = drk darkfid gatewayd
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
