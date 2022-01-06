@@ -545,6 +545,16 @@ impl Parser {
                         continue
                     }
 
+                    "ec_mul_base" => {
+                        stmt.args = self.parse_function_call(token, &mut iter);
+                        stmt.opcode = Opcode::EcMulBase;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
+                    }
+
                     "ec_mul" => {
                         stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcMul;

@@ -6,9 +6,11 @@ use crate::types::Type;
 pub enum Opcode {
     EcAdd = 0x00,
     EcMul = 0x01,
-    EcMulShort = 0x02,
-    EcGetX = 0x03,
-    EcGetY = 0x04,
+    EcMulBase = 0x02,
+    EcMulShort = 0x03,
+
+    EcGetX = 0x08,
+    EcGetY = 0x09,
 
     PoseidonHash = 0x10,
 
@@ -25,6 +27,7 @@ impl Opcode {
             // (return_type, opcode_arg_types)
             Opcode::EcAdd => (vec![Type::EcPoint], vec![Type::EcPoint, Type::EcPoint]),
             Opcode::EcMul => (vec![Type::EcPoint], vec![Type::Scalar, Type::EcFixedPoint]),
+            Opcode::EcMulBase => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPoint]),
             Opcode::EcMulShort => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPoint]),
             Opcode::EcGetX => (vec![Type::Base], vec![Type::EcPoint]),
             Opcode::EcGetY => (vec![Type::Base], vec![Type::EcPoint]),

@@ -49,7 +49,7 @@ circuit "Burn" {
 
 	# Finally, we derive a public key for the signature and
 	# constrain its coordinates:
-	signature_public = ec_mul(signature_secret, NULLIFIER_K);
+	signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
 	signature_x = ec_get_x(signature_public);
 	signature_y = ec_get_y(signature_public);
 	constrain_instance(signature_x);
