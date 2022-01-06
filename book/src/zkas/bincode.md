@@ -39,7 +39,7 @@ The constants in the `.constant` section are declared with their name
 and type, so that the VM knows how to search for the builtin constant
 and add it to the stack.
 
-## `.contract
+## `.contract`
 
 The `.contract` section holds the circuit witness values in the form
 of `WITNESS_TYPE` and `STACK_INDEX`. The witnesses that are of the same
@@ -51,6 +51,12 @@ circuit as _private values_ using the Halo2 `load_private` API.
 The `.circuit` section holds the procedural logic of the ZK proof.
 In here we have statements with opcodes that are executed as
 understood by the VM. The statements are in the form of:
+
+```
+STATEMENT_TYPE OPCODE ARG_NUM STACK_INDEX ... STACK_INDEX
+```
+
+where:
 
 * `STATEMENT_TYPE` - Where we currently support an assignment, and a
   call without an assignment.

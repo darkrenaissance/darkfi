@@ -4,7 +4,6 @@ use drk::{
 };
 
 async fn start() -> Result<()> {
-
     let wv1 = vec![Widget::new(0, 0, 0, 0, "V1".into())?];
 
     let wh1 = vec![Widget::new(0, 0, 0, 0, "H1".into())?];
