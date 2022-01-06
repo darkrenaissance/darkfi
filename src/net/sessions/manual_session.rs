@@ -41,7 +41,7 @@ impl ManualSession {
         let task = StoppableTask::new();
 
         task.clone().start(
-            self.clone().channel_connect_loop(addr.clone(), executor.clone()),
+            self.clone().channel_connect_loop(*addr, executor.clone()),
             // Ignore stop handler
             |_| async {},
             Error::ServiceStopped,
