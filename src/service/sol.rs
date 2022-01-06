@@ -1,4 +1,4 @@
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 
 use async_executor::Executor;
 use async_native_tls::TlsConnector;
@@ -22,11 +22,12 @@ use spl_associated_token_account::{create_associated_token_account, get_associat
 use tungstenite::Message;
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
+
 use crate::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, parse::truncate, NetworkName},
+    util::{generate_id2, parse::truncate, sleep, NetworkName},
     Error, Result,
 };
 
@@ -173,7 +174,7 @@ impl SolClient {
                     return Err(SolFailed::RpcError(format!("Deposit for {:?} expired", pubkey)))
                 }
                 sub_iter += iter_interval;
-                async_std::task::sleep(Duration::from_secs(iter_interval)).await;
+                sleep(iter_interval).await;
                 write.send(Message::Ping(ping_payload.clone())).await?;
                 continue
             };

@@ -6,13 +6,14 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use crate::error::{Error, Result};
-//use crate::net::error::{Error, Result};
-use crate::net::{
-    protocols::{ProtocolPing, ProtocolSeed},
-    sessions::Session,
-    utility::sleep,
-    ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
+use crate::{
+    error::{Error, Result},
+    net::{
+        protocols::{ProtocolPing, ProtocolSeed},
+        sessions::Session,
+        ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
+    },
+    util::sleep,
 };
 
 /// Defines seed connections session.

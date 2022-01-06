@@ -11,10 +11,10 @@ use crate::{
     net::{
         protocols::{ProtocolAddress, ProtocolPing},
         sessions::Session,
-        utility::sleep,
         ChannelPtr, Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
+    util::sleep,
 };
 
 pub struct ManualSession {

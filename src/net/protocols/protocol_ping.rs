@@ -8,9 +8,9 @@ use crate::{
     net::{
         messages,
         protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
-        utility::sleep,
         ChannelPtr, SettingsPtr,
     },
+    util::sleep,
 };
 
 /// Defines ping and pong messages.

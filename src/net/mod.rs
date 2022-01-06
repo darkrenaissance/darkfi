@@ -85,9 +85,6 @@ pub mod sessions;
 /// Network configuration settings.
 pub mod settings;
 
-/// Utility module that defines a sleep function used throughout the network.
-pub mod utility;
-
 pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
