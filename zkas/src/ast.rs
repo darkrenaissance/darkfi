@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use crate::{lexer::Token, opcode::Opcode, types::Type};
 
@@ -44,8 +44,8 @@ impl Default for Statement {
     }
 }
 
-pub type UnparsedConstants = HashMap<String, (Token, Token)>;
-pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
+pub type UnparsedConstants = IndexMap<String, (Token, Token)>;
+pub type UnparsedWitnesses = IndexMap<String, (Token, Token)>;
 
 pub type Constants = Vec<Constant>;
 pub type Witnesses = Vec<Witness>;

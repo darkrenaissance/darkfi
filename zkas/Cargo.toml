@@ -10,5 +10,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.52"
 clap = {version = "3.0.0", features = ["derive"]}
+indexmap = "1.7.0"
 itertools = "0.10.3"
 termion = "1.5.6"
