@@ -1,5 +1,19 @@
 # JSONRPC API 
 ## Methods 
+- [say_hello](jsonrpc.md#say_hello)
+- [create_wallet](jsonrpc.md#create_wallet)
+- [key_gen](jsonrpc.md#key_gen)
+- [get_key](jsonrpc.md#get_key)
+- [get_keys](jsonrpc.md#get_keys)
+- [import_keypair](jsonrpc.md#import_keypair)
+- [export_keypair](jsonrpc.md#export_keypair)
+- [set_default_address](jsonrpc.md#set_default_address)
+- [get_balances](jsonrpc.md#get_balances)
+- [get_token_id](jsonrpc.md#get_token_id)
+- [features](jsonrpc.md#features)
+- [deposit](jsonrpc.md#deposit)
+- [withdraw](jsonrpc.md#withdraw)
+- [transfer](jsonrpc.md#transfer)
 ### say_hello: 
 `params`: []
 

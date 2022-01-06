@@ -63,6 +63,8 @@ def main():
         f.write('# JSONRPC API \n')
         f.write('## Methods \n')
         for m in methods:
+            f.write('- [' + m.name + '](jsonrpc.md#' + m.name + ')\n')
+        for m in methods:
             f.write(m.__str__())
 
 
