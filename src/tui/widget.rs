@@ -14,8 +14,8 @@ pub struct Widget {
 }
 
 impl Widget {
-    pub fn new(title: String) -> Result<Widget> {
-        Ok(Widget { width: 0, height: 0, x: 0, y: 0, title })
+    pub fn new(width: usize, height: usize, x: usize, y: usize, title: String) -> Result<Widget> {
+        Ok(Widget { width, height, x, y, title })
     }
 
     pub fn print(
