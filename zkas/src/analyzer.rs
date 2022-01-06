@@ -13,10 +13,10 @@ use crate::{
 pub struct Analyzer {
     file: String,
     lines: Vec<String>,
-    constants: Constants,
-    witnesses: Witnesses,
-    statements: Statements,
-    stack: Variables,
+    pub constants: Constants,
+    pub witnesses: Witnesses,
+    pub statements: Statements,
+    pub stack: Variables,
 }
 
 impl Analyzer {
@@ -67,7 +67,11 @@ impl Analyzer {
                                 };
                                 if var_type != Type::Base {
                                     self.error(
-                                        "Incorrect argument type. Expected `Base`.".to_string(),
+                                        format!(
+                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                            Type::Base,
+                                            var_type
+                                        ),
                                         i.line,
                                         i.column,
                                     );
@@ -96,8 +100,8 @@ impl Analyzer {
                                 if var_type != arg_types[idx] {
                                     self.error(
                                         format!(
-                                            "Incorrect argument type. Expected `{:?}`.",
-                                            arg_types[idx]
+                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                            arg_types[idx], var_type,
                                         ),
                                         i.line,
                                         i.column,
@@ -143,7 +147,11 @@ impl Analyzer {
                                 };
                                 if var_type != Type::Base {
                                     self.error(
-                                        "Incorrect argument type. Expected `Base`.".to_string(),
+                                        format!(
+                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                            Type::Base,
+                                            var_type
+                                        ),
                                         i.line,
                                         i.column,
                                     );
@@ -172,8 +180,8 @@ impl Analyzer {
                                 if var_type != arg_types[idx] {
                                     self.error(
                                         format!(
-                                            "Incorrect argument type. Expected `{:?}`.",
-                                            arg_types[idx]
+                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                            arg_types[idx], var_type,
                                         ),
                                         i.line,
                                         i.column,
@@ -203,9 +211,9 @@ impl Analyzer {
     }
 
     pub fn analyze_semantic(&mut self) {
-        println!("{:#?}", self.constants);
-        println!("{:#?}", self.witnesses);
-        println!("{:#?}", self.statements);
+        // println!("{:#?}", self.constants);
+        // println!("{:#?}", self.witnesses);
+        // println!("{:#?}", self.statements);
     }
 
     fn lookup_var(&self, name: &str) -> Option<Var> {

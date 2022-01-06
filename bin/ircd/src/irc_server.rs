@@ -67,7 +67,10 @@ impl IrcServerConnection {
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
                 self.is_nick_init = true;
-                self.nickname = nickname.to_string();
+                let old_nick = std::mem::replace(&mut self.nickname, nickname.to_string());
+
+                let nick_reply = format!(":{}!darkfi@127.0.0.1 NICK {}\n", old_nick, self.nickname);
+                self.reply(&nick_reply).await?;
             }
             "USER" => {
                 // We can stuff any extra things like public keys in here
@@ -107,6 +110,10 @@ impl IrcServerConnection {
                     message: message.to_string(),
                 };
                 p2p.broadcast(protocol_msg).await?;
+            }
+            "QUIT" => {
+                // Close the connection
+                return Err(Error::ServiceStopped)
             }
             _ => {}
         }

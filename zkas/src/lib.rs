@@ -2,6 +2,8 @@
 pub mod analyzer;
 /// AST
 pub mod ast;
+/// Compiler
+pub mod compiler;
 /// Lexer module
 pub mod lexer;
 /// Language opcodes

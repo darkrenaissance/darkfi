@@ -1,12 +1,13 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use crate::{lexer::Token, opcode::Opcode, types::Type};
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Copy, PartialEq, Clone, Debug)]
+#[repr(u8)]
 pub enum StatementType {
-    Assignment,
-    Call,
-    Noop,
+    Assignment = 0x00,
+    Call = 0x01,
+    Noop = 0xff,
 }
 
 pub enum Var {
@@ -44,8 +45,8 @@ impl Default for Statement {
     }
 }
 
-pub type UnparsedConstants = HashMap<String, (Token, Token)>;
-pub type UnparsedWitnesses = HashMap<String, (Token, Token)>;
+pub type UnparsedConstants = IndexMap<String, (Token, Token)>;
+pub type UnparsedWitnesses = IndexMap<String, (Token, Token)>;
 
 pub type Constants = Vec<Constant>;
 pub type Witnesses = Vec<Witness>;

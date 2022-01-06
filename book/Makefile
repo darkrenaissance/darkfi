@@ -1,6 +1,7 @@
 .POSIX:
 
 all:
+	python3 ./build_jsonrpc.py
 	mdbook build
 
 github: all

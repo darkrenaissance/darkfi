@@ -1,5 +1,6 @@
 /// Types supported by the VM
 #[derive(Copy, Clone, PartialEq, Debug)]
+#[repr(u8)]
 pub enum Type {
     EcPoint = 0x00,
 

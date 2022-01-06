@@ -4,13 +4,13 @@ use drk::{
 };
 
 async fn start() -> Result<()> {
-    let wv1 = vec![Widget::new("V1".into())?];
+    let wv1 = vec![Widget::new(0, 0, 0, 0, "V1".into())?];
 
-    let wh1 = vec![Widget::new("H1".into())?];
+    let wh1 = vec![Widget::new(0, 0, 0, 0, "H1".into())?];
 
-    let wv2 = vec![Widget::new("V2".into())?];
+    let wv2 = vec![Widget::new(0, 0, 0, 0, "V2".into())?];
 
-    let wv3 = vec![Widget::new("V3".into())?, Widget::new("V4".into())?];
+    let wv3 = vec![Widget::new(0, 0, 0, 0, "V3".into())?, Widget::new(0, 0, 0, 0, "V4".into())?];
 
     let v_box1 = Box::new(VBox::new(wv1.clone(), 2));
     let h_box1 = Box::new(HBox::new(wh1.clone(), 2));

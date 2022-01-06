@@ -1,5 +1,6 @@
-use std::{collections::HashMap, io, io::Write, iter::Peekable, process, str::Chars};
+use std::{io, io::Write, iter::Peekable, process, str::Chars};
 
+use indexmap::IndexMap;
 use itertools::Itertools;
 use termion::{color, style};
 
@@ -41,9 +42,9 @@ impl Parser {
         // All the circuit statements
         let mut circuit_statements = vec![];
 
-        let mut ast = HashMap::new();
+        let mut ast = IndexMap::new();
         let mut namespace = String::new();
-        let mut ast_inner = HashMap::new();
+        let mut ast_inner = IndexMap::new();
         let mut namespace_found = false; // Nasty
 
         let mut iter = self.tokens.iter();
@@ -127,7 +128,7 @@ impl Parser {
                 }
 
                 let constants_cloned = constant_tokens.clone();
-                let mut constants_map = HashMap::new();
+                let mut constants_map = IndexMap::new();
                 // This is everything between the braces: { .. }
                 let mut constants_inner = constants_cloned[2..constant_tokens.len() - 1].iter();
 
@@ -177,7 +178,7 @@ impl Parser {
                 }
 
                 let contract_cloned = contract_tokens.clone();
-                let mut contract_map = HashMap::new();
+                let mut contract_map = IndexMap::new();
                 // This is everything between the braces: { .. }
                 let mut contract_inner = contract_cloned[2..contract_tokens.len() - 1].iter();
 
@@ -537,6 +538,16 @@ impl Parser {
                     "ec_mul_short" => {
                         stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcMulShort;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
+                    }
+
+                    "ec_mul_base" => {
+                        stmt.args = self.parse_function_call(token, &mut iter);
+                        stmt.opcode = Opcode::EcMulBase;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
 
