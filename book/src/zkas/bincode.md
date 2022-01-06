@@ -11,7 +11,7 @@ the binary.
 
 We currently keep everything on the same stack, so we avoid having to
 deal with different types. Instead, we rely that the compiler does a
-proper parse and analysys of the source code, so we are sure that in
+proper parse and analysis of the source code, so we are sure that in
 the VM, when referenced, the types shall be correct.
 
 The compiled binary blob has the following layout:
