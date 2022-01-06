@@ -1,8 +1,7 @@
-#[macro_use]
-extern crate clap;
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
+
 use async_executor::Executor;
-//use easy_parallel::Parallel;
-use std::{net::SocketAddr, sync::Arc};
+use clap::Parser;
 
 use drk::{net, Result};
 
@@ -21,55 +20,64 @@ struct ProgramOptions {
     log_path: Box<std::path::PathBuf>,
 }
 
+#[derive(Parser)]
+#[clap(name = "dnode")]
+pub struct DarkCli {
+    /// accept address
+    #[clap(short, long)]
+    pub accept: Option<String>,
+    /// seed nodes
+    #[clap(long, short)]
+    pub seeds: Option<Vec<String>>,
+    /// manual connections
+    #[clap(short, short)]
+    pub connect: Option<Vec<String>>,
+    ///  connections slots
+    #[clap(long)]
+    pub connect_slots: Option<u32>,
+    /// Logfile path
+    #[clap(long)]
+    pub log_path: Option<String>,
+    /// RPC port
+    #[clap(long)]
+    pub rpc_port: Option<String>,
+}
+
 impl ProgramOptions {
     fn load() -> Result<ProgramOptions> {
-        let app = clap_app!(dfi =>
-            (version: "0.1.0")
-            (author: "Amir Taaki <amir@dyne.org>")
-            (about: "Dark node")
-            (@arg ACCEPT: -a --accept +takes_value "Accept address")
-            (@arg SEED_NODES: -s --seeds ... "Seed nodes")
-            (@arg CONNECTS: -c --connect ... "Manual connections")
-            (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
-            (@arg LOG_PATH: --log +takes_value "Logfile path")
-            (@arg RPC_PORT: -r --rpc +takes_value "RPC port")
-        )
-        .get_matches();
+        let programcli = DarkCli::parse();
 
-        let accept_addr = if let Some(accept_addr) = app.value_of("ACCEPT") {
+        let accept_addr = if let Some(accept_addr) = programcli.accept {
             Some(accept_addr.parse()?)
         } else {
             None
         };
 
         let mut seed_addrs: Vec<SocketAddr> = vec![];
-        if let Some(seeds) = app.values_of("SEED_NODES") {
+        if let Some(seeds) = programcli.seeds {
             for seed in seeds {
                 seed_addrs.push(seed.parse()?);
             }
         }
 
         let mut manual_connects: Vec<SocketAddr> = vec![];
-        if let Some(connections) = app.values_of("CONNECTS") {
+        if let Some(connections) = programcli.connect {
             for connect in connections {
                 manual_connects.push(connect.parse()?);
             }
         }
 
-        let connection_slots = if let Some(connection_slots) = app.value_of("CONNECT_SLOTS") {
-            connection_slots.parse()?
+        let connection_slots = if let Some(connection_slots) = programcli.connect_slots {
+            connection_slots
         } else {
             0
         };
 
-        let log_path = Box::new(
-            if let Some(log_path) = app.value_of("LOG_PATH") {
-                std::path::Path::new(log_path)
-            } else {
-                std::path::Path::new("/tmp/darkfid.log")
-            }
-            .to_path_buf(),
-        );
+        let log_path = Box::new(if let Some(log_path) = programcli.log_path {
+            std::path::PathBuf::from_str(&log_path)?
+        } else {
+            std::path::PathBuf::from_str("hello")?
+        });
 
         Ok(ProgramOptions {
             network_settings: net::Settings {
@@ -106,17 +114,17 @@ fn main() -> Result<()> {
     smol::block_on(ex.run(start(ex.clone(), options)))
 
     /*
-    let (_, result) = Parallel::new()
-        // Run four executor threads.
-        .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex2, options).await?;
-                drop(signal);
-                Ok::<(), drk::Error>(())
-            })
-        });
+       let (_, result) = Parallel::new()
+    // Run four executor threads.
+    .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
+    // Run the main future on the current thread.
+    .finish(|| {
+    smol::future::block_on(async move {
+    start(ex2, options).await?;
+    drop(signal);
+    Ok::<(), drk::Error>(())
+    })
+    });
 
     result
     */

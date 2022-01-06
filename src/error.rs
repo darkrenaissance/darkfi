@@ -7,6 +7,9 @@ pub enum Error {
     #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
 
+    #[error("Infallible Error: `{0}`")]
+    InfallibleError(String),
+
     #[error("Cannot find home directory")]
     PathNotFound,
     /// VarInt was encoded in a non-minimal way
@@ -250,5 +253,11 @@ impl From<rusqlite::Error> for Error {
 impl From<Box<bincode::ErrorKind>> for Error {
     fn from(err: Box<bincode::ErrorKind>) -> Error {
         Error::BincodeError(err.to_string())
+    }
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(err: std::convert::Infallible) -> Error {
+        Error::InfallibleError(err.to_string())
     }
 }
