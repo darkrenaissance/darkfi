@@ -32,7 +32,9 @@ impl Opcode {
             Opcode::EcGetX => (vec![Type::Base], vec![Type::EcPoint]),
             Opcode::EcGetY => (vec![Type::Base], vec![Type::EcPoint]),
             Opcode::PoseidonHash => (vec![Type::Base], vec![Type::BaseArray]),
-            Opcode::CalculateMerkleRoot => (vec![Type::Base], vec![Type::MerklePath, Type::Base]),
+            Opcode::CalculateMerkleRoot => {
+                (vec![Type::Base], vec![Type::Uint32, Type::MerklePath, Type::Base])
+            }
             Opcode::ConstrainInstance => (vec![], vec![Type::Base]),
             Opcode::Noop => (vec![], vec![]),
         }
