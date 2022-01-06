@@ -43,7 +43,7 @@ change anything to run the testnet. The defaults will work fine.
 ## Run
 
 Darkfi consists of several software daemons or processes. These daemons
-have seperate, isolated concerns.
+have separate, isolated concerns.
 
 As a user, your interest is in the `darkfid` daemon. This is a user
 node that interacts with your wallet and communicates with services on
@@ -84,7 +84,7 @@ SUBCOMMANDS:
     features    Show what features the cashier supports
     hello       Say hello to the RPC
     help        Prints this message or the help of the given subcommand(s)
-    id          Get hexidecimal ID for token symbol
+    id          Get hexadecimal ID for token symbol
     transfer    Transfer Dark tokens to address
     wallet      Wallet operations
     withdraw    Withdraw Dark tokens for clear tokens
@@ -116,7 +116,7 @@ command-line. For sollet.io, switch the network to testnet and click
 Now that we have testnet coins we can deposit into darkfi.
 
 We'll do this by sending testnet coins to the darki cashier, which will
-issue darkened versions of the deposted coin. This process of darkening
+issue darkened versions of the deposited coin. This process of darkening
 involves the cashier minting new anonymous tokens that are 1:1 redeemable
 for deposits. For example, if you deposit 1 BTC, you will receive 1 dBTC,
 or darkened SOL.
@@ -195,7 +195,7 @@ Wallet address: "9GmLk7kkbxhsbLTYFMeg6FyuQJV9Na2GcJYFNrs3VLkv"
 ## Withdraw
 
 Withdrawing your testnet funds can be done at any time. This will exchange
-your anonymous darkened tokens for their underlying collaterol, i.e. if
+your anonymous darkened tokens for their underlying collateral, i.e. if
 you have 1 dBTC you will receive 1 BTC.
 
 To do so, simply send the following request to the cashier:
