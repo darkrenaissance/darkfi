@@ -82,7 +82,7 @@ impl WalletDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        debug!("Initalizing merkle tree table");
+        debug!("Initializing merkle tree table");
         sqlx::query(tree).execute(&mut conn).await?;
 
         debug!("Initializing keys table");
@@ -314,6 +314,8 @@ impl WalletDb {
             .fetch_all(&mut conn)
             .await?;
 
+        debug!("Found {} rows", rows.len());
+
         let mut list = vec![];
         for row in rows {
             // TODO: FIXME:
@@ -322,10 +324,6 @@ impl WalletDb {
             let token_id = self.get_value_deserialized(row.get("token_id"))?;
             let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
             list.push(Balance { token_id, value, nullifier });
-        }
-
-        if list.is_empty() {
-            debug!("Did not find any unspent coins");
         }
 
         Ok(Balances { list })

@@ -328,26 +328,35 @@ impl Darkfid {
             let balances = self.client.lock().await.get_balances().await?;
             let mut symbols: HashMap<String, (String, String)> = HashMap::new();
 
-            for balance in balances.list.iter() {
-                let amount = encode_base10(BigUint::from(balance.value), 8);
-                if let Some((network, symbol)) =
-                    self.drk_tokenlist.symbol_from_id(&balance.token_id)?
-                {
-                    symbols.insert(symbol, (amount, network.to_string()));
+            for b in balances.list.iter() {
+                let network: String;
+                let symbol: String;
+
+                let mut amount = BigUint::from(b.value);
+
+                if let Some((net, sym)) = self.drk_tokenlist.symbol_from_id(&b.token_id)? {
+                    network = net.to_string();
+                    symbol = sym;
                 } else {
                     // TODO: SQL needs to have the mint address for show, not the internal hash.
-                    // TODO: SQL needs to have the network name
-                    //symbols.insert(balance.token_id.to_string(), (amount,
-                    // String::from("UNKNOWN")));
-                    symbols.insert(
-                        format!("{:?}", balance.token_id),
-                        (amount, String::from("UNKNONW")),
-                    );
+                    // TODO: SQL needs to have the nework name
+                    network = String::from("UNKNOWN");
+                    symbol = format!("{:?}", b.token_id);
                 }
+
+                if let Some(prev) = symbols.get(&symbol) {
+                    let prev_amnt = decode_base10(&prev.0, 8, true)?;
+                    amount += prev_amnt;
+                }
+
+                let amount = encode_base10(amount, 8);
+                symbols.insert(symbol, (amount, network));
             }
+
             Ok(symbols)
         }
         .await;
+
         match result {
             Ok(res) => JsonResult::Resp(jsonresp(json!(res), id)),
             Err(err) => JsonResult::Err(jsonerr(InternalError, Some(err.to_string()), json!(id))),
