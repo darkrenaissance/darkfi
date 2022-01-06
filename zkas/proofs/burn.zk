@@ -7,12 +7,13 @@ constant "Burn" {
 contract "Burn" {
 	Base secret,
 	Base serial,
-	MerklePath path,
-	Base leaf,
 	Base value,
 	Base token,
+	Base coin_blind,
 	Scalar value_blind,
 	Scalar token_blind,
+	Uint32 leaf_pos,
+	MerklePath path,
 	Base signature_secret,
 }
 
@@ -21,8 +22,14 @@ circuit "Burn" {
 	nullifier = poseidon_hash(secret, serial);
 	constrain_instance(nullifier);
 
+	# Coin hash
+	pub = ec_mul_base(secret, NULLIFIER_K);
+	pub_x = ec_get_x(pub);
+	pub_y = ec_get_y(pub);
+	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+
 	# Merkle root
-	root = calculate_merkle_root(path, leaf);
+	root = calculate_merkle_root(leaf_pos, path, C);
 	constrain_instance(root);
 
 	# Pedersen commitment for coin's value
