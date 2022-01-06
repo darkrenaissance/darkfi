@@ -43,13 +43,16 @@ impl FromStr for Address {
 
     fn from_str(address: &str) -> Result<Self> {
         let bytes = bs58::decode(&address).into_vec();
-        if bytes.is_ok() && Self::is_valid_address(bytes.as_ref().unwrap().clone()) {
-            let mut bytes_arr = [0u8; 37];
-            bytes_arr.copy_from_slice(bytes.unwrap().as_slice());
-            Ok(Self(bytes_arr))
-        } else {
-            Err(Error::InvalidAddress)
+
+        if let Ok(v) = bytes {
+            if Self::is_valid_address(v.clone()) {
+                let mut bytes_arr = [0u8; 37];
+                bytes_arr.copy_from_slice(v.as_slice());
+                return Ok(Self(bytes_arr))
+            }
         }
+
+        Err(Error::InvalidAddress)
     }
 }
 
