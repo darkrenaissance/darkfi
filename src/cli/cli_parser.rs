@@ -70,7 +70,7 @@ pub enum CliDrkSubCommands {
         address: String,
         /// Amount to transfer
         #[clap(parse(try_from_str))]
-        amount: u64,
+        amount: f64,
     },
     /// Deposit clear tokens for Dark tokens
     Deposit {
