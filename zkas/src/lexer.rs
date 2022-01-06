@@ -129,8 +129,13 @@ impl<'a> Lexer<'a> {
                 continue
             }
 
-            if in_string && is_letter(c) {
+            if in_string && (is_letter(c) || is_digit(c)) {
                 strbuf.push(c);
+                continue
+            }
+
+            if in_symbol && is_digit(c) {
+                symbuf.push(c);
                 continue
             }
 
@@ -265,8 +270,6 @@ fn is_letter(ch: char) -> bool {
     ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
 }
 
-/*
 fn is_digit(ch: char) -> bool {
     ('0'..'9').contains(&ch)
 }
-*/

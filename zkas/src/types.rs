@@ -14,5 +14,7 @@ pub enum Type {
 
     MerklePath = 0x20,
 
+    Uint32 = 0x30,
+
     Dummy = 0xff,
 }
