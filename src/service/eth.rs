@@ -1,4 +1,4 @@
-use std::{convert::TryInto, time::Duration};
+use std::convert::TryInto;
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -12,11 +12,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
+
 use crate::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, parse::truncate, NetworkName},
+    util::{generate_id2, parse::truncate, sleep, NetworkName},
     Error, Result,
 };
 
@@ -251,7 +252,7 @@ impl EthClient {
             }
 
             sub_iter += iter_interval;
-            async_std::task::sleep(Duration::from_secs(iter_interval)).await;
+            sleep(iter_interval).await;
 
             current_balance = self.get_current_balance(&addr, None).await?;
 

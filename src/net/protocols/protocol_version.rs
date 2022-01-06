@@ -5,9 +5,8 @@ use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
-    net::{
-        message_subscriber::MessageSubscription, messages, utility::sleep, ChannelPtr, SettingsPtr,
-    },
+    net::{message_subscriber::MessageSubscription, messages, ChannelPtr, SettingsPtr},
+    util::sleep,
 };
 
 /// Implements the protocol version handshake sent out by nodes at the beginning

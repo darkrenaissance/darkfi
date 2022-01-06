@@ -1,4 +1,5 @@
 pub mod address;
+pub mod r#async;
 pub mod loader;
 pub mod net_name;
 pub mod parse;
@@ -9,6 +10,7 @@ pub use loader::ContractLoader;
 pub use net_name::NetworkName;
 pub use parse::{assign_id, decode_base10, encode_base10, generate_id, generate_id2};
 pub use path::{expand_path, join_config_path};
+pub use r#async::sleep;
 pub use token_list::{DrkTokenList, TokenList};
 
 pub use address::Address;

@@ -12,9 +12,9 @@ use crate::{
         protocols::{ProtocolAddress, ProtocolPing},
         sessions::Session,
         ChannelPtr, Connector, P2p,
-        utility::sleep,
     },
     system::{StoppableTask, StoppableTaskPtr},
+    util::sleep,
 };
 
 pub struct ManualSession {

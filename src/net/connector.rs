@@ -2,9 +2,11 @@ use futures::FutureExt;
 use smol::Async;
 use std::net::{SocketAddr, TcpStream};
 
-use crate::error::{Error, Result};
-//use crate::net::error::{Error, Result};
-use crate::net::{utility::sleep, Channel, ChannelPtr, SettingsPtr};
+use crate::{
+    error::{Error, Result},
+    net::{Channel, ChannelPtr, SettingsPtr},
+    util::sleep,
+};
 
 /// Create outbound socket connections.
 pub struct Connector {
