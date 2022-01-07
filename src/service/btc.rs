@@ -323,9 +323,6 @@ pub struct BtcClient {
 }
 impl BtcClient {
     pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
-        //TODO
-        // info!(target: "SOL BRIDGE", "Main BTC wallet pubkey: {:?}", &main_keypair.pubkey());
-
         let notify_channel = async_channel::unbounded();
 
         let (network, url) = match network {
@@ -335,6 +332,8 @@ impl BtcClient {
         };
 
         let main_account = Account::new(&main_keypair, network);
+
+        info!(target: "BTC BRIDGE", "Main BTC Address: {}", main_account.address.to_string());
 
         Ok(Arc::new(Self {
             main_account,
@@ -552,9 +551,11 @@ impl NetworkClient for BtcClient {
 
         Ok(public_key)
     }
+
     async fn get_notifier(self: Arc<Self>) -> Result<async_channel::Receiver<TokenNotification>> {
         Ok(self.notify_channel.1.clone())
     }
+
     async fn send(
         self: Arc<Self>,
         address: Vec<u8>,
