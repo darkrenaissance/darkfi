@@ -34,7 +34,12 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
             let config: T = toml::from_str(str_buff)?;
             Ok(config)
         } else {
-            println!("Could not parse configuration");
+            let path = path.to_str();
+            if path.is_some() {
+                println!("Could not find/parse configuration file in: {}", path.unwrap());
+            } else {
+                println!("Could not find/parse configuration file");
+            }
             println!("Please follow the instructions in the README");
             Err(Error::ConfigNotFound)
         }
