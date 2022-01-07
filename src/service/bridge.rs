@@ -4,7 +4,7 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace};
+use log::{debug, error};
 
 use crate::{
     crypto::keypair::PublicKey, types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error,
@@ -76,7 +76,7 @@ impl Bridge {
         network: NetworkName,
         client: Arc<dyn NetworkClient + Send + Sync>,
     ) -> Result<()> {
-        trace!(target: "BRIDGE", "Adding new client");
+        debug!(target: "BRIDGE", "Adding new client");
 
         let client2 = client.clone();
         let notifier = client2.get_notifier().await?;
@@ -92,7 +92,7 @@ impl Bridge {
 
     pub async fn listen(self: Arc<Self>) -> Option<Result<TokenNotification>> {
         if !self.notifiers.is_empty() {
-            trace!(target: "BRIDGE", "Start listening for new notifications");
+            debug!(target: "BRIDGE", "Start listening for new notifications");
             let notification = self
                 .notifiers
                 .iter()
@@ -102,7 +102,7 @@ impl Bridge {
                 .await
                 .map(|o| o.map_err(Error::from));
 
-            trace!(target: "BRIDGE", "Stop listening for new notifications");
+            debug!(target: "BRIDGE", "Stop listening for new notifications");
 
             notification
         } else {
@@ -116,7 +116,7 @@ impl Bridge {
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> BridgeSubscribtion {
-        trace!(target: "BRIDGE", "Start new subscription");
+        debug!(target: "BRIDGE", "Start new subscription");
         let (sender, req) = async_channel::unbounded();
         let (rep, receiver) = async_channel::unbounded();
 
@@ -135,7 +135,7 @@ impl Bridge {
         mint: Option<String>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        trace!(target: "BRIDGE", "Listen for new subscriptions");
+        debug!(target: "BRIDGE", "Listen for new subscriptions");
         let req = req.recv().await?;
 
         let network = req.network;

@@ -1,5 +1,5 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
-use log::{debug, trace};
+use log::{debug, error};
 
 use crate::{
     blockchain::{rocks::columns, RocksColumn},
@@ -66,18 +66,18 @@ impl From<error::Error> for VerifyFailed {
 
 pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
     // Check deposits are legit
-    trace!(target: "STATE TRANSITION", "iterate clear_inputs");
+    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
 
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         // Check the public key in the clear inputs
         // It should be a valid public key for the cashier
         if !state.is_valid_cashier_public_key(&input.signature_public) {
-            log::error!(target: "STATE TRANSITION", "Invalid cashier public key");
+            error!(target: "STATE TRANSITION", "Invalid cashier public key");
             return Err(VerifyFailed::InvalidCashierKey(i))
         }
     }
 
-    trace!(target: "STATE TRANSITION", "iterate inputs");
+    debug!(target: "STATE TRANSITION", "iterate inputs");
 
     for (i, input) in tx.inputs.iter().enumerate() {
         let merkle = &input.revealed.merkle_root;
@@ -97,9 +97,9 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         }
     }
 
-    trace!(target: "STATE TRANSITION", "Check the tx verifies correctly");
+    debug!(target: "STATE TRANSITION", "Check the tx verifies correctly");
     tx.verify(state.mint_vk(), state.spend_vk())?;
-    trace!(target: "STATE TRANSITION", "Verified successfully");
+    debug!(target: "STATE TRANSITION", "Verified successfully");
 
     let mut nullifiers = vec![];
     for input in tx.inputs {
@@ -143,12 +143,12 @@ impl State {
         wallet: WalletPtr,
     ) -> Result<()> {
         // Extend our list of nullifiers with the ones from the update.
-        trace!("Extend nullifiers");
+        debug!("Extend nullifiers");
         for nullifier in update.nullifiers {
             self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
         }
 
-        trace!("Update Merkle tree and witness");
+        debug!("Update Merkle tree and witness");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
             let node = MerkleNode(coin.0);
@@ -169,7 +169,7 @@ impl State {
                     let pubkey = PublicKey::from_secret(*secret);
 
                     debug!("Received a coin: amount {}", note.value);
-                    trace!("Send a notification");
+                    debug!("Send a notification");
                     if let Some(ch) = notify.clone() {
                         ch.send((pubkey, note.value)).await?;
                     }
@@ -179,7 +179,7 @@ impl State {
             wallet.put_tree(&self.tree).await?;
         }
 
-        trace!("apply() exiting successfully");
+        debug!("apply() exiting successfully");
         Ok(())
     }
 
@@ -193,12 +193,12 @@ impl State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
-        trace!("Check if it is a valid cashier public key");
+        debug!("Check if it is a valid cashier public key");
         self.public_keys.contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        trace!("Check if it is valid merkle");
+        debug!("Check if it is valid merkle");
         if let Ok(mr) = self.merkle_roots.key_exist(merkle_root.clone()) {
             return mr
         }
@@ -206,7 +206,7 @@ impl ProgramState for State {
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        trace!("Check if nullifier exists");
+        debug!("Check if nullifier exists");
         if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
             return nl
         }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::trace;
+use log::debug;
 
 use super::{
     rocks::{columns, IteratorMode, RocksColumn},
@@ -21,14 +21,14 @@ impl SlabStore {
     }
 
     pub fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        trace!(target: "SLABSTORE", "get value");
+        debug!(target: "SLABSTORE", "get value");
         let key: u64 = deserialize(&key)?;
         let value = self.rocks.get(key)?;
         Ok(value)
     }
 
     pub fn put(&self, slab: Slab) -> Result<Option<u64>> {
-        trace!(target: "SLABSTORE", "Put slab");
+        debug!(target: "SLABSTORE", "Put slab");
         let last_index = self.get_last_index()?;
         let key = last_index + 1;
 
@@ -45,7 +45,7 @@ impl SlabStore {
     }
 
     pub fn get_last_index(&self) -> Result<u64> {
-        trace!(target: "SLABSTORE", "Get last index");
+        debug!(target: "SLABSTORE", "Get last index");
         let last_index = self.rocks.iterator(IteratorMode::End)?.next();
         match last_index {
             Some((index, _)) => Ok(deserialize(&index)?),
@@ -54,7 +54,7 @@ impl SlabStore {
     }
 
     pub fn get_last_index_as_bytes(&self) -> Result<Vec<u8>> {
-        trace!(target: "SLABSTORE", "Get last index as bytes");
+        debug!(target: "SLABSTORE", "Get last index as bytes");
         let last_index = self.rocks.iterator(IteratorMode::End)?.next();
         match last_index {
             Some((index, _)) => Ok(index.to_vec()),

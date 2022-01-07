@@ -111,9 +111,6 @@ pub struct CliGatewayd {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
-    /// Show event trace
-    #[clap(short, long)]
-    pub trace: bool,
 }
 
 /// Darkfid cli

@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_executor::Executor;
-use log::trace;
+use log::debug;
 use url::Url;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
@@ -117,7 +117,7 @@ impl GatewayService {
         let peer = msg.0;
         match request.get_command() {
             0 => {
-                trace!(target: "GATEWAY DAEMON" ,"Received putslab msg");
+                debug!(target: "GATEWAY DAEMON", "Received putslab msg");
                 // PUTSLAB
                 let slab = request.get_payload();
 
@@ -137,7 +137,7 @@ impl GatewayService {
                 publish_queue.send(slab).await?;
             }
             1 => {
-                trace!(target: "GATEWAY DAEMON", "Received getslab msg");
+                debug!(target: "GATEWAY DAEMON", "Received getslab msg");
                 let index = request.get_payload();
                 let slab = slabstore.get(index)?;
 
@@ -154,7 +154,7 @@ impl GatewayService {
                 // GETSLAB
             }
             2 => {
-                trace!(target: "GATEWAY DAEMON","Received getlastindex msg");
+                debug!(target: "GATEWAY DAEMON","Received getlastindex msg");
                 let index = slabstore.get_last_index_as_bytes()?;
 
                 let reply = Reply::from(&request, GatewayError::NoError as u32, index);
@@ -226,7 +226,7 @@ impl GatewayClient {
     }
 
     pub async fn sync(&mut self) -> Result<u64> {
-        trace!(target: "GATEWAY CLIENT", "Start Syncing");
+        debug!(target: "GATEWAY CLIENT", "Start Syncing");
 
         let local_last_index = self.slabstore.get_last_index()?;
 
@@ -248,12 +248,12 @@ impl GatewayClient {
             }
         }
 
-        trace!(target: "GATEWAY CLIENT","End Syncing");
+        debug!(target: "GATEWAY CLIENT","End Syncing");
         Ok(last_index)
     }
 
     pub async fn get_slab(&mut self, index: u64) -> Result<Option<Slab>> {
-        trace!(target: "GATEWAY CLIENT","Get slab");
+        debug!(target: "GATEWAY CLIENT","Get slab");
 
         let handle_error = Arc::new(handle_error);
         let rep = self
@@ -272,7 +272,7 @@ impl GatewayClient {
     }
 
     pub async fn put_slab(&mut self, mut slab: Slab) -> Result<()> {
-        trace!(target: "GATEWAY CLIENT","Put slab");
+        debug!(target: "GATEWAY CLIENT","Put slab");
 
         loop {
             let last_index = self.sync().await?;
@@ -294,7 +294,7 @@ impl GatewayClient {
     }
 
     pub async fn get_last_index(&mut self) -> Result<u64> {
-        trace!(target: "GATEWAY CLIENT","Get last index");
+        debug!(target: "GATEWAY CLIENT","Get last index");
 
         let handle_error = Arc::new(handle_error);
 
@@ -314,7 +314,7 @@ impl GatewayClient {
         &self,
         executor: Arc<Executor<'_>>,
     ) -> Result<GatewaySlabsSubscriber> {
-        trace!(target: "GATEWAY CLIENT","Start subscriber");
+        debug!(target: "GATEWAY CLIENT", "Start subscriber");
 
         let mut subscriber = Subscriber::new(self.sub_addr, String::from("GATEWAY CLIENT"));
         subscriber.start().await?;
@@ -333,11 +333,11 @@ impl GatewayClient {
         slabstore: Arc<SlabStore>,
         gateway_slabs_sub_s: async_channel::Sender<Slab>,
     ) -> Result<()> {
-        trace!(target: "GATEWAY CLIENT","Start subscribe loop");
+        debug!(target: "GATEWAY CLIENT", "Start subscribe loop");
 
         loop {
             let slab = subscriber.fetch::<Slab>().await?;
-            trace!(target: "GATEWAY CLIENT","Received new slab");
+            debug!(target: "GATEWAY CLIENT", "Received new slab");
             gateway_slabs_sub_s.send(slab.clone()).await?;
             slabstore.put(slab)?;
         }
@@ -351,10 +351,10 @@ impl GatewayClient {
 fn handle_error(status_code: u32) {
     match status_code {
         1 => {
-            trace!(target: "GATEWAY SERVICE", "Reply has an Error: Index is not updated");
+            debug!(target: "GATEWAY SERVICE", "Reply has an Error: Index is not updated");
         }
         2 => {
-            trace!(target: "GATEWAY SERVICE", "Reply has an Error: Index Not Exist");
+            debug!(target: "GATEWAY SERVICE", "Reply has an Error: Index Not Exist");
         }
         _ => {}
     }
