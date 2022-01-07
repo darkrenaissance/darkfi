@@ -18,6 +18,7 @@ The compiled binary blob has the following layout:
 
 ```
 MAGIC_BYTES
+BINARY_VERSION
 .constant
 CONSTANT_TYPE STACK_INDEX CONSTANT_NAME 
 CONSTANT_TYPE STACK_INDEX CONSTANT_NAME 
@@ -37,15 +38,17 @@ TBD
 ## `MAGIC_BYTES`
 
 The magic bytes are the file signature consisting of four bytes used
-to identify the zkas binary code. It also contains the binary version
-to allow parsing potential different formats in the future.
+to identify the zkas binary code. They consist of:
 
-They consist of:
+> `0x0b` `0xxx` `0xb1` `0x35`
 
-> `0xf3` `0x42` `0x69` `BINARY_VERSION`
 
-Where binary version is the byte representing the format version.
+## `BINARY_VERSION`
 
+The binary code also contains the binary version to allow parsing
+potential different formats in the future.
+
+> `0x01`
 
 ## `.constant`
 
@@ -70,9 +73,7 @@ The `.circuit` section holds the procedural logic of the ZK proof.
 In here we have statements with opcodes that are executed as
 understood by the VM. The statements are in the form of:
 
-```
-OPCODE ARG_NUM STACK_INDEX ... STACK_INDEX
-```
+> `OPCODE ARG_NUM STACK_INDEX ... STACK_INDEX`
 
 where:
 
