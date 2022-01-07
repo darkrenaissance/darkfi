@@ -4,6 +4,11 @@ use termion::{color, style};
 
 use crate::ast::{Constants, StatementType, Statements, Witnesses};
 
+/// Version of the binary
+pub const BINARY_VERSION: u8 = 1;
+/// Magic bytes prepended to the binary
+pub const MAGIC_BYTES: [u8; 4] = [0xf3, 0x42, 0x69, BINARY_VERSION];
+
 pub struct Compiler {
     file: String,
     lines: Vec<String>,
@@ -32,6 +37,9 @@ impl Compiler {
     pub fn compile(&self) -> Vec<u8> {
         let mut bincode = vec![];
 
+        // Write the magic bytes
+        bincode.extend_from_slice(&MAGIC_BYTES);
+
         let mut stack_idx: u64 = 0;
 
         // Temporary stack vector for lookups
@@ -50,7 +58,6 @@ impl Compiler {
         for i in &self.witnesses {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
-            bincode.extend_from_slice(&stack_idx.to_le_bytes());
             stack_idx += 1;
         }
 
