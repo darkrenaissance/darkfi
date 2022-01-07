@@ -73,7 +73,6 @@ impl Compiler {
                 _ => unreachable!(),
             }
 
-            bincode.push(i.typ as u8);
             bincode.push(i.opcode as u8);
             bincode.extend_from_slice(&i.args.len().to_le_bytes());
 
