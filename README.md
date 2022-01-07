@@ -12,23 +12,26 @@ Please visit https://rustup.rs/ for instructions.
 
 The following dependencies are also required:
 
-|          Dependency          |  Debian-based   |   
-|------------------------------|-----------------|
-| gcc, gcc-c++, kernel headers | build-essential | 
-| clang                        | clang           | 
-| clang libs                   | libclang-dev    | 
-| llvm libs                    | llvm-dev        | 
-| udev libs                    | libudev-dev     |
-| pkg-config                   | pkg-config      | 
-| wget                         | wget            | 
+|          Dependency          |   Debian-based   |   
+|------------------------------|------------------|
+| gcc, gcc-c++, kernel headers | build-essential  | 
+| cmake                        | cmake            |
+| wget                         | wget             | 
+| pkg-config                   | pkg-config       | 
+| clang                        | clang            | 
+| clang libs                   | libclang-dev     | 
+| llvm libs                    | llvm-dev         | 
+| udev libs                    | libudev-dev      |
+| freetype2 libs               | libfreetype6-dev |
+| expat xml lib                | libexpat1-dev    |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
 to install the required dependencies:
 
 ```shell
 % sudo apt-get update
-% sudo apt-get install -y build-essential clang libclang-dev llvm-dev \
-    libudev-dev pkg-config wget
+% sudo apt-get install -y build-essential cmake wget pkg-config clang \
+    libclang-dev llvm-dev libudev-dev libfreetype6-dev libexpat1-dev
 ```
 
 To build the necessary binaries, we can just clone the repo, and use the 
@@ -87,25 +90,26 @@ communicate with the DarkFi network:
 And in the other terminal, we can use the CLI interface to `darkfid`
 called `drk`:
 
-```shell
+```
 % drk -h
+drk 0.2.0
+darkfi <dev@dark.fi>
+Anonymous. Uncensored. Sovereign.
 
 USAGE:
-    drk [FLAGS] [OPTIONS] [SUBCOMMAND]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v, --verbose    Increase verbosity
+    drk [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
     -c, --config <CONFIG>    Sets a custom config file
+    -h, --help               Print help information
+    -v                       Increase verbosity
+    -V, --version            Print version information
 
 SUBCOMMANDS:
     deposit     Deposit clear tokens for Dark tokens
     features    Show what features the cashier supports
     hello       Say hello to the RPC
-    help        Prints this message or the help of the given subcommand(s)
+    help        Print this message or the help of the given subcommand(s)
     id          Get hexidecimal ID for token symbol
     transfer    Transfer Dark tokens to address
     wallet      Wallet operations
