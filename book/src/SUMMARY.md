@@ -1,6 +1,7 @@
 # Summary
 
 [DarkFi](README.md)
+- [Ideology](IDEOLOGY.md)
 - [Development](development.md)
 - [Tutorial](tutorial.md)
 - [Client](clients/clients.md)
