@@ -1,3 +1,4 @@
+use drk::Result;
 use rand::{thread_rng, Rng};
 use std::{io, io::Read, time::Instant};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
@@ -10,7 +11,7 @@ use tui::{
     Terminal,
 };
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<()> {
     // Set up terminal output
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
@@ -20,8 +21,6 @@ fn main() -> Result<(), io::Error> {
     // This provides non-blocking input support.
     let mut asi = async_stdin();
 
-    let mut then = Instant::now();
-    let mut rng = thread_rng();
     // Clear the terminal before first draw.
     terminal.clear()?;
     loop {
