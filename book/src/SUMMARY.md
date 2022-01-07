@@ -8,4 +8,4 @@
 - [zkas](zkas/zkas.md)
   - [Bincode](zkas/bincode.md)
   - [Examples](zkas/examples.md)
-    - [Sapling payment scheme](zkas/examples/sapling.md)
+    - [Sapling scheme](zkas/examples/sapling.md)
