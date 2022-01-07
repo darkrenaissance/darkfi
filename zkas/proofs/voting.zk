@@ -1,4 +1,6 @@
 constant "Vote" {
+	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPoint NULLIFIER_K,
 }
 
@@ -6,23 +8,36 @@ contract "Vote" {
 	Base process_id_0,
 	Base process_id_1,
 	Base secret_key,
-	Base vote_hash,
+	Base vote,
+	Scalar vote_blind,
 	Uint32 leaf_pos,
 	MerklePath path,
 }
 
 circuit "Vote" {
+	# Nullifier hash
 	process_id = poseidon_hash(process_id_0, process_id_1);
 	nullifier = poseidon_hash(secret_key, process_id);
 	constrain_instance(nullifier);
 
+	# Public key derivation and hashing
 	public_key = ec_mul_base(secret_key, NULLIFIER_K);
 	public_x = ec_get_x(public_key);
 	public_y = ec_get_y(public_key);
 	pk_hash = poseidon_hash(public_x, public_y);
 
+	# Merkle root
 	root = calculate_merkle_root(leaf_pos, path, pk_hash);
 	constrain_instance(root);
 
-	constrain_instance(vote_hash);
+	# Pedersen commitment for vote
+	vcv = ec_mul_short(vote, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(vote_blind, VALUE_COMMIT_RANDOM);
+	vote_commit = ec_add(vcv, vcr);
+	# Since vote_commit is a curve point, we fetch its coordinates
+	# and constrain_them:
+	vote_commit_x = ec_get_x(vote_commit);
+	vote_commit_y = ec_get_y(vote_commit);
+	constrain_instance(vote_commit_x);
+	constrain_instance(vote_commit_y);
 }
