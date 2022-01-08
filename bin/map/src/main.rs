@@ -27,7 +27,12 @@ fn main() -> Result<()> {
         // Lock the terminal and start a drawing session.
         terminal.draw(|frame| {
             // Create a layout into which to place our blocks.
-            let size = frame.size();
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(6), Constraint::Percentage(94)].as_ref())
+                .split(frame.size());
+
+            //let size = frame.size();
 
             // The text lines for our text box.
             let txt = vec![Spans::from("\n Press q to quit.\n")];
@@ -39,7 +44,7 @@ fn main() -> Result<()> {
                 .style(Style::default().fg(Color::White).bg(Color::Black));
 
             // Render into the layout.
-            frame.render_widget(graph, size);
+            frame.render_widget(graph, chunks[0]);
 
             // create a list
             let mut items: Vec<ListItem> = Vec::new();
@@ -55,7 +60,7 @@ fn main() -> Result<()> {
                 .highlight_symbol(">>");
 
             // draw a list
-            frame.render_widget(list, size);
+            frame.render_widget(list, chunks[1]);
         })?;
 
         // Iterate over all the keys that have been pressed since the
