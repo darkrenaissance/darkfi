@@ -11,7 +11,7 @@ use darkfi::{
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
     },
-    state::{state_transition, ProgramState, StateUpdate},
+    node::state::{state_transition, ProgramState, StateUpdate},
     tx,
     util::{generate_id2, NetworkName},
     Result,

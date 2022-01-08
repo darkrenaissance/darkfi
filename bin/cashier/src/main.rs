@@ -14,20 +14,22 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
     cli::{CashierdConfig, CliCashierd, Config},
-    client::Client,
     crypto::{
         keypair::{PublicKey, SecretKey},
         proof::VerifyingKey,
+    },
+    node::{
+        client::Client,
+        state::State,
+        wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     },
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     serial::serialize,
-    state::State,
     types::DrkTokenId,
     util::{expand_path, generate_id2, join_config_path, parse::truncate, Address, NetworkName},
-    wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     Error, Result,
 };
 

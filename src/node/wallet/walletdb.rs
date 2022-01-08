@@ -10,7 +10,6 @@ use sqlx::{
 };
 
 use crate::{
-    client::ClientFailed,
     crypto::{
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -19,11 +18,13 @@ use crate::{
         nullifier::Nullifier,
         OwnCoin, OwnCoins,
     },
+    node::client::ClientFailed,
     serial::serialize,
     types::DrkTokenId,
-    wallet::wallet_api::WalletApi,
     Error, Result,
 };
+
+use super::wallet_api::WalletApi;
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -76,9 +77,9 @@ impl WalletDb {
 
     pub async fn init_db(&self) -> Result<()> {
         info!("Initializing wallet database");
-        let tree = include_str!("../../sql/tree.sql");
-        let keys = include_str!("../../sql/keys.sql");
-        let coins = include_str!("../../sql/coins.sql");
+        let tree = include_str!("../../../sql/tree.sql");
+        let keys = include_str!("../../../sql/keys.sql");
+        let coins = include_str!("../../../sql/coins.sql");
 
         let mut conn = self.conn.acquire().await?;
 

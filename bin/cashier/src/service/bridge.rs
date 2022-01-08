@@ -7,8 +7,8 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 
 use darkfi::{
-    crypto::keypair::PublicKey, types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error,
-    Result,
+    crypto::keypair::PublicKey, node::wallet::cashierdb::TokenKey, types::*, util::NetworkName,
+    Error, Result,
 };
 
 pub struct BridgeRequests {

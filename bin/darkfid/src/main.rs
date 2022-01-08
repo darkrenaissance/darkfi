@@ -15,10 +15,14 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
     cli::{CliDarkfid, Config, DarkfidConfig},
-    client::Client,
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         proof::VerifyingKey,
+    },
+    node::{
+        client::Client,
+        state::{ProgramState, State},
+        wallet::walletdb::WalletDb,
     },
     rpc::{
         jsonrpc::{
@@ -27,13 +31,11 @@ use darkfi::{
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    state::{ProgramState, State},
     types::DrkTokenId,
     util::{
         assign_id, decode_base10, encode_base10, expand_path, join_config_path, Address,
         DrkTokenList, NetworkName, TokenList,
     },
-    wallet::walletdb::WalletDb,
     Error, Result,
 };
 
@@ -102,11 +104,11 @@ impl Darkfid {
         cashiers: Vec<Cashier>,
     ) -> Result<Self> {
         let sol_tokenlist =
-            TokenList::new(include_bytes!("../../contrib/token/solana_token_list.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.json"))?;
         let eth_tokenlist =
-            TokenList::new(include_bytes!("../../contrib/token/erc20_token_list.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/erc20_token_list.json"))?;
         let btc_tokenlist =
-            TokenList::new(include_bytes!("../../contrib/token/bitcoin_token_list.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/bitcoin_token_list.json"))?;
         let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
         Ok(Self {

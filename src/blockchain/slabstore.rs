@@ -7,7 +7,7 @@ use super::{
     slab::Slab,
 };
 use crate::{
-    serial::{deserialize, serialize},
+    util::serial::{deserialize, serialize},
     Result,
 };
 

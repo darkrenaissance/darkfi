@@ -9,7 +9,7 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CliGatewayd, Config, GatewaydConfig},
-    service::gateway::GatewayService,
+    node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
     Result,
 };

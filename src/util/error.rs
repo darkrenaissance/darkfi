@@ -1,4 +1,4 @@
-use crate::{client, state};
+use crate::node::{client, state};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

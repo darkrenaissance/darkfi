@@ -1,5 +1,5 @@
 use crate::{
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
     Result,
 };
 

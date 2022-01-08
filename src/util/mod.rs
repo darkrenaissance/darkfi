@@ -1,9 +1,12 @@
 pub mod address;
+pub mod async_serial;
 pub mod async_util;
+pub mod error;
 pub mod loader;
 pub mod net_name;
 pub mod parse;
 pub mod path;
+pub mod serial;
 pub mod token_list;
 
 pub use async_util::sleep;
@@ -14,3 +17,5 @@ pub use path::{expand_path, join_config_path, load_keypair_to_str};
 pub use token_list::{DrkTokenList, TokenList};
 
 pub use address::Address;
+
+pub use error::{Error, Result};

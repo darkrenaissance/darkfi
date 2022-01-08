@@ -14,9 +14,10 @@ use crate::{
     },
     error,
     tx::Transaction,
-    wallet::walletdb::WalletPtr,
     Result,
 };
+
+use super::wallet::walletdb::WalletPtr;
 
 pub trait ProgramState {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool;

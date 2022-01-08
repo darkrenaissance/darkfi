@@ -9,12 +9,13 @@ use sqlx::{
 };
 
 use super::wallet_api::WalletApi;
+
 use crate::{
-    client::ClientFailed,
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
     },
+    node::client::ClientFailed,
     types::DrkTokenId,
     util::NetworkName,
     Error, Result,
@@ -79,9 +80,9 @@ impl CashierDb {
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        let main_kps = include_str!("../../sql/cashier_main_keypairs.sql");
-        let deposit_kps = include_str!("../../sql/cashier_deposit_keypairs.sql");
-        let withdraw_kps = include_str!("../../sql/cashier_withdraw_keypairs.sql");
+        let main_kps = include_str!("../../../sql/cashier_main_keypairs.sql");
+        let deposit_kps = include_str!("../../../sql/cashier_deposit_keypairs.sql");
+        let withdraw_kps = include_str!("../../../sql/cashier_withdraw_keypairs.sql");
 
         let mut conn = self.conn.acquire().await?;
 

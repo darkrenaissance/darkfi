@@ -4,7 +4,7 @@ use async_std::sync::Arc;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 
 use crate::{
-    serial::{deserialize, serialize, Decodable, Encodable},
+    util::serial::{deserialize, serialize, Decodable, Encodable},
     Error, Result,
 };
 

@@ -16,16 +16,19 @@ use crate::{
         OwnCoin,
     },
     serial::{Decodable, Encodable},
-    service::GatewayClient,
-    state::{state_transition, State, StateUpdate},
     tx,
     types::DrkTokenId,
     util::Address,
+    Result,
+};
+
+use super::{
+    service::GatewayClient,
+    state::{state_transition, State, StateUpdate},
     wallet::{
         cashierdb::CashierDbPtr,
         walletdb::{Balances, WalletPtr},
     },
-    Result,
 };
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -60,14 +63,14 @@ pub enum ClientFailed {
 
 pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
 
-impl From<super::error::Error> for ClientFailed {
-    fn from(err: super::error::Error) -> ClientFailed {
+impl From<crate::error::Error> for ClientFailed {
+    fn from(err: crate::error::Error) -> ClientFailed {
         ClientFailed::ClientError(err.to_string())
     }
 }
 
-impl From<crate::state::VerifyFailed> for ClientFailed {
-    fn from(err: crate::state::VerifyFailed) -> ClientFailed {
+impl From<super::state::VerifyFailed> for ClientFailed {
+    fn from(err: super::state::VerifyFailed) -> ClientFailed {
         ClientFailed::VerifyError(err.to_string())
     }
 }
