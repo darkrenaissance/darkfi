@@ -1,13 +1,12 @@
 use drk::Result;
-use rand::{thread_rng, Rng};
-use std::{io, io::Read, time::Instant};
+use std::{io, io::Read};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, Borders, List, ListItem, Paragraph, Widget},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Terminal,
 };
 
@@ -48,7 +47,7 @@ fn main() -> Result<()> {
 
             // create a list
             let mut items: Vec<ListItem> = Vec::new();
-            for num in 1..11 {
+            for num in 1..100 {
                 let new_item = ListItem::new(format!("Node {}", num));
                 items.push(new_item);
             }
