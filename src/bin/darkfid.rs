@@ -37,6 +37,8 @@ use darkfi::{
     Error, Result,
 };
 
+pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
+
 #[derive(Clone, Debug)]
 pub struct Cashier {
     pub name: String,
@@ -395,7 +397,6 @@ impl Darkfid {
         let result: Result<Value> = async {
             let network = NetworkName::from_str(network)?;
             match network {
-                #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     if let Some(tkn) = self.sol_tokenlist.search_id(symbol)? {
                         Ok(json!(tkn))
@@ -403,7 +404,6 @@ impl Darkfid {
                         Err(Error::NotSupportedToken)
                     }
                 }
-                #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     if let Some(tkn) = self.btc_tokenlist.search_id(symbol)? {
                         Ok(json!(tkn))
@@ -411,10 +411,8 @@ impl Darkfid {
                         Err(Error::NotSupportedToken)
                     }
                 }
-                #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
                     if symbol.to_lowercase() == "eth" {
-                        use drk::service::eth::ETH_NATIVE_TOKEN_ID;
                         Ok(json!(ETH_NATIVE_TOKEN_ID.to_string()))
                     } else if let Some(tkn) = self.eth_tokenlist.search_id(symbol)? {
                         Ok(json!(tkn))
