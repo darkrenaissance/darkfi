@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-darkfi = { path = "../../" , features = ['tui']}
+#darkfi = { path = "../../" , features = ['tui']}
 smol = "1.2.5"
 tui = "0.16.0"
 termion = "1.5"
