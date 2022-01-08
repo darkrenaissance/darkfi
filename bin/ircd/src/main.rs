@@ -1,23 +1,20 @@
 #[macro_use]
 extern crate clap;
+use async_executor::Executor;
+use async_std::io::BufReader;
 use async_trait::async_trait;
+use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
+use log::{debug, error, info, warn};
+use serde_json::{json, Value};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use smol::Async;
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
 };
-use async_executor::Executor;
-use async_std::io::BufReader;
-use futures::{
-    AsyncBufReadExt, AsyncReadExt, FutureExt,
-};
-use serde_json::{json, Value};
-use log::{debug, error, info, warn};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use smol::Async;
 
 use drk::{
     net,
-    util::expand_path,
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -25,19 +22,20 @@ use drk::{
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
+    util::expand_path,
     Error, Result,
 };
 
+mod irc_server;
 mod privmsg;
 mod program_options;
 mod protocol_privmsg;
-mod irc_server;
 
 use crate::{
+    irc_server::IrcServerConnection,
     privmsg::{PrivMsg, PrivMsgId, SeenPrivMsgIds, SeenPrivMsgIdsPtr},
     program_options::ProgramOptions,
     protocol_privmsg::ProtocolPrivMsg,
-    irc_server::IrcServerConnection,
 };
 
 async fn process(
@@ -117,7 +115,9 @@ async fn channel_loop(
 
         debug!("NEWCHANNEL");
 
-        let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone(), seen_privmsg_ids.clone(), p2p.clone()).await;
+        let protocol_privmsg =
+            ProtocolPrivMsg::new(channel, sender.clone(), seen_privmsg_ids.clone(), p2p.clone())
+                .await;
         protocol_privmsg.start(executor.clone()).await;
     }
 }
@@ -167,14 +167,16 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let (sender, recvr) = async_channel::unbounded();
     // for now the p2p and channel sub sessions just run forever
     // so detach them as background processes.
-    executor.spawn(channel_loop(p2p.clone(), sender, seen_privmsg_ids.clone(), executor.clone())).detach();
+    executor
+        .spawn(channel_loop(p2p.clone(), sender, seen_privmsg_ids.clone(), executor.clone()))
+        .detach();
 
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {});
-    executor.spawn(async move {
-        listen_and_serve(server_config, rpc_interface, ex3).await
-    }).detach();
+    executor
+        .spawn(async move { listen_and_serve(server_config, rpc_interface, ex3).await })
+        .detach();
 
     loop {
         let (stream, peer_addr) = match listener.accept().await {
@@ -188,12 +190,13 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
         let p2p2 = p2p.clone();
         let ex2 = executor.clone();
-        executor.spawn(process(recvr.clone(), stream, peer_addr, p2p2, seen_privmsg_ids.clone(), ex2)).detach();
+        executor
+            .spawn(process(recvr.clone(), stream, peer_addr, p2p2, seen_privmsg_ids.clone(), ex2))
+            .detach();
     }
 }
 
-struct JsonRpcInterface {
-}
+struct JsonRpcInterface {}
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {

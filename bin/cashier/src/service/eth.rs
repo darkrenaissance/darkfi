@@ -200,13 +200,11 @@ pub struct EthClient {
 
 impl EthClient {
     pub fn new(_network: &str, socket_path: &str, passphrase: &str) -> Self {
-
         let notify_channel = async_channel::unbounded();
 
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
 
-
-        let main_keypair = Keypair{ public_key: "".into(), private_key: "".into()};
+        let main_keypair = Keypair { public_key: "".into(), private_key: "".into() };
 
         Self {
             main_keypair,
@@ -219,23 +217,17 @@ impl EthClient {
 
     pub async fn setup_keypair(
         &mut self,
-        cashier_wallet: Arc<CashierDb>, 
-        _keypair_path: &str
+        cashier_wallet: Arc<CashierDb>,
+        _keypair_path: &str,
     ) -> Result<()> {
-
         let main_keypair: Keypair;
 
-        let main_keypairs =
-            cashier_wallet.get_main_keys(&NetworkName::Ethereum).await?;
+        let main_keypairs = cashier_wallet.get_main_keys(&NetworkName::Ethereum).await?;
 
         if main_keypairs.is_empty() {
             let main_private_key = generate_privkey();
-            let main_public_key = self
-                .import_privkey(&main_private_key)
-                .await?
-                .as_str()
-                .unwrap()
-                .to_string();
+            let main_public_key =
+                self.import_privkey(&main_private_key).await?.as_str().unwrap().to_string();
 
             cashier_wallet
                 .put_main_keys(
@@ -247,9 +239,7 @@ impl EthClient {
                 )
                 .await?;
 
-            main_keypair =
-                Keypair { private_key: main_private_key, public_key: main_public_key };
-
+            main_keypair = Keypair { private_key: main_private_key, public_key: main_public_key };
         } else {
             let last_keypair = &main_keypairs[main_keypairs.len() - 1];
 
@@ -316,7 +306,7 @@ impl EthClient {
 
         if current_balance < prev_balance {
             return Err(darkfi::Error::ClientFailed(
-                    "New balance is less than previous balance".into(),
+                "New balance is less than previous balance".into(),
             ))
         }
 
@@ -333,7 +323,7 @@ impl EthClient {
                 received_balance: received_balance.to_u64_digits()[0],
                 decimals: decimals as u16,
             })
-        .await
+            .await
             .map_err(Error::from)?;
 
         self.send_eth_to_main_wallet(&addr, received_balance).await?;
@@ -357,10 +347,10 @@ impl EthClient {
         let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r))
             .await
             .map_err(EthFailed::from)
-            {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
+        {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
 
         match reply {
             JsonResult::Resp(r) => {
@@ -380,17 +370,17 @@ impl EthClient {
         }
     }
 
-    pub async fn import_privkey(&self, key: &str,) -> EthResult<Value> {
+    pub async fn import_privkey(&self, key: &str) -> EthResult<Value> {
         let req = jsonrpc::request(json!("personal_importRawKey"), json!([key, self.passphrase]));
         Ok(self.request(req).await?)
     }
 
     /*
-       pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
-       let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
-       Ok(self.request(req).await?)
-       }
-       */
+    pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
+    let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
+    Ok(self.request(req).await?)
+    }
+    */
 
     pub async fn block_number(&self) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_blockNumber"), json!([]));
@@ -453,7 +443,7 @@ impl NetworkClient for EthClient {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         let private_key: Vec<u8> = serialize(&private_key);
 
@@ -478,7 +468,7 @@ impl NetworkClient for EthClient {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(public_key)
     }

@@ -27,13 +27,12 @@ use darkfi::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, parse::truncate, sleep, NetworkName, expand_path, load_keypair_to_str},
+    util::{expand_path, generate_id2, load_keypair_to_str, parse::truncate, sleep, NetworkName},
+    wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
-    wallet::cashierdb::{TokenKey, CashierDb},
 };
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
-
 
 struct Keypair(SolKeypair);
 struct Pubkey(SolPubkey);
@@ -50,12 +49,16 @@ pub struct SolClient {
     subscriptions: Arc<Mutex<Vec<Pubkey>>>,
     notify_channel:
         (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
-        rpc_server: &'static str,
-        wss_server: &'static str,
+    rpc_server: &'static str,
+    wss_server: &'static str,
 }
 
 impl SolClient {
-    pub async fn new(cashier_wallet: Arc<CashierDb>, network: &str, keypair_path: &str) -> Result<Arc<Self>> {
+    pub async fn new(
+        cashier_wallet: Arc<CashierDb>,
+        network: &str,
+        keypair_path: &str,
+    ) -> Result<Arc<Self>> {
         let notify_channel = async_channel::unbounded();
 
         let main_keypair: Keypair;
@@ -74,18 +77,16 @@ impl SolClient {
                         &NetworkName::Solana,
                     )
                     .await?;
-                } else {
-                    main_keypair =
-                        deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
+            } else {
+                main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
             }
         } else {
-            let keypair_str =
-                load_keypair_to_str(expand_path(keypair_path)?)?;
+            let keypair_str = load_keypair_to_str(expand_path(keypair_path)?)?;
 
             let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
             main_keypair = Keypair::from_bytes(&keypair_bytes)
                 .map_err(|e| SolFailed::Signature(e.to_string()))?;
-            }
+        }
 
         info!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
@@ -240,8 +241,8 @@ impl SolClient {
                             .unwrap()
                             .parse()
                             .map_err(Error::from)?;
-                        } else {
-                            cur_balance = params["lamports"].as_u64().unwrap();
+                    } else {
+                        cur_balance = params["lamports"].as_u64().unwrap();
                     }
                     break
                 }
@@ -270,7 +271,7 @@ impl SolClient {
                     received_balance: amnt,
                     decimals: decimals as u16,
                 })
-            .await
+                .await
                 .map_err(Error::from)?;
 
             info!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
@@ -286,7 +287,7 @@ impl SolClient {
                     received_balance: amnt,
                     decimals: decimals as u16,
                 })
-            .await
+                .await
                 .map_err(Error::from)?;
 
             info!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
@@ -455,7 +456,7 @@ impl NetworkClient for SolClient {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(TokenSubscribtion { private_key, public_key })
     }
@@ -488,7 +489,7 @@ impl NetworkClient for SolClient {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(public_key)
     }
@@ -595,7 +596,6 @@ impl Decodable for Keypair {
     }
 }
 
-
 impl Encodable for Pubkey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
         let key = self.to_string();
@@ -608,7 +608,9 @@ impl Decodable for Pubkey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
         let key = Pubkey::try_from(key.as_str()).map_err(|_| {
-            darkfi::Error::from(SolFailed::DecodeAndEncodeError("load public key from slice".into()))
+            darkfi::Error::from(SolFailed::DecodeAndEncodeError(
+                "load public key from slice".into(),
+            ))
         })?;
         Ok(key)
     }

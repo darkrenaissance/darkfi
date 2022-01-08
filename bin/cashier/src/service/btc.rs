@@ -44,7 +44,7 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use darkfi::{
     crypto::keypair::PublicKey as DrkPublicKey,
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, NetworkName, load_keypair_to_str, expand_path},
+    util::{expand_path, generate_id2, load_keypair_to_str, NetworkName},
     wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
 };
@@ -241,9 +241,9 @@ impl Client {
             subscriptions: Vec::new(),
             latest_block_height: BlockHeight::try_from(latest_block)
                 .map_err(|_| darkfi::Error::TryFromError)?,
-                last_sync: Instant::now(),
-                sync_interval: interval,
-                script_history: Default::default(),
+            last_sync: Instant::now(),
+            sync_interval: interval,
+            script_history: Default::default(),
         })
     }
     fn update_state(&mut self) -> Result<()> {
@@ -307,8 +307,8 @@ impl Client {
                     Ok(ScriptStatus::InMempool)
                 } else {
                     Ok(ScriptStatus::Confirmed(Confirmed::from_inclusion_and_latest_block(
-                                u32::try_from(last.height).map_err(|_| darkfi::Error::TryFromError)?,
-                                u32::from(self.latest_block_height),
+                        u32::try_from(last.height).map_err(|_| darkfi::Error::TryFromError)?,
+                        u32::from(self.latest_block_height),
                     )))
                 }
             }
@@ -320,15 +320,17 @@ pub struct BtcClient {
     client: Arc<Mutex<Client>>,
     notify_channel:
         (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
-        network: Network,
+    network: Network,
 }
 impl BtcClient {
-    pub async fn new(cashier_wallet: Arc<CashierDb>, network: &str, keypair_path: &str) -> Result<Arc<Self>> {
-
+    pub async fn new(
+        cashier_wallet: Arc<CashierDb>,
+        network: &str,
+        keypair_path: &str,
+    ) -> Result<Arc<Self>> {
         let main_keypair: Keypair;
 
-        let main_keypairs =
-            cashier_wallet.get_main_keys(&NetworkName::Bitcoin).await?;
+        let main_keypairs = cashier_wallet.get_main_keys(&NetworkName::Bitcoin).await?;
 
         if keypair_path.is_empty() {
             if main_keypairs.is_empty() {
@@ -342,19 +344,15 @@ impl BtcClient {
                         &NetworkName::Bitcoin,
                     )
                     .await?;
-                } else {
-                    main_keypair =
-                        deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
+            } else {
+                main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
             }
         } else {
-            let keypair_str = load_keypair_to_str(expand_path(
-                    &keypair_path,
-            )?)?;
+            let keypair_str = load_keypair_to_str(expand_path(&keypair_path)?)?;
             let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
             main_keypair = Keypair::from_bytes(&keypair_bytes)
                 .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
-            }
-
+        }
 
         let notify_channel = async_channel::unbounded();
 
@@ -450,7 +448,7 @@ impl BtcClient {
                 received_balance: amnt as u64,
                 decimals: 8,
             })
-        .await
+            .await
             .map_err(Error::from)?;
 
         info!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
@@ -556,7 +554,7 @@ impl NetworkClient for BtcClient {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(TokenSubscribtion { private_key, public_key })
     }
@@ -580,7 +578,7 @@ impl NetworkClient for BtcClient {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-        .detach();
+            .detach();
 
         Ok(public_key)
     }

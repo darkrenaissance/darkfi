@@ -1,17 +1,10 @@
-use std::{
-    net::{TcpStream},
-};
-use rand::{RngCore, rngs::OsRng};
-use futures::{
-    io::{WriteHalf}, AsyncWriteExt,
-};
+use futures::{io::WriteHalf, AsyncWriteExt};
 use log::{debug, info};
+use rand::{rngs::OsRng, RngCore};
 use smol::Async;
+use std::net::TcpStream;
 
-use drk::{
-    net,
-    Error, Result,
-};
+use drk::{net, Error, Result};
 
 use crate::privmsg::{PrivMsg, SeenPrivMsgIdsPtr};
 
@@ -43,7 +36,10 @@ pub struct IrcServerConnection {
 }
 
 impl IrcServerConnection {
-    pub fn new(write_stream: WriteHalf<Async<TcpStream>>, seen_privmsg_ids: SeenPrivMsgIdsPtr) -> Self {
+    pub fn new(
+        write_stream: WriteHalf<Async<TcpStream>>,
+        seen_privmsg_ids: SeenPrivMsgIdsPtr,
+    ) -> Self {
         Self {
             write_stream,
             seen_privmsg_ids,
@@ -140,4 +136,3 @@ impl IrcServerConnection {
         Ok(())
     }
 }
-

@@ -27,10 +27,7 @@ use darkfi::{
     state::State,
     types::DrkTokenId,
     util::{expand_path, generate_id2, join_config_path, parse::truncate, Address, NetworkName},
-    wallet::{
-        cashierdb::CashierDb, 
-        walletdb::WalletDb,
-    },
+    wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     Error, Result,
 };
 
@@ -111,9 +108,7 @@ impl Cashierd {
         state: Arc<Mutex<State>>,
         executor: Arc<Executor<'_>>,
     ) -> Result<(smol::Task<Result<()>>, smol::Task<Result<()>>)> {
-
         self.cashier_wallet.init_db().await?;
-
 
         for network in self.networks.iter() {
             match network.name {
@@ -124,7 +119,12 @@ impl Cashierd {
 
                     let _bridge = self.bridge.clone();
 
-                    let sol_client = SolClient::new(self.cashier_wallet.clone(), &network.blockchain, &network.keypair).await?;
+                    let sol_client = SolClient::new(
+                        self.cashier_wallet.clone(),
+                        &network.blockchain,
+                        &network.keypair,
+                    )
+                    .await?;
 
                     _bridge.add_clients(NetworkName::Solana, sol_client).await?;
                 }
@@ -157,7 +157,12 @@ impl Cashierd {
 
                     let _bridge = self.bridge.clone();
 
-                    let btc_client = BtcClient::new(self.cashier_wallet.clone(), &network.blockchain, &network.keypair).await?;
+                    let btc_client = BtcClient::new(
+                        self.cashier_wallet.clone(),
+                        &network.blockchain,
+                        &network.keypair,
+                    )
+                    .await?;
 
                     _bridge.add_clients(NetworkName::Bitcoin, btc_client).await?;
                 }
@@ -190,8 +195,8 @@ impl Cashierd {
                     recv_coin.clone(),
                     ex2.clone(),
                 )
-                    .await?;
-                }
+                .await?;
+            }
         });
 
         let bridge2 = self.bridge.clone();
@@ -217,7 +222,7 @@ impl Cashierd {
                             state.clone(),
                         )
                         .await?;
-                    }
+                }
                 Ok(())
             });
 
@@ -257,7 +262,7 @@ impl Cashierd {
                         amount,
                     ),
                 })
-            .await?;
+                .await?;
 
             // receive a response
             let res = bridge_subscribtion.receiver.recv().await?;
@@ -277,7 +282,7 @@ impl Cashierd {
                             &withdraw_token.network,
                         )
                         .await?;
-                    }
+                }
                 _ => {
                     return Err(Error::BridgeError("Receive unknown value from Subscription".into()))
                 }
@@ -341,9 +346,9 @@ impl Cashierd {
         // Check if the features list contains this network
         if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
-                    InvalidParams,
-                    Some(format!("Cashier doesn't support this network: {}", network)),
-                    id,
+                InvalidParams,
+                Some(format!("Cashier doesn't support this network: {}", network)),
+                id,
             ))
         }
 
@@ -388,15 +393,15 @@ impl Cashierd {
                         network: network.clone(),
                         payload: bridge::BridgeRequestsPayload::Watch(None),
                     })
-                .await?;
-                } else {
-                    let keypair = check[0].clone();
-                    bridge_subscribtion
-                        .sender
-                        .send(bridge::BridgeRequests {
-                            network: network.clone(),
-                            payload: bridge::BridgeRequestsPayload::Watch(Some(keypair)),
-                        })
+                    .await?;
+            } else {
+                let keypair = check[0].clone();
+                bridge_subscribtion
+                    .sender
+                    .send(bridge::BridgeRequests {
+                        network: network.clone(),
+                        payload: bridge::BridgeRequestsPayload::Watch(Some(keypair)),
+                    })
                     .await?;
             }
 
@@ -466,9 +471,9 @@ impl Cashierd {
         // Check if the features list contains this network
         if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
-                    InvalidParams,
-                    Some(format!("Cashier doesn't support this network: {}", network)),
-                    id,
+                InvalidParams,
+                Some(format!("Cashier doesn't support this network: {}", network)),
+                id,
             ))
         }
 
@@ -488,8 +493,8 @@ impl Cashierd {
 
             if let Some(addr) = self
                 .cashier_wallet
-                    .get_withdraw_keys_by_token_public_key(&address, &network)
-                    .await?
+                .get_withdraw_keys_by_token_public_key(&address, &network)
+                .await?
             {
                 cashier_public = addr.public;
             } else {
