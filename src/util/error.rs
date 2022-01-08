@@ -1,5 +1,3 @@
-use crate::node::{client, state};
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -79,8 +77,10 @@ pub enum Error {
     PlonkError(String),
     #[error("Unable to decrypt mint note")]
     NoteDecryptionFailed,
+
+    #[cfg(feature = "node")]
     #[error(transparent)]
-    VerifyFailed(#[from] state::VerifyFailed),
+    VerifyFailed(#[from] crate::node::state::VerifyFailed),
     #[error("MerkleTree is full")]
     TreeFull,
 
@@ -164,18 +164,21 @@ pub enum Error {
     InvalidAddress,
 }
 
+#[cfg(feature = "node")]
 impl From<zeromq::ZmqError> for Error {
     fn from(err: zeromq::ZmqError) -> Error {
         Error::ZmqError(err.to_string())
     }
 }
 
+#[cfg(feature = "blockchain")]
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())
     }
 }
 
+#[cfg(feature = "node")]
 impl From<sqlx::error::Error> for Error {
     fn from(err: sqlx::error::Error) -> Error {
         Error::SqlxError(err.to_string())
@@ -212,8 +215,9 @@ impl From<url::ParseError> for Error {
     }
 }
 
-impl From<client::ClientFailed> for Error {
-    fn from(err: client::ClientFailed) -> Error {
+#[cfg(feature = "node")]
+impl From<crate::node::client::ClientFailed> for Error {
+    fn from(err: crate::node::client::ClientFailed) -> Error {
         Error::ClientFailed(err.to_string())
     }
 }
@@ -240,13 +244,6 @@ impl From<crate::service::SolFailed> for Error {
 impl From<halo2::plonk::Error> for Error {
     fn from(err: halo2::plonk::Error) -> Error {
         Error::PlonkError(format!("{:?}", err))
-    }
-}
-
-#[cfg(feature = "darkpulse")]
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
-        Error::SqlxError(err.to_string())
     }
 }
 

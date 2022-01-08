@@ -18,7 +18,7 @@ use darkfi::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
     util::{generate_id2, parse::truncate, sleep, NetworkName},
-    wallet::cashierdb::{CashierDb, TokenKey},
+    node::wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
 };
 

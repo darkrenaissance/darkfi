@@ -45,7 +45,7 @@ use darkfi::{
     crypto::keypair::PublicKey as DrkPublicKey,
     serial::{deserialize, serialize, Decodable, Encodable},
     util::{expand_path, generate_id2, load_keypair_to_str, NetworkName},
-    wallet::cashierdb::{CashierDb, TokenKey},
+    node::wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
 };
 

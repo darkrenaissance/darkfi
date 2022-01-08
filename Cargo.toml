@@ -16,12 +16,7 @@ git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 features = ["dev-graph", "test-dependencies"]
 
-[dependencies.rocksdb]
-# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
-git = "https://github.com/parazyd/rust-rocksdb"
-rev = "bd966750ec861d687913d59a9939a1408ac53131"
-default-features = false
-features = ["zstd"]
+
 
 [dependencies]
 # Crypto
@@ -65,7 +60,7 @@ lazy_static = "1.4.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
 signal-hook = "0.3.10"
-signal-hook-async-std = "0.2.1"
+
 subtle = "2.4.1"
 thiserror = "1.0.30"
 
@@ -73,24 +68,41 @@ thiserror = "1.0.30"
 async-tungstenite = "0.16.0"
 tungstenite = "0.16.0"
 
-# Used for wallet management.
-sqlx = {version = "0.5.10", features = ["runtime-async-std-native-tls", "sqlite"]}
-libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"]}
-
-# Used for gatewayd network transport.
-zeromq = {version = "0.3.1", default-features = false, features = ["async-std-runtime", "all-transport"]}
-
 #tui dependencies
 crossbeam-channel = { version = "0.5.1", optional = true}
 libc = { version = "0.2.112", optional = true}
 termion = { version = "1.5.6", optional = true}
 
+# node dependencies
+## Used for wallet management.
+sqlx = {version = "0.5.10", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
+libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"],  optional = true }
+## Used for gatewayd network transport.
+zeromq = {version = "0.3.1", default-features = false, features = ["async-std-runtime", "all-transport"],  optional = true }
+signal-hook-async-std = {version = "0.2.1", optional = true}
+
+# blockchain dependencies
+[dependencies.rocksdb]
+# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
+git = "https://github.com/parazyd/rust-rocksdb"
+rev = "bd966750ec861d687913d59a9939a1408ac53131"
+default-features = false
+features = ["zstd"]
+optional = true
+
+
 [features]
+blockchain = ["rocksdb"]
+node = ["sqlx", "libsqlite3-sys", "zeromq", "signal-hook-async-std"]
 tui = ["termion", "libc", "crossbeam-channel"]
 
 [[bin]]         
 name = "tui_ex"    
 required-features = ["tui"]
+
+[[bin]]         
+name = "tx"    
+required-features = ["node"]
 
 [[example]]
 name = "net"
