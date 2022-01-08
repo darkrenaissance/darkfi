@@ -8,7 +8,7 @@ use std::{
 
 use num_bigint::BigUint;
 
-use crate::{
+use super::{
     endian,
     error::{Error, Result},
 };

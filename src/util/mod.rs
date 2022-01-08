@@ -1,6 +1,7 @@
 pub mod address;
 pub mod async_serial;
 pub mod async_util;
+pub mod endian;
 pub mod error;
 pub mod loader;
 pub mod net_name;

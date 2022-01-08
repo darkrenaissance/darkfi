@@ -1,10 +1,10 @@
 use std::io;
 
+use super::vm::{ZkBinary, ZkContract, ZkFunctionCall, ZkType};
 use crate::{
     error::{Error, Result},
     impl_vec,
     serial::{Decodable, Encodable, ReadExt, VarInt},
-    vm::{ZkBinary, ZkContract, ZkFunctionCall, ZkType},
 };
 
 impl_vec!((String, ZkType));

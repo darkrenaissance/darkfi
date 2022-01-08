@@ -2,14 +2,12 @@ pub mod blockchain;
 pub mod circuit;
 pub mod cli;
 pub mod crypto;
-pub mod endian;
 pub mod net;
 pub mod rpc;
 pub mod system;
 pub mod tx;
 pub mod types;
-pub mod vm;
-pub mod vm_serial;
+pub mod zk;
 
 pub mod node;
 

@@ -27,7 +27,7 @@ use darkfi::{
         util::pedersen_commitment_u64,
     },
     serial::Decodable,
-    vm,
+    zk::vm,
 };
 
 fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::Base {

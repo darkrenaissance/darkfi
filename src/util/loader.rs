@@ -3,9 +3,10 @@ use std::{fs::*, path::PathBuf, time::Instant};
 use crate::{
     circuit::MintContract,
     crypto::proof::{ProvingKey, VerifyingKey},
-    serial::Decodable,
-    vm, Result,
+    zk::vm,
 };
+
+use super::{serial::Decodable, Result};
 
 pub struct ContractLoader {}
 

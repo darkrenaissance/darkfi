@@ -18,7 +18,7 @@ use darkfi::{
         util::pedersen_commitment_u64,
     },
     serial::Decodable,
-    vm,
+    zk::vm,
 };
 
 fn main() -> std::result::Result<(), failure::Error> {
