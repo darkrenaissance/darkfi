@@ -5,9 +5,9 @@ use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Widget},
     Terminal,
 };
 
@@ -38,8 +38,24 @@ fn main() -> Result<()> {
                 // With white foreground and black background...
                 .style(Style::default().fg(Color::White).bg(Color::Black));
 
-            // Render into the second chunk of the layout.
+            // Render into the layout.
             frame.render_widget(graph, size);
+
+            // create a list
+            let mut items: Vec<ListItem> = Vec::new();
+            for num in 1..11 {
+                let new_item = ListItem::new(format!("Node {}", num));
+                items.push(new_item);
+            }
+
+            let list = List::new(items)
+                .block(Block::default().title("Nodes").borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
+                .highlight_symbol(">>");
+
+            // draw a list
+            frame.render_widget(list, size);
         })?;
 
         // Iterate over all the keys that have been pressed since the
