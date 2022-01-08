@@ -1,8 +1,8 @@
 use num_bigint::BigUint;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
-use drk::{
-    service::eth::{erc20_transfer_data, EthClient, EthTx, Keypair},
+use darkfi::{
+    service::eth::{erc20_transfer_data, EthClient, EthTx},
     util::{decode_base10, encode_base10},
     Result,
 };
@@ -19,12 +19,10 @@ async fn main() -> Result<()> {
     let acc = "0x113b6648f34f4d0340d04ff171cbcf0b49d47827".to_string();
     let key = "67cbb73cb293eea5fa2a7025d5479dbd50319010c03fd8821917ad0d9d53276c".to_string();
 
-    let mut eth = EthClient::new(
-        "/home/parazyd/.ethereum/ropsten/geth.ipc".to_string(),
-        String::from("foobar"),
-    );
+    let mut eth = EthClient::new("", "/home/parazyd/.ethereum/ropsten/geth.ipc", "foobar");
 
-    eth.set_main_keypair(&Keypair { private_key: key, public_key: acc.clone() });
+    eth.main_keypair.private_key = key;
+    eth.main_keypair.public_key = acc.clone();
 
     //let key = generate_privkey();
     //let passphrase = "foobar".to_string();
@@ -49,13 +47,13 @@ async fn main() -> Result<()> {
     /*
     // Transfer native ETH
     let tx = EthTx::new(
-        &acc,
-        &dest,
-        None,
-        None,
-        Some(decode_base10("0.051", 18, true)?),
-        None,
-        None,
+    &acc,
+    &dest,
+    None,
+    None,
+    Some(decode_base10("0.051", 18, true)?),
+    None,
+    None,
     );
 
     let rep = eth.send_transaction(&tx, &passphrase).await?;

@@ -10,7 +10,7 @@ use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
-use drk::{
+use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
     cli::{CashierdConfig, CliCashierd, Config},
@@ -23,17 +23,18 @@ use drk::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    serial::{deserialize, serialize},
-    service::{bridge, bridge::Bridge},
+    serial::serialize,
     state::State,
     types::DrkTokenId,
     util::{expand_path, generate_id2, join_config_path, parse::truncate, Address, NetworkName},
     wallet::{
-        cashierdb::{CashierDb, TokenKey},
+        cashierdb::CashierDb, 
         walletdb::WalletDb,
     },
     Error, Result,
 };
+
+use cashier::service::{bridge, bridge::Bridge};
 
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
@@ -55,7 +56,7 @@ struct Cashierd {
     bridge: Arc<Bridge>,
     cashier_wallet: Arc<CashierDb>,
     networks: Vec<Network>,
-    public_key: String,
+    public_key: Address,
     config: CashierdConfig,
 }
 
@@ -81,18 +82,17 @@ impl RequestHandler for Cashierd {
 }
 
 impl Cashierd {
-    async fn new(config: CashierdConfig) -> Result<Self> {
+    async fn new(config: CashierdConfig, public_key: Address) -> Result<Self> {
         debug!(target: "CASHIER DAEMON", "Initialize");
 
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
-        let cashier_wallet =
-            CashierDb::new(&wallet_path, config.cashier_wallet_password.clone()).await?;
+
+        let cashier_wallet = CashierDb::new(&wallet_path, &config.cashier_wallet_password).await?;
 
         let mut networks = Vec::new();
 
-        let cfg = config.clone();
-        for network in cfg.networks {
+        for network in config.clone().networks {
             networks.push(Network {
                 name: NetworkName::from_str(&network.name)?,
                 blockchain: network.blockchain,
@@ -102,7 +102,7 @@ impl Cashierd {
 
         let bridge = bridge::Bridge::new();
 
-        Ok(Self { bridge, cashier_wallet, networks, public_key: String::from(""), config })
+        Ok(Self { bridge, cashier_wallet, networks, public_key, config })
     }
 
     async fn start(
@@ -111,150 +111,55 @@ impl Cashierd {
         state: Arc<Mutex<State>>,
         executor: Arc<Executor<'_>>,
     ) -> Result<(smol::Task<Result<()>>, smol::Task<Result<()>>)> {
+
         self.cashier_wallet.init_db().await?;
+
 
         for network in self.networks.iter() {
             match network.name {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Adding solana network");
-                    use drk::service::{sol::SolFailed, SolClient};
-                    use solana_sdk::{signature::Signer, signer::keypair::Keypair};
+                    use drk::service::SolClient;
 
-                    let bridge2 = self.bridge.clone();
+                    let _bridge = self.bridge.clone();
 
-                    let main_keypair: Keypair;
+                    let sol_client = SolClient::new(self.cashier_wallet.clone(), &network.blockchain, &network.keypair).await?;
 
-                    let main_keypairs =
-                        self.cashier_wallet.get_main_keys(&NetworkName::Solana).await?;
-
-                    if network.keypair.is_empty() {
-                        if main_keypairs.is_empty() {
-                            main_keypair = Keypair::new();
-                            self.cashier_wallet
-                                .put_main_keys(
-                                    &TokenKey {
-                                        secret_key: serialize(&main_keypair),
-                                        public_key: serialize(&main_keypair.pubkey()),
-                                    },
-                                    &NetworkName::Solana,
-                                )
-                                .await?;
-                        } else {
-                            main_keypair =
-                                deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
-                        }
-                    } else {
-                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
-                            &network.keypair.clone(),
-                        )?)?;
-                        let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
-                        main_keypair = Keypair::from_bytes(&keypair_bytes)
-                            .map_err(|e| SolFailed::Signature(e.to_string()))?;
-                    }
-
-                    let sol_client = SolClient::new(main_keypair, &network.blockchain).await?;
-
-                    bridge2.add_clients(NetworkName::Solana, sol_client).await?;
+                    _bridge.add_clients(NetworkName::Solana, sol_client).await?;
                 }
 
                 #[cfg(feature = "eth")]
                 NetworkName::Ethereum => {
                     debug!(target: "CASHIER DAEMON", "Adding ethereum network");
-                    use drk::service::{
-                        eth::{generate_privkey, Keypair},
-                        EthClient,
-                    };
 
-                    let bridge2 = self.bridge.clone();
+                    use drk::service::EthClient;
 
-                    let main_keypair: Keypair;
-
-                    let main_keypairs =
-                        self.cashier_wallet.get_main_keys(&NetworkName::Ethereum).await?;
+                    let _bridge = self.bridge.clone();
 
                     let passphrase = self.config.geth_passphrase.clone();
 
                     let mut eth_client = EthClient::new(
-                        expand_path(&self.config.geth_socket)?.to_str().unwrap().into(),
-                        passphrase.clone(),
+                        &network.blockchain,
+                        expand_path(&self.config.geth_socket)?.to_str().unwrap(),
+                        &passphrase,
                     );
 
-                    if main_keypairs.is_empty() {
-                        let main_private_key = generate_privkey();
-                        let main_public_key = eth_client
-                            .import_privkey(&main_private_key, &passphrase)
-                            .await?
-                            .as_str()
-                            .unwrap()
-                            .to_string();
+                    eth_client.setup_keypair(self.cashier_wallet.clone(), &network.keypair).await?;
 
-                        self.cashier_wallet
-                            .put_main_keys(
-                                &TokenKey {
-                                    secret_key: serialize(&main_private_key),
-                                    public_key: serialize(&main_public_key),
-                                },
-                                &NetworkName::Ethereum,
-                            )
-                            .await?;
-
-                        main_keypair =
-                            Keypair { private_key: main_private_key, public_key: main_public_key };
-                    } else {
-                        let last_keypair = &main_keypairs[main_keypairs.len() - 1];
-
-                        main_keypair = Keypair {
-                            private_key: deserialize(&last_keypair.secret_key)?,
-                            public_key: deserialize(&last_keypair.public_key)?,
-                        }
-                    }
-
-                    eth_client.set_main_keypair(&main_keypair);
-
-                    bridge2.add_clients(NetworkName::Ethereum, Arc::new(eth_client)).await?;
+                    _bridge.add_clients(NetworkName::Ethereum, Arc::new(eth_client)).await?;
                 }
 
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
-                    use drk::service::btc::{BtcClient, BtcFailed, Keypair};
+                    use drk::service::btc::BtcClient;
 
-                    let bridge2 = self.bridge.clone();
+                    let _bridge = self.bridge.clone();
 
-                    let main_keypair: Keypair;
+                    let btc_client = BtcClient::new(self.cashier_wallet.clone(), &network.blockchain, &network.keypair).await?;
 
-                    let main_keypairs =
-                        self.cashier_wallet.get_main_keys(&NetworkName::Bitcoin).await?;
-
-                    if network.keypair.is_empty() {
-                        if main_keypairs.is_empty() {
-                            main_keypair = Keypair::new();
-                            self.cashier_wallet
-                                .put_main_keys(
-                                    &TokenKey {
-                                        secret_key: serialize(&main_keypair),
-                                        public_key: serialize(&main_keypair.pubkey()),
-                                    },
-                                    &NetworkName::Bitcoin,
-                                )
-                                .await?;
-                        } else {
-                            main_keypair =
-                                deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
-                        }
-                    } else {
-                        let keypair_str = drk::cli::cli_config::load_keypair_to_str(expand_path(
-                            &network.keypair.clone(),
-                        )?)?;
-                        let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
-                        main_keypair = Keypair::from_bytes(&keypair_bytes)
-                            .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
-                    }
-
-                    let btc_client = BtcClient::new(main_keypair, &network.blockchain).await?;
-
-                    bridge2.add_clients(NetworkName::Bitcoin, btc_client).await?;
+                    _bridge.add_clients(NetworkName::Bitcoin, btc_client).await?;
                 }
                 _ => {}
             }
@@ -285,8 +190,8 @@ impl Cashierd {
                     recv_coin.clone(),
                     ex2.clone(),
                 )
-                .await?;
-            }
+                    .await?;
+                }
         });
 
         let bridge2 = self.bridge.clone();
@@ -312,7 +217,7 @@ impl Cashierd {
                             state.clone(),
                         )
                         .await?;
-                }
+                    }
                 Ok(())
             });
 
@@ -352,7 +257,7 @@ impl Cashierd {
                         amount,
                     ),
                 })
-                .await?;
+            .await?;
 
             // receive a response
             let res = bridge_subscribtion.receiver.recv().await?;
@@ -372,7 +277,7 @@ impl Cashierd {
                             &withdraw_token.network,
                         )
                         .await?;
-                }
+                    }
                 _ => {
                     return Err(Error::BridgeError("Receive unknown value from Subscription".into()))
                 }
@@ -436,9 +341,9 @@ impl Cashierd {
         // Check if the features list contains this network
         if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
-                InvalidParams,
-                Some(format!("Cashier doesn't support this network: {}", network)),
-                id,
+                    InvalidParams,
+                    Some(format!("Cashier doesn't support this network: {}", network)),
+                    id,
             ))
         }
 
@@ -483,15 +388,15 @@ impl Cashierd {
                         network: network.clone(),
                         payload: bridge::BridgeRequestsPayload::Watch(None),
                     })
-                    .await?;
-            } else {
-                let keypair = check[0].clone();
-                bridge_subscribtion
-                    .sender
-                    .send(bridge::BridgeRequests {
-                        network: network.clone(),
-                        payload: bridge::BridgeRequestsPayload::Watch(Some(keypair)),
-                    })
+                .await?;
+                } else {
+                    let keypair = check[0].clone();
+                    bridge_subscribtion
+                        .sender
+                        .send(bridge::BridgeRequests {
+                            network: network.clone(),
+                            payload: bridge::BridgeRequestsPayload::Watch(Some(keypair)),
+                        })
                     .await?;
             }
 
@@ -561,9 +466,9 @@ impl Cashierd {
         // Check if the features list contains this network
         if !self.networks.iter().any(|net| net.name == network) {
             return JsonResult::Err(jsonerr(
-                InvalidParams,
-                Some(format!("Cashier doesn't support this network: {}", network)),
-                id,
+                    InvalidParams,
+                    Some(format!("Cashier doesn't support this network: {}", network)),
+                    id,
             ))
         }
 
@@ -583,8 +488,8 @@ impl Cashierd {
 
             if let Some(addr) = self
                 .cashier_wallet
-                .get_withdraw_keys_by_token_public_key(&address, &network)
-                .await?
+                    .get_withdraw_keys_by_token_public_key(&address, &network)
+                    .await?
             {
                 cashier_public = addr.public;
             } else {
@@ -640,7 +545,7 @@ impl Cashierd {
         {
             "server_version": env!("CARGO_PKG_VERSION"),
             "protocol_version": "1.0",
-            "public_key": self.public_key,
+            "public_key": self.public_key.to_string(),
             "networks": [],
             "hosts": {
                 "tcp_port": tcp_port,
@@ -669,12 +574,10 @@ async fn start(
     config: &CashierdConfig,
     get_address_flag: bool,
 ) -> Result<()> {
-    let mut cashierd = Cashierd::new(config.clone()).await?;
-
     let client_wallet_path =
         format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
-    let client_wallet =
-        WalletDb::new(&client_wallet_path, config.client_wallet_password.clone()).await?;
+
+    let client_wallet = WalletDb::new(&client_wallet_path, &config.client_wallet_password).await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -683,37 +586,42 @@ async fn start(
     info!("Building verifying key for the spend contract...");
     let spend_vk = VerifyingKey::build(11, SpendContract::default());
 
-    let client = Client::new(
-        rocks.clone(),
-        (config.gateway_protocol_url.parse()?, config.gateway_publisher_url.parse()?),
-        client_wallet.clone(),
-    )
-    .await?;
+    // new Client
+    let gateway_urls =
+        (config.gateway_protocol_url.parse()?, config.gateway_publisher_url.parse()?);
+    let client = Client::new(rocks.clone(), gateway_urls, client_wallet.clone()).await?;
 
     let tree = client.get_tree().await?;
     let merkle_roots = RocksColumn::<columns::MerkleRoots>::new(rocks.clone());
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
+    // get cashier public key
     let cashier_public = client.main_keypair.public;
-    let cashier_public_str = Address::from(cashier_public).to_string();
-    cashierd.public_key = cashier_public_str.clone();
 
-    let cashier_public_keys = vec![cashier_public];
+    // new Cashier daemon
+    let mut cashierd = Cashierd::new(config.clone(), Address::from(cashier_public)).await?;
 
+    // this will print the cashier public key and exit
+    if get_address_flag {
+        info!("Public Key: {}", cashierd.public_key);
+        return Ok(())
+    };
+
+    // new State
+    let public_keys = vec![cashier_public];
     let state = Arc::new(Mutex::new(State {
         tree,
         merkle_roots,
         nullifiers,
-        public_keys: cashier_public_keys,
+        public_keys,
         mint_vk,
         spend_vk,
     }));
 
-    if get_address_flag {
-        info!("Public Key: {}", cashier_public_str);
-        return Ok(())
-    };
+    // start cashier
+    let (t1, t2) = cashierd.start(client, state, executor.clone()).await?;
 
+    // config for rpc
     let cfg = RpcServerConfig {
         socket_addr: config.rpc_listen_address,
         use_tls: config.serve_tls,
@@ -721,7 +629,7 @@ async fn start(
         identity_pass: config.tls_identity_password.clone(),
     };
 
-    let (t1, t2) = cashierd.start(client, state, executor.clone()).await?;
+    // listen and serve RPC
     listen_and_serve(cfg, Arc::new(cashierd), executor).await?;
 
     t1.cancel().await;
@@ -760,26 +668,27 @@ async fn main() -> Result<()> {
 
     if args.refresh {
         info!(target: "CASHIER DAEMON", "Refresh the wallet and the database");
+
+        // refresh cashier's client wallet
         let client_wallet_path =
             format!("sqlite://{}", expand_path(&config.client_wallet_path)?.to_str().unwrap());
         let client_wallet =
-            WalletDb::new(&client_wallet_path, config.client_wallet_password.clone()).await?;
-
+            WalletDb::new(&client_wallet_path, &config.client_wallet_password).await?;
         client_wallet.remove_own_coins().await?;
 
+        // refresh cashier wallet
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.cashier_wallet_path)?.to_str().unwrap());
-        let wallet = CashierDb::new(&wallet_path, config.cashier_wallet_password.clone()).await?;
-
+        let wallet = CashierDb::new(&wallet_path, &config.cashier_wallet_password).await?;
         wallet.remove_withdraw_and_deposit_keys().await?;
 
+        // refresh rocks database
         if let Some(path) = expand_path(&config.database_path)?.to_str() {
             info!(target: "CASHIER DAEMON", "Remove database: {}", path);
             std::fs::remove_dir_all(path)?;
         }
 
         info!("Wallet updated successfully.");
-
         return Ok(())
     }
 
@@ -800,47 +709,9 @@ async fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2, &config, get_address_flag).await?;
                 drop(signal);
-                Ok::<(), drk::Error>(())
+                Ok::<(), darkfi::Error>(())
             })
         });
 
     result
 }
-
-// async fn resume_watch_deposit_keys(
-//     bridge: Arc<Bridge>,
-//     cashier_wallet: Arc<CashierDb>,
-//     networks: Vec<Network>,
-//     executor: Arc<Executor<'_>>,
-// ) -> Result<()> {
-//     debug!(target: "CASHIER DAEMON", "Resume watch deposit keys");
-
-//     for network in networks.iter() {
-//         let keypairs_to_watch =
-//             cashier_wallet.get_deposit_token_keys_by_network(&network.name)?;
-
-//         for deposit_token in keypairs_to_watch {
-//             let bridge = bridge.clone();
-
-//             let bridge_subscribtion = bridge
-//                 .subscribe(
-//                     deposit_token.drk_public_key,
-//                     Some(deposit_token.mint_address),
-//                     executor.clone(),
-//                 )
-//                 .await;
-
-//             bridge_subscribtion
-//                 .sender
-//                 .send(bridge::BridgeRequests {
-//                     network: network.name.clone(),
-//                     payload: bridge::BridgeRequestsPayload::Watch(Some(
-//                         deposit_token.token_key,
-//                     )),
-//                 })
-//                 .await?;
-//         }
-//     }
-
-//     Ok(())
-// }

@@ -1,5 +1,9 @@
-use crate::Result;
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use crate::{Error, Result};
 
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let ret: PathBuf;
@@ -29,4 +33,15 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
     path.push(file);
 
     Ok(path)
+}
+
+pub fn load_keypair_to_str(path: PathBuf) -> Result<String> {
+    if Path::new(&path).exists() {
+        let key = fs::read(&path)?;
+        let str_buff = std::str::from_utf8(&key)?;
+        Ok(str_buff.to_string())
+    } else {
+        println!("Could not parse keypair path");
+        Err(Error::KeypairPathNotFound)
+    }
 }

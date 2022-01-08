@@ -1,7 +1,7 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use rand::rngs::OsRng;
 
-use drk::{
+use darkfi::{
     circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     crypto::{
         coin::Coin,

@@ -13,11 +13,12 @@ use serde_json::{json, Value};
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
-use crate::{
+use darkfi::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
     util::{generate_id2, parse::truncate, sleep, NetworkName},
+    wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
 };
 
@@ -189,7 +190,7 @@ impl EthTx {
 // INFO [10-25|19:47:32.845] IPC endpoint opened: url=/home/x/.ethereum/ropsten/geth.ipc
 //
 pub struct EthClient {
-    main_keypair: Keypair,
+    pub main_keypair: Keypair,
     passphrase: String,
     socket_path: String,
     subscriptions: Arc<Mutex<Vec<String>>>,
@@ -198,21 +199,69 @@ pub struct EthClient {
 }
 
 impl EthClient {
-    pub fn new(socket_path: String, passphrase: String) -> Self {
+    pub fn new(_network: &str, socket_path: &str, passphrase: &str) -> Self {
+
         let notify_channel = async_channel::unbounded();
+
         let subscriptions = Arc::new(Mutex::new(Vec::new()));
+
+
+        let main_keypair = Keypair{ public_key: "".into(), private_key: "".into()};
+
         Self {
-            // This must be set by the cashier
-            main_keypair: Keypair { private_key: String::new(), public_key: String::new() },
-            passphrase,
-            socket_path,
+            main_keypair,
+            passphrase: passphrase.into(),
+            socket_path: socket_path.into(),
             subscriptions,
             notify_channel,
         }
     }
 
-    pub fn set_main_keypair(&mut self, keypair: &Keypair) {
-        self.main_keypair = keypair.clone();
+    pub async fn setup_keypair(
+        &mut self,
+        cashier_wallet: Arc<CashierDb>, 
+        _keypair_path: &str
+    ) -> Result<()> {
+
+        let main_keypair: Keypair;
+
+        let main_keypairs =
+            cashier_wallet.get_main_keys(&NetworkName::Ethereum).await?;
+
+        if main_keypairs.is_empty() {
+            let main_private_key = generate_privkey();
+            let main_public_key = self
+                .import_privkey(&main_private_key)
+                .await?
+                .as_str()
+                .unwrap()
+                .to_string();
+
+            cashier_wallet
+                .put_main_keys(
+                    &TokenKey {
+                        secret_key: serialize(&main_private_key),
+                        public_key: serialize(&main_public_key),
+                    },
+                    &NetworkName::Ethereum,
+                )
+                .await?;
+
+            main_keypair =
+                Keypair { private_key: main_private_key, public_key: main_public_key };
+
+        } else {
+            let last_keypair = &main_keypairs[main_keypairs.len() - 1];
+
+            main_keypair = Keypair {
+                private_key: deserialize(&last_keypair.secret_key)?,
+                public_key: deserialize(&last_keypair.public_key)?,
+            }
+        }
+
+        self.main_keypair = main_keypair;
+
+        Ok(())
     }
 
     async fn send_eth_to_main_wallet(&self, acc: &str, amount: BigUint) -> Result<()> {
@@ -248,7 +297,7 @@ impl EthClient {
             if sub_iter > 60 * 10 {
                 // 10 minutes
                 self.unsubscribe(&addr).await;
-                return Err(crate::Error::ClientFailed("Deposit for expired".into()))
+                return Err(darkfi::Error::ClientFailed("Deposit for expired".into()))
             }
 
             sub_iter += iter_interval;
@@ -266,8 +315,8 @@ impl EthClient {
         self.unsubscribe(&addr).await;
 
         if current_balance < prev_balance {
-            return Err(crate::Error::ClientFailed(
-                "New balance is less than previous balance".into(),
+            return Err(darkfi::Error::ClientFailed(
+                    "New balance is less than previous balance".into(),
             ))
         }
 
@@ -284,7 +333,7 @@ impl EthClient {
                 received_balance: received_balance.to_u64_digits()[0],
                 decimals: decimals as u16,
             })
-            .await
+        .await
             .map_err(Error::from)?;
 
         self.send_eth_to_main_wallet(&addr, received_balance).await?;
@@ -308,10 +357,10 @@ impl EthClient {
         let reply: JsonResult = match jsonrpc::send_unix_request(&self.socket_path, json!(r))
             .await
             .map_err(EthFailed::from)
-        {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+            {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
 
         match reply {
             JsonResult::Resp(r) => {
@@ -331,17 +380,17 @@ impl EthClient {
         }
     }
 
-    pub async fn import_privkey(&self, key: &str, passphrase: &str) -> EthResult<Value> {
-        let req = jsonrpc::request(json!("personal_importRawKey"), json!([key, passphrase]));
+    pub async fn import_privkey(&self, key: &str,) -> EthResult<Value> {
+        let req = jsonrpc::request(json!("personal_importRawKey"), json!([key, self.passphrase]));
         Ok(self.request(req).await?)
     }
 
     /*
-    pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
-    let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
-    Ok(self.request(req).await?)
-    }
-    */
+       pub async fn estimate_gas(&self, tx: &EthTx) -> Result<Value> {
+       let req = jsonrpc::request(json!("eth_estimateGas"), json!([tx]));
+       Ok(self.request(req).await?)
+       }
+       */
 
     pub async fn block_number(&self) -> EthResult<Value> {
         let req = jsonrpc::request(json!("eth_blockNumber"), json!([]));
@@ -388,7 +437,7 @@ impl NetworkClient for EthClient {
     ) -> Result<TokenSubscribtion> {
         let private_key = generate_privkey();
 
-        let addr = self.import_privkey(&private_key, &self.passphrase).await?;
+        let addr = self.import_privkey(&private_key).await?;
 
         let address: String = if addr.as_str().is_some() {
             addr.as_str().unwrap().to_string()
@@ -404,7 +453,7 @@ impl NetworkClient for EthClient {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         let private_key: Vec<u8> = serialize(&private_key);
 
@@ -429,7 +478,7 @@ impl NetworkClient for EthClient {
                     error!(target: "ETH BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(public_key)
     }
@@ -492,8 +541,8 @@ pub enum EthFailed {
     ImportPrivateError,
 }
 
-impl From<crate::error::Error> for EthFailed {
-    fn from(err: crate::error::Error) -> EthFailed {
+impl From<darkfi::Error> for EthFailed {
+    fn from(err: darkfi::Error) -> EthFailed {
         EthFailed::EthClientError(err.to_string())
     }
 }

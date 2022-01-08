@@ -1,4 +1,4 @@
-use drk::{
+use darkfi::{
     tui::{App, HBox, VBox, Widget},
     Result,
 };

@@ -11,7 +11,7 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 use std::{collections::HashMap, fs::File, time::Instant};
 
-use drk::{
+use darkfi::{
     crypto::{
         constants::OrchardFixedBases,
         proof::{Proof, ProvingKey, VerifyingKey},

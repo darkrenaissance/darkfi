@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use url::Url;
 
-use drk::{
+use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     circuit::{MintContract, SpendContract},
     cli::{CliDarkfid, Config, DarkfidConfig},
@@ -713,7 +713,7 @@ async fn start(
     config: &DarkfidConfig,
 ) -> Result<()> {
     let wallet_path = format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
-    let wallet = WalletDb::new(&wallet_path, config.wallet_password.clone()).await?;
+    let wallet = WalletDb::new(&wallet_path, &config.wallet_password).await?;
 
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
@@ -821,7 +821,7 @@ async fn main() -> Result<()> {
         info!(target: "DARKFI DAEMON", "Refresh the wallet and the database");
         let wallet_path =
             format!("sqlite://{}", expand_path(&config.wallet_path)?.to_str().unwrap());
-        let wallet = WalletDb::new(&wallet_path, config.wallet_password.clone()).await?;
+        let wallet = WalletDb::new(&wallet_path, &config.wallet_password).await?;
 
         wallet.remove_own_coins().await?;
 
@@ -850,7 +850,7 @@ async fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2, args.cashier, &config).await?;
                 drop(signal);
-                Ok::<(), drk::Error>(())
+                Ok::<(), darkfi::Error>(())
             })
         });
 

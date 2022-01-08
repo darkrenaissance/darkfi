@@ -41,10 +41,11 @@ use secp256k1::{
 };
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
-use crate::{
+use darkfi::{
     crypto::keypair::PublicKey as DrkPublicKey,
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, NetworkName},
+    util::{generate_id2, NetworkName, load_keypair_to_str, expand_path},
+    wallet::cashierdb::{CashierDb, TokenKey},
     Error, Result,
 };
 
@@ -228,7 +229,7 @@ impl Client {
         let _client = ElectrumClient::from_config(electrum_url, config)?;
 
         let electrum = ElectrumClient::new(electrum_url)
-            .map_err(|err| crate::Error::from(super::BtcFailed::from(err)))?;
+            .map_err(|err| darkfi::Error::from(super::BtcFailed::from(err)))?;
 
         let latest_block = electrum.block_headers_subscribe()?;
 
@@ -239,10 +240,10 @@ impl Client {
             electrum,
             subscriptions: Vec::new(),
             latest_block_height: BlockHeight::try_from(latest_block)
-                .map_err(|_| crate::Error::TryFromError)?,
-            last_sync: Instant::now(),
-            sync_interval: interval,
-            script_history: Default::default(),
+                .map_err(|_| darkfi::Error::TryFromError)?,
+                last_sync: Instant::now(),
+                sync_interval: interval,
+                script_history: Default::default(),
         })
     }
     fn update_state(&mut self) -> Result<()> {
@@ -306,8 +307,8 @@ impl Client {
                     Ok(ScriptStatus::InMempool)
                 } else {
                     Ok(ScriptStatus::Confirmed(Confirmed::from_inclusion_and_latest_block(
-                        u32::try_from(last.height).map_err(|_| crate::Error::TryFromError)?,
-                        u32::from(self.latest_block_height),
+                                u32::try_from(last.height).map_err(|_| darkfi::Error::TryFromError)?,
+                                u32::from(self.latest_block_height),
                     )))
                 }
             }
@@ -319,10 +320,42 @@ pub struct BtcClient {
     client: Arc<Mutex<Client>>,
     notify_channel:
         (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
-    network: Network,
+        network: Network,
 }
 impl BtcClient {
-    pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
+    pub async fn new(cashier_wallet: Arc<CashierDb>, network: &str, keypair_path: &str) -> Result<Arc<Self>> {
+
+        let main_keypair: Keypair;
+
+        let main_keypairs =
+            cashier_wallet.get_main_keys(&NetworkName::Bitcoin).await?;
+
+        if keypair_path.is_empty() {
+            if main_keypairs.is_empty() {
+                main_keypair = Keypair::new();
+                cashier_wallet
+                    .put_main_keys(
+                        &TokenKey {
+                            secret_key: serialize(&main_keypair),
+                            public_key: serialize(&main_keypair.pubkey()),
+                        },
+                        &NetworkName::Bitcoin,
+                    )
+                    .await?;
+                } else {
+                    main_keypair =
+                        deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
+            }
+        } else {
+            let keypair_str = load_keypair_to_str(expand_path(
+                    &keypair_path,
+            )?)?;
+            let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
+            main_keypair = Keypair::from_bytes(&keypair_bytes)
+                .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
+            }
+
+
         let notify_channel = async_channel::unbounded();
 
         let (network, url) = match network {
@@ -417,7 +450,7 @@ impl BtcClient {
                 received_balance: amnt as u64,
                 decimals: 8,
             })
-            .await
+        .await
             .map_err(Error::from)?;
 
         info!(target: "BTC BRIDGE", "Received {} btc", ui_amnt);
@@ -523,7 +556,7 @@ impl NetworkClient for BtcClient {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(TokenSubscribtion { private_key, public_key })
     }
@@ -547,7 +580,7 @@ impl NetworkClient for BtcClient {
                     error!(target: "BTC BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(public_key)
     }
@@ -739,7 +772,7 @@ impl Decodable for bitcoin::Address {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let addr: String = Decodable::decode(&mut d)?;
         let addr = bitcoin::Address::from_str(&addr)
-            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+            .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
         Ok(addr)
     }
 }
@@ -756,7 +789,7 @@ impl Decodable for bitcoin::PublicKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = bitcoin::PublicKey::from_slice(&key)
-            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+            .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
         Ok(key)
     }
 }
@@ -773,7 +806,7 @@ impl Decodable for bitcoin::PrivateKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
         let key = bitcoin::PrivateKey::from_str(&key)
-            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+            .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
         Ok(key)
     }
 }
@@ -788,7 +821,7 @@ impl Decodable for secp256k1::key::PublicKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = secp256k1::key::PublicKey::from_slice(&key)
-            .map_err(|err| crate::Error::from(BtcFailed::from(err)))?;
+            .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
         Ok(key)
     }
 }
@@ -805,7 +838,7 @@ impl Decodable for Keypair {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = Keypair::from_bytes(key.as_slice()).map_err(|_| {
-            crate::Error::from(BtcFailed::DecodeAndEncodeError("load keypair from slice".into()))
+            darkfi::Error::from(BtcFailed::DecodeAndEncodeError("load keypair from slice".into()))
         })?;
         Ok(key)
     }
@@ -829,8 +862,8 @@ pub enum BtcFailed {
     Notification(String),
 }
 
-impl From<crate::error::Error> for BtcFailed {
-    fn from(err: crate::error::Error) -> BtcFailed {
+impl From<darkfi::error::Error> for BtcFailed {
+    fn from(err: darkfi::error::Error) -> BtcFailed {
         BtcFailed::BtcError(err.to_string())
     }
 }
@@ -866,10 +899,13 @@ pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 #[cfg(test)]
 mod tests {
 
-    use super::Keypair;
-    use crate::serial::{deserialize, serialize};
-    use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
     use std::str::FromStr;
+
+    use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
+
+    use darkfi::serial::{deserialize, serialize};
+
+    use super::Keypair;
 
     const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 

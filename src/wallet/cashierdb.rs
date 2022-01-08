@@ -49,7 +49,7 @@ pub struct CashierDb {
 impl WalletApi for CashierDb {}
 
 impl CashierDb {
-    pub async fn new(path: &str, password: String) -> Result<CashierDbPtr> {
+    pub async fn new(path: &str, password: &str) -> Result<CashierDbPtr> {
         debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
@@ -65,7 +65,7 @@ impl CashierDb {
         }
 
         let mut connect_opts = SqliteConnectOptions::from_str(path)?
-            .pragma("key", password)
+            .pragma("key", password.to_string())
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
 
@@ -486,7 +486,7 @@ mod tests {
 
     #[async_std::test]
     async fn test_cashierdb() -> Result<()> {
-        let wallet = CashierDb::new("sqlite::memory:", WPASS.to_string()).await?;
+        let wallet = CashierDb::new("sqlite::memory:", WPASS).await?;
 
         // init_db()
         wallet.init_db().await?;

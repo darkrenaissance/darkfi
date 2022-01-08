@@ -6,13 +6,14 @@ use easy_parallel::Parallel;
 use log::debug;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
-use drk::{
+use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CliGatewayd, Config, GatewaydConfig},
-    service::GatewayService,
     util::{expand_path, join_config_path},
     Result,
+    service::gateway::GatewayService,
 };
+
 
 async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<()> {
     let rocks = Rocks::new(&expand_path(&config.database_path)?)?;
@@ -70,7 +71,7 @@ async fn main() -> Result<()> {
             smol::future::block_on(async move {
                 start(ex2, &config).await?;
                 drop(signal);
-                Ok::<(), drk::Error>(())
+                Ok::<(), darkfi::Error>(())
             })
         });
 

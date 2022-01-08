@@ -46,7 +46,7 @@ pub struct WalletDb {
 impl WalletApi for WalletDb {}
 
 impl WalletDb {
-    pub async fn new(path: &str, password: String) -> Result<WalletPtr> {
+    pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
             return Err(Error::from(ClientFailed::EmptyPassword))
@@ -61,7 +61,7 @@ impl WalletDb {
         }
 
         let mut connect_opts = SqliteConnectOptions::from_str(path)?
-            .pragma("key", password)
+            .pragma("key", password.to_string())
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
 
@@ -404,7 +404,7 @@ mod tests {
 
     #[async_std::test]
     async fn test_walletdb() -> Result<()> {
-        let wallet = WalletDb::new("sqlite::memory:", WPASS.to_string()).await?;
+        let wallet = WalletDb::new("sqlite::memory:", WPASS).await?;
         let keypair = Keypair::random(&mut OsRng);
 
         // init_db()

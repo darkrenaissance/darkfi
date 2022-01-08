@@ -2,7 +2,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use pasta_curves::{arithmetic::Field, pallas};
 use rand::rngs::OsRng;
 
-use drk::{crypto::merkle_node::MerkleNode, Result};
+use darkfi::{crypto::merkle_node::MerkleNode, Result};
 
 fn main() -> Result<()> {
     let mut tree = BridgeTree::<MerkleNode, 32>::new(100);

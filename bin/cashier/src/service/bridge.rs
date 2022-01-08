@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 
-use crate::{
+use darkfi::{
     crypto::keypair::PublicKey, types::*, util::NetworkName, wallet::cashierdb::TokenKey, Error,
     Result,
 };

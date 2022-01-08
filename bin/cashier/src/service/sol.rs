@@ -12,9 +12,9 @@ use solana_client::{blockhash_query::BlockhashQuery, rpc_client::RpcClient};
 use solana_sdk::{
     native_token::{lamports_to_sol, sol_to_lamports},
     program_pack::Pack,
-    pubkey::Pubkey,
+    pubkey::Pubkey as SolPubkey,
     signature::{Signature, Signer},
-    signer::keypair::Keypair,
+    signer::keypair::Keypair as SolKeypair,
     system_instruction,
     transaction::Transaction,
 };
@@ -23,15 +23,20 @@ use tungstenite::Message;
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
-use crate::{
+use darkfi::{
     crypto::keypair::PublicKey,
     rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, parse::truncate, sleep, NetworkName},
+    util::{generate_id2, parse::truncate, sleep, NetworkName, expand_path, load_keypair_to_str},
     Error, Result,
+    wallet::cashierdb::{TokenKey, CashierDb},
 };
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";
+
+
+struct Keypair(SolKeypair);
+struct Pubkey(SolPubkey);
 
 #[derive(Serialize)]
 struct SubscribeParams {
@@ -45,13 +50,42 @@ pub struct SolClient {
     subscriptions: Arc<Mutex<Vec<Pubkey>>>,
     notify_channel:
         (async_channel::Sender<TokenNotification>, async_channel::Receiver<TokenNotification>),
-    rpc_server: &'static str,
-    wss_server: &'static str,
+        rpc_server: &'static str,
+        wss_server: &'static str,
 }
 
 impl SolClient {
-    pub async fn new(main_keypair: Keypair, network: &str) -> Result<Arc<Self>> {
+    pub async fn new(cashier_wallet: Arc<CashierDb>, network: &str, keypair_path: &str) -> Result<Arc<Self>> {
         let notify_channel = async_channel::unbounded();
+
+        let main_keypair: Keypair;
+
+        let main_keypairs = cashier_wallet.get_main_keys(&NetworkName::Solana).await?;
+
+        if keypair_path.is_empty() {
+            if main_keypairs.is_empty() {
+                main_keypair = Keypair::new();
+                cashier_wallet
+                    .put_main_keys(
+                        &TokenKey {
+                            secret_key: serialize(&main_keypair),
+                            public_key: serialize(&main_keypair.pubkey()),
+                        },
+                        &NetworkName::Solana,
+                    )
+                    .await?;
+                } else {
+                    main_keypair =
+                        deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
+            }
+        } else {
+            let keypair_str =
+                load_keypair_to_str(expand_path(keypair_path)?)?;
+
+            let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
+            main_keypair = Keypair::from_bytes(&keypair_bytes)
+                .map_err(|e| SolFailed::Signature(e.to_string()))?;
+            }
 
         info!(target: "SOL BRIDGE", "Main SOL wallet pubkey: {:?}", &main_keypair.pubkey());
 
@@ -206,8 +240,8 @@ impl SolClient {
                             .unwrap()
                             .parse()
                             .map_err(Error::from)?;
-                    } else {
-                        cur_balance = params["lamports"].as_u64().unwrap();
+                        } else {
+                            cur_balance = params["lamports"].as_u64().unwrap();
                     }
                     break
                 }
@@ -236,7 +270,7 @@ impl SolClient {
                     received_balance: amnt,
                     decimals: decimals as u16,
                 })
-                .await
+            .await
                 .map_err(Error::from)?;
 
             info!(target: "SOL BRIDGE", "Received {} {:?} tokens", ui_amnt, mint.unwrap());
@@ -252,7 +286,7 @@ impl SolClient {
                     received_balance: amnt,
                     decimals: decimals as u16,
                 })
-                .await
+            .await
                 .map_err(Error::from)?;
 
             info!(target: "SOL BRIDGE", "Received {} SOL", ui_amnt);
@@ -421,7 +455,7 @@ impl NetworkClient for SolClient {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(TokenSubscribtion { private_key, public_key })
     }
@@ -454,7 +488,7 @@ impl NetworkClient for SolClient {
                     error!(target: "SOL BRIDGE SUBSCRIPTION","{}", e.to_string());
                 }
             })
-            .detach();
+        .detach();
 
         Ok(public_key)
     }
@@ -555,11 +589,12 @@ impl Decodable for Keypair {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = Keypair::from_bytes(key.as_slice()).map_err(|_| {
-            crate::Error::from(SolFailed::DecodeAndEncodeError("load keypair from slice".into()))
+            darkfi::Error::from(SolFailed::DecodeAndEncodeError("load keypair from slice".into()))
         })?;
         Ok(key)
     }
 }
+
 
 impl Encodable for Pubkey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
@@ -573,7 +608,7 @@ impl Decodable for Pubkey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
         let key = Pubkey::try_from(key.as_str()).map_err(|_| {
-            crate::Error::from(SolFailed::DecodeAndEncodeError("load public key from slice".into()))
+            darkfi::Error::from(SolFailed::DecodeAndEncodeError("load public key from slice".into()))
         })?;
         Ok(key)
     }
@@ -608,7 +643,7 @@ pub enum SolFailed {
     #[error("Signature Error: `{0}`")]
     Signature(String),
     #[error(transparent)]
-    Darkfi(#[from] crate::error::Error),
+    Darkfi(#[from] darkfi::error::Error),
 }
 
 pub type SolResult<T> = std::result::Result<T, SolFailed>;

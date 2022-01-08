@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [lib]
-name = "drk"
+name = "darkfi"
 
 [dependencies.halo2_gadgets]
 git = "https://github.com/parazyd/halo2_gadgets.git"
@@ -84,43 +84,13 @@ libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"]}
 # Used for gatewayd network transport.
 zeromq = {version = "0.3.1", default-features = false, features = ["async-std-runtime", "all-transport"]}
 
-# Cashier Bitcoin dependencies
-bdk = {version = "0.14.0", optional = true}
-bitcoin = {version = "0.27.1", optional = true}
-secp256k1 = {version = "0.20.3", default-features = false, features = ["rand-std"], optional = true}
-
-# Cashier Ethereum dependencies
-hash-db = {version = "0.15.2", optional = true}
-keccak-hasher = {version = "0.15.3", optional = true}
-
-# Cashier Solana dependencies
-solana-client = {version = "1.8.11", optional = true}
-solana-sdk = {version = "1.8.11", optional = true}
-spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
-spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
-
-# Darkpulse and tui dependencies
-aes-gcm = {version = "0.9.4", optional = true}
-chrono = {version = "0.4.19", optional = true}
-rusqlite = {version = "0.26.3", optional = true}
+#tui dependencies
 crossbeam-channel = { version = "0.5.1", optional = true}
 libc = { version = "0.2.112", optional = true}
 termion = { version = "1.5.6", optional = true}
 
 [features]
-btc = ["bdk", "bitcoin", "secp256k1"]
-eth = ["keccak-hasher", "hash-db"]
-sol = ["solana-sdk", "solana-client", "spl-token", "spl-associated-token-account"]
-darkpulse = ["aes-gcm", "chrono","rusqlite"]
-tui = ["termion", "chrono","libc", "crossbeam-channel"]
-
-[[bin]]         
-name = "darkpulse"    
-required-features = ["darkpulse"]
-
-[[bin]]         
-name = "eth"    
-required-features = ["eth"]
+tui = ["termion", "libc", "crossbeam-channel"]
 
 [[bin]]         
 name = "tui_ex"    

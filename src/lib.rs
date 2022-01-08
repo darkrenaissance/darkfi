@@ -22,7 +22,4 @@ pub mod wallet;
 #[cfg(feature = "tui")]
 pub mod tui;
 
-#[cfg(feature = "darkpulse")]
-pub mod darkpulse;
-
 pub use crate::error::{Error, Result};

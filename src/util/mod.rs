@@ -10,7 +10,7 @@ pub use async_util::sleep;
 pub use loader::ContractLoader;
 pub use net_name::NetworkName;
 pub use parse::{assign_id, decode_base10, encode_base10, generate_id, generate_id2};
-pub use path::{expand_path, join_config_path};
+pub use path::{expand_path, join_config_path, load_keypair_to_str};
 pub use token_list::{DrkTokenList, TokenList};
 
 pub use address::Address;
