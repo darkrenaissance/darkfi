@@ -20,8 +20,8 @@ use crate::{
     },
     error::Result,
     impl_vec,
+    node::state,
     serial::{Decodable, Encodable, VarInt},
-    state,
     types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
 };
 

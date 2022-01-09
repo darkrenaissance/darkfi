@@ -1,11 +1,11 @@
 use std::{fs::*, path::PathBuf, time::Instant};
 
 use crate::{
-    circuit::MintContract,
     crypto::proof::{ProvingKey, VerifyingKey},
-    serial::Decodable,
-    vm, Result,
+    zk::{circuit::MintContract, vm},
 };
+
+use super::{serial::Decodable, Result};
 
 pub struct ContractLoader {}
 

@@ -10,6 +10,8 @@ use crate::{
     Error, Result,
 };
 
+pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
+
 // hash the external token ID and NetworkName param.
 // if fails, change the last 4 bytes and hash it again. keep repeating until it works.
 pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
@@ -81,7 +83,6 @@ pub fn assign_id(
     btc_tokenlist: &TokenList,
 ) -> Result<String> {
     match network {
-        #[cfg(feature = "sol")]
         NetworkName::Solana => {
             // (== 44) can represent a Solana base58 token mint address
             if token.len() == 44 {
@@ -91,7 +92,6 @@ pub fn assign_id(
                 symbol_to_id(&tok_lower, sol_tokenlist)
             }
         }
-        #[cfg(feature = "btc")]
         NetworkName::Bitcoin => {
             if token.len() == 34 {
                 Ok(token.to_string())
@@ -100,9 +100,7 @@ pub fn assign_id(
                 symbol_to_id(&tok_lower, btc_tokenlist)
             }
         }
-        #[cfg(feature = "eth")]
         NetworkName::Ethereum => {
-            use crate::service::eth::ETH_NATIVE_TOKEN_ID;
             // (== 42) can represent a erc20 token mint address
             if token.len() == 42 {
                 Ok(token.to_string())

@@ -1,17 +1,6 @@
-use std::{
-    net::{SocketAddr},
-};
+use std::net::SocketAddr;
 
-
-
-
-
-
-
-
-use drk::{
-    net, Result,
-};
+use darkfi::{net, Result};
 
 pub struct ProgramOptions {
     pub network_settings: net::Settings,
@@ -96,4 +85,3 @@ impl ProgramOptions {
         })
     }
 }
-

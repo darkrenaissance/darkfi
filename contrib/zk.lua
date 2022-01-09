@@ -23,7 +23,7 @@ local keyword = token(l.KEYWORD, word_match{
 -- Types.
 local type = token(l.TYPE, word_match{
   'EcPoint', 'EcFixedPoint', 'Base', 'BaseArray',
-  'Scalar', 'ScalarArray', 'MerklePath',
+  'Scalar', 'ScalarArray', 'MerklePath', 'Uint32',
 })
 
 -- Instructions.

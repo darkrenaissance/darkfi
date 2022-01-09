@@ -1,28 +1,26 @@
-pub mod async_serial;
-pub mod blockchain;
-pub mod circuit;
 pub mod cli;
-pub mod client;
 pub mod crypto;
-pub mod endian;
-pub mod error;
 pub mod net;
-pub mod rpc;
-pub mod serial;
-pub mod service;
-pub mod state;
 pub mod system;
-pub mod tx;
 pub mod types;
-pub mod util;
-pub mod vm;
-pub mod vm_serial;
-pub mod wallet;
+pub mod zk;
+
+#[cfg(feature = "node")]
+pub mod node;
+
+#[cfg(feature = "node")]
+pub mod tx;
 
 #[cfg(feature = "tui")]
 pub mod tui;
 
-#[cfg(feature = "darkpulse")]
-pub mod darkpulse;
+#[cfg(feature = "chain")]
+pub mod chain;
 
-pub use crate::error::{Error, Result};
+pub mod util;
+
+pub use util::{
+    error,
+    error::{Error, Result},
+    serial,
+};

@@ -1,15 +1,10 @@
-use async_std::sync::Mutex;
-use std::{
-    sync::Arc,
-    collections::HashSet,
-};
-use log::debug;
 use async_executor::Executor;
-use drk::{
-    net, Result,
-};
+use async_std::sync::Mutex;
+use darkfi::{net, Result};
+use log::debug;
+use std::{collections::HashSet, sync::Arc};
 
-use crate::privmsg::{PrivMsgId, PrivMsg, SeenPrivMsgIdsPtr};
+use crate::privmsg::{PrivMsg, PrivMsgId, SeenPrivMsgIdsPtr};
 
 pub struct ProtocolPrivMsg {
     notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
@@ -76,4 +71,3 @@ impl ProtocolPrivMsg {
         }
     }
 }
-

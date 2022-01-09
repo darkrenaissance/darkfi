@@ -1,13 +1,10 @@
 use async_std::sync::Mutex;
-use std::{
-    collections::HashSet,
-    io,
-    sync::Arc,
-};
-use drk::{
+use darkfi::{
     net,
-    serial::{Decodable, Encodable}, Result,
+    serial::{Decodable, Encodable},
+    Result,
 };
+use std::{collections::HashSet, io, sync::Arc};
 
 pub type PrivMsgId = u32;
 
@@ -66,4 +63,3 @@ impl SeenPrivMsgIds {
         self.privmsg_ids.lock().await.contains(&id)
     }
 }
-
