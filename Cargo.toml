@@ -16,7 +16,14 @@ git = "https://github.com/parazyd/halo2_gadgets.git"
 rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 features = ["dev-graph", "test-dependencies"]
 
-
+# blockchain dependencies
+[dependencies.rocksdb]
+# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
+git = "https://github.com/parazyd/rust-rocksdb"
+rev = "bd966750ec861d687913d59a9939a1408ac53131"
+default-features = false
+features = ["zstd"]
+optional = true
 
 [dependencies]
 # Crypto
@@ -80,16 +87,6 @@ libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"],  optiona
 ## Used for gatewayd network transport.
 zeromq = {version = "0.3.1", default-features = false, features = ["async-std-runtime", "all-transport"],  optional = true }
 signal-hook-async-std = {version = "0.2.1", optional = true}
-
-# blockchain dependencies
-[dependencies.rocksdb]
-# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
-git = "https://github.com/parazyd/rust-rocksdb"
-rev = "bd966750ec861d687913d59a9939a1408ac53131"
-default-features = false
-features = ["zstd"]
-optional = true
-
 
 [features]
 blockchain = ["rocksdb"]
