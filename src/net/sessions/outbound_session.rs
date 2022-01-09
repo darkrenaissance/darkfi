@@ -1,5 +1,5 @@
 use async_executor::Executor;
-use async_std::sync::Mutex;
+use async_std::{sync::Mutex, task::yield_now};
 use log::*;
 use std::{
     net::SocketAddr,
@@ -111,9 +111,11 @@ impl OutboundSession {
     async fn load_address(&self, slot_number: u32) -> Result<SocketAddr> {
         let p2p = self.p2p();
         let hosts = p2p.hosts();
-        let inbound_addr = p2p.settings().inbound;
+        let self_inbound_addr = p2p.settings().external_addr;
 
         loop {
+            yield_now().await;
+
             let addr = hosts.load_single().await;
 
             if addr.is_none() {
@@ -122,7 +124,7 @@ impl OutboundSession {
             }
             let addr = addr.unwrap();
 
-            if Self::is_self_inbound(&addr, &inbound_addr) {
+            if Self::is_self_inbound(&addr, &self_inbound_addr) {
                 continue
             }
 

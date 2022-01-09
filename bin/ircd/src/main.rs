@@ -17,7 +17,7 @@ use smol::Async;
 
 use drk::{
     net,
-    util::expand_path,
+    util::{expand_path, sleep},
     rpc::{
         jsonrpc::{
             error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
@@ -109,13 +109,10 @@ async fn channel_loop(
     seen_privmsg_ids: SeenPrivMsgIdsPtr,
     executor: Arc<Executor<'_>>,
 ) -> Result<()> {
-    debug!("CHANNEL SUBS LOOP");
     let new_channel_sub = p2p.subscribe_channel().await;
 
     loop {
         let channel = new_channel_sub.receive().await?;
-
-        debug!("NEWCHANNEL");
 
         let protocol_privmsg = ProtocolPrivMsg::new(channel, sender.clone(), seen_privmsg_ids.clone(), p2p.clone()).await;
         protocol_privmsg.start(executor.clone()).await;
