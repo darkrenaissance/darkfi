@@ -12,7 +12,7 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
-    blockchain::{rocks::columns, Rocks, RocksColumn},
+    chain::{rocks::columns, Rocks, RocksColumn},
     cli::{CliDarkfid, Config, DarkfidConfig},
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},

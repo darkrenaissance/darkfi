@@ -16,8 +16,8 @@ pub mod tx;
 #[cfg(feature = "tui")]
 pub mod tui;
 
-#[cfg(feature = "blockchain")]
-pub mod blockchain;
+#[cfg(feature = "chain")]
+pub mod chain;
 
 pub mod util;
 

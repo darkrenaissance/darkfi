@@ -171,7 +171,7 @@ impl From<zeromq::ZmqError> for Error {
     }
 }
 
-#[cfg(feature = "blockchain")]
+#[cfg(feature = "chain")]
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())

@@ -2,7 +2,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use log::{debug, error};
 
 use crate::{
-    blockchain::{rocks::columns, RocksColumn},
+    chain::{rocks::columns, RocksColumn},
     crypto::{
         coin::Coin,
         keypair::{PublicKey, SecretKey},

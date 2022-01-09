@@ -10,7 +10,7 @@ use url::Url;
 
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{
-    blockchain::{rocks::columns, RocksColumn, Slab, SlabStore},
+    chain::{rocks::columns, RocksColumn, Slab, SlabStore},
     serial::{deserialize, serialize},
     Error, Result,
 };

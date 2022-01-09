@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
-    blockchain::{rocks::columns, Rocks, RocksColumn},
+    chain::{rocks::columns, Rocks, RocksColumn},
     cli::{CashierdConfig, CliCashierd, Config},
     crypto::{
         keypair::{PublicKey, SecretKey},
