@@ -26,7 +26,7 @@ fn main() -> std::result::Result<(), failure::Error> {
     let k: u32 = 11;
 
     let start = Instant::now();
-    let file = File::open("proof/mint.zk.bin")?;
+    let file = File::open("../proof/mint.zk.bin")?;
     let zkbin = vm::ZkBinary::decode(file)?;
     for contract_name in zkbin.contracts.keys() {
         println!("Loaded '{}' contract.", contract_name);

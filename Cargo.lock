@@ -941,6 +941,7 @@ dependencies = [
  "sha2",
  "signal-hook",
  "signal-hook-async-std",
+ "simplelog",
  "smol",
  "sqlx",
  "subtle",
@@ -2705,6 +2706,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "simplelog"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecabc0118918611790b8615670ab79296272cbe09496b6884b02b1e929c20886"
+dependencies = [
+ "chrono",
+ "log",
+ "termcolor",
 ]
 
 [[package]]

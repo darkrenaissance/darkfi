@@ -3,7 +3,7 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use async_executor::Executor;
 use clap::Parser;
 
-use drk::{net, Result};
+use darkfi::{net, Result};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings);

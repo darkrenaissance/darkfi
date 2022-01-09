@@ -67,7 +67,7 @@ lazy_static = "1.4.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
 signal-hook = "0.3.10"
-
+simplelog = "0.11.1"
 subtle = "2.4.1"
 thiserror = "1.0.30"
 
@@ -93,14 +93,29 @@ chain = ["rocksdb"]
 node = ["sqlx", "libsqlite3-sys", "zeromq", "signal-hook-async-std"]
 tui = ["termion", "libc", "crossbeam-channel"]
 
-[[bin]]         
-name = "tui_ex"    
-required-features = ["tui"]
-
-[[bin]]         
-name = "tx"    
-required-features = ["node"]
-
 [[example]]
 name = "net"
 path = "example/net.rs"
+required-features = ["node", "chain"]
+
+[[example]]
+name = "tui"
+path = "example/tui_ex.rs"
+required-features = ["tui"]
+
+[[example]]
+name = "vm"
+path = "example/vm.rs"
+
+[[example]]
+name = "vm_burn"
+path = "example/vm_burn.rs"
+
+[[example]]
+name = "tx"
+path = "example/tx.rs"
+required-features = ["node"]
+
+[[example]]
+name = "tree"
+path = "example/tree.rs"
