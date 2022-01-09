@@ -24,17 +24,17 @@ use darkfi::{
         state::{ProgramState, State},
         wallet::walletdb::WalletDb,
     },
-    rpc::{
-        jsonrpc::{
-            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
-            ErrorCode::*, JsonRequest, JsonResult,
-        },
-        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
-    },
     types::DrkTokenId,
     util::{
-        assign_id, decode_base10, encode_base10, expand_path, join_config_path, Address,
-        DrkTokenList, NetworkName, TokenList,
+        assign_id, decode_base10, encode_base10, expand_path, join_config_path,
+        rpc::{
+            jsonrpc::{
+                error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
+                ErrorCode::*, JsonRequest, JsonResult,
+            },
+            rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
+        },
+        Address, DrkTokenList, NetworkName, TokenList,
     },
     Error, Result,
 };

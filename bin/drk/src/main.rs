@@ -10,8 +10,12 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     cli::{CliDrk, CliDrkSubCommands, Config, DrkConfig},
-    rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::{join_config_path, path::expand_path, NetworkName},
+    util::{
+        join_config_path,
+        path::expand_path,
+        rpc::{jsonrpc, jsonrpc::JsonResult},
+        NetworkName,
+    },
     Error, Result,
 };
 
@@ -377,4 +381,3 @@ async fn main() -> Result<()> {
 
     start(&config, args).await
 }
-

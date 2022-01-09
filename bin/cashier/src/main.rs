@@ -23,13 +23,19 @@ use darkfi::{
         state::State,
         wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     },
-    rpc::{
-        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
-        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
-    },
     serial::serialize,
     types::DrkTokenId,
-    util::{expand_path, generate_id2, join_config_path, parse::truncate, Address, NetworkName},
+    util::{
+        expand_path, generate_id2, join_config_path,
+        parse::truncate,
+        rpc::{
+            jsonrpc::{
+                error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult,
+            },
+            rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
+        },
+        Address, NetworkName,
+    },
     Error, Result,
 };
 
