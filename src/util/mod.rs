@@ -7,9 +7,9 @@ pub mod loader;
 pub mod net_name;
 pub mod parse;
 pub mod path;
+pub mod rpc;
 pub mod serial;
 pub mod token_list;
-pub mod rpc;
 
 pub use async_util::sleep;
 pub use loader::ContractLoader;

@@ -12,7 +12,6 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    circuit::{MintContract, SpendContract},
     cli::{CashierdConfig, CliCashierd, Config},
     crypto::{
         keypair::{PublicKey, SecretKey},
@@ -36,6 +35,7 @@ use darkfi::{
         },
         Address, NetworkName,
     },
+    zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
 

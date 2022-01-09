@@ -1,4 +1,4 @@
-pub mod circuit;
+//pub mod circuit;
 pub mod cli;
 pub mod crypto;
 pub mod net;

@@ -18,13 +18,13 @@ use super::{
     util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
 };
 use crate::{
-    circuit::spend_contract::SpendContract,
     crypto::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
     },
     serial::{Decodable, Encodable},
     types::*,
+    zk::circuit::spend_contract::SpendContract,
     Result,
 };
 

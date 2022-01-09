@@ -12,7 +12,6 @@ use pasta_curves::{
 };
 
 use crate::{
-    circuit::mint_contract::MintContract,
     crypto::{
         coin::Coin,
         keypair::PublicKey,
@@ -21,6 +20,7 @@ use crate::{
     },
     serial::{Decodable, Encodable},
     types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
+    zk::circuit::mint_contract::MintContract,
     Result,
 };
 

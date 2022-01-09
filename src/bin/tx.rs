@@ -2,7 +2,6 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     crypto::{
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -14,6 +13,7 @@ use darkfi::{
     node::state::{state_transition, ProgramState, StateUpdate},
     tx,
     util::{generate_id2, NetworkName},
+    zk::circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     Result,
 };
 

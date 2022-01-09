@@ -13,7 +13,6 @@ use url::Url;
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    circuit::{MintContract, SpendContract},
     cli::{CliDarkfid, Config, DarkfidConfig},
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
@@ -36,6 +35,7 @@ use darkfi::{
         },
         Address, DrkTokenList, NetworkName, TokenList,
     },
+    zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
 

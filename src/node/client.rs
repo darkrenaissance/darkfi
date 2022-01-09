@@ -7,7 +7,6 @@ use url::Url;
 
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
-    circuit::{MintContract, SpendContract},
     crypto::{
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -19,6 +18,7 @@ use crate::{
     tx,
     types::DrkTokenId,
     util::Address,
+    zk::circuit::{MintContract, SpendContract},
     Result,
 };
 

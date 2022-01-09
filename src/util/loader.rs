@@ -1,9 +1,8 @@
 use std::{fs::*, path::PathBuf, time::Instant};
 
 use crate::{
-    circuit::MintContract,
     crypto::proof::{ProvingKey, VerifyingKey},
-    zk::vm,
+    zk::{circuit::MintContract, vm},
 };
 
 use super::{serial::Decodable, Result};
