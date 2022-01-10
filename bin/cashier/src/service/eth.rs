@@ -16,9 +16,13 @@ use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use darkfi::{
     crypto::keypair::PublicKey,
     node::wallet::cashierdb::{CashierDb, TokenKey},
-    rpc::{jsonrpc, jsonrpc::JsonResult},
     serial::{deserialize, serialize, Decodable, Encodable},
-    util::{generate_id2, parse::truncate, sleep, NetworkName},
+    util::{
+        generate_id2,
+        parse::truncate,
+        rpc::{jsonrpc, jsonrpc::JsonResult},
+        sleep, NetworkName,
+    },
     Error, Result,
 };
 
