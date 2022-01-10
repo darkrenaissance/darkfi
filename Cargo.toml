@@ -90,7 +90,7 @@ signal-hook-async-std = {version = "0.2.1", optional = true}
 
 [workspace]
 members = ["bin/drk", "bin/darkfid", "bin/gateway"]
-exclude = ["bin/cashier"]
+exclude = ["bin/cashier", "bin/ircd", "bin/map"]
 
 [features]
 chain = ["rocksdb"]
