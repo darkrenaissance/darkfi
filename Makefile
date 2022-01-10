@@ -7,7 +7,7 @@ PREFIX = /usr/local
 CARGO = cargo
 
 # Binaries to be built
-BINS = drk darkfid gatewayd
+BINS = drk darkfid gatewayd 
 
 # Dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -19,7 +19,7 @@ BINDEPS = \
 all: $(BINS)
 
 $(BINS): $(BINDEPS)
-	$(CARGO) build --release --all-features --bin $@
+	$(CARGO) build --workspace --release --all-features
 	cp -f target/release/$@ $@
 
 test:
