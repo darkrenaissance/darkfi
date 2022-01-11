@@ -43,10 +43,10 @@ use cashier::service::{bridge, bridge::Bridge};
 
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
-        1 => Err(Error::BridgeError("Not Supported Client".into())),
-        2 => Err(Error::BridgeError("Unable to watch the deposit address".into())),
-        3 => Err(Error::BridgeError("Unable to send the token".into())),
-        _ => Err(Error::BridgeError("Unknown error_code".into())),
+        1 => Err(Error::CashierError("Not Supported Client".into())),
+        2 => Err(Error::CashierError("Unable to watch the deposit address".into())),
+        3 => Err(Error::CashierError("Unable to send the token".into())),
+        _ => Err(Error::CashierError("Unknown error_code".into())),
     }
 }
 
@@ -123,7 +123,7 @@ impl Cashierd {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Adding solana network");
-                    use drk::service::SolClient;
+                    use cashier::service::SolClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -141,7 +141,7 @@ impl Cashierd {
                 NetworkName::Ethereum => {
                     debug!(target: "CASHIER DAEMON", "Adding ethereum network");
 
-                    use drk::service::EthClient;
+                    use cashier::service::EthClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -161,7 +161,7 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
-                    use drk::service::btc::BtcClient;
+                    use cashier::service::btc::BtcClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -292,7 +292,9 @@ impl Cashierd {
                         .await?;
                 }
                 _ => {
-                    return Err(Error::BridgeError("Receive unknown value from Subscription".into()))
+                    return Err(Error::CashierError(
+                        "Receive unknown value from Subscription".into(),
+                    ))
                 }
             }
         }
@@ -304,7 +306,7 @@ impl Cashierd {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
-                use drk::service::sol::SOL_NATIVE_TOKEN_ID;
+                use cashier::service::sol::SOL_NATIVE_TOKEN_ID;
                 if _token_id != SOL_NATIVE_TOKEN_ID {
                     return Ok(Some(_token_id.to_string()))
                 }
@@ -312,7 +314,7 @@ impl Cashierd {
             }
             #[cfg(feature = "eth")]
             NetworkName::Ethereum => {
-                use drk::service::eth::ETH_NATIVE_TOKEN_ID;
+                use cashier::service::eth::ETH_NATIVE_TOKEN_ID;
                 if _token_id != ETH_NATIVE_TOKEN_ID {
                     return Ok(Some(_token_id.to_string()))
                 }
@@ -438,7 +440,7 @@ impl Cashierd {
                     Ok(token_key.public_key)
                 }
                 bridge::BridgeResponsePayload::Address(token_pub) => Ok(token_pub),
-                _ => Err(Error::BridgeError("Receive unknown value from Subscription".into())),
+                _ => Err(Error::CashierError("Receive unknown value from Subscription".into())),
             }
         }
         .await;

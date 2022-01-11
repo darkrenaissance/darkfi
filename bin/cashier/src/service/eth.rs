@@ -546,6 +546,12 @@ impl From<serde_json::Error> for EthFailed {
     }
 }
 
+impl From<EthFailed> for Error {
+    fn from(error: EthFailed) -> Self {
+        Error::CashierError(error.to_string())
+    }
+}
+
 pub type EthResult<T> = std::result::Result<T, EthFailed>;
 
 #[allow(unused_imports)]

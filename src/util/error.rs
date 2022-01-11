@@ -17,6 +17,10 @@ pub enum Error {
     /// Parsing And Encode/Decode errors
     #[error("parse failed: `{0}`")]
     ParseFailed(&'static str),
+    #[error("decode failed: `{0}`")]
+    DecodeError(&'static str),
+    #[error("encode failed: `{0}`")]
+    EncodeError(&'static str),
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error(transparent)]
@@ -89,17 +93,8 @@ pub enum Error {
     ServicesError(&'static str),
     #[error("Client failed: `{0}`")]
     ClientFailed(String),
-    #[cfg(feature = "btc")]
-    #[error(transparent)]
-    BtcFailed(#[from] crate::service::BtcFailed),
-    #[cfg(feature = "sol")]
-    #[error("Sol client failed: `{0}`")]
-    SolFailed(String),
-    #[cfg(feature = "eth")]
-    #[error(transparent)]
-    EthFailed(#[from] crate::service::EthFailed),
-    #[error("BridgeError Error: `{0}`")]
-    BridgeError(String),
+    #[error("Cashier failed: `{0}`")]
+    CashierError(String),
     #[error("ZmqError: `{0}`")]
     ZmqError(String),
 
@@ -144,8 +139,6 @@ pub enum Error {
     ConfigNotFound,
     #[error("No keypair file detected.")]
     KeypairPathNotFound,
-    #[error("No cashier public keys detected.")]
-    CashierKeysNotFound,
     #[error("SetLoggerError")]
     SetLoggerError,
     #[error("Async_channel sender error")]
@@ -231,13 +224,6 @@ impl From<log::SetLoggerError> for Error {
 impl From<tungstenite::Error> for Error {
     fn from(err: tungstenite::Error) -> Error {
         Error::TungsteniteError(err.to_string())
-    }
-}
-
-#[cfg(feature = "sol")]
-impl From<crate::service::SolFailed> for Error {
-    fn from(err: crate::service::SolFailed) -> Error {
-        Error::SolFailed(err.to_string())
     }
 }
 

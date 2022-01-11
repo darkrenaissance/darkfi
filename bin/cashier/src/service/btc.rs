@@ -339,7 +339,7 @@ impl BtcClient {
                     .put_main_keys(
                         &TokenKey {
                             secret_key: serialize(&main_keypair),
-                            public_key: serialize(&main_keypair.pubkey()),
+                            public_key: serialize(&SecPublicKey(main_keypair.pubkey())),
                         },
                         &NetworkName::Bitcoin,
                     )
@@ -518,12 +518,13 @@ impl BtcClient {
         )?;
 
         let _txid = signed_tx.txid();
+        let signed_tx = BtcTransaction(signed_tx);
         let _serialized_tx = serialize(&signed_tx);
 
         info!(target: "BTC BRIDGE", "Signed tx: {:?}",
-            serialize_hex(&signed_tx));
+            serialize_hex(&signed_tx.0));
 
-        let txid = electrum.transaction_broadcast_raw(&signed_tx.serialize().to_vec())?;
+        let txid = electrum.transaction_broadcast_raw(&signed_tx.0.serialize().to_vec())?;
 
         info!(target: "BTC BRIDGE", "Sent {} satoshi to main wallet, txid: {}", amount, txid);
         Ok(())
@@ -595,7 +596,7 @@ impl NetworkClient for BtcClient {
     ) -> Result<()> {
         // address is not a btc address, so derive the btc address
         let electrum = &self.client.lock().await.electrum;
-        let public_key = deserialize(&address)?;
+        let public_key = deserialize::<SecPublicKey>(&address)?.0;
         let script_pubkey = Account::derive_btc_script_pubkey(public_key, self.network);
 
         let main_script_pubkey = &self.main_account.script_pubkey;
@@ -751,76 +752,84 @@ impl fmt::Display for ScriptStatus {
         }
     }
 }
-impl Encodable for bitcoin::Transaction {
+
+// Aliases
+pub struct BtcTransaction(bitcoin::Transaction);
+pub struct BtcAddress(bitcoin::Address);
+pub struct BtcPublicKey(bitcoin::PublicKey);
+pub struct BtcPrivateKey(bitcoin::PrivateKey);
+pub struct SecPublicKey(secp256k1::key::PublicKey);
+
+impl Encodable for BtcTransaction {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let tx = self.serialize();
+        let tx = self.0.serialize();
         let len = tx.encode(s)?;
         Ok(len)
     }
 }
-impl Encodable for bitcoin::Address {
+impl Encodable for BtcAddress {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let addr = self.to_string();
+        let addr = self.0.to_string();
         let len = addr.encode(s)?;
         Ok(len)
     }
 }
 
-impl Decodable for bitcoin::Address {
+impl Decodable for BtcAddress {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let addr: String = Decodable::decode(&mut d)?;
         let addr = bitcoin::Address::from_str(&addr)
             .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
-        Ok(addr)
+        Ok(BtcAddress(addr))
     }
 }
 
-impl Encodable for bitcoin::PublicKey {
+impl Encodable for BtcPublicKey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key = self.to_bytes();
+        let key = self.0.to_bytes();
         let len = key.encode(s)?;
         Ok(len)
     }
 }
 
-impl Decodable for bitcoin::PublicKey {
+impl Decodable for BtcPublicKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = bitcoin::PublicKey::from_slice(&key)
             .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
-        Ok(key)
+        Ok(BtcPublicKey(key))
     }
 }
 
-impl Encodable for bitcoin::PrivateKey {
+impl Encodable for BtcPrivateKey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key: String = self.to_string();
+        let key: String = self.0.to_string();
         let len = key.encode(s)?;
         Ok(len)
     }
 }
 
-impl Decodable for bitcoin::PrivateKey {
+impl Decodable for BtcPrivateKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
         let key = bitcoin::PrivateKey::from_str(&key)
             .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
-        Ok(key)
+        Ok(BtcPrivateKey(key))
     }
 }
-impl Encodable for secp256k1::key::PublicKey {
+impl Encodable for SecPublicKey {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
-        let key: Vec<u8> = self.serialize().to_vec();
+        let key: Vec<u8> = self.0.serialize().to_vec();
         let len = key.encode(s)?;
         Ok(len)
     }
 }
-impl Decodable for secp256k1::key::PublicKey {
+impl Decodable for SecPublicKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
         let key = secp256k1::key::PublicKey::from_slice(&key)
             .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
-        Ok(key)
+        Ok(SecPublicKey(key))
     }
 }
 // TODO: add secret + public keys together for Encodable
@@ -892,6 +901,12 @@ impl From<anyhow::Error> for BtcFailed {
     }
 }
 
+impl From<BtcFailed> for Error {
+    fn from(error: BtcFailed) -> Self {
+        Error::CashierError(error.to_string())
+    }
+}
+
 pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 
 #[cfg(test)]
@@ -903,7 +918,7 @@ mod tests {
 
     use darkfi::serial::{deserialize, serialize};
 
-    use super::Keypair;
+    use super::*;
 
     const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 
@@ -912,10 +927,12 @@ mod tests {
         let btc_addr =
             bitcoin::Address::from_str(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"))?;
 
-        let btc_ser = serialize(&btc_addr);
-        let btc_dser = deserialize(&btc_ser)?;
+        let btc_addr = BtcAddress(btc_addr);
 
-        assert_eq!(btc_addr, btc_dser);
+        let btc_ser = serialize(&btc_addr);
+        let btc_dser = deserialize::<BtcAddress>(&btc_ser)?.0;
+
+        assert_eq!(btc_addr.0, btc_dser);
 
         Ok(())
     }
