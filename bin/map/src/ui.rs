@@ -15,10 +15,10 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .nodes
         .iter()
         .map(|(id, info)| {
-            let line1 = vec![Spans::from(id.to_string())];
-            let line2 = vec![Spans::from(info.to_string())];
-            ListItem::new(line1).style(Style::default());
-            ListItem::new(line2).style(Style::default())
+            let line1 = Spans::from(id.to_string());
+            let line2 = Spans::from(info.to_string());
+
+            ListItem::new(vec![line1, line2]).style(Style::default())
         })
         .collect();
 
