@@ -1,19 +1,22 @@
+use crate::types::{NodeId, NodeInfo};
+use std::collections::HashMap;
 use tui::widgets::ListState;
 
-pub struct StatefulList<T> {
+#[derive(Clone)]
+pub struct StatefulList {
     pub state: ListState,
-    pub items: Vec<T>,
+    pub nodes: HashMap<NodeId, NodeInfo>,
 }
 
-impl<T> StatefulList<T> {
-    pub fn with_items(items: Vec<T>) -> StatefulList<T> {
-        StatefulList { state: ListState::default(), items }
+impl StatefulList {
+    pub fn new(nodes: HashMap<NodeId, NodeInfo>) -> StatefulList {
+        StatefulList { state: ListState::default(), nodes }
     }
 
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.nodes.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -28,7 +31,7 @@ impl<T> StatefulList<T> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.nodes.len() - 1
                 } else {
                     i - 1
                 }

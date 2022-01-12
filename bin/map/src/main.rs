@@ -11,6 +11,7 @@ use tui::{
 
 pub mod app;
 pub mod list;
+pub mod types;
 pub mod ui;
 
 use crate::app::App;
@@ -23,6 +24,7 @@ fn main() -> Result<(), io::Error> {
 
     // create app and run it
     let tick_rate = Duration::from_millis(250);
+    // here
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 
@@ -54,8 +56,8 @@ fn run_app<B: Backend>(
                     terminal.clear()?;
                     return Ok(())
                 }
-                Key::Char('j') => app.nodes.next(),
-                Key::Char('k') => app.nodes.previous(),
+                Key::Char('j') => app.node_list.next(),
+                Key::Char('k') => app.node_list.previous(),
                 _ => (),
             }
         }
