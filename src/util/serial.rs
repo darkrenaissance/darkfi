@@ -49,6 +49,8 @@ pub fn deserialize_partial<T: Decodable>(data: &[u8]) -> Result<(T, usize)> {
 
 /// Extensions of `Write` to encode data as per Bitcoin consensus
 pub trait WriteExt {
+    /// Output a platform-specific uint
+    fn write_usize(&mut self, v: usize) -> Result<()>;
     /// Output a 64-bit uint
     fn write_u64(&mut self, v: u64) -> Result<()>;
     /// Output a 32-bit uint
@@ -76,6 +78,8 @@ pub trait WriteExt {
 
 /// Extensions of `Read` to decode data as per Bitcoin consensus
 pub trait ReadExt {
+    /// Read a platform-specific uint
+    fn read_usize(&mut self) -> Result<usize>;
     /// Read a 64-bit uint
     fn read_u64(&mut self) -> Result<u64>;
     /// Read a 32-bit uint
@@ -123,6 +127,7 @@ macro_rules! decoder_fn {
 }
 
 impl<W: Write> WriteExt for W {
+    encoder_fn!(write_usize, usize, usize_to_array_le);
     encoder_fn!(write_u64, u64, u64_to_array_le);
     encoder_fn!(write_u32, u32, u32_to_array_le);
     encoder_fn!(write_u16, u16, u16_to_array_le);
@@ -149,6 +154,7 @@ impl<W: Write> WriteExt for W {
 }
 
 impl<R: Read> ReadExt for R {
+    decoder_fn!(read_usize, usize, slice_to_usize_le, usize::BITS as usize / 8);
     decoder_fn!(read_u64, u64, slice_to_u64_le, 8);
     decoder_fn!(read_u32, u32, slice_to_u32_le, 4);
     decoder_fn!(read_u16, u16, slice_to_u16_le, 2);
@@ -218,6 +224,7 @@ impl_int_encodable!(u8, read_u8, write_u8);
 impl_int_encodable!(u16, read_u16, write_u16);
 impl_int_encodable!(u32, read_u32, write_u32);
 impl_int_encodable!(u64, read_u64, write_u64);
+impl_int_encodable!(usize, read_usize, write_usize);
 impl_int_encodable!(i8, read_i8, write_i8);
 impl_int_encodable!(i16, read_i16, write_i16);
 impl_int_encodable!(i32, read_i32, write_i32);
