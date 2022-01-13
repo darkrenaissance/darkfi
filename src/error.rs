@@ -32,7 +32,7 @@ pub enum Error {
     // ParseFloatError(#[from] std::num::ParseFloatError),
     // #[error(transparent)]
     // FromHexError(#[from] hex::FromHexError),
-    #[cfg(feature = "rpc")]
+    #[cfg(any(feature = "rpc", feature = "node"))]
     #[error("Url parse error `{0}`")]
     UrlParseError(String),
 
@@ -52,8 +52,8 @@ pub enum Error {
 
     // #[error("TryInto error")]
     // TryIntoError,
-    // #[error("TryFrom error")]
-    // TryFromError,
+    #[error("TryFrom error")]
+    TryFromError,
     // #[error(transparent)]
     // TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
     #[cfg(feature = "util")]
@@ -66,8 +66,9 @@ pub enum Error {
 
     // #[error(transparent)]
     // TomlSerializeError(#[from] toml::ser::Error),
-    // #[error("Bincode serialization error: `{0}`")]
-    // BincodeError(String),
+    #[cfg(feature = "util")]
+    #[error("Bincode serialization error: `{0}`")]
+    BincodeError(String),
 
     // /// Contract
     // #[error("Bad variable ref type byte")]
@@ -92,28 +93,29 @@ pub enum Error {
     #[error("Unable to decrypt mint note")]
     NoteDecryptionFailed,
 
-    // #[cfg(feature = "node")]
-    // #[error(transparent)]
-    // VerifyFailed(#[from] crate::node::state::VerifyFailed),
+    #[cfg(feature = "node")]
+    #[error(transparent)]
+    VerifyFailed(#[from] crate::node::state::VerifyFailed),
     // #[error("MerkleTree is full")]
     // TreeFull,
-
-    // /// Service
-    // #[error("Services Error: `{0}`")]
-    // ServicesError(&'static str),
-    // #[error("Client failed: `{0}`")]
-    // ClientFailed(String),
+    #[error("Services Error: `{0}`")]
+    ServicesError(&'static str),
+    #[error("Client failed: `{0}`")]
+    ClientFailed(String),
     // #[error("Cashier failed: `{0}`")]
     // CashierError(String),
-    // #[error("ZmqError: `{0}`")]
-    // ZmqError(String),
+    #[error("ZmqError: `{0}`")]
+    ZmqError(String),
     #[cfg(feature = "chain")]
     #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
-    // #[error("sqlx error: `{0}`")]
-    // SqlxError(String),
-    // #[error("SlabsStore Error: `{0}`")]
-    // SlabsStore(String),
+
+    #[cfg(feature = "node")]
+    #[error("sqlx error: `{0}`")]
+    SqlxError(String),
+    #[cfg(feature = "node")]
+    #[error("SlabsStore Error: `{0}`")]
+    SlabsStore(String),
 
     // /// RPC errors
     // #[error("JsonRpc Error: `{0}`")]
@@ -160,10 +162,12 @@ pub enum Error {
     KeypairPathNotFound,
     // #[error("SetLoggerError")]
     // SetLoggerError,
-    // #[error("Async_channel sender error")]
-    // AsyncChannelSenderError,
-    // #[error(transparent)]
-    // AsyncChannelReceiverError(#[from] async_channel::RecvError),
+    #[cfg(feature = "async-runtime")]
+    #[error("Async_channel sender error")]
+    AsyncChannelSenderError,
+    #[cfg(feature = "async-runtime")]
+    #[error(transparent)]
+    AsyncChannelReceiverError(#[from] async_channel::RecvError),
 
     // #[error("Error converting Address to PublicKey")]
     // AddressToPublicKeyError,
@@ -178,12 +182,12 @@ pub enum Error {
     InvalidAddress,
 }
 
-// #[cfg(feature = "node")]
-// impl From<zeromq::ZmqError> for Error {
-// fn from(err: zeromq::ZmqError) -> Error {
-// Error::ZmqError(err.to_string())
-// }
-// }
+#[cfg(feature = "node")]
+impl From<zeromq::ZmqError> for Error {
+    fn from(err: zeromq::ZmqError) -> Error {
+        Error::ZmqError(err.to_string())
+    }
+}
 
 #[cfg(feature = "chain")]
 impl From<rocksdb::Error> for Error {
@@ -192,12 +196,12 @@ impl From<rocksdb::Error> for Error {
     }
 }
 
-// #[cfg(feature = "node")]
-// impl From<sqlx::error::Error> for Error {
-// fn from(err: sqlx::error::Error) -> Error {
-// Error::SqlxError(err.to_string())
-// }
-// }
+#[cfg(feature = "node")]
+impl From<sqlx::error::Error> for Error {
+    fn from(err: sqlx::error::Error) -> Error {
+        Error::SqlxError(err.to_string())
+    }
+}
 
 #[cfg(feature = "util")]
 impl From<serde_json::Error> for Error {
@@ -212,11 +216,12 @@ impl From<std::io::Error> for Error {
     }
 }
 
-// impl<T> From<async_channel::SendError<T>> for Error {
-// fn from(_err: async_channel::SendError<T>) -> Error {
-// Error::AsyncChannelSenderError
-// }
-// }
+#[cfg(feature = "async-runtime")]
+impl<T> From<async_channel::SendError<T>> for Error {
+    fn from(_err: async_channel::SendError<T>) -> Error {
+        Error::AsyncChannelSenderError
+    }
+}
 
 #[cfg(feature = "async-net")]
 impl From<async_native_tls::Error> for Error {
@@ -232,12 +237,12 @@ impl From<url::ParseError> for Error {
     }
 }
 
-// #[cfg(feature = "node")]
-// impl From<crate::node::client::ClientFailed> for Error {
-// fn from(err: crate::node::client::ClientFailed) -> Error {
-// Error::ClientFailed(err.to_string())
-// }
-// }
+#[cfg(feature = "node")]
+impl From<crate::node::client::ClientFailed> for Error {
+    fn from(err: crate::node::client::ClientFailed) -> Error {
+        Error::ClientFailed(err.to_string())
+    }
+}
 
 // impl From<log::SetLoggerError> for Error {
 // fn from(_err: log::SetLoggerError) -> Error {
@@ -259,11 +264,12 @@ impl From<halo2::plonk::Error> for Error {
     }
 }
 
-// impl From<Box<bincode::ErrorKind>> for Error {
-// fn from(err: Box<bincode::ErrorKind>) -> Error {
-// Error::BincodeError(err.to_string())
-// }
-// }
+#[cfg(feature = "util")]
+impl From<Box<bincode::ErrorKind>> for Error {
+    fn from(err: Box<bincode::ErrorKind>) -> Error {
+        Error::BincodeError(err.to_string())
+    }
+}
 
 // impl From<std::convert::Infallible> for Error {
 // fn from(err: std::convert::Infallible) -> Error {

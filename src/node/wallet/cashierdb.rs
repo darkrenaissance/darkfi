@@ -14,9 +14,9 @@ use crate::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
+        types::DrkTokenId,
     },
     node::client::ClientFailed,
-    types::DrkTokenId,
     util::NetworkName,
     Error, Result,
 };

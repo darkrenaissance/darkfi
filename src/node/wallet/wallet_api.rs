@@ -1,5 +1,5 @@
 use crate::{
-    serial::{deserialize, serialize, Decodable, Encodable},
+    util::serial::{deserialize, serialize, Decodable, Encodable},
     Result,
 };
 

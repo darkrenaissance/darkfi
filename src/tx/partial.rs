@@ -2,11 +2,15 @@ use std::io;
 
 use super::TransactionOutput;
 use crate::{
-    crypto::{keypair::PublicKey, spend_proof::SpendRevealedValues, Proof},
+    crypto::{
+        keypair::PublicKey,
+        spend_proof::SpendRevealedValues,
+        types::{DrkTokenId, DrkValueBlind},
+        Proof,
+    },
     error::Result,
     impl_vec,
-    serial::{Decodable, Encodable, VarInt},
-    types::{DrkTokenId, DrkValueBlind},
+    util::serial::{Decodable, Encodable, VarInt},
 };
 
 pub struct PartialTransaction {

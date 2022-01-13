@@ -15,14 +15,14 @@ use crate::{
         schnorr,
         schnorr::SchnorrPublic,
         spend_proof::verify_spend_proof,
+        types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
         MintRevealedValues, SpendRevealedValues,
     },
     error::Result,
     impl_vec,
     node::state,
-    serial::{Decodable, Encodable, VarInt},
-    types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
+    util::serial::{Decodable, Encodable, VarInt},
 };
 
 pub use self::builder::{

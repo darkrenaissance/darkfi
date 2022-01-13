@@ -11,7 +11,7 @@ use url::Url;
 use super::reqrep::{PeerId, Publisher, RepProtocol, Reply, ReqProtocol, Request, Subscriber};
 use crate::{
     chain::{rocks::columns, RocksColumn, Slab, SlabStore},
-    serial::{deserialize, serialize},
+    util::serial::{deserialize, serialize},
     Error, Result,
 };
 

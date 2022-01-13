@@ -1,5 +1,6 @@
 *.pyc
 *.sage.py
+/Cargo.lock
 target/*
 /zkas/target
 /zkas/zkas

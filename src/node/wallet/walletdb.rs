@@ -16,11 +16,11 @@ use crate::{
         merkle_node::MerkleNode,
         note::Note,
         nullifier::Nullifier,
+        types::DrkTokenId,
         OwnCoin, OwnCoins,
     },
     node::client::ClientFailed,
-    serial::serialize,
-    types::DrkTokenId,
+    util::serial::serialize,
     Error, Result,
 };
 

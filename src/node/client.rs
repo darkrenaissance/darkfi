@@ -8,16 +8,16 @@ use url::Url;
 use crate::{
     chain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
+        address::Address,
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
+        types::DrkTokenId,
         OwnCoin,
     },
-    serial::{Decodable, Encodable},
     tx,
-    types::DrkTokenId,
-    util::Address,
+    util::serial::{Decodable, Encodable},
     zk::circuit::{MintContract, SpendContract},
     Result,
 };

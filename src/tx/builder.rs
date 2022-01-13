@@ -14,9 +14,9 @@ use crate::{
         proof::ProvingKey,
         schnorr::SchnorrSecret,
         spend_proof::create_spend_proof,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
-    serial::Encodable,
-    types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+    util::serial::Encodable,
     Result,
 };
 
