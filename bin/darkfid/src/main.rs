@@ -12,29 +12,28 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
-    chain::{rocks::columns, Rocks, RocksColumn},
+    blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CliDarkfid, Config, DarkfidConfig},
     crypto::{
+        address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
         proof::VerifyingKey,
+        token_list::{assign_id, DrkTokenList, TokenList},
+        types::DrkTokenId,
     },
     node::{
         client::Client,
         state::{ProgramState, State},
         wallet::walletdb::WalletDb,
     },
-    types::DrkTokenId,
-    util::{
-        assign_id, decode_base10, encode_base10, expand_path, join_config_path,
-        rpc::{
-            jsonrpc::{
-                error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
-                ErrorCode::*, JsonRequest, JsonResult,
-            },
-            rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
+    rpc::{
+        jsonrpc::{
+            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
+            ErrorCode::*, JsonRequest, JsonResult,
         },
-        Address, DrkTokenList, NetworkName, TokenList,
+        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
+    util::{decode_base10, encode_base10, expand_path, join_config_path, NetworkName},
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };

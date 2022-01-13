@@ -12,6 +12,7 @@ pub mod proof;
 pub mod schnorr;
 pub mod spend_proof;
 pub mod token_id;
+pub mod token_list;
 pub mod types;
 pub mod util;
 

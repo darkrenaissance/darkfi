@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::{
-    types::DrkTokenId,
-    util::{generate_id2, NetworkName},
+    crypto::{token_id::generate_id2, types::DrkTokenId},
+    util::NetworkName,
     Error, Result,
 };
 

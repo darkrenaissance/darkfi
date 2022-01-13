@@ -18,10 +18,10 @@ pub enum Error {
     #[cfg(feature = "util")]
     #[error("parse failed: `{0}`")]
     ParseFailed(&'static str),
-    // #[error("decode failed: `{0}`")]
-    // DecodeError(&'static str),
-    // #[error("encode failed: `{0}`")]
-    // EncodeError(&'static str),
+    #[error("decode failed: `{0}`")]
+    DecodeError(&'static str),
+    #[error("encode failed: `{0}`")]
+    EncodeError(&'static str),
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
 
@@ -56,8 +56,11 @@ pub enum Error {
     // TryIntoError,
     #[error("TryFrom error")]
     TryFromError,
-    // #[error(transparent)]
-    // TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
+
+    #[cfg(feature = "util")]
+    #[error(transparent)]
+    TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
+
     #[cfg(feature = "util")]
     #[error("Json serialization error: `{0}`")]
     SerdeJsonError(String),
@@ -104,8 +107,8 @@ pub enum Error {
     ServicesError(&'static str),
     #[error("Client failed: `{0}`")]
     ClientFailed(String),
-    // #[error("Cashier failed: `{0}`")]
-    // CashierError(String),
+    #[error("Cashier failed: `{0}`")]
+    CashierError(String),
     #[error("ZmqError: `{0}`")]
     ZmqError(String),
     #[cfg(feature = "blockchain")]
@@ -162,8 +165,11 @@ pub enum Error {
     #[cfg(feature = "util")]
     #[error("No keypair file detected.")]
     KeypairPathNotFound,
-    // #[error("SetLoggerError")]
-    // SetLoggerError,
+    #[error("No cashier public keys detected.")]
+    CashierKeysNotFound,
+
+    #[error("SetLoggerError")]
+    SetLoggerError,
     #[cfg(feature = "async-runtime")]
     #[error("Async_channel sender error")]
     AsyncChannelSenderError,
@@ -246,11 +252,11 @@ impl From<crate::node::client::ClientFailed> for Error {
     }
 }
 
-// impl From<log::SetLoggerError> for Error {
-// fn from(_err: log::SetLoggerError) -> Error {
-// Error::SetLoggerError
-// }
-// }
+impl From<log::SetLoggerError> for Error {
+    fn from(_err: log::SetLoggerError) -> Error {
+        Error::SetLoggerError
+    }
+}
 
 #[cfg(feature = "websockets")]
 impl From<tungstenite::Error> for Error {
