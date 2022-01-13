@@ -30,10 +30,12 @@ native-tls = {version = "0.2.8", optional = true}
 
 # Encoding
 hex = {version = "0.4.3", optional = true}
+toml = {version = "0.5.8", optional = true}
 serde = {version = "1.0.133", features = ["derive"], optional = true}
 serde_json = {version = "1.0.74", optional = true}
 
 # Utilities
+clap = {version = "3.0.7", features = ["derive"], optional = true}
 dirs = {version = "4.0.0", optional = true}
 url = {version = "2.2.2", optional = true}
 
@@ -58,11 +60,13 @@ optional = true
 async-runtime = ["async-std", "async-channel", "async-executor", "async-trait", "futures", "smol"]
 async-net = ["async-native-tls", "native-tls"]
 websockets = ["tungstenite", "async-tungstenite"]
-util = ["async-runtime", "hex", "serde", "serde_json", "dirs", "num-bigint"]
-rpc = ["async-net", "util", "websockets", "url"]
-chain = ["rocksdb", "util"]
+util = ["hex", "serde", "serde_json", "dirs", "num-bigint"]
+rpc = ["async-runtime", "async-net", "util", "websockets", "url"]
+chain = ["async-runtime", "rocksdb", "util"]
 tui = ["async-std", "termion"]
 system = ["async-runtime"]
+cli = ["toml", "serde", "clap", "util"]
+net = ["async-runtime", "util", "system"]
 
 # [dependencies.halo2_gadgets]
 # git = "https://github.com/parazyd/halo2_gadgets.git"

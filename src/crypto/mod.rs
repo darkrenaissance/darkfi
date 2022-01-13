@@ -10,6 +10,7 @@ pub mod nullifier;
 pub mod proof;
 pub mod schnorr;
 pub mod spend_proof;
+pub mod types;
 pub mod util;
 
 pub(crate) use mint_proof::MintRevealedValues;

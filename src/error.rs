@@ -38,8 +38,6 @@ pub enum Error {
 
     #[error("No url found")]
     NoUrlFound,
-    // #[error("Malformed packet")]
-    // MalformedPacket,
     // #[error(transparent)]
     // AddrParseError(#[from] std::net::AddrParseError),
     // #[error(transparent)]
@@ -61,8 +59,11 @@ pub enum Error {
     #[cfg(feature = "util")]
     #[error("Json serialization error: `{0}`")]
     SerdeJsonError(String),
-    // #[error(transparent)]
-    // TomlDeserializeError(#[from] toml::de::Error),
+
+    #[cfg(feature = "cli")]
+    #[error(transparent)]
+    TomlDeserializeError(#[from] toml::de::Error),
+
     // #[error(transparent)]
     // TomlSerializeError(#[from] toml::ser::Error),
     // #[error("Bincode serialization error: `{0}`")]
@@ -83,8 +84,6 @@ pub enum Error {
     // MissingParams,
     // #[error("Contract is poorly defined")]
     // BadContract,
-    // #[error("Operation failed")]
-    // OperationFailed,
     // #[error("PLONK error: `{0}`")]
     // PlonkError(String),
     // #[error("Unable to decrypt mint note")]
@@ -135,21 +134,24 @@ pub enum Error {
     #[error("TungsteniteError: `{0}`")]
     TungsteniteError(String),
 
-    // /// Network
-    // #[error("Connection failed")]
-    // ConnectFailed,
-    // #[error("Connection timed out")]
-    // ConnectTimeout,
-    // #[error("Channel stopped")]
-    // ChannelStopped,
-    // #[error("Channel timed out")]
-    // ChannelTimeout,
-    // #[error("Service stopped")]
-    // ServiceStopped,
+    #[error("Connection failed")]
+    ConnectFailed,
+    #[error("Connection timed out")]
+    ConnectTimeout,
+    #[error("Channel stopped")]
+    ChannelStopped,
+    #[error("Channel timed out")]
+    ChannelTimeout,
+    #[error("Service stopped")]
+    ServiceStopped,
+    #[error("Operation failed")]
+    OperationFailed,
+    #[error("Malformed packet")]
+    MalformedPacket,
 
-    // /// Util
-    // #[error("No config file detected. Please create one.")]
-    // ConfigNotFound,
+    #[error("No config file detected. Please create one.")]
+    ConfigNotFound,
+
     #[cfg(feature = "util")]
     #[error("No keypair file detected.")]
     KeypairPathNotFound,

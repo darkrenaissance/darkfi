@@ -5,9 +5,9 @@ use rand::Rng;
 use std::{any::Any, collections::HashMap, io, io::Cursor, sync::Arc};
 
 use crate::{
-    error::{Error, Result},
     net::messages::Message,
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
+    Error, Result,
 };
 
 /// 64bit identifier for message subscription.

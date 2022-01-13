@@ -3,8 +3,8 @@ use log::*;
 use std::{io, net::SocketAddr};
 
 use crate::{
-    error::{Error, Result},
-    serial::{Decodable, Encodable, VarInt},
+    util::serial::{Decodable, Encodable, VarInt},
+    Error, Result,
 };
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
