@@ -3,7 +3,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
     Result,
 };
 

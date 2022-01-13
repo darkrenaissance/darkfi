@@ -8,10 +8,8 @@ use std::{
 
 use num_bigint::BigUint;
 
-use super::{
-    endian,
-    error::{Error, Result},
-};
+use super::endian;
+use crate::{Error, Result};
 
 /// Encode an object into a vector
 pub fn serialize<T: Encodable + ?Sized>(data: &T) -> Vec<u8> {

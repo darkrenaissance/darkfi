@@ -8,6 +8,8 @@ use crate::{
     Error, Result,
 };
 
+pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
+
 #[derive(Debug, Clone)]
 pub struct TokenList {
     tokens: Vec<Value>,
@@ -116,6 +118,65 @@ impl DrkTokenList {
         }
 
         Ok(None)
+    }
+}
+
+pub fn assign_id(
+    network: &NetworkName,
+    token: &str,
+    sol_tokenlist: &TokenList,
+    eth_tokenlist: &TokenList,
+    btc_tokenlist: &TokenList,
+) -> Result<String> {
+    match network {
+        NetworkName::Solana => {
+            // (== 44) can represent a Solana base58 token mint address
+            if token.len() == 44 {
+                Ok(token.to_string())
+            } else {
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, sol_tokenlist)
+            }
+        }
+        NetworkName::Bitcoin => {
+            if token.len() == 34 {
+                Ok(token.to_string())
+            } else {
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, btc_tokenlist)
+            }
+        }
+        NetworkName::Ethereum => {
+            // (== 42) can represent a erc20 token mint address
+            if token.len() == 42 {
+                Ok(token.to_string())
+            } else if token == "eth" {
+                Ok(ETH_NATIVE_TOKEN_ID.to_string())
+            } else {
+                let tok_lower = token.to_lowercase();
+                symbol_to_id(&tok_lower, eth_tokenlist)
+            }
+        }
+        _ => Err(Error::NotSupportedNetwork),
+    }
+}
+
+pub fn symbol_to_id(token: &str, tokenlist: &TokenList) -> Result<String> {
+    let vec: Vec<char> = token.chars().collect();
+    let mut counter = 0;
+    for c in vec {
+        if c.is_alphabetic() {
+            counter += 1;
+        }
+    }
+    if counter == token.len() {
+        if let Some(id) = tokenlist.search_id(token)? {
+            Ok(id)
+        } else {
+            Err(Error::TokenParseError)
+        }
+    } else {
+        Ok(token.to_string())
     }
 }
 
