@@ -145,7 +145,7 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
             fs::create_dir_all(parent)?;
         }
 
-        let mut file = fs::File::create(path.clone())?;
+        let mut file = fs::File::create(path)?;
         file.write_all(contents)?;
         println!("Config file created in `{:?}`. Please review it and try again.", path);
         std::process::exit(2);
