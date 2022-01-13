@@ -47,6 +47,7 @@ impl App {
         node_info
     }
 
+    // every 5 seconds
     // TODO: implement this
     //fn update(&mut self) {
     //    let node = self.node.remove(0);

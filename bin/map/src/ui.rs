@@ -15,7 +15,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -49,23 +49,23 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         info_vec.push(Spans::from(val.to_string()))
     }
 
-    let info: Vec<ListItem> = app
-        .node_list
-        .nodes
-        .values()
-        //.iter()
-        .map(|i| {
-            let line2 = Spans::from(i.to_string());
-            ListItem::new(vec![line2]).style(Style::default())
-        })
-        .collect();
+    //let info: Vec<ListItem> = app
+    //    .node_list
+    //    .nodes
+    //    .values()
+    //    //.iter()
+    //    .map(|i| {
+    //        let line2 = Spans::from(i.to_string());
+    //        ListItem::new(vec![line2]).style(Style::default())
+    //    })
+    //    .collect();
 
     let graph = Paragraph::new(info_vec).block(Block::default()).style(Style::default());
 
-    let info = List::new(info)
-        .block(Block::default())
-        .highlight_style(Style::default().bg(Color::Black).add_modifier(Modifier::BOLD))
-        .highlight_symbol(">> ");
+    //let info = List::new(info)
+    //    .block(Block::default())
+    //    .highlight_style(Style::default().bg(Color::Black).add_modifier(Modifier::BOLD))
+    //    .highlight_symbol(">> ");
 
     //if app.show_popup {
     //    let block = Block::default().title("Popup").borders(Borders::ALL);
