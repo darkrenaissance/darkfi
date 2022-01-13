@@ -11,7 +11,18 @@ edition = "2021"
 [lib]
 name = "darkfi"
 
+[workspace]
+members = [
+    "bin/cashierd",
+    "bin/darkfid",
+    "bin/drk",
+    "bin/gatewayd",
+    "bin/ircd",
+    #"bin/map",
+]
+
 [dependencies]
+# Hard dependencies
 log = "0.4.14"
 thiserror = "1.0.30"
 

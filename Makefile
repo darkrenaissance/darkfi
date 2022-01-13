@@ -12,6 +12,8 @@ BINS = drk darkfid gatewayd
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
 	Cargo.toml \
+	$(shell find bin/*/src -type f) \
+	$(shell find bin -type f -name Cargo.toml) \
 	$(shell find src -type f) \
 	$(shell find sql -type f) \
 	$(shell find contrib/token -type f)
@@ -19,20 +21,21 @@ BINDEPS = \
 all: $(BINS)
 
 $(BINS): $(BINDEPS)
-	$(MAKE) -C bin/$@
-	cp -f bin/$@/$@ $@
+	$(CARGO) build --all-features --release --package $@
+	cp -f target/release/$@ $@
 
 check:
-	$(CARGO) hack check --release --feature-powerset --no-dev-deps
+	$(CARGO) hack check --release --feature-powerset --all
 
 fix:
-	$(CARGO) clippy --release --all-features --fix --allow-dirty
+	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
 clippy:
-	$(CARGO) clippy --release --all-features
+	$(CARGO) clippy --release --all-features --all
 
 test:
-	$(CARGO) test --release --all-features
+	$(CARGO) test --release --all-features --all
+	$(CARGO) run --release --features=node --example tx
 
 clean:
 	rm -f $(BINS)
