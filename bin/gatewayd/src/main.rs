@@ -7,7 +7,7 @@ use log::debug;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
-    chain::{rocks::columns, Rocks, RocksColumn},
+    blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CliGatewayd, Config, GatewaydConfig},
     node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
