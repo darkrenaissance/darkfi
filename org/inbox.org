@@ -1,2 +1,0 @@
-* TODO Evaluate p2p chat matrix replacement
-* TODO sollet btc / btc has same interface on drk
