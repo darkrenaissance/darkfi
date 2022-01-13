@@ -8,20 +8,20 @@ pub enum Error {
     #[error("Infallible Error: `{0}`")]
     InfallibleError(String),
 
-    // #[error("Cannot find home directory")]
-    // PathNotFound,
     #[cfg(feature = "util")]
-    /// VarInt was encoded in a non-minimal way
-    #[error("non-minimal varint")]
+    #[error("VarInt was encoded in a non-minimal way")]
     NonMinimalVarInt,
 
     #[cfg(feature = "util")]
     #[error("parse failed: `{0}`")]
     ParseFailed(&'static str),
+
     #[error("decode failed: `{0}`")]
     DecodeError(&'static str),
+
     #[error("encode failed: `{0}`")]
     EncodeError(&'static str),
+
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
 
@@ -29,10 +29,6 @@ pub enum Error {
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
 
-    // #[error(transparent)]
-    // ParseFloatError(#[from] std::num::ParseFloatError),
-    // #[error(transparent)]
-    // FromHexError(#[from] hex::FromHexError),
     #[cfg(any(feature = "rpc", feature = "node"))]
     #[error("Url parse error `{0}`")]
     UrlParseError(String),
@@ -42,18 +38,13 @@ pub enum Error {
 
     #[error(transparent)]
     AddrParseError(#[from] std::net::AddrParseError),
-    // #[error(transparent)]
-    // Base58EncodeError(#[from] bs58::encode::Error),
-    // #[error(transparent)]
-    // Base58DecodeError(#[from] bs58::decode::Error),
+
     #[error(transparent)]
     Utf8Error(#[from] std::string::FromUtf8Error),
 
     #[error(transparent)]
     StrUtf8Error(#[from] std::str::Utf8Error),
 
-    // #[error("TryInto error")]
-    // TryIntoError,
     #[error("TryFrom error")]
     TryFromError,
 
@@ -69,29 +60,22 @@ pub enum Error {
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
 
-    // #[error(transparent)]
-    // TomlSerializeError(#[from] toml::ser::Error),
     #[cfg(feature = "util")]
     #[error("Bincode serialization error: `{0}`")]
     BincodeError(String),
 
-    // /// Contract
-    // #[error("Bad variable ref type byte")]
-    // BadVariableRefType,
     #[error("Bad operation type byte")]
     BadOperationType,
-    // #[error("Bad constraint type byte")]
-    // BadConstraintType,
+
     #[error("Invalid param name")]
     InvalidParamName,
+
     #[error("Invalid param type")]
     InvalidParamType,
 
     #[error("Missing params")]
     MissingParams,
 
-    // #[error("Contract is poorly defined")]
-    // BadContract,
     #[cfg(feature = "crypto")]
     #[error("PLONK error: `{0}`")]
     PlonkError(String),
@@ -103,16 +87,19 @@ pub enum Error {
     #[cfg(feature = "node")]
     #[error(transparent)]
     VerifyFailed(#[from] crate::node::state::VerifyFailed),
-    // #[error("MerkleTree is full")]
-    // TreeFull,
+
     #[error("Services Error: `{0}`")]
     ServicesError(&'static str),
+
     #[error("Client failed: `{0}`")]
     ClientFailed(String),
+
     #[error("Cashier failed: `{0}`")]
     CashierError(String),
+
     #[error("ZmqError: `{0}`")]
     ZmqError(String),
+
     #[cfg(feature = "blockchain")]
     #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
@@ -120,6 +107,7 @@ pub enum Error {
     #[cfg(feature = "node")]
     #[error("sqlx error: `{0}`")]
     SqlxError(String),
+
     #[cfg(feature = "node")]
     #[error("SlabsStore Error: `{0}`")]
     SlabsStore(String),
@@ -136,8 +124,6 @@ pub enum Error {
     #[error("Could not parse token parameter")]
     TokenParseError,
 
-    // #[error("Cannot parse network parameter")]
-    // NetworkParseError,
     #[cfg(feature = "async-net")]
     #[error("Async_Native_TLS error: `{0}`")]
     AsyncNativeTlsError(String),
@@ -148,16 +134,22 @@ pub enum Error {
 
     #[error("Connection failed")]
     ConnectFailed,
+
     #[error("Connection timed out")]
     ConnectTimeout,
+
     #[error("Channel stopped")]
     ChannelStopped,
+
     #[error("Channel timed out")]
     ChannelTimeout,
+
     #[error("Service stopped")]
     ServiceStopped,
+
     #[error("Operation failed")]
     OperationFailed,
+
     #[error("Malformed packet")]
     MalformedPacket,
 
@@ -167,26 +159,29 @@ pub enum Error {
     #[cfg(feature = "util")]
     #[error("No keypair file detected.")]
     KeypairPathNotFound,
+
     #[error("No cashier public keys detected.")]
     CashierKeysNotFound,
 
     #[error("SetLoggerError")]
     SetLoggerError,
+
     #[cfg(feature = "async-runtime")]
     #[error("Async_channel sender error")]
     AsyncChannelSenderError,
+
     #[cfg(feature = "async-runtime")]
     #[error(transparent)]
     AsyncChannelReceiverError(#[from] async_channel::RecvError),
 
-    // #[error("Error converting Address to PublicKey")]
-    // AddressToPublicKeyError,
     #[cfg(feature = "crypto")]
     #[error("Error converting bytes to PublicKey")]
     PublicKeyFromBytes,
+
     #[cfg(feature = "crypto")]
     #[error("Error converting bytes to SecretKey")]
     SecretKeyFromBytes,
+
     #[cfg(feature = "crypto")]
     #[error("Invalid Address")]
     InvalidAddress,
