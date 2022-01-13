@@ -1,5 +1,6 @@
 use std::{io, io::Write, process, str::Chars};
 
+use darkfi::util::serial::{serialize, VarInt};
 use termion::{color, style};
 
 use crate::ast::{Constants, StatementType, Statements, Witnesses};
@@ -33,7 +34,6 @@ impl Compiler {
         Compiler { file: filename.to_string(), lines, constants, witnesses, statements, debug_info }
     }
 
-    // TODO: varint encoding
     pub fn compile(&self) -> Vec<u8> {
         let mut bincode = vec![];
 
@@ -50,7 +50,7 @@ impl Compiler {
         for i in &self.constants {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
-            bincode.extend_from_slice(&stack_idx.to_le_bytes());
+            bincode.extend_from_slice(&serialize(&VarInt(stack_idx)));
             bincode.extend_from_slice(i.name.as_bytes());
             stack_idx += 1;
         }
@@ -75,11 +75,11 @@ impl Compiler {
             }
 
             bincode.push(i.opcode as u8);
-            bincode.extend_from_slice(&i.args.len().to_le_bytes());
+            bincode.extend_from_slice(&serialize(&VarInt(i.args.len() as u64)));
 
             for arg in &i.args {
                 if let Some(found) = Compiler::lookup_stack(&tmp_stack, &arg.name) {
-                    bincode.extend_from_slice(&found.to_le_bytes());
+                    bincode.extend_from_slice(&serialize(&VarInt(found)));
                     continue
                 }
 

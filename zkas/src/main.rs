@@ -56,7 +56,8 @@ fn main() -> Result<()> {
         !cli.strip,
     );
 
-    let _bincode = compiler.compile();
+    let bincode = compiler.compile();
+    println!("{:?}", bincode);
 
     Ok(())
 }
