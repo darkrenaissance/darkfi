@@ -18,6 +18,7 @@ thiserror = "1.0.30"
 
 # async-runtime
 async-std = {version = "1.10.0", optional = true}
+async-channel = {version = "1.6.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
 async-trait = {version = "0.1.52", optional = true}
 futures = {version = "0.3.19", optional = true}
@@ -54,13 +55,14 @@ features = ["zstd"]
 optional = true
 
 [features]
-async-runtime = ["async-std", "async-executor", "async-trait", "futures", "smol"]
+async-runtime = ["async-std", "async-channel", "async-executor", "async-trait", "futures", "smol"]
 async-net = ["async-native-tls", "native-tls"]
 websockets = ["tungstenite", "async-tungstenite"]
 util = ["async-runtime", "hex", "serde", "serde_json", "dirs", "num-bigint"]
 rpc = ["async-net", "util", "websockets", "url"]
 chain = ["rocksdb", "util"]
 tui = ["async-std", "termion"]
+system = ["async-runtime"]
 
 # [dependencies.halo2_gadgets]
 # git = "https://github.com/parazyd/halo2_gadgets.git"

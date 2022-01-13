@@ -19,14 +19,14 @@ pub mod chain;
 #[cfg(feature = "net")]
 pub mod net;
 
-#[cfg(feature = "system")]
-pub mod system;
-
 #[cfg(feature = "node")]
 pub mod node;
 
 #[cfg(feature = "node")]
 pub mod tx;
+
+#[cfg(feature = "system")]
+pub mod system;
 
 #[cfg(feature = "tui")]
 pub mod tui;
