@@ -41,3 +41,15 @@ exit 0
 
 Place this script in `.git/hooks/pre-commit` and make sure it's
 executable by running `chmod +x .git/hooks/pre-commit`.
+
+
+## Testing crate features
+
+Our library heavily depends on cargo _features_. Currently
+there are more than 650 possible combinations of features to
+build the library.  To ensure everything can always compile
+and works, we can use a helper for `cargo` called
+[`cargo hack`](https://github.com/taiki-e/cargo-hack).
+
+The `Makefile` provided in the repository is already set up to use it,
+so it's enough to install `cargo hack` and run `make check`.
