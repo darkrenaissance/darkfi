@@ -15,17 +15,14 @@ use std::{
 
 use darkfi::{
     net,
-    util::{
-        expand_path,
-        rpc::{
-            jsonrpc::{
-                error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
-                ErrorCode::*, JsonRequest, JsonResult,
-            },
-            rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
+    rpc::{
+        jsonrpc::{
+            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
+            ErrorCode::*, JsonRequest, JsonResult,
         },
-        sleep,
+        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
+    util::{expand_path, sleep},
     Error, Result,
 };
 

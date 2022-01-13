@@ -1,10 +1,12 @@
+use std::{collections::HashSet, io, sync::Arc};
+
 use async_std::sync::Mutex;
+
 use darkfi::{
     net,
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
     Result,
 };
-use std::{collections::HashSet, io, sync::Arc};
 
 pub type PrivMsgId = u32;
 
