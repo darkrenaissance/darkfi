@@ -5994,6 +5994,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zkas"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap 3.0.7",
+ "darkfi",
+ "indexmap",
+ "itertools",
+ "termion",
+]
+
+[[package]]
 name = "zstd"
 version = "0.9.2+zstd.1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

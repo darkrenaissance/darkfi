@@ -1,9 +1,8 @@
 *.pyc
 *.sage.py
 target/*
-/zkas/target
-/zkas/zkas
 
+/zkas/zkas
 /drk
 /darkfid
 /cashierd

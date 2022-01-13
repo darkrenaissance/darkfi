@@ -13,7 +13,8 @@ BINS = drk darkfid gatewayd
 BINDEPS = \
 	Cargo.toml \
 	$(shell find bin/*/src -type f) \
-	$(shell find bin -type f -name *.toml) \
+	$(shell find bin -type f -name '*.toml') \
+	$(shell find zkas -type f) \
 	$(shell find src -type f) \
 	$(shell find sql -type f) \
 	$(shell find contrib/token -type f)

@@ -7,6 +7,10 @@ repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 
+[dependencies.darkfi]
+path = "../"
+features = ["util"]
+
 [dependencies]
 anyhow = "1.0.52"
 clap = {version = "3.0.0", features = ["derive"]}

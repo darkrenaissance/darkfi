@@ -14,7 +14,7 @@ all: $(BINS)
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --release --all-features --bin $@
-	cp -f target/release/$@ $@
+	cp -f ../target/release/$@ $@
 
 test:
 	$(CARGO) test --release --all-features

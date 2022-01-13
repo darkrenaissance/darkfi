@@ -19,6 +19,7 @@ members = [
     "bin/gatewayd",
     "bin/ircd",
     "bin/map",
+    "zkas",
 ]
 
 [dependencies]
