@@ -2,6 +2,10 @@ use crate::types::{NodeId, NodeInfo};
 use std::collections::HashMap;
 use tui::widgets::ListState;
 
+//pub struct NodeInfo {
+//    pub index: u32
+//}
+
 #[derive(Clone)]
 pub struct StatefulList {
     pub state: ListState,
