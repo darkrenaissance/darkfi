@@ -11,7 +11,7 @@ pub struct NodeExtra {
 impl NodeExtra {
     pub fn new() -> NodeExtra {
         let mut index = 0;
-        NodeExtra { index, noise: String::new()}
+        NodeExtra { index, noise: String::new() }
     }
 }
 #[derive(Clone)]
