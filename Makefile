@@ -16,7 +16,11 @@ BINDEPS = \
 	$(shell find sql -type f) \
 	$(shell find contrib/token -type f) \
 
+#all: $(BINS)
 all: $(BINS)
+
+check:
+	$(CARGO) hack check --feature-powerset --no-dev-deps
 
 $(BINS): $(BINDEPS)
 	$(CARGO) build --workspace --release --all-features
@@ -57,4 +61,4 @@ clean:
 distclean: clean
 	rm -rf target
 
-.PHONY: all test fix clippy install uninstall clean distclean
+.PHONY: all check test fix clippy install uninstall clean distclean
