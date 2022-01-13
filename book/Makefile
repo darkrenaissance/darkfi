@@ -1,7 +1,9 @@
 .POSIX:
 
 all:
-	python3 ./build_jsonrpc.py
+	echo "# darkfid JSON-RPC API" > src/clients/darkfid_jsonrpc.md
+	./build_jsonrpc.py ../bin/darkfid/src/main.rs \
+		>> src/clients/darkfid_jsonrpc.md
 	mdbook build
 
 github: all

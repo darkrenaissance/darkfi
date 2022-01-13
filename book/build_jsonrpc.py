@@ -1,72 +1,59 @@
-
-class Method:
-    def __init__(self, name, params):
-        self.name = name
-        self.params = params.replace(',', ', ');
-        self.result = ""
-        self.note = ""
+#!/usr/bin/env python3
+from sys import argv
 
 
-    def set_result(self, result):
-        self.result = result.replace(':', ': ');
-        self.result = result.replace(',', ', ');
+def main(path):
+    lines = []
 
-    def __str__(self):
-        method_str = '### ' + self.name + ': \n' \
-                + '`params`: ' +  self.params + '\n' \
-                + '\n' \
-                + '`result`: ' +  self.result + '\n' \
-                + '\n' \
+    f = open(path, "r")
+    read_lines = f.readlines()
+    for line in read_lines:
+        lines.append(line.strip())
 
-        if not self.note == "":
-            method_str += '> `note`: ' +  self.note + '\n' 
+    parsing_method = False
 
-        return method_str
+    methods = []
+    method = ""
+    comment = ""
+    send = ""
+    recv = ""
 
+    for i in lines:
+        if not i.startswith("//"):
+            continue
 
-def main():
-    methods =  []
-    with open('../src/bin/darkfid.rs') as f:
-        lines = f.readlines()
-        for i in range(0, len(lines)):
-            line = lines[i]
+        if i == ("// RPCAPI:"):
+            parsing_method = True
+            continue
 
-            if line.__contains__("RPCAPI"):
+        if parsing_method:
+            if i.startswith("// --> "):
+                method = i.split()[3][1:-2]
+                recv = i[3:]
+                continue
 
-                line = lines[i + 1]
-                if line.__contains__(' --> '):
-                    line = line.strip()
-                    words = line.split(' ')
-                    method = words[3][1::][:-2:]
-                    params = words[5][:-1:]
-                    methods.append(Method(method, params))
+            if i.startswith("// <-- "):
+                send = i[3:]
+                parsing_method = False
+                methods.append((method, comment.strip(), recv, send))
+                comment = ""
+                continue
 
-                line = lines[i + 2]
-                if line.__contains__(' <-- '):
-                    line = line.strip()
-                    words = line.split(' ')
-                    methods[-1].set_result(words[3][:-1:])
+            comment += i[3:] + "\n"
 
-                line = lines[i + 3]
-                if line.__contains__("APINOTE"):
-                    methods[-1].note = line.strip().replace('// APINOTE:','')
-                    count = i + 4
-                    line = lines[count]
-                    while line.strip().startswith('//'):
-                        count += 1
-                        methods[-1].note += line[6::]
-                        line = lines[count]
+    print("\n## Methods")
+    for i in methods:
+        print(f"* [`{i[0]}`](#{i[0]})")
 
-
-
-    with open('src/clients/jsonrpc.md', 'w') as f:
-        f.write('# JSONRPC API \n')
-        f.write('## Methods \n')
-        for m in methods:
-            f.write('- [' + m.name + '](jsonrpc.md#' + m.name + ')\n')
-        for m in methods:
-            f.write(m.__str__())
+    print("\n")
+    for i in methods:
+        print(f"### `{i[0]}`\n")
+        print(f"{i[1]}")
+        print("\n```json")
+        print(i[2])
+        print(i[3])
+        print("```")
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    main(argv[1])
