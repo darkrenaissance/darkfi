@@ -1,19 +1,19 @@
 use std::{path::PathBuf, str::FromStr};
 
-#[macro_use]
-extern crate prettytable;
 use clap::{IntoApp, Parser};
-use log::debug;
-use prettytable::{format, Table};
+use log::{debug, error};
+use prettytable::{cell, format, row, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
-    cli::{CliDrk, CliDrkSubCommands, Config, DrkConfig},
+    cli::{cli_config::spawn_config, CliDrk, CliDrkSubCommands, Config, DrkConfig},
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{join_config_path, path::expand_path, NetworkName},
     Error, Result,
 };
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../drk_config.toml");
 
 struct Drk {
     url: String,
@@ -343,7 +343,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
         None => {}
     }
 
-    println!("Please run 'drk help' to see usage.");
+    error!("Please run 'drk help' to see usage.");
     Err(Error::MissingParams)
 }
 
@@ -357,6 +357,9 @@ async fn main() -> Result<()> {
     } else {
         join_config_path(&PathBuf::from("drk.toml"))?
     };
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let mut verbosity_level = 0;
     verbosity_level += matches.occurrences_of("verbose");

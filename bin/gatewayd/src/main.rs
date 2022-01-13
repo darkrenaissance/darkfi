@@ -8,11 +8,13 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{CliGatewayd, Config, GatewaydConfig},
+    cli::{cli_config::spawn_config, CliGatewayd, Config, GatewaydConfig},
     node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
     Result,
 };
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../gatewayd_config.toml");
 
 async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<()> {
     let rocks = Rocks::new(&expand_path(&config.database_path)?)?;
@@ -37,6 +39,9 @@ async fn main() -> Result<()> {
     } else {
         join_config_path(&PathBuf::from("gatewayd.toml"))?
     };
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let mut verbosity_level = 0;
     verbosity_level += matches.occurrences_of("verbose");

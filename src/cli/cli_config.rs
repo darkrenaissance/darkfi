@@ -1,5 +1,6 @@
 use std::{
     fs,
+    io::Write,
     marker::PhantomData,
     net::SocketAddr,
     path::{Path, PathBuf},
@@ -136,4 +137,19 @@ pub struct CashierdConfig {
     pub geth_passphrase: String,
     /// The configured networks to use
     pub networks: Vec<FeatureNetwork>,
+}
+
+pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
+    if !path.exists() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut file = fs::File::create(path.clone())?;
+        file.write_all(contents)?;
+        println!("Config file created in `{:?}`. Please review it and try again.", path);
+        std::process::exit(2);
+    }
+
+    Ok(())
 }

@@ -12,7 +12,7 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{CashierdConfig, CliCashierd, Config},
+    cli::{cli_config::spawn_config, CashierdConfig, CliCashierd, Config},
     crypto::{
         address::Address,
         keypair::{PublicKey, SecretKey},
@@ -35,6 +35,8 @@ use darkfi::{
 };
 
 use cashierd::service::{bridge, bridge::Bridge};
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../cashierd_config.toml");
 
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
@@ -658,6 +660,9 @@ async fn main() -> Result<()> {
     } else {
         join_config_path(&PathBuf::from("cashierd.toml"))?
     };
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let mut verbosity_level = 0;
     verbosity_level += matches.occurrences_of("verbose");

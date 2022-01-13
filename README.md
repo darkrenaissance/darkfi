@@ -53,20 +53,14 @@ introductory advice in the
 
 ## Install
 
-This will install the binaries and configurations in the configured
-namespace (`/usr/local` by default). The configurations are installed
-as TOML files in `/usr/local/share/doc/darkfi`. They have to be copied
-in your user's `HOME/.config/darkfi` directory. You can review the
-installed config files, but the defaults should be good for using
-the testnet if you're following this document.
+This will install the binaries on your system (`/usr/local` by
+default). The configuration files for the binaries are bundled with the
+binaries and contain sane defaults. You'll have to run each daemon once
+in order for them to spawn a config file, which you can then review.
 
 ```shell
 % sudo make install
-% mkdir -p ~/.config/darkfi
-% cp -f /usr/local/share/doc/darkfi/*.toml ~/.config/darkfi
 ```
-
-N.B. On OSX this is `/Users/x/Library/Application Support/darkfi`.
 
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
@@ -76,9 +70,9 @@ This will add the options auto completion of `drk` and `darkfid`.
 
 ## Usage
 
-After the installation, you should have `drk` and `darkfid`
-binaries in `/usr/local`. Also, the configuration files should be in
-`~/.config/darkfi`. Now we're ready to use the testnet.
+After the installation, you should have `drk` and `darkfid` binaries in
+`/usr/local`. Trying to run them once should place the configuration
+files in their respective path. Now we're ready to use the testnet.
 
 In one terminal, start `darkfid`, which is the daemon that will
 communicate with the DarkFi network:

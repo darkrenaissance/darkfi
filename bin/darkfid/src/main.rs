@@ -13,7 +13,7 @@ use url::Url;
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{CliDarkfid, Config, DarkfidConfig},
+    cli::{cli_config::spawn_config, CliDarkfid, Config, DarkfidConfig},
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -37,6 +37,8 @@ use darkfi::{
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../darkfid_config.toml");
 
 pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
 
@@ -811,6 +813,9 @@ async fn main() -> Result<()> {
     } else {
         join_config_path(&PathBuf::from("darkfid.toml"))?
     };
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let mut verbosity_level = 0;
     verbosity_level += matches.occurrences_of("verbose");
