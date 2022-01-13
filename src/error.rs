@@ -86,8 +86,10 @@ pub enum Error {
     InvalidParamName,
     #[error("Invalid param type")]
     InvalidParamType,
-    // #[error("Missing params")]
-    // MissingParams,
+
+    #[error("Missing params")]
+    MissingParams,
+
     // #[error("Contract is poorly defined")]
     // BadContract,
     #[cfg(feature = "crypto")]
@@ -122,9 +124,9 @@ pub enum Error {
     #[error("SlabsStore Error: `{0}`")]
     SlabsStore(String),
 
-    // /// RPC errors
-    // #[error("JsonRpc Error: `{0}`")]
-    // JsonRpcError(String),
+    #[error("JsonRpc Error: `{0}`")]
+    JsonRpcError(String),
+
     #[error("Not supported network")]
     NotSupportedNetwork,
 

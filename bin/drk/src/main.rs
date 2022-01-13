@@ -10,12 +10,8 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     cli::{CliDrk, CliDrkSubCommands, Config, DrkConfig},
-    util::{
-        join_config_path,
-        path::expand_path,
-        rpc::{jsonrpc, jsonrpc::JsonResult},
-        NetworkName,
-    },
+    rpc::{jsonrpc, jsonrpc::JsonResult},
+    util::{join_config_path, path::expand_path, NetworkName},
     Error, Result,
 };
 
