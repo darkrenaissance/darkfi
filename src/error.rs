@@ -199,7 +199,6 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-#[cfg(feature = "util")]
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::Io(err.kind())
