@@ -613,9 +613,8 @@ impl Encodable for SolPubkey {
 impl Decodable for SolPubkey {
     fn decode<D: std::io::Read>(mut d: D) -> darkfi::Result<Self> {
         let key: String = Decodable::decode(&mut d)?;
-        let key = Pubkey::try_from(key.as_str()).map_err(|_| {
-            darkfi::Error::DecodeError("SOL BRIDGE: load public key from slice".into())
-        })?;
+        let key = Pubkey::try_from(key.as_str())
+            .map_err(|_| darkfi::Error::DecodeError("SOL BRIDGE: load public key from slice"))?;
         Ok(SolPubkey(key))
     }
 }

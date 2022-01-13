@@ -351,7 +351,7 @@ impl BtcClient {
                 main_keypair = deserialize(&main_keypairs[main_keypairs.len() - 1].secret_key)?;
             }
         } else {
-            let keypair_str = load_keypair_to_str(expand_path(&keypair_path)?)?;
+            let keypair_str = load_keypair_to_str(expand_path(keypair_path)?)?;
             let keypair_bytes: Vec<u8> = serde_json::from_str(&keypair_str)?;
             main_keypair = Keypair::from_bytes(&keypair_bytes)
                 .map_err(|e| BtcFailed::DecodeAndEncodeError(e.to_string()))?;
