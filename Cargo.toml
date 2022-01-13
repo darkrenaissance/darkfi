@@ -13,12 +13,19 @@ name = "darkfi"
 
 [dependencies]
 log = "0.4.14"
+rand = "0.8.4"
 thiserror = "1.0.30"
 
-# Async
+# async-runtime
+async-std = {version = "1.10.0", optional = true}
+async-executor = {version = "1.4.1", optional = true}
 async-trait = {version = "0.1.52", optional = true}
 futures = {version = "0.3.19", optional = true}
 smol = {version = "1.2.5", optional = true}
+
+# async-net
+async-native-tls = {version = "0.4.0", optional = true}
+native-tls = {version = "0.2.8", optional = true}
 
 # Encoding
 hex = {version = "0.4.3", optional = true}
@@ -27,14 +34,21 @@ serde_json = {version = "1.0.74", optional = true}
 
 # Utilities
 dirs = {version = "4.0.0", optional = true}
+url = {version = "2.2.2", optional = true}
 
 # Misc
 num-bigint = {version = "0.4.3", optional = true}
 
+# Websockets
+tungstenite = {version = "0.16.0", optional = true}
+async-tungstenite = {version = "0.16.1", optional = true}
+
 [features]
-async-runtime = ["async-trait", "futures", "smol"]
-util = ["async-runtime", "hex", "serde", "serde_json", "dirs",
-    "num-bigint"]
+async-runtime = ["async-std", "async-executor", "async-trait", "futures", "smol"]
+async-net = ["async-native-tls", "native-tls"]
+websockets = ["tungstenite", "async-tungstenite"]
+util = ["async-runtime", "hex", "serde", "serde_json", "dirs", "num-bigint"]
+rpc = ["async-net", "util", "websockets", "url"]
 
 # [dependencies.halo2_gadgets]
 # git = "https://github.com/parazyd/halo2_gadgets.git"

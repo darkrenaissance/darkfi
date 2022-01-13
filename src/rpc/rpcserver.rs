@@ -14,7 +14,7 @@ use smol::{
 };
 
 use crate::{
-    util::rpc::jsonrpc::{JsonRequest, JsonResult},
+    rpc::jsonrpc::{JsonRequest, JsonResult},
     Result,
 };
 

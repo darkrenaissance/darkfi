@@ -32,10 +32,12 @@ pub enum Error {
     // ParseFloatError(#[from] std::num::ParseFloatError),
     // #[error(transparent)]
     // FromHexError(#[from] hex::FromHexError),
-    // #[error("Url parse error `{0}`")]
-    // UrlParseError(String),
-    // #[error("No url found")]
-    // NoUrlFound,
+    #[cfg(feature = "rpc")]
+    #[error("Url parse error `{0}`")]
+    UrlParseError(String),
+
+    #[error("No url found")]
+    NoUrlFound,
     // #[error("Malformed packet")]
     // MalformedPacket,
     // #[error(transparent)]
@@ -126,10 +128,13 @@ pub enum Error {
 
     // #[error("Cannot parse network parameter")]
     // NetworkParseError,
-    // #[error("Async_Native_TLS error: `{0}`")]
-    // AsyncNativeTlsError(String),
-    // #[error("TungsteniteError: `{0}`")]
-    // TungsteniteError(String),
+    #[cfg(feature = "async-net")]
+    #[error("Async_Native_TLS error: `{0}`")]
+    AsyncNativeTlsError(String),
+
+    #[cfg(feature = "websockets")]
+    #[error("TungsteniteError: `{0}`")]
+    TungsteniteError(String),
 
     // /// Network
     // #[error("Connection failed")]
@@ -208,17 +213,19 @@ impl From<std::io::Error> for Error {
 // }
 // }
 
-// impl From<async_native_tls::Error> for Error {
-// fn from(err: async_native_tls::Error) -> Error {
-// Error::AsyncNativeTlsError(err.to_string())
-// }
-// }
+#[cfg(feature = "async-net")]
+impl From<async_native_tls::Error> for Error {
+    fn from(err: async_native_tls::Error) -> Error {
+        Error::AsyncNativeTlsError(err.to_string())
+    }
+}
 
-// impl From<url::ParseError> for Error {
-// fn from(err: url::ParseError) -> Error {
-// Error::UrlParseError(err.to_string())
-// }
-// }
+#[cfg(feature = "rpc")]
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Error {
+        Error::UrlParseError(err.to_string())
+    }
+}
 
 // #[cfg(feature = "node")]
 // impl From<crate::node::client::ClientFailed> for Error {
@@ -233,11 +240,12 @@ impl From<std::io::Error> for Error {
 // }
 // }
 
-// impl From<tungstenite::Error> for Error {
-// fn from(err: tungstenite::Error) -> Error {
-// Error::TungsteniteError(err.to_string())
-// }
-// }
+#[cfg(feature = "websockets")]
+impl From<tungstenite::Error> for Error {
+    fn from(err: tungstenite::Error) -> Error {
+        Error::TungsteniteError(err.to_string())
+    }
+}
 
 // impl From<halo2::plonk::Error> for Error {
 // fn from(err: halo2::plonk::Error) -> Error {
