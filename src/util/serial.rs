@@ -586,8 +586,11 @@ tuple_encode!(T0, T1, T2, T3, T4, T5, T6, T7);
 
 #[cfg(test)]
 mod tests {
-    use super::{deserialize, deserialize_partial, serialize, Encodable, Error, Result, VarInt};
-    use super::endian::{u16_to_array_le, u32_to_array_le, u64_to_array_le};
+    use super::{
+        deserialize, deserialize_partial,
+        endian::{u16_to_array_le, u32_to_array_le, u64_to_array_le},
+        serialize, Encodable, Error, Result, VarInt,
+    };
     use std::{io, mem::discriminant};
 
     #[test]

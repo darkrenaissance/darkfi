@@ -107,8 +107,8 @@ impl Decodable for Proof {
 mod tests {
     use super::*;
     use crate::{
-        zk::circuit::MintContract,
         crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
+        zk::circuit::MintContract,
     };
     use halo2::arithmetic::Field;
     use rand::rngs::OsRng;
