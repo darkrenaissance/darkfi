@@ -11,6 +11,7 @@ pub mod nullifier;
 pub mod proof;
 pub mod schnorr;
 pub mod spend_proof;
+pub mod token_id;
 pub mod types;
 pub mod util;
 

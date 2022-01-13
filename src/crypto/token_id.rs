@@ -1,3 +1,14 @@
+use sha2::{Digest, Sha256};
+
+use super::types::DrkTokenId;
+use crate::{
+    util::{
+        serial::{deserialize, serialize},
+        NetworkName,
+    },
+    Result,
+};
+
 /// Hash the external token ID and NetworkName param.
 /// If it fails, change the last 4 bytes and hash it again.
 /// Keep repeating until it works.

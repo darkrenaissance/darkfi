@@ -9,10 +9,11 @@ use darkfi::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
+        token_id::generate_id2,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
     tx,
-    util::{generate_id2, NetworkName},
+    util::NetworkName,
     zk::circuit::{mint_contract::MintContract, spend_contract::SpendContract},
     Result,
 };

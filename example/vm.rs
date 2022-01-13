@@ -17,11 +17,12 @@ use darkfi::{
         proof::{Proof, ProvingKey, VerifyingKey},
         util::pedersen_commitment_u64,
     },
-    serial::Decodable,
+    util::serial::Decodable,
     zk::vm,
+    Error,
 };
 
-fn main() -> std::result::Result<(), failure::Error> {
+fn main() -> std::result::Result<(), Error> {
     // The number of rows in our circuit cannot exceed 2^k
     let k: u32 = 11;
 

@@ -26,8 +26,9 @@ use darkfi::{
         proof::{Proof, ProvingKey, VerifyingKey},
         util::pedersen_commitment_u64,
     },
-    serial::Decodable,
+    util::serial::Decodable,
     zk::vm,
+    Error,
 };
 
 fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::Base {
@@ -52,7 +53,7 @@ fn root(path: [pallas::Base; 32], leaf_pos: u32, leaf: pallas::Base) -> pallas::
     node
 }
 
-fn main() -> std::result::Result<(), failure::Error> {
+fn main() -> std::result::Result<(), Error> {
     // The number of rows in our circuit cannot exceed 2^k
     let k: u32 = 11;
 

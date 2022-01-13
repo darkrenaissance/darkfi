@@ -4,8 +4,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
-    // #[error("Infallible Error: `{0}`")]
-    // InfallibleError(String),
+
+    #[error("Infallible Error: `{0}`")]
+    InfallibleError(String),
 
     // #[error("Cannot find home directory")]
     // PathNotFound,
@@ -38,8 +39,9 @@ pub enum Error {
 
     #[error("No url found")]
     NoUrlFound,
-    // #[error(transparent)]
-    // AddrParseError(#[from] std::net::AddrParseError),
+
+    #[error(transparent)]
+    AddrParseError(#[from] std::net::AddrParseError),
     // #[error(transparent)]
     // Base58EncodeError(#[from] bs58::encode::Error),
     // #[error(transparent)]
@@ -271,8 +273,8 @@ impl From<Box<bincode::ErrorKind>> for Error {
     }
 }
 
-// impl From<std::convert::Infallible> for Error {
-// fn from(err: std::convert::Infallible) -> Error {
-// Error::InfallibleError(err.to_string())
-// }
-// }
+impl From<std::convert::Infallible> for Error {
+    fn from(err: std::convert::Infallible) -> Error {
+        Error::InfallibleError(err.to_string())
+    }
+}
