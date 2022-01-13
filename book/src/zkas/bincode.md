@@ -35,6 +35,10 @@ OPCODE ARG_NUM STACK_INDEX ... STACK_INDEX
 TBD
 ```
 
+Integers in the binary are encoded using variable-integer encoding.
+See [`serial.rs`](../../../src/util/serial.rs) for our Rust
+implementation.
+
 ## `MAGIC_BYTES`
 
 The magic bytes are the file signature consisting of four bytes used
