@@ -19,6 +19,7 @@ impl App {
         let node_id = Self::get_node_id();
         let node_info = Self::get_node_info();
 
+        // TODO: fix this
         for id in node_id.iter() {
             for info in node_info.iter() {
                 hashmap.insert(id.to_string(), info.to_string());
