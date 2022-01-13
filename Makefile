@@ -7,35 +7,35 @@ PREFIX = /usr/local
 CARGO = cargo
 
 # Binaries to be built
-BINS = drk darkfid gatewayd 
+BINS = drk darkfid gatewayd
 
-# Dependencies which should force the binaries to be rebuilt
+# Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
 	Cargo.toml \
 	$(shell find src -type f) \
 	$(shell find sql -type f) \
-	$(shell find contrib/token -type f) \
+	$(shell find contrib/token -type f)
 
-#all: $(BINS)
 all: $(BINS)
 
-check:
-	$(CARGO) hack check --feature-powerset --no-dev-deps
-
 $(BINS): $(BINDEPS)
-	$(CARGO) build --workspace --release --all-features
-	cp -f target/release/$@ $@
+	$(MAKE) -C bin/$@
+	cp -f bin/$@/$@ $@
 
-test:
-	$(CARGO) test --release --all-features
-	$(CARGO) build --release --all-features --bin tx
-	./target/release/tx
+check:
+	$(CARGO) hack check --release --feature-powerset --no-dev-deps
 
 fix:
 	$(CARGO) clippy --release --all-features --fix --allow-dirty
 
 clippy:
 	$(CARGO) clippy --release --all-features
+
+test:
+	$(CARGO) test --release --all-features
+
+clean:
+	rm -f $(BINS)
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
@@ -55,10 +55,4 @@ uninstall:
 	rm -rf $(DESTDIR)$(PREFIX)/share/doc/darkfi
 	rm -rf $(DESTDIR)$(PREFIX)/share/darkfi
 
-clean:
-	rm -f $(BINS)
-
-distclean: clean
-	rm -rf target
-
-.PHONY: all check test fix clippy install uninstall clean distclean
+.PHONY: all check fix clippy test clean install uninstall
