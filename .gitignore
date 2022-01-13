@@ -1,6 +1,5 @@
 *.pyc
 *.sage.py
-/Cargo.lock
 target/*
 /zkas/target
 /zkas/zkas
@@ -9,4 +8,4 @@ target/*
 /darkfid
 /cashierd
 /gatewayd
-/tx
+/ircd

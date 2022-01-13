@@ -183,10 +183,6 @@ pub fn symbol_to_id(token: &str, tokenlist: &TokenList) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        util::{DrkTokenList, TokenList},
-        Result,
-    };
 
     fn _get_sol_tokens() -> Result<TokenList> {
         let file_contents = include_bytes!("../../testdata/solanatokenlisttest.json");

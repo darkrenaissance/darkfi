@@ -377,8 +377,8 @@ impl WalletDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        crypto::merkle_node::MerkleNode,
+    use crate::crypto::{
+        merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
     use incrementalmerkletree::{Frontier, Tree};

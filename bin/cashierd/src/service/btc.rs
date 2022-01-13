@@ -914,14 +914,10 @@ pub type BtcResult<T> = std::result::Result<T, BtcFailed>;
 
 #[cfg(test)]
 mod tests {
-
-    use std::str::FromStr;
-
-    use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
-
-    use darkfi::serial::{deserialize, serialize};
-
     use super::*;
+    use darkfi::util::serial::{deserialize, serialize};
+    use secp256k1::constants::{PUBLIC_KEY_SIZE, SECRET_KEY_SIZE};
+    use std::str::FromStr;
 
     const KEYPAIR_LENGTH: usize = SECRET_KEY_SIZE + PUBLIC_KEY_SIZE;
 

@@ -371,7 +371,7 @@ impl Decodable for Reply {
 #[cfg(test)]
 mod tests {
     use super::{Reply, Request, Result};
-    use crate::serial::{deserialize, serialize};
+    use crate::util::serial::{deserialize, serialize};
 
     #[test]
     fn serialize_and_deserialize_request_test() {

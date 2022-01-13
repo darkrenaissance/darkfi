@@ -479,7 +479,7 @@ impl CashierDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serial::serialize;
+    use crate::util::serial::serialize;
     use pasta_curves::arithmetic::Field;
     use rand::rngs::OsRng;
 

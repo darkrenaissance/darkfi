@@ -192,9 +192,9 @@ impl Decodable for PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{
-        serial::{deserialize, serialize},
-        util::pedersen_commitment_scalar,
+    use crate::{
+        crypto::util::pedersen_commitment_scalar,
+        util::serial::{deserialize, serialize},
     };
 
     #[test]
