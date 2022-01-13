@@ -142,18 +142,18 @@ impl Darkfid {
         Ok(())
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Returns a `helloworld` string.
     // --> {"method": "say_hello", "params": []}
     // <-- {"result": "helloworld"}
-    // APINOTE:
     async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Attempts to initialize a wallet, and returns `true` upon success.
     // --> {"method": "create_wallet", "params": []}
     // <-- {"result": true}
-    // APINOTE:
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.init_db().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
@@ -161,10 +161,10 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Attempts to generate a new keypair and returns `true` upon success.
     // --> {"method": "key_gen", "params": []}
     // <-- {"result": true}
-    // APINOTE:
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         let client = self.client.lock().await;
         match client.key_gen().await {
@@ -173,21 +173,23 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Fetches the main keypair from the wallet and returns it
+    // in an encoded format.
     // --> {"method": "get_key", "params": []}
     // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
-    // APINOTE:
     async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
         let pk = self.client.lock().await.main_keypair.public;
         let addr = Address::from(pk).to_string();
         JsonResult::Resp(jsonresp(json!(addr), id))
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Fetches all keypairs from the wallet and returns a list of them
+    // in an encoded format.
+    // The first one in the list is the default selected keypair.
     // --> {"method": "get_keys", "params": []}
     // <-- {"result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC,...]"}
-    // APINOTE:
-    // the first address in the returned vector is the default address
     async fn get_keys(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<Vec<String>> = async {
             let keypairs = self.client.lock().await.get_keypairs().await?;
@@ -215,10 +217,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Imports a keypair into the wallet with a given path on the filesystem.
+    // Returns `true` upon success.
     // --> {"method": "import_keypair", "params": [path]}
     // <-- {"result": true}
-    // APINOTE:
     async fn import_keypair(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -259,10 +262,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Exports the default selected keypair to a given path on the filesystem.
+    // Returns `true` upon success.
     // --> {"method": "export_keypair", "params": [path]}
     // <-- {"result": true}
-    // APINOTE:
     async fn export_keypair(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -296,10 +300,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Sets the default wallet address to the given parameter.
+    // Returns true upon success.
     // --> {"method": "set_default_address", "params": [vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC]}
     // <-- {"result": true}
-    // APINOTE:
     async fn set_default_address(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -322,10 +327,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Fetches the known balances from the wallet.
+    // Returns a map of balances, indexed by `network`, and token ID.
     // --> {"method": "get_balances", "params": []}
     // <-- {"result": "[{"btc":(value,network)},...]"}
-    // APINOTE:
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, (String, String)>> = async {
             let balances = self.client.lock().await.get_balances().await?;
@@ -366,10 +372,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Generates the internal token ID for a given `network` and token ticker or address.
+    // Returns the internal representation of the token ID.
     // --> {"method": "get_token_id", "params": [network,token]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
-    // APINOTE:
     async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -432,10 +439,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Asks the configured cashier for their supported features.
+    // Returns a map of features received from the requested cashier.
     // --> {"method": "features", "params": []}
     // <-- {"result": {"network":["btc","sol"]}}
-    // APINOTE:
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult =
@@ -452,12 +460,14 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Initializes a DarkFi deposit request for a given `network`, `token`,
+    // and `publickey`.
+    // The public key send here is used so the cashier can know where to send
+    // the newly minted tokens once the deposit is received.
+    // Returns an address to which the caller is supposed to deposit funds.
     // --> {"method": "deposit", "params": [network,token,publickey]}
     // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
-    // APINOTE:
-    // The publickey sent here is used so the cashier can know where to send
-    // tokens once the deposit is received.
     async fn deposit(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -518,15 +528,17 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Initializes a withdraw request for a given `network`, `token`, `publickey`,
+    // and `amount`.
+    // The publickey send here is the address where the caller wants to receive
+    // the tokens they plan to withdraw.
+    // On request, sends a request to a cashier to get a deposit address, and
+    // then transfers wrapped DarkFitokens to the cashier's wallet. Following that,
+    // the cashier should return a transaction ID of them sending the funds that
+    // are requested for withdrawal.
     // --> {"method": "withdraw", "params": [network,token,publickey,amount]}
     // <-- {"result": "txID"}
-    // APINOTE:
-    // The publickey sent here is the address where the caller wants to receive
-    // the tokens they plan to withdraw.
-    // On request, send request to cashier to get deposit address, and then transfer
-    // dark tokens to the cashier's wallet. Following that, the cashier should return
-    // a transaction ID of them sending the funds that are requested for withdrawal.
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -639,10 +651,11 @@ impl Darkfid {
         }
     }
 
-    //// RPCAPI
+    // RPCAPI:
+    // Transfer a given wrapped DarkFi token amount to the given address.
+    // Returns the transaction ID of the transfer.
     // --> {"method": "transfer", "params": [network,dToken,address,amount]}
     // <-- {"result": "txID"}
-    // APINOTE:
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
         if args.is_none() {
