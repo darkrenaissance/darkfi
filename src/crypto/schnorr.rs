@@ -10,7 +10,7 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         util::{hash_to_scalar, mod_r_p},
     },
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
     Result,
 };
 

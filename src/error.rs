@@ -72,22 +72,25 @@ pub enum Error {
     // /// Contract
     // #[error("Bad variable ref type byte")]
     // BadVariableRefType,
-    // #[error("Bad operation type byte")]
-    // BadOperationType,
+    #[error("Bad operation type byte")]
+    BadOperationType,
     // #[error("Bad constraint type byte")]
     // BadConstraintType,
-    // #[error("Invalid param name")]
-    // InvalidParamName,
-    // #[error("Invalid param type")]
-    // InvalidParamType,
+    #[error("Invalid param name")]
+    InvalidParamName,
+    #[error("Invalid param type")]
+    InvalidParamType,
     // #[error("Missing params")]
     // MissingParams,
     // #[error("Contract is poorly defined")]
     // BadContract,
-    // #[error("PLONK error: `{0}`")]
-    // PlonkError(String),
-    // #[error("Unable to decrypt mint note")]
-    // NoteDecryptionFailed,
+    #[cfg(feature = "crypto")]
+    #[error("PLONK error: `{0}`")]
+    PlonkError(String),
+
+    #[cfg(feature = "crypto")]
+    #[error("Unable to decrypt mint note")]
+    NoteDecryptionFailed,
 
     // #[cfg(feature = "node")]
     // #[error(transparent)]
@@ -162,15 +165,17 @@ pub enum Error {
     // #[error(transparent)]
     // AsyncChannelReceiverError(#[from] async_channel::RecvError),
 
-    // /// Keypari & Address
     // #[error("Error converting Address to PublicKey")]
     // AddressToPublicKeyError,
-    // #[error("Error converting bytes to PublicKey")]
-    // PublicKeyFromBytes,
-    // #[error("Error converting bytes to SecretKey")]
-    // SecretKeyFromBytes,
-    // #[error("Invalid Address")]
-    // InvalidAddress,
+    #[cfg(feature = "crypto")]
+    #[error("Error converting bytes to PublicKey")]
+    PublicKeyFromBytes,
+    #[cfg(feature = "crypto")]
+    #[error("Error converting bytes to SecretKey")]
+    SecretKeyFromBytes,
+    #[cfg(feature = "crypto")]
+    #[error("Invalid Address")]
+    InvalidAddress,
 }
 
 // #[cfg(feature = "node")]
@@ -247,11 +252,12 @@ impl From<tungstenite::Error> for Error {
     }
 }
 
-// impl From<halo2::plonk::Error> for Error {
-// fn from(err: halo2::plonk::Error) -> Error {
-// Error::PlonkError(format!("{:?}", err))
-// }
-// }
+#[cfg(feature = "crypto")]
+impl From<halo2::plonk::Error> for Error {
+    fn from(err: halo2::plonk::Error) -> Error {
+        Error::PlonkError(format!("{:?}", err))
+    }
+}
 
 // impl From<Box<bincode::ErrorKind>> for Error {
 // fn from(err: Box<bincode::ErrorKind>) -> Error {

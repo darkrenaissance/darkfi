@@ -7,9 +7,9 @@ use crate::{
     crypto::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::{PublicKey, SecretKey},
+        types::*,
     },
-    serial::{Decodable, Encodable, ReadExt, WriteExt},
-    types::*,
+    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Error, Result,
 };
 

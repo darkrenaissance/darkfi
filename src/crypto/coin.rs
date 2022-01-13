@@ -3,7 +3,7 @@ use std::io;
 use pasta_curves::{arithmetic::FieldExt, pallas};
 
 use crate::{
-    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Result,
 };
 

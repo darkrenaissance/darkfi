@@ -16,10 +16,10 @@ use crate::{
         coin::Coin,
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
-    serial::{Decodable, Encodable},
-    types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
+    util::serial::{Decodable, Encodable},
     zk::circuit::mint_contract::MintContract,
     Result,
 };

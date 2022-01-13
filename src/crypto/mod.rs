@@ -1,3 +1,4 @@
+pub mod address;
 pub mod arith_chip;
 pub mod coin;
 pub mod constants;
@@ -13,9 +14,9 @@ pub mod spend_proof;
 pub mod types;
 pub mod util;
 
-pub(crate) use mint_proof::MintRevealedValues;
-pub(crate) use proof::Proof;
-pub(crate) use spend_proof::SpendRevealedValues;
+pub use mint_proof::MintRevealedValues;
+pub use proof::Proof;
+pub use spend_proof::SpendRevealedValues;
 
 use keypair::SecretKey;
 

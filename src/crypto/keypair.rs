@@ -9,9 +9,8 @@ use pasta_curves::{
 use rand::RngCore;
 
 use crate::{
-    crypto::{constants::OrchardFixedBases, util::mod_r_p},
-    serial::{Decodable, Encodable, ReadExt, WriteExt},
-    util::Address,
+    crypto::{address::Address, constants::OrchardFixedBases, util::mod_r_p},
+    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Error, Result,
 };
 
@@ -193,9 +192,9 @@ impl Decodable for PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        crypto::util::pedersen_commitment_scalar,
+    use crate::crypto::{
         serial::{deserialize, serialize},
+        util::pedersen_commitment_scalar,
     };
 
     #[test]

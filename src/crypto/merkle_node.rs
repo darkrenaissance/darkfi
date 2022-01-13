@@ -23,8 +23,8 @@ use crate::{
             L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD,
         },
     },
-    error::Result,
-    serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
+    Result,
 };
 
 lazy_static! {

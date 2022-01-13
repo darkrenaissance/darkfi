@@ -10,8 +10,8 @@ use halo2::{
 use pasta_curves::vesta;
 
 use crate::{
-    serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
-    types::*,
+    crypto::types::*,
+    util::serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
     Result,
 };
 

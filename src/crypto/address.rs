@@ -4,7 +4,7 @@ use sha2::Digest;
 
 use crate::{
     crypto::keypair::PublicKey,
-    serial::{Decodable, Encodable, ReadExt, WriteExt},
+    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Error, Result,
 };
 

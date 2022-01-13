@@ -21,9 +21,9 @@ use crate::{
     crypto::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
+        types::*,
     },
-    serial::{Decodable, Encodable},
-    types::*,
+    util::serial::{Decodable, Encodable},
     zk::circuit::spend_contract::SpendContract,
     Result,
 };
