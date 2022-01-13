@@ -106,7 +106,7 @@ pub enum Error {
     // CashierError(String),
     #[error("ZmqError: `{0}`")]
     ZmqError(String),
-    #[cfg(feature = "chain")]
+    #[cfg(feature = "blockchain")]
     #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
 
@@ -189,7 +189,7 @@ impl From<zeromq::ZmqError> for Error {
     }
 }
 
-#[cfg(feature = "chain")]
+#[cfg(feature = "blockchain")]
 impl From<rocksdb::Error> for Error {
     fn from(err: rocksdb::Error) -> Error {
         Error::RocksdbError(err.to_string())

@@ -6,7 +6,7 @@ use smol::Executor;
 use url::Url;
 
 use crate::{
-    chain::{rocks::columns, Rocks, RocksColumn, Slab},
+    blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
         address::Address,
         coin::Coin,

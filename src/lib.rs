@@ -19,8 +19,8 @@ pub mod net;
 #[cfg(feature = "cli")]
 pub mod cli;
 
-#[cfg(feature = "chain")]
-pub mod chain;
+#[cfg(feature = "blockchain")]
+pub mod blockchain;
 
 #[cfg(feature = "system")]
 pub mod system;
