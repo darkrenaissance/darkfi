@@ -26,6 +26,30 @@ jobs:
         run: |
           make test
 
+  feature-powerset:
+    name: Test crate feature powerset on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: taiki-e/install-action@cargo-hack
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt -y install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+
+      - name: Run feature powerset builds
+        run: |
+          make check
+
   fmt:
     name: rustfmt
     timeout-minutes: 30
