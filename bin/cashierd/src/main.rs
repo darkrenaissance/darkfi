@@ -323,6 +323,11 @@ impl Cashierd {
         }
     }
 
+    // RPCAPI:
+    // Executes a deposit request given `network` and `token_id`.
+    // Returns the address where the deposit shall be transferred to.
+    // --> {"method": "deposit", "params": [network, token, publickey]}
+    // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
     async fn deposit(&self, id: Value, params: Value, executor: Arc<Executor<'_>>) -> JsonResult {
         info!(target: "CASHIER DAEMON", "Received deposit request");
 
@@ -448,6 +453,12 @@ impl Cashierd {
         }
     }
 
+    // RPCAPI:
+    // Executes a withdraw request given `network`, `token_id`, `publickey`
+    // and `amount`. `publickey` is supposed to correspond to `network`.
+    // Returns the transaction ID of the processed withdraw.
+    // --> {"method": "withdraw", "params": [network, token, publickey, amount]}
+    // <-- {"result": "txID"}
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
         info!(target: "CASHIER DAEMON", "Received withdraw request");
 
@@ -531,6 +542,10 @@ impl Cashierd {
         }
     }
 
+    // RPCAPI:
+    // Returns supported cashier features, like network, listening ports, etc.
+    // --> {"method": "features", "params": []}
+    // <-- {"result": {"network": ["btc", "sol"]}
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let tcp_port: Option<u16>;
         let tls_port: Option<u16>;

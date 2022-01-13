@@ -18,7 +18,7 @@ def main(path):
     send = ""
     recv = ""
 
-    for i in lines:
+    for (idx, i) in enumerate(lines):
         if not i.startswith("//"):
             continue
 
@@ -35,7 +35,7 @@ def main(path):
             if i.startswith("// <-- "):
                 send = i[3:]
                 parsing_method = False
-                methods.append((method, comment.strip(), recv, send))
+                methods.append((method, comment.strip(), recv, send, idx + 2))
                 comment = ""
                 continue
 
@@ -49,6 +49,13 @@ def main(path):
     for i in methods:
         print(f"### `{i[0]}`\n")
         print(f"{i[1]}")
+        ghlink = "%s%s%s%d" % (
+            "https://github.com/darkrenaissance/darkfi/blob/master/",
+            path.replace("../", ""),
+            "#L",
+            i[4],
+        )
+        print(f'<br><sup><a href="{ghlink}">[src]</a></sup>')
         print("\n```json")
         print(i[2])
         print(i[3])
