@@ -105,10 +105,9 @@ pub enum Error {
     // CashierError(String),
     // #[error("ZmqError: `{0}`")]
     // ZmqError(String),
-
-    // /// Database/Sql errors
-    // #[error("Rocksdb error: `{0}`")]
-    // RocksdbError(String),
+    #[cfg(feature = "chain")]
+    #[error("Rocksdb error: `{0}`")]
+    RocksdbError(String),
     // #[error("sqlx error: `{0}`")]
     // SqlxError(String),
     // #[error("SlabsStore Error: `{0}`")]
@@ -179,12 +178,12 @@ pub enum Error {
 // }
 // }
 
-// #[cfg(feature = "chain")]
-// impl From<rocksdb::Error> for Error {
-// fn from(err: rocksdb::Error) -> Error {
-// Error::RocksdbError(err.to_string())
-// }
-// }
+#[cfg(feature = "chain")]
+impl From<rocksdb::Error> for Error {
+    fn from(err: rocksdb::Error) -> Error {
+        Error::RocksdbError(err.to_string())
+    }
+}
 
 // #[cfg(feature = "node")]
 // impl From<sqlx::error::Error> for Error {

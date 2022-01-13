@@ -43,26 +43,28 @@ num-bigint = {version = "0.4.3", optional = true}
 tungstenite = {version = "0.16.0", optional = true}
 async-tungstenite = {version = "0.16.1", optional = true}
 
+# Blockchain
+[dependencies.rocksdb]
+# TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
+git = "https://github.com/parazyd/rust-rocksdb"
+rev = "bd966750ec861d687913d59a9939a1408ac53131"
+default-features = false
+features = ["zstd"]
+optional = true
+
 [features]
 async-runtime = ["async-std", "async-executor", "async-trait", "futures", "smol"]
 async-net = ["async-native-tls", "native-tls"]
 websockets = ["tungstenite", "async-tungstenite"]
 util = ["async-runtime", "hex", "serde", "serde_json", "dirs", "num-bigint"]
 rpc = ["async-net", "util", "websockets", "url"]
+chain = ["rocksdb", "util"]
 
 # [dependencies.halo2_gadgets]
 # git = "https://github.com/parazyd/halo2_gadgets.git"
 # rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
 # features = ["dev-graph", "test-dependencies"]
 
-# # blockchain dependencies
-# [dependencies.rocksdb]
-# # TODO: Revert to upstream after bd966750ec861d687913d59a9939a1408ac53131 is merged.
-# git = "https://github.com/parazyd/rust-rocksdb"
-# rev = "bd966750ec861d687913d59a9939a1408ac53131"
-# default-features = false
-# features = ["zstd"]
-# optional = true
 
 # [dependencies]
 # # Crypto
