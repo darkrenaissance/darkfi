@@ -24,15 +24,16 @@ use tungstenite::Message;
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
 use darkfi::{
-    crypto::keypair::PublicKey,
+    crypto::{keypair::PublicKey, token_id::generate_id2},
     node::wallet::cashierdb::{CashierDb, TokenKey},
-    serial::{deserialize, serialize, Decodable, Encodable},
+    rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
     util::{
-        expand_path, generate_id2, load_keypair_to_str,
+        expand_path, load_keypair_to_str,
         parse::truncate,
-        rpc::{jsonrpc, jsonrpc::JsonResult, websockets, websockets::WsStream},
-        sleep, Error, NetworkName, Result,
+        serial::{deserialize, serialize, Decodable, Encodable},
+        sleep, NetworkName,
     },
+    Error, Result,
 };
 
 pub const SOL_NATIVE_TOKEN_ID: &str = "So11111111111111111111111111111111111111112";

@@ -42,10 +42,13 @@ use secp256k1::{
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 use darkfi::{
-    crypto::keypair::PublicKey as DrkPublicKey,
+    crypto::{keypair::PublicKey as DrkPublicKey, token_id::generate_id2},
     node::wallet::cashierdb::{CashierDb, TokenKey},
-    serial::{deserialize, serialize, Decodable, Encodable},
-    util::{expand_path, generate_id2, load_keypair_to_str, NetworkName},
+    util::{
+        expand_path, load_keypair_to_str,
+        serial::{deserialize, serialize, Decodable, Encodable},
+        NetworkName,
+    },
     Error, Result,
 };
 

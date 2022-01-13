@@ -14,13 +14,12 @@ use serde_json::{json, Value};
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
 use darkfi::{
-    crypto::keypair::PublicKey,
+    crypto::{keypair::PublicKey, token_id::generate_id2},
     node::wallet::cashierdb::{CashierDb, TokenKey},
-    serial::{deserialize, serialize, Decodable, Encodable},
+    rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{
-        generate_id2,
         parse::truncate,
-        rpc::{jsonrpc, jsonrpc::JsonResult},
+        serial::{deserialize, serialize, Decodable, Encodable},
         sleep, NetworkName,
     },
     Error, Result,

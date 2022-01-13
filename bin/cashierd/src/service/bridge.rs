@@ -7,7 +7,9 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 
 use darkfi::{
-    crypto::keypair::PublicKey, node::wallet::cashierdb::TokenKey, types::*, util::NetworkName,
+    crypto::{keypair::PublicKey, types::*},
+    node::wallet::cashierdb::TokenKey,
+    util::NetworkName,
     Error, Result,
 };
 

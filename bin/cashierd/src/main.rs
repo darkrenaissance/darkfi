@@ -11,35 +11,30 @@ use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
-    chain::{rocks::columns, Rocks, RocksColumn},
+    blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{CashierdConfig, CliCashierd, Config},
     crypto::{
+        address::Address,
         keypair::{PublicKey, SecretKey},
         proof::VerifyingKey,
+        token_id::generate_id2,
+        types::DrkTokenId,
     },
     node::{
         client::Client,
         state::State,
         wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     },
-    serial::serialize,
-    types::DrkTokenId,
-    util::{
-        expand_path, generate_id2, join_config_path,
-        parse::truncate,
-        rpc::{
-            jsonrpc::{
-                error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult,
-            },
-            rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
-        },
-        Address, NetworkName,
+    rpc::{
+        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
+        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
+    util::{expand_path, join_config_path, parse::truncate, serial::serialize, NetworkName},
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
 
-use cashier::service::{bridge, bridge::Bridge};
+use cashierd::service::{bridge, bridge::Bridge};
 
 fn handle_bridge_error(error_code: u32) -> Result<()> {
     match error_code {
@@ -123,7 +118,7 @@ impl Cashierd {
                 #[cfg(feature = "sol")]
                 NetworkName::Solana => {
                     debug!(target: "CASHIER DAEMON", "Adding solana network");
-                    use cashier::service::SolClient;
+                    use cashierd::service::SolClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -141,7 +136,7 @@ impl Cashierd {
                 NetworkName::Ethereum => {
                     debug!(target: "CASHIER DAEMON", "Adding ethereum network");
 
-                    use cashier::service::EthClient;
+                    use cashierd::service::EthClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -161,7 +156,7 @@ impl Cashierd {
                 #[cfg(feature = "btc")]
                 NetworkName::Bitcoin => {
                     debug!(target: "CASHIER DAEMON", "Adding bitcoin network");
-                    use cashier::service::btc::BtcClient;
+                    use cashierd::service::btc::BtcClient;
 
                     let _bridge = self.bridge.clone();
 
@@ -306,7 +301,7 @@ impl Cashierd {
         match network {
             #[cfg(feature = "sol")]
             NetworkName::Solana => {
-                use cashier::service::sol::SOL_NATIVE_TOKEN_ID;
+                use cashierd::service::sol::SOL_NATIVE_TOKEN_ID;
                 if _token_id != SOL_NATIVE_TOKEN_ID {
                     return Ok(Some(_token_id.to_string()))
                 }
@@ -314,7 +309,7 @@ impl Cashierd {
             }
             #[cfg(feature = "eth")]
             NetworkName::Ethereum => {
-                use cashier::service::eth::ETH_NATIVE_TOKEN_ID;
+                use cashierd::service::eth::ETH_NATIVE_TOKEN_ID;
                 if _token_id != ETH_NATIVE_TOKEN_ID {
                     return Ok(Some(_token_id.to_string()))
                 }
