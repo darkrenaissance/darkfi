@@ -116,6 +116,7 @@ util = [
 rpc = [
     "async-runtime",
     "async-net",
+    "rand",
     "util",
     "websockets",
     "url",
@@ -131,6 +132,7 @@ tui = [
 ]
 system = [
     "async-runtime",
+    "rand",
 ]
 cli = [
     "toml",
@@ -142,6 +144,7 @@ net = [
     "system",
 ]
 crypto = [
+    "rand",
     "pasta_curves",
     "blake2b_simd",
     "incrementalmerkletree",
