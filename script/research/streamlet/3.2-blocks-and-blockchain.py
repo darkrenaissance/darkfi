@@ -45,11 +45,11 @@ genesis_block = Block("⊥", 0, '⊥')
 chain = Blockchain(genesis_block)
 
 # A new block is generated and appended to the blockchain, since its valid.
-block1 = Block(hash(genesis_block), 1, "'tx1','tx2','tx3'")
+block1 = Block(hash(genesis_block), 1, "tx1, tx2, tx3")
 chain.add_block(block1)
 
 # A new block is generated and appended to the blockchain, since its valid.
-block2 = Block(hash(block1), 2, "tx4,tx5,tx6")
+block2 = Block(hash(block1), 2, "tx4, tx5, tx6")
 chain.add_block(block2)
 
 # We check entire blockchain validity.
@@ -59,5 +59,5 @@ chain.check_chain_validity()
 # wrong_block = Block(hash(block1), 3, "tx4,tx5,tx6")
 # chain.add_block(wrong_block)
 
-# wrong_block = Block(hash(block1), 1, "tx4,tx5,tx6") # 
+# wrong_block = Block(hash(block1), 1, "tx4,tx5,tx6") # Epoch not incremental
 # chain.add_block(wrong_block)
