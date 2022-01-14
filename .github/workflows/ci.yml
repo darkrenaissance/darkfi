@@ -3,12 +3,11 @@ name: CI Checks
 on: [push, pull_request]
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  test-units:
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v2
@@ -17,12 +16,20 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install dependencies
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Install dependencies (Linux)
         run: |
           sudo apt update
           sudo apt -y install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+        if: matrix.os == 'ubuntu-latest'
 
-      - name: Run tests
+      - name: Install dependencies (macOS)
+        run: |
+          brew install llvm
+        if: matrix.os == 'macos-latest'
+
+      - name: Run test units
         run: |
           make test
 
@@ -31,7 +38,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v2
@@ -40,11 +47,18 @@ jobs:
           toolchain: stable
           override: true
       - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v1
 
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
         run: |
           sudo apt update
           sudo apt -y install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install dependencies (macOS)
+        run: |
+          brew install llvm
+        if: matrix.os == 'macos-latest'
 
       - name: Run feature powerset builds
         run: |
@@ -63,5 +77,3 @@ jobs:
       - run: |
           rustup component add rustfmt
           cargo fmt -- --check
-
-
