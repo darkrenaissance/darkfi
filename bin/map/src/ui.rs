@@ -50,7 +50,19 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let graph = Paragraph::new(info_vec).block(Block::default()).style(Style::default());
 
-    //let 
+    let node_info: Vec<ListItem> = app
+        .node_list
+        .node_info
+        .noise
+        .iter()
+        .map(|i| {
+            let line1 = Spans::from(i.to_string());
+            ListItem::new(vec![line1]).style(Style::default())
+        })
+        .collect();
+
+
+    //let
     //let info: Vec<ListItem> = app
     //    .node_list
     //    .nodes
@@ -62,10 +74,9 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     //    })
     //    .collect();
 
-    //let info = List::new(info)
-    //    .block(Block::default())
-    //    .highlight_style(Style::default().bg(Color::Black).add_modifier(Modifier::BOLD))
-    //    .highlight_symbol(">> ");
+    let node_info = List::new(node_info)
+        .block(Block::default())
+        .highlight_style(Style::default().bg(Color::Blue).add_modifier(Modifier::BOLD));
 
     //if app.show_popup {
     //    let block = Block::default().title("Popup").borders(Borders::ALL);
@@ -73,6 +84,6 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     //}
 
     // TODO: make this a stateful widget that changes with scroll
-    f.render_widget(graph, slice[1]);
-    //f.render_stateful_widget(info, slice[1], &mut app.node_list.state);
+    //f.render_widget(graph, slice[1]);
+    f.render_stateful_widget(node_info, slice[1], &mut app.node_list.state);
 }

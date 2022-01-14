@@ -1,39 +1,23 @@
-use crate::types::{NodeId, NodeInfo};
+use crate::{
+    info::NodeExtra,
+    types::{NodeId, NodeInfo},
+};
 use std::collections::HashMap;
 use tui::widgets::ListState;
 
 #[derive(Clone)]
-pub struct NodeExtra {
-    pub index: u32,
-    pub noise: String,
-}
-
-impl NodeExtra {
-    pub fn new() -> NodeExtra {
-        let mut index = 0;
-        let noise = Self::make_noise();
-        NodeExtra { index, noise }
-    }
-
-    pub fn make_noise() -> String {
-        String::new()
-    }
-}
-#[derive(Clone)]
 pub struct StatefulList {
     pub state: ListState,
     pub nodes: HashMap<NodeId, NodeInfo>,
-    pub nodex: NodeExtra,
+    pub node_info: NodeExtra,
 }
 
 impl StatefulList {
-    pub fn new(nodes: HashMap<NodeId, NodeInfo>) -> StatefulList {
-        StatefulList { state: ListState::default(), nodes, nodex: NodeExtra::new() }
+    pub fn new(nodes: HashMap<NodeId, NodeInfo>, node_info: NodeExtra) -> StatefulList {
+        StatefulList { state: ListState::default(), nodes, node_info }
     }
 
     pub fn next(&mut self) {
-        let index = self.nodex.index;
-
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.nodes.len() - 1 {
@@ -41,7 +25,6 @@ impl StatefulList {
                 } else {
                     i + 1
                 }
-                //index == i;
             }
             None => 0,
         };
@@ -49,8 +32,6 @@ impl StatefulList {
     }
 
     pub fn previous(&mut self) {
-        let index = self.nodex.index;
-
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -58,7 +39,6 @@ impl StatefulList {
                 } else {
                     i - 1
                 }
-                //index == i;
             }
             None => 0,
         };

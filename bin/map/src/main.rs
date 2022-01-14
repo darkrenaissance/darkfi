@@ -10,6 +10,7 @@ use tui::{
 };
 
 pub mod app;
+pub mod info;
 pub mod list;
 pub mod types;
 pub mod ui;
