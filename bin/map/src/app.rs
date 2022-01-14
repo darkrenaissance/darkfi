@@ -10,7 +10,6 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct App {
     pub node_list: StatefulList,
-    pub show_popup: bool,
 }
 
 impl App {
@@ -26,7 +25,7 @@ impl App {
                 hashmap.insert(id.to_string(), info.to_string());
             }
         }
-        App { node_list: StatefulList::new(hashmap), show_popup: false }
+        App { node_list: StatefulList::new(hashmap) }
     }
 
     fn get_node_id() -> Vec<String> {

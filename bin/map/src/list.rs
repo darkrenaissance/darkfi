@@ -11,7 +11,12 @@ pub struct NodeExtra {
 impl NodeExtra {
     pub fn new() -> NodeExtra {
         let mut index = 0;
-        NodeExtra { index, noise: String::new() }
+        let noise = Self::make_noise();
+        NodeExtra { index, noise }
+    }
+
+    pub fn make_noise() -> String {
+        String::new("USEFUL NODE INFO")
     }
 }
 #[derive(Clone)]
@@ -29,16 +34,14 @@ impl StatefulList {
     pub fn next(&mut self) {
         let index = self.nodex.index;
 
-        // index
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.nodes.len() - 1 {
-                    //index = 0;
                     0
                 } else {
-                    //index + 1;
                     i + 1
                 }
+                index == i;
             }
             None => 0,
         };
@@ -53,6 +56,7 @@ impl StatefulList {
                 } else {
                     i - 1
                 }
+                index == i;
             }
             None => 0,
         };

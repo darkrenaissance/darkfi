@@ -39,8 +39,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let nodes = List::new(nodes)
         .block(Block::default())
-        .highlight_style(Style::default().bg(Color::Black).add_modifier(Modifier::BOLD));
-    //.highlight_symbol(">> ");
+        .highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD));
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
@@ -49,6 +48,9 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         info_vec.push(Spans::from(val.to_string()))
     }
 
+    let graph = Paragraph::new(info_vec).block(Block::default()).style(Style::default());
+
+    //let 
     //let info: Vec<ListItem> = app
     //    .node_list
     //    .nodes
@@ -59,8 +61,6 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     //        ListItem::new(vec![line2]).style(Style::default())
     //    })
     //    .collect();
-
-    let graph = Paragraph::new(info_vec).block(Block::default()).style(Style::default());
 
     //let info = List::new(info)
     //    .block(Block::default())
