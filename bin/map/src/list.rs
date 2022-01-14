@@ -16,7 +16,7 @@ impl NodeExtra {
     }
 
     pub fn make_noise() -> String {
-        String::new("USEFUL NODE INFO")
+        String::new()
     }
 }
 #[derive(Clone)]
@@ -41,7 +41,7 @@ impl StatefulList {
                 } else {
                     i + 1
                 }
-                index == i;
+                //index == i;
             }
             None => 0,
         };
@@ -49,6 +49,8 @@ impl StatefulList {
     }
 
     pub fn previous(&mut self) {
+        let index = self.nodex.index;
+
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -56,7 +58,7 @@ impl StatefulList {
                 } else {
                     i - 1
                 }
-                index == i;
+                //index == i;
             }
             None => 0,
         };

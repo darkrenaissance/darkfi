@@ -58,7 +58,7 @@ fn run_app<B: Backend>(
                 }
                 Key::Char('j') => app.node_list.next(),
                 Key::Char('k') => app.node_list.previous(),
-                Key::Char('\n') => app.show_popup = !app.show_popup,
+                //Key::Char('\n') => app.show_popup = !app.show_popup,
                 _ => (),
             }
         }
