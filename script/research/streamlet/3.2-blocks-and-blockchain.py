@@ -56,8 +56,8 @@ chain.add_block(block2)
 chain.check_chain_validity()
 
 # Following code examples will fail, due to block validity checks:
-# wrong_block = Block(hash(block1), 3, "tx4,tx5,tx6")
+# wrong_block = Block(hash(block1), 3, "tx4,tx5,tx6") # Previous block not last
 # chain.add_block(wrong_block)
 
-# wrong_block = Block(hash(block1), 1, "tx4,tx5,tx6") # Epoch not incremental
+# wrong_block = Block(hash(block2), 1, "tx4,tx5,tx6") # Epoch not incremental
 # chain.add_block(wrong_block)
