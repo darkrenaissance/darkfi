@@ -4,7 +4,7 @@ pub mod app;
 pub mod ui;
 pub mod types;
 
-pub use info::NodeExtra;
+pub use info::InfoScreen;
 pub use list::StatefulList;
 pub use app::App;
 pub use ui::ui;

@@ -48,6 +48,9 @@ fn run_app<B: Backend>(
     terminal.clear()?;
 
     let mut last_tick = Instant::now();
+
+    app.node_list.state.select(Some(0));
+
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;
 

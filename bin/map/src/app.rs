@@ -1,5 +1,5 @@
 use crate::{
-    info::NodeExtra,
+    info::InfoScreen,
     list::StatefulList,
     types::{NodeId, NodeInfo},
 };
@@ -27,7 +27,7 @@ impl App {
             }
         }
 
-        let node_info = NodeExtra::new();
+        let node_info = InfoScreen::new();
         App { node_list: StatefulList::new(hashmap, node_info) }
     }
 
@@ -42,7 +42,7 @@ impl App {
 
     fn get_node_info() -> Vec<String> {
         let mut node_info = Vec::new();
-        for num in 1..100 {
+        for _num in 1..100 {
             //let new_info = format!("\nConnections: {}\n", num);
             let new_info = "";
             node_info.push(new_info.to_string());

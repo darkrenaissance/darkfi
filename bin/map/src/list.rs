@@ -1,5 +1,5 @@
 use crate::{
-    info::NodeExtra,
+    info::InfoScreen,
     types::{NodeId, NodeInfo},
 };
 use std::collections::HashMap;
@@ -9,11 +9,11 @@ use tui::widgets::ListState;
 pub struct StatefulList {
     pub state: ListState,
     pub nodes: HashMap<NodeId, NodeInfo>,
-    pub node_info: NodeExtra,
+    pub node_info: InfoScreen,
 }
 
 impl StatefulList {
-    pub fn new(nodes: HashMap<NodeId, NodeInfo>, node_info: NodeExtra) -> StatefulList {
+    pub fn new(nodes: HashMap<NodeId, NodeInfo>, node_info: InfoScreen) -> StatefulList {
         StatefulList { state: ListState::default(), nodes, node_info }
     }
 

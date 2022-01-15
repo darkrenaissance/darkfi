@@ -15,13 +15,14 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, List, ListItem, Paragraph},
+    widgets::{Block, List, ListItem},
     Frame,
 };
 
 pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
+        .margin(1)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(f.size());
 
@@ -39,14 +40,14 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let nodes = List::new(nodes)
         .block(Block::default())
-        .highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD));
+        .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
     let node_info: Vec<ListItem> = app
         .node_list
         .node_info
-        .noise
+        .info
         .iter()
         .map(|i| {
             let line1 = Spans::from(i.to_string());
@@ -56,8 +57,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let node_info = List::new(node_info)
         .block(Block::default())
-        .highlight_style(Style::default().bg(Color::Blue).add_modifier(Modifier::BOLD));
+        .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
-    // TODO: make this a stateful widget that changes with scroll
     f.render_stateful_widget(node_info, slice[1], &mut app.node_list.state);
 }
