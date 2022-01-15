@@ -13,7 +13,7 @@ class Node:
 		self.inputs = []
 	
 	def __repr__(self):
-		return "Node=[id={0}, secret_key={1}, public_key={2}]".format(self.id, self.secret_key, self.public_key)
+		return "Node=[id={0}, secret_key={1}, public_key={2}, blockchain={3}, inputs={4}".format(self.id, self.secret_key, self.public_key, self.blockchain, self.inputs)
 		
 	def receive_input(self, input):
 		# Additional validity rules must be defined by the protocol for its blockchain data structure.
