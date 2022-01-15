@@ -23,7 +23,7 @@ the commitments.
 
 The `constrain_instance` call can take any of our assigned variables
 and enforce a _public input_. Public inputs are an array (or vector)
-of values used as public inputs by verifiers to verify a zero knowledge
+of revealed values used by verifiers to verify a zero knowledge
 proof. In the above case of the Mint proof, since we have five calls to
 `constrain_instance`, we would also have an array of five elements that
 represent these public inputs. The array's order **must match** the
