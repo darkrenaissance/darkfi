@@ -1,6 +1,6 @@
 use crate::{
-    list::StatefulList,
-    node::{NodeId, NodeInfo},
+    list::NodeIdList,
+    node::{NodeInfo, NodeInfoView},
 };
 use rand::Rng;
 use smol::Timer;
@@ -8,15 +8,25 @@ use std::{collections::HashMap, time::Duration};
 
 #[derive(Clone)]
 pub struct App {
-    pub node_list: StatefulList,
-    pub node_info: NodeInfo,
+    pub node_list: NodeIdList,
+    pub node_info: NodeInfoView,
 }
 
 impl App {
     pub fn new() -> App {
-        let node_info = NodeInfo::new();
-        let node_id = NodeId::new();
-        let node_list = StatefulList::new(node_id);
+        // node info struct w fields
+        // make 10 node info
+        let infos = vec![NodeInfo {
+            id: "sodisofjhosd".to_string(),
+            connections: 10,
+            is_active: true,
+            last_message: "hey how are you?".to_string(),
+        }];
+
+        let node_info = NodeInfoView::new(infos.clone());
+
+        let ids = vec![infos[0].id.clone()];
+        let node_list = NodeIdList::new(ids);
         App { node_list, node_info }
     }
 

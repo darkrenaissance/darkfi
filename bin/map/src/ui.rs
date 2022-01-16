@@ -1,6 +1,6 @@
 use crate::{
     app::App,
-    node::{NodeId, NodeInfo},
+    node::{NodeInfo, NodeInfoView},
 };
 use tui::{
     backend::Backend,
@@ -11,7 +11,6 @@ use tui::{
     Frame,
 };
 
-// pass node info
 pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
@@ -21,8 +20,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let nodes: Vec<ListItem> = app
         .node_list
-        .nodes
-        .id
+        .node_id
         .iter()
         .map(|(id)| {
             let line1 = Spans::from(id.to_string());
@@ -36,10 +34,12 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
-    let text: Vec<Spans> = app.node_info.info.iter().map(|i| Spans::from(i.to_string())).collect();
-    let graph = Paragraph::new(text)
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
+    //// call make info here
+    //let text: Vec<Spans> = app.node_info.info.iter().map(|i| Spans::from(i.to_string())).collect();
 
-    f.render_widget(graph, slice[1]);
+    //let graph = Paragraph::new(text)
+    //    .block(Block::default().borders(Borders::ALL))
+    //    .style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
+
+    //f.render_widget(graph, slice[1]);
 }
