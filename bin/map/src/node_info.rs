@@ -1,19 +1,10 @@
-use rand::Rng;
-
-// TODO: make Node data structure
-//       hashmap of node_id and node_info
-//       make NodeInfoView that implements scrolling
-//
-// NodeInfoView
-// next and previous updates index
-// and updates info content
 #[derive(Clone)]
 pub struct NodeInfoView {
     pub index: usize,
 }
 
 impl NodeInfoView {
-    pub fn new(infos: Vec<NodeInfo>) -> NodeInfoView {
+    pub fn new(_infos: Vec<NodeInfo>) -> NodeInfoView {
         let index = 0;
         NodeInfoView { index }
     }

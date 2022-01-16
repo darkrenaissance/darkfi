@@ -1,10 +1,9 @@
 use crate::{
     list::NodeIdList,
-    node::{NodeInfo, NodeInfoView},
+    node_info::{NodeInfo, NodeInfoView},
 };
-use rand::Rng;
-use smol::Timer;
-use std::{collections::HashMap, time::Duration};
+//use smol::Timer;
+//use std::{collections::HashMap, time::Duration};
 
 #[derive(Clone)]
 pub struct App {
@@ -16,31 +15,31 @@ impl App {
     pub fn new() -> App {
         let infos = vec![
             NodeInfo {
-                id: "sodisofjhosd".to_string(),
+                id: "0385048034sodisofjhosd1111q3434".to_string(),
                 connections: 10,
                 is_active: true,
                 last_message: "hey how are you?".to_string(),
             },
             NodeInfo {
-                id: "snfksdfkdjflsjkdfj".to_string(),
+                id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
                 connections: 5,
                 is_active: false,
                 last_message: "lmao".to_string(),
             },
             NodeInfo {
-                id: "alsdlasjfrsdfsdfsd".to_string(),
+                id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
                 connections: 5,
                 is_active: true,
                 last_message: "gm".to_string(),
             },
             NodeInfo {
-                id: "ldflsdjflsdjflsdjfii".to_string(),
+                id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
                 connections: 2,
                 is_active: true,
                 last_message: "hihi".to_string(),
             },
             NodeInfo {
-                id: "asdjapsdika;lsk;asdkas".to_string(),
+                id: "09850249352asdjapsdikalskasdkas".to_string(),
                 connections: 10,
                 is_active: true,
                 last_message: "wtf".to_string(),

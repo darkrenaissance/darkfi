@@ -1,5 +1,4 @@
-use crate::node::{NodeInfo, NodeInfoView};
-use std::collections::HashMap;
+//use std::collections::HashMap;
 use tui::widgets::ListState;
 
 #[derive(Clone)]

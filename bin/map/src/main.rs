@@ -1,15 +1,4 @@
-// next/ prev:
-//      select_node(i)
-//      NodeInfo
-//          set-content(node_info)
-//              clear current text
-//              let text = ...
-
-use std::{
-    io,
-    io::Read,
-    time::{Duration, Instant},
-};
+use std::{io, io::Read, time::Duration};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -48,7 +37,7 @@ fn main() -> Result<(), io::Error> {
 fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: App,
-    tick_rate: Duration,
+    _tick_rate: Duration,
 ) -> io::Result<()> {
     let mut asi = async_stdin();
 
@@ -56,7 +45,7 @@ fn run_app<B: Backend>(
 
     app.node_list.state.select(Some(0));
 
-    let mut last_tick = Instant::now();
+    //let mut last_tick = Instant::now();
 
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;

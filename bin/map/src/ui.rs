@@ -1,13 +1,13 @@
 use crate::{
     app::App,
-    node::{NodeInfo, NodeInfoView},
+    //node_info::{NodeInfo, NodeInfoView},
 };
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem},
     Frame,
 };
 
@@ -22,7 +22,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .node_list
         .node_id
         .iter()
-        .map(|(id)| {
+        .map(|id| {
             let line1 = Spans::from(id.to_string());
             ListItem::new(vec![line1]).style(Style::default())
         })
