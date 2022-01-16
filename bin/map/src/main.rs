@@ -1,3 +1,10 @@
+// next/ prev:
+//      select_node(i)
+//      NodeInfo
+//          set-content(node_info)
+//              clear current text
+//              let text = ...
+
 use std::{
     io,
     io::Read,
@@ -10,7 +17,7 @@ use tui::{
 };
 
 pub mod app;
-pub mod info;
+pub mod node;
 pub mod list;
 pub mod types;
 pub mod ui;
@@ -47,9 +54,9 @@ fn run_app<B: Backend>(
 
     terminal.clear()?;
 
-    let mut last_tick = Instant::now();
-
     app.node_list.state.select(Some(0));
+
+    let mut last_tick = Instant::now();
 
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;
@@ -60,14 +67,21 @@ fn run_app<B: Backend>(
                     terminal.clear()?;
                     return Ok(())
                 }
-                Key::Char('j') => app.node_list.next(),
-                Key::Char('k') => app.node_list.previous(),
+                Key::Char('j') => {
+                    app.node_list.next();
+                    app.node_info.next();
+                }
+                Key::Char('k') => {
+                    app.node_list.previous();
+                    app.node_info.previous();
+                }
                 _ => (),
             }
         }
 
-        if last_tick.elapsed() >= tick_rate {
-            last_tick = Instant::now();
-        }
+        //if last_tick.elapsed() >= tick_rate {
+        //    app.clone().update();
+        //    last_tick = Instant::now();
+        //}
     }
 }

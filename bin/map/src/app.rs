@@ -1,9 +1,10 @@
 use crate::{
-    info::InfoScreen,
+    node::{NodeId, NodeInfo},
     list::StatefulList,
-    types::{NodeId, NodeInfo},
 };
-use std::collections::HashMap;
+use rand::Rng;
+use smol::Timer;
+use std::{collections::HashMap, time::Duration};
 
 // the information here should be continually updating
 // nodes are added from the result of rpc requests
@@ -11,49 +12,24 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct App {
     pub node_list: StatefulList,
+    pub node_info: NodeInfo,
 }
 
 impl App {
     pub fn new() -> App {
-        let mut hashmap: HashMap<NodeId, NodeInfo> = HashMap::new();
-
-        let node_id = Self::get_node_id();
-        let node_info = Self::get_node_info();
-
-        // TODO: fix this
-        for id in node_id.iter() {
-            for info in node_info.iter() {
-                hashmap.insert(id.to_string(), info.to_string());
-            }
-        }
-
-        let node_info = InfoScreen::new();
-        App { node_list: StatefulList::new(hashmap, node_info) }
+        let node_info = NodeInfo::new();
+        let node_id = NodeId::new();
+        let node_list = StatefulList::new(node_id);
+        App { node_list, node_info }
     }
 
-    fn get_node_id() -> Vec<String> {
-        let mut node_list = Vec::new();
-        for num in 1..100 {
-            let new_nodes = format!("\nNode {}\n", num);
-            node_list.push(new_nodes);
-        }
-        node_list
-    }
-
-    fn get_node_info() -> Vec<String> {
-        let mut node_info = Vec::new();
-        for _num in 1..100 {
-            //let new_info = format!("\nConnections: {}\n", num);
-            let new_info = "";
-            node_info.push(new_info.to_string());
-        }
-        node_info
-    }
-
-    // every 5 seconds
     // TODO: implement this
-    //fn update(&mut self) {
-    //    let node = self.node.remove(0);
-    //    self.nodes.push(node);
+    //async fn sleep(self, dur: Duration) {
+    //    Timer::after(dur).await;
+    //}
+
+    //pub async fn update(mut self) {
+    //    self.node_list.nodes.insert("New node joined".to_string(), "".to_string());
+    //    //self.sleep(Duration::from_secs(2)).await;
     //}
 }

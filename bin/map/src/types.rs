@@ -1,2 +1,2 @@
-pub type NodeId = String;
-pub type NodeInfo = String;
+//pub type NodeId = String;
+//pub type NodeInfo = String;

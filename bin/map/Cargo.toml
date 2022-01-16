@@ -11,3 +11,5 @@ edition = "2021"
 # Misc
 termion = "1.5.6"
 tui = "0.16.0"
+smol = "1.2.4"
+rand = "0.6.5"

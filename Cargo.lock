@@ -2811,6 +2811,19 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "map"
+version = "0.3.0"
+dependencies = [
+ "rand 0.6.5",
+ "smol",
+ "termion",
+ "tui",
+]
+
+[[package]]
+>>>>>>> 4ca0ed7 (map: simplify and refactor)
 name = "matches"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
