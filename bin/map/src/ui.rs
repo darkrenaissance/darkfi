@@ -1,13 +1,10 @@
-use crate::{
-    app::App,
-    //node_info::{NodeInfo, NodeInfoView},
-};
+use crate::app::App;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Spans,
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -34,12 +31,11 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
-    //// call make info here
-    //let text: Vec<Spans> = app.node_info.info.iter().map(|i| Spans::from(i.to_string())).collect();
+    let info: Vec<Spans> =
+        app.node_info.infos.iter().map(|info| Spans::from(info.connections.to_string())).collect();
 
-    //let graph = Paragraph::new(text)
-    //    .block(Block::default().borders(Borders::ALL))
-    //    .style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
+    let graph =
+        Paragraph::new(info).block(Block::default().borders(Borders::ALL)).style(Style::default());
 
-    //f.render_widget(graph, slice[1]);
+    f.render_widget(graph, slice[1]);
 }

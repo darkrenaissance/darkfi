@@ -1,24 +1,25 @@
 #[derive(Clone)]
 pub struct NodeInfoView {
     pub index: usize,
+    pub infos: Vec<NodeInfo>,
 }
 
 impl NodeInfoView {
-    pub fn new(_infos: Vec<NodeInfo>) -> NodeInfoView {
+    pub fn new(infos: Vec<NodeInfo>) -> NodeInfoView {
         let index = 0;
-        NodeInfoView { index }
+        NodeInfoView { index, infos }
     }
 
     pub fn next(&mut self) {
-        //self.index = (self.index + 1) % self.info.len();
+        self.index = (self.index + 1) % self.infos.len();
     }
 
     pub fn previous(&mut self) {
-        //if self.index > 0 {
-        //    self.index -= 1;
-        //} else {
-        //    self.index = self.info.len() - 1;
-        //}
+        if self.index > 0 {
+            self.index -= 1;
+        } else {
+            self.index = self.infos.len() - 1;
+        }
     }
 }
 
