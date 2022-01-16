@@ -31,11 +31,75 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
-    let info: Vec<Spans> =
-        app.node_info.infos.iter().map(|info| Spans::from(info.connections.to_string())).collect();
-
-    let graph =
-        Paragraph::new(info).block(Block::default().borders(Borders::ALL)).style(Style::default());
-
-    f.render_widget(graph, slice[1]);
+    // TODO: cleanup this boilerplate
+    // pass index value to render_info()
+    match app.node_info.index {
+        0 => {
+            let id = &app.node_info.infos[0].id;
+            let connections = app.node_info.infos[0].connections;
+            let span = vec![
+                Spans::from(format!("NodeId: {}", id)),
+                Spans::from(format!("Number of connections: {}", connections)),
+            ];
+            let graph = Paragraph::new(span)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default());
+            f.render_widget(graph, slice[1]);
+        }
+        1 => {
+            let id = &app.node_info.infos[1].id;
+            let connections = app.node_info.infos[1].connections;
+            let span = vec![
+                Spans::from(format!("NodeId: {}", id)),
+                Spans::from(format!("Number of connections: {}", connections)),
+            ];
+            let graph = Paragraph::new(span)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default());
+            f.render_widget(graph, slice[1]);
+        }
+        2 => {
+            let id = &app.node_info.infos[2].id;
+            let connections = app.node_info.infos[2].connections;
+            let span = vec![
+                Spans::from(format!("NodeId: {}", id)),
+                Spans::from(format!("Number of connections: {}", connections)),
+            ];
+            let graph = Paragraph::new(span)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default());
+            f.render_widget(graph, slice[1]);
+        }
+        3 => {
+            let id = &app.node_info.infos[3].id;
+            let connections = app.node_info.infos[3].connections;
+            let span = vec![
+                Spans::from(format!("NodeId: {}", id)),
+                Spans::from(format!("Number of connections: {}", connections)),
+            ];
+            let graph = Paragraph::new(span)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default());
+            f.render_widget(graph, slice[1]);
+        }
+        4 => {
+            let id = &app.node_info.infos[4].id;
+            let connections = app.node_info.infos[3].connections;
+            let span = vec![
+                Spans::from(format!("NodeId: {}", id)),
+                Spans::from(format!("Number of connections: {}", connections)),
+            ];
+            let graph = Paragraph::new(span)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default());
+            f.render_widget(graph, slice[1]);
+        }
+        _ => {
+            // do something
+        }
+    }
 }
+
+// render_info(index)
+// return info at index
+// render info

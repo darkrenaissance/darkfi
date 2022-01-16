@@ -45,6 +45,7 @@ fn run_app<B: Backend>(
 
     app.node_list.state.select(Some(0));
 
+    app.node_info.index = 0;
     //let mut last_tick = Instant::now();
 
     loop {

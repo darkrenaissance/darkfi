@@ -28,7 +28,7 @@ impl App {
             },
             NodeInfo {
                 id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
-                connections: 5,
+                connections: 7,
                 is_active: true,
                 last_message: "gm".to_string(),
             },
