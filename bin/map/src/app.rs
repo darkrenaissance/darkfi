@@ -1,13 +1,10 @@
 use crate::{
-    node::{NodeId, NodeInfo},
     list::StatefulList,
+    node::{NodeId, NodeInfo},
 };
 use rand::Rng;
 use smol::Timer;
 use std::{collections::HashMap, time::Duration};
-
-// the information here should be continually updating
-// nodes are added from the result of rpc requests
 
 #[derive(Clone)]
 pub struct App {

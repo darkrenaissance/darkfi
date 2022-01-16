@@ -1,20 +1,11 @@
-use crate::{
-    node::{NodeId, NodeInfo},
-    ui::render_selected,
-};
+use crate::node::{NodeId, NodeInfo};
 use std::collections::HashMap;
 use tui::widgets::ListState;
 
-// TODO: make this just a list
-// hashmaps are owned by App
 #[derive(Clone)]
 pub struct StatefulList {
     pub state: ListState,
     pub nodes: NodeId,
-    //pub nodes: HashMap<NodeId, NodeInfo>,
-    //pub node_info: NodeInfo,
-    //pub index: HashMap<usize, NodeInfo>,
-    //pub node_info: InfoScreen,
 }
 
 impl StatefulList {
