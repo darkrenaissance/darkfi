@@ -1,6 +1,9 @@
 use anyhow::Result;
 use clap::Parser as ClapParser;
-use std::fs::read_to_string;
+use std::{
+    fs::{read_to_string, File},
+    io::Write,
+};
 
 use zkas::{analyzer::Analyzer, compiler::Compiler, lexer::Lexer, parser::Parser};
 
@@ -57,7 +60,17 @@ fn main() -> Result<()> {
     );
 
     let bincode = compiler.compile();
-    println!("{:?}", bincode);
+
+    let output: String;
+    if let Some(o) = cli.output {
+        output = o;
+    } else {
+        output = format!("{}.bin", cli.input);
+    }
+
+    let mut file = File::create(&output)?;
+    file.write_all(&bincode)?;
+    println!("Wrote output to {}", &output);
 
     Ok(())
 }
