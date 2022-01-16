@@ -14,18 +14,49 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
-        // node info struct w fields
-        // make 10 node info
-        let infos = vec![NodeInfo {
-            id: "sodisofjhosd".to_string(),
-            connections: 10,
-            is_active: true,
-            last_message: "hey how are you?".to_string(),
-        }];
+        let infos = vec![
+            NodeInfo {
+                id: "sodisofjhosd".to_string(),
+                connections: 10,
+                is_active: true,
+                last_message: "hey how are you?".to_string(),
+            },
+            NodeInfo {
+                id: "snfksdfkdjflsjkdfj".to_string(),
+                connections: 5,
+                is_active: false,
+                last_message: "lmao".to_string(),
+            },
+            NodeInfo {
+                id: "alsdlasjfrsdfsdfsd".to_string(),
+                connections: 5,
+                is_active: true,
+                last_message: "gm".to_string(),
+            },
+            NodeInfo {
+                id: "ldflsdjflsdjflsdjfii".to_string(),
+                connections: 2,
+                is_active: true,
+                last_message: "hihi".to_string(),
+            },
+            NodeInfo {
+                id: "asdjapsdika;lsk;asdkas".to_string(),
+                connections: 10,
+                is_active: true,
+                last_message: "wtf".to_string(),
+            },
+        ];
 
         let node_info = NodeInfoView::new(infos.clone());
 
-        let ids = vec![infos[0].id.clone()];
+        let ids = vec![
+            infos[0].id.clone(),
+            infos[1].id.clone(),
+            infos[2].id.clone(),
+            infos[3].id.clone(),
+            infos[4].id.clone(),
+        ];
+
         let node_list = NodeIdList::new(ids);
         App { node_list, node_info }
     }
