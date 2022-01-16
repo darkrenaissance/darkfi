@@ -4,6 +4,7 @@ pub mod coin;
 pub mod constants;
 pub mod diffie_hellman;
 pub mod keypair;
+pub mod loader;
 pub mod merkle_node;
 pub mod mint_proof;
 pub mod note;
