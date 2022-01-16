@@ -4,7 +4,7 @@ use std::io;
 use halo2::{
     plonk,
     plonk::Circuit,
-    poly::commitment,
+    poly::commitment::Params,
     transcript::{Blake2bRead, Blake2bWrite},
 };
 use pasta_curves::vesta;
@@ -17,13 +17,13 @@ use crate::{
 
 #[derive(Debug)]
 pub struct VerifyingKey {
-    pub params: commitment::Params<vesta::Affine>,
+    pub params: Params<vesta::Affine>,
     pub vk: plonk::VerifyingKey<vesta::Affine>,
 }
 
 impl VerifyingKey {
     pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
-        let params = commitment::Params::new(k);
+        let params = Params::new(k);
         let vk = plonk::keygen_vk(&params, &c).unwrap();
         VerifyingKey { params, vk }
     }
@@ -31,13 +31,13 @@ impl VerifyingKey {
 
 #[derive(Debug)]
 pub struct ProvingKey {
-    pub params: commitment::Params<vesta::Affine>,
+    pub params: Params<vesta::Affine>,
     pub pk: plonk::ProvingKey<vesta::Affine>,
 }
 
 impl ProvingKey {
     pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
-        let params = commitment::Params::new(k);
+        let params = Params::new(k);
         let vk = plonk::keygen_vk(&params, &c).unwrap();
         let pk = plonk::keygen_pk(&params, vk, &c).unwrap();
         ProvingKey { params, pk }

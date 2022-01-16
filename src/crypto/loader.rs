@@ -2,10 +2,10 @@ use std::{fs::*, path::PathBuf, time::Instant};
 
 use crate::{
     crypto::proof::{ProvingKey, VerifyingKey},
+    util::serial::Decodable,
     zk::{circuit::MintContract, vm},
+    Result,
 };
-
-use super::{serial::Decodable, Result};
 
 pub struct ContractLoader {}
 
@@ -69,7 +69,7 @@ impl ContractLoader {
 
     pub fn create_prk(name: String) -> Result<()> {
         // TODO: implement this
-        let _mint_vk = ProvingKey::build(11, MintContract::default());
+        let _mint_pk = ProvingKey::build(11, MintContract::default());
         let _file = File::create(name + ".prk")?;
         // TODO: serialize and save file
         Ok(())
