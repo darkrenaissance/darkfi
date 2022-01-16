@@ -19,7 +19,6 @@ use tui::{
 pub mod app;
 pub mod node;
 pub mod list;
-pub mod types;
 pub mod ui;
 
 use crate::app::App;
