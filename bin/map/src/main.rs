@@ -5,13 +5,7 @@ use tui::{
     Terminal,
 };
 
-pub mod app;
-pub mod list;
-pub mod node_info;
-pub mod types;
-pub mod ui;
-
-use crate::app::App;
+use map::{App, ui};
 
 fn main() -> Result<(), io::Error> {
     // Set up terminal output
