@@ -1,7 +1,7 @@
 use crate::app::App;
 use tui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Spans,
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -31,75 +31,23 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
 
-    // TODO: cleanup this boilerplate
-    // pass index value to render_info()
-    match app.node_info.index {
-        0 => {
-            let id = &app.node_info.infos[0].id;
-            let connections = app.node_info.infos[0].connections;
-            let span = vec![
-                Spans::from(format!("NodeId: {}", id)),
-                Spans::from(format!("Number of connections: {}", connections)),
-            ];
-            let graph = Paragraph::new(span)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default());
-            f.render_widget(graph, slice[1]);
-        }
-        1 => {
-            let id = &app.node_info.infos[1].id;
-            let connections = app.node_info.infos[1].connections;
-            let span = vec![
-                Spans::from(format!("NodeId: {}", id)),
-                Spans::from(format!("Number of connections: {}", connections)),
-            ];
-            let graph = Paragraph::new(span)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default());
-            f.render_widget(graph, slice[1]);
-        }
-        2 => {
-            let id = &app.node_info.infos[2].id;
-            let connections = app.node_info.infos[2].connections;
-            let span = vec![
-                Spans::from(format!("NodeId: {}", id)),
-                Spans::from(format!("Number of connections: {}", connections)),
-            ];
-            let graph = Paragraph::new(span)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default());
-            f.render_widget(graph, slice[1]);
-        }
-        3 => {
-            let id = &app.node_info.infos[3].id;
-            let connections = app.node_info.infos[3].connections;
-            let span = vec![
-                Spans::from(format!("NodeId: {}", id)),
-                Spans::from(format!("Number of connections: {}", connections)),
-            ];
-            let graph = Paragraph::new(span)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default());
-            f.render_widget(graph, slice[1]);
-        }
-        4 => {
-            let id = &app.node_info.infos[4].id;
-            let connections = app.node_info.infos[3].connections;
-            let span = vec![
-                Spans::from(format!("NodeId: {}", id)),
-                Spans::from(format!("Number of connections: {}", connections)),
-            ];
-            let graph = Paragraph::new(span)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default());
-            f.render_widget(graph, slice[1]);
-        }
-        _ => {
-            // do something
-        }
-    }
+    let index = app.node_info.index;
+
+    render_info(app, f, index, slice);
 }
 
-// render_info(index)
-// return info at index
-// render info
+fn render_info<B: Backend>(app: &mut App, f: &mut Frame<B>, index: usize, slice: Vec<Rect>) {
+    let id = &app.node_info.infos[index].id;
+    let connections = app.node_info.infos[index].connections;
+    let is_active = app.node_info.infos[index].is_active;
+    let message = &app.node_info.infos[index].last_message;
+    let span = vec![
+        Spans::from(format!("NodeId: {}", id)),
+        Spans::from(format!("Number of connections: {}", connections)),
+        Spans::from(format!("Is active: {}", is_active)),
+        Spans::from(format!("Last message: {}", message)),
+    ];
+    let graph =
+        Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
+    f.render_widget(graph, slice[1]);
+}
