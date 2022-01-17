@@ -1,23 +1,14 @@
-use std::collections::HashMap;
-
 #[derive(Clone)]
 pub struct NodeInfoView {
     pub index: usize,
-    pub info_map: HashMap<usize, NodeInfo>,
     pub infos: Vec<NodeInfo>,
 }
 
 impl NodeInfoView {
     pub fn new(infos: Vec<NodeInfo>) -> NodeInfoView {
-        let mut info_map: HashMap<usize, NodeInfo> = HashMap::new();
-        let mut index = 0;
+        let index = 0;
 
-        for info in infos.clone() {
-            info_map.insert(index, info);
-            index += 1;
-        }
-
-        NodeInfoView { index, info_map, infos }
+        NodeInfoView { index, infos }
     }
 
     pub fn next(&mut self) {
