@@ -2,9 +2,10 @@ class Blockchain:
 	''' This class represents a sequence of blocks starting with the genesis block. '''
 	def __init__(self, intial_block):
 		self.blocks = [intial_block]
+		self.notarized = False
 	
 	def __repr__(self):
-		return "Blockchain=[blocks={0}]".format(self.blocks)
+		return "Blockchain=[blocks={0}], is notarized: {}".format(self.blocks, self.notarized)
 		
 	def __eq__(self, other):
 		return self.blocks == other.blocks
@@ -14,6 +15,9 @@ class Blockchain:
 		
 	def __getitem__(self, index):
 		  return self.blocks[index]
+
+	def is_notarized(self):
+		return self.notarized
 	
 	''' A block is considered valid when its parent hash is equal to the hash of the 
 		previous block and their epochs are incremental, exluding genesis. 
