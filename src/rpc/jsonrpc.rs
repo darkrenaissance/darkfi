@@ -195,9 +195,7 @@ pub async fn send_request(uri: &str, data: Value) -> Result<JsonResult, Error> {
     }
 
     if use_unix {
-        let path = uri.strip_prefix("unix://").unwrap();
-
-        let mut stream = Async::<UnixStream>::connect(path).await?;
+        let mut stream = Async::<UnixStream>::connect(parsed_uri.path()).await?;
         stream.write_all(data_str.as_bytes()).await?;
 
         bytes_read = stream.read(&mut buf[..]).await?;
