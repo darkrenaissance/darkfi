@@ -9,6 +9,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use smol::Async;
+use url::Url;
 
 use crate::Error;
 
@@ -140,65 +141,70 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
-pub async fn send_raw_request(url: &str, data: Value) -> Result<JsonResult, Error> {
-    let use_tls: bool;
-    let parsed_url = url::Url::parse(url)?;
+pub async fn send_request(uri: &str, data: Value) -> Result<JsonResult, Error> {
+    // let mut use_tor = false;
+    // let mut use_nym = false;
+    let mut use_tcp = false;
+    let mut use_tls = false;
+    let mut use_unix = false;
 
-    match parsed_url.scheme() {
-        "tcp" => use_tls = false,
+    let parsed_uri = Url::parse(uri)?;
+    match parsed_uri.scheme() {
+        "tor" => unimplemented!(),
+        "nym" => unimplemented!(),
+        "tcp" => use_tcp = true,
         "tls" => use_tls = true,
-        scheme => {
-            return Err(Error::UrlParseError(format!(
-                "Invalid scheme `{}` found in `{}`",
-                scheme, parsed_url
-            )))
-        }
+        "unix" => use_unix = true,
+        s => unimplemented!("Protocol `{}` not supported.", s),
     }
-
-    let host = parsed_url
-        .host()
-        .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", url)))?
-        .to_string();
-    let port = parsed_url
-        .port()
-        .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", url)))?;
-
-    let socket_addr = {
-        let host = host.clone();
-        smol::unblock(move || (host.as_str(), port).to_socket_addrs())
-            .await?
-            .next()
-            .ok_or(Error::NoUrlFound)?
-    };
 
     let mut buf = [0; 2048];
     let bytes_read: usize;
     let data_str = serde_json::to_string(&data)?;
 
-    let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
+    if use_tcp || use_tls {
+        let host = parsed_uri
+            .host()
+            .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
+            .to_string();
+        let port = parsed_uri
+            .port()
+            .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
 
-    if use_tls {
-        let mut stream = async_native_tls::connect(&host, stream).await?;
-        stream.write_all(data_str.as_bytes()).await?;
-        bytes_read = stream.read(&mut buf[..]).await?;
-    } else {
-        stream.write_all(data_str.as_bytes()).await?;
-        bytes_read = stream.read(&mut buf[..]).await?;
+        let socket_addr = {
+            let host = host.clone();
+            smol::unblock(move || (host.as_str(), port).to_socket_addrs())
+                .await?
+                .next()
+                .ok_or(Error::NoUrlFound)?
+        };
+
+        let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
+
+        if use_tls {
+            let mut stream = async_native_tls::connect(&host, stream).await?;
+            stream.write_all(data_str.as_bytes()).await?;
+            bytes_read = stream.read(&mut buf[..]).await?;
+        } else {
+            stream.write_all(data_str.as_bytes()).await?;
+            bytes_read = stream.read(&mut buf[..]).await?;
+        }
+
+        let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+        return Ok(reply)
     }
 
-    let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-    Ok(reply)
-}
+    if use_unix {
+        let path = uri.strip_prefix("unix://").unwrap();
 
-pub async fn send_unix_request(path: &str, data: Value) -> Result<JsonResult, Error> {
-    let mut buf = [0; 2048];
-    let data_str = serde_json::to_string(&data)?;
+        let mut stream = Async::<UnixStream>::connect(path).await?;
+        stream.write_all(data_str.as_bytes()).await?;
 
-    let mut stream = Async::<UnixStream>::connect(path).await?;
-    stream.write_all(data_str.as_bytes()).await?;
+        bytes_read = stream.read(&mut buf[..]).await?;
 
-    let bytes_read: usize = stream.read(&mut buf[..]).await?;
+        let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+        return Ok(reply)
+    }
 
-    let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-    Ok(reply)
+    unreachable!();
 }

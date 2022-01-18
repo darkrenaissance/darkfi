@@ -5,7 +5,7 @@ use tui::{
     Terminal,
 };
 
-use map::{App, ui};
+use map::{ui, App};
 
 fn main() -> Result<(), io::Error> {
     // Set up terminal output

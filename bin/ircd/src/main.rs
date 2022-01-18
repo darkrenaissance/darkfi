@@ -17,8 +17,8 @@ use darkfi::{
     net,
     rpc::{
         jsonrpc::{
-            error as jsonerr, request as jsonreq, response as jsonresp, send_raw_request,
-            ErrorCode::*, JsonRequest, JsonResult,
+            error as jsonerr, request as jsonreq, response as jsonresp, ErrorCode::*, JsonRequest,
+            JsonResult,
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
