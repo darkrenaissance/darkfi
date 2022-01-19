@@ -31,14 +31,14 @@ pub enum Type {
 impl Type {
     pub fn from_repr(b: u8) -> Self {
         match b {
-            0 => Self::EcPoint,
-            1 => Self::EcFixedPoint,
-            16 => Self::Base,
-            17 => Self::BaseArray,
-            18 => Self::Scalar,
-            19 => Self::ScalarArray,
-            32 => Self::MerklePath,
-            48 => Self::Uint32,
+            0x00 => Self::EcPoint,
+            0x01 => Self::EcFixedPoint,
+            0x10 => Self::Base,
+            0x11 => Self::BaseArray,
+            0x12 => Self::Scalar,
+            0x13 => Self::ScalarArray,
+            0x20 => Self::MerklePath,
+            0x30 => Self::Uint32,
             _ => unimplemented!(),
         }
     }

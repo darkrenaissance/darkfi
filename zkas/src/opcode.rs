@@ -54,15 +54,15 @@ impl Opcode {
 
     pub fn from_repr(b: u8) -> Self {
         match b {
-            0 => Self::EcAdd,
-            1 => Self::EcMul,
-            2 => Self::EcMulBase,
-            3 => Self::EcMulShort,
-            8 => Self::EcGetX,
-            9 => Self::EcGetY,
-            16 => Self::PoseidonHash,
-            32 => Self::CalculateMerkleRoot,
-            240 => Self::ConstrainInstance,
+            0x00 => Self::EcAdd,
+            0x01 => Self::EcMul,
+            0x02 => Self::EcMulBase,
+            0x03 => Self::EcMulShort,
+            0x08 => Self::EcGetX,
+            0x09 => Self::EcGetY,
+            0x10 => Self::PoseidonHash,
+            0x20 => Self::CalculateMerkleRoot,
+            0xf0 => Self::ConstrainInstance,
             _ => unimplemented!(),
         }
     }
