@@ -28,7 +28,7 @@ def main(path):
 
         if parsing_method:
             if i.startswith("// --> "):
-                method = i.split()[3][1:-2]
+                method = i.split()[5][1:-2]
                 recv = i[3:]
                 continue
 
