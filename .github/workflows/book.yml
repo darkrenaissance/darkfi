@@ -26,6 +26,8 @@ jobs:
                 override: true
                 components: rustfmt, clippy
 
+            - uses: Swatinem/rust-cache@v1
+
             - name: Install ghp-import and mdbook
               run: |
                 pip install ghp-import
