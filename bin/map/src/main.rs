@@ -1,3 +1,14 @@
+// select each connection and show log of traffic
+// use rpc to get some info from the ircd network
+// ircd::logger keeps track of network info
+// map rpc polls logger for info about nodes, etc
+use darkfi::{
+    error::{Error, Result},
+    rpc::{jsonrpc, jsonrpc::JsonResult},
+};
+
+use log::{debug, error};
+use serde_json::{json, Value};
 use std::{io, io::Read, time::Duration};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
@@ -7,7 +18,41 @@ use tui::{
 
 use map::{ui, App};
 
-fn main() -> Result<(), io::Error> {
+struct Map {
+    url: String,
+}
+
+impl Map {
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+
+    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
+        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r)).await {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
+        match reply {
+            JsonResult::Resp(r) => {
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
+                Ok(r.result)
+            }
+
+            JsonResult::Err(e) => {
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
+                Err(Error::JsonRpcError(e.error.message.to_string()))
+            }
+
+            JsonResult::Notif(n) => {
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
+                Err(Error::JsonRpcError("Unexpected reply".to_string()))
+            }
+        }
+    }
+}
+
+fn main() -> Result<()> {
     // Set up terminal output
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
