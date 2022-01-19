@@ -36,8 +36,8 @@ TBD
 ```
 
 Integers in the binary are encoded using variable-integer encoding.
-See [`serial.rs`](../../../src/util/serial.rs) for our Rust
-implementation.
+See [`serial.rs`](https://github.com/darkrenaissance/darkfi/blob/master/src/util/serial.rs)
+for our Rust implementation.
 
 ## `MAGIC_BYTES`
 
