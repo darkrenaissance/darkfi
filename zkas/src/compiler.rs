@@ -51,7 +51,7 @@ impl Compiler {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
             bincode.extend_from_slice(&serialize(&VarInt(stack_idx)));
-            bincode.extend_from_slice(i.name.as_bytes());
+            bincode.extend_from_slice(&serialize(&i.name));
             stack_idx += 1;
         }
 

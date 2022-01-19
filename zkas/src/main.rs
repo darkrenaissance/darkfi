@@ -5,7 +5,9 @@ use std::{
     io::Write,
 };
 
-use zkas::{analyzer::Analyzer, compiler::Compiler, lexer::Lexer, parser::Parser};
+use zkas::{
+    analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
+};
 
 #[derive(clap::Parser)]
 #[clap(name = "zkas", version)]
@@ -71,6 +73,9 @@ fn main() -> Result<()> {
     let mut file = File::create(&output)?;
     file.write_all(&bincode)?;
     println!("Wrote output to {}", &output);
+
+    let zkbin = ZkBinary::decode(&bincode)?;
+    println!("{:#?}", zkbin);
 
     Ok(())
 }
