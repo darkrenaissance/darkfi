@@ -24,6 +24,10 @@ struct Cli {
     #[clap(short)]
     evaluate: bool,
 
+    /// Examine decoded bytecode
+    #[clap(long)]
+    examine: bool,
+
     /// ZK script to compile
     input: String,
 }
@@ -74,8 +78,10 @@ fn main() -> Result<()> {
     file.write_all(&bincode)?;
     println!("Wrote output to {}", &output);
 
-    let zkbin = ZkBinary::decode(&bincode)?;
-    println!("{:#?}", zkbin);
+    if cli.examine {
+        let zkbin = ZkBinary::decode(&bincode)?;
+        println!("{:#?}", zkbin);
+    }
 
     Ok(())
 }
