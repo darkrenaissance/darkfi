@@ -146,16 +146,16 @@ impl Darkfid {
 
     // RPCAPI:
     // Returns a `helloworld` string.
-    // --> {"method": "say_hello", "params": []}
-    // <-- {"result": "helloworld"}
+    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 1}
     async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
 
     // RPCAPI:
     // Attempts to initialize a wallet, and returns `true` upon success.
-    // --> {"method": "create_wallet", "params": []}
-    // <-- {"result": true}
+    // --> {"jsonrpc": "2.0", "method": "create_wallet", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn create_wallet(&self, id: Value, _params: Value) -> JsonResult {
         match self.client.lock().await.init_db().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
@@ -165,8 +165,8 @@ impl Darkfid {
 
     // RPCAPI:
     // Attempts to generate a new keypair and returns `true` upon success.
-    // --> {"method": "key_gen", "params": []}
-    // <-- {"result": true}
+    // --> {"jsonrpc": "2.0", "method": "key_gen", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         let client = self.client.lock().await;
         match client.key_gen().await {
@@ -178,8 +178,8 @@ impl Darkfid {
     // RPCAPI:
     // Fetches the main keypair from the wallet and returns it
     // in an encoded format.
-    // --> {"method": "get_key", "params": []}
-    // <-- {"result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"}
+    // --> {"jsonrpc": "2.0", "method": "get_key", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 1}
     async fn get_key(&self, id: Value, _params: Value) -> JsonResult {
         let pk = self.client.lock().await.main_keypair.public;
         let addr = Address::from(pk).to_string();
@@ -190,8 +190,8 @@ impl Darkfid {
     // Fetches all keypairs from the wallet and returns a list of them
     // in an encoded format.
     // The first one in the list is the default selected keypair.
-    // --> {"method": "get_keys", "params": []}
-    // <-- {"result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC,...]"}
+    // --> {"jsonrpc": "2.0", "method": "get_keys", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "..."], "id": 1}
     async fn get_keys(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<Vec<String>> = async {
             let keypairs = self.client.lock().await.get_keypairs().await?;
@@ -222,8 +222,8 @@ impl Darkfid {
     // RPCAPI:
     // Imports a keypair into the wallet with a given path on the filesystem.
     // Returns `true` upon success.
-    // --> {"method": "import_keypair", "params": [path]}
-    // <-- {"result": true}
+    // --> {"jsonrpc": "2.0", "method": "import_keypair", "params": ["/path"], "id": 1}
+    // <-- {"jsonrpc:" "2.0", "result": true, "id": 1}
     async fn import_keypair(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -267,8 +267,8 @@ impl Darkfid {
     // RPCAPI:
     // Exports the default selected keypair to a given path on the filesystem.
     // Returns `true` upon success.
-    // --> {"method": "export_keypair", "params": [path]}
-    // <-- {"result": true}
+    // --> {"jsonrpc": "2.0", "method": "export_keypair", "params": ["/path"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn export_keypair(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -305,8 +305,8 @@ impl Darkfid {
     // RPCAPI:
     // Sets the default wallet address to the given parameter.
     // Returns true upon success.
-    // --> {"method": "set_default_address", "params": [vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC]}
-    // <-- {"result": true}
+    // --> {"jsonrpc": "2.0", "method": "set_default_address", "params": ["vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_default_address(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -332,8 +332,8 @@ impl Darkfid {
     // RPCAPI:
     // Fetches the known balances from the wallet.
     // Returns a map of balances, indexed by `network`, and token ID.
-    // --> {"method": "get_balances", "params": []}
-    // <-- {"result": "[{"btc":(value,network)},...]"}
+    // --> {"jsonrpc": "2.0", "method": "get_balances", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
         let result: Result<HashMap<String, (String, String)>> = async {
             let balances = self.client.lock().await.get_balances().await?;
@@ -377,8 +377,8 @@ impl Darkfid {
     // RPCAPI:
     // Generates the internal token ID for a given `network` and token ticker or address.
     // Returns the internal representation of the token ID.
-    // --> {"method": "get_token_id", "params": [network,token]}
-    // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
+    // --> {"jsonrpc": "2.0", "method": "get_token_id", "params": ["network", "token"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 1}
     async fn get_token_id(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -444,8 +444,8 @@ impl Darkfid {
     // RPCAPI:
     // Asks the configured cashier for their supported features.
     // Returns a map of features received from the requested cashier.
-    // --> {"method": "features", "params": []}
-    // <-- {"result": {"network":["btc","sol"]}}
+    // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"network": ["btc", "sol"]}, "id": 1}
     async fn features(&self, id: Value, _params: Value) -> JsonResult {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult =
@@ -468,8 +468,8 @@ impl Darkfid {
     // The public key send here is used so the cashier can know where to send
     // the newly minted tokens once the deposit is received.
     // Returns an address to which the caller is supposed to deposit funds.
-    // --> {"method": "deposit", "params": [network,token,publickey]}
-    // <-- {"result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL"}
+    // --> {"jsonrpc": "2.0", "method": "deposit", "params": ["network", "token", "publickey"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 1}
     async fn deposit(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -539,8 +539,8 @@ impl Darkfid {
     // then transfers wrapped DarkFitokens to the cashier's wallet. Following that,
     // the cashier should return a transaction ID of them sending the funds that
     // are requested for withdrawal.
-    // --> {"method": "withdraw", "params": [network,token,publickey,amount]}
-    // <-- {"result": "txID"}
+    // --> {"jsonrpc": "2.0", "method": "withdraw", "params": ["network", "token", "publickey", "amount"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn withdraw(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
 
@@ -654,8 +654,8 @@ impl Darkfid {
     // RPCAPI:
     // Transfer a given wrapped DarkFi token amount to the given address.
     // Returns the transaction ID of the transfer.
-    // --> {"method": "transfer", "params": [network,dToken,address,amount]}
-    // <-- {"result": "txID"}
+    // --> {"jsonrpc": "2.0", "method": "transfer", "params": ["network", "dToken", "address", "amount"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn transfer(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
         if args.is_none() {
