@@ -73,7 +73,6 @@ impl ProgramOptions {
             ([127, 0, 0, 1], 6667).into()
         };
 
-
         let rpc_listen_addr = if let Some(rpc_addr) = app.value_of("RPC_LISTEN") {
             rpc_addr.parse()?
         } else {

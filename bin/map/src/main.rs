@@ -51,8 +51,8 @@ impl Map {
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
+     //--> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
+     //<-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
     async fn say_hello(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("say_hello"), json!([]));
         Ok(self.request(req).await?)
@@ -60,7 +60,7 @@ impl Map {
 }
 
 async fn start() -> Result<()> {
-    let client = Map::new("127.0.0.1:8000".to_string());
+    let client = Map::new("tcp://127.0.0.1:8000".to_string());
     let reply = client.say_hello().await?;
     println!("Server replied: {}", &reply.to_string());
     Ok(())
