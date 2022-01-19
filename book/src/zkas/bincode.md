@@ -96,3 +96,9 @@ the stack and become available for later references.
 ## `.debug`
 
 TBD
+
+
+## Decoding the bincode
+
+An example decoder implementation can be found in zkas'
+[`decoder.rs`](../../../zkas/src/decoder.rs) module.
