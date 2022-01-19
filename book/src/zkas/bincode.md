@@ -20,8 +20,8 @@ The compiled binary blob has the following layout:
 MAGIC_BYTES
 BINARY_VERSION
 .constant
-CONSTANT_TYPE STACK_INDEX CONSTANT_NAME 
-CONSTANT_TYPE STACK_INDEX CONSTANT_NAME 
+CONSTANT_TYPE CONSTANT_NAME 
+CONSTANT_TYPE CONSTANT_NAME 
 ...
 .contract
 WITNESS_TYPE
@@ -56,9 +56,9 @@ potential different formats in the future.
 
 ## `.constant`
 
-The constants in the `.constant` section are declared with their
-type stack index, and name, so that the VM knows how to search for
-the builtin constant and add it to the stack.
+The constants in the `.constant` section are declared with their type
+and name, so that the VM knows how to search for the builtin constant
+and add it to the stack.
 
 
 ## `.contract`
