@@ -51,4 +51,19 @@ impl Opcode {
             Opcode::Noop => (vec![], vec![]),
         }
     }
+
+    pub fn from_repr(b: u8) -> Self {
+        match b {
+            0 => Self::EcAdd,
+            1 => Self::EcMul,
+            2 => Self::EcMulBase,
+            3 => Self::EcMulShort,
+            8 => Self::EcGetX,
+            9 => Self::EcGetY,
+            16 => Self::PoseidonHash,
+            32 => Self::CalculateMerkleRoot,
+            240 => Self::ConstrainInstance,
+            _ => unimplemented!(),
+        }
+    }
 }

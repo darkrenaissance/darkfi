@@ -9,7 +9,7 @@ use crate::{compiler::MAGIC_BYTES, opcode::Opcode, types::Type};
 pub struct ZkBinary {
     pub constants: Vec<(Type, String)>,
     pub witnesses: Vec<Type>,
-    pub opcodes: Vec<(Opcode, u64, Vec<u64>)>,
+    pub opcodes: Vec<(Opcode, Vec<u64>)>,
 }
 
 impl ZkBinary {
@@ -87,8 +87,28 @@ impl ZkBinary {
         Ok(witnesses)
     }
 
-    fn parse_circuit(_bytes: &[u8]) -> Result<Vec<(Opcode, u64, Vec<u64>)>> {
-        Ok(vec![])
+    fn parse_circuit(bytes: &[u8]) -> Result<Vec<(Opcode, Vec<u64>)>> {
+        let mut opcodes = vec![];
+
+        let mut iter_offset = 0;
+        while iter_offset < bytes.len() {
+            let opcode = Opcode::from_repr(bytes[iter_offset]);
+            iter_offset += 1;
+
+            let (arg_num, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
+            iter_offset += offset;
+
+            let mut args = vec![];
+            for _ in 0..arg_num.0 {
+                let (stack_index, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
+                iter_offset += offset;
+                args.push(stack_index.0);
+            }
+
+            opcodes.push((opcode, args));
+        }
+
+        Ok(opcodes)
     }
 }
 
