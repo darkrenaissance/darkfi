@@ -1,5 +1,6 @@
 use darkfi::{
     util::serial::{deserialize_partial, VarInt},
+    Error::ZkasDecoderError,
     Result,
 };
 
@@ -16,24 +17,24 @@ impl ZkBinary {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let magic_bytes = &bytes[0..4];
         if magic_bytes != MAGIC_BYTES {
-            panic!()
+            return Err(ZkasDecoderError("Magic bytes are incorrect."))
         }
 
         let _binary_version = &bytes[4];
 
         let constants_offset = match find_subslice(bytes, b".constant") {
             Some(v) => v,
-            None => panic!(),
+            None => return Err(ZkasDecoderError("Could not find .constant section.")),
         };
 
         let contract_offset = match find_subslice(bytes, b".contract") {
             Some(v) => v,
-            None => panic!(),
+            None => return Err(ZkasDecoderError("Could not find .contract section")),
         };
 
         let circuit_offset = match find_subslice(bytes, b".circuit") {
             Some(v) => v,
-            None => panic!(),
+            None => return Err(ZkasDecoderError("Could not find .circuit section")),
         };
 
         let debug_offset = match find_subslice(bytes, b".debug") {
@@ -41,9 +42,17 @@ impl ZkBinary {
             None => bytes.len(),
         };
 
-        assert!(constants_offset < contract_offset);
-        assert!(contract_offset < circuit_offset);
-        assert!(circuit_offset < debug_offset);
+        if constants_offset < contract_offset {
+            return Err(ZkasDecoderError(".contract appeared before .constant"))
+        }
+
+        if contract_offset < circuit_offset {
+            return Err(ZkasDecoderError(".contract appeared before .circuit"))
+        }
+
+        if circuit_offset < debug_offset {
+            return Err(ZkasDecoderError(".circuit appeared before .debug or EOF"))
+        }
 
         let constants_section = &bytes[constants_offset + b".constant".len()..contract_offset];
         let contract_section = &bytes[contract_offset + b".contract".len()..circuit_offset];

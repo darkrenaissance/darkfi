@@ -185,6 +185,9 @@ pub enum Error {
     #[cfg(feature = "crypto")]
     #[error("Invalid Address")]
     InvalidAddress,
+
+    #[error("Invalid bincode: {0}")]
+    ZkasDecoderError(&'static str),
 }
 
 #[cfg(feature = "node")]
