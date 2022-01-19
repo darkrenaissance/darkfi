@@ -42,15 +42,15 @@ impl ZkBinary {
             None => bytes.len(),
         };
 
-        if constants_offset < contract_offset {
+        if constants_offset > contract_offset {
             return Err(ZkasDecoderError(".contract appeared before .constant"))
         }
 
-        if contract_offset < circuit_offset {
+        if contract_offset > circuit_offset {
             return Err(ZkasDecoderError(".contract appeared before .circuit"))
         }
 
-        if circuit_offset < debug_offset {
+        if circuit_offset > debug_offset {
             return Err(ZkasDecoderError(".circuit appeared before .debug or EOF"))
         }
 
