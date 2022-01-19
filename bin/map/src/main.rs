@@ -7,7 +7,7 @@ use darkfi::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
 };
 
-use log::{debug, error};
+use log::debug;
 use serde_json::{json, Value};
 use std::{io, io::Read, time::Duration};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
@@ -50,17 +50,36 @@ impl Map {
             }
         }
     }
+
+    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
+    async fn say_hello(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("say_hello"), json!([]));
+        Ok(self.request(req).await?)
+    }
 }
 
-fn main() -> Result<()> {
+async fn start() -> Result<()> {
+    let client = Map::new("127.0.0.1:8000".to_string());
+    let reply = client.say_hello().await?;
+    println!("Server replied: {}", &reply.to_string());
+    Ok(())
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
     // Set up terminal output
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
+    // we're not using this yet
     let tick_rate = Duration::from_millis(250);
-    // here
+
+    // start rpc
+    start().await?;
+
+    // create the app and run it
     let app = App::new();
     let res = run_app(&mut terminal, app, tick_rate);
 

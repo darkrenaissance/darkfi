@@ -2820,7 +2820,11 @@ dependencies = [
 name = "map"
 version = "0.3.0"
 dependencies = [
+ "async-std",
+ "darkfi",
+ "log",
  "rand 0.6.5",
+ "serde_json",
  "smol",
  "termion",
  "tui",

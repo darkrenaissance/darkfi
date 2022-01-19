@@ -14,6 +14,7 @@ tui = "0.16.0"
 
 # Async
 smol = "1.2.4"
+async-std = {version = "1.10.0", features = ["attributes"]}
 
 # Misc
 rand = "0.6.5"
