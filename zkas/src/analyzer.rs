@@ -1,4 +1,9 @@
-use std::{io, io::Write, process, str::Chars};
+use std::{
+    io,
+    io::{stdin, stdout, Read, Write},
+    process,
+    str::Chars,
+};
 
 use termion::{color, style};
 
@@ -179,6 +184,57 @@ impl Analyzer {
     }
 
     pub fn analyze_semantic(&mut self) {
+        let mut stack = vec![];
+
+        println!("Loading constants...\n-----");
+        for i in &self.constants {
+            println!("Adding `{}` to stack", i.name);
+            stack.push(&i.name);
+            Analyzer::pause();
+        }
+        println!("Stack:\n{:#?}\n-----", stack);
+
+        println!("Loading witnesses...\n-----");
+        for i in &self.witnesses {
+            println!("Adding `{}` to stack", i.name);
+            stack.push(&i.name);
+            Analyzer::pause();
+        }
+        println!("Stack:\n{:#?}\n-----", stack);
+
+        println!("Loading circuit...");
+        for i in &self.statements {
+            let argnames: Vec<String> = i.args.iter().map(|x| x.name.clone()).collect();
+            println!("Executing: {:?}({:?})", i.opcode, argnames);
+            Analyzer::pause();
+
+            for arg in &i.args {
+                print!("Looking up `{}` on the stack... ", arg.name);
+                if let Some(index) = stack.iter().position(|&r| r == &arg.name) {
+                    println!("Found at stack index {}", index);
+                } else {
+                    self.error(
+                        format!("Could not find `{}` on the stack", arg.name),
+                        arg.line,
+                        arg.column,
+                    );
+                }
+                Analyzer::pause();
+            }
+
+            match i.typ {
+                StatementType::Assignment => {
+                    println!("Pushing result as `{}` to stack", &i.variable.as_ref().unwrap().name);
+                    stack.push(&i.variable.as_ref().unwrap().name);
+                    println!("Stack:\n{:#?}\n-----", stack);
+                }
+                StatementType::Call => {
+                    println!("-----");
+                }
+                _ => unreachable!(),
+            }
+        }
+
         // println!("{:#?}", self.constants);
         // println!("{:#?}", self.witnesses);
         // println!("{:#?}", self.statements);
@@ -250,5 +306,14 @@ impl Analyzer {
         .unwrap();
         handle.flush().unwrap();
         process::exit(1);
+    }
+
+    fn pause() {
+        let msg = b"[Press Enter to continue]\r";
+        let mut stdout = stdout();
+        let _ = stdout.write(msg).unwrap();
+        stdout.flush().unwrap();
+        let _ = stdin().read(&mut [0]).unwrap();
+        write!(stdout, "{}{}\r", termion::cursor::Up(1), termion::clear::CurrentLine).unwrap();
     }
 }

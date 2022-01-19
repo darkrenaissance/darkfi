@@ -24,6 +24,10 @@ struct Cli {
     #[clap(short)]
     evaluate: bool,
 
+    /// Interactive semantic analysis
+    #[clap(short)]
+    interactive: bool,
+
     /// Examine decoded bytecode
     #[clap(long)]
     examine: bool,
@@ -46,7 +50,10 @@ fn main() -> Result<()> {
 
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
     analyzer.analyze_types();
-    analyzer.analyze_semantic();
+
+    if cli.interactive {
+        analyzer.analyze_semantic();
+    }
 
     if cli.evaluate {
         println!("{:#?}", analyzer.constants);
