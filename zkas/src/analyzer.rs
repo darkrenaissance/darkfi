@@ -43,84 +43,121 @@ impl Analyzer {
     pub fn analyze_types(&mut self) {
         // To work around the pedantic safety, we'll make new vectors and
         // then replace the `statements` and `stack` vectors from the
-        // Analyzer object when we're done.
+        // `Analyzer` object when we're done.
         let mut statements = vec![];
         let mut stack = vec![];
 
         for statement in &self.statements {
             let mut stmt = statement.clone();
 
+            let (return_types, arg_types) = statement.opcode.arg_types();
+            let mut args = vec![];
+
+            // For variable length args, we implement `BaseArray` and `ScalarArray`.
+            // It's kinda ugly.
+            if arg_types[0] == Type::BaseArray || arg_types[0] == Type::ScalarArray {
+                if statement.args.is_empty() {
+                    self.error(
+                        format!(
+                            "Passed no arguments to `{:?}` call. Expected at least 1.",
+                            statement.opcode
+                        ),
+                        statement.line,
+                        1,
+                    );
+                }
+
+                for i in &statement.args {
+                    if let Some(v) = self.lookup_var(&i.name) {
+                        let var_type = match v {
+                            Var::Constant(c) => c.typ,
+                            Var::Witness(c) => c.typ,
+                            Var::Variable(c) => c.typ,
+                        };
+
+                        if arg_types[0] == Type::BaseArray && var_type != Type::Base {
+                            self.error(
+                                format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                    arg_types[0],
+                                    Type::Base,
+                                ),
+                                i.line,
+                                i.column,
+                            );
+                        }
+
+                        if arg_types[0] == Type::ScalarArray && var_type != Type::Scalar {
+                            self.error(
+                                format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                    arg_types[0],
+                                    Type::Scalar,
+                                ),
+                                i.line,
+                                i.column,
+                            );
+                        }
+
+                        let mut arg = i.clone();
+                        arg.typ = var_type;
+                        args.push(arg);
+                    } else {
+                        self.error(
+                            format!("Unknown argument reference `{}`.", i.name),
+                            i.line,
+                            i.column,
+                        );
+                    }
+                }
+            } else {
+                if statement.args.len() != arg_types.len() {
+                    self.error(
+                        format!(
+                            "Incorrent number of args to `{:?}` call. Expected {}, got {}",
+                            statement.opcode,
+                            arg_types.len(),
+                            statement.args.len()
+                        ),
+                        statement.line,
+                        1,
+                    );
+                }
+
+                for (idx, i) in statement.args.iter().enumerate() {
+                    if let Some(v) = self.lookup_var(&i.name) {
+                        let var_type = match v {
+                            Var::Constant(c) => c.typ,
+                            Var::Witness(c) => c.typ,
+                            Var::Variable(c) => c.typ,
+                        };
+
+                        if var_type != arg_types[idx] {
+                            self.error(
+                                format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`",
+                                    arg_types[idx], var_type,
+                                ),
+                                i.line,
+                                i.column,
+                            );
+                        }
+
+                        let mut arg = i.clone();
+                        arg.typ = var_type;
+                        args.push(arg);
+                    } else {
+                        self.error(
+                            format!("Unknown argument reference `{}`.", i.name),
+                            i.line,
+                            i.column,
+                        );
+                    }
+                }
+            }
+
             match statement.typ {
                 StatementType::Assignment => {
-                    let (return_types, arg_types) = statement.opcode.arg_types();
-                    let mut args = vec![];
-
-                    // For variable length args, we implement BaseArray.
-                    // It's kinda ugly.
-                    if arg_types[0] == Type::BaseArray {
-                        for i in &statement.args {
-                            if let Some(v) = self.lookup_var(&i.name) {
-                                let var_type = match v {
-                                    Var::Constant(c) => c.typ,
-                                    Var::Witness(c) => c.typ,
-                                    Var::Variable(c) => c.typ,
-                                };
-                                if var_type != Type::Base {
-                                    self.error(
-                                        format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
-                                            Type::Base,
-                                            var_type
-                                        ),
-                                        i.line,
-                                        i.column,
-                                    );
-                                }
-
-                                let mut arg = i.clone();
-                                arg.typ = var_type;
-                                args.push(arg);
-                            } else {
-                                self.error(
-                                    format!("Unknown argument reference `{}`.", i.name),
-                                    i.line,
-                                    i.column,
-                                );
-                            }
-                        }
-                    } else {
-                        for (idx, i) in statement.args.iter().enumerate() {
-                            if let Some(v) = self.lookup_var(&i.name) {
-                                let var_type = match v {
-                                    Var::Constant(c) => c.typ,
-                                    Var::Witness(c) => c.typ,
-                                    Var::Variable(c) => c.typ,
-                                };
-
-                                if var_type != arg_types[idx] {
-                                    self.error(
-                                        format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
-                                            arg_types[idx], var_type,
-                                        ),
-                                        i.line,
-                                        i.column,
-                                    );
-                                }
-
-                                let mut arg = i.clone();
-                                arg.typ = var_type;
-                                args.push(arg);
-                            } else {
-                                self.error(
-                                    format!("Unknown argument reference `{}`.", i.name),
-                                    i.line,
-                                    i.column,
-                                );
-                            }
-                        }
-                    }
-
                     // Currently we just support a single return type.
                     let mut var = statement.variable.clone().unwrap();
                     var.typ = return_types[0];
@@ -130,80 +167,11 @@ impl Analyzer {
                     stmt.args = args;
                     statements.push(stmt);
                 }
-
                 StatementType::Call => {
-                    let (_, arg_types) = statement.opcode.arg_types();
-                    let mut args = vec![];
-
-                    // For variable length args, we implement BaseArray.
-                    // It's kinda ugly.
-                    if arg_types[0] == Type::BaseArray {
-                        for i in &statement.args {
-                            if let Some(v) = self.lookup_var(&i.name) {
-                                let var_type = match v {
-                                    Var::Constant(c) => c.typ,
-                                    Var::Witness(c) => c.typ,
-                                    Var::Variable(c) => c.typ,
-                                };
-                                if var_type != Type::Base {
-                                    self.error(
-                                        format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
-                                            Type::Base,
-                                            var_type
-                                        ),
-                                        i.line,
-                                        i.column,
-                                    );
-                                }
-
-                                let mut arg = i.clone();
-                                arg.typ = var_type;
-                                args.push(arg);
-                            } else {
-                                self.error(
-                                    format!("Unknown argument reference `{}`.", i.name),
-                                    i.line,
-                                    i.column,
-                                );
-                            }
-                        }
-                    } else {
-                        for (idx, i) in statement.args.iter().enumerate() {
-                            if let Some(v) = self.lookup_var(&i.name) {
-                                let var_type = match v {
-                                    Var::Constant(c) => c.typ,
-                                    Var::Witness(c) => c.typ,
-                                    Var::Variable(c) => c.typ,
-                                };
-
-                                if var_type != arg_types[idx] {
-                                    self.error(
-                                        format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`",
-                                            arg_types[idx], var_type,
-                                        ),
-                                        i.line,
-                                        i.column,
-                                    );
-                                }
-
-                                let mut arg = i.clone();
-                                arg.typ = var_type;
-                                args.push(arg);
-                            } else {
-                                self.error(
-                                    format!("Unknown argument reference `{}`.", i.name),
-                                    i.line,
-                                    i.column,
-                                );
-                            }
-                        }
-                    }
                     stmt.args = args;
                     statements.push(stmt);
                 }
-                StatementType::Noop => unreachable!(),
+                _ => unreachable!(),
             }
         }
 
