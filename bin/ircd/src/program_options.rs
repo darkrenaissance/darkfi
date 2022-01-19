@@ -6,6 +6,7 @@ pub struct ProgramOptions {
     pub network_settings: net::Settings,
     pub log_path: Box<std::path::PathBuf>,
     pub irc_accept_addr: SocketAddr,
+    pub rpc_listen_addr: SocketAddr,
 }
 
 impl ProgramOptions {
@@ -21,6 +22,7 @@ impl ProgramOptions {
             (@arg EXTERNAL_ADDR: -e --external +takes_value "External address")
             (@arg LOG_PATH: --log +takes_value "Logfile path")
             (@arg IRC_ACCEPT: -r --irc +takes_value "IRC accept address")
+            (@arg RPC_LISTEN: --rpc +takes_value "RPC listen address")
         )
         .get_matches();
 
@@ -71,6 +73,13 @@ impl ProgramOptions {
             ([127, 0, 0, 1], 6667).into()
         };
 
+
+        let rpc_listen_addr = if let Some(rpc_addr) = app.value_of("RPC_LISTEN") {
+            rpc_addr.parse()?
+        } else {
+            ([127, 0, 0, 1], 8000).into()
+        };
+
         Ok(ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
@@ -82,6 +91,7 @@ impl ProgramOptions {
             },
             log_path,
             irc_accept_addr,
+            rpc_listen_addr,
         })
     }
 }

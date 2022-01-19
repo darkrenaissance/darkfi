@@ -138,7 +138,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     info!("Listening on {}", local_addr);
 
     let server_config = RpcServerConfig {
-        socket_addr: local_addr,
+        socket_addr: options.rpc_listen_addr,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
         // TODO: cleanup
