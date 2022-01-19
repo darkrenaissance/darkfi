@@ -27,3 +27,19 @@ pub enum Type {
     /// Intermediate type, should never appear in the result
     Dummy = 0xff,
 }
+
+impl Type {
+    pub fn from_repr(b: u8) -> Self {
+        match b {
+            0 => Self::EcPoint,
+            1 => Self::EcFixedPoint,
+            16 => Self::Base,
+            17 => Self::BaseArray,
+            18 => Self::Scalar,
+            19 => Self::ScalarArray,
+            32 => Self::MerklePath,
+            48 => Self::Uint32,
+            _ => unimplemented!(),
+        }
+    }
+}

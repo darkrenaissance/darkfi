@@ -41,8 +41,6 @@ impl Compiler {
         bincode.extend_from_slice(&MAGIC_BYTES);
         bincode.push(BINARY_VERSION);
 
-        let mut stack_idx: u64 = 0;
-
         // Temporary stack vector for lookups
         let mut tmp_stack = vec![];
 
@@ -51,14 +49,12 @@ impl Compiler {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
             bincode.extend_from_slice(&serialize(&i.name));
-            stack_idx += 1;
         }
 
         bincode.extend_from_slice(b".contract");
         for i in &self.witnesses {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
-            stack_idx += 1;
         }
 
         bincode.extend_from_slice(b".circuit");
@@ -66,7 +62,6 @@ impl Compiler {
             match i.typ {
                 StatementType::Assignment => {
                     tmp_stack.push(&i.variable.as_ref().unwrap().name);
-                    stack_idx += 1;
                 }
                 // In case of a simple call, we don't append anything to the stack
                 StatementType::Call => {}

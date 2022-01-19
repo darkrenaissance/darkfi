@@ -1,11 +1,14 @@
-use darkfi::Result;
+use darkfi::{
+    util::serial::{deserialize_partial, VarInt},
+    Result,
+};
 
 use crate::{compiler::MAGIC_BYTES, opcode::Opcode, types::Type};
 
 #[derive(Debug)]
 pub struct ZkBinary {
-    pub constants: Vec<(Type, u64, String)>,
-    pub witnesses: Vec<(Type, u64)>,
+    pub constants: Vec<(Type, String)>,
+    pub witnesses: Vec<Type>,
     pub opcodes: Vec<(Opcode, u64, Vec<u64>)>,
 }
 
@@ -54,16 +57,38 @@ impl ZkBinary {
         Ok(Self { constants, witnesses, opcodes })
     }
 
-    fn parse_constants(_bytes: &[u8]) -> Result<Vec<(Type, u64, String)>> {
-        unimplemented!();
+    fn parse_constants(bytes: &[u8]) -> Result<Vec<(Type, String)>> {
+        let mut constants = vec![];
+
+        let mut iter_offset = 0;
+        while iter_offset < bytes.len() {
+            let c_type = Type::from_repr(bytes[iter_offset]);
+            iter_offset += 1;
+            let (name, offset) = deserialize_partial::<String>(&bytes[iter_offset..])?;
+            iter_offset += offset;
+
+            constants.push((c_type, name));
+        }
+
+        Ok(constants)
     }
 
-    fn parse_contract(_bytes: &[u8]) -> Result<Vec<(Type, u64)>> {
-        unimplemented!();
+    fn parse_contract(bytes: &[u8]) -> Result<Vec<Type>> {
+        let mut witnesses = vec![];
+
+        let mut iter_offset = 0;
+        while iter_offset < bytes.len() {
+            let w_type = Type::from_repr(bytes[iter_offset]);
+            iter_offset += 1;
+
+            witnesses.push(w_type);
+        }
+
+        Ok(witnesses)
     }
 
     fn parse_circuit(_bytes: &[u8]) -> Result<Vec<(Opcode, u64, Vec<u64>)>> {
-        unimplemented!();
+        Ok(vec![])
     }
 }
 
