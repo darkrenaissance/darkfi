@@ -57,11 +57,19 @@ impl Map {
         let req = jsonrpc::request(json!("say_hello"), json!([]));
         Ok(self.request(req).await?)
     }
+
+    //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
+    async fn get_info(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("get_info"), json!([]));
+        Ok(self.request(req).await?)
+    }
 }
 
 async fn start() -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
-    let reply = client.say_hello().await?;
+    // call this every 1 second (poll)
+    let reply = client.get_info().await?;
     println!("Server replied: {}", &reply.to_string());
     Ok(())
 }
