@@ -5,11 +5,15 @@
 use darkfi::{
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
+    util::async_util,
 };
 
+use async_std::sync::Arc;
+use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
-use std::{io, io::Read, time::Duration};
+use smol::Executor;
+use std::{io, io::Read};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -53,7 +57,7 @@ impl Map {
 
     // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
-    async fn say_hello(&self) -> Result<Value> {
+    async fn _say_hello(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("say_hello"), json!([]));
         Ok(self.request(req).await?)
     }
@@ -66,45 +70,56 @@ impl Map {
     }
 }
 
-async fn start() -> Result<()> {
-    let client = Map::new("tcp://127.0.0.1:8000".to_string());
-    // call this every 1 second (poll)
-    let reply = client.get_info().await?;
-    println!("Server replied: {}", &reply.to_string());
-    Ok(())
-}
-
 #[async_std::main]
 async fn main() -> Result<()> {
-    // Set up terminal output
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // we're not using this yet
-    let tick_rate = Duration::from_millis(250);
-
-    // start rpc
-    start().await?;
-
-    // create the app and run it
-    let app = App::new();
-    let res = run_app(&mut terminal, app, tick_rate);
-
     terminal.clear()?;
 
-    if let Err(err) = res {
-        println!("{:?}", err)
-    }
+    let app = App::new();
+
+    let nthreads = num_cpus::get();
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let ex = Arc::new(Executor::new());
+    let ex2 = ex.clone();
+
+    let (_, result) = Parallel::new()
+        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2.clone()).await?;
+                run_app(&mut terminal, app).await?;
+                drop(signal);
+                Ok::<(), darkfi::Error>(())
+            })
+        });
+
+    result
+}
+
+async fn start(ex: Arc<Executor<'_>>) -> Result<()> {
+    let client = Map::new("tcp://127.0.0.1:8000".to_string());
+
+    ex.spawn(async {
+        poll(client).await;
+    })
+    .detach();
 
     Ok(())
 }
 
-fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    mut app: App,
-    _tick_rate: Duration,
-) -> io::Result<()> {
+async fn poll(client: Map) -> Result<()> {
+    loop {
+        client.get_info().await?;
+        async_util::sleep(1).await;
+    }
+}
+
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -112,7 +127,6 @@ fn run_app<B: Backend>(
     app.node_list.state.select(Some(0));
 
     app.node_info.index = 0;
-    //let mut last_tick = Instant::now();
 
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;
@@ -134,10 +148,5 @@ fn run_app<B: Backend>(
                 _ => (),
             }
         }
-
-        //if last_tick.elapsed() >= tick_rate {
-        //    app.clone().update();
-        //    last_tick = Instant::now();
-        //}
     }
 }

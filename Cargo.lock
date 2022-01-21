@@ -2820,9 +2820,12 @@ dependencies = [
 name = "map"
 version = "0.3.0"
 dependencies = [
+ "async-channel",
  "async-std",
  "darkfi",
+ "easy-parallel",
  "log",
+ "num_cpus",
  "rand 0.6.5",
  "serde_json",
  "smol",
