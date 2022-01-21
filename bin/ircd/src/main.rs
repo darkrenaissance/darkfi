@@ -223,7 +223,27 @@ impl JsonRpcInterface {
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!("get_info"), id))
+        let resp: serde_json::Value = json!({
+            "nodes": [{
+                "id": "dfk34123kl213kp213sd",
+                "connections": "1",
+                "message": "gm",
+                "is_active": "true",
+            },
+            {
+                "id": "138032139034903499s8",
+                "connections": "3",
+                "message": "ok",
+                "is_active": "false",
+            },
+            {
+                "id": "123423ml1k2j3ll123kl",
+                "connections": "6",
+                "message": "lol",
+                "is_active": "true",
+            }]
+        });
+        JsonResult::Resp(jsonresp(resp, id))
     }
 }
 
