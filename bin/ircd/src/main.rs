@@ -228,19 +228,19 @@ impl JsonRpcInterface {
                 "id": "dfk34123kl213kp213sd",
                 "connections": 1,
                 "message": "gm",
-                "is_active": "true",
+                "is_active": true,
             },
             {
                 "id": "138032139034903499s8",
                 "connections": 3,
                 "message": "ok",
-                "is_active": "false",
+                "is_active": false,
             },
             {
                 "id": "123423ml1k2j3ll123kl",
                 "connections": 6,
                 "message": "lol",
-                "is_active": "true",
+                "is_active": true,
             }]
         });
         JsonResult::Resp(jsonresp(resp, id))
