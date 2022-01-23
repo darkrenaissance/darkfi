@@ -226,19 +226,19 @@ impl JsonRpcInterface {
         let resp: serde_json::Value = json!({
             "nodes": [{
                 "id": "dfk34123kl213kp213sd",
-                "connections": "1",
+                "connections": 1,
                 "message": "gm",
                 "is_active": "true",
             },
             {
                 "id": "138032139034903499s8",
-                "connections": "3",
+                "connections": 3,
                 "message": "ok",
                 "is_active": "false",
             },
             {
                 "id": "123423ml1k2j3ll123kl",
-                "connections": "6",
+                "connections": 6,
                 "message": "lol",
                 "is_active": "true",
             }]
