@@ -71,12 +71,8 @@ impl App {
 
     pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> App {
         let node_info = NodeInfoView::new(node_vec.clone());
-        
-        let ids = vec![
-            node_vec[0].id.clone(),
-            node_vec[1].id.clone(),
-            node_vec[2].id.clone(),
-        ];
+
+        let ids = vec![node_vec[0].id.clone(), node_vec[1].id.clone(), node_vec[2].id.clone()];
 
         let node_list = NodeIdList::new(ids);
         App { node_list, node_info }

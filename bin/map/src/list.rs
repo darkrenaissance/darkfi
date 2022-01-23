@@ -44,3 +44,7 @@ impl NodeIdList {
         self.state.select(None);
     }
 }
+
+//pub async fn add_seen(&self, id: u32) {
+//    self.privmsg_ids.lock().await.insert(id);
+//}

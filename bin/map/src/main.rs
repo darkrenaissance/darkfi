@@ -164,8 +164,7 @@ async fn update(mut app: App, reply: Value) -> Result<()> {
         //let node_list = NodeIdList::new(ids);
         //println!("{}", test);
         // do something
-    }
-    else {
+    } else {
         // TODO: error handling
         println!("Reply is an error");
     }

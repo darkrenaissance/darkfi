@@ -39,3 +39,7 @@ impl NodeInfo {
         NodeInfo { id: String::new(), connections, is_active, last_message: String::new() }
     }
 }
+
+//pub async fn add_seen(&self, id: u32) {
+//    self.privmsg_ids.lock().await.insert(id);
+//}
