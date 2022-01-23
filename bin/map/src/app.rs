@@ -5,6 +5,9 @@ use crate::{
 //use smol::Timer;
 //use std::{collections::HashMap, time::Duration};
 
+// make a structure to be able to modify and read them
+// protect using a mutex
+// arc reference
 #[derive(Clone)]
 pub struct App {
     pub node_list: NodeIdList,
@@ -13,6 +16,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
+        // append to vector of node info
         let infos = vec![
             NodeInfo {
                 id: "0385048034sodisofjhosd1111q3434".to_string(),
@@ -65,8 +69,16 @@ impl App {
     //    Timer::after(dur).await;
     //}
 
-    //pub async fn update(mut self) {
-    //    self.node_list.nodes.insert("New node joined".to_string(), "".to_string());
-    //    //self.sleep(Duration::from_secs(2)).await;
-    //}
+    pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> App {
+        let node_info = NodeInfoView::new(node_vec.clone());
+        
+        let ids = vec![
+            node_vec[0].id.clone(),
+            node_vec[1].id.clone(),
+            node_vec[2].id.clone(),
+        ];
+
+        let node_list = NodeIdList::new(ids);
+        App { node_list, node_info }
+    }
 }
