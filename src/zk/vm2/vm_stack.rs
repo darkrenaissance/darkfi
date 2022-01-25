@@ -7,6 +7,7 @@ use pasta_curves::pallas;
 
 use crate::crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode};
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum Stack {
     Var(Witness),
