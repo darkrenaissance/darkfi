@@ -7,6 +7,7 @@ use halo2_gadgets::primitives::{
     poseidon::{ConstantLength, P128Pow5T3},
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use log::info;
 use pasta_curves::{group::Curve, pallas};
 use rand::rngs::OsRng;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -18,7 +19,7 @@ use darkfi::{
         mint_proof::MintRevealedValues,
         spend_proof::SpendRevealedValues,
     },
-    zk::vm2::{WitnessVar, ZkCircuit},
+    zk::vm2::{Witness, ZkCircuit},
     zkas::decoder::ZkBinary,
     Result,
 };
@@ -47,17 +48,17 @@ fn mint_proof() -> Result<()> {
 
     let pk_coords = public_key.0.to_affine().coordinates().unwrap();
     let witnesses = vec![
-        WitnessVar::Base(*pk_coords.x()),
-        WitnessVar::Base(*pk_coords.y()),
-        WitnessVar::Base(pallas::Base::from(value)),
-        WitnessVar::Base(token_id),
-        WitnessVar::Base(serial),
-        WitnessVar::Base(coin_blind),
-        WitnessVar::Scalar(value_blind),
-        WitnessVar::Scalar(token_blind),
+        Witness::Base(*pk_coords.x()),
+        Witness::Base(*pk_coords.y()),
+        Witness::Base(pallas::Base::from(value)),
+        Witness::Base(token_id),
+        Witness::Base(serial),
+        Witness::Base(coin_blind),
+        Witness::Scalar(value_blind),
+        Witness::Scalar(token_blind),
     ];
 
-    let circuit = ZkCircuit::new(witnesses, revealed.make_outputs().to_vec(), zkbin);
+    let circuit = ZkCircuit::new(witnesses, zkbin);
     let prover = MockProver::run(11, &circuit, vec![revealed.make_outputs().to_vec()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 
@@ -120,19 +121,19 @@ fn burn_proof() -> Result<()> {
     let leaf_pos = leaf_pos as u32;
 
     let witnesses = vec![
-        WitnessVar::Base(secret.0),
-        WitnessVar::Base(serial),
-        WitnessVar::Base(pallas::Base::from(value)),
-        WitnessVar::Base(token_id),
-        WitnessVar::Base(coin_blind),
-        WitnessVar::Scalar(value_blind),
-        WitnessVar::Scalar(token_blind),
-        WitnessVar::Uint32(leaf_pos),
-        WitnessVar::MerklePath(merkle_path),
-        WitnessVar::Base(sig_secret.0),
+        Witness::Base(secret.0),
+        Witness::Base(serial),
+        Witness::Base(pallas::Base::from(value)),
+        Witness::Base(token_id),
+        Witness::Base(coin_blind),
+        Witness::Scalar(value_blind),
+        Witness::Scalar(token_blind),
+        Witness::Uint32(leaf_pos),
+        Witness::MerklePath(merkle_path),
+        Witness::Base(sig_secret.0),
     ];
 
-    let circuit = ZkCircuit::new(witnesses, revealed.make_outputs().to_vec(), zkbin);
+    let circuit = ZkCircuit::new(witnesses, zkbin);
     let prover = MockProver::run(11, &circuit, vec![revealed.make_outputs().to_vec()])?;
     assert_eq!(prover.verify(), Ok(()));
 
@@ -147,7 +148,10 @@ fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
+    info!("Executing Mint proof");
     mint_proof()?;
+
+    info!("Executing Burn proof");
     burn_proof()?;
 
     Ok(())
