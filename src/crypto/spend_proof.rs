@@ -39,7 +39,7 @@ pub struct SpendRevealedValues {
 
 impl SpendRevealedValues {
     #[allow(clippy::too_many_arguments)]
-    fn compute(
+    pub fn compute(
         value: u64,
         token_id: DrkTokenId,
         value_blind: DrkValueBlind,
@@ -89,7 +89,7 @@ impl SpendRevealedValues {
         }
     }
 
-    fn make_outputs(&self) -> [DrkCircuitField; 8] {
+    pub fn make_outputs(&self) -> [DrkCircuitField; 8] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
         let merkle_root = self.merkle_root.0;

@@ -32,7 +32,7 @@ pub struct MintRevealedValues {
 }
 
 impl MintRevealedValues {
-    fn compute(
+    pub fn compute(
         value: u64,
         token_id: DrkTokenId,
         value_blind: DrkValueBlind,
@@ -53,7 +53,7 @@ impl MintRevealedValues {
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
 
-    fn make_outputs(&self) -> [pallas::Base; 5] {
+    pub fn make_outputs(&self) -> [pallas::Base; 5] {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 
