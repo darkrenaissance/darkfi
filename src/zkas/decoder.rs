@@ -1,10 +1,9 @@
-use darkfi::{
+use super::{compiler::MAGIC_BYTES, opcode::Opcode, types::Type};
+use crate::{
     util::serial::{deserialize_partial, VarInt},
     Error::ZkasDecoderError,
     Result,
 };
-
-use crate::{compiler::MAGIC_BYTES, opcode::Opcode, types::Type};
 
 #[derive(Debug)]
 pub struct ZkBinary {

@@ -1,9 +1,9 @@
 use std::{io, io::Write, process, str::Chars};
 
-use darkfi::util::serial::{serialize, VarInt};
 use termion::{color, style};
 
-use crate::ast::{Constants, StatementType, Statements, Witnesses};
+use super::ast::{Constants, StatementType, Statements, Witnesses};
+use crate::util::serial::{serialize, VarInt};
 
 /// Version of the binary
 pub const BINARY_VERSION: u8 = 1;

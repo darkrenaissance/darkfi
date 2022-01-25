@@ -1,4 +1,4 @@
-use crate::types::Type;
+use super::types::Type;
 
 /// Opcodes supported by the VM
 #[derive(Copy, Clone, Debug)]

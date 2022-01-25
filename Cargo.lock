@@ -1376,6 +1376,8 @@ dependencies = [
  "halo2_gadgets",
  "hex",
  "incrementalmerkletree",
+ "indexmap",
+ "itertools",
  "lazy_static",
  "libsqlite3-sys",
  "log",
@@ -5682,6 +5684,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
+name = "vm"
+version = "0.3.0"
+dependencies = [
+ "darkfi",
+]
+
+[[package]]
 name = "wait-timeout"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6004,14 +6013,11 @@ dependencies = [
 
 [[package]]
 name = "zkas"
-version = "0.0.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap 3.0.7",
  "darkfi",
- "indexmap",
- "itertools",
- "termion",
 ]
 
 [[package]]

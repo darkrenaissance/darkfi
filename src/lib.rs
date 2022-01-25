@@ -33,3 +33,6 @@ pub mod util;
 
 #[cfg(feature = "rpc")]
 pub mod rpc;
+
+#[cfg(feature = "zkas")]
+pub mod zkas;

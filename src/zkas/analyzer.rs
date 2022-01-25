@@ -7,7 +7,7 @@ use std::{
 
 use termion::{color, style};
 
-use crate::{
+use super::{
     ast::{
         Constant, Constants, StatementType, Statements, Var, Variable, Variables, Witness,
         Witnesses,

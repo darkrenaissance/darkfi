@@ -2,7 +2,9 @@
 *.sage.py
 target/*
 
-/zkas/zkas
+/proofs/*.bin
+
+/zkas
 /drk
 /darkfid
 /cashierd

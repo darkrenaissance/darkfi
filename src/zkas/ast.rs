@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 
-use crate::{lexer::Token, opcode::Opcode, types::Type};
+use super::{lexer::Token, opcode::Opcode, types::Type};
 
 #[derive(Copy, PartialEq, Clone, Debug)]
 #[repr(u8)]

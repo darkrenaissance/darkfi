@@ -13,13 +13,14 @@ name = "darkfi"
 
 [workspace]
 members = [
+    "bin/zkas",
     "bin/cashierd",
     "bin/darkfid",
     "bin/drk",
     "bin/gatewayd",
     "bin/ircd",
     "bin/map",
-    "zkas",
+    "bin/vm",
 ]
 
 [dependencies]
@@ -55,6 +56,8 @@ dirs = {version = "4.0.0", optional = true}
 subtle = {version = "2.4.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
 clap = {version = "3.0.7", features = ["derive"], optional = true}
+indexmap = {version = "1.7.0", optional = true}
+itertools = {version = "0.10.3", optional = true}
 
 # Misc
 termion = {version = "1.5.6", optional = true}
@@ -213,6 +216,14 @@ node = [
 	"net",
 ]
 
+zkas = [
+    "termion",
+    "indexmap",
+    "itertools",
+
+    "util",
+]
+
 
 [[example]]
 name = "net"
@@ -242,4 +253,9 @@ required-features = ["node"]
 [[example]]
 name = "tree"
 path = "example/tree.rs"
+required-features = ["crypto"]
+
+[[example]]
+name = "vm2"
+path = "example/vm2.rs"
 required-features = ["crypto"]

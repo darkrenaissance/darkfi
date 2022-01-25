@@ -1,0 +1,15 @@
+constant "Poseidon" {
+	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+}
+
+contract "Poseidon" {
+	Base foo,
+	Base bar,
+}
+
+circuit "Poseidon" {
+	# Poseidon hash of the coin
+	C = poseidon_hash(foo, bar);
+	constrain_instance(C);
+}

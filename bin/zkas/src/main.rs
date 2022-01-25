@@ -1,17 +1,18 @@
-use anyhow::Result;
-use clap::Parser as ClapParser;
 use std::{
     fs::{read_to_string, File},
     io::Write,
 };
 
-use zkas::{
+use anyhow::Result;
+use clap::Parser as ClapParser;
+
+use darkfi::zkas::{
     analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
 };
 
 #[derive(clap::Parser)]
 #[clap(name = "zkas", version)]
-struct Cli {
+struct Args {
     /// Place the output into <FILE>
     #[clap(short, value_name = "FILE")]
     output: Option<String>,
@@ -37,9 +38,9 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let args = Args::parse();
 
-    let filename = cli.input.as_str();
+    let filename = args.input.as_str();
     let source = read_to_string(filename)?;
 
     let lexer = Lexer::new(filename, source.chars());
@@ -51,11 +52,11 @@ fn main() -> Result<()> {
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
     analyzer.analyze_types();
 
-    if cli.interactive {
+    if args.interactive {
         analyzer.analyze_semantic();
     }
 
-    if cli.evaluate {
+    if args.evaluate {
         println!("{:#?}", analyzer.constants);
         println!("{:#?}", analyzer.witnesses);
         println!("{:#?}", analyzer.statements);
@@ -69,23 +70,21 @@ fn main() -> Result<()> {
         analyzer.constants,
         analyzer.witnesses,
         analyzer.statements,
-        !cli.strip,
+        !args.strip,
     );
 
     let bincode = compiler.compile();
 
-    let output: String;
-    if let Some(o) = cli.output {
-        output = o;
-    } else {
-        output = format!("{}.bin", cli.input);
-    }
+    let output = match args.output {
+        Some(o) => o,
+        None => format!("{}.bin", args.input),
+    };
 
     let mut file = File::create(&output)?;
     file.write_all(&bincode)?;
     println!("Wrote output to {}", &output);
 
-    if cli.examine {
+    if args.examine {
         let zkbin = ZkBinary::decode(&bincode)?;
         println!("{:#?}", zkbin);
     }

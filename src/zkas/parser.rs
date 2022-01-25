@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use termion::{color, style};
 
-use crate::{
+use super::{
     ast::{
         Constant, Constants, Statement, StatementType, Statements, UnparsedConstants,
         UnparsedWitnesses, Variable, Witness, Witnesses,
