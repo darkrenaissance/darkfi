@@ -20,7 +20,6 @@ members = [
     "bin/gatewayd",
     "bin/ircd",
     "bin/map",
-    "bin/vm",
 ]
 
 [dependencies]
