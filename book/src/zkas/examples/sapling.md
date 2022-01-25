@@ -120,7 +120,7 @@ let public_inputs = vec![
 ## Burn
 
 ```
-{{#include ../../../../proofs/mint.zk}}
+{{#include ../../../../proofs/burn.zk}}
 ```
 
 The `Burn` proof consists of operations similar to the `Mint` proof,
