@@ -33,9 +33,11 @@ fix:
 clippy:
 	$(CARGO) clippy --release --all-features --all
 
-test:
+test: zkas
 	$(CARGO) test --release --all-features --all
 	$(CARGO) run --release --features=node --example tx
+	./zkas proofs/mint.zk
+	./zkas proofs/burn.zk
 	$(CARGO) run --release --features=cli,zkvm --example vm2
 
 clean:
