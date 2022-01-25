@@ -33,9 +33,13 @@ fix:
 clippy:
 	$(CARGO) clippy --release --all-features --all
 
-test: zkas
+test: test-vm test-tx
 	$(CARGO) test --release --all-features --all
+
+test-tx:
 	$(CARGO) run --release --features=node --example tx
+
+test-vm: zkas
 	./zkas proofs/mint.zk
 	./zkas proofs/burn.zk
 	$(CARGO) run --release --features=cli,zkvm --example vm2
@@ -53,4 +57,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy test clean install uninstall
+.PHONY: all check fix clippy test test-tx test-vm clean install uninstall
