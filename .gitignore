@@ -1,7 +1,7 @@
 *.pyc
 *.sage.py
-target/*
 
+/target/*
 /proof/*.bin
 
 /zkas
