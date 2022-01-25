@@ -15,7 +15,7 @@ with its voter's key on the database, so votes wouldn't be secret.
 ## Vote proof
 
 ```
-{{#include ../../../../zkas/proofs/voting.zk}}
+{{#include ../../../../proofs/voting.zk}}
 ```
 
 Our proof consists of four main operation. First we are hashing the

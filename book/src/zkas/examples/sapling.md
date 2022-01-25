@@ -11,7 +11,7 @@ $C$, and we use the burn proof to spend a previously minted _coin_.
 ## Mint proof
 
 ```
-{{#include ../../../../zkas/proofs/mint.zk}}
+{{#include ../../../../proofs/mint.zk}}
 ```
 
 As you can see, the `Mint` proof basically consists of three
@@ -120,7 +120,7 @@ let public_inputs = vec![
 ## Burn
 
 ```
-{{#include ../../../../zkas/proofs/burn.zk}}
+{{#include ../../../../proofs/mint.zk}}
 ```
 
 The `Burn` proof consists of operations similar to the `Mint` proof,

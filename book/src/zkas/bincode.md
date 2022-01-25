@@ -101,5 +101,5 @@ TBD
 ## Decoding the bincode
 
 An example decoder implementation can be found in zkas'
-[`decoder.rs`](https://github.com/darkrenaissance/darkfi/blob/master/zkas/src/decoder.rs)
+[`decoder.rs`](https://github.com/darkrenaissance/darkfi/blob/master/src/zkas/decoder.rs)
 module.
