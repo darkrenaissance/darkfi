@@ -73,7 +73,7 @@ impl Compiler {
 
             for arg in &i.args {
                 if let Some(found) = Compiler::lookup_stack(&tmp_stack, &arg.name) {
-                    bincode.extend_from_slice(&serialize(&VarInt(found)));
+                    bincode.extend_from_slice(&serialize(&VarInt(found as u64)));
                     continue
                 }
 
@@ -95,10 +95,10 @@ impl Compiler {
         bincode
     }
 
-    fn lookup_stack(stack: &[&str], name: &str) -> Option<u64> {
+    fn lookup_stack(stack: &[&str], name: &str) -> Option<usize> {
         for (idx, n) in stack.iter().enumerate() {
             if n == &name {
-                return Some(idx.try_into().unwrap())
+                return Some(idx)
             }
         }
 
