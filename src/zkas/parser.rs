@@ -430,6 +430,15 @@ impl Parser {
                     });
                 }
 
+                "Uint64" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: Type::Uint64,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
                 x => {
                     self.error(format!("`{}` is an illegal witness type", x), v.1.line, v.1.column);
                 }

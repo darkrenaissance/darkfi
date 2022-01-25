@@ -24,6 +24,9 @@ pub enum Type {
     /// Unsigned 32-bit integer
     Uint32 = 0x30,
 
+    /// Unsigned 64-bit integer
+    Uint64 = 0x31,
+
     /// Intermediate type, should never appear in the result
     Dummy = 0xff,
 }
@@ -39,6 +42,7 @@ impl Type {
             0x13 => Self::ScalarArray,
             0x20 => Self::MerklePath,
             0x30 => Self::Uint32,
+            0x31 => Self::Uint64,
             _ => unimplemented!(),
         }
     }
