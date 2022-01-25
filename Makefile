@@ -36,7 +36,7 @@ clippy:
 test:
 	$(CARGO) test --release --all-features --all
 	$(CARGO) run --release --features=node --example tx
-	$(CARGO) run --release --features=crypto,cli,zkas --example vm2
+	$(CARGO) run --release --features=crypto,cli,zkas,zkvm --example vm2
 
 clean:
 	rm -f $(BINS)

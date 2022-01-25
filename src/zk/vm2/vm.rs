@@ -24,131 +24,16 @@ use halo2_gadgets::{
 use log::debug;
 use pasta_curves::pallas;
 
+use super::vm_stack::{Stack, Witness};
 use crate::{
-    crypto::{
-        constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-            OrchardFixedBases,
-        },
-        merkle_node::MerkleNode,
+    crypto::constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        OrchardFixedBases,
     },
     zkas::{decoder::ZkBinary, opcode::Opcode},
 };
 
-// Stack type abstractions
 #[derive(Clone)]
-enum ConstantVar {
-    EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
-}
-
-#[derive(Clone)]
-pub enum WitnessVar {
-    EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
-    EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
-    Base(pallas::Base),
-    Scalar(pallas::Scalar),
-    MerklePath(Vec<MerkleNode>),
-    Uint32(u32),
-    Uint64(u64),
-}
-
-#[derive(Clone)]
-enum StackVar {
-    Constant(ConstantVar),
-    Witness(WitnessVar),
-    Cell(CellValue<pallas::Base>),
-}
-
-impl StackVar {
-    fn to_ec_point(&self) -> Point<pallas::Affine, EccChip<OrchardFixedBases>> {
-        let inner = match self {
-            StackVar::Witness(v) => v,
-            _ => unimplemented!(),
-        };
-
-        let inner = match inner {
-            WitnessVar::EcPoint(v) => v,
-            _ => unimplemented!(),
-        };
-
-        inner.clone()
-    }
-
-    fn to_fixed_point(&self) -> FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> {
-        let inner = match self {
-            StackVar::Witness(WitnessVar::EcFixedPoint(v)) => v,
-            StackVar::Constant(ConstantVar::EcFixedPoint(v)) => v,
-            _ => unimplemented!(),
-        };
-
-        inner.clone()
-    }
-
-    fn to_scalar(&self) -> pallas::Scalar {
-        let inner = match self {
-            StackVar::Witness(v) => v,
-            _ => unimplemented!(),
-        };
-
-        let inner = match inner {
-            WitnessVar::Scalar(v) => v,
-            _ => unimplemented!(),
-        };
-
-        *inner
-    }
-
-    fn to_base(&self) -> CellValue<pallas::Base> {
-        let inner = match self {
-            StackVar::Cell(v) => v,
-            _ => unimplemented!(),
-        };
-
-        *inner
-    }
-}
-
-impl From<StackVar> for std::option::Option<u32> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Witness(WitnessVar::Uint32(v)) => Some(v),
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for std::option::Option<u64> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Witness(WitnessVar::Uint64(v)) => Some(v),
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for std::option::Option<[pallas::Base; 32]> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Witness(WitnessVar::MerklePath(v)) => {
-                let ret: Vec<pallas::Base> = v.iter().map(|x| x.0).collect();
-                Some(ret.try_into().unwrap())
-            }
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for CellValue<pallas::Base> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Cell(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-#[derive(Clone)]
-#[allow(dead_code)]
 pub struct VmConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
@@ -156,7 +41,7 @@ pub struct VmConfig {
     merkle_cfg1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     merkle_cfg2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_cfg1: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
@@ -199,19 +84,14 @@ impl VmConfig {
 #[derive(Default)]
 pub struct ZkCircuit {
     constants: Vec<String>,
-    witnesses: Vec<WitnessVar>,
-    opcodes: Vec<(Opcode, Vec<u64>)>,
-    pub public_inputs: Vec<pallas::Base>,
+    witnesses: Vec<Witness>,
+    opcodes: Vec<(Opcode, Vec<usize>)>,
 }
 
 impl ZkCircuit {
-    pub fn new(
-        witnesses: Vec<WitnessVar>,
-        public_inputs: Vec<pallas::Base>,
-        circuit_code: ZkBinary,
-    ) -> Self {
+    pub fn new(witnesses: Vec<Witness>, circuit_code: ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
-        Self { constants, witnesses, opcodes: circuit_code.opcodes, public_inputs }
+        Self { constants, witnesses, opcodes: circuit_code.opcodes }
     }
 }
 
@@ -315,7 +195,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             (sinsemilla_cfg1, merkle_cfg1)
         };
 
-        let (sinsemilla_cfg2, merkle_cfg2) = {
+        let (_sinsemilla_cfg2, merkle_cfg2) = {
             let sinsemilla_cfg2 = SinsemillaChip::configure(
                 meta,
                 advices[5..].try_into().unwrap(),
@@ -335,7 +215,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             merkle_cfg1,
             merkle_cfg2,
             sinsemilla_cfg1,
-            sinsemilla_cfg2,
+            _sinsemilla_cfg2,
             poseidon_config,
         }
     }
@@ -346,8 +226,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), plonk::Error> {
         debug!("Entering synthesize()");
-        // Our stack which holds everything we reference
-        let mut stack: Vec<StackVar> = vec![];
+
+        // Our stack which holds everything we reference.
+        let mut stack: Vec<Stack> = vec![];
 
         // Offset for public inputs
         let mut public_inputs_offset = 0;
@@ -369,41 +250,45 @@ impl Circuit<pallas::Base> for ZkCircuit {
             Some(pallas::Base::one()),
         )?;
 
+        // Lookup and push the constants onto the stack
         for constant in &self.constants {
             debug!("Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = OrchardFixedBases::ValueCommitV;
                     let vcv = FixedPoint::from_inner(ecc_chip.clone(), vcv);
-                    stack.push(StackVar::Constant(ConstantVar::EcFixedPoint(vcv)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(vcv)));
                 }
                 "VALUE_COMMIT_RANDOM" => {
                     let vcr = OrchardFixedBases::ValueCommitR;
                     let vcr = FixedPoint::from_inner(ecc_chip.clone(), vcr);
-                    stack.push(StackVar::Constant(ConstantVar::EcFixedPoint(vcr)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(vcr)));
                 }
                 "NULLIFIER_K" => {
                     let nfk = OrchardFixedBases::NullifierK;
                     let nfk = FixedPoint::from_inner(ecc_chip.clone(), nfk);
-                    stack.push(StackVar::Constant(ConstantVar::EcFixedPoint(nfk)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(nfk)));
                 }
                 _ => unimplemented!(),
             }
         }
 
+        // Push the witnesses onto the stack, and potentially, if the witness
+        // is in the Base field (like the entire circuit is), load it into a
+        // table cell.
         for witness in &self.witnesses {
             match witness {
-                WitnessVar::EcPoint(_) => {
+                Witness::EcPoint(_) => {
                     debug!("Pushing EcPoint to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
 
-                WitnessVar::EcFixedPoint(_) => {
+                Witness::EcFixedPoint(_) => {
                     debug!("Pushing EcFixedPoint to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
 
-                WitnessVar::Base(v) => {
+                Witness::Base(v) => {
                     debug!("Loading Base element into cell");
                     let w = self.load_private(
                         layouter.namespace(|| "Load witness into cell"),
@@ -412,176 +297,190 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     debug!("Pushing Base to stack index {}", stack.len());
-                    stack.push(StackVar::Cell(w));
+                    stack.push(Stack::Cell(w));
                 }
 
-                WitnessVar::Scalar(_) => {
+                Witness::Scalar(_) => {
                     debug!("Pushing Scalar to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
 
-                WitnessVar::MerklePath(_) => {
+                Witness::MerklePath(_) => {
                     debug!("Pushing MerklePath to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
 
-                WitnessVar::Uint32(_) => {
+                Witness::Uint32(_) => {
                     debug!("Pushing Uint32 to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
 
-                WitnessVar::Uint64(_) => {
+                Witness::Uint64(_) => {
                     debug!("Pushing Uint64 to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(witness.clone()));
+                    stack.push(Stack::Var(witness.clone()));
                 }
             }
         }
 
-        // TODO: Guard usize casts
+        // And now, work through opcodes
         for opcode in &self.opcodes {
             match opcode.0 {
                 Opcode::EcAdd => {
                     debug!("Executing `EcAdd{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let lhs = stack[args[0] as usize].to_ec_point();
-                    let rhs = stack[args[1] as usize].to_ec_point();
+                    let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[0]].clone().into();
 
-                    let result = lhs.add(layouter.namespace(|| "EcAdd"), &rhs)?;
+                    let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1]].clone().into();
+
+                    let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(WitnessVar::EcPoint(result)));
+                    stack.push(Stack::Var(Witness::EcPoint(ret)));
                 }
 
                 Opcode::EcMul => {
                     debug!("Executing `EcMul{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let lhs = stack[args[0] as usize].to_scalar();
-                    let rhs = stack[args[1] as usize].to_fixed_point();
+                    let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1]].clone().into();
 
-                    let (result, _) = rhs.mul(layouter.namespace(|| "EcMul"), Some(lhs))?;
+                    let rhs: pallas::Scalar = stack[args[0]].clone().into();
+
+                    let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), Some(rhs))?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(WitnessVar::EcPoint(result)));
+                    stack.push(Stack::Var(Witness::EcPoint(ret)));
                 }
 
                 Opcode::EcMulBase => {
                     debug!("Executing `EcMulBase{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let lhs = stack[args[0] as usize].to_base();
-                    let rhs = stack[args[1] as usize].to_fixed_point();
+                    let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1]].clone().into();
 
-                    let result = rhs.mul_base_field(layouter.namespace(|| "EcMulBase"), lhs)?;
+                    let rhs: CellValue<pallas::Base> = stack[args[0]].clone().into();
+
+                    let ret = lhs.mul_base_field(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(WitnessVar::EcPoint(result)));
+                    stack.push(Stack::Var(Witness::EcPoint(ret)));
                 }
 
                 Opcode::EcMulShort => {
                     debug!("Executing `EcMulShort{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let lhs = stack[args[0] as usize].to_base();
-                    let rhs = stack[args[1] as usize].to_fixed_point();
+                    let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1]].clone().into();
 
-                    let (result, _) =
-                        rhs.mul_short(layouter.namespace(|| "EcMulShort"), (lhs, one))?;
+                    let rhs: CellValue<pallas::Base> = stack[args[0]].clone().into();
+
+                    let (ret, _) =
+                        lhs.mul_short(layouter.namespace(|| "EcMulShort()"), (rhs, one))?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Witness(WitnessVar::EcPoint(result)));
+                    stack.push(Stack::Var(Witness::EcPoint(ret)));
                 }
 
                 Opcode::EcGetX => {
                     debug!("Executing `EcGetX{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let point = stack[args[0] as usize].to_ec_point();
-                    let result = point.inner().x();
+                    let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[0]].clone().into();
+
+                    let ret = point.inner().x();
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Cell(result));
+                    stack.push(Stack::Cell(ret));
                 }
 
                 Opcode::EcGetY => {
                     debug!("Executing `EcGetY{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let point = stack[args[0] as usize].to_ec_point();
-                    let result = point.inner().y();
+                    let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[0]].clone().into();
+
+                    let ret = point.inner().y();
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Cell(result));
+                    stack.push(Stack::Cell(ret));
                 }
 
                 Opcode::PoseidonHash => {
                     debug!("Executing `PoseidonHash{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
-                    let mut poseidon_message: Vec<CellValue<pallas::Base>> = vec![];
-                    for idx in &args {
-                        let index = *idx as usize; // TODO: Guard this usize cast
-                        poseidon_message.push(stack[index].clone().into());
+                    let args = &opcode.1;
+
+                    let mut poseidon_message: Vec<CellValue<pallas::Base>> =
+                        Vec::with_capacity(args.len());
+
+                    for idx in args {
+                        poseidon_message.push(stack[*idx].clone().into());
                     }
 
                     macro_rules! poseidon_hash {
-                        ($len:expr, $poseidon_hasher:ident, $poseidon_output:ident, $cell_output:ident) => {
-                            let $poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+                        ($len:expr, $hasher:ident, $output:ident, $cell:ident) => {
+                            let $hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
                                 config.poseidon_chip(),
-                                layouter.namespace(|| "PoseidonHash ($len msgs) init"),
+                                layouter.namespace(|| "PoseidonHash init"),
                                 ConstantLength::<$len>,
                             )?;
 
-                            let $poseidon_output = $poseidon_hasher.hash(
-                                layouter.namespace(|| "PoseidonHash ($len msgs) hash"),
+                            let $output = $hasher.hash(
+                                layouter.namespace(|| "PoseidonHash hash"),
                                 poseidon_message.try_into().unwrap(),
                             )?;
 
-                            let $cell_output: CellValue<pallas::Base> =
-                                $poseidon_output.inner().into();
+                            let $cell: CellValue<pallas::Base> = $output.inner().into();
 
                             debug!("Pushing hash to stack index {}", stack.len());
-                            stack.push(StackVar::Cell($cell_output));
+                            stack.push(Stack::Cell($cell));
                         };
                     }
 
-                    // I can't find a better way to do this.
+                    // I can't find a better way to do this
                     match args.len() {
                         1 => {
-                            poseidon_hash!(1, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(1, a, b, c);
                         }
                         2 => {
-                            poseidon_hash!(2, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(2, a, b, c);
                         }
                         3 => {
-                            poseidon_hash!(3, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(3, a, b, c);
                         }
                         4 => {
-                            poseidon_hash!(4, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(4, a, b, c);
                         }
                         5 => {
-                            poseidon_hash!(5, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(5, a, b, c);
                         }
                         6 => {
-                            poseidon_hash!(6, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(6, a, b, c);
                         }
                         7 => {
-                            poseidon_hash!(7, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(7, a, b, c);
                         }
                         8 => {
-                            poseidon_hash!(8, poseidon_hasher, poseidon_output, cell_output);
+                            poseidon_hash!(8, a, b, c);
                         }
                         _ => unimplemented!(),
-                    };
+                    }
                 }
 
                 Opcode::CalculateMerkleRoot => {
                     debug!("Executing `CalculateMerkleRoot{:?}` opcode", opcode.1);
-                    let args = opcode.1.clone();
+                    let args = &opcode.1;
 
-                    let leaf_pos = stack[args[0] as usize].clone().into();
-                    let merkle_path = stack[args[1] as usize].clone().into();
-                    let leaf = stack[args[2] as usize].clone().into();
+                    let leaf_pos = stack[args[0]].clone().into();
+                    let merkle_path = stack[args[1]].clone().into();
+                    let leaf = stack[args[2]].clone().into();
 
                     let path = MerklePath {
                         chip_1: merkle_chip_1.clone(),
@@ -592,19 +491,17 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     };
 
                     let root =
-                        path.calculate_root(layouter.namespace(|| "CalculateMerkleRoot"), leaf)?;
+                        path.calculate_root(layouter.namespace(|| "CalculateMerkleRoot()"), leaf)?;
 
-                    debug!("Pushing hash to stack index {}", stack.len());
-                    stack.push(StackVar::Cell(root));
+                    debug!("Pushing merkle root to stack index {}", stack.len());
+                    stack.push(Stack::Cell(root));
                 }
 
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
-                    // TODO: Guard this usize cast
-                    let var = match stack[opcode.1[0] as usize] {
-                        StackVar::Cell(v) => v,
-                        _ => panic!("Incorrect stack variable type"),
-                    };
+                    let args = &opcode.1;
+
+                    let var: CellValue<pallas::Base> = stack[args[0]].clone().into();
 
                     layouter.constrain_instance(
                         var.cell(),
@@ -619,7 +516,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
             }
         }
 
-        // If we haven't exploded until now, we're golden.
         debug!("Exiting synthesize()");
         Ok(())
     }

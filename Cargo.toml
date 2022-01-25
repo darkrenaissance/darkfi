@@ -223,6 +223,11 @@ zkas = [
     "util",
 ]
 
+zkvm = [
+    "crypto",
+    "zkas",
+]
+
 
 [[example]]
 name = "net"
@@ -257,4 +262,4 @@ required-features = ["crypto"]
 [[example]]
 name = "vm2"
 path = "example/vm2.rs"
-required-features = ["crypto"]
+required-features = ["zkvm"]
