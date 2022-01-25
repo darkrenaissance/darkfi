@@ -1,114 +1,158 @@
-use halo2::dev::MockProver;
-use halo2_gadgets::{
-    primitives,
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
-};
-use pasta_curves::{
+use halo2::{
     arithmetic::{CurveAffine, Field},
-    group::{Curve, Group},
-    pallas,
+    dev::MockProver,
 };
+use halo2_gadgets::primitives::{
+    poseidon,
+    poseidon::{ConstantLength, P128Pow5T3},
+};
+use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use log::info;
+use pasta_curves::{group::Curve, pallas};
 use rand::rngs::OsRng;
-use std::{collections::HashMap, fs::File, time::Instant};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     crypto::{
-        constants::OrchardFixedBases,
-        proof::{Proof, ProvingKey, VerifyingKey},
-        util::pedersen_commitment_u64,
+        keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+        mint_proof::MintRevealedValues,
+        spend_proof::SpendRevealedValues,
     },
-    util::serial::Decodable,
-    zk::vm,
-    Error,
+    zk::vm::{Witness, ZkCircuit},
+    zkas::decoder::ZkBinary,
+    Result,
 };
 
-fn main() -> std::result::Result<(), Error> {
-    // The number of rows in our circuit cannot exceed 2^k
-    let k: u32 = 11;
+fn mint_proof() -> Result<()> {
+    let bincode = include_bytes!("../proof/mint.zk.bin");
+    let zkbin = ZkBinary::decode(bincode)?;
 
-    let start = Instant::now();
-    let file = File::open("../proof/mint.zk.bin")?;
-    let zkbin = vm::ZkBinary::decode(file)?;
-    for contract_name in zkbin.contracts.keys() {
-        println!("Loaded '{}' contract.", contract_name);
-    }
-    println!("Load time: [{:?}]", start.elapsed());
-
-    let contract = &zkbin.contracts["Mint"];
-
-    //contract.witness_base(...);
-    //contract.witness_base(...);
-    //contract.witness_base(...);
-
-    let pubkey = pallas::Point::random(&mut OsRng);
-    let coords = pubkey.to_affine().coordinates().unwrap();
-
-    let value = 110;
-    let asset = 1;
-
+    let value = 42;
+    let token_id = pallas::Base::from(22);
     let value_blind = pallas::Scalar::random(&mut OsRng);
-    let asset_blind = pallas::Scalar::random(&mut OsRng);
-
+    let token_blind = pallas::Scalar::random(&mut OsRng);
     let serial = pallas::Base::random(&mut OsRng);
     let coin_blind = pallas::Base::random(&mut OsRng);
+    let public_key = PublicKey::random(&mut OsRng);
 
-    let mut coin = pallas::Base::zero();
+    let revealed = MintRevealedValues::compute(
+        value,
+        token_id,
+        value_blind,
+        token_blind,
+        serial,
+        coin_blind,
+        public_key,
+    );
 
-    let messages = [
-        [*coords.x(), *coords.y()],
-        [pallas::Base::from(value), pallas::Base::from(asset)],
-        [serial, coin_blind],
+    let pk_coords = public_key.0.to_affine().coordinates().unwrap();
+    let witnesses = vec![
+        Witness::Base(*pk_coords.x()),
+        Witness::Base(*pk_coords.y()),
+        Witness::Base(pallas::Base::from(value)),
+        Witness::Base(token_id),
+        Witness::Base(serial),
+        Witness::Base(coin_blind),
+        Witness::Scalar(value_blind),
+        Witness::Scalar(token_blind),
     ];
 
-    for msg in messages.iter() {
-        coin += primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
-    }
-
-    let _coin2 = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>)
-        .hash([*coords.x(), *coords.y()]);
-
-    let value_commit = pedersen_commitment_u64(value, value_blind);
-    let value_coords = value_commit.to_affine().coordinates().unwrap();
-
-    let asset_commit = pedersen_commitment_u64(asset, asset_blind);
-    let asset_coords = asset_commit.to_affine().coordinates().unwrap();
-
-    let public_inputs =
-        vec![coin, *value_coords.x(), *value_coords.y(), *asset_coords.x(), *asset_coords.y()];
-
-    let mut const_fixed_points = HashMap::new();
-    const_fixed_points.insert("VALUE_COMMIT_VALUE".to_string(), OrchardFixedBases::ValueCommitV);
-    const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
-
-    let mut circuit = vm::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
-    let empty_circuit = circuit.clone();
-
-    circuit.witness_base("pub_x", *coords.x())?;
-    circuit.witness_base("pub_y", *coords.y())?;
-    circuit.witness_base("value", pallas::Base::from(value))?;
-    circuit.witness_base("asset", pallas::Base::from(asset))?;
-    circuit.witness_base("serial", serial)?;
-    circuit.witness_base("coin_blind", coin_blind)?;
-    circuit.witness_scalar("value_blind", value_blind)?;
-    circuit.witness_scalar("asset_blind", asset_blind)?;
-
-    // Valid MockProver
-    let prover = MockProver::run(k, &circuit, vec![public_inputs.clone()]).unwrap();
+    let circuit = ZkCircuit::new(witnesses, zkbin);
+    let prover = MockProver::run(11, &circuit, vec![revealed.make_outputs().to_vec()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 
-    // Actual ZK proof
-    let start = Instant::now();
-    let vk = VerifyingKey::build(k, empty_circuit.clone());
-    let pk = ProvingKey::build(k, empty_circuit.clone());
-    println!("\nSetup: [{:?}]", start.elapsed());
+    Ok(())
+}
 
-    let start = Instant::now();
-    let proof = Proof::create(&pk, &[circuit], &public_inputs).unwrap();
-    println!("Prove: [{:?}]", start.elapsed());
+fn burn_proof() -> Result<()> {
+    let bincode = include_bytes!("../proof/burn.zk.bin");
+    let zkbin = ZkBinary::decode(bincode)?;
 
-    let start = Instant::now();
-    assert!(proof.verify(&vk, &public_inputs).is_ok());
-    println!("Verify: [{:?}]", start.elapsed());
+    let value = 42;
+    let token_id = pallas::Base::from(22);
+    let value_blind = pallas::Scalar::random(&mut OsRng);
+    let token_blind = pallas::Scalar::random(&mut OsRng);
+    let serial = pallas::Base::random(&mut OsRng);
+    let coin_blind = pallas::Base::random(&mut OsRng);
+    let secret = SecretKey::random(&mut OsRng);
+    let sig_secret = SecretKey::random(&mut OsRng);
+
+    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+
+    let random_coin_1 = pallas::Base::random(&mut OsRng);
+    tree.append(&MerkleNode(random_coin_1));
+    tree.witness();
+    let random_coin_2 = pallas::Base::random(&mut OsRng);
+    tree.append(&MerkleNode(random_coin_2));
+
+    let coin = {
+        let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
+        let messages =
+            [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
+
+        poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages)
+    };
+
+    tree.append(&MerkleNode(coin));
+    tree.witness();
+
+    let random_coin_3 = pallas::Base::random(&mut OsRng);
+    tree.append(&MerkleNode(random_coin_3));
+    tree.witness();
+
+    let (leaf_position, merkle_path) = tree.authentication_path(&MerkleNode(coin)).unwrap();
+
+    let revealed = SpendRevealedValues::compute(
+        value,
+        token_id,
+        value_blind,
+        token_blind,
+        serial,
+        coin_blind,
+        secret,
+        leaf_position,
+        merkle_path.clone(),
+        sig_secret,
+    );
+
+    // Why are these types not matched in halo2 gadgets?
+    let leaf_pos: u64 = leaf_position.into();
+    let leaf_pos = leaf_pos as u32;
+
+    let witnesses = vec![
+        Witness::Base(secret.0),
+        Witness::Base(serial),
+        Witness::Base(pallas::Base::from(value)),
+        Witness::Base(token_id),
+        Witness::Base(coin_blind),
+        Witness::Scalar(value_blind),
+        Witness::Scalar(token_blind),
+        Witness::Uint32(leaf_pos),
+        Witness::MerklePath(merkle_path),
+        Witness::Base(sig_secret.0),
+    ];
+
+    let circuit = ZkCircuit::new(witnesses, zkbin);
+    let prover = MockProver::run(11, &circuit, vec![revealed.make_outputs().to_vec()])?;
+    assert_eq!(prover.verify(), Ok(()));
+
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    TermLogger::init(
+        LevelFilter::Debug,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
+
+    info!("Executing Mint proof");
+    mint_proof()?;
+
+    info!("Executing Burn proof");
+    burn_proof()?;
 
     Ok(())
 }

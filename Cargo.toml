@@ -242,12 +242,7 @@ required-features = ["async-runtime", "tui"]
 [[example]]
 name = "vm"
 path = "example/vm.rs"
-required-features = ["crypto"]
-
-[[example]]
-name = "vm_burn"
-path = "example/vm_burn.rs"
-required-features = ["crypto"]
+required-features = ["cli", "zkvm"]
 
 [[example]]
 name = "tx"
@@ -258,8 +253,3 @@ required-features = ["node"]
 name = "tree"
 path = "example/tree.rs"
 required-features = ["crypto"]
-
-[[example]]
-name = "vm2"
-path = "example/vm2.rs"
-required-features = ["cli", "zkvm"]

@@ -2,7 +2,7 @@
 *.sage.py
 target/*
 
-/proofs/*.bin
+/proof/*.bin
 
 /zkas
 /drk
