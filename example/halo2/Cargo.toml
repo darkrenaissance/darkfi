@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Ivan Jelincic <parazyd@dyne.org>"]
 edition = "2021"
 
+[workspace]
+
 [dependencies]
 rand = "0.8.4"
 ff = "0.11.0"

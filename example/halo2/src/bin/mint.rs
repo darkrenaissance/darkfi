@@ -1,4 +1,5 @@
-use std::time::Instant;
+#![feature(type_name_of_val)]
+use std::{any::type_name_of_val, time::Instant};
 
 use halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
@@ -139,11 +140,7 @@ impl Circuit<pallas::Base> for MintCircuit {
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
-        let lookup = (
-            table_idx,
-            meta.lookup_table_column(),
-            meta.lookup_table_column(),
-        );
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -267,17 +264,11 @@ impl Circuit<pallas::Base> for MintCircuit {
             self.pub_y,
         )?;
 
-        let value = self.load_private(
-            layouter.namespace(|| "load value"),
-            config.advices[0],
-            self.value,
-        )?;
+        let value =
+            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
-        let asset = self.load_private(
-            layouter.namespace(|| "load asset"),
-            config.advices[0],
-            self.asset,
-        )?;
+        let asset =
+            self.load_private(layouter.namespace(|| "load asset"), config.advices[0], self.asset)?;
 
         let serial = self.load_private(
             layouter.namespace(|| "load serial"),
@@ -294,73 +285,27 @@ impl Circuit<pallas::Base> for MintCircuit {
         // =========
         // Coin hash
         // =========
-        let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
-        let mut hashes = vec![];
+        let mut messages: Vec<CellValue<pallas::Base>> = vec![];
+        messages.push(pub_x);
+        messages.push(pub_y);
+        messages.push(value);
+        messages.push(asset);
+        messages.push(serial);
+        messages.push(coin_blind);
 
-        for message in messages.iter() {
-            let hash = {
-                let poseidon_message = layouter.assign_region(
-                    || "load message",
-                    |mut region| {
-                        let mut message_word = |i: usize| {
-                            let value = message[i].value();
-                            let var = region.assign_advice(
-                                || format!("load message_{}", i),
-                                config.poseidon_config.state()[i],
-                                0,
-                                || value.ok_or(Error::SynthesisError),
-                            )?;
-                            region.constrain_equal(var, message[i].cell())?;
-                            Ok(Word::<_, _, P128Pow5T3, 3, 2>::from_inner(StateWord::new(
-                                var, value,
-                            )))
-                        };
-                        Ok([message_word(0)?, message_word(1)?])
-                    },
-                )?;
+        let coin = {
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "PoseidonHash init"),
+                ConstantLength::<6>,
+            )?;
 
-                let poseidon_hasher = PoseidonHash::init(
-                    config.poseidon_chip(),
-                    layouter.namespace(|| "Poseidon init"),
-                    ConstantLength::<2>,
-                )?;
+            let poseidon_output = poseidon_hasher
+                .hash(layouter.namespace(|| "PoseidonHash hash"), messages.try_into().unwrap())?;
 
-                let poseidon_output = poseidon_hasher.hash(
-                    layouter.namespace(|| "Poseidon hash (a, b)"),
-                    poseidon_message,
-                )?;
-
-                let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
-                poseidon_output
-            };
-
-            hashes.push(hash);
-        }
-
-        let coin = layouter.assign_region(
-            || " `coin` = hash(a,b) + hash(c, d) + hash(e, f)",
-            |mut region| {
-                config.q_add.enable(&mut region, 0)?;
-
-                copy(&mut region, || "copy ab", config.advices[6], 0, &hashes[0])?;
-                copy(&mut region, || "copy cd", config.advices[7], 0, &hashes[1])?;
-                copy(&mut region, || "copy ef", config.advices[8], 0, &hashes[2])?;
-
-                let scalar_val = hashes[0]
-                    .value()
-                    .zip(hashes[1].value())
-                    .zip(hashes[2].value())
-                    .map(|(abcd, ef)| abcd.0 + abcd.1 + ef);
-
-                let cell = region.assign_advice(
-                    || "hash(a,b)+hash(c,d)+hash(e,f)",
-                    config.advices[5],
-                    0,
-                    || scalar_val.ok_or(Error::SynthesisError),
-                )?;
-                Ok(CellValue::new(cell, scalar_val))
-            },
-        )?;
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            poseidon_output
+        };
 
         // Constrain the coin C
         layouter.constrain_instance(coin.cell(), config.primary, MINT_COIN_OFFSET)?;
@@ -421,8 +366,10 @@ impl Circuit<pallas::Base> for MintCircuit {
             let asset_commit_r = FixedPoint::from_inner(ecc_chip, asset_commit_r);
             asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
         };
+        println!("{:#?}", type_name_of_val(&blind));
 
         // Constrain the asset commitment coordinates
+        //println!("{:#?}", type_name_of_val(&commitment));
         let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
         layouter.constrain_instance(
             asset_commit.inner().x().cell(),
@@ -456,19 +403,16 @@ fn main() {
     let serial = pallas::Base::random(&mut OsRng);
     let coin_blind = pallas::Base::random(&mut OsRng);
 
-    // poseidon_hash(x, y) + poseidon_hash(value, asset) + poseidon_hash(serial, coin_blind)
-    let mut coin = pallas::Base::zero();
-
     let messages = [
-        [*coords.x(), *coords.y()],
-        [pallas::Base::from(value), pallas::Base::from(asset)],
-        [serial, coin_blind],
+        *coords.x(),
+        *coords.y(),
+        pallas::Base::from(value),
+        pallas::Base::from(asset),
+        serial,
+        coin_blind,
     ];
 
-    for msg in messages.iter() {
-        let hash = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(*msg);
-        coin += hash;
-    }
+    let coin = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages);
 
     let value_commit = pedersen_commitment(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -476,13 +420,8 @@ fn main() {
     let asset_commit = pedersen_commitment(asset, asset_blind);
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
 
-    let public_inputs = vec![
-        coin,
-        *value_coords.x(),
-        *value_coords.y(),
-        *asset_coords.x(),
-        *asset_coords.y(),
-    ];
+    let public_inputs =
+        vec![coin, *value_coords.x(), *value_coords.y(), *asset_coords.x(), *asset_coords.y()];
 
     let circuit = MintCircuit {
         pub_x: Some(*coords.x()),
