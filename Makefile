@@ -7,7 +7,7 @@ PREFIX = /usr/local
 CARGO = cargo
 
 # Binaries to be built
-BINS = drk darkfid gatewayd zkas
+BINS = zkas drk darkfid gatewayd
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -40,8 +40,8 @@ test-tx:
 	$(CARGO) run --release --features=node --example tx
 
 test-vm: zkas
-	./zkas proofs/mint.zk
-	./zkas proofs/burn.zk
+	./zkas proof/mint.zk
+	./zkas proof/burn.zk
 	$(CARGO) run --release --features=cli,zkvm --example vm2
 
 clean:

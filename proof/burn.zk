@@ -1,56 +1,66 @@
-# :set syntax=zk
-# :source scripts/zk.vim
-constant EcFixedPoint VALUE_COMMIT_VALUE
-constant EcFixedPoint VALUE_COMMIT_RANDOM
-constant EcFixedPoint SPEND_AUTH_G
-
-contract Burn {
-    Base secret
-    Base serial
-    MerklePath path
-    Base leaf
-
-    Base value
-    Base asset
-    Scalar value_blind
-    Scalar asset_blind
-    Scalar sig_secret
+constant "Burn" {
+	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPoint NULLIFIER_K,
 }
 
-circuit Burn {
-    # nullifier = Hash(secret, serial)
-    poseidon_hash nullifier secret serial
-    constrain_instance nullifier
-
-    # root = calculate_root(path, leaf)
-    calculate_merkle_root root path leaf
-    constrain_instance root
-
-    # value_commit = PedersenCommit(value, value_blind);
-    ec_mul_short vcv value VALUE_COMMIT_VALUE
-    ec_mul vcr value_blind VALUE_COMMIT_RANDOM
-    ec_add value_commit vcv vcr
-    ec_get_x x value_commit
-    ec_get_y y value_commit
-    constrain_instance x
-    constrain_instance y
-
-    # asset_commit = PedersenCommit(asset, asset_blind);
-    ec_mul_short acv asset VALUE_COMMIT_VALUE
-    ec_mul acr asset_blind VALUE_COMMIT_RANDOM
-    ec_add asset_commit acv acr
-    ec_get_x x asset_commit
-    ec_get_y y asset_commit
-    constrain_instance x
-    constrain_instance y
-
-    # spend_auth_public = sig_secret * SPEND_AUTH_G
-    ec_mul spend_auth_public sig_secret SPEND_AUTH_G
-    ec_get_x sx spend_auth_public
-    ec_get_y sy spend_auth_public
-    constrain_instance sx
-    constrain_instance sy
-
-    # return (nullifier, root, value_commit, value_blind);
+contract "Burn" {
+	Base secret,
+	Base serial,
+	Base value,
+	Base token,
+	Base coin_blind,
+	Scalar value_blind,
+	Scalar token_blind,
+	Uint32 leaf_pos,
+	MerklePath path,
+	Base signature_secret,
 }
 
+circuit "Burn" {
+	# Poseidon hash of the nullifier
+	nullifier = poseidon_hash(secret, serial);
+	constrain_instance(nullifier);
+
+	# Pedersen commitment for coin's value
+	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(vcv, vcr);
+	# Since value_commit is a curve point, we fetch its coordinates
+	# and constrain them:
+	value_commit_x = ec_get_x(value_commit);
+	value_commit_y = ec_get_y(value_commit);
+	constrain_instance(value_commit_x);
+	constrain_instance(value_commit_y);
+
+	# Pedersen commitment for coin's token ID
+	tcv = ec_mul_short(token, VALUE_COMMIT_VALUE);
+	tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
+	token_commit = ec_add(tcv, tcr);
+	# Since token_commit is also a curve point, we'll do the same
+	# coordinate dance:
+	token_commit_x = ec_get_x(token_commit);
+	token_commit_y = ec_get_y(token_commit);
+	constrain_instance(token_commit_x);
+	constrain_instance(token_commit_y);
+
+	# Coin hash
+	pub = ec_mul_base(secret, NULLIFIER_K);
+	pub_x = ec_get_x(pub);
+	pub_y = ec_get_y(pub);
+	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+
+	# Merkle root
+	root = calculate_merkle_root(leaf_pos, path, C);
+	constrain_instance(root);
+
+	# Finally, we derive a public key for the signature and
+	# constrain its coordinates:
+	signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+	signature_x = ec_get_x(signature_public);
+	signature_y = ec_get_y(signature_public);
+	constrain_instance(signature_x);
+	constrain_instance(signature_y);
+
+	# At this point we've enforced all of our public inputs.
+}
