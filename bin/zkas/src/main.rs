@@ -3,11 +3,13 @@ use std::{
     io::Write,
 };
 
-use anyhow::Result;
 use clap::Parser as ClapParser;
 
-use darkfi::zkas::{
-    analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
+use darkfi::{
+    zkas::{
+        analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
+    },
+    Result,
 };
 
 #[derive(clap::Parser)]

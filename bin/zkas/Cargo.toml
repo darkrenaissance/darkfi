@@ -8,6 +8,4 @@ path= "../../"
 features = ["zkas"]
 
 [dependencies]
-# Misc
-anyhow = "1.0.52"
 clap = {version = "3.0.7", features = ["derive"]}

@@ -6008,7 +6008,6 @@ dependencies = [
 name = "zkas"
 version = "0.3.0"
 dependencies = [
- "anyhow",
  "clap 3.0.7",
  "darkfi",
 ]
