@@ -123,7 +123,7 @@ mod tests {
         let coin_blind = DrkCoinBlind::random(&mut OsRng);
         let public_key = PublicKey::random(&mut OsRng);
 
-        let pk = ProvingKey::build(11, MintContract::default());
+        let pk = ProvingKey::build(11, &MintContract::default());
         let (proof, _) = create_mint_proof(
             &pk,
             value,
