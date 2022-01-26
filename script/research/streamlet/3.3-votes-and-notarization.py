@@ -24,7 +24,7 @@ def generate_keys(private_key_password):
 	
 	return encrypted_pem_private_key, pem_public_key
 
-# Signs a message using private_key
+# Signs a message using private_key.
 def sign_message(password, private_key, message):
 	privkey = serialization.load_pem_private_key(private_key, password=password.encode(), backend=default_backend())
 	signed_message = privkey.sign(
@@ -36,7 +36,7 @@ def sign_message(password, private_key, message):
 	)
 	return signed_message
 	
-# Verifies a message against a public key
+# Verifies a message against a public key.
 def verify_signature(public_key, message, signed_message):
 	pubkey = serialization.load_pem_public_key(public_key, backend=default_backend())
 	try:
@@ -59,4 +59,4 @@ signed_message = sign_message(node_password, node_private_key, message)
 
 # When nodes receive votes, they verify them against nodes public key.
 assert(verify_signature(node_public_key, message, signed_message))
-# If votes for that specific block are >=2n/3, node marks block as notarized
+# If votes for that specific block are >=2n/3, node marks block as notarized.

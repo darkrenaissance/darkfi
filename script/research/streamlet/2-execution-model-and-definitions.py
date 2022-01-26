@@ -71,7 +71,7 @@ corruptedNode = Node(2, "dummy_secret_key2", "dummy_public_key2")
 
 # We simulate some rounds to test consistency.
 
-# Round 0 synchronization period
+# Round 0 synchronization period.
 # node0 receives input and broadcasts it to rest nodes.
 node0.receive_input("tx0")
 node0.broadcast([node1, corruptedNode], "tx0")
@@ -83,29 +83,29 @@ node1.broadcast([node0, corruptedNode], "tx1")
 # corruptedNode receives input but doesn't broadcast to rest nodes.
 corruptedNode.receive_input("tx2")
 
-# We assume nodes finalize blocks(append to blockchain) at the end of each round
+# We assume nodes finalize blocks(append to blockchain) at the end of each round.
 node0.finalize_block()
 node1.finalize_block()
 corruptedNode.finalize_block()
 
-# In round 1, a new node joins
+# In round 1, a new node joins.
 node3 = Node(3, "dummy_secret_key3", "dummy_public_key3")
 
 # node3 receives input and broadcasts it to rest nodes.
 node3.receive_input("tx3")
 node3.broadcast([node0, node1, corruptedNode], "tx3")
 
-# Nodes finalize blocks
+# Nodes finalize blocks.
 node0.finalize_block()
 node1.finalize_block()
 corruptedNode.finalize_block()
 node3.finalize_block()
 
-# Consistency testing
-# node0 and node1 remained honest, therefore their outputs must be the same
+# Consistency testing.
+# node0 and node1 remained honest, therefore their outputs must be the same.
 assert(node0.output() == node1.output())
 
-# Since node3 joined later, node0 and node1 outputs are a prefix or equal to his output.
+# Since node3 joined later, node0 and node1 outputs are a prefix or equal to node3 output.
 # Based on that, node3 output is a suffix of node0 and node1 outputs.
 assert(node0.output()[-len(node3.output()):] == node3.output().blocks)
 assert(node1.output()[-len(node3.output()):] == node3.output().blocks)
