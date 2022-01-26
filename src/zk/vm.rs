@@ -458,34 +458,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         };
                     }
 
-                    // I can't find a better way to do this
-                    match args.len() {
-                        1 => {
-                            poseidon_hash!(1, a, b, c);
-                        }
-                        2 => {
-                            poseidon_hash!(2, a, b, c);
-                        }
-                        3 => {
-                            poseidon_hash!(3, a, b, c);
-                        }
-                        4 => {
-                            poseidon_hash!(4, a, b, c);
-                        }
-                        5 => {
-                            poseidon_hash!(5, a, b, c);
-                        }
-                        6 => {
-                            poseidon_hash!(6, a, b, c);
-                        }
-                        7 => {
-                            poseidon_hash!(7, a, b, c);
-                        }
-                        8 => {
-                            poseidon_hash!(8, a, b, c);
-                        }
-                        _ => unimplemented!(),
+                    macro_rules! vla {
+                        ($args:ident, $a: ident, $b:ident, $c:ident, $($num:tt)*) => {
+                            match $args.len() {
+                                $($num => {
+                                    poseidon_hash!($num, $a, $b, $c);
+                                })*
+                                _ => unimplemented!()
+                            }
+                        };
                     }
+
+                    vla!(args, a, b, c, 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16);
                 }
 
                 Opcode::CalculateMerkleRoot => {
