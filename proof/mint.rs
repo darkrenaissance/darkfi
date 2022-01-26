@@ -24,6 +24,7 @@ use simplelog::{ColorChoice::Auto, Config, LevelFilter::Debug, TermLogger, Termi
 fn main() -> Result<()> {
     TermLogger::init(Debug, Config::default(), Mixed, Auto)?;
 
+    /* ANCHOR: main */
     let bincode = include_bytes!("mint.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
@@ -94,6 +95,7 @@ fn main() -> Result<()> {
     // Build the verifying key and verify the zero-knowledge proof
     let verifying_key = VerifyingKey::build(11, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
+    /* ANCHOR_END: main */
 
     Ok(())
 }
