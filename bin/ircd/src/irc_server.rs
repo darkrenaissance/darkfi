@@ -32,7 +32,7 @@ pub struct IrcServerConnection {
     is_user_init: bool,
     is_registered: bool,
     nickname: String,
-    channels: Vec<String>,
+    _channels: Vec<String>,
 }
 
 impl IrcServerConnection {
@@ -47,7 +47,7 @@ impl IrcServerConnection {
             is_user_init: false,
             is_registered: false,
             nickname: "".to_string(),
-            channels: vec![],
+            _channels: vec![],
         }
     }
 

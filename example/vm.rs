@@ -78,7 +78,7 @@ fn mint_proof() -> Result<()> {
     info!("Prover setup: [{:?}]", Instant::now() - start);
 
     let start = Instant::now();
-    let proof = Proof::create(&proving_key, &[circuit], &public_inputs.clone())?;
+    let proof = Proof::create(&proving_key, &[circuit], &public_inputs)?;
     info!("Prover prove: [{:?}]", Instant::now() - start);
 
     // =======

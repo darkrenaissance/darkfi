@@ -1,10 +1,10 @@
 use async_executor::Executor;
-use async_std::sync::Mutex;
+
 use darkfi::{net, Result};
 use log::debug;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
-use crate::privmsg::{PrivMsg, PrivMsgId, SeenPrivMsgIdsPtr};
+use crate::privmsg::{PrivMsg, SeenPrivMsgIdsPtr};
 
 pub struct ProtocolPrivMsg {
     notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,

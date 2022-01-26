@@ -16,13 +16,10 @@ use std::{
 use darkfi::{
     net,
     rpc::{
-        jsonrpc::{
-            error as jsonerr, request as jsonreq, response as jsonresp, ErrorCode::*, JsonRequest,
-            JsonResult,
-        },
+        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::{expand_path, sleep},
+    util::expand_path,
     Error, Result,
 };
 
@@ -33,7 +30,7 @@ mod protocol_privmsg;
 
 use crate::{
     irc_server::IrcServerConnection,
-    privmsg::{PrivMsg, PrivMsgId, SeenPrivMsgIds, SeenPrivMsgIdsPtr},
+    privmsg::{PrivMsg, SeenPrivMsgIds, SeenPrivMsgIdsPtr},
     program_options::ProgramOptions,
     protocol_privmsg::ProtocolPrivMsg,
 };
@@ -83,7 +80,7 @@ async fn process_user_input(
     connection: &mut IrcServerConnection,
     p2p: net::P2pPtr,
 ) -> Result<()> {
-    if line.len() == 0 {
+    if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
         return Err(Error::ChannelStopped)
     }

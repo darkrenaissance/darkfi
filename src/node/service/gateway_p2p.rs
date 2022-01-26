@@ -18,7 +18,7 @@ use crate::{
 pub struct Gateway {
     p2p: P2pPtr,
     slabstore: Arc<SlabStore>,
-    last_indexes: Arc<Mutex<Vec<u64>>>,
+    _last_indexes: Arc<Mutex<Vec<u64>>>,
 }
 
 impl Gateway {
@@ -28,7 +28,7 @@ impl Gateway {
 
         let p2p = P2p::new(settings);
         let last_indexes = Arc::new(Mutex::new(vec![0; 10]));
-        Ok(Self { p2p, slabstore, last_indexes })
+        Ok(Self { p2p, slabstore, _last_indexes: last_indexes })
     }
 
     pub async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {

@@ -40,6 +40,12 @@ impl NodeInfo {
     }
 }
 
+impl Default for NodeInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 //pub async fn add_seen(&self, id: u32) {
 //    self.privmsg_ids.lock().await.insert(id);
 //}

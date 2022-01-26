@@ -20,11 +20,7 @@ use tui::{
     Terminal,
 };
 
-use map::{
-    list::NodeIdList,
-    node_info::{NodeInfo, NodeInfoView},
-    ui, App,
-};
+use map::{node_info::NodeInfo, ui, App};
 
 struct Map {
     url: String,
@@ -105,18 +101,18 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn start(ex: Arc<Executor<'_>>, mut app: App) -> Result<()> {
+async fn start(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(async {
-        poll(client, app).await;
+        let _ = poll(client, app).await;
     })
     .detach();
 
     Ok(())
 }
 
-async fn poll(client: Map, mut app: App) -> Result<()> {
+async fn poll(client: Map, app: App) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
         update(app.clone(), reply).await?;
@@ -124,14 +120,14 @@ async fn poll(client: Map, mut app: App) -> Result<()> {
     }
 }
 
-async fn update(mut app: App, reply: Value) -> Result<()> {
+async fn update(app: App, reply: Value) -> Result<()> {
     if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
         //let args = params.as_array();
         let nodes = reply.as_object().unwrap().get("nodes").unwrap();
 
         let node1 = &nodes[0];
         let node2 = &nodes[1];
-        let node3 = &nodes[2];
+        let _node3 = &nodes[2];
 
         let infos = vec![
             NodeInfo {
