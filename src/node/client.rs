@@ -115,9 +115,9 @@ impl Client {
 
         // TODO: These should go to a better place.
         debug!("Building proving key for the mint contract...");
-        let mint_pk = ProvingKey::build(11, MintContract::default());
+        let mint_pk = ProvingKey::build(11, &MintContract::default());
         debug!("Building proving key for the spend contract...");
-        let spend_pk = ProvingKey::build(11, SpendContract::default());
+        let spend_pk = ProvingKey::build(11, &SpendContract::default());
 
         let client = Client { main_keypair, gateway, wallet, mint_pk, spend_pk };
         Ok(client)

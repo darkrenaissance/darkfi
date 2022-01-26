@@ -41,8 +41,9 @@ test-tx:
 
 test-vm: zkas
 	./zkas proof/mint.zk
+	$(CARGO) run --release --features=cli,zkvm --example mint
 	./zkas proof/burn.zk
-	$(CARGO) run --release --features=cli,zkvm --example vm
+	$(CARGO) run --release --features=cli,zkvm --example burn
 
 clean:
 	rm -f $(BINS)

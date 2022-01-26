@@ -775,9 +775,9 @@ async fn start(
     let nullifiers = RocksColumn::<columns::Nullifiers>::new(rocks);
 
     info!("Building verifying key for the mint contract...");
-    let mint_vk = VerifyingKey::build(11, MintContract::default());
+    let mint_vk = VerifyingKey::build(11, &MintContract::default());
     info!("Building verifying key for the spend contract...");
-    let spend_vk = VerifyingKey::build(11, SpendContract::default());
+    let spend_vk = VerifyingKey::build(11, &SpendContract::default());
 
     let state = Arc::new(Mutex::new(State {
         tree,

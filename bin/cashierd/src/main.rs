@@ -609,9 +609,9 @@ async fn start(
     let rocks = Rocks::new(expand_path(&config.database_path.clone())?.as_path())?;
 
     info!("Building verifying key for the mint contract...");
-    let mint_vk = VerifyingKey::build(11, MintContract::default());
+    let mint_vk = VerifyingKey::build(11, &MintContract::default());
     info!("Building verifying key for the spend contract...");
-    let spend_vk = VerifyingKey::build(11, SpendContract::default());
+    let spend_vk = VerifyingKey::build(11, &SpendContract::default());
 
     // new Client
     let gateway_urls =

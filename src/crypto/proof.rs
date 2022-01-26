@@ -22,9 +22,9 @@ pub struct VerifyingKey {
 }
 
 impl VerifyingKey {
-    pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
+    pub fn build(k: u32, c: &impl Circuit<DrkCircuitField>) -> Self {
         let params = Params::new(k);
-        let vk = plonk::keygen_vk(&params, &c).unwrap();
+        let vk = plonk::keygen_vk(&params, c).unwrap();
         VerifyingKey { params, vk }
     }
 }
@@ -36,10 +36,10 @@ pub struct ProvingKey {
 }
 
 impl ProvingKey {
-    pub fn build(k: u32, c: impl Circuit<DrkCircuitField>) -> Self {
+    pub fn build(k: u32, c: &impl Circuit<DrkCircuitField>) -> Self {
         let params = Params::new(k);
-        let vk = plonk::keygen_vk(&params, &c).unwrap();
-        let pk = plonk::keygen_pk(&params, vk, &c).unwrap();
+        let vk = plonk::keygen_vk(&params, c).unwrap();
+        let pk = plonk::keygen_pk(&params, vk, c).unwrap();
         ProvingKey { params, pk }
     }
 }

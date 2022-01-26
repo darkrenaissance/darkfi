@@ -35,10 +35,10 @@ In other words, the vector of public inputs could look like this:
 ```
 let public_inputs = vec![
     coin,
-    *value_coords.x();
-    *value_coords.y();
-    *token_coords.x();
-    *token_coords.y();
+    *value_coords.x(),
+    *value_coords.y(),
+    *token_coords.x(),
+    *token_coords.y(),
 ];
 ```
 
@@ -87,33 +87,7 @@ Knowing this we can extend our pseudo-code and build the
 before-mentioned public inputs for the circuit:
 
 ```rust
-let public_key = pallas::Point::random(&mut OsRng);
-let coords = public_key.to_affine().coordinates().unwrap();
-let pub_x = *coords.x();
-let pub_y = *coords.y();
-
-let value = pallas::Base::from(42);
-let token = pallas::Base::from(1);
-let serial = pallas::Base::random(&mut OsRng);
-let coin_blind = pallas::Base::random(&mut OsRng);
-
-let coin = poseidon::Hash(pub_x, pub_y, value, token, serial, coin_blind);
-
-let value_blind = pallas::Scalar::random(&mut OsRng);
-let value_commit = pedersen_commitment(value, value_blind);
-let value_coords = value_commit.to_affine().coordinates().unwrap();
-
-let token_blind = pallas::Scalar::random(&mut OsRng);
-let token_commit = pedersen_commitment(token, token_blind);
-let token_coords = token_commit.to_affine().coordinates().unwrap();
-
-let public_inputs = vec![
-    coin,
-    *value_coords.x(),
-    *value_coords.y(),
-    *token_coords.x(),
-    *token_coords.y(),
-];
+{{#include ../../../../proof/mint.rs}}
 ```
 
 
@@ -134,13 +108,13 @@ In this case, our vector of public inputs could look like:
 ```
 let public_inputs = vec![
     nullifier,
-    merkle_root,
     *value_coords.x(),
     *value_coords.y(),
     *token_coords.x(),
     *token_coords.y(),
-    *signature_coords.x(),
-    *signature_coords.y(),
+    merkle_root,
+    *sig_coords.x(),
+    *sig_coords.y(),
 ];
 ```
 
@@ -188,44 +162,7 @@ Knowing this we can extend our pseudo-code and build the
 before-mentioned public inputs for the circuit:
 
 ```rust
-let secret_key = pallas::Base::random(&mut OsRng);
-let serial = pallas::Base::random(&mut OsRng);
-
-let nullifier = poseidon::Hash(secret_key, serial);
-
-let tree = BridgeTree::<MerkleNode, 32>::new(100);
-tree.append(some_known_coin);
-tree.witness();
-tree.append(another_known_coin);
-tree.witness();
-
-let merkle_root = tree.root();
-
-let value = pallas::Base::from(42);
-let token = pallas::Base::from(1);
-
-let value_blind = pallas::Scalar::random(&mut OsRng);
-let value_commit = pedersen_commitment(value, value_blind);
-let value_coords = value_commit.to_affine().coordinates().unwrap();
-
-let token_blind = pallas::Scalar::random(&mut OsRng);
-let token_commit = pedersen_commitment(token, token_blind);
-let token_coords = token_commit.to_affine().coordinates().unwrap();
-
-let sig_secret = pallas::Base::random(&mut OsRng);
-let sig_public = NullifierK.generator() * mod_r_p(sig_secret);
-let signature_coords = sig_public.to_affine().coordinates().unwrap();
-
-let public_inputs = vec![
-    nullifier,
-    merkle_root,
-    *value_coords.x(),
-    *value_coords.y(),
-    *token_coords.x(),
-    *token_coords.y(),
-    *signature_coords.x(),
-    *signature_coords.y(),
-];
+{{#include ../../../../proof/mint.rs}}
 ```
 
 

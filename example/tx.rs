@@ -105,8 +105,8 @@ fn main() -> Result<()> {
     let keypair = Keypair::random(&mut OsRng);
 
     const K: u32 = 11;
-    let mint_vk = VerifyingKey::build(K, MintContract::default());
-    let spend_vk = VerifyingKey::build(K, SpendContract::default());
+    let mint_vk = VerifyingKey::build(K, &MintContract::default());
+    let spend_vk = VerifyingKey::build(K, &SpendContract::default());
 
     let mut state = MemoryState {
         tree: BridgeTree::<MerkleNode, 32>::new(100),
@@ -136,8 +136,8 @@ fn main() -> Result<()> {
         }],
     };
 
-    let mint_pk = ProvingKey::build(K, MintContract::default());
-    let spend_pk = ProvingKey::build(K, SpendContract::default());
+    let mint_pk = ProvingKey::build(K, &MintContract::default());
+    let spend_pk = ProvingKey::build(K, &SpendContract::default());
     let tx = builder.build(&mint_pk, &spend_pk)?;
 
     tx.verify(&state.mint_vk, &state.spend_vk).expect("tx verify");
