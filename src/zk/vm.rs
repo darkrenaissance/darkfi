@@ -24,7 +24,7 @@ use halo2_gadgets::{
 use log::debug;
 use pasta_curves::pallas;
 
-use super::vm_stack::{Stack, Witness};
+pub use super::vm_stack::{Stack, Witness};
 use crate::{
     crypto::constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
@@ -81,7 +81,7 @@ impl VmConfig {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ZkCircuit {
     constants: Vec<String>,
     witnesses: Vec<Witness>,
@@ -257,17 +257,17 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = OrchardFixedBases::ValueCommitV;
                     let vcv = FixedPoint::from_inner(ecc_chip.clone(), vcv);
-                    stack.push(Stack::Var(Witness::EcFixedPoint(vcv)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(Some(vcv))));
                 }
                 "VALUE_COMMIT_RANDOM" => {
                     let vcr = OrchardFixedBases::ValueCommitR;
                     let vcr = FixedPoint::from_inner(ecc_chip.clone(), vcr);
-                    stack.push(Stack::Var(Witness::EcFixedPoint(vcr)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(Some(vcr))));
                 }
                 "NULLIFIER_K" => {
                     let nfk = OrchardFixedBases::NullifierK;
                     let nfk = FixedPoint::from_inner(ecc_chip.clone(), nfk);
-                    stack.push(Stack::Var(Witness::EcFixedPoint(nfk)));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(Some(nfk))));
                 }
                 _ => unimplemented!(),
             }
@@ -278,46 +278,46 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // table cell.
         for witness in &self.witnesses {
             match witness {
-                Witness::EcPoint(_) => {
+                Witness::EcPoint(w) => {
                     debug!("Pushing EcPoint to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::EcPoint(w.clone())));
                 }
 
-                Witness::EcFixedPoint(_) => {
+                Witness::EcFixedPoint(w) => {
                     debug!("Pushing EcFixedPoint to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::EcFixedPoint(w.clone())));
                 }
 
-                Witness::Base(v) => {
+                Witness::Base(w) => {
                     debug!("Loading Base element into cell");
-                    let w = self.load_private(
+                    let c = self.load_private(
                         layouter.namespace(|| "Load witness into cell"),
                         config.advices[0],
-                        Some(*v),
+                        *w,
                     )?;
 
-                    debug!("Pushing Base to stack index {}", stack.len());
-                    stack.push(Stack::Cell(w));
+                    debug!("Pushing Base/Cell to stack index {}", stack.len());
+                    stack.push(Stack::Cell(c));
                 }
 
-                Witness::Scalar(_) => {
+                Witness::Scalar(w) => {
                     debug!("Pushing Scalar to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::Scalar(*w)));
                 }
 
-                Witness::MerklePath(_) => {
+                Witness::MerklePath(w) => {
                     debug!("Pushing MerklePath to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::MerklePath(w.clone())));
                 }
 
-                Witness::Uint32(_) => {
+                Witness::Uint32(w) => {
                     debug!("Pushing Uint32 to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::Uint32(*w)));
                 }
 
-                Witness::Uint64(_) => {
+                Witness::Uint64(w) => {
                     debug!("Pushing Uint64 to stack index {}", stack.len());
-                    stack.push(Stack::Var(witness.clone()));
+                    stack.push(Stack::Var(Witness::Uint64(*w)));
                 }
             }
         }
@@ -338,7 +338,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(Stack::Var(Witness::EcPoint(ret)));
+                    stack.push(Stack::Var(Witness::EcPoint(Some(ret))));
                 }
 
                 Opcode::EcMul => {
@@ -348,12 +348,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
-                    let rhs: pallas::Scalar = stack[args[0]].clone().into();
+                    let rhs: Option<pallas::Scalar> = stack[args[0]].clone().into();
 
-                    let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), Some(rhs))?;
+                    let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(Stack::Var(Witness::EcPoint(ret)));
+                    stack.push(Stack::Var(Witness::EcPoint(Some(ret))));
                 }
 
                 Opcode::EcMulBase => {
@@ -368,7 +368,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = lhs.mul_base_field(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(Stack::Var(Witness::EcPoint(ret)));
+                    stack.push(Stack::Var(Witness::EcPoint(Some(ret))));
                 }
 
                 Opcode::EcMulShort => {
@@ -384,7 +384,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         lhs.mul_short(layouter.namespace(|| "EcMulShort()"), (rhs, one))?;
 
                     debug!("Pushing result to stack index {}", stack.len());
-                    stack.push(Stack::Var(Witness::EcPoint(ret)));
+                    stack.push(Stack::Var(Witness::EcPoint(Some(ret))));
                 }
 
                 Opcode::EcGetX => {

@@ -5,7 +5,7 @@ use crate::{
     Result,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ZkBinary {
     pub constants: Vec<(Type, String)>,
     pub witnesses: Vec<Type>,

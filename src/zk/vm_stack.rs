@@ -16,19 +16,19 @@ pub enum Stack {
 
 #[derive(Clone)]
 pub enum Witness {
-    EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
-    EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
-    Base(pallas::Base),
-    Scalar(pallas::Scalar),
-    MerklePath(Vec<MerkleNode>),
-    Uint32(u32),
-    Uint64(u64),
+    EcPoint(Option<Point<pallas::Affine, EccChip<OrchardFixedBases>>>),
+    EcFixedPoint(Option<FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>>),
+    Base(Option<pallas::Base>),
+    Scalar(Option<pallas::Scalar>),
+    MerklePath(Option<Vec<MerkleNode>>),
+    Uint32(Option<u32>),
+    Uint64(Option<u64>),
 }
 
 impl From<Stack> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
     fn from(value: Stack) -> Self {
         match value {
-            Stack::Var(Witness::EcPoint(v)) => v,
+            Stack::Var(Witness::EcPoint(v)) => v.unwrap(),
             _ => unimplemented!(),
         }
     }
@@ -37,13 +37,13 @@ impl From<Stack> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
 impl From<Stack> for FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> {
     fn from(value: Stack) -> Self {
         match value {
-            Stack::Var(Witness::EcFixedPoint(v)) => v,
+            Stack::Var(Witness::EcFixedPoint(v)) => v.unwrap(),
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for pallas::Scalar {
+impl From<Stack> for std::option::Option<pallas::Scalar> {
     fn from(value: Stack) -> Self {
         match value {
             Stack::Var(Witness::Scalar(v)) => v,
@@ -64,7 +64,7 @@ impl From<Stack> for CellValue<pallas::Base> {
 impl From<Stack> for std::option::Option<u32> {
     fn from(value: Stack) -> Self {
         match value {
-            Stack::Var(Witness::Uint32(v)) => Some(v),
+            Stack::Var(Witness::Uint32(v)) => v,
             _ => unimplemented!(),
         }
     }
@@ -74,8 +74,12 @@ impl From<Stack> for std::option::Option<[pallas::Base; 32]> {
     fn from(value: Stack) -> Self {
         match value {
             Stack::Var(Witness::MerklePath(v)) => {
-                let ret: Vec<pallas::Base> = v.iter().map(|x| x.0).collect();
-                Some(ret.try_into().unwrap())
+                if let Some(path) = v {
+                    let ret: Vec<pallas::Base> = path.iter().map(|x| x.0).collect();
+                    return Some(ret.try_into().unwrap())
+                }
+
+                None
             }
             _ => unimplemented!(),
         }
