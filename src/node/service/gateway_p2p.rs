@@ -43,7 +43,7 @@ impl Gateway {
         self.p2p.broadcast(msg).await
     }
 
-    async fn subscribe_loop(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn _subscribe_loop(&self, executor: Arc<Executor<'_>>) -> Result<()> {
         let new_channel_sub = self.p2p.subscribe_channel().await;
 
         loop {
