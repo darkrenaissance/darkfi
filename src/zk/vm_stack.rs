@@ -7,80 +7,81 @@ use pasta_curves::pallas;
 
 use crate::crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode};
 
+/// These represent the witness types outside of the circuit
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
-pub enum Stack {
-    Var(Witness),
-    Cell(CellValue<pallas::Base>),
-}
-
-#[derive(Clone)]
 pub enum Witness {
-    EcPoint(Option<Point<pallas::Affine, EccChip<OrchardFixedBases>>>),
-    EcFixedPoint(Option<FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>>),
+    EcPoint(Option<pallas::Point>),
+    EcFixedPoint(Option<pallas::Point>),
     Base(Option<pallas::Base>),
     Scalar(Option<pallas::Scalar>),
-    MerklePath(Option<Vec<MerkleNode>>),
+    MerklePath(Option<[MerkleNode; 32]>),
     Uint32(Option<u32>),
     Uint64(Option<u64>),
 }
 
-impl From<Stack> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
-    fn from(value: Stack) -> Self {
+/// These represent the witness types inside the circuit
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
+pub enum StackVar {
+    EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
+    EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
+    Base(CellValue<pallas::Base>),
+    Scalar(Option<pallas::Scalar>),
+    MerklePath(Option<[pallas::Base; 32]>),
+    Uint32(Option<u32>),
+    Uint64(Option<u64>),
+}
+
+impl From<StackVar> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Var(Witness::EcPoint(v)) => v.unwrap(),
+            StackVar::EcPoint(v) => v,
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> {
-    fn from(value: Stack) -> Self {
+impl From<StackVar> for FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Var(Witness::EcFixedPoint(v)) => v.unwrap(),
+            StackVar::EcFixedPoint(v) => v,
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for std::option::Option<pallas::Scalar> {
-    fn from(value: Stack) -> Self {
+impl From<StackVar> for std::option::Option<pallas::Scalar> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Var(Witness::Scalar(v)) => v,
+            StackVar::Scalar(v) => v,
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for CellValue<pallas::Base> {
-    fn from(value: Stack) -> Self {
+impl From<StackVar> for CellValue<pallas::Base> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Cell(v) => v,
+            StackVar::Base(v) => v,
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for std::option::Option<u32> {
-    fn from(value: Stack) -> Self {
+impl From<StackVar> for std::option::Option<u32> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Var(Witness::Uint32(v)) => v,
+            StackVar::Uint32(v) => v,
             _ => unimplemented!(),
         }
     }
 }
 
-impl From<Stack> for std::option::Option<[pallas::Base; 32]> {
-    fn from(value: Stack) -> Self {
+impl From<StackVar> for std::option::Option<[pallas::Base; 32]> {
+    fn from(value: StackVar) -> Self {
         match value {
-            Stack::Var(Witness::MerklePath(v)) => {
-                if let Some(path) = v {
-                    let ret: Vec<pallas::Base> = path.iter().map(|x| x.0).collect();
-                    return Some(ret.try_into().unwrap())
-                }
-
-                None
-            }
+            StackVar::MerklePath(v) => v,
             _ => unimplemented!(),
         }
     }

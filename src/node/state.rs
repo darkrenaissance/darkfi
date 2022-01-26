@@ -200,7 +200,7 @@ impl ProgramState for State {
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         debug!("Check if it is valid merkle");
-        if let Ok(mr) = self.merkle_roots.key_exist(merkle_root.clone()) {
+        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
             return mr
         }
         false

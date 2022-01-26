@@ -168,7 +168,7 @@ fn burn_proof() -> Result<()> {
         Witness::Scalar(Some(value_blind)),
         Witness::Scalar(Some(token_blind)),
         Witness::Uint32(Some(leaf_pos)),
-        Witness::MerklePath(Some(merkle_path.clone())),
+        Witness::MerklePath(Some(merkle_path.clone().try_into().unwrap())),
         Witness::Base(Some(sig_secret.0)),
     ];
 
@@ -231,8 +231,8 @@ fn burn_proof() -> Result<()> {
 
 fn main() -> Result<()> {
     TermLogger::init(
-        //LevelFilter::Debug,
-        LevelFilter::Info,
+        LevelFilter::Debug,
+        //LevelFilter::Info,
         simplelog::Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,

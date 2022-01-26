@@ -35,13 +35,13 @@ lazy_static! {
             .chain((0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
                 let l = l as u8;
                 *state = MerkleNode::combine(l.into(), state, state);
-                Some(state.clone())
+                Some(*state)
             }))
             .collect()
     };
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Copy, Clone, Eq)]
 pub struct MerkleNode(pub pallas::Base);
 
 impl MerkleNode {
@@ -55,6 +55,10 @@ impl MerkleNode {
 
     pub fn from_coin(coin: &Coin) -> Self {
         MerkleNode(coin.0)
+    }
+
+    pub fn inner(&self) -> pallas::Base {
+        self.0
     }
 }
 
@@ -117,7 +121,7 @@ impl Hashable for MerkleNode {
     }
 
     fn empty_root(altitude: Altitude) -> Self {
-        EMPTY_ROOTS[<usize>::from(altitude)].clone()
+        EMPTY_ROOTS[<usize>::from(altitude)]
     }
 }
 
