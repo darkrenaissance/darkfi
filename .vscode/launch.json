@@ -1,0 +1,453 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'cashierd'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=cashierd"
+                ],
+                "filter": {
+                    "name": "cashierd",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'cashierd'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=cashierd",
+                    "--package=cashierd"
+                ],
+                "filter": {
+                    "name": "cashierd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'cashierd'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=cashierd",
+                    "--package=cashierd"
+                ],
+                "filter": {
+                    "name": "cashierd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'darkfi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "darkfi",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'net'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=net",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "net",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'net'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=net",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "net",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tui",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tui",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'vm'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=vm",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "vm",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'vm'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=vm",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "vm",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'vm_burn'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=vm_burn",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "vm_burn",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'vm_burn'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=vm_burn",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "vm_burn",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tx'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tx",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tx",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tx'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tx",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tx",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tree'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tree",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tree",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tree'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tree",
+                    "--package=darkfi"
+                ],
+                "filter": {
+                    "name": "tree",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'darkfid'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=darkfid",
+                    "--package=darkfid"
+                ],
+                "filter": {
+                    "name": "darkfid",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'darkfid'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=darkfid",
+                    "--package=darkfid"
+                ],
+                "filter": {
+                    "name": "darkfid",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'drk'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=drk",
+                    "--package=drk"
+                ],
+                "filter": {
+                    "name": "drk",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'drk'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=drk",
+                    "--package=drk"
+                ],
+                "filter": {
+                    "name": "drk",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gatewayd'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gatewayd",
+                    "--package=gatewayd"
+                ],
+                "filter": {
+                    "name": "gatewayd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gatewayd'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gatewayd",
+                    "--package=gatewayd"
+                ],
+                "filter": {
+                    "name": "gatewayd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'ircd'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=ircd",
+                    "--package=ircd"
+                ],
+                "filter": {
+                    "name": "ircd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'ircd'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=ircd",
+                    "--package=ircd"
+                ],
+                "filter": {
+                    "name": "ircd",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

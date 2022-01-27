@@ -2,6 +2,7 @@ import copy, utils
 from block import Block
 from blockchain import Blockchain
 from vote import Vote
+from logger import Logger
 
 class Node:
 	''' This class represents a protocol node.
@@ -16,6 +17,7 @@ class Node:
 		self.private_key, self.public_key = utils.generate_keys(self.password)
 		self.blockchain = Blockchain(init_block)
 		self.unconfirmed_transactions = []
+		self.log = Logger(self)
 	
 	def __repr__(self):
 		return "Node=[id={0}, clock={1}, password={2}, private_key={3}, public_key={4}, blockchain={5}, unconfirmed_transactions={6}".format(self.id, self.clock, self.password, self.private_key, self.public_key, self.blockchain, self.unconfirmed_transactions)
@@ -32,11 +34,15 @@ class Node:
 			node.receive_transaction(transaction)
 			
 	def propose_block(self, epoch, nodes):
-		propozed_block = Block(hash(self.blockchain.blocks[-1]), epoch, self.unconfirmed_transactions)
+		proposed_block = Block(hash(self.blockchain.blocks[-1]), epoch, self.unconfirmed_transactions)
+		signed_proposed_block = utils.sign_message(self.password, self.private_key, proposed_block)
 		for node in nodes:
-			node.receive_proposed_block(copy.deepcopy(propozed_block))
+			node.receive_proposed_block(self.public_key, copy.deepcopy(proposed_block), copy.deepcopy(signed_proposed_block))
 	
-	def receive_proposed_block(self, round_block):
+	def receive_proposed_block(self, leader_pubkey,  round_block, signed_round_block):
+		if not utils.verify_signature(leader_pubkey, round_block, signed_round_block):
+			self.warn("the signature of the proposed block dosn't match")
+			return
 		self.round_block = round_block
 		
 	def vote_on_round_block(self, nodes):
@@ -44,6 +50,7 @@ class Node:
 		# Already notarized check.
 		if (self.round_block != self.blockchain.blocks[-1]):
 			self.blockchain.check_block_validity(self.round_block, self.blockchain.blocks[-1])
+		#TODO implement: at this point we need to verify the unconfirmed transactions
 		signed_block = utils.sign_message(self.password, self.private_key, self.round_block)
 		vote = Vote(signed_block, self.round_block, self.id)
 		for node in nodes:
@@ -63,7 +70,7 @@ class Node:
 			notarized_block.notarized = True
 			self.blockchain.add_block(notarized_block)
 			# Node removes block transactions from unconfirmed_transactions array
-			for transaction in notarized_block.txs:
-				self.unconfirmed_transactions.remove(transaction)
+			#for transaction in notarized_block.txs:
+			#	self.unconfirmed_transactions.remove(transaction)
 			
 			

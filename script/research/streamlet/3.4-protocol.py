@@ -76,3 +76,4 @@ assert(node0.output() == node1.output() == node2.output() == node3.output() == n
 # Since node6 joined later, node0 output is a prefix or equal to node6 output.
 # Based on that, node6 output is a suffix of node0 output.
 assert(node0.output().blocks[-len(node6.output()):] == node6.output().blocks)
+print('finished...')
