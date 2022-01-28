@@ -1,7 +1,4 @@
 pub mod circuit;
-
-#[cfg(feature = "zkvm")]
+/// Halo2 zkas virtual machine
 pub mod vm;
-
-#[cfg(feature = "zkvm")]
 mod vm_stack;
