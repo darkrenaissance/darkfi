@@ -2,6 +2,7 @@ import copy, utils
 from block import Block
 from blockchain import Blockchain
 from vote import Vote
+from vrf import VRF
 from logger import Logger
 
 class Node:
@@ -18,6 +19,7 @@ class Node:
 		self.blockchain = Blockchain(init_block)
 		self.unconfirmed_transactions = []
 		self.log = Logger(self)
+		self.current_epoch=None #this need to be set by the clock tics
 	
 	def __repr__(self):
 		return "Node=[id={0}, clock={1}, password={2}, private_key={3}, public_key={4}, blockchain={5}, unconfirmed_transactions={6}".format(self.id, self.clock, self.password, self.private_key, self.public_key, self.blockchain, self.unconfirmed_transactions)
@@ -33,22 +35,30 @@ class Node:
 		for node in nodes:
 			node.receive_transaction(transaction)
 			
-	def propose_block(self, epoch, nodes):
+	def propose_block(self, epoch, y, pi, vrf_pk, g, nodes):
 		proposed_block = Block(hash(self.blockchain.blocks[-1]), epoch, self.unconfirmed_transactions)
 		signed_proposed_block = utils.sign_message(self.password, self.private_key, proposed_block)
 		for node in nodes:
-			node.receive_proposed_block(self.public_key, copy.deepcopy(proposed_block), copy.deepcopy(signed_proposed_block))
+			node.receive_proposed_block(self.public_key, y, pi, vrf_pk, g, copy.deepcopy(proposed_block), copy.deepcopy(signed_proposed_block))
 	
-	def receive_proposed_block(self, leader_pubkey,  round_block, signed_round_block):
+	def receive_proposed_block(self, leader_pubkey, y, pi, vrf_pk, g, round_block, signed_round_block):
 		if not utils.verify_signature(leader_pubkey, round_block, signed_round_block):
-			self.warn("the signature of the proposed block dosn't match")
+			self.log.warn("the signature of the proposed block dosn't match")
+			return
+		#TODO alert that is insecure, e should be set by the ticing clock
+		x = round_block.e
+		#TODO pass and verify the proposed leader id
+		print(f"epoch number in verification {round_block.e}")
+		print(f"verifying {x}, {y}, {pi}, {vrf_pk}, {g}")
+		if not VRF.verify(x, y, pi, vrf_pk, g):
+			self.log.warn("failed verifying choosing leader")
 			return
 		self.round_block = round_block
 		
 	def vote_on_round_block(self, nodes):
 		# Node verifies proposed block extends from one of the longest notarized chains that node has seen at the time.
 		# Already notarized check.
-		if (self.round_block != self.blockchain.blocks[-1]):
+		if self.round_block != self.blockchain.blocks[-1]:
 			self.blockchain.check_block_validity(self.round_block, self.blockchain.blocks[-1])
 		#TODO implement: at this point we need to verify the unconfirmed transactions
 		signed_block = utils.sign_message(self.password, self.private_key, self.round_block)

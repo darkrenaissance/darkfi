@@ -2,6 +2,9 @@
 
 from block import Block
 from node import Node
+from vrf import VRF
+import math
+import numpy as np
 
 # Genesis block is generated.
 genesis_block = Block("⊥", 0, '⊥')
@@ -31,11 +34,17 @@ node1.broadcast_transaction([node0, node2, node3, node4, node5], "tx2")
 node4.receive_transaction("tx3")
 node4.broadcast_transaction([node0, node1, node2, node3, node5], "tx3")
 
+vrf = VRF()
+x = epoch
+y, pi, g = vrf.sign(x)
+Y = np.array(y)
+y_hypotenuse2 = np.sum(Y[1]**2+Y[2]**2)
 # A random leader is selected.
-leader = nodes[hash(str(epoch))%len(nodes)]
+leader = nodes[math.ceil(y_hypotenuse2)%len(nodes)]
 
+print(f"proposed {x}, {y}, {pi}, {vrf.pk}, {g}")
 # Leader forms a block and broadcasts it.
-leader.propose_block(epoch, nodes)
+leader.propose_block(1, y, pi, vrf.pk, g, nodes)
 
 # Nodes vote on the block and broadcast their vote to rest nodes.
 for node in nodes:
@@ -60,11 +69,18 @@ node5.broadcast_transaction([node0, node1, node2, node3, node4, node6], "tx5")
 node6.receive_transaction("tx6")
 node6.broadcast_transaction([node0, node1, node2, node3, node4, node5], "tx6")
 
+x = epoch
+vrf = VRF()
+y, pi, g = vrf.sign(x)
+Y = np.array(y)
+y_hypotenuse2 = np.sum(Y[1]**2+Y[2]**2)
 # A random leader is selected.
-leader = nodes[hash(str(epoch))%len(nodes)]
+leader = nodes[math.ceil(y_hypotenuse2)%len(nodes)]
+# A random leader is selected.
 
+print(f"epoch number in protocol: {epoch}")
 # Leader forms a block and broadcasts it.
-leader.propose_block(epoch, nodes)
+leader.propose_block(epoch, y, pi, vrf.pk, g, nodes)
 
 # Nodes vote on the block and broadcast their vote to rest nodes.
 for node in nodes:
