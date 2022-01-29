@@ -107,7 +107,7 @@ tutorial](https://bitzuma.com/posts/a-beginners-guide-to-the-electrum-bitcoin-wa
 for more details.
 
 For Solana, you can either install the Solana command-line suite or use
-[sollet](sollet.io).
+[sollet](https://www.sollet.io).
 
 Follow [this tutorial](https://docs.solana.com/cli) for the Solana
 command-line. For sollet.io, switch the network to testnet and click
