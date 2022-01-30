@@ -1,9 +1,6 @@
-import copy, utils
-from block import Block
-from blockchain import Blockchain
-from vote import Vote
-from vrf import VRF
-from logger import Logger
+import copy
+from streamlet import Block, Blockchain, Vote, Logger, generate_keys, sign_message, verify_signature
+from ouroboros import VRF
 
 class Node:
 	''' This class represents a protocol node.
@@ -15,7 +12,7 @@ class Node:
 		self.id = id
 		self.clock = clock # Clock syncronization to be implemented.
 		self.password = password
-		self.private_key, self.public_key = utils.generate_keys(self.password)
+		self.private_key, self.public_key = generate_keys(self.password)
 		self.blockchain = Blockchain(init_block)
 		self.unconfirmed_transactions = []
 		self.log = Logger(self)
@@ -37,12 +34,12 @@ class Node:
 			
 	def propose_block(self, epoch, y, pi, vrf_pk, g, nodes):
 		proposed_block = Block(hash(self.blockchain.blocks[-1]), epoch, self.unconfirmed_transactions)
-		signed_proposed_block = utils.sign_message(self.password, self.private_key, proposed_block)
+		signed_proposed_block = sign_message(self.password, self.private_key, proposed_block)
 		for node in nodes:
 			node.receive_proposed_block(self.public_key, y, pi, vrf_pk, g, copy.deepcopy(proposed_block), copy.deepcopy(signed_proposed_block))
 	
 	def receive_proposed_block(self, leader_pubkey, y, pi, vrf_pk, g, round_block, signed_round_block):
-		if not utils.verify_signature(leader_pubkey, round_block, signed_round_block):
+		if not verify_signature(leader_pubkey, round_block, signed_round_block):
 			self.log.warn("the signature of the proposed block dosn't match")
 			return
 		#TODO alert that is insecure, e should be set by the ticing clock
@@ -61,7 +58,7 @@ class Node:
 		if self.round_block != self.blockchain.blocks[-1]:
 			self.blockchain.check_block_validity(self.round_block, self.blockchain.blocks[-1])
 		#TODO implement: at this point we need to verify the unconfirmed transactions
-		signed_block = utils.sign_message(self.password, self.private_key, self.round_block)
+		signed_block = sign_message(self.password, self.private_key, self.round_block)
 		vote = Vote(signed_block, self.round_block, self.id)
 		for node in nodes:
 			node.receive_vote(self.public_key, vote, nodes)
@@ -70,7 +67,7 @@ class Node:
 		# We verify we haven't received a vote from that node again.
 		assert(vote not in self.round_block.votes)
 		# When nodes receive votes, they verify them against nodes public key.
-		assert(utils.verify_signature(node_public_key, vote.block, vote.vote))
+		assert(verify_signature(node_public_key, vote.block, vote.vote))
 		assert(self.round_block == vote.block)
 		# Additional rules must be defined by the protocol for its voting system.
 		self.round_block.votes.append(vote)

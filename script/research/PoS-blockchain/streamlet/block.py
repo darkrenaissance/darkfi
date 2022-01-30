@@ -1,4 +1,4 @@
-class Block:
+class Block(object):
 	''' This class represents a tuple of the form (h, e, txs).
 		Each blocks parent hash h may be computed simply as a hash of the parent block. '''
 	def __init__(self, h, e, txs):
