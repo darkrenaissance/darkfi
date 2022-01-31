@@ -193,6 +193,7 @@ crypto = [
     "bs58",
 
     "util",
+    "zkas",
 ]
 
 wallet = [
