@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2.clone(), app.lock().await.clone()).await?;
+                listen(ex2.clone(), app.lock().await.clone()).await?;
                 run_app(&mut terminal, app.lock().await.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn start(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
+async fn listen(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, app)).detach();
@@ -116,57 +116,31 @@ async fn start(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
 async fn poll(client: Map, app: App) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
-        update(app.clone(), reply).await?;
+
+        if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+            let nodes = reply.as_object().unwrap().get("nodes").unwrap();
+
+            let node1 = &nodes[0];
+            let node2 = &nodes[1];
+            let node3 = &nodes[2];
+
+            let infos = vec![
+                NodeInfo {
+                    id: node1["id"].to_string(),
+                    connections: node1["connections"].as_u64().unwrap() as usize,
+                    is_active: node2["is_active"].as_bool().unwrap(),
+                    last_message: node3["message"].to_string(),
+                },
+            ];
+
+            app.clone().update(infos).await;
+        } else {
+            // TODO: error handling
+            println!("Reply is an error");
+        }
+
         async_util::sleep(1).await;
     }
-}
-
-async fn update(app: App, reply: Value) -> Result<()> {
-    if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-        //let args = params.as_array();
-        let nodes = reply.as_object().unwrap().get("nodes").unwrap();
-
-        let node1 = &nodes[0];
-        let node2 = &nodes[1];
-        let node3 = &nodes[2];
-
-        let infos = vec![
-            NodeInfo {
-                id: node1["id"].to_string(),
-                connections: node1["connections"].as_u64().unwrap() as usize,
-                is_active: node2["is_active"].as_bool().unwrap(),
-                last_message: node3["message"].to_string(),
-            },
-            //NodeInfo {
-            //    id: node2["id"].to_string(),
-            //    connections: node2["connections"].as_u64().unwrap() as usize,
-            //    is_active: node2["is_active"].as_bool().unwrap(),
-            //    last_message: node2["message"].to_string(),
-            //},
-            //NodeInfo {
-            //    id: node3["id"].to_string(),
-            //    connections: node3["connections"].as_u64().unwrap() as usize,
-            //    is_active: node3["is_active"].as_bool().unwrap(),
-            //    last_message: node3["message"].to_string(),
-            //},
-        ];
-
-        //app.node_info(
-        //let node_info = NodeInfoView::new(infos.clone());
-
-        //let ids = vec![node1["id"].to_string(), node2["id"].to_string(), node3["id"].to_string()];
-
-        // mutex
-        app.update(infos).await;
-        //let node_list = NodeIdList::new(ids);
-        //println!("{}", test);
-        // do something
-    } else {
-        // TODO: error handling
-        println!("Reply is an error");
-    }
-
-    Ok(())
 }
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
