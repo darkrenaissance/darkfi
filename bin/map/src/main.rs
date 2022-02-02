@@ -8,7 +8,7 @@ use darkfi::{
     util::async_util,
 };
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
@@ -81,8 +81,8 @@ async fn main() -> Result<()> {
     // let current_state = get_current_state.await;
     // let mut app = app.lock();
     // app.current_state = current_state;
-    // let app = Arc::new(Mutex::new(App::new()));
-    let app = App::new();
+    let app = Arc::new(Mutex::new(App::new()));
+    //let app = App::new();
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -95,8 +95,8 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2.clone(), app.clone()).await?;
-                run_app(&mut terminal, app).await?;
+                start(ex2.clone(), app.lock().await.clone()).await?;
+                run_app(&mut terminal, app.lock().await.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -128,7 +128,7 @@ async fn update(app: App, reply: Value) -> Result<()> {
 
         let node1 = &nodes[0];
         let node2 = &nodes[1];
-        let _node3 = &nodes[2];
+        let node3 = &nodes[2];
 
         let infos = vec![
             NodeInfo {
