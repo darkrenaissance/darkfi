@@ -16,7 +16,6 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
-        // append to vector of node info
         let infos = vec![
             NodeInfo {
                 id: "0385048034sodisofjhosd1111q3434".to_string(),
@@ -61,6 +60,12 @@ impl App {
         ];
 
         let node_list = NodeIdList::new(ids);
+
+        //let infos = Vec::new();
+        //let ids = Vec::new();
+
+        //let node_info = NodeInfoView::new(infos);
+        //let node_list = NodeIdList::new(ids);
         App { node_list, node_info }
     }
 
@@ -69,12 +74,20 @@ impl App {
     //    Timer::after(dur).await;
     //}
 
-    pub async fn update(self, node_vec: Vec<NodeInfo>) -> App {
-        let node_info = NodeInfoView::new(node_vec.clone());
+    pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> App {
+        let ids = vec![node_vec[0].id.clone()];
 
-        let ids = vec![node_vec[0].id.clone(), node_vec[1].id.clone(), node_vec[2].id.clone()];
+        for id in ids {
+            self.node_list.node_id.push(id);
+        }
 
-        let node_list = NodeIdList::new(ids);
+        let node_list = self.node_list;
+
+        for info in node_vec {
+            self.node_info.infos.push(info);
+        }
+        let node_info = self.node_info;
+
         App { node_list, node_info }
     }
 }
