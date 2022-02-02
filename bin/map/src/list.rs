@@ -2,14 +2,14 @@
 use tui::widgets::ListState;
 
 #[derive(Clone)]
-pub struct NodeIdList {
+pub struct IdPanel {
     pub state: ListState,
     pub node_id: Vec<String>,
 }
 
-impl NodeIdList {
-    pub fn new(node_id: Vec<String>) -> NodeIdList {
-        NodeIdList { state: ListState::default(), node_id }
+impl IdPanel {
+    pub fn new(node_id: Vec<String>) -> IdPanel {
+        IdPanel { state: ListState::default(), node_id }
     }
 
     pub fn next(&mut self) {

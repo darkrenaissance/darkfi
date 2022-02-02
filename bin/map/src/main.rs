@@ -78,11 +78,7 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    // let current_state = get_current_state.await;
-    // let mut app = app.lock();
-    // app.current_state = current_state;
     let app = Arc::new(Mutex::new(App::new()));
-    //let app = App::new();
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
