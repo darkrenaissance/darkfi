@@ -1,14 +1,14 @@
 #[derive(Clone)]
-pub struct NodeInfoView {
+pub struct InfoList {
     pub index: usize,
     pub infos: Vec<NodeInfo>,
 }
 
-impl NodeInfoView {
-    pub fn new(infos: Vec<NodeInfo>) -> NodeInfoView {
+impl InfoList {
+    pub fn new(infos: Vec<NodeInfo>) -> InfoList {
         let index = 0;
 
-        NodeInfoView { index, infos }
+        InfoList { index, infos }
     }
 
     pub fn next(&mut self) {

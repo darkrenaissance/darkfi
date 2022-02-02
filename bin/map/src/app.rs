@@ -1,6 +1,6 @@
 use crate::{
-    list::IdPanel,
-    node_info::{NodeInfo, NodeInfoView},
+    list::IdList,
+    node_info::{NodeInfo, InfoList},
 };
 //use smol::Timer;
 //use std::{collections::HashMap, time::Duration};
@@ -10,8 +10,8 @@ use crate::{
 // arc reference
 #[derive(Clone)]
 pub struct App {
-    pub node_list: IdPanel,
-    pub node_info: NodeInfoView,
+    pub node_list: IdList,
+    pub node_info: InfoList,
 }
 
 impl App {
@@ -49,7 +49,7 @@ impl App {
             },
         ];
 
-        let node_info = NodeInfoView::new(infos.clone());
+        let node_info = InfoList::new(infos.clone());
 
         let ids = vec![
             infos[0].id.clone(),
@@ -59,13 +59,13 @@ impl App {
             infos[4].id.clone(),
         ];
 
-        let node_list = IdPanel::new(ids);
+        let node_list = IdList::new(ids);
 
         //let infos = Vec::new();
         //let ids = Vec::new();
 
-        //let node_info = NodeInfoView::new(infos);
-        //let node_list = IdPanel::new(ids);
+        //let node_info = InfoList::new(infos);
+        //let node_list = IdList::new(ids);
         App { node_list, node_info }
     }
 
