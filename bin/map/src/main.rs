@@ -20,7 +20,7 @@ use tui::{
     Terminal,
 };
 
-use map::{node_info::NodeInfo, ui, App};
+use map::{info_list::NodeInfo, ui, App};
 
 struct Map {
     url: String,

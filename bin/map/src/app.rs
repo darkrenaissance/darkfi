@@ -1,6 +1,6 @@
 use crate::{
-    list::IdList,
-    node_info::{NodeInfo, InfoList},
+    id_list::IdList,
+    info_list::{NodeInfo, InfoList},
 };
 //use smol::Timer;
 //use std::{collections::HashMap, time::Duration};

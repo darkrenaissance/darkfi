@@ -1,6 +1,6 @@
 pub mod app;
-pub mod list;
-pub mod node_info;
+pub mod id_list;
+pub mod info_list;
 pub mod types;
 pub mod ui;
 
