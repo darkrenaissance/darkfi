@@ -10,8 +10,8 @@ use crate::{
 // arc reference
 #[derive(Clone)]
 pub struct App {
-    pub node_list: IdList,
-    pub node_info: InfoList,
+    pub id_list: IdList,
+    pub info_list: InfoList,
 }
 
 impl App {
@@ -49,7 +49,7 @@ impl App {
             },
         ];
 
-        let node_info = InfoList::new(infos.clone());
+        let info_list = InfoList::new(infos.clone());
 
         let ids = vec![
             infos[0].id.clone(),
@@ -59,14 +59,14 @@ impl App {
             infos[4].id.clone(),
         ];
 
-        let node_list = IdList::new(ids);
+        let id_list = IdList::new(ids);
 
         //let infos = Vec::new();
         //let ids = Vec::new();
 
-        //let node_info = InfoList::new(infos);
-        //let node_list = IdList::new(ids);
-        App { node_list, node_info }
+        //let info_list = InfoList::new(infos);
+        //let id_list = IdList::new(ids);
+        App { id_list, info_list }
     }
 
     // TODO: implement this
@@ -78,17 +78,17 @@ impl App {
         let ids = vec![node_vec[0].id.clone()];
 
         for id in ids {
-            self.node_list.node_id.push(id);
+            self.id_list.node_id.push(id);
         }
 
-        let node_list = self.node_list;
+        let id_list = self.id_list;
 
         for info in node_vec {
-            self.node_info.infos.push(info);
+            self.info_list.infos.push(info);
         }
-        let node_info = self.node_info;
+        let info_list = self.info_list;
 
-        App { node_list, node_info }
+        App { id_list, info_list }
     }
 }
 

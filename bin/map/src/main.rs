@@ -144,9 +144,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
 
     terminal.clear()?;
 
-    app.node_list.state.select(Some(0));
+    app.id_list.state.select(Some(0));
 
-    app.node_info.index = 0;
+    app.info_list.index = 0;
 
     // acquire the mutex
     // let mut app = app.lock();
@@ -161,12 +161,12 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    app.node_list.next();
-                    app.node_info.next();
+                    app.id_list.next();
+                    app.info_list.next();
                 }
                 Key::Char('k') => {
-                    app.node_list.previous();
-                    app.node_info.previous();
+                    app.id_list.previous();
+                    app.info_list.previous();
                 }
                 _ => (),
             }
