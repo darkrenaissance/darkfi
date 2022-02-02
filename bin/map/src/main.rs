@@ -78,6 +78,10 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
+    // let current_state = get_current_state.await;
+    // let mut app = app.lock();
+    // app.current_state = current_state;
+    // let app = Arc::new(Mutex::new(App::new()));
     let app = App::new();
 
     let nthreads = num_cpus::get();
@@ -104,10 +108,7 @@ async fn main() -> Result<()> {
 async fn start(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
-    ex.spawn(async {
-        let _ = poll(client, app).await;
-    })
-    .detach();
+    ex.spawn(poll(client, app)).detach();
 
     Ok(())
 }
@@ -134,7 +135,7 @@ async fn update(app: App, reply: Value) -> Result<()> {
                 id: node1["id"].to_string(),
                 connections: node1["connections"].as_u64().unwrap() as usize,
                 is_active: node2["is_active"].as_bool().unwrap(),
-                last_message: "message".to_string(),
+                last_message: node3["message"].to_string(),
             },
             //NodeInfo {
             //    id: node2["id"].to_string(),
@@ -176,6 +177,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
     app.node_list.state.select(Some(0));
 
     app.node_info.index = 0;
+
+    // acquire the mutex
+    // let mut app = app.lock();
 
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;
