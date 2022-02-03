@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     error::Result,
-    net::{p2p::P2pPtr, protocols::ProtocolVersion, ChannelPtr},
+    net::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr},
 };
 
 /// Removes channel from the list of connected channels when a stop signal is

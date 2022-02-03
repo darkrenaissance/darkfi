@@ -9,8 +9,8 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocols::{ProtocolPing, ProtocolSeed, ProtocolBase},
-        sessions::Session,
+        protocol::{ProtocolPing, ProtocolSeed, ProtocolBase},
+        session::Session,
         ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
     },
     util::sleep,

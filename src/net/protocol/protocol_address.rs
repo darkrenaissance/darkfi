@@ -7,8 +7,8 @@ use crate::{
     error::Result,
     net::{
         message_subscriber::MessageSubscription,
-        messages,
-        protocols::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
+        message,
+        protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
         ChannelPtr, HostsPtr, P2pPtr,
     },
 };
@@ -16,8 +16,8 @@ use crate::{
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
-    addrs_sub: MessageSubscription<messages::AddrsMessage>,
-    get_addrs_sub: MessageSubscription<messages::GetAddrsMessage>,
+    addrs_sub: MessageSubscription<message::AddrsMessage>,
+    get_addrs_sub: MessageSubscription<message::GetAddrsMessage>,
     hosts: HostsPtr,
     jobsman: ProtocolJobsManagerPtr,
 }
@@ -29,14 +29,14 @@ impl ProtocolAddress {
         // Creates a subscription to address message.
         let addrs_sub = channel
             .clone()
-            .subscribe_msg::<messages::AddrsMessage>()
+            .subscribe_msg::<message::AddrsMessage>()
             .await
             .expect("Missing addrs dispatcher!");
 
         // Creates a subscription to get-address message.
         let get_addrs_sub = channel
             .clone()
-            .subscribe_msg::<messages::GetAddrsMessage>()
+            .subscribe_msg::<message::GetAddrsMessage>()
             .await
             .expect("Missing getaddrs dispatcher!");
 
@@ -55,14 +55,14 @@ impl ProtocolAddress {
         // Creates a subscription to address message.
         let addrs_sub = channel
             .clone()
-            .subscribe_msg::<messages::AddrsMessage>()
+            .subscribe_msg::<message::AddrsMessage>()
             .await
             .expect("Missing addrs dispatcher!");
 
         // Creates a subscription to get-address message.
         let get_addrs_sub = channel
             .clone()
-            .subscribe_msg::<messages::GetAddrsMessage>()
+            .subscribe_msg::<message::GetAddrsMessage>()
             .await
             .expect("Missing getaddrs dispatcher!");
 
@@ -113,7 +113,7 @@ impl ProtocolAddress {
                 addrs.len()
             );
             // Creates an address messages containing host address.
-            let addrs_msg = messages::AddrsMessage { addrs };
+            let addrs_msg = message::AddrsMessage { addrs };
             // Sends the address message across the channel.
             self.channel.clone().send(addrs_msg).await?;
         }
@@ -132,7 +132,7 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.clone().spawn(self.clone().handle_receive_get_addrs(), executor).await;
 
         // Send get_address message.
-        let get_addrs = messages::GetAddrsMessage {};
+        let get_addrs = message::GetAddrsMessage {};
         let _ = self.channel.clone().send(get_addrs).await;
         debug!(target: "net", "ProtocolAddress::start() [END]");
     }

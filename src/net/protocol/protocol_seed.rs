@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     error::Result,
-    net::{messages, ChannelPtr, HostsPtr, SettingsPtr},
+    net::{message, ChannelPtr, HostsPtr, SettingsPtr},
 };
 
 /// Implements the seed protocol.
@@ -29,7 +29,7 @@ impl ProtocolSeed {
         let addr_sub = self
             .channel
             .clone()
-            .subscribe_msg::<messages::AddrsMessage>()
+            .subscribe_msg::<message::AddrsMessage>()
             .await
             .expect("Missing addrs dispatcher!");
 
@@ -37,7 +37,7 @@ impl ProtocolSeed {
         self.send_self_address().await?;
 
         // Send get address message.
-        let get_addr = messages::GetAddrsMessage {};
+        let get_addr = message::GetAddrsMessage {};
         self.channel.clone().send(get_addr).await?;
 
         // Receive addresses.
@@ -56,7 +56,7 @@ impl ProtocolSeed {
         match self.settings.external_addr {
             Some(addr) => {
                 debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
-                let addr = messages::AddrsMessage { addrs: vec![addr] };
+                let addr = message::AddrsMessage { addrs: vec![addr] };
                 Ok(self.channel.clone().send(addr).await?)
             }
             // Do nothing if external address is not configured

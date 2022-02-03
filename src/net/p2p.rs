@@ -1,6 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
-use log::*;
+use log::debug;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -10,9 +10,9 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        messages::Message,
-        protocols::{register_default_protocols, ProtocolRegistry},
-        sessions::{InboundSession, ManualSession, OutboundSession, SeedSession},
+        message::Message,
+        protocol::{register_default_protocols, ProtocolRegistry},
+        session::{InboundSession, ManualSession, OutboundSession, SeedSession},
         Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
     },
     system::{Subscriber, SubscriberPtr, Subscription},

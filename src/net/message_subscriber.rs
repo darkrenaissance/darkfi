@@ -5,7 +5,7 @@ use rand::Rng;
 use std::{any::Any, collections::HashMap, io, io::Cursor, sync::Arc};
 
 use crate::{
-    net::messages::Message,
+    net::message::Message,
     util::serial::{Decodable, Encodable},
     Error, Result,
 };

@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use crate::{
     error::{Error, Result},
     net::{
-        messages,
-        protocols::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
+        message,
+        protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
         ChannelPtr, P2pPtr, SettingsPtr,
     },
     util::sleep,
@@ -53,7 +53,7 @@ impl ProtocolPing {
         let pong_sub = self
             .channel
             .clone()
-            .subscribe_msg::<messages::PongMessage>()
+            .subscribe_msg::<message::PongMessage>()
             .await
             .expect("Missing pong dispatcher!");
 
@@ -65,7 +65,7 @@ impl ProtocolPing {
             let nonce = Self::random_nonce();
 
             // Send ping message.
-            let ping = messages::PingMessage { nonce };
+            let ping = message::PingMessage { nonce };
             self.channel.clone().send(ping).await?;
             debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
             // Start the timer for ping timer.
@@ -91,7 +91,7 @@ impl ProtocolPing {
         let ping_sub = self
             .channel
             .clone()
-            .subscribe_msg::<messages::PingMessage>()
+            .subscribe_msg::<message::PingMessage>()
             .await
             .expect("Missing ping dispatcher!");
 
@@ -101,7 +101,7 @@ impl ProtocolPing {
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send pong message.
-            let pong = messages::PongMessage { nonce: ping.nonce };
+            let pong = message::PongMessage { nonce: ping.nonce };
             self.channel.clone().send(pong).await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() sent Pong reply");
         }
