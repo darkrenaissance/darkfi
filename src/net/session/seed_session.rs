@@ -9,7 +9,7 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocol::{ProtocolPing, ProtocolSeed, ProtocolBase},
+        protocol::{ProtocolBase, ProtocolPing, ProtocolSeed},
         session::Session,
         ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
     },

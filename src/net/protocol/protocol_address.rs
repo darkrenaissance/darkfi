@@ -1,13 +1,13 @@
-use log::{error, debug};
+use async_trait::async_trait;
+use log::{debug, error};
 use smol::Executor;
 use std::sync::Arc;
-use async_trait::async_trait;
 
 use crate::{
     error::Result,
     net::{
-        message_subscriber::MessageSubscription,
         message,
+        message_subscriber::MessageSubscription,
         protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
         ChannelPtr, HostsPtr, P2pPtr,
     },
@@ -137,4 +137,3 @@ impl ProtocolBase for ProtocolAddress {
         debug!(target: "net", "ProtocolAddress::start() [END]");
     }
 }
-

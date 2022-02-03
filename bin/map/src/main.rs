@@ -120,14 +120,12 @@ async fn poll(client: Map, app: App) -> Result<()> {
             let node2 = &nodes[1];
             let node3 = &nodes[2];
 
-            let infos = vec![
-                NodeInfo {
-                    id: node1["id"].to_string(),
-                    connections: node1["connections"].as_u64().unwrap() as usize,
-                    is_active: node2["is_active"].as_bool().unwrap(),
-                    last_message: node3["message"].to_string(),
-                },
-            ];
+            let infos = vec![NodeInfo {
+                id: node1["id"].to_string(),
+                connections: node1["connections"].as_u64().unwrap() as usize,
+                is_active: node2["is_active"].as_bool().unwrap(),
+                last_message: node3["message"].to_string(),
+            }];
 
             app.clone().update(infos).await;
         } else {

@@ -1,8 +1,8 @@
-use log::{error, debug};
+use async_trait::async_trait;
+use log::{debug, error};
 use rand::Rng;
 use smol::Executor;
 use std::{sync::Arc, time::Instant};
-use async_trait::async_trait;
 
 use crate::{
     error::{Error, Result},
@@ -126,4 +126,3 @@ impl ProtocolBase for ProtocolPing {
         debug!(target: "net", "ProtocolPing::start() [END]");
     }
 }
-

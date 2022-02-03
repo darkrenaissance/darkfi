@@ -16,8 +16,8 @@ use std::sync::{
 use crate::{
     error::{Error, Result},
     net::{
-        message_subscriber::{MessageSubscription, MessageSubsystem},
         message,
+        message_subscriber::{MessageSubscription, MessageSubsystem},
         protocol::{ProtocolBase, ProtocolBasePtr},
     },
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},

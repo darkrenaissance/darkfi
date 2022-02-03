@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use async_trait::async_trait;
 use smol::Executor;
+use std::sync::Arc;
 
 pub type ProtocolBasePtr = Arc<dyn 'static + ProtocolBase + Send + Sync>;
 

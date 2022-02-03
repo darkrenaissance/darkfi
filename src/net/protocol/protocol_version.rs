@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
-    net::{message_subscriber::MessageSubscription, message, ChannelPtr, SettingsPtr},
+    net::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr},
     util::sleep,
 };
 

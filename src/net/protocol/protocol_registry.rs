@@ -8,10 +8,11 @@ use std::sync::Arc;
 use super::protocol_base::ProtocolBasePtr;
 use crate::net::{ChannelPtr, P2pPtr};
 
-type Constructor =
-    Box<dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static,
-        Arc<dyn 'static + ProtocolBase + Send + Sync>
-    > + Send + Sync>;
+type Constructor = Box<
+    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, Arc<dyn 'static + ProtocolBase + Send + Sync>>
+        + Send
+        + Sync,
+>;
 
 pub struct ProtocolRegistry {
     protocol_constructors: Mutex<Vec<Constructor>>,
@@ -19,9 +20,7 @@ pub struct ProtocolRegistry {
 
 impl ProtocolRegistry {
     pub fn new() -> Self {
-        Self {
-            protocol_constructors: Mutex::new(Vec::new()),
-        }
+        Self { protocol_constructors: Mutex::new(Vec::new()) }
     }
 
     // add_protocol()?
