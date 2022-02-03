@@ -9,7 +9,7 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocols::{ProtocolAddress, ProtocolPing},
+        protocols::{ProtocolAddress, ProtocolPing, ProtocolBase},
         sessions::Session,
         ChannelPtr, Connector, P2p,
     },
@@ -118,10 +118,9 @@ impl ManualSession {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let settings = self.p2p().settings().clone();
         let hosts = self.p2p().hosts();
 
-        let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
+        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
         let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;

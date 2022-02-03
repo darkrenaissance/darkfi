@@ -18,6 +18,7 @@ use crate::{
     net::{
         message_subscriber::{MessageSubscription, MessageSubsystem},
         messages,
+        protocols::{ProtocolBase, ProtocolBasePtr},
     },
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
 };

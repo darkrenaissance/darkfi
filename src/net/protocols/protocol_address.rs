@@ -1,14 +1,15 @@
-use log::*;
+use log::{error, debug};
 use smol::Executor;
 use std::sync::Arc;
+use async_trait::async_trait;
 
 use crate::{
     error::Result,
     net::{
         message_subscriber::MessageSubscription,
         messages,
-        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
-        ChannelPtr, HostsPtr,
+        protocols::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
+        ChannelPtr, HostsPtr, P2pPtr,
     },
 };
 
@@ -48,19 +49,30 @@ impl ProtocolAddress {
         })
     }
 
-    /// Starts the address protocol. Runs receive address and get address
-    /// protocols on the protocol task manager. Then sends get-address
-    /// message.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "net", "ProtocolAddress::start() [START]");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.clone().handle_receive_get_addrs(), executor).await;
+    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+        let hosts = p2p.hosts();
 
-        // Send get_address message.
-        let get_addrs = messages::GetAddrsMessage {};
-        let _ = self.channel.clone().send(get_addrs).await;
-        debug!(target: "net", "ProtocolAddress::start() [END]");
+        // Creates a subscription to address message.
+        let addrs_sub = channel
+            .clone()
+            .subscribe_msg::<messages::AddrsMessage>()
+            .await
+            .expect("Missing addrs dispatcher!");
+
+        // Creates a subscription to get-address message.
+        let get_addrs_sub = channel
+            .clone()
+            .subscribe_msg::<messages::GetAddrsMessage>()
+            .await
+            .expect("Missing getaddrs dispatcher!");
+
+        Arc::new(Self {
+            channel: channel.clone(),
+            addrs_sub,
+            get_addrs_sub,
+            hosts,
+            jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
+        })
     }
 
     /// Handles receiving the address message. Loops to continually recieve
@@ -107,3 +119,22 @@ impl ProtocolAddress {
         }
     }
 }
+
+#[async_trait]
+impl ProtocolBase for ProtocolAddress {
+    /// Starts the address protocol. Runs receive address and get address
+    /// protocols on the protocol task manager. Then sends get-address
+    /// message.
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+        debug!(target: "net", "ProtocolAddress::start() [START]");
+        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_get_addrs(), executor).await;
+
+        // Send get_address message.
+        let get_addrs = messages::GetAddrsMessage {};
+        let _ = self.channel.clone().send(get_addrs).await;
+        debug!(target: "net", "ProtocolAddress::start() [END]");
+    }
+}
+

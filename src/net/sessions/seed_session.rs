@@ -9,7 +9,7 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocols::{ProtocolPing, ProtocolSeed},
+        protocols::{ProtocolPing, ProtocolSeed, ProtocolBase},
         sessions::Session,
         ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
     },
@@ -120,7 +120,7 @@ impl SeedSession {
         settings: SettingsPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
+        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
         protocol_ping.start(executor.clone()).await;
 
         let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());

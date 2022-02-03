@@ -145,7 +145,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     let seen_privmsg_ids = SeenPrivMsgIds::new();
 
-    let p2p = net::P2p::new(options.network_settings);
+    let p2p = net::P2p::new(options.network_settings).await;
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
     // Actual main p2p session

@@ -1,14 +1,15 @@
-use log::*;
+use log::{error, debug};
 use rand::Rng;
 use smol::Executor;
 use std::{sync::Arc, time::Instant};
+use async_trait::async_trait;
 
 use crate::{
     error::{Error, Result},
     net::{
         messages,
-        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
-        ChannelPtr, SettingsPtr,
+        protocols::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
+        ChannelPtr, P2pPtr, SettingsPtr,
     },
     util::sleep,
 };
@@ -22,7 +23,9 @@ pub struct ProtocolPing {
 
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
-    pub fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub fn new(channel: ChannelPtr, p2p: P2pPtr) -> Arc<Self> {
+        let settings = p2p.settings();
+
         Arc::new(Self {
             channel: channel.clone(),
             settings,
@@ -30,15 +33,14 @@ impl ProtocolPing {
         })
     }
 
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
-    /// protocol task manager, then queues the reply. Sends out a ping and
-    /// waits for pong reply. Waits for ping and replies with a pong.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "net", "ProtocolPing::start() [START]");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
-        debug!(target: "net", "ProtocolPing::start() [END]");
+    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+        let settings = p2p.settings();
+
+        Arc::new(Self {
+            channel: channel.clone(),
+            settings,
+            jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
+        })
     }
 
     /// Runs ping-pong protocol. Creates a subscription to pong, then starts a
@@ -110,3 +112,18 @@ impl ProtocolPing {
         rng.gen()
     }
 }
+
+#[async_trait]
+impl ProtocolBase for ProtocolPing {
+    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
+    /// protocol task manager, then queues the reply. Sends out a ping and
+    /// waits for pong reply. Waits for ping and replies with a pong.
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+        debug!(target: "net", "ProtocolPing::start() [START]");
+        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
+        debug!(target: "net", "ProtocolPing::start() [END]");
+    }
+}
+
