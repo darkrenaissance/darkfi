@@ -8,19 +8,19 @@ use crate::{id_list::IdList, info_list::InfoList, node_info::NodeInfo};
 // arc reference
 
 #[derive(Clone)]
-pub struct App {
+pub struct Model {
     pub id_list: IdList,
     pub info_list: InfoList,
 }
 
-impl App {
-    pub fn new(id_list: IdList, info_list: InfoList) -> App {
+impl Model {
+    pub fn new(id_list: IdList, info_list: InfoList) -> Model {
         //let infos = Vec::new();
         //let ids = Vec::new();
 
         //let info_list = InfoList::new(infos);
         //let id_list = IdList::new(ids);
-        App { id_list, info_list }
+        Model { id_list, info_list }
     }
 
     // TODO: implement this
@@ -28,7 +28,7 @@ impl App {
     //    Timer::after(dur).await;
     //}
 
-    pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> App {
+    pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> Model {
         let ids = vec![node_vec[0].id.clone()];
 
         for id in ids {
@@ -42,11 +42,11 @@ impl App {
         }
         let info_list = self.info_list;
 
-        App { id_list, info_list }
+        Model { id_list, info_list }
     }
 }
 
-//impl Default for App {
+//impl Default for Model {
 //    fn default() -> Self {
 //        Self::new()
 //    }

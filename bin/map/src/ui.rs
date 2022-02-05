@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::model::Model;
 use async_std::sync::{Arc, Mutex};
 use tui::{
     backend::Backend,
@@ -9,7 +9,7 @@ use tui::{
     Frame,
 };
 
-pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: App) {
+pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: Model) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)
@@ -30,6 +30,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: App) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
+    // needs to be mutable. could
     f.render_stateful_widget(nodes, slice[0], &mut app.id_list.state);
 
     let index = app.info_list.index;
@@ -37,7 +38,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: App) {
     render_info(app, f, index, slice);
 }
 
-fn render_info<B: Backend>(app: App, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+fn render_info<B: Backend>(app: Model, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
     let info = &app.info_list.infos;
     let id = &info[index].id;
     let connections = info[index].connections;

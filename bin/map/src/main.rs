@@ -16,7 +16,7 @@ use tui::{
     Terminal,
 };
 
-use map::{id_list::IdList, info_list::InfoList, node_info::NodeInfo, ui, App};
+use map::{id_list::IdList, info_list::InfoList, node_info::NodeInfo, ui, Model};
 
 struct Map {
     url: String,
@@ -119,8 +119,8 @@ async fn main() -> Result<()> {
 
     let id_list = IdList::new(ids);
 
-    //let app = Arc::new(App::new(id_list, info_list));
-    let app = App::new(id_list, info_list);
+    //let app = Arc::new(Model::new(id_list, info_list));
+    let app = Model::new(id_list, info_list);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run_rpc(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
+async fn run_rpc(ex: Arc<Executor<'_>>, app: Model) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, app)).detach();
@@ -151,7 +151,7 @@ async fn run_rpc(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     Ok(())
 }
 
-async fn poll(client: Map, _app: App) -> Result<()> {
+async fn poll(client: Map, _app: Model) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
@@ -179,7 +179,7 @@ async fn poll(client: Map, _app: App) -> Result<()> {
     }
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: Model) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;

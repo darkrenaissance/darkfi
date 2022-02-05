@@ -5,6 +5,7 @@ use tui::widgets::ListState;
 #[derive(Clone)]
 pub struct IdList {
     pub state: ListState,
+    // todo: mutex
     pub node_id: Vec<String>,
 }
 
