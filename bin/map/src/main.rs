@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                listen(ex2.clone(), app.clone()).await?;
+                run_rpc(ex2.clone(), app.clone()).await?;
                 run_app(&mut terminal, app.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn listen(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
+async fn run_rpc(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, app)).detach();
