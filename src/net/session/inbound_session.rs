@@ -9,7 +9,7 @@ use crate::{
     error::{Error, Result},
     net::{
         protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
-        session::Session,
+        session::{Session, SessionBitflag, SESSION_INBOUND},
         Acceptor, AcceptorPtr, ChannelPtr, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
@@ -96,11 +96,12 @@ impl InboundSession {
 
         self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-        self.attach_protocols(channel, executor).await
+        //self.attach_protocols(channel, executor).await
+        Ok(())
     }
 
-    /// Starts sending keep-alive and address messages across the channels.
-    async fn attach_protocols(
+    // Starts sending keep-alive and address messages across the channels.
+    /*async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
@@ -114,11 +115,15 @@ impl InboundSession {
         protocol_addr.start(executor).await;
 
         Ok(())
-    }
+    }*/
 }
 
 impl Session for InboundSession {
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
+    }
+
+    fn selector_id(&self) -> SessionBitflag {
+        SESSION_INBOUND
     }
 }

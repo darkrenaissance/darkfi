@@ -10,7 +10,7 @@ use crate::{
     error::{Error, Result},
     net::{
         protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
-        session::Session,
+        session::{Session, SessionBitflag, SESSION_OUTBOUND},
         ChannelPtr, Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
@@ -91,7 +91,7 @@ impl OutboundSession {
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
 
-                    self.clone().attach_protocols(channel, executor.clone()).await?;
+                    //self.clone().attach_protocols(channel, executor.clone()).await?;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -151,8 +151,8 @@ impl OutboundSession {
         }
     }
 
-    /// Starts sending keep-alive and address messages across the channels.
-    async fn attach_protocols(
+    // Starts sending keep-alive and address messages across the channels.
+    /*async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
@@ -166,11 +166,15 @@ impl OutboundSession {
         protocol_addr.start(executor).await;
 
         Ok(())
-    }
+    }*/
 }
 
 impl Session for OutboundSession {
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
+    }
+
+    fn selector_id(&self) -> SessionBitflag {
+        SESSION_OUTBOUND
     }
 }

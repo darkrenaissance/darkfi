@@ -58,10 +58,14 @@ pub use protocol_version::ProtocolVersion;
 pub use protocol_base::{ProtocolBase, ProtocolBasePtr};
 pub use protocol_registry::ProtocolRegistry;
 
-use crate::net::P2pPtr;
+use crate::net::{
+    session::{SESSION_ALL, SESSION_SEED},
+    P2pPtr,
+};
 
 pub async fn register_default_protocols(p2p: P2pPtr) {
     let registry = p2p.protocol_registry();
-    registry.register(ProtocolPing::new2).await;
-    registry.register(ProtocolAddress::new2).await;
+    registry.register(SESSION_ALL, ProtocolPing::new2).await;
+    registry.register(!SESSION_SEED, ProtocolAddress::new2).await;
+    registry.register(SESSION_SEED, ProtocolSeed::new2).await;
 }

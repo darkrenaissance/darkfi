@@ -118,11 +118,12 @@ impl ProtocolBase for ProtocolPing {
     /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "ProtocolPing::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
         self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
         debug!(target: "net", "ProtocolPing::start() [END]");
+        Ok(())
     }
 }

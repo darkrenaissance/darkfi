@@ -125,7 +125,7 @@ impl ProtocolBase for ProtocolAddress {
     /// Starts the address protocol. Runs receive address and get address
     /// protocols on the protocol task manager. Then sends get-address
     /// message.
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
@@ -135,5 +135,6 @@ impl ProtocolBase for ProtocolAddress {
         let get_addrs = message::GetAddrsMessage {};
         let _ = self.channel.clone().send(get_addrs).await;
         debug!(target: "net", "ProtocolAddress::start() [END]");
+        Ok(())
     }
 }

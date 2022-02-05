@@ -92,5 +92,6 @@ pub use hosts::{Hosts, HostsPtr};
 pub use message::Message;
 pub use message_subscriber::MessageSubscription;
 pub use p2p::{P2p, P2pPtr};
-pub use protocol::{ProtocolJobsManager, ProtocolJobsManagerPtr};
+pub use protocol::{ProtocolJobsManager, ProtocolJobsManagerPtr, ProtocolBasePtr, ProtocolBase};
+pub use session::{SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND, SESSION_SEED};
 pub use settings::{Settings, SettingsPtr};

@@ -42,7 +42,8 @@ pub trait Session: Sync {
         // while the handshake protocol is ongoing.
         // They are currently in sleep mode.
         let p2p = self.p2p();
-        let protocols = p2p.protocol_registry().attach(channel.clone(), p2p.clone()).await;
+        let protocols =
+            p2p.protocol_registry().attach(self.selector_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
@@ -62,7 +63,7 @@ pub trait Session: Sync {
         // correctly self destructing when the channel ends.
         for protocol in protocols {
             // Activate protocol
-            protocol.start(executor.clone()).await;
+            protocol.start(executor.clone()).await?;
         }
 
         debug!(target: "net", "Session::register_channel() [END]");
@@ -95,4 +96,6 @@ pub trait Session: Sync {
 
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
+
+    fn selector_id(&self) -> u32;
 }

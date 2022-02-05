@@ -10,7 +10,7 @@ use crate::{
     error::{Error, Result},
     net::{
         protocol::{ProtocolBase, ProtocolPing, ProtocolSeed},
-        session::Session,
+        session::{Session, SessionBitflag, SESSION_SEED},
         ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
     },
     util::sleep,
@@ -100,7 +100,7 @@ impl SeedSession {
 
                 self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-                self.attach_protocols(channel, hosts, settings, executor).await?;
+                //self.attach_protocols(channel, hosts, settings, executor).await?;
 
                 debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
@@ -112,8 +112,8 @@ impl SeedSession {
         }
     }
 
-    /// Starts keep-alive messages and seed protocol.
-    async fn attach_protocols(
+    // Starts keep-alive messages and seed protocol.
+    /*async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
         hosts: HostsPtr,
@@ -130,11 +130,15 @@ impl SeedSession {
         channel.stop().await;
 
         Ok(())
-    }
+    }*/
 }
 
 impl Session for SeedSession {
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
+    }
+
+    fn selector_id(&self) -> SessionBitflag {
+        SESSION_SEED
     }
 }
