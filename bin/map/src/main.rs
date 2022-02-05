@@ -16,7 +16,10 @@ use tui::{
     Terminal,
 };
 
-use map::{id_list::IdList, info_list::InfoList, node_info::NodeInfo, ui, Model};
+use map::{
+    model::{IdList, InfoList, NodeInfo},
+    ui, Model,
+};
 
 struct Map {
     url: String,
@@ -119,8 +122,8 @@ async fn main() -> Result<()> {
 
     let id_list = IdList::new(ids);
 
-    //let app = Arc::new(Model::new(id_list, info_list));
-    let app = Model::new(id_list, info_list);
+    //let model = Arc::new(Model::new(id_list, info_list));
+    let model = Model::new(id_list, info_list);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -133,8 +136,8 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                run_rpc(ex2.clone(), app.clone()).await?;
-                run_app(&mut terminal, app.clone()).await?;
+                run_rpc(ex2.clone(), model.clone()).await?;
+                run_model(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -143,15 +146,15 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run_rpc(ex: Arc<Executor<'_>>, app: Model) -> Result<()> {
+async fn run_rpc(ex: Arc<Executor<'_>>, model: Model) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
-    ex.spawn(poll(client, app)).detach();
+    ex.spawn(poll(client, model)).detach();
 
     Ok(())
 }
 
-async fn poll(client: Map, _app: Model) -> Result<()> {
+async fn poll(client: Map, _model: Model) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
@@ -169,7 +172,7 @@ async fn poll(client: Map, _app: Model) -> Result<()> {
                 last_message: node3["message"].to_string(),
             }];
 
-            //app.lock().await.update(infos).await;
+            //model.lock().await.update(infos).await;
         } else {
             // TODO: error handling
             println!("Reply is an error");
@@ -179,36 +182,36 @@ async fn poll(client: Map, _app: Model) -> Result<()> {
     }
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: Model) -> io::Result<()> {
+async fn run_model<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
 
-    app.id_list.state.select(Some(0));
+    model.id_list.state.select(Some(0));
 
-    app.info_list.index = 0;
+    model.info_list.index = 0;
 
     // acquire the mutex
-    // let mut app = app.lock();
+    // let mut model = model.lock();
 
     loop {
         // clone everything
         terminal.draw(|f| {
-            ui::ui(f, app.clone());
+            ui::ui(f, model.clone());
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
-                    app.id_list.next();
-                    app.info_list.next().await;
+                    model.id_list.next();
+                    model.info_list.next().await;
                 }
                 Key::Char('k') => {
-                    app.id_list.previous();
-                    app.info_list.previous().await;
+                    model.id_list.previous();
+                    model.info_list.previous().await;
                 }
                 _ => (),
             }
