@@ -3,16 +3,10 @@ use futures::future::BoxFuture;
 use std::future::Future;
 use log::debug;
 
-use super::protocol_base::ProtocolBase;
-use std::sync::Arc;
-
-//use super::protocol_base::ProtocolBasePtr;
-use crate::net::{session::SessionBitflag, ChannelPtr, P2pPtr};
-
-type ProtocolBasePtr = Arc<dyn ProtocolBase + Send + Sync>;
+use crate::net::{session::SessionBitflag, ChannelPtr, P2pPtr, protocol::ProtocolBasePtr};
 
 type Constructor = Box<
-    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, Arc<dyn ProtocolBase + Send + Sync>>
+    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, ProtocolBasePtr>
         + Send
         + Sync,
 >;
@@ -30,11 +24,11 @@ impl ProtocolRegistry {
     pub async fn register<C, F>(&self, session_flags: SessionBitflag, constructor: C)
     where
         C: 'static + Fn(ChannelPtr, P2pPtr) -> F + Send + Sync,
-        F: 'static + Future<Output = Arc<dyn ProtocolBase + Send + Sync>> + Send,
+        F: 'static + Future<Output = ProtocolBasePtr> + Send,
     {
         let constructor = move |channel, p2p| {
             Box::pin(constructor(channel, p2p))
-                as BoxFuture<'static, Arc<dyn ProtocolBase + Send + Sync>>
+                as BoxFuture<'static, ProtocolBasePtr>
         };
         self.protocol_constructors.lock().await.push((session_flags, Box::new(constructor)));
     }
@@ -44,15 +38,15 @@ impl ProtocolRegistry {
         selector_id: SessionBitflag,
         channel: ChannelPtr,
         p2p: P2pPtr,
-    ) -> Vec<Arc<dyn ProtocolBase + Send + Sync>> {
-        let mut protocols: Vec<Arc<dyn ProtocolBase + Send + Sync>> = Vec::new();
+    ) -> Vec<ProtocolBasePtr> {
+        let mut protocols: Vec<ProtocolBasePtr> = Vec::new();
         for (session_flags, construct) in self.protocol_constructors.lock().await.iter() {
             // Skip protocols that are not registered for this session
             if selector_id & session_flags == 0 {
                 continue
             }
 
-            let protocol: Arc<dyn ProtocolBase + Send + Sync> =
+            let protocol: ProtocolBasePtr =
                 construct(channel.clone(), p2p.clone()).await;
             debug!(target: "net", "Attached {}", protocol.name());
             protocols.push(protocol)
