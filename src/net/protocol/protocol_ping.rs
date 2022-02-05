@@ -8,6 +8,7 @@ use crate::{
     error::{Error, Result},
     net::{
         message,
+        message_subscriber::MessageSubscription,
         protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
         ChannelPtr, P2pPtr, SettingsPtr,
     },
@@ -17,6 +18,8 @@ use crate::{
 /// Defines ping and pong messages.
 pub struct ProtocolPing {
     channel: ChannelPtr,
+    ping_sub: MessageSubscription<message::PingMessage>,
+    pong_sub: MessageSubscription<message::PongMessage>,
     settings: SettingsPtr,
     jobsman: ProtocolJobsManagerPtr,
 }
@@ -26,8 +29,24 @@ impl ProtocolPing {
     pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
 
+        // Creates a subscription to ping message.
+        let ping_sub = channel
+            .clone()
+            .subscribe_msg::<message::PingMessage>()
+            .await
+            .expect("Missing ping dispatcher!");
+
+        // Creates a subscription to pong message.
+        let pong_sub = channel
+            .clone()
+            .subscribe_msg::<message::PongMessage>()
+            .await
+            .expect("Missing pong dispatcher!");
+
         Arc::new(Self {
             channel: channel.clone(),
+            ping_sub,
+            pong_sub,
             settings,
             jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
         })
@@ -39,14 +58,6 @@ impl ProtocolPing {
     /// for the pong reply and insures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
-        // Creates a subscription to pong message.
-        let pong_sub = self
-            .channel
-            .clone()
-            .subscribe_msg::<message::PongMessage>()
-            .await
-            .expect("Missing pong dispatcher!");
-
         loop {
             // Wait channel_heartbeat amount of time.
             sleep(self.settings.channel_heartbeat_seconds).await;
@@ -62,7 +73,7 @@ impl ProtocolPing {
             let start = Instant::now();
 
             // Wait for pong, check nonce matches.
-            let pong_msg = pong_sub.receive().await?;
+            let pong_msg = self.pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
@@ -77,17 +88,9 @@ impl ProtocolPing {
     /// pong reply.
     async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolPing::reply_to_ping() [START]");
-        // Creates a subscription to ping message.
-        let ping_sub = self
-            .channel
-            .clone()
-            .subscribe_msg::<message::PingMessage>()
-            .await
-            .expect("Missing ping dispatcher!");
-
         loop {
             // Wait for ping, reply with pong that has a matching nonce.
-            let ping = ping_sub.receive().await?;
+            let ping = self.ping_sub.receive().await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send pong message.
