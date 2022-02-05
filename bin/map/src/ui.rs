@@ -9,7 +9,7 @@ use tui::{
     Frame,
 };
 
-pub async fn ui<B: Backend>(f: &mut Frame<'_, B>, app: Arc<Mutex<App>>) {
+pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: App) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)
@@ -17,8 +17,6 @@ pub async fn ui<B: Backend>(f: &mut Frame<'_, B>, app: Arc<Mutex<App>>) {
         .split(f.size());
 
     let nodes: Vec<ListItem> = app
-        .lock()
-        .await
         .id_list
         .node_id
         .iter()
@@ -32,20 +30,15 @@ pub async fn ui<B: Backend>(f: &mut Frame<'_, B>, app: Arc<Mutex<App>>) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
-    f.render_stateful_widget(nodes, slice[0], &mut app.lock().await.id_list.state);
+    f.render_stateful_widget(nodes, slice[0], &mut app.id_list.state);
 
-    let index = app.lock().await.info_list.index;
+    let index = app.info_list.index;
 
-    render_info(app, f, index, slice).await;
+    render_info(app, f, index, slice);
 }
 
-async fn render_info<B: Backend>(
-    app: Arc<Mutex<App>>,
-    f: &mut Frame<'_, B>,
-    index: usize,
-    slice: Vec<Rect>,
-) {
-    let info = &app.lock().await.info_list.infos;
+fn render_info<B: Backend>(app: App, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+    let info = &app.info_list.infos;
     let id = &info[index].id;
     let connections = info[index].connections;
     let is_active = info[index].is_active;

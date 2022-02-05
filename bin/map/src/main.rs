@@ -119,7 +119,8 @@ async fn main() -> Result<()> {
 
     let id_list = IdList::new(ids);
 
-    let app = Arc::new(Mutex::new(App::new(id_list, info_list)));
+    //let app = Arc::new(App::new(id_list, info_list));
+    let app = App::new(id_list, info_list);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -142,7 +143,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn listen(ex: Arc<Executor<'_>>, app: Arc<Mutex<App>>) -> Result<()> {
+async fn listen(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, app)).detach();
@@ -150,7 +151,7 @@ async fn listen(ex: Arc<Executor<'_>>, app: Arc<Mutex<App>>) -> Result<()> {
     Ok(())
 }
 
-async fn poll(client: Map, app: Arc<Mutex<App>>) -> Result<()> {
+async fn poll(client: Map, _app: App) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
@@ -161,14 +162,14 @@ async fn poll(client: Map, app: Arc<Mutex<App>>) -> Result<()> {
             let node2 = &nodes[1];
             let node3 = &nodes[2];
 
-            let infos = vec![NodeInfo {
+            let _infos = vec![NodeInfo {
                 id: node1["id"].to_string(),
                 connections: node1["connections"].as_u64().unwrap() as usize,
                 is_active: node2["is_active"].as_bool().unwrap(),
                 last_message: node3["message"].to_string(),
             }];
 
-            //app.update(infos).await;
+            //app.lock().await.update(infos).await;
         } else {
             // TODO: error handling
             println!("Reply is an error");
@@ -178,19 +179,20 @@ async fn poll(client: Map, app: Arc<Mutex<App>>) -> Result<()> {
     }
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
 
-    app.lock().await.id_list.state.select(Some(0));
+    app.id_list.state.select(Some(0));
 
-    app.lock().await.info_list.index = 0;
+    app.info_list.index = 0;
 
     // acquire the mutex
     // let mut app = app.lock();
 
     loop {
+        // clone everything
         terminal.draw(|f| {
             ui::ui(f, app.clone());
         })?;
@@ -201,12 +203,12 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -
                     return Ok(());
                 }
                 Key::Char('j') => {
-                    app.lock().await.id_list.next();
-                    app.lock().await.info_list.next();
+                    app.id_list.next();
+                    app.info_list.next().await;
                 }
                 Key::Char('k') => {
-                    app.lock().await.id_list.previous();
-                    app.lock().await.info_list.previous();
+                    app.id_list.previous();
+                    app.info_list.previous().await;
                 }
                 _ => (),
             }

@@ -1,5 +1,6 @@
 use crate::node_info::NodeInfo;
 
+#[derive(Clone)]
 pub struct InfoList {
     pub index: usize,
     pub infos: Vec<NodeInfo>,

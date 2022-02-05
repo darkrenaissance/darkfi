@@ -6,6 +6,8 @@ use crate::{id_list::IdList, info_list::InfoList, node_info::NodeInfo};
 // make a structure to be able to modify and read them
 // protect using a mutex
 // arc reference
+
+#[derive(Clone)]
 pub struct App {
     pub id_list: IdList,
     pub info_list: InfoList,
