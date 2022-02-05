@@ -1,4 +1,5 @@
-//use std::collections::HashMap;
+//TODO: made node_id into a hashset across project
+//use std::collections::HashSet
 use tui::widgets::ListState;
 
 #[derive(Clone)]

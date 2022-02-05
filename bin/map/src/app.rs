@@ -1,63 +1,18 @@
 use crate::{id_list::IdList, info_list::InfoList, node_info::NodeInfo};
+//use async_std::sync::Mutex;
 //use smol::Timer;
 //use std::{collections::HashMap, time::Duration};
 
 // make a structure to be able to modify and read them
 // protect using a mutex
 // arc reference
-#[derive(Clone)]
 pub struct App {
     pub id_list: IdList,
     pub info_list: InfoList,
 }
 
 impl App {
-    pub fn new() -> App {
-        let infos = vec![
-            NodeInfo {
-                id: "0385048034sodisofjhosd1111q3434".to_string(),
-                connections: 10,
-                is_active: true,
-                last_message: "hey how are you?".to_string(),
-            },
-            NodeInfo {
-                id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
-                connections: 5,
-                is_active: false,
-                last_message: "lmao".to_string(),
-            },
-            NodeInfo {
-                id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
-                connections: 7,
-                is_active: true,
-                last_message: "gm".to_string(),
-            },
-            NodeInfo {
-                id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
-                connections: 2,
-                is_active: true,
-                last_message: "hihi".to_string(),
-            },
-            NodeInfo {
-                id: "09850249352asdjapsdikalskasdkas".to_string(),
-                connections: 10,
-                is_active: true,
-                last_message: "wtf".to_string(),
-            },
-        ];
-
-        let info_list = InfoList::new(infos.clone());
-
-        let ids = vec![
-            infos[0].id.clone(),
-            infos[1].id.clone(),
-            infos[2].id.clone(),
-            infos[3].id.clone(),
-            infos[4].id.clone(),
-        ];
-
-        let id_list = IdList::new(ids);
-
+    pub fn new(id_list: IdList, info_list: InfoList) -> App {
         //let infos = Vec::new();
         //let ids = Vec::new();
 
@@ -89,8 +44,8 @@ impl App {
     }
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+//impl Default for App {
+//    fn default() -> Self {
+//        Self::new()
+//    }
+//}

@@ -1,4 +1,5 @@
 use crate::app::App;
+use async_std::sync::{Arc, Mutex};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,7 +9,7 @@ use tui::{
     Frame,
 };
 
-pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub async fn ui<B: Backend>(f: &mut Frame<'_, B>, app: Arc<Mutex<App>>) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)
@@ -16,6 +17,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .split(f.size());
 
     let nodes: Vec<ListItem> = app
+        .lock()
+        .await
         .id_list
         .node_id
         .iter()
@@ -29,18 +32,24 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
-    f.render_stateful_widget(nodes, slice[0], &mut app.id_list.state);
+    f.render_stateful_widget(nodes, slice[0], &mut app.lock().await.id_list.state);
 
-    let index = app.info_list.index;
+    let index = app.lock().await.info_list.index;
 
-    render_info(app, f, index, slice);
+    render_info(app, f, index, slice).await;
 }
 
-fn render_info<B: Backend>(app: &mut App, f: &mut Frame<B>, index: usize, slice: Vec<Rect>) {
-    let id = &app.info_list.infos[index].id;
-    let connections = app.info_list.infos[index].connections;
-    let is_active = app.info_list.infos[index].is_active;
-    let message = &app.info_list.infos[index].last_message;
+async fn render_info<B: Backend>(
+    app: Arc<Mutex<App>>,
+    f: &mut Frame<'_, B>,
+    index: usize,
+    slice: Vec<Rect>,
+) {
+    let info = &app.lock().await.info_list.infos;
+    let id = &info[index].id;
+    let connections = info[index].connections;
+    let is_active = info[index].is_active;
+    let message = &info[index].last_message;
     let span = vec![
         Spans::from(format!("NodeId: {}", id)),
         Spans::from(format!("Number of connections: {}", connections)),

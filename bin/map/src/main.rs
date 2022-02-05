@@ -1,7 +1,3 @@
-// select each connection and show log of traffic
-// use rpc to get some info from the ircd network
-// ircd::logger keeps track of network info
-// map rpc polls logger for info about nodes, etc
 use darkfi::{
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
@@ -20,7 +16,7 @@ use tui::{
     Terminal,
 };
 
-use map::{node_info::NodeInfo, ui, App};
+use map::{id_list::IdList, info_list::InfoList, node_info::NodeInfo, ui, App};
 
 struct Map {
     url: String,
@@ -78,7 +74,52 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let app = Arc::new(Mutex::new(App::new()));
+    let infos = vec![
+        NodeInfo {
+            id: "0385048034sodisofjhosd1111q3434".to_string(),
+            connections: 10,
+            is_active: true,
+            last_message: "hey how are you?".to_string(),
+        },
+        NodeInfo {
+            id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
+            connections: 5,
+            is_active: false,
+            last_message: "lmao".to_string(),
+        },
+        NodeInfo {
+            id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
+            connections: 7,
+            is_active: true,
+            last_message: "gm".to_string(),
+        },
+        NodeInfo {
+            id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
+            connections: 2,
+            is_active: true,
+            last_message: "hihi".to_string(),
+        },
+        NodeInfo {
+            id: "09850249352asdjapsdikalskasdkas".to_string(),
+            connections: 10,
+            is_active: true,
+            last_message: "wtf".to_string(),
+        },
+    ];
+
+    let info_list = InfoList::new(infos.clone());
+
+    let ids = vec![
+        infos[0].id.clone(),
+        infos[1].id.clone(),
+        infos[2].id.clone(),
+        infos[3].id.clone(),
+        infos[4].id.clone(),
+    ];
+
+    let id_list = IdList::new(ids);
+
+    let app = Arc::new(Mutex::new(App::new(id_list, info_list)));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -91,8 +132,8 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                listen(ex2.clone(), app.lock().await.clone()).await?;
-                run_app(&mut terminal, app.lock().await.clone()).await?;
+                listen(ex2.clone(), app.clone()).await?;
+                run_app(&mut terminal, app.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -101,7 +142,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn listen(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
+async fn listen(ex: Arc<Executor<'_>>, app: Arc<Mutex<App>>) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, app)).detach();
@@ -109,7 +150,7 @@ async fn listen(ex: Arc<Executor<'_>>, app: App) -> Result<()> {
     Ok(())
 }
 
-async fn poll(client: Map, app: App) -> Result<()> {
+async fn poll(client: Map, app: Arc<Mutex<App>>) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
@@ -127,7 +168,7 @@ async fn poll(client: Map, app: App) -> Result<()> {
                 last_message: node3["message"].to_string(),
             }];
 
-            app.clone().update(infos).await;
+            //app.update(infos).await;
         } else {
             // TODO: error handling
             println!("Reply is an error");
@@ -137,34 +178,35 @@ async fn poll(client: Map, app: App) -> Result<()> {
     }
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
 
-    app.id_list.state.select(Some(0));
+    app.lock().await.id_list.state.select(Some(0));
 
-    app.info_list.index = 0;
+    app.lock().await.info_list.index = 0;
 
     // acquire the mutex
     // let mut app = app.lock();
 
     loop {
-        terminal.draw(|f| ui::ui(f, &mut app))?;
-
+        terminal.draw(|f| {
+            ui::ui(f, app.clone());
+        })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
-                    app.id_list.next();
-                    app.info_list.next();
+                    app.lock().await.id_list.next();
+                    app.lock().await.info_list.next();
                 }
                 Key::Char('k') => {
-                    app.id_list.previous();
-                    app.info_list.previous();
+                    app.lock().await.id_list.previous();
+                    app.lock().await.info_list.previous();
                 }
                 _ => (),
             }
