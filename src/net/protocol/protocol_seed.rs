@@ -21,11 +21,7 @@ pub struct ProtocolSeed {
 
 impl ProtocolSeed {
     /// Create a new seed protocol.
-    pub fn new(channel: ChannelPtr, hosts: HostsPtr, settings: SettingsPtr) -> Arc<Self> {
-        Arc::new(Self { channel, hosts, settings })
-    }
-
-    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
 

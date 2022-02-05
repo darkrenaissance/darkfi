@@ -65,7 +65,7 @@ use crate::net::{
 
 pub async fn register_default_protocols(p2p: P2pPtr) {
     let registry = p2p.protocol_registry();
-    registry.register(SESSION_ALL, ProtocolPing::new2).await;
-    registry.register(!SESSION_SEED, ProtocolAddress::new2).await;
-    registry.register(SESSION_SEED, ProtocolSeed::new2).await;
+    registry.register(SESSION_ALL, ProtocolPing::new).await;
+    registry.register(!SESSION_SEED, ProtocolAddress::new).await;
+    registry.register(SESSION_SEED, ProtocolSeed::new).await;
 }

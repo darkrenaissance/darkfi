@@ -25,31 +25,7 @@ pub struct ProtocolAddress {
 impl ProtocolAddress {
     /// Create a new address protocol. Makes an address and get-address
     /// subscription and adds them to the address protocol instance.
-    pub async fn new(channel: ChannelPtr, hosts: HostsPtr) -> Arc<Self> {
-        // Creates a subscription to address message.
-        let addrs_sub = channel
-            .clone()
-            .subscribe_msg::<message::AddrsMessage>()
-            .await
-            .expect("Missing addrs dispatcher!");
-
-        // Creates a subscription to get-address message.
-        let get_addrs_sub = channel
-            .clone()
-            .subscribe_msg::<message::GetAddrsMessage>()
-            .await
-            .expect("Missing getaddrs dispatcher!");
-
-        Arc::new(Self {
-            channel: channel.clone(),
-            addrs_sub,
-            get_addrs_sub,
-            hosts,
-            jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
-        })
-    }
-
-    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
 
         // Creates a subscription to address message.

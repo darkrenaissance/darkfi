@@ -23,17 +23,7 @@ pub struct ProtocolPing {
 
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
-    pub fn new(channel: ChannelPtr, p2p: P2pPtr) -> Arc<Self> {
-        let settings = p2p.settings();
-
-        Arc::new(Self {
-            channel: channel.clone(),
-            settings,
-            jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
-        })
-    }
-
-    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
 
         Arc::new(Self {
