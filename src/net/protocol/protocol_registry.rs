@@ -5,11 +5,13 @@ use std::future::Future;
 use super::protocol_base::ProtocolBase;
 use std::sync::Arc;
 
-use super::protocol_base::ProtocolBasePtr;
+//use super::protocol_base::ProtocolBasePtr;
 use crate::net::{ChannelPtr, P2pPtr};
 
+type ProtocolBasePtr = Arc<dyn ProtocolBase + Send + Sync>;
+
 type Constructor = Box<
-    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, Arc<dyn 'static + ProtocolBase + Send + Sync>>
+    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, Arc<dyn ProtocolBase + Send + Sync>>
         + Send
         + Sync,
 >;
@@ -27,18 +29,18 @@ impl ProtocolRegistry {
     pub async fn register<C, F>(&self, constructor: C)
     where
         C: 'static + Fn(ChannelPtr, P2pPtr) -> F + Send + Sync,
-        F: 'static + Future<Output = Arc<dyn 'static + ProtocolBase + Send + Sync>> + Send,
+        F: 'static + Future<Output = Arc<dyn ProtocolBase + Send + Sync>> + Send,
     {
         let constructor = move |channel, p2p| {
-            Box::pin(constructor(channel, p2p)) as BoxFuture<'static, ProtocolBasePtr>
+            Box::pin(constructor(channel, p2p)) as BoxFuture<'static, Arc<dyn ProtocolBase + Send + Sync>>
         };
         self.protocol_constructors.lock().await.push(Box::new(constructor));
     }
 
-    pub async fn attach(&self, channel: ChannelPtr, p2p: P2pPtr) -> Vec<ProtocolBasePtr> {
-        let mut protocols: Vec<Arc<dyn ProtocolBase + 'static + Send + Sync>> = Vec::new();
+    pub async fn attach(&self, channel: ChannelPtr, p2p: P2pPtr) -> Vec<Arc<dyn ProtocolBase + Send + Sync>> {
+        let mut protocols: Vec<Arc<dyn ProtocolBase + Send + Sync>> = Vec::new();
         for construct in self.protocol_constructors.lock().await.iter() {
-            let protocol: Arc<dyn ProtocolBase + 'static + Send + Sync> =
+            let protocol: Arc<dyn ProtocolBase + Send + Sync> =
                 construct(channel.clone(), p2p.clone()).await;
             protocols.push(protocol)
         }
