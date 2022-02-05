@@ -1,11 +1,4 @@
 use tui::widgets::ListState;
-//use async_std::sync::Mutex;
-//use smol::Timer;
-//use std::{collections::HashMap, time::Duration};
-
-// make a structure to be able to modify and read them
-// protect using a mutex
-// arc reference
 
 #[derive(Clone)]
 pub struct Model {
@@ -15,18 +8,8 @@ pub struct Model {
 
 impl Model {
     pub fn new(id_list: IdList, info_list: InfoList) -> Model {
-        //let infos = Vec::new();
-        //let ids = Vec::new();
-
-        //let info_list = InfoList::new(infos);
-        //let id_list = IdList::new(ids);
         Model { id_list, info_list }
     }
-
-    // TODO: implement this
-    //async fn sleep(self, dur: Duration) {
-    //    Timer::after(dur).await;
-    //}
 
     pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> Model {
         let ids = vec![node_vec[0].id.clone()];
@@ -116,15 +99,6 @@ impl InfoList {
     }
 }
 
-//impl Default for Model {
-//    fn default() -> Self {
-//        Self::new()
-//    }
-//}
-
-//TODO: made node_id into a HashSet(u32)
-// wrap NodeInfo and NodeId in a Mutex
-
 pub type NodeId = u32;
 
 #[derive(Clone)]
@@ -148,7 +122,3 @@ impl Default for NodeInfo {
         Self::new()
     }
 }
-
-//pub async fn add_seen(&self, id: u32) {
-//    self.privmsg_ids.lock().await.insert(id);
-//}

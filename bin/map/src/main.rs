@@ -203,7 +203,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
                     model.id_list.next();
