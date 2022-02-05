@@ -98,25 +98,6 @@ async fn process_user_input(
     Ok(())
 }
 
-async fn channel_loop(
-    p2p: net::P2pPtr,
-    sender: async_channel::Sender<Arc<PrivMsg>>,
-    seen_privmsg_ids: SeenPrivMsgIdsPtr,
-    executor: Arc<Executor<'_>>,
-) -> Result<()> {
-    let new_channel_sub = p2p.subscribe_channel().await;
-
-    loop {
-        let channel = new_channel_sub.receive().await?;
-
-        let protocol_privmsg =
-            ProtocolPrivMsg::new(channel, sender.clone(), seen_privmsg_ids.clone(), p2p.clone())
-                .await;
-
-        protocol_privmsg.start(executor.clone()).await;
-    }
-}
-
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let listener = match Async::<TcpListener>::bind(options.irc_accept_addr) {
         Ok(listener) => listener,
@@ -145,7 +126,28 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
     let seen_privmsg_ids = SeenPrivMsgIds::new();
 
+    //
+    // PrivMsg protocol
+    //
     let p2p = net::P2p::new(options.network_settings).await;
+    let registry = p2p.protocol_registry();
+
+    let (sender, recvr) = async_channel::unbounded();
+    let seen_privmsg_ids2 = seen_privmsg_ids.clone();
+    let sender2 = sender.clone();
+    registry.register(
+        !net::SESSION_SEED,
+        move |channel, p2p| {
+            let sender = sender2.clone();
+            let seen_privmsg_ids = seen_privmsg_ids2.clone();
+            async move {
+                ProtocolPrivMsg::new(channel, sender, seen_privmsg_ids, p2p).await
+            }
+        }).await;
+
+    //
+    // p2p network main instance
+    //
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
     // Actual main p2p session
@@ -159,13 +161,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         })
         .detach();
 
-    let (sender, recvr) = async_channel::unbounded();
-    // for now the p2p and channel sub sessions just run forever
-    // so detach them as background processes.
-    executor
-        .spawn(channel_loop(p2p.clone(), sender, seen_privmsg_ids.clone(), executor.clone()))
-        .detach();
-
+    //
+    // RPC interface
+    //
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {});
@@ -173,6 +171,9 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         .spawn(async move { listen_and_serve(server_config, rpc_interface, ex3).await })
         .detach();
 
+    //
+    // IRC instance
+    //
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),
