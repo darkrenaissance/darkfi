@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(ex2.clone(), model.clone()).await?;
-                run_model(&mut terminal, model.clone()).await?;
+                run_app(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -182,7 +182,7 @@ async fn poll(client: Map, _model: Model) -> Result<()> {
     }
 }
 
-async fn run_model<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io::Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -203,7 +203,7 @@ async fn run_model<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> 
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     model.id_list.next();
