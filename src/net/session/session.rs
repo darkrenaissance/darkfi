@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use log::*;
+use log::debug;
 use smol::Executor;
 use std::sync::Arc;
 
@@ -57,6 +57,7 @@ pub trait Session: Sync {
         handshake_task.await?;
 
         // Now the channel is ready
+        debug!(target: "net", "Session handshake complete. Activating remaining protocols");
 
         // Now start all the protocols
         // They are responsible for managing their own lifetimes and

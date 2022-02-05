@@ -126,4 +126,8 @@ impl ProtocolBase for ProtocolPing {
         debug!(target: "net", "ProtocolPing::start() [END]");
         Ok(())
     }
+
+    fn name(&self) -> &'static str {
+        "ProtocolPing"
+    }
 }

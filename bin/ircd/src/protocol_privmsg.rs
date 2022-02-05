@@ -25,8 +25,6 @@ impl ProtocolPrivMsg {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<PrivMsg>().await;
 
-        debug!("ADDED DISPATCH");
-
         let privmsg_sub =
             channel.subscribe_msg::<PrivMsg>().await.expect("Missing PrivMsg dispatcher!");
 
@@ -40,7 +38,7 @@ impl ProtocolPrivMsg {
     }
 
     async fn handle_receive_privmsg(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolAddress::handle_receive_privmsg() [START]");
+        debug!(target: "ircd", "ProtocolPrivMsg::handle_receive_privmsg() [START]");
         loop {
             let privmsg = self.privmsg_sub.receive().await?;
 
@@ -77,5 +75,9 @@ impl net::ProtocolBase for ProtocolPrivMsg {
         self.jobsman.clone().spawn(self.clone().handle_receive_privmsg(), executor.clone()).await;
         debug!(target: "ircd", "ProtocolPrivMsg::start() [END]");
         Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "ProtocolPrivMsg"
     }
 }

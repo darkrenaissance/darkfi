@@ -137,4 +137,8 @@ impl ProtocolBase for ProtocolAddress {
         debug!(target: "net", "ProtocolAddress::start() [END]");
         Ok(())
     }
+
+    fn name(&self) -> &'static str {
+        "ProtocolAddress"
+    }
 }

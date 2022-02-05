@@ -1,6 +1,7 @@
 use async_std::sync::Mutex;
 use futures::future::BoxFuture;
 use std::future::Future;
+use log::debug;
 
 use super::protocol_base::ProtocolBase;
 use std::sync::Arc;
@@ -53,6 +54,7 @@ impl ProtocolRegistry {
 
             let protocol: Arc<dyn ProtocolBase + Send + Sync> =
                 construct(channel.clone(), p2p.clone()).await;
+            debug!(target: "net", "Attached {}", protocol.name());
             protocols.push(protocol)
         }
         protocols

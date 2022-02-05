@@ -78,4 +78,8 @@ impl ProtocolBase for ProtocolSeed {
         debug!(target: "net", "ProtocolSeed::start() [END]");
         Ok(())
     }
+
+    fn name(&self) -> &'static str {
+        "ProtocolSeed"
+    }
 }
