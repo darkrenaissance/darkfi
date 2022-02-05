@@ -9,8 +9,8 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocols::{ProtocolAddress, ProtocolPing},
-        sessions::Session,
+        protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
+        session::{Session, SessionBitflag, SESSION_OUTBOUND},
         ChannelPtr, Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
@@ -91,7 +91,7 @@ impl OutboundSession {
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
 
-                    self.clone().attach_protocols(channel, executor.clone()).await?;
+                    //self.clone().attach_protocols(channel, executor.clone()).await?;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -151,27 +151,30 @@ impl OutboundSession {
         }
     }
 
-    /// Starts sending keep-alive and address messages across the channels.
-    async fn attach_protocols(
+    // Starts sending keep-alive and address messages across the channels.
+    /*async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let settings = self.p2p().settings().clone();
         let hosts = self.p2p().hosts();
 
-        let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
+        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
         let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;
 
         Ok(())
-    }
+    }*/
 }
 
 impl Session for OutboundSession {
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
+    }
+
+    fn selector_id(&self) -> SessionBitflag {
+        SESSION_OUTBOUND
     }
 }

@@ -1,4 +1,5 @@
-use log::*;
+use async_trait::async_trait;
+use log::{debug, error};
 use rand::Rng;
 use smol::Executor;
 use std::{sync::Arc, time::Instant};
@@ -6,9 +7,9 @@ use std::{sync::Arc, time::Instant};
 use crate::{
     error::{Error, Result},
     net::{
-        messages,
-        protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr},
-        ChannelPtr, SettingsPtr,
+        message,
+        protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
+        ChannelPtr, P2pPtr, SettingsPtr,
     },
     util::sleep,
 };
@@ -22,7 +23,9 @@ pub struct ProtocolPing {
 
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
-    pub fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub fn new(channel: ChannelPtr, p2p: P2pPtr) -> Arc<Self> {
+        let settings = p2p.settings();
+
         Arc::new(Self {
             channel: channel.clone(),
             settings,
@@ -30,15 +33,14 @@ impl ProtocolPing {
         })
     }
 
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
-    /// protocol task manager, then queues the reply. Sends out a ping and
-    /// waits for pong reply. Waits for ping and replies with a pong.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "net", "ProtocolPing::start() [START]");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
-        debug!(target: "net", "ProtocolPing::start() [END]");
+    pub async fn new2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+        let settings = p2p.settings();
+
+        Arc::new(Self {
+            channel: channel.clone(),
+            settings,
+            jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
+        })
     }
 
     /// Runs ping-pong protocol. Creates a subscription to pong, then starts a
@@ -51,7 +53,7 @@ impl ProtocolPing {
         let pong_sub = self
             .channel
             .clone()
-            .subscribe_msg::<messages::PongMessage>()
+            .subscribe_msg::<message::PongMessage>()
             .await
             .expect("Missing pong dispatcher!");
 
@@ -63,7 +65,7 @@ impl ProtocolPing {
             let nonce = Self::random_nonce();
 
             // Send ping message.
-            let ping = messages::PingMessage { nonce };
+            let ping = message::PingMessage { nonce };
             self.channel.clone().send(ping).await?;
             debug!(target: "net", "ProtocolPing::run_ping_pong() send Ping message");
             // Start the timer for ping timer.
@@ -89,7 +91,7 @@ impl ProtocolPing {
         let ping_sub = self
             .channel
             .clone()
-            .subscribe_msg::<messages::PingMessage>()
+            .subscribe_msg::<message::PingMessage>()
             .await
             .expect("Missing ping dispatcher!");
 
@@ -99,7 +101,7 @@ impl ProtocolPing {
             debug!(target: "net", "ProtocolPing::reply_to_ping() received Ping message");
 
             // Send pong message.
-            let pong = messages::PongMessage { nonce: ping.nonce };
+            let pong = message::PongMessage { nonce: ping.nonce };
             self.channel.clone().send(pong).await?;
             debug!(target: "net", "ProtocolPing::reply_to_ping() sent Pong reply");
         }
@@ -108,5 +110,20 @@ impl ProtocolPing {
     fn random_nonce() -> u32 {
         let mut rng = rand::thread_rng();
         rng.gen()
+    }
+}
+
+#[async_trait]
+impl ProtocolBase for ProtocolPing {
+    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
+    /// protocol task manager, then queues the reply. Sends out a ping and
+    /// waits for pong reply. Waits for ping and replies with a pong.
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net", "ProtocolPing::start() [START]");
+        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
+        debug!(target: "net", "ProtocolPing::start() [END]");
+        Ok(())
     }
 }

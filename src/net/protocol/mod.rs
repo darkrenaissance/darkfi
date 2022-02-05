@@ -46,8 +46,26 @@ pub mod protocol_seed;
 /// other node and sending the version acknowledgement.
 pub mod protocol_version;
 
+pub mod protocol_base;
+pub mod protocol_registry;
+
 pub use protocol_address::ProtocolAddress;
 pub use protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr};
 pub use protocol_ping::ProtocolPing;
 pub use protocol_seed::ProtocolSeed;
 pub use protocol_version::ProtocolVersion;
+
+pub use protocol_base::{ProtocolBase, ProtocolBasePtr};
+pub use protocol_registry::ProtocolRegistry;
+
+use crate::net::{
+    session::{SESSION_ALL, SESSION_SEED},
+    P2pPtr,
+};
+
+pub async fn register_default_protocols(p2p: P2pPtr) {
+    let registry = p2p.protocol_registry();
+    registry.register(SESSION_ALL, ProtocolPing::new2).await;
+    registry.register(!SESSION_SEED, ProtocolAddress::new2).await;
+    registry.register(SESSION_SEED, ProtocolSeed::new2).await;
+}

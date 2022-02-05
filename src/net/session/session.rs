@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     error::Result,
-    net::{p2p::P2pPtr, protocols::ProtocolVersion, ChannelPtr},
+    net::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr},
 };
 
 /// Removes channel from the list of connected channels when a stop signal is
@@ -37,14 +37,34 @@ pub trait Session: Sync {
     ) -> Result<()> {
         debug!(target: "net", "Session::register_channel() [START]");
 
+        // Protocols should all be initialized but not started
+        // We do this so that the protocols can begin receiving and buffering messages
+        // while the handshake protocol is ongoing.
+        // They are currently in sleep mode.
+        let p2p = self.p2p();
+        let protocols =
+            p2p.protocol_registry().attach(self.selector_id(), channel.clone(), p2p.clone()).await;
+
+        // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
-        // start channel
-        channel.start(executor);
+        // Switch on the channel
+        channel.start(executor.clone());
 
+        // Wait for handshake to finish.
         handshake_task.await?;
+
+        // Now the channel is ready
+
+        // Now start all the protocols
+        // They are responsible for managing their own lifetimes and
+        // correctly self destructing when the channel ends.
+        for protocol in protocols {
+            // Activate protocol
+            protocol.start(executor.clone()).await?;
+        }
 
         debug!(target: "net", "Session::register_channel() [END]");
         Ok(())
@@ -76,4 +96,6 @@ pub trait Session: Sync {
 
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
+
+    fn selector_id(&self) -> u32;
 }

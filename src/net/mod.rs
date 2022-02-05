@@ -46,7 +46,7 @@ pub mod message_subscriber;
 ///
 /// Implements a type called Packet which is the base message type. Packets are
 /// converted into messages and passed to an event loop.
-pub mod messages;
+pub mod message;
 
 /// P2P provides all core functionality to interact with the peer-to-peer
 /// network.
@@ -72,7 +72,7 @@ pub mod p2p;
 ///
 /// Protocol submodule also implements a jobs manager than handles the
 /// asynchronous execution of the protocols.
-pub mod protocols;
+pub mod protocol;
 
 /// Defines the interaction between nodes during a connection. Consists of an
 /// inbound session, which describes how to set up an incoming connection, and
@@ -80,7 +80,7 @@ pub mod protocols;
 /// describes the seed session, which is the type of connection used when a node
 /// connects to the network for the first time. Implements the session trait
 /// which describes the common functions across all sessions.
-pub mod sessions;
+pub mod session;
 
 /// Network configuration settings.
 pub mod settings;
@@ -89,8 +89,9 @@ pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
 pub use hosts::{Hosts, HostsPtr};
+pub use message::Message;
 pub use message_subscriber::MessageSubscription;
-pub use messages::Message;
 pub use p2p::{P2p, P2pPtr};
-pub use protocols::{ProtocolJobsManager, ProtocolJobsManagerPtr};
+pub use protocol::{ProtocolJobsManager, ProtocolJobsManagerPtr, ProtocolBasePtr, ProtocolBase};
+pub use session::{SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND, SESSION_SEED};
 pub use settings::{Settings, SettingsPtr};

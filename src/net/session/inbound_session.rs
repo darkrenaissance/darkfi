@@ -8,8 +8,8 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocols::{ProtocolAddress, ProtocolPing},
-        sessions::Session,
+        protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
+        session::{Session, SessionBitflag, SESSION_INBOUND},
         Acceptor, AcceptorPtr, ChannelPtr, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
@@ -96,30 +96,34 @@ impl InboundSession {
 
         self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-        self.attach_protocols(channel, executor).await
+        //self.attach_protocols(channel, executor).await
+        Ok(())
     }
 
-    /// Starts sending keep-alive and address messages across the channels.
-    async fn attach_protocols(
+    // Starts sending keep-alive and address messages across the channels.
+    /*async fn attach_protocols(
         self: Arc<Self>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let settings = self.p2p().settings().clone();
         let hosts = self.p2p().hosts();
 
-        let protocol_ping = ProtocolPing::new(channel.clone(), settings.clone());
+        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
         let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
         protocol_ping.start(executor.clone()).await;
         protocol_addr.start(executor).await;
 
         Ok(())
-    }
+    }*/
 }
 
 impl Session for InboundSession {
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
+    }
+
+    fn selector_id(&self) -> SessionBitflag {
+        SESSION_INBOUND
     }
 }

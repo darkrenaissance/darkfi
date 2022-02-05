@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
-    net::{message_subscriber::MessageSubscription, messages, ChannelPtr, SettingsPtr},
+    net::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr},
     util::sleep,
 };
 
@@ -13,8 +13,8 @@ use crate::{
 /// of a connection.
 pub struct ProtocolVersion {
     channel: ChannelPtr,
-    version_sub: MessageSubscription<messages::VersionMessage>,
-    verack_sub: MessageSubscription<messages::VerackMessage>,
+    version_sub: MessageSubscription<message::VersionMessage>,
+    verack_sub: MessageSubscription<message::VerackMessage>,
     settings: SettingsPtr,
 }
 
@@ -26,14 +26,14 @@ impl ProtocolVersion {
         // Creates a version subscription.
         let version_sub = channel
             .clone()
-            .subscribe_msg::<messages::VersionMessage>()
+            .subscribe_msg::<message::VersionMessage>()
             .await
             .expect("Missing version dispatcher!");
 
         // Creates a version acknowledgement subscription.
         let verack_sub = channel
             .clone()
-            .subscribe_msg::<messages::VerackMessage>()
+            .subscribe_msg::<message::VerackMessage>()
             .await
             .expect("Missing verack dispatcher!");
 
@@ -71,7 +71,7 @@ impl ProtocolVersion {
     /// Send version info and wait for version acknowledgement.
     async fn send_version(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
-        let version = messages::VersionMessage {};
+        let version = message::VersionMessage {};
         self.channel.clone().send(version).await?;
 
         // Wait for version acknowledgement
@@ -90,7 +90,7 @@ impl ProtocolVersion {
         // Check the message is OK
 
         // Send version acknowledgement
-        let verack = messages::VerackMessage {};
+        let verack = message::VerackMessage {};
         self.channel.clone().send(verack).await?;
 
         debug!(target: "net", "ProtocolVersion::recv_version() [END]");
