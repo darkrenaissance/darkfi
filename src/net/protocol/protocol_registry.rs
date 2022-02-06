@@ -1,15 +1,12 @@
 use async_std::sync::Mutex;
 use futures::future::BoxFuture;
-use std::future::Future;
 use log::debug;
+use std::future::Future;
 
-use crate::net::{session::SessionBitflag, ChannelPtr, P2pPtr, protocol::ProtocolBasePtr};
+use crate::net::{protocol::ProtocolBasePtr, session::SessionBitflag, ChannelPtr, P2pPtr};
 
-type Constructor = Box<
-    dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, ProtocolBasePtr>
-        + Send
-        + Sync,
->;
+type Constructor =
+    Box<dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, ProtocolBasePtr> + Send + Sync>;
 
 pub struct ProtocolRegistry {
     protocol_constructors: Mutex<Vec<(SessionBitflag, Constructor)>>,
@@ -27,8 +24,7 @@ impl ProtocolRegistry {
         F: 'static + Future<Output = ProtocolBasePtr> + Send,
     {
         let constructor = move |channel, p2p| {
-            Box::pin(constructor(channel, p2p))
-                as BoxFuture<'static, ProtocolBasePtr>
+            Box::pin(constructor(channel, p2p)) as BoxFuture<'static, ProtocolBasePtr>
         };
         self.protocol_constructors.lock().await.push((session_flags, Box::new(constructor)));
     }
@@ -46,8 +42,7 @@ impl ProtocolRegistry {
                 continue
             }
 
-            let protocol: ProtocolBasePtr =
-                construct(channel.clone(), p2p.clone()).await;
+            let protocol: ProtocolBasePtr = construct(channel.clone(), p2p.clone()).await;
             debug!(target: "net", "Attached {}", protocol.name());
             protocols.push(protocol)
         }

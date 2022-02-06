@@ -8,7 +8,10 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{cli_config::spawn_config, CliGatewayd, Config, GatewaydConfig},
+    cli::{
+        cli_config::{log_config, spawn_config},
+        CliGatewayd, Config, GatewaydConfig,
+    },
     node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
     Result,
@@ -43,20 +46,12 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let mut verbosity_level = 0;
-    verbosity_level += matches.occurrences_of("verbose");
-    let loglevel = match verbosity_level {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
+    let conf: simplelog::Config;
+    let lvl: simplelog::LevelFilter;
 
-    TermLogger::init(
-        loglevel,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    (lvl, conf) = log_config(matches)?;
+
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;
 

@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use async_executor::Executor;
+use async_trait::async_trait;
 
 use darkfi::{net, Result};
 use log::debug;
