@@ -4,7 +4,7 @@ use clap::{IntoApp, Parser};
 use log::{debug, error};
 use prettytable::{cell, format, row, Table};
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     cli::{
@@ -364,11 +364,7 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let conf: simplelog::Config;
-    let lvl: LevelFilter;
-
-    (lvl, conf) = log_config(matches)?;
-
+    let (lvl, conf) = log_config(matches)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config = Config::<DrkConfig>::load(config_path)?;

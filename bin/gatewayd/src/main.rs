@@ -4,7 +4,7 @@ use async_executor::Executor;
 use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::debug;
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
@@ -46,11 +46,7 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let conf: simplelog::Config;
-    let lvl: simplelog::LevelFilter;
-
-    (lvl, conf) = log_config(matches)?;
-
+    let (lvl, conf) = log_config(matches)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: GatewaydConfig = Config::<GatewaydConfig>::load(config_path)?;

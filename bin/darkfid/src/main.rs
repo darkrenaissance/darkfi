@@ -8,7 +8,7 @@ use easy_parallel::Parallel;
 use log::{debug, info};
 use num_bigint::BigUint;
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
@@ -818,11 +818,7 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let conf: simplelog::Config;
-    let lvl: LevelFilter;
-
-    (lvl, conf) = log_config(matches)?;
-
+    let (lvl, conf) = log_config(matches)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
