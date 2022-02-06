@@ -2585,7 +2585,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 2.34.0",
+ "clap 3.0.7",
  "darkfi",
  "futures",
  "log",
