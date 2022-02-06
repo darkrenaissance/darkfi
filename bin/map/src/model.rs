@@ -1,6 +1,6 @@
+use async_std::sync::Mutex;
 use tui::widgets::ListState;
 
-#[derive(Clone)]
 pub struct Model {
     pub id_list: IdList,
     pub info_list: InfoList,
@@ -11,17 +11,17 @@ impl Model {
         Model { id_list, info_list }
     }
 
-    pub async fn update(mut self, node_vec: Vec<NodeInfo>) -> Model {
+    pub async fn update(self, node_vec: Vec<NodeInfo>) -> Model {
         let ids = vec![node_vec[0].id.clone()];
 
         for id in ids {
-            self.id_list.node_id.push(id);
+            self.id_list.node_id.lock().await.push(id);
         }
 
         let id_list = self.id_list;
 
         for info in node_vec {
-            self.info_list.infos.push(info);
+            self.info_list.infos.lock().await.push(info);
         }
         let info_list = self.info_list;
 
@@ -29,74 +29,76 @@ impl Model {
     }
 }
 
-#[derive(Clone)]
 pub struct IdList {
-    pub state: ListState,
-    pub node_id: Vec<String>,
+    pub state: Mutex<ListState>,
+    pub node_id: Mutex<Vec<String>>,
 }
 
 impl IdList {
     pub fn new(node_id: Vec<String>) -> IdList {
-        IdList { state: ListState::default(), node_id }
+        let node_id = Mutex::new(node_id);
+        IdList { state: Mutex::new(ListState::default()), node_id }
     }
 
-    pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.node_id.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
+    //pub async fn next(&mut self) {
+    //    let i = match self.state.lock().await.selected() {
+    //        Some(i) => {
+    //            if i >= self.node_id.lock().await.len() - 1 {
+    //                0
+    //            } else {
+    //                i + 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.lock().await.select(Some(i));
+    //}
 
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.node_id.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
+    //pub async fn previous(&mut self) {
+    //    let i = match self.state.lock().await.selected() {
+    //        Some(i) => {
+    //            if i == 0 {
+    //                self.node_id.lock().await.len() - 1
+    //            } else {
+    //                i - 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.lock().await.select(Some(i));
+    //}
 
-    pub fn unselect(&mut self) {
-        self.state.select(None);
-    }
+    //pub async fn unselect(&mut self) {
+    //    self.state.lock().await.select(None);
+    //}
 }
 
-#[derive(Clone)]
 pub struct InfoList {
-    pub index: usize,
-    pub infos: Vec<NodeInfo>,
+    pub index: Mutex<usize>,
+    pub infos: Mutex<Vec<NodeInfo>>,
 }
 
 impl InfoList {
     pub fn new(infos: Vec<NodeInfo>) -> InfoList {
         let index = 0;
+        let index = Mutex::new(index);
+        let infos = Mutex::new(infos);
 
         InfoList { index, infos }
     }
 
-    pub async fn next(&mut self) {
-        self.index = (self.index + 1) % self.infos.len();
-    }
+    //pub async fn next(&mut self) {
+    //    let index = self.index.lock().await;
+    //    index = (index + 1) % index.len();
+    //}
 
-    pub async fn previous(&mut self) {
-        if self.index > 0 {
-            self.index -= 1;
-        } else {
-            self.index = self.infos.len() - 1;
-        }
-    }
+    //pub async fn previous(&mut self) {
+    //    if self.index.lock().await > 0 {
+    //        self.index.lock().await -= 1;
+    //    } else {
+    //        self.index.lock().await = self.infos.lock().await.len() - 1;
+    //    }
+    //}
 }
 
 pub type NodeId = u32;

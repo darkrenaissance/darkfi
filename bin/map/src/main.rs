@@ -124,8 +124,8 @@ async fn main() -> Result<()> {
 
     let id_list = IdList::new(ids);
 
-    //let model = Arc::new(Model::new(id_list, info_list));
-    let model = Model::new(id_list, info_list);
+    let model = Arc::new(Model::new(id_list, info_list));
+    //let model = Model::new(id_list, info_list);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run_rpc(ex: Arc<Executor<'_>>, model: Model) -> Result<()> {
+async fn run_rpc(ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
     let client = Map::new("tcp://127.0.0.1:8000".to_string());
 
     ex.spawn(poll(client, model)).detach();
@@ -156,7 +156,7 @@ async fn run_rpc(ex: Arc<Executor<'_>>, model: Model) -> Result<()> {
     Ok(())
 }
 
-async fn poll(client: Map, _model: Model) -> Result<()> {
+async fn poll(client: Map, _model: Arc<Model>) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
@@ -184,20 +184,20 @@ async fn poll(client: Map, _model: Model) -> Result<()> {
     }
 }
 
-async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Model) -> io::Result<()> {
+async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
 
     let mut info_vec = Vec::new();
 
-    for info in model.info_list.infos.clone() {
+    for info in model.info_list.infos.lock().await.clone() {
         info_vec.push(info)
     }
 
     let mut id_vec = Vec::new();
 
-    for id in model.id_list.node_id.clone() {
+    for id in model.id_list.node_id.lock().await.clone() {
         id_vec.push(id)
     }
 

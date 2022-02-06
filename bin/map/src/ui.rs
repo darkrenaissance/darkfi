@@ -1,5 +1,4 @@
 use crate::view::View;
-use async_std::sync::{Arc, Mutex};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
