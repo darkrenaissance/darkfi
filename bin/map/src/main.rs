@@ -18,7 +18,9 @@ use tui::{
 
 use map::{
     model::{IdList, InfoList, NodeInfo},
-    ui, Model,
+    ui,
+    view::{IdListView, InfoListView},
+    Model, View,
 };
 
 struct Map {
@@ -187,17 +189,36 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io
 
     terminal.clear()?;
 
-    model.id_list.state.select(Some(0));
+    //model.id_list.state.select(Some(0));
 
-    model.info_list.index = 0;
+    //model.info_list.index = 0;
+
+    let mut info_vec = Vec::new();
+
+    for info in model.info_list.infos.clone() {
+        info_vec.push(info)
+    }
+
+    let mut id_vec = Vec::new();
+
+    for id in model.id_list.node_id.clone() {
+        id_vec.push(id)
+    }
+
+    let id_list = IdListView::new(id_vec);
+    let info_list = InfoListView::new(info_vec);
+    let mut view = View::new(id_list, info_list);
+
+    view.id_list.state.select(Some(0));
+
+    view.info_list.index = 0;
 
     // acquire the mutex
     // let mut model = model.lock();
 
     loop {
-        // clone everything
         terminal.draw(|f| {
-            ui::ui(f, model.clone());
+            ui::ui(f, view.clone());
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
@@ -206,12 +227,12 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    model.id_list.next();
-                    model.info_list.next().await;
+                    view.id_list.next();
+                    view.info_list.next().await;
                 }
                 Key::Char('k') => {
-                    model.id_list.previous();
-                    model.info_list.previous().await;
+                    view.id_list.previous();
+                    view.info_list.previous().await;
                 }
                 _ => (),
             }

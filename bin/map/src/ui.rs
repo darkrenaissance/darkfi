@@ -1,4 +1,4 @@
-use crate::model::Model;
+use crate::view::View;
 use async_std::sync::{Arc, Mutex};
 use tui::{
     backend::Backend,
@@ -9,14 +9,14 @@ use tui::{
     Frame,
 };
 
-pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: Model) {
+pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(f.size());
 
-    let nodes: Vec<ListItem> = app
+    let nodes: Vec<ListItem> = view
         .id_list
         .node_id
         .iter()
@@ -31,15 +31,15 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut app: Model) {
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
     // needs to be mutable. could
-    f.render_stateful_widget(nodes, slice[0], &mut app.id_list.state);
+    f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
-    let index = app.info_list.index;
+    let index = view.info_list.index;
 
-    render_info(app, f, index, slice);
+    render_info(view, f, index, slice);
 }
 
-fn render_info<B: Backend>(app: Model, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
-    let info = &app.info_list.infos;
+fn render_info<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+    let info = &view.info_list.infos;
     let id = &info[index].id;
     let connections = info[index].connections;
     let is_active = info[index].is_active;
