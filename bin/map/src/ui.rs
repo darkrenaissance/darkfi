@@ -29,7 +29,6 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
-    // needs to be mutable. could
     f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
     let index = view.info_list.index;

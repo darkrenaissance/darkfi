@@ -39,38 +39,6 @@ impl IdList {
         let node_id = Mutex::new(node_id);
         IdList { state: Mutex::new(ListState::default()), node_id }
     }
-
-    //pub async fn next(&mut self) {
-    //    let i = match self.state.lock().await.selected() {
-    //        Some(i) => {
-    //            if i >= self.node_id.lock().await.len() - 1 {
-    //                0
-    //            } else {
-    //                i + 1
-    //            }
-    //        }
-    //        None => 0,
-    //    };
-    //    self.state.lock().await.select(Some(i));
-    //}
-
-    //pub async fn previous(&mut self) {
-    //    let i = match self.state.lock().await.selected() {
-    //        Some(i) => {
-    //            if i == 0 {
-    //                self.node_id.lock().await.len() - 1
-    //            } else {
-    //                i - 1
-    //            }
-    //        }
-    //        None => 0,
-    //    };
-    //    self.state.lock().await.select(Some(i));
-    //}
-
-    //pub async fn unselect(&mut self) {
-    //    self.state.lock().await.select(None);
-    //}
 }
 
 pub struct InfoList {
@@ -86,19 +54,6 @@ impl InfoList {
 
         InfoList { index, infos }
     }
-
-    //pub async fn next(&mut self) {
-    //    let index = self.index.lock().await;
-    //    index = (index + 1) % index.len();
-    //}
-
-    //pub async fn previous(&mut self) {
-    //    if self.index.lock().await > 0 {
-    //        self.index.lock().await -= 1;
-    //    } else {
-    //        self.index.lock().await = self.infos.lock().await.len() - 1;
-    //    }
-    //}
 }
 
 pub type NodeId = u32;
