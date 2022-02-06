@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(ex2.clone(), model.clone()).await?;
-                run_app(&mut terminal, model.clone()).await?;
+                render(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -184,14 +184,10 @@ async fn poll(client: Map, _model: Model) -> Result<()> {
     }
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io::Result<()> {
+async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Model) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
-
-    //model.id_list.state.select(Some(0));
-
-    //model.info_list.index = 0;
 
     let mut info_vec = Vec::new();
 
@@ -206,15 +202,14 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io
     }
 
     let id_list = IdListView::new(id_vec);
+
     let info_list = InfoListView::new(info_vec);
+
     let mut view = View::new(id_list, info_list);
 
     view.id_list.state.select(Some(0));
 
     view.info_list.index = 0;
-
-    // acquire the mutex
-    // let mut model = model.lock();
 
     loop {
         terminal.draw(|f| {
@@ -224,7 +219,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut model: Model) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
