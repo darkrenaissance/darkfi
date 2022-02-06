@@ -1,4 +1,4 @@
-//! Stack type abstractions
+//! VM stack type abstractions
 use halo2_gadgets::{
     ecc::{chip::EccChip, FixedPoint, Point},
     utilities::CellValue,

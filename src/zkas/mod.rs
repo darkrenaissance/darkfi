@@ -6,6 +6,8 @@ pub mod ast;
 pub mod compiler;
 /// Binary decoder
 pub mod decoder;
+/// Error emitter
+mod error;
 /// Lexer module
 pub mod lexer;
 /// Language opcodes

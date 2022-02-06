@@ -1,31 +1,32 @@
-use std::{io, io::Write, iter::Peekable, process, str::Chars};
+use std::{iter::Peekable, str::Chars};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use termion::{color, style};
 
 use super::{
     ast::{
         Constant, Constants, Statement, StatementType, Statements, UnparsedConstants,
         UnparsedWitnesses, Variable, Witness, Witnesses,
     },
+    error::ErrorEmitter,
     lexer::{Token, TokenType},
     opcode::Opcode,
     types::Type,
 };
 
 pub struct Parser {
-    file: String,
-    lines: Vec<String>,
     tokens: Vec<Token>,
+    error: ErrorEmitter,
 }
 
 impl Parser {
     pub fn new(filename: &str, source: Chars, tokens: Vec<Token>) -> Self {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
-        let lines = source.as_str().lines().map(|x| x.to_string()).collect();
-        Parser { file: filename.to_string(), lines, tokens }
+        let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
+        let error = ErrorEmitter::new("Parser", filename, lines.clone());
+
+        Parser { tokens, error }
     }
 
     pub fn parse(self) -> (Constants, Witnesses, Statements) {
@@ -93,7 +94,9 @@ impl Parser {
                         }
                     }
 
-                    x => self.error(format!("Unknown `{}` proof section", x), t.line, t.column),
+                    x => {
+                        self.error.emit(format!("Unknown `{}` proof section", x), t.line, t.column)
+                    }
                 }
             }
 
@@ -114,7 +117,7 @@ impl Parser {
 
                 // TODO: Do we need this?
                 if namespace_found && namespace != constant_tokens[0].token {
-                    self.error(
+                    self.error.emit(
                         format!(
                             "Found `{}` namespace. Expected `{}`.",
                             constant_tokens[0].token, namespace
@@ -134,7 +137,7 @@ impl Parser {
 
                 while let Some((typ, name, comma)) = constants_inner.next_tuple() {
                     if comma.token_type != TokenType::Comma {
-                        self.error(
+                        self.error.emit(
                             "Separator is not a comma".to_string(),
                             comma.line,
                             comma.column,
@@ -142,7 +145,7 @@ impl Parser {
                     }
 
                     if constants_map.contains_key(name.token.as_str()) {
-                        self.error(
+                        self.error.emit(
                             format!(
                                 "Section `constant` already contains the token `{}`.",
                                 &name.token
@@ -164,7 +167,7 @@ impl Parser {
 
                 // TODO: Do we need this?
                 if namespace_found && namespace != contract_tokens[0].token {
-                    self.error(
+                    self.error.emit(
                         format!(
                             "Found `{}` namespace. Expected `{}`.",
                             contract_tokens[0].token, namespace
@@ -184,7 +187,7 @@ impl Parser {
 
                 while let Some((typ, name, comma)) = contract_inner.next_tuple() {
                     if comma.token_type != TokenType::Comma {
-                        self.error(
+                        self.error.emit(
                             "Separator is not a comma".to_string(),
                             comma.line,
                             comma.column,
@@ -192,7 +195,7 @@ impl Parser {
                     }
 
                     if contract_map.contains_key(name.token.as_str()) {
-                        self.error(
+                        self.error.emit(
                             format!(
                                 "Section `contract` already contains the token `{}`.",
                                 &name.token
@@ -213,7 +216,7 @@ impl Parser {
                 self.check_section_structure("circuit", contract_tokens.clone());
 
                 if circuit_tokens[circuit_tokens.len() - 2].token_type != TokenType::Semicolon {
-                    self.error(
+                    self.error.emit(
                         "Circuit section does not end with a semicolon. Would never finish parsing.".to_string(),
                         circuit_tokens[circuit_tokens.len()-2].line,
                         circuit_tokens[circuit_tokens.len()-2].column
@@ -222,7 +225,7 @@ impl Parser {
 
                 // TODO: Do we need this?
                 if namespace_found && namespace != circuit_tokens[0].token {
-                    self.error(
+                    self.error.emit(
                         format!(
                             "Found `{}` namespace. Expected `{}`.",
                             circuit_tokens[0].token, namespace
@@ -271,7 +274,7 @@ impl Parser {
 
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
         if tokens[0].token_type != TokenType::String {
-            self.error(
+            self.error.emit(
                 format!("{} section declaration must start with a naming string.", section),
                 tokens[0].line,
                 tokens[0].column,
@@ -279,7 +282,7 @@ impl Parser {
         }
 
         if tokens[1].token_type != TokenType::LeftBrace {
-            self.error(
+            self.error.emit(
                 format!(
                     "{} section opening is not correct. Must be opened with a left brace `{{`",
                     section
@@ -290,7 +293,7 @@ impl Parser {
         }
 
         if tokens[tokens.len() - 1].token_type != TokenType::RightBrace {
-            self.error(
+            self.error.emit(
                 format!(
                     "{} section closing is not correct. Must be closed with a right brace `}}`",
                     section
@@ -303,7 +306,7 @@ impl Parser {
         if (section == "constant" || section == "contract") &&
             tokens[2..tokens.len() - 1].len() % 3 != 0
         {
-            self.error(
+            self.error.emit(
                 format!(
                     "Invalid number of elements in `{}` section. Must be pairs of `type:name` separated with a comma `,`",
                     section
@@ -319,7 +322,7 @@ impl Parser {
 
         for (k, v) in ast {
             if &v.0.token != k {
-                self.error(
+                self.error.emit(
                     format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,
                     v.0.column,
@@ -327,7 +330,7 @@ impl Parser {
             }
 
             if v.0.token_type != TokenType::Symbol {
-                self.error(
+                self.error.emit(
                     format!("Constant name `{}` is not a symbol.", v.0.token),
                     v.0.line,
                     v.0.column,
@@ -335,7 +338,7 @@ impl Parser {
             }
 
             if v.1.token_type != TokenType::Symbol {
-                self.error(
+                self.error.emit(
                     format!("Constant type `{}` is not a symbol.", v.1.token),
                     v.1.line,
                     v.1.column,
@@ -353,7 +356,7 @@ impl Parser {
                 }
 
                 x => {
-                    self.error(
+                    self.error.emit(
                         format!("`{}` is an illegal constant type", x),
                         v.1.line,
                         v.1.column,
@@ -370,7 +373,7 @@ impl Parser {
 
         for (k, v) in ast {
             if &v.0.token != k {
-                self.error(
+                self.error.emit(
                     format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,
                     v.0.column,
@@ -378,7 +381,7 @@ impl Parser {
             }
 
             if v.0.token_type != TokenType::Symbol {
-                self.error(
+                self.error.emit(
                     format!("Witness name `{}` is not a symbol.", v.0.token),
                     v.0.line,
                     v.0.column,
@@ -386,7 +389,7 @@ impl Parser {
             }
 
             if v.1.token_type != TokenType::Symbol {
-                self.error(
+                self.error.emit(
                     format!("Witness type `{}` is not a symbol.", v.1.token),
                     v.1.line,
                     v.1.column,
@@ -440,7 +443,11 @@ impl Parser {
                 }
 
                 x => {
-                    self.error(format!("`{}` is an illegal witness type", x), v.1.line, v.1.column);
+                    self.error.emit(
+                        format!("`{}` is an illegal witness type", x),
+                        v.1.line,
+                        v.1.column,
+                    );
                 }
             }
         }
@@ -461,7 +468,7 @@ impl Parser {
                 }
             }
             if left_paren != right_paren {
-                self.error(
+                self.error.emit(
                     "Incorrect number of left and right parenthesis for statement.".to_string(),
                     statement[0].line,
                     statement[0].column,
@@ -508,7 +515,7 @@ impl Parser {
                         }
 
                         if !parsing {
-                            self.error(
+                            self.error.emit(
                                 format!("Illegal token `{}`", next_token.token),
                                 next_token.line,
                                 next_token.column,
@@ -614,7 +621,7 @@ impl Parser {
                     }
 
                     x => {
-                        self.error(
+                        self.error.emit(
                             format!("Unimplemented function call `{}`", x),
                             token.line,
                             token.column,
@@ -635,7 +642,7 @@ impl Parser {
     ) -> Vec<Variable> {
         if let Some(next_token) = iter.peek() {
             if next_token.token_type != TokenType::LeftParen {
-                self.error(
+                self.error.emit(
                     "Invalid function call opening. Must start with a `(`".to_string(),
                     next_token.line,
                     next_token.column,
@@ -644,7 +651,7 @@ impl Parser {
             // Skip the opening parenthesis
             iter.next();
         } else {
-            self.error("Premature ending of statement".to_string(), token.line, token.column);
+            self.error.emit("Premature ending of statement".to_string(), token.line, token.column);
         }
 
         // Eat up function arguments
@@ -663,7 +670,7 @@ impl Parser {
             }
 
             if sep.token_type != TokenType::Comma {
-                self.error(
+                self.error.emit(
                     "Argument separator is not a comma (`,`)".to_string(),
                     sep.line,
                     sep.column,
@@ -672,30 +679,5 @@ impl Parser {
         }
 
         args
-    }
-
-    fn error(&self, msg: String, ln: usize, col: usize) {
-        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
-        let caret = format!("{:width$}^", "", width = pad);
-        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
-        Parser::abort(&msg);
-    }
-
-    fn abort(msg: &str) {
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        write!(
-            handle,
-            "{}{}Parser error:{} {}",
-            style::Bold,
-            color::Fg(color::Red),
-            style::Reset,
-            msg,
-        )
-        .unwrap();
-        handle.flush().unwrap();
-        process::exit(1);
     }
 }

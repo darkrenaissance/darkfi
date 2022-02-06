@@ -1,6 +1,6 @@
-use std::{io, io::Write, process, str::Chars};
+use std::str::Chars;
 
-use termion::{color, style};
+use super::error::ErrorEmitter;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum TokenType {
@@ -33,9 +33,8 @@ impl Token {
 }
 
 pub struct Lexer<'a> {
-    file: String,
-    lines: Vec<String>,
     source: Chars<'a>,
+    error: ErrorEmitter,
 }
 
 impl<'a> Lexer<'a> {
@@ -43,7 +42,9 @@ impl<'a> Lexer<'a> {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
-        Lexer { file: filename.to_string(), lines, source }
+        let error = ErrorEmitter::new("Lexer", filename, lines.clone());
+
+        Self { source, error }
     }
 
     pub fn lex(self) -> Vec<Token> {
@@ -78,7 +79,11 @@ impl<'a> Lexer<'a> {
 
                 if in_string {
                     // TODO: Allow newlines in strings?
-                    self.error(format!("Invalid ending in string `{}`", &strbuf), lineno, column);
+                    self.error.emit(
+                        format!("Invalid ending in string `{}`", &strbuf),
+                        lineno,
+                        column,
+                    );
                 }
 
                 in_comment = false;
@@ -141,7 +146,7 @@ impl<'a> Lexer<'a> {
 
             if c == '"' && !in_string {
                 if in_symbol {
-                    self.error(format!("Illegal char `{}` for symbol", c), lineno, column);
+                    self.error.emit(format!("Illegal char `{}` for symbol", c), lineno, column);
                 }
                 in_string = true;
                 continue
@@ -149,7 +154,11 @@ impl<'a> Lexer<'a> {
 
             if c == '"' && in_string {
                 if strbuf.is_empty() {
-                    self.error(format!("Invalid ending in string `{}`", &strbuf), lineno, column);
+                    self.error.emit(
+                        format!("Invalid ending in string `{}`", &strbuf),
+                        lineno,
+                        column,
+                    );
                 }
 
                 in_string = false;
@@ -229,40 +238,15 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token::new("=".to_string(), TokenType::Assign, lineno, column));
                         continue
                     }
-                    _ => self.error(format!("Invalid token `{}`", c), lineno, column - 1),
+                    _ => self.error.emit(format!("Invalid token `{}`", c), lineno, column - 1),
                 }
                 continue
             }
 
-            self.error(format!("Invalid token `{}`", c), lineno, column - 1);
+            self.error.emit(format!("Invalid token `{}`", c), lineno, column - 1);
         }
 
         tokens
-    }
-
-    fn error(&self, msg: String, ln: usize, col: usize) {
-        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
-        let caret = format!("{:width$}^", "", width = pad);
-        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
-        Lexer::abort(&msg);
-    }
-
-    fn abort(msg: &str) {
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        write!(
-            handle,
-            "{}{}Lexer error:{} {}",
-            style::Bold,
-            color::Fg(color::Red),
-            style::Reset,
-            msg,
-        )
-        .unwrap();
-        handle.flush().unwrap();
-        process::exit(1);
     }
 }
 

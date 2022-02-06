@@ -1,6 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
-use log::*;
+use log::debug;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -10,8 +10,9 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        messages::Message,
-        sessions::{InboundSession, ManualSession, OutboundSession, SeedSession},
+        message::Message,
+        protocol::{register_default_protocols, ProtocolRegistry},
+        session::{InboundSession, ManualSession, OutboundSession, SeedSession},
         Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
     },
     system::{Subscriber, SubscriberPtr, Subscription},
@@ -32,21 +33,28 @@ pub struct P2p {
     // Used both internally and externally
     stop_subscriber: SubscriberPtr<Error>,
     hosts: HostsPtr,
+    protocol_registry: ProtocolRegistry,
     settings: SettingsPtr,
 }
 
 impl P2p {
     /// Create a new p2p network.
-    pub fn new(settings: Settings) -> Arc<Self> {
+    pub async fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
-        Arc::new(Self {
+
+        let self_ = Arc::new(Self {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(),
+            protocol_registry: ProtocolRegistry::new(),
             settings,
-        })
+        });
+
+        register_default_protocols(self_.clone()).await;
+
+        self_
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
@@ -138,6 +146,10 @@ impl P2p {
     /// Return an atomic pointer to the list of hosts.
     pub fn hosts(&self) -> HostsPtr {
         self.hosts.clone()
+    }
+
+    pub fn protocol_registry(&self) -> &ProtocolRegistry {
+        &self.protocol_registry
     }
 
     /// Subscribe to a channel.

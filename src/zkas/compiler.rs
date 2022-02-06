@@ -1,8 +1,9 @@
-use std::{io, io::Write, process, str::Chars};
+use std::str::Chars;
 
-use termion::{color, style};
-
-use super::ast::{Constants, StatementType, Statements, Witnesses};
+use super::{
+    ast::{Constants, StatementType, Statements, Witnesses},
+    error::ErrorEmitter,
+};
 use crate::util::serial::{serialize, VarInt};
 
 /// Version of the binary
@@ -11,12 +12,11 @@ pub const BINARY_VERSION: u8 = 1;
 pub const MAGIC_BYTES: [u8; 4] = [0x0b, 0x00, 0xb1, 0x35];
 
 pub struct Compiler {
-    file: String,
-    lines: Vec<String>,
     constants: Constants,
     witnesses: Witnesses,
     statements: Statements,
     debug_info: bool,
+    error: ErrorEmitter,
 }
 
 impl Compiler {
@@ -30,8 +30,10 @@ impl Compiler {
     ) -> Self {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
-        let lines = source.as_str().lines().map(|x| x.to_string()).collect();
-        Compiler { file: filename.to_string(), lines, constants, witnesses, statements, debug_info }
+        let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
+        let error = ErrorEmitter::new("Compiler", filename, lines.clone());
+
+        Compiler { constants, witnesses, statements, debug_info, error }
     }
 
     pub fn compile(&self) -> Vec<u8> {
@@ -77,7 +79,7 @@ impl Compiler {
                     continue
                 }
 
-                self.error(
+                self.error.emit(
                     format!("Failed finding a stack reference for `{}`", arg.name),
                     arg.line,
                     arg.column,
@@ -103,30 +105,5 @@ impl Compiler {
         }
 
         None
-    }
-
-    fn error(&self, msg: String, ln: usize, col: usize) {
-        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
-        let caret = format!("{:width$}^", "", width = pad);
-        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
-        Compiler::abort(&msg);
-    }
-
-    fn abort(msg: &str) {
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        write!(
-            handle,
-            "{}{}Compiler error:{} {}",
-            style::Bold,
-            color::Fg(color::Red),
-            style::Reset,
-            msg,
-        )
-        .unwrap();
-        handle.flush().unwrap();
-        process::exit(1);
     }
 }

@@ -1,5 +1,5 @@
-use futures::prelude::*;
-use log::*;
+use futures::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
+use log::debug;
 use std::{io, net::SocketAddr};
 
 use crate::{

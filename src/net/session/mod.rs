@@ -27,6 +27,14 @@ pub mod outbound_session;
 /// channel and initializing the channel by performing a network handshake.
 pub mod session;
 
+// bitwise selectors for the protocol_registry
+pub type SessionBitflag = u32;
+pub const SESSION_INBOUND: SessionBitflag = 0b0001;
+pub const SESSION_OUTBOUND: SessionBitflag = 0b0010;
+pub const SESSION_MANUAL: SessionBitflag = 0b0100;
+pub const SESSION_SEED: SessionBitflag = 0b1000;
+pub const SESSION_ALL: SessionBitflag = 0b1111;
+
 pub use inbound_session::InboundSession;
 pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;

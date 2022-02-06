@@ -193,6 +193,7 @@ crypto = [
     "bs58",
 
     "util",
+    "zkas",
 ]
 
 wallet = [
@@ -223,12 +224,6 @@ zkas = [
     "util",
 ]
 
-zkvm = [
-    "crypto",
-    "zkas",
-]
-
-
 [[example]]
 name = "net"
 path = "example/net.rs"
@@ -252,9 +247,9 @@ required-features = ["crypto"]
 [[example]]
 name = "mint"
 path = "proof/mint.rs"
-required-features = ["cli", "zkvm"]
+required-features = ["cli", "crypto", "zkas"]
 
 [[example]]
 name = "burn"
 path = "proof/burn.rs"
-required-features = ["cli", "zkvm"]
+required-features = ["cli", "crypto", "zkas"]

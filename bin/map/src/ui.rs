@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::view::View;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,15 +8,15 @@ use tui::{
     Frame,
 };
 
-pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(f.size());
 
-    let nodes: Vec<ListItem> = app
-        .node_list
+    let nodes: Vec<ListItem> = view
+        .id_list
         .node_id
         .iter()
         .map(|id| {
@@ -29,18 +29,19 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
 
-    f.render_stateful_widget(nodes, slice[0], &mut app.node_list.state);
+    f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
-    let index = app.node_info.index;
+    let index = view.info_list.index;
 
-    render_info(app, f, index, slice);
+    render_info(view, f, index, slice);
 }
 
-fn render_info<B: Backend>(app: &mut App, f: &mut Frame<B>, index: usize, slice: Vec<Rect>) {
-    let id = &app.node_info.infos[index].id;
-    let connections = app.node_info.infos[index].connections;
-    let is_active = app.node_info.infos[index].is_active;
-    let message = &app.node_info.infos[index].last_message;
+fn render_info<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+    let info = &view.info_list.infos;
+    let id = &info[index].id;
+    let connections = info[index].connections;
+    let is_active = info[index].is_active;
+    let message = &info[index].last_message;
     let span = vec![
         Spans::from(format!("NodeId: {}", id)),
         Spans::from(format!("Number of connections: {}", connections)),

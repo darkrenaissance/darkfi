@@ -37,13 +37,17 @@ test: test-vm test-tx
 	$(CARGO) test --release --all-features --all
 
 test-tx:
-	$(CARGO) run --release --features=node --example tx
+	$(CARGO) run --release --features=node,zkas --example tx
 
-test-vm: zkas
-	./zkas proof/mint.zk
-	$(CARGO) run --release --features=cli,zkvm --example mint
-	./zkas proof/burn.zk
-	$(CARGO) run --release --features=cli,zkvm --example burn
+VM_SRC = proof/mint.zk proof/burn.zk
+VM_BIN = $(VM_SRC:=.bin)
+
+$(VM_BIN): zkas $(VM_SRC)
+	./zkas $(basename $@) -o $@
+
+test-vm: $(VM_BIN)
+	$(CARGO) run --release --features=cli,crypto,zkas --example mint
+	$(CARGO) run --release --features=cli,crypto,zkas --example burn
 
 clean:
 	rm -f $(BINS)

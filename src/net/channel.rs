@@ -16,8 +16,9 @@ use std::sync::{
 use crate::{
     error::{Error, Result},
     net::{
+        message,
         message_subscriber::{MessageSubscription, MessageSubsystem},
-        messages,
+        protocol::{ProtocolBase, ProtocolBasePtr},
     },
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
 };
@@ -107,7 +108,7 @@ impl Channel {
     /// Sends a message across a channel. Calls function 'send_message' that
     /// creates a new payload and sends it over the TCP connection as a
     /// packet. Returns an error if something goes wrong.
-    pub async fn send<M: messages::Message>(&self, message: M) -> Result<()> {
+    pub async fn send<M: message::Message>(&self, message: M) -> Result<()> {
         debug!(target: "net",
             "Channel::send() [START, command={:?}, address={}]",
             M::name(),
@@ -138,17 +139,17 @@ impl Channel {
     /// it. Then creates a message packet- the base type of the network- and
     /// copies the payload into it. Then we send the packet over the TCP
     /// stream.
-    async fn send_message<M: messages::Message>(&self, message: M) -> Result<()> {
+    async fn send_message<M: message::Message>(&self, message: M) -> Result<()> {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
-        let packet = messages::Packet { command: String::from(M::name()), payload };
+        let packet = message::Packet { command: String::from(M::name()), payload };
 
         let stream = &mut *self.writer.lock().await;
-        messages::send_packet(stream, packet).await
+        message::send_packet(stream, packet).await
     }
 
     /// Subscribe to a messages on the message subsystem.
-    pub async fn subscribe_msg<M: messages::Message>(&self) -> Result<MessageSubscription<M>> {
+    pub async fn subscribe_msg<M: message::Message>(&self) -> Result<MessageSubscription<M>> {
         debug!(target: "net",
             "Channel::subscribe_msg() [START, command={:?}, address={}]",
             M::name(),
@@ -178,12 +179,12 @@ impl Channel {
 
     /// Perform network handshake for message subsystem dispatchers.
     async fn setup_dispatchers(message_subsystem: &MessageSubsystem) {
-        message_subsystem.add_dispatch::<messages::VersionMessage>().await;
-        message_subsystem.add_dispatch::<messages::VerackMessage>().await;
-        message_subsystem.add_dispatch::<messages::PingMessage>().await;
-        message_subsystem.add_dispatch::<messages::PongMessage>().await;
-        message_subsystem.add_dispatch::<messages::GetAddrsMessage>().await;
-        message_subsystem.add_dispatch::<messages::AddrsMessage>().await;
+        message_subsystem.add_dispatch::<message::VersionMessage>().await;
+        message_subsystem.add_dispatch::<message::VerackMessage>().await;
+        message_subsystem.add_dispatch::<message::PingMessage>().await;
+        message_subsystem.add_dispatch::<message::PongMessage>().await;
+        message_subsystem.add_dispatch::<message::GetAddrsMessage>().await;
+        message_subsystem.add_dispatch::<message::AddrsMessage>().await;
     }
 
     /// Convenience function that returns the Message Subsystem.
@@ -202,7 +203,7 @@ impl Channel {
         let reader = &mut *self.reader.lock().await;
 
         loop {
-            let packet = match messages::read_packet(reader).await {
+            let packet = match message::read_packet(reader).await {
                 Ok(packet) => packet,
                 Err(err) => {
                     if Self::is_eof_error(err.clone()) {

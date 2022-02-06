@@ -15,16 +15,22 @@ use halo2_gadgets::primitives::{
     poseidon::{ConstantLength, P128Pow5T3},
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use log::info;
 use pasta_curves::{
     arithmetic::{CurveAffine, Field},
     group::Curve,
     pallas,
 };
 use rand::rngs::OsRng;
-use simplelog::{ColorChoice::Auto, Config, LevelFilter::Debug, TermLogger, TerminalMode::Mixed};
+use simplelog::{ColorChoice::Auto, Config, LevelFilter, TermLogger, TerminalMode::Mixed};
 
 fn main() -> Result<()> {
-    TermLogger::init(Debug, Config::default(), Mixed, Auto)?;
+    let loglevel = match option_env!("RUST_LOG") {
+        Some("debug") => LevelFilter::Debug,
+        Some("trace") => LevelFilter::Trace,
+        Some(_) | None => LevelFilter::Info,
+    };
+    TermLogger::init(loglevel, Config::default(), Mixed, Auto)?;
 
     /* ANCHOR: main */
     let bincode = include_bytes!("burn.zk.bin");
@@ -114,7 +120,7 @@ fn main() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
 
-    // Build the proving key and create the zero-knowledge proof
+    info!(target: "PROVER", "Building proving key and creating the zero-knowledge proof");
     let proving_key = ProvingKey::build(11, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs)?;
 
@@ -139,7 +145,7 @@ fn main() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
 
-    // Build the verifying key and verify the zero-knowledge proof
+    info!(target: "VERIFIER", "Building verifying key and verifying the zero-knowledge proof");
     let verifying_key = VerifyingKey::build(11, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
     /* ANCHOR_END: main */

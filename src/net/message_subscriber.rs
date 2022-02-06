@@ -1,11 +1,11 @@
 use async_std::sync::Mutex;
 use async_trait::async_trait;
-use log::*;
+use log::{debug, error, warn};
 use rand::Rng;
 use std::{any::Any, collections::HashMap, io, io::Cursor, sync::Arc};
 
 use crate::{
-    net::messages::Message,
+    net::message::Message,
     util::serial::{Decodable, Encodable},
     Error, Result,
 };
@@ -87,6 +87,7 @@ impl<M: Message> MessageDispatcher<M> {
     /// channels.
     async fn trigger_all(&self, message: MessageResult<M>) {
         debug!(
+            target: "net",
             "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
             M::name(),
             if message.is_ok() { "msg" } else { "err" },
@@ -109,6 +110,7 @@ impl<M: Message> MessageDispatcher<M> {
         self.collect_garbage(garbage_ids).await;
 
         debug!(
+            target: "net",
             "MessageDispatcher<M={}>::trigger_all({}) [END, subs={}]",
             M::name(),
             if message.is_ok() { "msg" } else { "err" },

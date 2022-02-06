@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use async_executor::Executor;
 
 use darkfi::{net, Result};
@@ -20,11 +21,9 @@ impl ProtocolPrivMsg {
         notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
         seen_privmsg_ids: SeenPrivMsgIdsPtr,
         p2p: net::P2pPtr,
-    ) -> Arc<Self> {
+    ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<PrivMsg>().await;
-
-        debug!("ADDED DISPATCH");
 
         let privmsg_sub =
             channel.subscribe_msg::<PrivMsg>().await.expect("Missing PrivMsg dispatcher!");
@@ -38,15 +37,8 @@ impl ProtocolPrivMsg {
         })
     }
 
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "ircd", "ProtocolPrivMsg::start() [START]");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_privmsg(), executor.clone()).await;
-        debug!(target: "ircd", "ProtocolPrivMsg::start() [END]");
-    }
-
     async fn handle_receive_privmsg(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolAddress::handle_receive_privmsg() [START]");
+        debug!(target: "ircd", "ProtocolPrivMsg::handle_receive_privmsg() [START]");
         loop {
             let privmsg = self.privmsg_sub.receive().await?;
 
@@ -69,5 +61,23 @@ impl ProtocolPrivMsg {
 
             self.notify_queue_sender.send(privmsg).await.expect("notify_queue_sender send failed!");
         }
+    }
+}
+
+#[async_trait]
+impl net::ProtocolBase for ProtocolPrivMsg {
+    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
+    /// protocol task manager, then queues the reply. Sends out a ping and
+    /// waits for pong reply. Waits for ping and replies with a pong.
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolPrivMsg::start() [START]");
+        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().spawn(self.clone().handle_receive_privmsg(), executor.clone()).await;
+        debug!(target: "ircd", "ProtocolPrivMsg::start() [END]");
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "ProtocolPrivMsg"
     }
 }

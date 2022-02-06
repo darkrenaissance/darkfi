@@ -1,8 +1,7 @@
-pub mod app;
-pub mod list;
-pub mod node_info;
-pub mod types;
+pub mod model;
 pub mod ui;
+pub mod view;
 
-pub use app::App;
+pub use model::{IdList, InfoList, Model, NodeInfo};
 pub use ui::ui;
+pub use view::{IdListView, InfoListView, View};

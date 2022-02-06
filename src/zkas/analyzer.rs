@@ -1,27 +1,23 @@
 use std::{
-    io,
     io::{stdin, stdout, Read, Write},
-    process,
     str::Chars,
 };
-
-use termion::{color, style};
 
 use super::{
     ast::{
         Constant, Constants, StatementType, Statements, Var, Variable, Variables, Witness,
         Witnesses,
     },
+    error::ErrorEmitter,
     types::Type,
 };
 
 pub struct Analyzer {
-    file: String,
-    lines: Vec<String>,
     pub constants: Constants,
     pub witnesses: Witnesses,
     pub statements: Statements,
     pub stack: Variables,
+    error: ErrorEmitter,
 }
 
 impl Analyzer {
@@ -34,15 +30,10 @@ impl Analyzer {
     ) -> Self {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
-        let lines = source.as_str().lines().map(|x| x.to_string()).collect();
-        Analyzer {
-            file: filename.to_string(),
-            lines,
-            constants,
-            witnesses,
-            statements,
-            stack: vec![],
-        }
+        let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
+        let error = ErrorEmitter::new("Semantic", filename, lines.clone());
+
+        Analyzer { constants, witnesses, statements, stack: vec![], error }
     }
 
     pub fn analyze_types(&mut self) {
@@ -62,7 +53,7 @@ impl Analyzer {
             // It's kinda ugly.
             if arg_types[0] == Type::BaseArray || arg_types[0] == Type::ScalarArray {
                 if statement.args.is_empty() {
-                    self.error(
+                    self.error.emit(
                         format!(
                             "Passed no arguments to `{:?}` call. Expected at least 1.",
                             statement.opcode
@@ -81,7 +72,7 @@ impl Analyzer {
                         };
 
                         if arg_types[0] == Type::BaseArray && var_type != Type::Base {
-                            self.error(
+                            self.error.emit(
                                 format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[0],
@@ -93,7 +84,7 @@ impl Analyzer {
                         }
 
                         if arg_types[0] == Type::ScalarArray && var_type != Type::Scalar {
-                            self.error(
+                            self.error.emit(
                                 format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[0],
@@ -108,7 +99,7 @@ impl Analyzer {
                         arg.typ = var_type;
                         args.push(arg);
                     } else {
-                        self.error(
+                        self.error.emit(
                             format!("Unknown argument reference `{}`.", i.name),
                             i.line,
                             i.column,
@@ -117,7 +108,7 @@ impl Analyzer {
                 }
             } else {
                 if statement.args.len() != arg_types.len() {
-                    self.error(
+                    self.error.emit(
                         format!(
                             "Incorrent number of args to `{:?}` call. Expected {}, got {}",
                             statement.opcode,
@@ -138,7 +129,7 @@ impl Analyzer {
                         };
 
                         if var_type != arg_types[idx] {
-                            self.error(
+                            self.error.emit(
                                 format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[idx], var_type,
@@ -152,7 +143,7 @@ impl Analyzer {
                         arg.typ = var_type;
                         args.push(arg);
                     } else {
-                        self.error(
+                        self.error.emit(
                             format!("Unknown argument reference `{}`.", i.name),
                             i.line,
                             i.column,
@@ -213,7 +204,7 @@ impl Analyzer {
                 if let Some(index) = stack.iter().position(|&r| r == &arg.name) {
                     println!("Found at stack index {}", index);
                 } else {
-                    self.error(
+                    self.error.emit(
                         format!("Could not find `{}` on the stack", arg.name),
                         arg.line,
                         arg.column,
@@ -281,31 +272,6 @@ impl Analyzer {
             }
         }
         None
-    }
-
-    fn error(&self, msg: String, ln: usize, col: usize) {
-        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
-        let caret = format!("{:width$}^", "", width = pad);
-        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
-        Analyzer::abort(&msg);
-    }
-
-    fn abort(msg: &str) {
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        write!(
-            handle,
-            "{}{}Semantic error:{} {}",
-            style::Bold,
-            color::Fg(color::Red),
-            style::Reset,
-            msg,
-        )
-        .unwrap();
-        handle.flush().unwrap();
-        process::exit(1);
     }
 
     fn pause() {
