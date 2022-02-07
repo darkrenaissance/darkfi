@@ -1,13 +1,13 @@
 use std::io;
 
-// TODO: Alias vesta::Affine to something
-use halo2::{
+use halo2_proofs::{
     plonk,
-    plonk::Circuit,
+    plonk::{Circuit, SingleVerifier},
     poly::commitment::Params,
     transcript::{Blake2bRead, Blake2bWrite},
 };
 use pasta_curves::vesta;
+use rand::RngCore;
 
 use crate::{
     crypto::types::*,
@@ -57,11 +57,19 @@ impl Proof {
     pub fn create(
         pk: &ProvingKey,
         circuits: &[impl Circuit<DrkCircuitField>],
-        pubinputs: &[DrkCircuitField],
+        instances: &[DrkCircuitField],
+        mut rng: impl RngCore,
     ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
 
-        plonk::create_proof(&pk.params, &pk.pk, circuits, &[&[pubinputs]], &mut transcript)?;
+        plonk::create_proof(
+            &pk.params,
+            &pk.pk,
+            circuits,
+            &[&[instances]],
+            &mut rng,
+            &mut transcript,
+        )?;
 
         Ok(Proof(transcript.finalize()))
     }
@@ -69,18 +77,12 @@ impl Proof {
     pub fn verify(
         &self,
         vk: &VerifyingKey,
-        pubinputs: &[DrkCircuitField],
+        instances: &[DrkCircuitField],
     ) -> std::result::Result<(), plonk::Error> {
-        let msm = vk.params.empty_msm();
+        let strategy = SingleVerifier::new(&vk.params);
         let mut transcript = Blake2bRead::init(&self.0[..]);
-        let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;
-        let msm = guard.clone().use_challenges();
 
-        if msm.eval() {
-            Ok(())
-        } else {
-            Err(plonk::Error::ConstraintSystemFailure)
-        }
+        plonk::verify_proof(&vk.params, &vk.vk, strategy, &[&[instances]], &mut transcript)
     }
 
     pub fn new(bytes: Vec<u8>) -> Self {

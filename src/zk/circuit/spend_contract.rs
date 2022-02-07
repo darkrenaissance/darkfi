@@ -1,13 +1,9 @@
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
-};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint,
+        FixedPoint, FixedPointBaseField, FixedPointShort,
     },
-    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
+    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
@@ -16,15 +12,21 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-    },
+    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
-use pasta_curves::pallas;
+use halo2_proofs::{
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
+};
+use pasta_curves::{pallas, Fp};
 
-use crate::crypto::constants::{
-    sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-    OrchardFixedBases,
+use crate::crypto::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        util::gen_const_array,
+        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+    },
+    merkle_node::MerkleNode,
 };
 
 #[allow(dead_code)]
@@ -32,14 +34,14 @@ use crate::crypto::constants::{
 pub struct SpendConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
-    ecc_config: EccConfig,
+    ecc_config: EccConfig<OrchardFixedBases>,
     merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_config_1:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    poseidon_config: PoseidonConfig<pallas::Base>,
+    poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
 }
 
 impl SpendConfig {
@@ -73,7 +75,7 @@ impl SpendConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
@@ -98,13 +100,13 @@ pub struct SpendContract {
     pub value_blind: Option<pallas::Scalar>,
     pub token_blind: Option<pallas::Scalar>,
     pub leaf_pos: Option<u32>,
-    pub merkle_path: Option<[pallas::Base; 32]>,
+    pub merkle_path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     //pub sig_secret: Option<pallas::Scalar>,
     pub sig_secret: Option<pallas::Base>,
 }
 
 impl UtilitiesInstructions<pallas::Base> for SpendContract {
-    type Var = CellValue<pallas::Base>;
+    type Var = AssignedCell<Fp, Fp>;
 }
 
 impl Circuit<pallas::Base> for SpendContract {
@@ -136,11 +138,11 @@ impl Circuit<pallas::Base> for SpendContract {
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
-        meta.enable_equality(primary.into());
+        meta.enable_equality(primary);
 
         // Permutation over all advice columns
         for advice in advices.iter() {
-            meta.enable_equality((*advice).into());
+            meta.enable_equality(*advice);
         }
 
         // Poseidon requires four advice columns, while ECC incomplete addition
@@ -177,9 +179,8 @@ impl Circuit<pallas::Base> for SpendContract {
         );
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure(
+        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
             meta,
-            P128Pow5T3,
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
@@ -264,18 +265,17 @@ impl Circuit<pallas::Base> for SpendContract {
         )?;
 
         let hash = {
-            let poseidon_message = [secret_key, serial];
+            let poseidon_message = [secret_key.clone(), serial.clone()];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
-                ConstantLength::<2>,
             )?;
 
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
             poseidon_output
         };
 
@@ -300,9 +300,9 @@ impl Circuit<pallas::Base> for SpendContract {
         )?;
 
         let public_key = {
-            let nullifier_k = OrchardFixedBases::NullifierK;
-            let nullifier_k = FixedPoint::from_inner(ecc_chip.clone(), nullifier_k);
-            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), secret_key)?
+            let nullifier_k = NullifierK;
+            let nullifier_k = FixedPointBaseField::from_inner(ecc_chip.clone(), nullifier_k);
+            nullifier_k.mul(layouter.namespace(|| "[x_s] Nullifier"), secret_key)?
         };
 
         let (pub_x, pub_y) = (public_key.inner().x(), public_key.inner().y());
@@ -313,16 +313,15 @@ impl Circuit<pallas::Base> for SpendContract {
         let coin = {
             let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<6>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
-                ConstantLength::<6>,
             )?;
 
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
             poseidon_output
         };
 
@@ -330,16 +329,19 @@ impl Circuit<pallas::Base> for SpendContract {
         // Merkle root
         // ===========
 
-        let path = MerklePath {
-            chip_1: merkle_chip_1,
-            chip_2: merkle_chip_2,
-            domain: OrchardHashDomains::MerkleCrh,
-            leaf_pos: self.leaf_pos,
-            path: self.merkle_path,
-        };
+        let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+            self.merkle_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+
+        let merkle_inputs = MerklePath::construct(
+            config.merkle_chip_1(),
+            config.merkle_chip_2(),
+            OrchardHashDomains::MerkleCrh,
+            self.leaf_pos,
+            path,
+        );
 
         let computed_final_root =
-            path.calculate_root(layouter.namespace(|| "calculate root"), coin)?;
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -363,15 +365,16 @@ impl Circuit<pallas::Base> for SpendContract {
 
         // v * G_1
         let (commitment, _) = {
-            let value_commit_v = OrchardFixedBases::ValueCommitV;
-            let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
-            value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+            let value_commit_v = ValueCommitV;
+            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
+            value_commit_v
+                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one.clone()))?
         };
 
         // r_V * G_2
         let (blind, _rcv) = {
             let rcv = self.value_blind;
-            let value_commit_r = OrchardFixedBases::ValueCommitR;
+            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
@@ -398,15 +401,15 @@ impl Circuit<pallas::Base> for SpendContract {
 
         // a * G_1
         let (commitment, _) = {
-            let token_commit_v = OrchardFixedBases::ValueCommitV;
-            let token_commit_v = FixedPoint::from_inner(ecc_chip.clone(), token_commit_v);
-            token_commit_v.mul_short(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
+            let token_commit_v = ValueCommitV;
+            let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
+            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
             let rca = self.token_blind;
-            let token_commit_r = OrchardFixedBases::ValueCommitR;
+            let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let token_commit_r = FixedPoint::from_inner(ecc_chip.clone(), token_commit_r);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };
@@ -436,9 +439,9 @@ impl Circuit<pallas::Base> for SpendContract {
         )?;
 
         let sig_pub = {
-            let nullifier_k = OrchardFixedBases::NullifierK;
-            let nullifier_k = FixedPoint::from_inner(ecc_chip, nullifier_k);
-            nullifier_k.mul_base_field(layouter.namespace(|| "[x_s] Nullifier"), sig_secret)?
+            let nullifier_k = NullifierK;
+            let nullifier_k = FixedPointBaseField::from_inner(ecc_chip, nullifier_k);
+            nullifier_k.mul(layouter.namespace(|| "[x_s] Nullifier"), sig_secret)?
         };
 
         layouter.constrain_instance(

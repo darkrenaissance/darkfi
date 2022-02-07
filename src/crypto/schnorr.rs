@@ -1,12 +1,15 @@
 use std::io;
 
-use halo2_gadgets::ecc::FixedPoints;
-use pasta_curves::{arithmetic::Field, group::GroupEncoding, pallas};
+use halo2_gadgets::ecc::chip::FixedPoint;
+use pasta_curves::{
+    group::{ff::Field, GroupEncoding},
+    pallas,
+};
 use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
-        constants::{OrchardFixedBases, DRK_SCHNORR_DOMAIN},
+        constants::{NullifierK, DRK_SCHNORR_DOMAIN},
         keypair::{PublicKey, SecretKey},
         util::{hash_to_scalar, mod_r_p},
     },
@@ -31,7 +34,8 @@ pub trait SchnorrPublic {
 impl SchnorrSecret for SecretKey {
     fn sign(&self, message: &[u8]) -> Signature {
         let mask = pallas::Scalar::random(&mut OsRng);
-        let commit = OrchardFixedBases::NullifierK.generator() * mask;
+        let nfk = NullifierK;
+        let commit = nfk.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
         let response = mask + challenge * mod_r_p(self.0);
@@ -43,8 +47,8 @@ impl SchnorrSecret for SecretKey {
 impl SchnorrPublic for PublicKey {
     fn verify(&self, message: &[u8], signature: &Signature) -> bool {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
-        OrchardFixedBases::NullifierK.generator() * signature.response - self.0 * challenge ==
-            signature.commit
+        let nfk = NullifierK;
+        nfk.generator() * signature.response - self.0 * challenge == signature.commit
     }
 }
 

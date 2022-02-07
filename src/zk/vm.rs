@@ -1,14 +1,9 @@
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    plonk,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
-};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, Point,
+        FixedPoint, FixedPointBaseField, FixedPointShort, Point,
     },
-    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
+    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
@@ -17,19 +12,22 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::{
-        gen_const_array, lookup_range_check::LookupRangeCheckConfig, CellValue,
-        UtilitiesInstructions, Var,
-    },
+    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+};
+use halo2_proofs::{
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    plonk,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
 use log::debug;
-use pasta_curves::{group::Curve, pallas};
+use pasta_curves::{group::Curve, pallas, Fp};
 
 pub use super::vm_stack::{StackVar, Witness};
 use crate::{
     crypto::constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        OrchardFixedBases,
+        util::gen_const_array,
+        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
     },
     zkas::{decoder::ZkBinary, opcode::Opcode},
 };
@@ -38,12 +36,12 @@ use crate::{
 pub struct VmConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
-    ecc_config: EccConfig,
+    ecc_config: EccConfig<OrchardFixedBases>,
     merkle_cfg1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     merkle_cfg2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_cfg1: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    poseidon_config: PoseidonConfig<pallas::Base>,
+    poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
 }
 
 impl VmConfig {
@@ -77,7 +75,7 @@ impl VmConfig {
         MerkleChip::construct(self.merkle_cfg2.clone())
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
@@ -97,7 +95,7 @@ impl ZkCircuit {
 }
 
 impl UtilitiesInstructions<pallas::Base> for ZkCircuit {
-    type Var = CellValue<pallas::Base>;
+    type Var = AssignedCell<Fp, Fp>;
 }
 
 impl Circuit<pallas::Base> for ZkCircuit {
@@ -133,11 +131,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
-        meta.enable_equality(primary.into());
+        meta.enable_equality(primary);
 
         // Permutation over all advice columns
         for advice in advices.iter() {
-            meta.enable_equality((*advice).into());
+            meta.enable_equality(*advice);
         }
 
         // Poseidon requires four advice columns, while ECC incomplete addition
@@ -174,9 +172,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
         );
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure(
+        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
             meta,
-            P128Pow5T3,
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
@@ -244,10 +241,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
 
-        // Construct the Merkle chips
-        let merkle_chip_1 = config.merkle_chip_1();
-        let merkle_chip_2 = config.merkle_chip_2();
-
         // This constant one is used for short multiplication
         let one = self.load_private(
             layouter.namespace(|| "Load constant one"),
@@ -260,19 +253,19 @@ impl Circuit<pallas::Base> for ZkCircuit {
             debug!("Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
-                    let vcv = OrchardFixedBases::ValueCommitV;
-                    let vcv = FixedPoint::from_inner(ecc_chip.clone(), vcv);
-                    stack.push(StackVar::EcFixedPoint(vcv));
+                    let vcv = ValueCommitV;
+                    let vcv = FixedPointShort::from_inner(ecc_chip.clone(), vcv);
+                    stack.push(StackVar::FixedPointShort(vcv));
                 }
                 "VALUE_COMMIT_RANDOM" => {
-                    let vcr = OrchardFixedBases::ValueCommitR;
+                    let vcr = OrchardFixedBasesFull::ValueCommitR;
                     let vcr = FixedPoint::from_inner(ecc_chip.clone(), vcr);
                     stack.push(StackVar::EcFixedPoint(vcr));
                 }
                 "NULLIFIER_K" => {
-                    let nfk = OrchardFixedBases::NullifierK;
-                    let nfk = FixedPoint::from_inner(ecc_chip.clone(), nfk);
-                    stack.push(StackVar::EcFixedPoint(nfk));
+                    let nfk = NullifierK;
+                    let nfk = FixedPointBaseField::from_inner(ecc_chip.clone(), nfk);
+                    stack.push(StackVar::EcFixedPointBase(nfk));
                 }
                 _ => unimplemented!(),
             }
@@ -318,7 +311,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 Witness::MerklePath(w) => {
                     debug!("Witnessing MerklePath into circuit");
-                    let path = w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+                    let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+                        w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
                     debug!("Pushing MerklePath to stack index {}", stack.len());
                     stack.push(StackVar::MerklePath(path));
@@ -374,12 +368,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `EcMulBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                    let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
-                    let rhs: CellValue<pallas::Base> = stack[args[0]].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
 
-                    let ret = lhs.mul_base_field(layouter.namespace(|| "EcMulBase()"), rhs)?;
+                    let (ret, _) =
+                        lhs.mul(layouter.namespace(|| "EcMulBase()"), (rhs, one.clone()))?;
 
                     debug!("Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
@@ -389,14 +384,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `EcMulShort{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                    let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
-                    let rhs: CellValue<pallas::Base> = stack[args[0]].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
 
                     let (ret, _) =
-                        lhs.mul_short(layouter.namespace(|| "EcMulShort()"), (rhs, one))?;
-
+                        lhs.mul(layouter.namespace(|| "EcMulShort()"), (rhs, one.clone()))?;
                     debug!("Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
@@ -431,7 +425,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `PoseidonHash{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let mut poseidon_message: Vec<CellValue<pallas::Base>> =
+                    let mut poseidon_message: Vec<AssignedCell<Fp, Fp>> =
                         Vec::with_capacity(args.len());
 
                     for idx in args {
@@ -440,18 +434,25 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     macro_rules! poseidon_hash {
                         ($len:expr, $hasher:ident, $output:ident, $cell:ident) => {
-                            let $hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
-                                config.poseidon_chip(),
-                                layouter.namespace(|| "PoseidonHash init"),
-                                ConstantLength::<$len>,
-                            )?;
+                            // let $hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+                            // config.poseidon_chip(),
+                            // layouter.namespace(|| "PoseidonHash init"),
+                            // ConstantLength::<$len>,
+                            // )?;
+
+                            let $hasher =
+                                PoseidonHash::<_, _, P128Pow5T3, ConstantLength<$len>, 3, 2>::init(
+                                    config.poseidon_chip(),
+                                    layouter.namespace(|| "PoseidonHash init"),
+                                )?;
 
                             let $output = $hasher.hash(
                                 layouter.namespace(|| "PoseidonHash hash"),
                                 poseidon_message.try_into().unwrap(),
                             )?;
 
-                            let $cell: CellValue<pallas::Base> = $output.inner().into();
+                            //let $cell: AssignedCell<Fp, Fp> = $output.inner().into();
+                            let $cell: AssignedCell<Fp, Fp> = $output.into();
 
                             debug!("Pushing hash to stack index {}", stack.len());
                             stack.push(StackVar::Base($cell));
@@ -480,16 +481,16 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let merkle_path = stack[args[1]].clone().into();
                     let leaf = stack[args[2]].clone().into();
 
-                    let path = MerklePath {
-                        chip_1: merkle_chip_1.clone(),
-                        chip_2: merkle_chip_2.clone(),
-                        domain: OrchardHashDomains::MerkleCrh,
+                    let merkle_inputs = MerklePath::construct(
+                        config.merkle_chip_1(),
+                        config.merkle_chip_2(),
+                        OrchardHashDomains::MerkleCrh,
                         leaf_pos,
-                        path: merkle_path,
-                    };
+                        merkle_path,
+                    );
 
-                    let root =
-                        path.calculate_root(layouter.namespace(|| "CalculateMerkleRoot()"), leaf)?;
+                    let root = merkle_inputs
+                        .calculate_root(layouter.namespace(|| "CalculateMerkleRoot()"), leaf)?;
 
                     debug!("Pushing merkle root to stack index {}", stack.len());
                     stack.push(StackVar::Base(root));
@@ -499,7 +500,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let var: CellValue<pallas::Base> = stack[args[0]].clone().into();
+                    let var: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
 
                     layouter.constrain_instance(
                         var.cell(),

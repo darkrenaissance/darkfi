@@ -1,5 +1,5 @@
 pub mod address;
-pub mod arith_chip;
+//pub mod arith_chip;
 pub mod coin;
 pub mod constants;
 pub mod diffie_hellman;
@@ -10,6 +10,7 @@ pub mod mint_proof;
 pub mod note;
 pub mod nullifier;
 pub mod proof;
+//pub mod redpallas;
 pub mod schnorr;
 pub mod spend_proof;
 pub mod token_id;

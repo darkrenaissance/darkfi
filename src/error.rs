@@ -1,6 +1,6 @@
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
@@ -77,8 +77,8 @@ pub enum Error {
     MissingParams,
 
     #[cfg(feature = "crypto")]
-    #[error("PLONK error: `{0}`")]
-    PlonkError(String),
+    #[error(transparent)]
+    PlonkError(#[from] halo2_proofs::plonk::Error),
 
     #[cfg(feature = "crypto")]
     #[error("Unable to decrypt mint note")]
@@ -262,13 +262,6 @@ impl From<log::SetLoggerError> for Error {
 impl From<tungstenite::Error> for Error {
     fn from(err: tungstenite::Error) -> Error {
         Error::TungsteniteError(err.to_string())
-    }
-}
-
-#[cfg(feature = "crypto")]
-impl From<halo2::plonk::Error> for Error {
-    fn from(err: halo2::plonk::Error) -> Error {
-        Error::PlonkError(format!("{:?}", err))
     }
 }
 

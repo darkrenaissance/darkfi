@@ -4,7 +4,6 @@ use halo2_gadgets::primitives::sinsemilla::HashDomain;
 use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
 use pasta_curves::{
-    arithmetic::FieldExt,
     group::ff::{PrimeField, PrimeFieldBits},
     pallas,
 };
@@ -28,7 +27,7 @@ use crate::{
 };
 
 lazy_static! {
-    static ref UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from_u64(2);
+    static ref UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from(2);
     static ref EMPTY_ROOTS: Vec<MerkleNode> = {
         iter::empty()
             .chain(Some(MerkleNode::empty_leaf()))
@@ -85,7 +84,7 @@ impl std::cmp::PartialEq for MerkleNode {
 
 impl std::hash::Hash for MerkleNode {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        <Option<pallas::Base>>::from(self.0).map(|b| b.to_bytes()).hash(state)
+        <Option<pallas::Base>>::from(self.0).map(|b| b.to_repr()).hash(state)
     }
 }
 
