@@ -1,12 +1,10 @@
 //! Sinsemilla generators
-use super::OrchardFixedBases;
-//use crate::spec::i2lebsp;
-
+use super::{OrchardFixedBases, OrchardFixedBasesFull};
+use crate::crypto::util::i2lebsp;
 use halo2_gadgets::sinsemilla::{CommitDomains, HashDomains};
-use pasta_curves::{
-    arithmetic::{CurveAffine, FieldExt},
-    pallas,
-};
+
+use group::ff::PrimeField;
+use pasta_curves::{arithmetic::CurveAffine, pallas};
 
 /// Number of bits of each message piece in $\mathsf{SinsemillaHashToPoint}$
 pub const K: usize = 10;
@@ -21,18 +19,11 @@ pub const INV_TWO_POW_K: [u8; 32] = [
 /// of Pallas.
 pub const C: usize = 253;
 
+/// $\ell^\mathsf{Orchard}_\mathsf{Merkle}$
+pub(crate) const L_ORCHARD_MERKLE: usize = 255;
+
 /// SWU hash-to-curve personalization for the Merkle CRH generator
 pub const MERKLE_CRH_PERSONALIZATION: &str = "z.cash:Orchard-MerkleCRH";
-
-// Sinsemilla Q generators
-
-/// SWU hash-to-curve personalization for Sinsemilla $Q$ generators.
-pub const Q_PERSONALIZATION: &str = "z.cash:SinsemillaQ";
-
-// Sinsemilla S generators
-
-/// SWU hash-to-curve personalization for Sinsemilla $S$ generators.
-pub const S_PERSONALIZATION: &str = "z.cash:SinsemillaS";
 
 /// Generator used in SinsemillaHashToPoint for note commitment
 pub const Q_NOTE_COMMITMENT_M_GENERATOR: ([u8; 32], [u8; 32]) = (
@@ -70,20 +61,14 @@ pub const Q_MERKLE_CRH: ([u8; 32], [u8; 32]) = (
     ],
 );
 
-pub fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
-    assert!(NUM_BITS <= 64);
-    super::util::gen_const_array(|mask: usize| (int & (1 << mask)) != 0)
-}
-
-#[allow(dead_code)]
-fn lebs2ip_k(bits: &[bool]) -> u32 {
+pub(crate) fn lebs2ip_k(bits: &[bool]) -> u32 {
     assert!(bits.len() == K);
     bits.iter().enumerate().fold(0u32, |acc, (i, b)| acc + if *b { 1 << i } else { 0 })
 }
 
 /// The sequence of K bits in little-endian order representing an integer
 /// up to `2^K` - 1.
-pub fn i2lebsp_k(int: usize) -> [bool; K] {
+pub(crate) fn i2lebsp_k(int: usize) -> [bool; K] {
     assert!(int < (1 << K));
     i2lebsp(int as u64)
 }
@@ -100,18 +85,18 @@ impl HashDomains<pallas::Affine> for OrchardHashDomains {
     fn Q(&self) -> pallas::Affine {
         match self {
             OrchardHashDomains::CommitIvk => pallas::Affine::from_xy(
-                pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.0).unwrap(),
-                pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.1).unwrap(),
+                pallas::Base::from_repr(Q_COMMIT_IVK_M_GENERATOR.0).unwrap(),
+                pallas::Base::from_repr(Q_COMMIT_IVK_M_GENERATOR.1).unwrap(),
             )
             .unwrap(),
             OrchardHashDomains::NoteCommit => pallas::Affine::from_xy(
-                pallas::Base::from_bytes(&Q_NOTE_COMMITMENT_M_GENERATOR.0).unwrap(),
-                pallas::Base::from_bytes(&Q_NOTE_COMMITMENT_M_GENERATOR.1).unwrap(),
+                pallas::Base::from_repr(Q_NOTE_COMMITMENT_M_GENERATOR.0).unwrap(),
+                pallas::Base::from_repr(Q_NOTE_COMMITMENT_M_GENERATOR.1).unwrap(),
             )
             .unwrap(),
             OrchardHashDomains::MerkleCrh => pallas::Affine::from_xy(
-                pallas::Base::from_bytes(&Q_MERKLE_CRH.0).unwrap(),
-                pallas::Base::from_bytes(&Q_MERKLE_CRH.1).unwrap(),
+                pallas::Base::from_repr(Q_MERKLE_CRH.0).unwrap(),
+                pallas::Base::from_repr(Q_MERKLE_CRH.1).unwrap(),
             )
             .unwrap(),
         }
@@ -125,10 +110,10 @@ pub enum OrchardCommitDomains {
 }
 
 impl CommitDomains<pallas::Affine, OrchardFixedBases, OrchardHashDomains> for OrchardCommitDomains {
-    fn r(&self) -> OrchardFixedBases {
+    fn r(&self) -> OrchardFixedBasesFull {
         match self {
-            Self::NoteCommit => OrchardFixedBases::NoteCommitR,
-            Self::CommitIvk => OrchardFixedBases::CommitIvkR,
+            Self::NoteCommit => OrchardFixedBasesFull::NoteCommitR,
+            Self::CommitIvk => OrchardFixedBasesFull::CommitIvkR,
         }
     }
 
@@ -143,23 +128,19 @@ impl CommitDomains<pallas::Affine, OrchardFixedBases, OrchardHashDomains> for Or
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::constants::{
+    use crate::constants::{
         fixed_bases::{COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION},
         sinsemilla::MERKLE_CRH_PERSONALIZATION,
     };
+    use group::{ff::PrimeField, Curve};
     use halo2_gadgets::primitives::sinsemilla::{CommitDomain, HashDomain};
-
-    use pasta_curves::{
-        arithmetic::{CurveAffine, FieldExt},
-        group::{ff::PrimeField, Curve},
-        pallas,
-    };
+    use halo2_proofs::{arithmetic::CurveAffine, pasta::pallas};
     use rand::{self, rngs::OsRng, Rng};
 
     #[test]
     // Nodes in the Merkle tree are Pallas base field elements.
     fn l_orchard_merkle() {
-        assert_eq!(255, pallas::Base::NUM_BITS as usize);
+        assert_eq!(super::L_ORCHARD_MERKLE, pallas::Base::NUM_BITS as usize);
     }
 
     #[test]
@@ -198,14 +179,8 @@ mod tests {
         let point = domain.Q();
         let coords = point.to_affine().coordinates().unwrap();
 
-        assert_eq!(
-            *coords.x(),
-            pallas::Base::from_bytes(&Q_NOTE_COMMITMENT_M_GENERATOR.0).unwrap()
-        );
-        assert_eq!(
-            *coords.y(),
-            pallas::Base::from_bytes(&Q_NOTE_COMMITMENT_M_GENERATOR.1).unwrap()
-        );
+        assert_eq!(*coords.x(), pallas::Base::from_repr(Q_NOTE_COMMITMENT_M_GENERATOR.0).unwrap());
+        assert_eq!(*coords.y(), pallas::Base::from_repr(Q_NOTE_COMMITMENT_M_GENERATOR.1).unwrap());
     }
 
     #[test]
@@ -214,8 +189,8 @@ mod tests {
         let point = domain.Q();
         let coords = point.to_affine().coordinates().unwrap();
 
-        assert_eq!(*coords.x(), pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.0).unwrap());
-        assert_eq!(*coords.y(), pallas::Base::from_bytes(&Q_COMMIT_IVK_M_GENERATOR.1).unwrap());
+        assert_eq!(*coords.x(), pallas::Base::from_repr(Q_COMMIT_IVK_M_GENERATOR.0).unwrap());
+        assert_eq!(*coords.y(), pallas::Base::from_repr(Q_COMMIT_IVK_M_GENERATOR.1).unwrap());
     }
 
     #[test]
@@ -224,14 +199,14 @@ mod tests {
         let point = domain.Q();
         let coords = point.to_affine().coordinates().unwrap();
 
-        assert_eq!(*coords.x(), pallas::Base::from_bytes(&Q_MERKLE_CRH.0).unwrap());
-        assert_eq!(*coords.y(), pallas::Base::from_bytes(&Q_MERKLE_CRH.1).unwrap());
+        assert_eq!(*coords.x(), pallas::Base::from_repr(Q_MERKLE_CRH.0).unwrap());
+        assert_eq!(*coords.y(), pallas::Base::from_repr(Q_MERKLE_CRH.1).unwrap());
     }
 
     #[test]
     fn inv_two_pow_k() {
-        let two_pow_k = pallas::Base::from_u64(1u64 << K);
-        let inv_two_pow_k = pallas::Base::from_bytes(&INV_TWO_POW_K).unwrap();
+        let two_pow_k = pallas::Base::from(1u64 << K);
+        let inv_two_pow_k = pallas::Base::from_repr(INV_TWO_POW_K).unwrap();
 
         assert_eq!(two_pow_k * inv_two_pow_k, pallas::Base::one());
     }
