@@ -79,48 +79,43 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let infos = vec![
-        NodeInfo {
-            id: "0385048034sodisofjhosd1111q3434".to_string(),
-            connections: 10,
-            is_active: true,
-            last_message: "hey how are you?".to_string(),
-        },
-        NodeInfo {
-            id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
-            connections: 5,
-            is_active: false,
-            last_message: "lmao".to_string(),
-        },
-        NodeInfo {
-            id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
-            connections: 7,
-            is_active: true,
-            last_message: "gm".to_string(),
-        },
-        NodeInfo {
-            id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
-            connections: 2,
-            is_active: true,
-            last_message: "hihi".to_string(),
-        },
-        NodeInfo {
-            id: "09850249352asdjapsdikalskasdkas".to_string(),
-            connections: 10,
-            is_active: true,
-            last_message: "wtf".to_string(),
-        },
-    ];
+    let infos = vec![NodeInfo::new()];
+    //let infos = vec![
+    //    NodeInfo {
+    //        id: "0385048034sodisofjhosd1111q3434".to_string(),
+    //        connections: 10,
+    //        is_active: true,
+    //        last_message: "hey how are you?".to_string(),
+    //    },
+    //    NodeInfo {
+    //        id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
+    //        connections: 5,
+    //        is_active: false,
+    //        last_message: "lmao".to_string(),
+    //    },
+    //    NodeInfo {
+    //        id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
+    //        connections: 7,
+    //        is_active: true,
+    //        last_message: "gm".to_string(),
+    //    },
+    //    NodeInfo {
+    //        id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
+    //        connections: 2,
+    //        is_active: true,
+    //        last_message: "hihi".to_string(),
+    //    },
+    //    NodeInfo {
+    //        id: "09850249352asdjapsdikalskasdkas".to_string(),
+    //        connections: 10,
+    //        is_active: true,
+    //        last_message: "wtf".to_string(),
+    //    },
+    //];
 
     let info_list = InfoList::new(infos.clone());
 
-    let ids = vec![
-        infos[0].id.clone(),
-        infos[1].id.clone(),
-        infos[2].id.clone(),
-        infos[3].id.clone(),
-        infos[4].id.clone(),
-    ];
+    let ids = vec![String::new()];
 
     let id_list = IdList::new(ids);
 
@@ -156,25 +151,33 @@ async fn run_rpc(ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
     Ok(())
 }
 
-async fn poll(client: Map, _model: Arc<Model>) -> Result<()> {
+async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
             let nodes = reply.as_object().unwrap().get("nodes").unwrap();
 
+            // todo: generalize this
             let node1 = &nodes[0];
-            let node2 = &nodes[1];
-            let node3 = &nodes[2];
+            //let node2 = &nodes[1];
+            //let node3 = &nodes[2];
 
-            let _infos = vec![NodeInfo {
+            // TODO: error handling
+            let infos = vec![NodeInfo {
                 id: node1["id"].to_string(),
                 connections: node1["connections"].as_u64().unwrap() as usize,
-                is_active: node2["is_active"].as_bool().unwrap(),
-                last_message: node3["message"].to_string(),
+                is_active: node1["is_active"].as_bool().unwrap(),
+                last_message: node1["message"].to_string(),
             }];
 
-            //model.lock().await.update(infos).await;
+            //model.update(infos).await;
+
+            for node in infos {
+                model.id_list.node_id.lock().await.push(node.id);
+                //self.info_list.infos.lock().await.push(node.info);
+                //self.id_list.
+            }
         } else {
             // TODO: error handling
             println!("Reply is an error");

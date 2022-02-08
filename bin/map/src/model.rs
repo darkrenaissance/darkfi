@@ -1,4 +1,5 @@
 use async_std::sync::Mutex;
+use darkfi::error::{Error, Result};
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -11,21 +12,25 @@ impl Model {
         Model { id_list, info_list }
     }
 
-    pub async fn update(self, node_vec: Vec<NodeInfo>) -> Model {
-        let ids = vec![node_vec[0].id.clone()];
-
-        for id in ids {
-            self.id_list.node_id.lock().await.push(id);
+    pub async fn update(self, node_vec: Vec<NodeInfo>) -> Result<()> {
+        for node in node_vec {
+            self.id_list.node_id.lock().await.push(node.id);
+            //self.info_list.infos.lock().await.push(node.info);
+            //self.id_list.
         }
+        //let ids = vec![node_vec[0].id.clone()];
 
-        let id_list = self.id_list;
+        //for id in ids {
+        //    self.id_list.node_id.lock().await.push(id);
+        //}
 
-        for info in node_vec {
-            self.info_list.infos.lock().await.push(info);
-        }
-        let info_list = self.info_list;
+        //let id_list = self.id_list;
 
-        Model { id_list, info_list }
+        //for info in node_vec {
+        //    self.info_list.infos.lock().await.push(info);
+        //}
+        //let info_list = self.info_list;
+        Ok(())
     }
 }
 
@@ -56,7 +61,7 @@ impl InfoList {
     }
 }
 
-pub type NodeId = u32;
+//pub type NodeId = u32;
 
 #[derive(Clone)]
 pub struct NodeInfo {
