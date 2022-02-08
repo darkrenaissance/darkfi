@@ -355,6 +355,24 @@ impl Parser {
                     });
                 }
 
+                "EcFixedPointShort" => {
+                    ret.push(Constant {
+                        name: k.to_string(),
+                        typ: Type::EcFixedPointShort,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                "EcFixedPointBase" => {
+                    ret.push(Constant {
+                        name: k.to_string(),
+                        typ: Type::EcFixedPointBase,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
                 x => {
                     self.error.emit(
                         format!("`{}` is an illegal constant type", x),

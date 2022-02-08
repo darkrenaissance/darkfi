@@ -6,7 +6,7 @@ use halo2_gadgets::primitives::{
 };
 use incrementalmerkletree::Hashable;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
 use super::{
@@ -158,7 +158,6 @@ pub fn create_spend_proof(
         signature_secret,
     );
 
-    //let merkle_path: Vec<MerkleNode> = merkle_path.iter().map(|node| node.0).collect();
     let leaf_position: u64 = leaf_position.into();
 
     let c = SpendContract {

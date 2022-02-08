@@ -255,7 +255,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = ValueCommitV;
                     let vcv = FixedPointShort::from_inner(ecc_chip.clone(), vcv);
-                    stack.push(StackVar::FixedPointShort(vcv));
+                    stack.push(StackVar::EcFixedPointShort(vcv));
                 }
                 "VALUE_COMMIT_RANDOM" => {
                     let vcr = OrchardFixedBasesFull::ValueCommitR;
@@ -368,13 +368,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `EcMulBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
+                    let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
                     let rhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
 
-                    let (ret, _) =
-                        lhs.mul(layouter.namespace(|| "EcMulBase()"), (rhs, one.clone()))?;
+                    let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
                     debug!("Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));

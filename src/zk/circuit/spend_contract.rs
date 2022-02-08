@@ -245,10 +245,6 @@ impl Circuit<pallas::Base> for SpendContract {
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
 
-        // Construct the merkle chips
-        let merkle_chip_1 = config.merkle_chip_1();
-        let merkle_chip_2 = config.merkle_chip_2();
-
         // =========
         // Nullifier
         // =========

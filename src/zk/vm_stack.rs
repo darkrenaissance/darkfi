@@ -24,13 +24,13 @@ pub enum Witness {
 pub enum StackVar {
     EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
+    EcFixedPointShort(FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPointBase(FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>),
     Base(AssignedCell<pallas::Base, pallas::Base>),
     Scalar(Option<pallas::Scalar>),
     MerklePath(Option<[pallas::Base; 32]>),
     Uint32(Option<u32>),
     Uint64(Option<u64>),
-    FixedPointShort(FixedPointShort<EpAffine, EccChip<OrchardFixedBases>>),
 }
 
 impl From<StackVar> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
@@ -90,7 +90,16 @@ impl From<StackVar> for std::option::Option<[pallas::Base; 32]> {
 impl From<StackVar> for FixedPointShort<EpAffine, EccChip<OrchardFixedBases>> {
     fn from(value: StackVar) -> Self {
         match value {
-            StackVar::FixedPointShort(v) => v,
+            StackVar::EcFixedPointShort(v) => v,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl From<StackVar> for FixedPointBaseField<EpAffine, EccChip<OrchardFixedBases>> {
+    fn from(value: StackVar) -> Self {
+        match value {
+            StackVar::EcFixedPointBase(v) => v,
             _ => unimplemented!(),
         }
     }

@@ -19,6 +19,7 @@ pub const INV_TWO_POW_K: [u8; 32] = [
 /// of Pallas.
 pub const C: usize = 253;
 
+#[allow(dead_code)]
 /// $\ell^\mathsf{Orchard}_\mathsf{Merkle}$
 pub(crate) const L_ORCHARD_MERKLE: usize = 255;
 
@@ -61,6 +62,7 @@ pub const Q_MERKLE_CRH: ([u8; 32], [u8; 32]) = (
     ],
 );
 
+#[allow(dead_code)]
 pub(crate) fn lebs2ip_k(bits: &[bool]) -> u32 {
     assert!(bits.len() == K);
     bits.iter().enumerate().fold(0u32, |acc, (i, b)| acc + if *b { 1 << i } else { 0 })

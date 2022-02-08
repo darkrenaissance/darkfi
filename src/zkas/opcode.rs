@@ -6,15 +6,19 @@ use super::types::Type;
 pub enum Opcode {
     /// Elliptic curve addition
     EcAdd = 0x00,
+
     /// Elliptic curve multiplication
     EcMul = 0x01,
+
     /// Elliptic curve multiplication with a Base field element
     EcMulBase = 0x02,
+
     /// Elliptic curve multiplication with a u64 wrapped in a Scalar element
     EcMulShort = 0x03,
 
     /// Get the x coordinate of an elliptic curve point
     EcGetX = 0x08,
+
     /// Get the y coordinate of an elliptic curve point
     EcGetY = 0x09,
 
@@ -39,8 +43,8 @@ impl Opcode {
             // (return_type, opcode_arg_types)
             Opcode::EcAdd => (vec![Type::EcPoint], vec![Type::EcPoint, Type::EcPoint]),
             Opcode::EcMul => (vec![Type::EcPoint], vec![Type::Scalar, Type::EcFixedPoint]),
-            Opcode::EcMulBase => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPoint]),
-            Opcode::EcMulShort => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPoint]),
+            Opcode::EcMulBase => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPointBase]),
+            Opcode::EcMulShort => (vec![Type::EcPoint], vec![Type::Base, Type::EcFixedPointShort]),
             Opcode::EcGetX => (vec![Type::Base], vec![Type::EcPoint]),
             Opcode::EcGetY => (vec![Type::Base], vec![Type::EcPoint]),
             Opcode::PoseidonHash => (vec![Type::Base], vec![Type::BaseArray]),

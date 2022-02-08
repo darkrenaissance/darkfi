@@ -1,7 +1,7 @@
 constant "Burn" {
-	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
-	EcFixedPoint NULLIFIER_K,
+	EcFixedPointBase NULLIFIER_K,
 }
 
 contract "Burn" {
