@@ -67,15 +67,17 @@ tungstenite = {version = "0.16.0", optional = true}
 async-tungstenite = {version = "0.16.1", optional = true}
 
 # Crypto
+bitvec = {version = "1.0.0", optional = true}
 rand = {version = "0.8.4", optional = true}
 sha2 = {version = "0.10.1", optional = true}
 group = {version = "0.11.0", optional = true}
 arrayvec = {version = "0.7.2", optional = true}
 blake2b_simd = {version = "1.0.0", optional = true}
-pasta_curves = {version = "0.2.1", optional = true}
+pasta_curves = {version = "0.3.0", optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 incrementalmerkletree = {version = "0.2.0", optional = true}
-halo2 = {version = "=0.1.0-beta.1", features = ["dev-graph", "gadget-traces", "sanity-checks"], optional = true}
+halo2_proofs = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "gadget-traces", "sanity-checks"], optional = true}
+halo2_gadgets = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "test-dependencies"], optional = true}
 
 # Wallet management
 sqlx = {version = "0.5.10", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
@@ -100,12 +102,6 @@ default-features = false
 features = ["zstd"]
 optional = true
 
-[dependencies.halo2_gadgets]
-# TODO: Use upstream when published
-git = "https://github.com/parazyd/halo2_gadgets.git"
-rev = "b45c527276bb2309f3b256eb5f45ccdcc5bd8c0f"
-features = ["dev-graph", "test-dependencies"]
-optional = true
 
 [features]
 async-runtime = [
@@ -178,11 +174,12 @@ net = [
 ]
 
 crypto = [
+    "bitvec",
     "rand",
     "pasta_curves",
     "blake2b_simd",
     "incrementalmerkletree",
-    "halo2",
+    "halo2_proofs",
     "halo2_gadgets",
     "subtle",
     "lazy_static",
@@ -252,4 +249,9 @@ required-features = ["cli", "crypto", "zkas"]
 [[example]]
 name = "burn"
 path = "proof/burn.rs"
+required-features = ["cli", "crypto", "zkas"]
+
+[[example]]
+name = "dao"
+path = "proof/dao.rs"
 required-features = ["cli", "crypto", "zkas"]

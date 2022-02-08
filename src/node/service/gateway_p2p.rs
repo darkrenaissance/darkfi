@@ -2,7 +2,7 @@ use async_std::sync::{Arc, Mutex};
 use std::io;
 
 use async_executor::Executor;
-use log::*;
+use log::debug;
 
 use crate::{
     blockchain::{rocks::columns, RocksColumn, Slab, SlabStore},
@@ -22,11 +22,11 @@ pub struct Gateway {
 }
 
 impl Gateway {
-    pub fn new(_settings: Settings, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
+    pub async fn new(_settings: Settings, rocks: RocksColumn<columns::Slabs>) -> Result<Self> {
         let slabstore = SlabStore::new(rocks)?;
         let settings = Settings::default();
 
-        let p2p = P2p::new(settings);
+        let p2p = P2p::new(settings).await;
         let last_indexes = Arc::new(Mutex::new(vec![0; 10]));
         Ok(Self { p2p, slabstore, _last_indexes: last_indexes })
     }

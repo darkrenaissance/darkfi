@@ -1,9 +1,9 @@
-use halo2::{
+use halo2_gadgets::utilities::Var;
+use halo2_proofs::{
     circuit::{Chip, Layouter},
     plonk::{Advice, Column, ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-use halo2_gadgets::utilities::{CellValue, Var};
 use pasta_curves::pallas;
 
 type Variable = CellValue<pallas::Base>;

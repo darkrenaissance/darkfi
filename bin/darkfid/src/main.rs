@@ -8,12 +8,15 @@ use easy_parallel::Parallel;
 use log::{debug, info};
 use num_bigint::BigUint;
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{cli_config::spawn_config, CliDarkfid, Config, DarkfidConfig},
+    cli::{
+        cli_config::{log_config, spawn_config},
+        CliDarkfid, Config, DarkfidConfig,
+    },
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -815,20 +818,8 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let mut verbosity_level = 0;
-    verbosity_level += matches.occurrences_of("verbose");
-    let loglevel = match verbosity_level {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    TermLogger::init(
-        loglevel,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    let (lvl, conf) = log_config(matches)?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;
 

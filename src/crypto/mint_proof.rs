@@ -1,15 +1,12 @@
 use std::{io, time::Instant};
 
-use halo2_gadgets::{
-    primitives,
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
+use halo2_gadgets::primitives::{
+    poseidon,
+    poseidon::{ConstantLength, P128Pow5T3},
 };
 use log::debug;
-use pasta_curves::{
-    arithmetic::{CurveAffine, FieldExt},
-    group::Curve,
-    pallas,
-};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
@@ -46,9 +43,9 @@ impl MintRevealedValues {
 
         let coords = public_key.0.to_affine().coordinates().unwrap();
         let messages =
-            [*coords.x(), *coords.y(), DrkValue::from_u64(value), token_id, serial, coin_blind];
+            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
 
-        let coin = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages);
+        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages);
 
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
@@ -115,7 +112,7 @@ pub fn create_mint_proof(
     let c = MintContract {
         pub_x: Some(*coords.x()),
         pub_y: Some(*coords.y()),
-        value: Some(DrkValue::from_u64(value)),
+        value: Some(DrkValue::from(value)),
         token: Some(token_id),
         serial: Some(serial),
         coin_blind: Some(coin_blind),
@@ -125,7 +122,7 @@ pub fn create_mint_proof(
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    let proof = Proof::create(pk, &[c], &public_inputs)?;
+    let proof = Proof::create(pk, &[c], &public_inputs, &mut OsRng)?;
     debug!("Prove: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))

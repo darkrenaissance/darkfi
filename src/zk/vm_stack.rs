@@ -1,9 +1,7 @@
 //! VM stack type abstractions
-use halo2_gadgets::{
-    ecc::{chip::EccChip, FixedPoint, Point},
-    utilities::CellValue,
-};
-use pasta_curves::pallas;
+use halo2_gadgets::ecc::{chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, Point};
+use halo2_proofs::circuit::AssignedCell;
+use pasta_curves::{pallas, EpAffine};
 
 use crate::crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode};
 
@@ -26,11 +24,13 @@ pub enum Witness {
 pub enum StackVar {
     EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
-    Base(CellValue<pallas::Base>),
+    EcFixedPointBase(FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>),
+    Base(AssignedCell<pallas::Base, pallas::Base>),
     Scalar(Option<pallas::Scalar>),
     MerklePath(Option<[pallas::Base; 32]>),
     Uint32(Option<u32>),
     Uint64(Option<u64>),
+    FixedPointShort(FixedPointShort<EpAffine, EccChip<OrchardFixedBases>>),
 }
 
 impl From<StackVar> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
@@ -60,7 +60,7 @@ impl From<StackVar> for std::option::Option<pallas::Scalar> {
     }
 }
 
-impl From<StackVar> for CellValue<pallas::Base> {
+impl From<StackVar> for AssignedCell<pallas::Base, pallas::Base> {
     fn from(value: StackVar) -> Self {
         match value {
             StackVar::Base(v) => v,
@@ -82,6 +82,15 @@ impl From<StackVar> for std::option::Option<[pallas::Base; 32]> {
     fn from(value: StackVar) -> Self {
         match value {
             StackVar::MerklePath(v) => v,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl From<StackVar> for FixedPointShort<EpAffine, EccChip<OrchardFixedBases>> {
+    fn from(value: StackVar) -> Self {
+        match value {
+            StackVar::FixedPointShort(v) => v,
             _ => unimplemented!(),
         }
     }

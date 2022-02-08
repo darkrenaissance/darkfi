@@ -3,6 +3,7 @@ extern crate clap;
 use async_executor::Executor;
 use async_std::io::BufReader;
 use async_trait::async_trait;
+use clap::{ArgMatches, IntoApp};
 use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
@@ -14,6 +15,7 @@ use std::{
 };
 
 use darkfi::{
+    cli::{cli_config::log_config, cli_parser::CliIrcd},
     net,
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
@@ -218,12 +220,13 @@ impl JsonRpcInterface {
 }
 
 fn main() -> Result<()> {
-    TermLogger::init(
-        LevelFilter::Debug,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    let matches = CliIrcd::into_app().get_matches();
+    let conf: simplelog::Config;
+    let lvl: LevelFilter;
+
+    (lvl, conf) = log_config(matches)?;
+
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let options = ProgramOptions::load()?;
 
