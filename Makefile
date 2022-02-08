@@ -39,13 +39,14 @@ test: test-vm test-tx
 test-tx:
 	$(CARGO) run --release --features=node,zkas --example tx
 
-VM_SRC = proof/mint.zk proof/burn.zk
+VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk
 VM_BIN = $(VM_SRC:=.bin)
 
 $(VM_BIN): zkas $(VM_SRC)
 	./zkas $(basename $@) -o $@
 
 test-vm: $(VM_BIN)
+	$(CARGO) run --release --features=cli,crypto,zkas --example arithmetic
 	$(CARGO) run --release --features=cli,crypto,zkas --example mint
 	$(CARGO) run --release --features=cli,crypto,zkas --example burn
 

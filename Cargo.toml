@@ -241,6 +241,13 @@ name = "tree"
 path = "example/tree.rs"
 required-features = ["crypto"]
 
+# ZK VM Proof examples
+
+[[example]]
+name = "arithmetic"
+path = "proof/arithmetic.rs"
+required-features = ["cli", "crypto", "zkas"]
+
 [[example]]
 name = "mint"
 path = "proof/mint.rs"
