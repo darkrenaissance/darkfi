@@ -15,8 +15,8 @@ use halo2_gadgets::primitives::{
 };
 use log::info;
 use pasta_curves::{
-    arithmetic::{CurveAffine, Field},
-    group::Curve,
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
 
     // Create the public inputs
     let msgs = [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
-    let coin = poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(msgs);
+    let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msgs);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
 
     info!(target: "PROVER", "Building proving key and creating the zero-knowledge proof");
     let proving_key = ProvingKey::build(11, &circuit);
-    let proof = Proof::create(&proving_key, &[circuit], &public_inputs)?;
+    let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     // ========
     // Verifier
