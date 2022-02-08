@@ -3,11 +3,11 @@ extern crate clap;
 use async_executor::Executor;
 use async_std::io::BufReader;
 use async_trait::async_trait;
-use clap::{ArgMatches, IntoApp};
+use clap::IntoApp;
 use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::Async;
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
@@ -21,7 +21,6 @@ use darkfi::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::expand_path,
     Error, Result,
 };
 
@@ -121,9 +120,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         socket_addr: options.rpc_listen_addr,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
-        // TODO: cleanup
-        identity_path: expand_path("../..")?,
-        identity_pass: "test".to_string(),
+        identity_path: Default::default(),
+        identity_pass: Default::default(),
     };
 
     let seen_privmsg_ids = SeenPrivMsgIds::new();
@@ -247,10 +245,8 @@ impl JsonRpcInterface {
 
 fn main() -> Result<()> {
     let matches = CliIrcd::into_app().get_matches();
-    let conf: simplelog::Config;
-    let lvl: LevelFilter;
 
-    (lvl, conf) = log_config(matches)?;
+    let (lvl, conf) = log_config(matches)?;
 
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
