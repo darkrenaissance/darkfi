@@ -28,6 +28,12 @@ pub enum Opcode {
     /// Calculate merkle root given given a position, Merkle path, and an element
     CalculateMerkleRoot = 0x20,
 
+    /// Base field element addition
+    BaseAdd = 0x30,
+
+    /// Base field element multiplication
+    BaseMul = 0x31,
+
     /// Constrain a Base field element to a circuit's public input
     ConstrainInstance = 0xf0,
 
@@ -51,6 +57,8 @@ impl Opcode {
             Opcode::CalculateMerkleRoot => {
                 (vec![Type::Base], vec![Type::Uint32, Type::MerklePath, Type::Base])
             }
+            Opcode::BaseAdd => (vec![Type::Base], vec![Type::Base, Type::Base]),
+            Opcode::BaseMul => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::ConstrainInstance => (vec![], vec![Type::Base]),
             Opcode::Noop => (vec![], vec![]),
         }
@@ -66,6 +74,8 @@ impl Opcode {
             0x09 => Self::EcGetY,
             0x10 => Self::PoseidonHash,
             0x20 => Self::CalculateMerkleRoot,
+            0x30 => Self::BaseAdd,
+            0x31 => Self::BaseMul,
             0xf0 => Self::ConstrainInstance,
             _ => unimplemented!(),
         }

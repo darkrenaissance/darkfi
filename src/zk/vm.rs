@@ -22,6 +22,8 @@ use halo2_proofs::{
 use log::debug;
 use pasta_curves::{group::Curve, pallas, Fp};
 
+use super::arith_chip::{ArithmeticChip, ArithmeticChipConfig};
+
 pub use super::vm_stack::{StackVar, Witness};
 use crate::{
     crypto::constants::{
@@ -42,6 +44,7 @@ pub struct VmConfig {
     sinsemilla_cfg1: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
+    arith_config: ArithmeticChipConfig,
 }
 
 impl VmConfig {
@@ -77,6 +80,10 @@ impl VmConfig {
 
     fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
+    }
+
+    fn arithmetic_chip(&self) -> ArithmeticChip {
+        ArithmeticChip::construct(self.arith_config.clone())
     }
 }
 
@@ -180,6 +187,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
             rc_b,
         );
 
+        // Configuration for the Arithmetic chip
+        let arith_config = ArithmeticChip::configure(meta);
+
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.
         // Since the Sinsemilla config uses only 5 advice columns,
@@ -219,6 +229,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             sinsemilla_cfg1,
             _sinsemilla_cfg2,
             poseidon_config,
+            arith_config,
         }
     }
 
@@ -240,6 +251,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
+
+        // Construct the Arithmetic chip.
+        let arith_chip = config.arithmetic_chip();
 
         // This constant one is used for short multiplication
         let one = self.load_private(
@@ -493,6 +507,32 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     debug!("Pushing merkle root to stack index {}", stack.len());
                     stack.push(StackVar::Base(root));
+                }
+
+                Opcode::BaseAdd => {
+                    debug!("Executing `BaseAdd{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs = stack[args[0]].clone().into();
+                    let rhs = stack[args[1]].clone().into();
+
+                    let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
+
+                    debug!("Pushing sum to stack index {}", stack.len());
+                    stack.push(StackVar::Base(sum));
+                }
+
+                Opcode::BaseMul => {
+                    debug!("Executing `BaseMul{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs = stack[args[0]].clone().into();
+                    let rhs = stack[args[1]].clone().into();
+
+                    let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
+
+                    debug!("Pushing product to stack index {}", stack.len());
+                    stack.push(StackVar::Base(product));
                 }
 
                 Opcode::ConstrainInstance => {
