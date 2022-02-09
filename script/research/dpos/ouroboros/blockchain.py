@@ -1,4 +1,4 @@
-from logger import Logger
+from ouroboros.logger import Logger
 '''
 Non-forkable Blockchain for simplicity
 #TODO consider forkable property

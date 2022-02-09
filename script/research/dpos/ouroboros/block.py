@@ -1,5 +1,5 @@
 import json
-from utils import encode_genesis_data, decode_gensis_data, state_hash
+from ouroboros.utils import encode_genesis_data, decode_gensis_data, state_hash
 
 '''
 single block B_i for slot i in the system live time L,
@@ -41,9 +41,6 @@ class Block(object):
             'sl': self.sl}
         return json.encoder(d)
 
-    @property
-    def state(self):
-        return self.st
     
     @property
     def data(self):
@@ -68,7 +65,7 @@ class GensisBlock(Block):
         self.stakeholders = data['stakeholders']
         self.seed = data['seed']
         data = encode_genesis_data(self.stakeholders, self.seed)
-        super.__init__(previous_block, data, slot_uid, True)
+        Block.__init__(self, previous_block, data, slot_uid, True)
     '''
     @return: the number of participating stakeholders in the blockchain
     '''
@@ -88,4 +85,4 @@ is an empty Block
 '''
 class EmptyBlock(Block):
     def __init__(self):
-        super.__init__(None, '', -1, False)
+        Block.__init__(self, '', -1, False)

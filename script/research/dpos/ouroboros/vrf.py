@@ -1,8 +1,8 @@
-from streamlet.logger import Logger
+from ouroboros.logger import Logger
 import random as rnd
 from  tate_bilinear_pairing import eta, ecc
 from ouroboros.utils import inverse_of
-from utils import vrf_hash
+from ouroboros.utils import vrf_hash
 eta.init(369)
 
 '''
@@ -14,7 +14,8 @@ def generate_vrf_keys(sk_seed):
         generate pk/sk
     return: list of pk (public key), sk(secret key), base(field base)
     '''
-    sk = vrf_hash(sk_seed)
+    #sk = vrf_hash(sk_seed)
+    sk=2
     base = ecc.gen()
     pk = ecc.scalar_mult(sk, base)
     return (pk, sk, base)

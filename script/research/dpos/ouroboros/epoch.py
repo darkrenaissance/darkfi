@@ -1,4 +1,4 @@
-from utils import state_hash
+from ouroboros.utils import state_hash
 
 class Epoch(object):
     '''
