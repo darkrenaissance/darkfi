@@ -1,29 +1,27 @@
-use halo2::{
-    circuit::{Layouter, SimpleFloorPlanner},
-    plonk,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
-};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint,
+        FixedPoint, FixedPointShort,
     },
-    poseidon::{Hash as PoseidonHash, Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig},
+    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
-    utilities::{
-        lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
-    },
+    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
-use pasta_curves::pallas;
+use halo2_proofs::{
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    plonk,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
+};
+use pasta_curves::{pallas, Fp};
 
-use crate::crypto::constants::OrchardFixedBases;
+use crate::crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV};
 
 #[derive(Clone, Debug)]
 pub struct MintConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
-    ecc_config: EccConfig,
-    poseidon_config: PoseidonConfig<pallas::Base>,
+    ecc_config: EccConfig<OrchardFixedBases>,
+    poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
 }
 
 impl MintConfig {
@@ -31,7 +29,7 @@ impl MintConfig {
         EccChip::construct(self.ecc_config.clone())
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
@@ -56,7 +54,7 @@ pub struct MintContract {
 }
 
 impl UtilitiesInstructions<pallas::Base> for MintContract {
-    type Var = CellValue<pallas::Base>;
+    type Var = AssignedCell<pallas::Base, pallas::Base>;
 }
 
 impl Circuit<pallas::Base> for MintContract {
@@ -86,11 +84,11 @@ impl Circuit<pallas::Base> for MintContract {
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
-        meta.enable_equality(primary.into());
+        meta.enable_equality(primary);
 
         // Permutation over all advice columns
         for advice in advices.iter() {
-            meta.enable_equality((*advice).into());
+            meta.enable_equality(*advice);
         }
 
         // Poseidon requires four advice columns, while ECC incomplete addition
@@ -123,9 +121,8 @@ impl Circuit<pallas::Base> for MintContract {
             EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure(
+        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
             meta,
-            P128Pow5T3,
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
@@ -176,18 +173,17 @@ impl Circuit<pallas::Base> for MintContract {
         // Coin hash
         // =========
         let coin = {
-            let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
+            let poseidon_message = [pub_x, pub_y, value.clone(), token.clone(), serial, coin_blind];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<6>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
-                ConstantLength::<6>,
             )?;
 
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
             poseidon_output
         };
 
@@ -207,15 +203,16 @@ impl Circuit<pallas::Base> for MintContract {
 
         // v * G_1
         let (commitment, _) = {
-            let value_commit_v = OrchardFixedBases::ValueCommitV;
-            let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
-            value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+            let value_commit_v = ValueCommitV;
+            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
+            value_commit_v
+                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value.clone(), one.clone()))?
         };
 
         // r_V * G_2
         let (blind, _rcv) = {
             let rcv = self.value_blind;
-            let value_commit_r = OrchardFixedBases::ValueCommitR;
+            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
@@ -240,15 +237,16 @@ impl Circuit<pallas::Base> for MintContract {
         // ================
         // a * G_1
         let (commitment, _) = {
-            let token_commit_v = OrchardFixedBases::ValueCommitV;
-            let token_commit_v = FixedPoint::from_inner(ecc_chip.clone(), token_commit_v);
-            token_commit_v.mul_short(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
+            let token_commit_v = ValueCommitV;
+            let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
+            token_commit_v
+                .mul(layouter.namespace(|| "[token] ValueCommitV"), (token.clone(), one.clone()))?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
             let rca = self.token_blind;
-            let token_commit_r = OrchardFixedBases::ValueCommitR;
+            let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let token_commit_r = FixedPoint::from_inner(ecc_chip, token_commit_r);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };

@@ -1,12 +1,11 @@
-use halo2::{
-    circuit::{Chip, Layouter},
+use halo2_proofs::{
+    circuit::{AssignedCell, Chip, Layouter},
     plonk::{Advice, Column, ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-use halo2_gadgets::utilities::{CellValue, Var};
 use pasta_curves::pallas;
 
-type Variable = CellValue<pallas::Base>;
+type Variable = AssignedCell<pallas::Base, pallas::Base>;
 
 // Replace with use pasta::Fp and pasta::Fq
 type Fp = pallas::Base;
@@ -48,8 +47,8 @@ impl ArithmeticChip {
         let a_col = cs.advice_column();
         let b_col = cs.advice_column();
 
-        cs.enable_equality(a_col.into());
-        cs.enable_equality(b_col.into());
+        cs.enable_equality(a_col);
+        cs.enable_equality(b_col);
 
         //let instance = cs.instance_column();
 
@@ -110,26 +109,29 @@ impl ArithmeticChip {
                     || "lhs",
                     self.config.a_col,
                     0,
-                    || a.value().ok_or(Error::SynthesisError),
+                    || Ok(*a.value().ok_or(Error::Synthesis)?),
                 )?;
+
                 let rhs = region.assign_advice(
                     || "rhs",
                     self.config.b_col,
                     0,
-                    || b.value().ok_or(Error::SynthesisError),
+                    || Ok(*b.value().ok_or(Error::Synthesis)?),
                 )?;
-                region.constrain_equal(a.cell(), lhs)?;
-                region.constrain_equal(b.cell(), rhs)?;
+
+                region.constrain_equal(a.cell(), lhs.cell())?;
+                region.constrain_equal(b.cell(), rhs.cell())?;
 
                 let value = a.value().and_then(|a| b.value().map(|b| a + b));
+
                 let cell = region.assign_advice(
                     || "lhs + rhs",
                     self.config.a_col,
                     1,
-                    || value.ok_or(Error::SynthesisError),
+                    || value.ok_or(Error::Synthesis),
                 )?;
 
-                out = Some(Var::new(cell, value));
+                out = Some(cell);
                 Ok(())
             },
         )?;
@@ -144,6 +146,7 @@ impl ArithmeticChip {
         b: Variable,
     ) -> Result<Variable, Error> {
         let mut out = None;
+
         layouter.assign_region(
             || "mul",
             |mut region| {
@@ -153,26 +156,28 @@ impl ArithmeticChip {
                     || "lhs",
                     self.config.a_col,
                     0,
-                    || a.value().ok_or(Error::SynthesisError),
+                    || Ok(*a.value().ok_or(Error::Synthesis)?),
                 )?;
+
                 let rhs = region.assign_advice(
                     || "rhs",
                     self.config.b_col,
                     0,
-                    || b.value().ok_or(Error::SynthesisError),
+                    || Ok(*b.value().ok_or(Error::Synthesis)?),
                 )?;
-                region.constrain_equal(a.cell(), lhs)?;
-                region.constrain_equal(b.cell(), rhs)?;
+
+                region.constrain_equal(a.cell(), lhs.cell())?;
+                region.constrain_equal(b.cell(), rhs.cell())?;
 
                 let value = a.value().and_then(|a| b.value().map(|b| a * b));
                 let cell = region.assign_advice(
                     || "lhs * rhs",
                     self.config.a_col,
                     1,
-                    || value.ok_or(Error::SynthesisError),
+                    || value.ok_or(Error::Synthesis),
                 )?;
 
-                out = Some(Var::new(cell, value));
+                out = Some(cell);
                 Ok(())
             },
         )?;

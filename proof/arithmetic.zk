@@ -1,0 +1,14 @@
+constant "Arith" {}
+
+contract "Arith" {
+	Base a,
+	Base b,
+}
+
+circuit "Arith" {
+	sum = base_add(a, b);
+	constrain_instance(sum);
+
+	product = base_mul(a, b);
+	constrain_instance(product);
+}

@@ -3,6 +3,7 @@ extern crate clap;
 use async_executor::Executor;
 use async_std::io::BufReader;
 use async_trait::async_trait;
+use clap::{ArgMatches, IntoApp};
 use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
@@ -14,6 +15,7 @@ use std::{
 };
 
 use darkfi::{
+    cli::{cli_config::log_config, cli_parser::CliIrcd},
     net,
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
@@ -135,15 +137,13 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     let (sender, recvr) = async_channel::unbounded();
     let seen_privmsg_ids2 = seen_privmsg_ids.clone();
     let sender2 = sender.clone();
-    registry.register(
-        !net::SESSION_SEED,
-        move |channel, p2p| {
+    registry
+        .register(!net::SESSION_SEED, move |channel, p2p| {
             let sender = sender2.clone();
             let seen_privmsg_ids = seen_privmsg_ids2.clone();
-            async move {
-                ProtocolPrivMsg::new(channel, sender, seen_privmsg_ids, p2p).await
-            }
-        }).await;
+            async move { ProtocolPrivMsg::new(channel, sender, seen_privmsg_ids, p2p).await }
+        })
+        .await;
 
     //
     // p2p network main instance
@@ -217,41 +217,16 @@ impl JsonRpcInterface {
     async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!("hello world"), id))
     }
-
-    //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
-    async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        let resp: serde_json::Value = json!({
-            "nodes": [{
-                "id": "dfk34123kl213kp213sd",
-                "connections": 1,
-                "message": "gm",
-                "is_active": true,
-            },
-            {
-                "id": "138032139034903499s8",
-                "connections": 3,
-                "message": "ok",
-                "is_active": false,
-            },
-            {
-                "id": "123423ml1k2j3ll123kl",
-                "connections": 6,
-                "message": "lol",
-                "is_active": true,
-            }]
-        });
-        JsonResult::Resp(jsonresp(resp, id))
-    }
 }
 
 fn main() -> Result<()> {
-    TermLogger::init(
-        LevelFilter::Debug,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    let matches = CliIrcd::into_app().get_matches();
+    let conf: simplelog::Config;
+    let lvl: LevelFilter;
+
+    (lvl, conf) = log_config(matches)?;
+
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let options = ProgramOptions::load()?;
 

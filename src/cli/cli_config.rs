@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     io::Write,
     marker::PhantomData,
     net::SocketAddr,
@@ -8,6 +8,9 @@ use std::{
 };
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use clap::ArgMatches;
+use simplelog::{ConfigBuilder, LevelFilter};
 
 use crate::{Error, Result};
 
@@ -152,4 +155,29 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn log_config(matches: ArgMatches) -> Result<(LevelFilter, simplelog::Config)> {
+    let mut verbosity_level = 0;
+    verbosity_level += matches.occurrences_of("verbose");
+    let log_level = match verbosity_level {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+
+    let log_config = match env::var("LOG_TARGETS") {
+        Ok(x) => {
+            let targets: Vec<&str> = x.split(',').collect();
+            let mut cfgbuilder = ConfigBuilder::new();
+            for i in targets {
+                cfgbuilder.add_filter_allow(i.to_string());
+            }
+
+            cfgbuilder.build()
+        }
+        Err(_) => simplelog::Config::default(),
+    };
+
+    Ok((log_level, log_config))
 }

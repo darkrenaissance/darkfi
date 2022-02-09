@@ -1,16 +1,13 @@
 use std::{io, time::Instant};
 
-use halo2_gadgets::{
-    primitives,
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
+use halo2_gadgets::primitives::{
+    poseidon,
+    poseidon::{ConstantLength, P128Pow5T3},
 };
 use incrementalmerkletree::Hashable;
 use log::debug;
-use pasta_curves::{
-    arithmetic::{CurveAffine, FieldExt},
-    group::Curve,
-    pallas,
-};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
+use rand::rngs::OsRng;
 
 use super::{
     nullifier::Nullifier,
@@ -53,15 +50,15 @@ impl SpendRevealedValues {
     ) -> Self {
         let nullifier = [secret.0, serial];
         let nullifier =
-            primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
 
         let messages =
-            [*coords.x(), *coords.y(), DrkValue::from_u64(value), token_id, serial, coin_blind];
+            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
 
-        let coin = primitives::poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages);
+        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages);
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
@@ -161,13 +158,12 @@ pub fn create_spend_proof(
         signature_secret,
     );
 
-    let merkle_path: Vec<pallas::Base> = merkle_path.iter().map(|node| node.0).collect();
     let leaf_position: u64 = leaf_position.into();
 
     let c = SpendContract {
         secret_key: Some(secret.0),
         serial: Some(serial),
-        value: Some(DrkValue::from_u64(value)),
+        value: Some(DrkValue::from(value)),
         token: Some(token_id),
         coin_blind: Some(coin_blind),
         value_blind: Some(value_blind),
@@ -179,7 +175,7 @@ pub fn create_spend_proof(
 
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    let proof = Proof::create(pk, &[c], &public_inputs)?;
+    let proof = Proof::create(pk, &[c], &public_inputs, &mut OsRng)?;
     debug!("Prove: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))

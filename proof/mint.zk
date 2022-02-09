@@ -1,5 +1,5 @@
 constant "Mint" {
-	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 

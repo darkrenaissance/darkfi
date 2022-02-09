@@ -355,6 +355,24 @@ impl Parser {
                     });
                 }
 
+                "EcFixedPointShort" => {
+                    ret.push(Constant {
+                        name: k.to_string(),
+                        typ: Type::EcFixedPointShort,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                "EcFixedPointBase" => {
+                    ret.push(Constant {
+                        name: k.to_string(),
+                        typ: Type::EcFixedPointBase,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
                 x => {
                     self.error.emit(
                         format!("`{}` is an illegal constant type", x),
@@ -613,6 +631,26 @@ impl Parser {
                     "ec_add" => {
                         stmt.args = self.parse_function_call(token, &mut iter);
                         stmt.opcode = Opcode::EcAdd;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
+                    }
+
+                    "base_add" => {
+                        stmt.args = self.parse_function_call(token, &mut iter);
+                        stmt.opcode = Opcode::BaseAdd;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
+                    }
+
+                    "base_mul" => {
+                        stmt.args = self.parse_function_call(token, &mut iter);
+                        stmt.opcode = Opcode::BaseMul;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
 

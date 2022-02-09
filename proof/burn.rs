@@ -17,8 +17,8 @@ use halo2_gadgets::primitives::{
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use log::info;
 use pasta_curves::{
-    arithmetic::{CurveAffine, Field},
-    group::Curve,
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         let messages =
             [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
 
-        poseidon::Hash::init(P128Pow5T3, ConstantLength::<6>).hash(messages)
+        poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages)
     };
 
     // Fill the merkle tree with some random coins that we want to witness,
@@ -93,7 +93,8 @@ fn main() -> Result<()> {
 
     // Create the public inputs
     let nullifier = [secret.0, serial];
-    let nullifier = poseidon::Hash::init(P128Pow5T3, ConstantLength::<2>).hash(nullifier);
+    let nullifier =
+        poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -122,7 +123,7 @@ fn main() -> Result<()> {
 
     info!(target: "PROVER", "Building proving key and creating the zero-knowledge proof");
     let proving_key = ProvingKey::build(11, &circuit);
-    let proof = Proof::create(&proving_key, &[circuit], &public_inputs)?;
+    let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     // ========
     // Verifier

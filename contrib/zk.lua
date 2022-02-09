@@ -22,15 +22,17 @@ local keyword = token(l.KEYWORD, word_match{
 
 -- Types.
 local type = token(l.TYPE, word_match{
-  'EcPoint', 'EcFixedPoint', 'Base', 'BaseArray',
-  'Scalar', 'ScalarArray', 'MerklePath', 'Uint32',
-  'Uint64',
+  'EcPoint', 'EcFixedPoint', 'EcFixedPointBase', 'EcFixedPointShort',
+  'Base', 'BaseArray', 'Scalar', 'ScalarArray',
+  'MerklePath',
+  'Uint32', 'Uint64',
 })
 
 -- Instructions.
 local instruction = token('instruction', word_match{
   'ec_add', 'ec_mul', 'ec_mul_base', 'ec_mul_short',
   'ec_get_x', 'ec_get_y',
+  'base_add', 'base_mul',
   'poseidon_hash', 'calculate_merkle_root',
   'constrain_instance',
 })

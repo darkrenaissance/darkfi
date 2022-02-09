@@ -8,13 +8,21 @@ pub enum Type {
     /// Elliptic curve fixed point (a constant)
     EcFixedPoint = 0x01,
 
+    /// Elliptic curve fixed point short
+    EcFixedPointShort = 0x02,
+
+    /// Elliptic curve fixed point in base field
+    EcFixedPointBase = 0x03,
+
     /// Base field element
     Base = 0x10,
+
     /// Array of Base field elements
     BaseArray = 0x11,
 
     /// Scalar field element
     Scalar = 0x12,
+
     /// Array of Scalar field elements
     ScalarArray = 0x13,
 
@@ -36,6 +44,8 @@ impl Type {
         match b {
             0x00 => Self::EcPoint,
             0x01 => Self::EcFixedPoint,
+            0x02 => Self::EcFixedPointShort,
+            0x03 => Self::EcFixedPointBase,
             0x10 => Self::Base,
             0x11 => Self::BaseArray,
             0x12 => Self::Scalar,

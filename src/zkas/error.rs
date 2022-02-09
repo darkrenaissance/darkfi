@@ -14,7 +14,7 @@ impl ErrorEmitter {
     }
 
     pub fn emit(&self, msg: String, ln: usize, col: usize) {
-        let err_msg = format!("{} (line{}, column {})", msg, ln, col);
+        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
         let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
         let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
         let caret = format!("{:width$}^", "", width = pad);

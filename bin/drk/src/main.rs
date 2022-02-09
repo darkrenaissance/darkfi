@@ -4,10 +4,13 @@ use clap::{IntoApp, Parser};
 use log::{debug, error};
 use prettytable::{cell, format, row, Table};
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
-    cli::{cli_config::spawn_config, CliDrk, CliDrkSubCommands, Config, DrkConfig},
+    cli::{
+        cli_config::{log_config, spawn_config},
+        CliDrk, CliDrkSubCommands, Config, DrkConfig,
+    },
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{join_config_path, path::expand_path, NetworkName},
     Error, Result,
@@ -361,20 +364,8 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let mut verbosity_level = 0;
-    verbosity_level += matches.occurrences_of("verbose");
-    let loglevel = match verbosity_level {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    TermLogger::init(
-        loglevel,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    let (lvl, conf) = log_config(matches)?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config = Config::<DrkConfig>::load(config_path)?;
 

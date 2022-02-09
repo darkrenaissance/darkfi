@@ -1,15 +1,17 @@
 use std::{convert::TryFrom, io};
 
-use halo2_gadgets::ecc::FixedPoints;
+use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
-    arithmetic::{Field, FieldExt},
-    group::{Group, GroupEncoding},
+    group::{
+        ff::{Field, PrimeField},
+        Group, GroupEncoding,
+    },
     pallas,
 };
 use rand::RngCore;
 
 use crate::{
-    crypto::{address::Address, constants::OrchardFixedBases, util::mod_r_p},
+    crypto::{address::Address, constants::NullifierK, util::mod_r_p},
     util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Error, Result,
 };
@@ -42,11 +44,11 @@ impl SecretKey {
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
-        self.0.to_bytes()
+        self.0.to_repr()
     }
 
-    pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
-        match pallas::Base::from_bytes(bytes).into() {
+    pub fn from_bytes(bytes: [u8; 32]) -> Result<Self> {
+        match pallas::Base::from_repr(bytes).into() {
             Some(k) => Ok(Self(k)),
             None => Err(Error::SecretKeyFromBytes),
         }
@@ -63,7 +65,8 @@ impl PublicKey {
     }
 
     pub fn from_secret(s: SecretKey) -> Self {
-        let p = OrchardFixedBases::NullifierK.generator() * mod_r_p(s.0);
+        let nfk = NullifierK;
+        let p = nfk.generator() * mod_r_p(s.0);
         Self(p)
     }
 
@@ -90,7 +93,7 @@ impl TryFrom<Address> for PublicKey {
 
 impl Encodable for pallas::Base {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.to_bytes()[..])?;
+        s.write_slice(&self.to_repr()[..])?;
         Ok(32)
     }
 }
@@ -99,7 +102,7 @@ impl Decodable for pallas::Base {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
-        let result = pallas::Base::from_bytes(&bytes);
+        let result = pallas::Base::from_repr(bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
         } else {
@@ -110,7 +113,7 @@ impl Decodable for pallas::Base {
 
 impl Encodable for pallas::Scalar {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.to_bytes()[..])?;
+        s.write_slice(&self.to_repr()[..])?;
         Ok(32)
     }
 }
@@ -119,7 +122,7 @@ impl Decodable for pallas::Scalar {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
-        let result = pallas::Scalar::from_bytes(&bytes);
+        let result = pallas::Scalar::from_repr(bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
         } else {
@@ -150,7 +153,7 @@ impl Decodable for pallas::Point {
 
 impl Encodable for SecretKey {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.0.to_bytes()[..])?;
+        s.write_slice(&self.0.to_repr()[..])?;
         Ok(32)
     }
 }
@@ -159,7 +162,7 @@ impl Decodable for SecretKey {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
-        let result = pallas::Base::from_bytes(&bytes);
+        let result = pallas::Base::from_repr(bytes);
         if result.is_some().into() {
             Ok(SecretKey(result.unwrap()))
         } else {
@@ -183,7 +186,6 @@ impl Decodable for PublicKey {
         if result.is_some().into() {
             Ok(PublicKey(result.unwrap()))
         } else {
-            log::debug!("Failed decoding PublicKey");
             Err(Error::BadOperationType)
         }
     }

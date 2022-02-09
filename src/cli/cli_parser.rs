@@ -148,3 +148,12 @@ pub struct CliCashierd {
     #[clap(short, long)]
     pub refresh: bool,
 }
+
+/// Ircd cli
+#[derive(Parser)]
+#[clap(name = "ircd")]
+pub struct CliIrcd {
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+}
