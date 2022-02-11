@@ -27,9 +27,9 @@ class Block(object):
 
     def __repr__(self):
         if self.is_genesis:
-            return "GensisBlock at {slot:"+self.sl+",data:"+self.tx+",state:"+self.state+"}\n"+\
-                decode_gensis_data(self.data)
-        return "Block at {slot:"+self.sl+",data:"+self.tx+",state:"+self.state+"}"
+            #return "GensisBlock at {slot:"+str(self.sl)+",data:"+self.tx+",state:"+str(self.state)+"}\n"+decode_gensis_data(self.tx)
+            return "GensisBlock at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}\n"+str(self.tx)
+        return "Block at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}"
     
     def __hash__(self):
         if type(self.tx)==str:
@@ -63,7 +63,10 @@ class Block(object):
 
     @property
     def empty(self):
-        return (self.data=='' or self.slot<0) and self.state==''
+        return (self.tx=='' or self.slot<0) and self.state==''
+
+    def encode(self):
+        return str(self).encode()
 
 class GensisBlock(Block):
     '''

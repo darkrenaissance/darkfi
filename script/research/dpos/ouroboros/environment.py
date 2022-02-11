@@ -50,6 +50,11 @@ class Z(object):
     def current_leader_vrf_g(self):
         return self.stakeholders[self.current_leader_id].vrf_base
 
+    @property
+    def current_leader_sig_pk(self):
+        return self.stakeholders[self.current_leader_id].sig_pk
+    
+
     #TODO complete
     def obfuscate_idx(self, i):
         return i
@@ -105,7 +110,7 @@ class Z(object):
         assert current_leader!=None, "current leader cant be None"
         if current_leader.is_leader:
             #pass leadership to the current slot leader from the epoch leader
-            self.stakeholders[self.current_epoch_leaders[slot%self.epoch_length]].set_leader()
+            self.stakeholders[self.current_epoch_leaders[self.current_leader_id]].set_leader()
     
     def new_epoch(self, slot, sigmas, proofs):
         self.current_slot=slot
@@ -115,10 +120,10 @@ class Z(object):
         #assert(current_leader.is_leader)
         self.select_epoch_leaders(sigmas, proofs)
 
-    def broadcast_block(self, signed_block):
+    def broadcast_block(self, signed_block, slot_uid):
         for stakeholder in self.stakeholders:
             if not stakeholder.is_leader:
-                self.stakeholders.receive_block(signed_block)
+                stakeholder.receive_block(signed_block, slot_uid)
 
     def start(self):
         for sh in self.stakeholders:
@@ -128,4 +133,4 @@ class Z(object):
 
     def print_blockchain(self):
         bc = self.stakeholders[0].blockchain
-        self.log.info(f"<blockchain>  {len(bc)} blocks: "+str(bc))
+        self.log.highlight(f"<blockchain>  {len(bc)} blocks: "+str(bc))

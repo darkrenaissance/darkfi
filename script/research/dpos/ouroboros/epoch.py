@@ -43,7 +43,7 @@ class Epoch(list):
             # the caller of the add_block should execute (corrupt,U)
             pass
 
-        if self.length==self.R:
+        if self.length>=self.R:
             self.log.error(f"epoch length: {self.length} can't exceed Epoch's length: {self.R}")
         self.blocks.append(block)
     

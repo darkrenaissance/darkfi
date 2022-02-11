@@ -7,10 +7,12 @@ from ouroboros.vrf import verify, VRF
 from ouroboros.utils import *
 from ouroboros.logger import Logger
 from ouroboros.consts import *
+from copy import deepcopy
 import time
 '''
 \class Stakeholder
 '''
+
 class Stakeholder(object):
     def __init__(self, epoch_length=2, passwd='password'):
         #TODO (fix) remove redundant variables reley on environment
@@ -35,12 +37,12 @@ class Stakeholder(object):
         self.am_current_endorder=False
         self.am_corrupt=False
         #
+        self.blockchain=None
 
     @property
     def is_leader(self):
         return self.am_current_leader
 
-    
     @property
     def vrf_pk(self):
         return self.__vrf_pk
@@ -93,7 +95,7 @@ class Stakeholder(object):
         #kickoff gensis block
         # add old epoch to the ledger
         if self.current_slot_uid > 1 and self.current_epoch!=None and len(self.current_epoch)>0:
-            self.blockchain.add_epoch(self.current_epoch) 
+            self.blockchain.add_epoch(self.current_epoch)  
         #if leader, you need to broadcast the block
         self.__gen_genesis_epoch() 
         if self.am_current_leader:
@@ -112,22 +114,21 @@ class Stakeholder(object):
         self.env.new_slot(slot, sigma, proof)
         vrf_pk = self.env.current_leader_vrf_pk
         vrf_g = self.env.current_leader_vrf_g
-        assert(vrf_pk!=None)
-        assert(vrf_g!=None)
         if not verify(slot, sigma, proof, vrf_pk,vrf_g) :
             #TODO the leader is corrupted, action to be taken against the corrupt stakeholder
             #in this case this slot is empty
             self.current_block=EmptyBlock() 
-            if self.current_epoch!=None:
-                self.current_epoch.add_block(self.current_block)
-            else:
-                self.log.warn(f"<new_slot> current_epoch is None!")
-                return
+            if self.current_epoch==None:
+                self.log.warn(f"<new_slot> leader verification fails, current_epoch is None!")
+                self.__gen_genesis_epoch()
+            self.current_epoch.add_block(self.current_block)
+            return
         if self.current_epoch==None:
             self.log.warn(f"<new_slot> current_epoch is None!")
             self.__gen_genesis_epoch()
         self.current_slot_uid = slot
-        self.current_block=Block(self.current_block, self.tx, self.current_slot_uid)
+        prev_blk = self.blockchain[-1] if len(self.blockchain)>0 else EmptyBlock()
+        self.current_block=Block(prev_blk, self.tx, self.current_slot_uid)
         self.current_epoch.add_block(self.current_block)
         if self.am_current_leader:
             self.broadcast_block()
@@ -143,16 +144,26 @@ class Stakeholder(object):
 
     def broadcast_block(self):
         self.log.highlight("broadcasting block")
-        assert(self.am_current_leader)
+        assert(self.am_current_leader and self.current_block is not None)
         signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
-        self.env.broadcast_block(signed_block)
+        self.env.broadcast_block(signed_block, self.current_slot_uid)
         self.env.print_blockchain()
 
-
-    def receive_block(self, received_block):
+    def receive_block(self, signed_block, blk_uid):
         self.log.highlight("receiving block")
-        if verify_signature(self.env.current_leader_sig_pk, self.current_block, received_block):
-            pass
+        cur_blk = None
+        assert(blk_uid>0)
+        stashed=True
+        if blk_uid>= len(self.blockchain):
+            cur_blk = self.current_block
+        else:
+            #TODO this assumes synced blockchain
+            cur_blk = self.blockchain[blk_uid]
+            stashed=False
+        #TODO to consider deley should retrive leader_pk of corresponding blk_uid
+        if verify_signature(self.env.current_leader_sig_pk, cur_blk, signed_block):
+            if stashed:
+                self.current_epoch.add_block(cur_blk)
         else:
             self.env.corrupt(self.env.current_leader_id)
         self.env.print_blockchain()
