@@ -1,12 +1,13 @@
 from ouroboros.logger import Logger
+import time
 '''
 Non-forkable Blockchain for simplicity
 #TODO consider forkable property
 '''
 class Blockchain(object):
-    def __init__(self, R):
+    def __init__(self, R, genesis_time):
         self.blocks = []
-        self.log = Logger(self)
+        self.log = Logger(self, genesis_time)
         self.R = R # how many slots in single epoch
     
     @property

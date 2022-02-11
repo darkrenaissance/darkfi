@@ -2,12 +2,14 @@ import numpy as np
 import math
 import random
 from ouroboros.logger import Logger
+import time
 '''
 \class Z is the environment
 '''
 class Z(object):
-    def __init__(self, stakeholdes, epoch_length):
-        self.log = Logger(self)
+    def __init__(self, stakeholdes, epoch_length, genesis_time=time.time()):
+        self.genesis_time=genesis_time
+        self.log = Logger(self, genesis_time)
         self.epoch_length=epoch_length
         self.stakeholders = np.array(stakeholdes)
         self.adversary_mask=np.array([True]*len(stakeholdes))
@@ -72,12 +74,12 @@ class Z(object):
         return len(self.stakeholders[self.adversary_mask])
 
     def select_epoch_leaders(self, sigmas, proofs):
-        assert(len(sigmas)==self.epoch_length and len(proofs)==self.epoch_length, \
-            f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
+        if len(sigmas)==self.epoch_length or len(proofs)==self.epoch_length:
+            self.log.error(f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
         for i in range(self.epoch_length):
             self.log.info(f"current sigma of index {i} of total {len(sigmas)}, epoch_length: {self.epoch_length}")
             sigma = sigmas[i]
-            assert (sigma!=None, 'proof cant be None')
+            assert sigma!=None, 'proof cant be None'
             def leader_selection_hash(sigma):
                 Y = np.array(sigma)
                 y_hypotenuse2 = math.ceil(np.sum(Y[1]**2+Y[2]**2))
@@ -97,7 +99,7 @@ class Z(object):
         self.current_slot=slot
         self.log.info(f"stakeholders: {self.stakeholders}")
         current_leader = self.stakeholders[self.current_leader_id]
-        assert(current_leader!=None, "current leader cant be None")
+        assert current_leader!=None, "current leader cant be None"
         if current_leader.is_leader:
             #pass leadership to the current slot leader from the epoch leader
             self.stakeholders[self.current_epoch_leaders[slot%self.epoch_length]].set_leader()
@@ -106,7 +108,7 @@ class Z(object):
         self.current_slot=slot
         #self.log.info(f"stakeholders: {self.stakeholders}")
         #current_leader = self.stakeholders[self.current_leader_id]
-        #assert(current_leader!=None, 'current leader cant be none')
+        #assert current_leader!=None, 'current leader cant be none'
         #assert(current_leader.is_leader)
         self.select_epoch_leaders(sigmas, proofs)
 

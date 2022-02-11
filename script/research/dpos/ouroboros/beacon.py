@@ -14,7 +14,7 @@ proof, and base to the genesis block.
 #TODO implement trustedbeacon as a node
 '''
 class TrustedBeacon(SynchedNTPClock, threading.Thread):
-    def __init__(self, node, vrf_sk, epoch_length):
+    def __init__(self, node, vrf_sk, epoch_length, genesis_time):
         self.epoch_length=epoch_length # how many slots in a a block
         SynchedNTPClock.__init__(self)
         threading.Thread.__init__(self)
@@ -22,11 +22,11 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
         self.node = node #stakeholder
         self.vrf = VRF(self.node.vrf_pk, vrf_sk, self.node.vrf_base)
         self.current_slot = self.slot
-        self.log = Logger(self)
-        self.log.info("[TrustedBeacon]")
+        self.log = Logger(self, genesis_time)
+        self.log.info(f"[TrustedBeacon] constructed for node {str(node)}")
 
     def __repr__(self):
-        return f"trustedbeadon\n"
+        return f"trustedbeacon"
 
     def run(self):
         self.log.info("[TrustedBeacon] thread [start]")
@@ -44,9 +44,10 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
         self.current_slot = self.slot
         sigmas = []
         proofs = []
-        self.log.info(f"[TrustedBeacon] new slot of idx: {self.current_slot}")
         for i in range(self.epoch_length):
+            self.log.info(f"[TrustedBeacon] callback: new slot of idx: {self.current_slot}, epoch slot {i}")
             y, pi = self.vrf.sign(self.current_slot)
+            self.log.info(f"[TrustedBeacon] callback: signature calculated for {str(self.node)}")
             sigmas.append(y)
             proofs.append(pi)
         if self.current_slot%self.epoch_length==0:
@@ -58,4 +59,3 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
 
     def verify(self, y, pi, pk_raw, g):
         return VRF.verify(self.current_slot, y, pi, pk_raw, g)
-    

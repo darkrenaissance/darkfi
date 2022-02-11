@@ -6,7 +6,7 @@ from ouroboros.beacon import TrustedBeacon
 from ouroboros.vrf import generate_vrf_keys, VRF
 from ouroboros.utils import *
 from ouroboros.logger import Logger
-
+import time
 '''
 \class Stakeholder
 '''
@@ -17,24 +17,23 @@ class Stakeholder(object):
         self.stake=0
         self.epoch_length=epoch_length
         pk, sk, g = generate_vrf_keys(self.passwd)
+        #verification keys
         self.__vrf_pk = pk
         self.__vrf_sk = sk
         self.__vrf_base = g
-
-        self.blockchain = Blockchain(self.epoch_length)
-        self.beacon = TrustedBeacon(self, self.epoch_length, self.__vrf_sk)
+        #signature keys
         sig_sk, sig_pk = generate_sig_keys(self.passwd)
         self.sig_sk = sig_sk
         self.sig_pk = sig_pk
+        #
         self.current_block = None
         self.uncommited_tx=''
         self.tx=''
-        self.current_slot_uid = self.beacon.slot
         self.current_epoch = None
         self.am_current_leader=False
         self.am_current_endorder=False
         self.am_corrupt=False
-        self.log = Logger(self)
+        #
 
     @property
     def is_leader(self):
@@ -55,6 +54,11 @@ class Stakeholder(object):
 
     def __call__(self, env):
         self.env=env
+        self.log = Logger(self, self.env.genesis_time)
+        self.blockchain = Blockchain(self.epoch_length, self.env.genesis_time)
+        self.beacon = TrustedBeacon(self,  self.__vrf_sk, self.epoch_length, self.env.genesis_time)
+        self.current_slot_uid = self.beacon.slot
+
 
     def start(self):
         self.log.info("Stakeholder.start [started]")

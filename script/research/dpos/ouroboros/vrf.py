@@ -14,8 +14,7 @@ def generate_vrf_keys(sk_seed):
         generate pk/sk
     return: list of pk (public key), sk(secret key), base(field base)
     '''
-    #sk = vrf_hash(sk_seed)
-    sk=2
+    sk = vrf_hash(sk_seed)
     base = ecc.gen()
     pk = ecc.scalar_mult(sk, base)
     return (pk, sk, base)
