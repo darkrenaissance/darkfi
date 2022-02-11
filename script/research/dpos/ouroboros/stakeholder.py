@@ -147,7 +147,6 @@ class Stakeholder(object):
         assert(self.am_current_leader and self.current_block is not None)
         signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
         self.env.broadcast_block(signed_block, self.current_slot_uid)
-        self.env.print_blockchain()
 
     def receive_block(self, signed_block, blk_uid):
         self.log.highlight("receiving block")
@@ -166,4 +165,3 @@ class Stakeholder(object):
                 self.current_epoch.add_block(cur_blk)
         else:
             self.env.corrupt(self.env.current_leader_id)
-        self.env.print_blockchain()

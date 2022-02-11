@@ -124,13 +124,14 @@ class Z(object):
         for stakeholder in self.stakeholders:
             if not stakeholder.is_leader:
                 stakeholder.receive_block(signed_block, slot_uid)
+        self.print_blockchain()
 
     def start(self):
         for sh in self.stakeholders:
             sh(self)
-        for sh in self.stakeholders:
             sh.start()
 
     def print_blockchain(self):
-        bc = self.stakeholders[0].blockchain
-        self.log.highlight(f"<blockchain>  {len(bc)} blocks: "+str(bc))
+        for sh in self.stakeholders:
+            bc = sh.blockchain
+            self.log.highlight(f"<blockchain>  {len(bc)} blocks: "+str(bc))

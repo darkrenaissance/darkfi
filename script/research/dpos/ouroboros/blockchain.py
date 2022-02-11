@@ -36,7 +36,7 @@ class Blockchain(object):
             if not block.empty:
                 self.__add_block(block)
             else:
-                self.log.info(f"met an empty block at index of index: {block.index},\nrelative slot:{idx}\nabsolute slot: {self.length*idx+block.slot}")
+                self.log.warn(f"an empty block at index of index: {block.index},\nrelative slot:{idx}\nabsolute slot: {self.length*idx+block.slot}")
 
 
     
