@@ -17,7 +17,7 @@ class Blockchain(object):
     def __repr__(self):
         buff=''
         for i in range(len(self.blocks)):
-            buff+=self.blocks[i]
+            buff+=str(self.blocks[i])
         return buff
     
     def __getitem__(self, i):
@@ -30,6 +30,8 @@ class Blockchain(object):
         self.blocks.append(block)
 
     def add_epoch(self, epoch):
+        assert epoch!=None, 'epoch cant be None'
+        assert len(epoch)>0 , 'epoch cant be zero-sized'
         for idx, block in enumerate(epoch):
             if not block.empty:
                 self.__add_block(block)

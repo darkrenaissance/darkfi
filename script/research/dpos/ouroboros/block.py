@@ -1,5 +1,6 @@
 import json
 from ouroboros.utils import encode_genesis_data, decode_gensis_data, state_hash
+from ouroboros.consts import *
 
 '''
 single block B_i for slot i in the system live time L,
@@ -30,6 +31,16 @@ class Block(object):
                 decode_gensis_data(self.data)
         return "Block at {slot:"+self.sl+",data:"+self.tx+",state:"+self.state+"}"
     
+    def __hash__(self):
+        if type(self.tx)==str:
+            return hash((self.state, self.tx, self.sl))
+        elif type(self.tx)==dict:
+            #TODO include distribution
+            return hash((self.state, self.tx[SEED], self.tx[TX]))
+        else: 
+            #TODO (fix) shouldn't reach here
+            return 0
+
     def __eq__(self, block):
         return self.state==block.state and \
             self.tx == block.tx and \
@@ -62,10 +73,15 @@ class GensisBlock(Block):
     '''
     def __init__(self, previous_block, data, slot_uid):
         # stakeholders is list of tuple (pk_i, s_i) for the ith stakeholder
-        self.stakeholders = data['stakeholders']
-        self.seed = data['seed']
-        data = encode_genesis_data(self.stakeholders, self.seed)
-        Block.__init__(self, previous_block, data, slot_uid, True)
+        self.stakeholders = data[STAKEHOLDERS]
+        self.distribution = data[STAKEHOLDERS_DISTRIBUTIONS]
+        self.seed = data.get(SEED, '') #needed for pvss
+        shd_buff = ''
+        for shd in self.distribution:
+            shd_buff +=str(shd)
+        #data = encode_genesis_data(shd_buff)
+        data_dict = {'seed':self.seed, 'distribution':shd_buff}
+        Block.__init__(self, previous_block, str(data_dict), slot_uid, True)
     '''
     @return: the number of participating stakeholders in the blockchain
     '''

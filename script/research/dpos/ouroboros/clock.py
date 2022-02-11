@@ -8,7 +8,7 @@ import math
 
 class SynchedNTPClock(object):
 
-    def __init__(self, slot_length=180, ntp_server='europe.pool.ntp.org'):
+    def __init__(self, slot_length=1, ntp_server='europe.pool.ntp.org'):
         #TODO how long should be the slot length
         self.slot_length=slot_length
         self.ntp_server = ntp_server

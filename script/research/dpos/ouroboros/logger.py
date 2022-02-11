@@ -14,11 +14,14 @@ class Logger(object):
         return round(d,1)
 
     def info(self, payload):
-        print("\033[32m", f"[{self.diff}] - [{self.obj}]:\n\t{payload}\n", "\033[0m")
+        print("\033[32m", f"[{self.diff}] - [{type(self.obj).__name__}] {self.obj}:\n\t{payload}\n", "\033[0m")
+    
+    def highlight(self, payload):
+        print("\033[35m", f"[{self.diff}] - [{type(self.obj).__name__}] {self.obj}:\n\t{payload}\n", "\033[0m")
     
     def warn(self, payload):
-        print("\033[33m", f"[{self.diff}] - [{self.obj}]:\n\t{payload}\n", "\033[0m")
+        print("\033[33m", f"[{self.diff}] - [{type(self.obj).__name__}] {self.obj}:\n\t{payload}\n", "\033[0m")
     
     def error(self, payload):
-        print("\033[31m", f"[{self.diff}] - [{self.obj}]:\n\t{payload}\n", "\033[0m")
+        print("\033[31m", f"[{self.diff}] - [{type(self.obj).__name__}] {self.obj}:\n\t{payload}\n", "\033[0m")
         exit()

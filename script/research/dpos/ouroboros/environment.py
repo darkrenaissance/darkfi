@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 from ouroboros.logger import Logger
+from ouroboros.consts import *
 import time
 '''
 \class Z is the environment
@@ -27,8 +28,11 @@ class Z(object):
         return genesis data of the current epoch
     '''
     def get_genesis_data(self):
-        #TODO implement dynaming staking 
-        return ''
+        #TODO implement dynaming staking
+        genesis_data = {STAKEHOLDERS: self.stakeholders,
+        STAKEHOLDERS_DISTRIBUTIONS:[],
+            SEED: ''}
+        return genesis_data
     
     @property
     def current_leader_id(self):
@@ -74,8 +78,7 @@ class Z(object):
         return len(self.stakeholders[self.adversary_mask])
 
     def select_epoch_leaders(self, sigmas, proofs):
-        if len(sigmas)==self.epoch_length or len(proofs)==self.epoch_length:
-            self.log.error(f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
+        assert len(sigmas)==self.epoch_length and len(proofs)==self.epoch_length, self.log.error(f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
         for i in range(self.epoch_length):
             self.log.info(f"current sigma of index {i} of total {len(sigmas)}, epoch_length: {self.epoch_length}")
             sigma = sigmas[i]
@@ -120,11 +123,9 @@ class Z(object):
     def start(self):
         for sh in self.stakeholders:
             sh(self)
-        self.log.info("Z.start [started]")
         for sh in self.stakeholders:
             sh.start()
-        self.log.info("Z.start [ended]")
 
     def print_blockchain(self):
         bc = self.stakeholders[0].blockchain
-        self.log.info(f"blockchain of {len(bc)} blocks: "+str(bc))
+        self.log.info(f"<blockchain>  {len(bc)} blocks: "+str(bc))
