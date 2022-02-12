@@ -1,6 +1,6 @@
+import time
 from ouroboros import Stakeholder
 from ouroboros import Z
-import time
 
 EPOCH_LENGTH = 2
 stakeholders = []

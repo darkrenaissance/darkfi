@@ -1,4 +1,3 @@
-#from asyncio.log import logger
 from ouroboros.block import Block, GensisBlock, EmptyBlock
 from ouroboros.blockchain import Blockchain
 from ouroboros.epoch import Epoch
@@ -7,13 +6,12 @@ from ouroboros.vrf import verify, VRF
 from ouroboros.utils import *
 from ouroboros.logger import Logger
 from ouroboros.consts import *
-from copy import deepcopy
-import time
+
 '''
 \class Stakeholder
 '''
-
 class Stakeholder(object):
+
     def __init__(self, epoch_length=2, passwd='password'):
         #TODO (fix) remove redundant variables reley on environment
         self.passwd=passwd
@@ -38,6 +36,7 @@ class Stakeholder(object):
         self.am_corrupt=False
         #
         self.blockchain=None
+        self.current_blk_endorser_sig = None
 
     @property
     def is_leader(self):
@@ -78,8 +77,9 @@ class Stakeholder(object):
         self.tx = self.env.get_genesis_data()
         self.tx[TX]=self.uncommited_tx
         self.uncommited_tx=''
-        self.current_block=GensisBlock(self.current_block, self.tx, self.current_slot_uid)
+        self.current_block=GensisBlock(self.current_block, self.tx, self.current_slot_uid, self.env.genesis_time)
         self.current_epoch=Epoch(self.current_block, self.epoch_length, self.epoch_index, self.env.genesis_time)
+   
     '''
     it's a callback function, and called by the diffuser
     '''
@@ -100,6 +100,7 @@ class Stakeholder(object):
         self.__gen_genesis_epoch() 
         if self.am_current_leader:
             self.broadcast_block()
+        self.am_current_leader=False
 
     '''
     it's a callback function, and called by the diffuser
@@ -117,7 +118,7 @@ class Stakeholder(object):
         if not verify(slot, sigma, proof, vrf_pk,vrf_g) :
             #TODO the leader is corrupted, action to be taken against the corrupt stakeholder
             #in this case this slot is empty
-            self.current_block=EmptyBlock() 
+            self.current_block=EmptyBlock(self.env.genesis_time) 
             if self.current_epoch==None:
                 self.log.warn(f"<new_slot> leader verification fails, current_epoch is None!")
                 self.__gen_genesis_epoch()
@@ -127,11 +128,24 @@ class Stakeholder(object):
             self.log.warn(f"<new_slot> current_epoch is None!")
             self.__gen_genesis_epoch()
         self.current_slot_uid = slot
-        prev_blk = self.blockchain[-1] if len(self.blockchain)>0 else EmptyBlock()
-        self.current_block=Block(prev_blk, self.tx, self.current_slot_uid)
+        prev_blk = self.blockchain[-1] if len(self.blockchain)>0 else EmptyBlock(self.env.genesis_time)
+        self.current_block=Block(prev_blk, self.tx, self.current_slot_uid, self.env.genesis_time)
         self.current_epoch.add_block(self.current_block)
         if self.am_current_leader:
             self.broadcast_block()
+            self.end_leadership()
+        elif self.am_current_endorder:
+            self.endorse_block()
+            self.end_endorsing()
+
+
+    def end_leadership(self):
+        self.log(f"stakeholder:{str(self)} ending leadership for slot{self.current_slot_uid}")
+        self.am_current_leader=False
+
+    def end_endorsing(self):
+        self.log(f"stakeholder:{str(self)} ending endorsing for slot{self.current_slot_uid}")
+        self.am_current_endorder=False
 
     def set_leader(self):
         self.am_current_leader=True
@@ -145,11 +159,22 @@ class Stakeholder(object):
     def broadcast_block(self):
         self.log.highlight("broadcasting block")
         assert(self.am_current_leader and self.current_block is not None)
-        signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
+        signed_block=None
+        #TODO should wait for l slot until block is endorsed
+        if not self.current_block.endorsed:
+            self.current_block = EmptyBlock(self.env.genesis_time)
+        else:
+            signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
         self.env.broadcast_block(signed_block, self.current_slot_uid)
+        self.current_block=None
+    
+    def endorse_block(self):
+        if not self.am_current_endorder:
+            return
+        sig = sign_message(self.passwd, self.sig_sk, self.current_block)
+        self.env.endorse_block(sig, self.current_slot_uid)
 
-    def receive_block(self, signed_block, blk_uid):
-        self.log.highlight("receiving block")
+    def __get_blk(self, blk_uid):
         cur_blk = None
         assert(blk_uid>0)
         stashed=True
@@ -159,9 +184,34 @@ class Stakeholder(object):
             #TODO this assumes synced blockchain
             cur_blk = self.blockchain[blk_uid]
             stashed=False
+        return cur_blk, stashed
+
+    def receive_block(self, signed_block, endorser_sig, blk_uid):
+        self.log.highlight("receiving block")
+        cur_blk, stashed = self.__get_blk(blk_uid)
+        
         #TODO to consider deley should retrive leader_pk of corresponding blk_uid
-        if verify_signature(self.env.current_leader_sig_pk, cur_blk, signed_block):
+        if verify_signature(self.env.current_leader_sig_pk, cur_blk, signed_block) \
+            and  verify_signature(self.env.current_endorser_sig_pk, cur_blk, endorser_sig):
             if stashed:
                 self.current_epoch.add_block(cur_blk)
         else:
-            self.env.corrupt(self.env.current_leader_id)
+            self.env.corrupt_blk()
+
+    def confirm_endorsing(self, signed_endorsed_block, blk_uid):
+        confirmed=False
+        if self.am_current_leader:
+            cur_blk, _ = self.__get_blk(blk_uid)
+            if verify_signature(self.env.current_endorser_sig_pk, cur_blk, signed_endorsed_block):
+                if blk_uid==self.current_slot_uid:
+                    self.current_block.set_endorsed()
+                else:
+                    self.blockchain[blk_uid].set_endorsed()
+                confirmed=True
+                #self.env.confirm_endorsing(signed_endorsed_block, blk_uid)
+            else:
+                confirmed=False
+                #self.env.confirm_endorsing(None, blk_uid)
+        self.log.info(f"<confirm_endorsing enderser signature: {self.current_blk_endorser_sig}")
+        return confirmed
+

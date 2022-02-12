@@ -1,8 +1,7 @@
+import threading
 from ouroboros.clock import SynchedNTPClock
 from ouroboros.vrf import VRF
 from ouroboros.logger import Logger
-import threading
-import time 
 
 '''
 \class TrustedBeacon
@@ -51,6 +50,8 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
         else:
             sigmas = []
             proofs = []
+            #TODO since it's expensive, but to generate single (y,pi) pair as seed 
+            # and use random hash function to generate the rest randomly. 
             for i in range(self.epoch_length):
                 self.log.info(f"callback: new slot of idx: {self.current_slot}, epoch slot {i}")
                 y, pi = self.vrf.sign(self.current_slot)

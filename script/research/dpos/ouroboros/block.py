@@ -1,6 +1,7 @@
 import json
 from ouroboros.utils import encode_genesis_data, decode_gensis_data, state_hash
 from ouroboros.consts import *
+from ouroboros.logger import Logger
 
 '''
 single block B_i for slot i in the system live time L,
@@ -16,7 +17,7 @@ class Block(object):
         it's one-based
     @param gensis: boolean, True for gensis block
     '''
-    def __init__(self, previous_block, data, slot_uid, genesis=False):
+    def __init__(self, previous_block, data, slot_uid, genesis_time, genesis=False):
         # state is hte hash of the previous block in the blockchain
         self.state=''
         if slot_uid>1:
@@ -24,6 +25,8 @@ class Block(object):
         self.tx = data
         self.sl = slot_uid
         self.is_genesis=genesis
+        self.endorsed=False
+        self.log = Logger(genesis_time)
 
     def __repr__(self):
         if self.is_genesis:
@@ -51,6 +54,9 @@ class Block(object):
             'data': self.tx, \
             'sl': self.sl}
         return json.encoder(d)
+
+    def set_endorsed(self):
+        self.endorsed=True
 
     
     @property
@@ -103,5 +109,5 @@ lead by offline leader
 is an empty Block
 '''
 class EmptyBlock(Block):
-    def __init__(self):
-        Block.__init__(self, '', -1, False)
+    def __init__(self, genesis_time):
+        Block.__init__(self, '', -1, genesis_time, False)

@@ -1,8 +1,8 @@
 from ouroboros.logger import Logger
-import time
+
 '''
 Non-forkable Blockchain for simplicity
-#TODO consider forkable property
+#TODO implement forkable chain
 '''
 class Blockchain(object):
     def __init__(self, R, genesis_time):
@@ -37,6 +37,3 @@ class Blockchain(object):
                 self.__add_block(block)
             else:
                 self.log.warn(f"an empty block at index of index: {block.index},\nrelative slot:{idx}\nabsolute slot: {self.length*idx+block.slot}")
-
-
-    
