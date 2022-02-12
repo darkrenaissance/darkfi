@@ -205,7 +205,7 @@ impl RequestHandler for JsonRpcInterface {
 
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
-            //Some("get_info") => return self.get_info(req.id, req.params).await,
+            Some("get_info") => return self.get_info(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
@@ -216,6 +216,31 @@ impl JsonRpcInterface {
     // <-- {"result": "hello world"}
     async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
         JsonResult::Resp(jsonresp(json!("hello world"), id))
+    }
+    //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
+    async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
+        let resp: serde_json::Value = json!({
+            "nodes": [{
+                "id": "dfk34123kl213kp213sd",
+                "connections": 1,
+                "message": "gm",
+                "is_active": true,
+            },
+            {
+                "id": "138032139034903499s8",
+                "connections": 3,
+                "message": "ok",
+                "is_active": false,
+            },
+            {
+                "id": "123423ml1k2j3ll123kl",
+                "connections": 6,
+                "message": "lol",
+                "is_active": true,
+            }]
+        });
+        JsonResult::Resp(jsonresp(resp, id))
     }
 }
 
