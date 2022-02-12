@@ -83,6 +83,13 @@ pub enum CliDrkSubCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum CliDaoSubCommands {
+    /// Say hello to the RPC
+    Hello {}
+}
+
+
 /// Drk cli
 #[derive(Parser)]
 #[clap(name = "drk")]
@@ -157,3 +164,15 @@ pub struct CliIrcd {
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
 }
+
+/// DAO cli
+#[derive(Parser)]
+#[clap(name = "dao")]
+pub struct CliDao {
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+    #[clap(subcommand)]
+    pub command: Option<CliDaoSubCommands>,
+}
+

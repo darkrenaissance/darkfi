@@ -1338,6 +1338,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "daocli"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "clap 3.0.7",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "log",
+ "num_cpus",
+ "serde_json",
+ "simplelog",
+ "smol",
+]
+
+[[package]]
+name = "daod"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "log",
+ "num_cpus",
+ "serde_json",
+ "simplelog",
+ "smol",
+]
+
+[[package]]
 name = "darkfi"
 version = "0.3.0"
 dependencies = [

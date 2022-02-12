@@ -20,6 +20,8 @@ members = [
     "bin/gatewayd",
     "bin/ircd",
     "bin/map",
+    "bin/daod",
+    "bin/daocli",
 ]
 
 [dependencies]
