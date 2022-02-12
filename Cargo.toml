@@ -21,7 +21,7 @@ members = [
     "bin/ircd",
     "bin/map",
     "bin/daod",
-    "bin/daocli",
+    "bin/dao-cli",
 ]
 
 [dependencies]
