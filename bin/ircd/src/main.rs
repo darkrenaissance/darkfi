@@ -205,7 +205,7 @@ impl RequestHandler for JsonRpcInterface {
 
         match req.method.as_str() {
             Some("say_hello") => return self.say_hello(req.id, req.params).await,
-            Some("get_info") => return self.get_info(req.id, req.params).await,
+            //Some("get_info") => return self.get_info(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
@@ -220,13 +220,19 @@ impl JsonRpcInterface {
 }
 
 fn main() -> Result<()> {
-    let matches = CliIrcd::into_app().get_matches();
-    let conf: simplelog::Config;
-    let lvl: LevelFilter;
+    //let matches = CliIrcd::into_app().get_matches();
+    //let conf: simplelog::Config;
+    //let lvl: LevelFilter;
 
-    (lvl, conf) = log_config(matches)?;
+    //let (lvl, conf) = log_config(matches)?;
 
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    //TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    TermLogger::init(
+        LevelFilter::Debug,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
 
     let options = ProgramOptions::load()?;
 

@@ -1,6 +1,6 @@
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
