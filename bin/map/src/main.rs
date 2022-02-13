@@ -158,25 +158,36 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
             let nodes = reply.as_object().unwrap().get("nodes").unwrap();
 
-            // todo: generalize this
+            // TODO: generalize this
             let node1 = &nodes[0];
-            //let node2 = &nodes[1];
-            //let node3 = &nodes[2];
+            let node2 = &nodes[1];
+            let node3 = &nodes[2];
 
             // TODO: error handling
-            let infos = vec![NodeInfo {
-                id: node1["id"].to_string(),
-                connections: node1["connections"].as_u64().unwrap() as usize,
-                is_active: node1["is_active"].as_bool().unwrap(),
-                last_message: node1["message"].to_string(),
-            }];
-
-            //model.update(infos).await;
+            let infos = vec![
+                NodeInfo {
+                    id: node1["id"].to_string(),
+                    connections: node1["connections"].as_u64().unwrap() as usize,
+                    is_active: node1["is_active"].as_bool().unwrap(),
+                    last_message: node1["message"].to_string(),
+                },
+                NodeInfo {
+                    id: node2["id"].to_string(),
+                    connections: node2["connections"].as_u64().unwrap() as usize,
+                    is_active: node2["is_active"].as_bool().unwrap(),
+                    last_message: node2["message"].to_string(),
+                },
+                NodeInfo {
+                    id: node3["id"].to_string(),
+                    connections: node3["connections"].as_u64().unwrap() as usize,
+                    is_active: node3["is_active"].as_bool().unwrap(),
+                    last_message: node3["message"].to_string(),
+                },
+            ];
 
             for node in infos {
-                model.id_list.node_id.lock().await.push(node.id);
-                //self.info_list.infos.lock().await.push(node.info);
-                //self.id_list.
+                model.info_list.infos.lock().await.push(node.clone());
+                model.id_list.node_id.lock().await.push(node.clone().id);
             }
         } else {
             // TODO: error handling

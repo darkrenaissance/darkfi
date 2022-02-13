@@ -12,24 +12,11 @@ impl Model {
         Model { id_list, info_list }
     }
 
-    pub async fn update(self, node_vec: Vec<NodeInfo>) -> Result<()> {
-        for node in node_vec {
-            self.id_list.node_id.lock().await.push(node.id);
-            //self.info_list.infos.lock().await.push(node.info);
-            //self.id_list.
+    pub async fn update(self, infos: Vec<NodeInfo>) -> Result<()> {
+        for node in infos {
+            self.info_list.infos.lock().await.push(node.clone());
+            self.id_list.node_id.lock().await.push(node.clone().id);
         }
-        //let ids = vec![node_vec[0].id.clone()];
-
-        //for id in ids {
-        //    self.id_list.node_id.lock().await.push(id);
-        //}
-
-        //let id_list = self.id_list;
-
-        //for info in node_vec {
-        //    self.info_list.infos.lock().await.push(info);
-        //}
-        //let info_list = self.info_list;
         Ok(())
     }
 }
