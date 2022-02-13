@@ -58,7 +58,7 @@ async fn start(options: CliDao) -> Result<()> {
         Some(CliDaoSubCommands::Hello {}) => {
             let reply = client.say_hello().await?;
             println!("Server replied: {}", &reply.to_string());
-            return Ok(());
+            return Ok(())
         }
         None => {}
     }

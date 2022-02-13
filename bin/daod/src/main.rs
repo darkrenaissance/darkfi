@@ -40,7 +40,7 @@ struct JsonRpcInterface {}
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
