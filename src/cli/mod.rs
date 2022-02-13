@@ -3,4 +3,6 @@ pub mod cli_parser;
 
 pub use cli_config::{CashierdConfig, Config, DarkfidConfig, DrkConfig, GatewaydConfig};
 
-pub use cli_parser::{CliCashierd, CliDarkfid, CliDrk, CliDrkSubCommands, CliGatewayd, CliIrcd, CliDao, CliDaoSubCommands};
+pub use cli_parser::{
+    CliCashierd, CliDao, CliDaoSubCommands, CliDarkfid, CliDrk, CliDrkSubCommands, CliGatewayd,
+};

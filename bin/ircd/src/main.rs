@@ -1,13 +1,11 @@
-#[macro_use]
 extern crate clap;
 use async_executor::Executor;
 use async_std::io::BufReader;
 use async_trait::async_trait;
-use clap::{ArgMatches, IntoApp};
 use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::Async;
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
@@ -15,7 +13,7 @@ use std::{
 };
 
 use darkfi::{
-    cli::{cli_config::log_config, cli_parser::CliIrcd},
+    cli::cli_config::log_config,
     net,
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
@@ -245,21 +243,10 @@ impl JsonRpcInterface {
 }
 
 fn main() -> Result<()> {
-    //let matches = CliIrcd::into_app().get_matches();
-    //let conf: simplelog::Config;
-    //let lvl: LevelFilter;
-
-    //let (lvl, conf) = log_config(matches)?;
-
-    //TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
-    TermLogger::init(
-        LevelFilter::Debug,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
-
     let options = ProgramOptions::load()?;
+    let (lvl, cfg) = log_config(options.app.clone())?;
+
+    TermLogger::init(lvl, cfg, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(ex.clone(), options)))

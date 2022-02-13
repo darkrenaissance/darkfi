@@ -1,3 +1,4 @@
+use clap::{App, Arg, ArgMatches};
 use std::net::SocketAddr;
 
 use darkfi::{net, Result};
@@ -7,24 +8,84 @@ pub struct ProgramOptions {
     pub log_path: Box<std::path::PathBuf>,
     pub irc_accept_addr: SocketAddr,
     pub rpc_listen_addr: SocketAddr,
+    pub app: ArgMatches,
 }
 
 impl ProgramOptions {
     pub fn load() -> Result<ProgramOptions> {
-        let app = clap_app!(dfi =>
-            (version: "0.1.0")
-            (author: "Amir Taaki <amir@dyne.org>")
-            (about: "Dark node")
-            (@arg ACCEPT: -a --accept +takes_value "Accept address")
-            (@arg SEED_NODES: -s --seeds +takes_value ... "Seed nodes")
-            (@arg CONNECTS: -c --connect +takes_value ... "Manual connections")
-            (@arg CONNECT_SLOTS: --slots +takes_value "Connection slots")
-            (@arg EXTERNAL_ADDR: -e --external +takes_value "External address")
-            (@arg LOG_PATH: --log +takes_value "Logfile path")
-            (@arg IRC_ACCEPT: -r --irc +takes_value "IRC accept address")
-            (@arg RPC_LISTEN: --rpc +takes_value "RPC listen address")
-        )
-        .get_matches();
+        let app = App::new("dfi")
+            .version("0.1.0")
+            .author("Amir Taaki <amir@dyne.org>")
+            .about("Dark node")
+            .arg(
+                Arg::new("ACCEPT")
+                    .short('a')
+                    .long("accept")
+                    .value_name("ACCEPT")
+                    .help("Accept address")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("SEED_NODES")
+                    .short('s')
+                    .long("seeds")
+                    .value_name("SEED_NODES")
+                    .help("Seed nodes")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("CONNECTS")
+                    .short('c')
+                    .long("connect")
+                    .value_name("CONNECTS")
+                    .help("Manual connections")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("CONNECT_SLOTS")
+                    .long("slots")
+                    .value_name("CONNECT_SLOTS")
+                    .help("Connection slots")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("EXTERNAL_ADDR")
+                    .short('e')
+                    .long("external")
+                    .value_name("EXTERNAL_ADDR")
+                    .help("External address")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("LOG_PATH")
+                    .long("log")
+                    .value_name("LOG_PATH")
+                    .help("Logfile path")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("IRC_ACCEPT")
+                    .short('r')
+                    .long("irc")
+                    .value_name("IRC_ACCEPT")
+                    .help("IRC accept address")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("RPC_LISTEN")
+                    .long("rpc")
+                    .value_name("RPC_LISTEN")
+                    .help("RPC listen address")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("verbose")
+                    .short('v')
+                    .long("verbose")
+                    .multiple_occurrences(true)
+                    .help("Sets the level of verbosity"),
+            )
+            .get_matches();
 
         let accept_addr = if let Some(accept_addr) = app.value_of("ACCEPT") {
             Some(accept_addr.parse()?)
@@ -91,6 +152,7 @@ impl ProgramOptions {
             log_path,
             irc_accept_addr,
             rpc_listen_addr,
+            app,
         })
     }
 }
