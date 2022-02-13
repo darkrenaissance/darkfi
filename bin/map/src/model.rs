@@ -50,7 +50,7 @@ impl InfoList {
 
 //pub type NodeId = u32;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub id: String,
     pub connections: usize,

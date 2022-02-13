@@ -186,9 +186,19 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             ];
 
             for node in infos {
+                // update the index
+                let mut index = model.info_list.index.lock().await;
+                *index += 1;
+
+                // write nodes
                 model.info_list.infos.lock().await.push(node.clone());
+                // write node id
                 model.id_list.node_id.lock().await.push(node.clone().id);
             }
+
+            //println!("MODEL INFO LIST: {:?}", model.info_list.infos.lock().await);
+            //println!("MODEL INFO INDEX: {:?}", model.info_list.index.lock().await);
+            //println!("MODEL ID LIST: {:?}", model.id_list.node_id.lock().await);
         } else {
             // TODO: error handling
             println!("Reply is an error");
@@ -203,12 +213,15 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
 
     terminal.clear()?;
 
+    //println!("RENDER INFO LIST: {:?}", model.info_list.infos.lock().await);
+    //println!("RENDER INFO INDEX: {:?}", model.info_list.index.lock().await);
+    //println!("RENDER ID LIST: {:?}", model.id_list.node_id.lock().await);
+
     let mut info_vec = Vec::new();
 
     for info in model.info_list.infos.lock().await.clone() {
         info_vec.push(info)
     }
-
     let mut id_vec = Vec::new();
 
     for id in model.id_list.node_id.lock().await.clone() {
@@ -226,6 +239,11 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
     view.info_list.index = 0;
 
     loop {
+        //println!("RENDER INFO LIST: {:?}", model.info_list.infos.lock().await);
+        //println!("RENDER INFO INDEX: {:?}", model.info_list.index.lock().await);
+        //println!("RENDER ID LIST: {:?}", model.id_list.node_id.lock().await);
+
+        //async_util::sleep(1).await;
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
@@ -233,7 +251,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();

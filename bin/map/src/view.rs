@@ -64,7 +64,11 @@ pub struct InfoListView {
 
 impl InfoListView {
     pub fn new(infos: Vec<NodeInfo>) -> InfoListView {
-        let index = 0;
+        let mut index = 0;
+
+        for _info in infos.clone() {
+            index = index + 1
+        }
 
         InfoListView { index, infos }
     }
