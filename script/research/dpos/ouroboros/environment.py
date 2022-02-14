@@ -1,4 +1,3 @@
-from debugpy import configure
 import numpy as np
 import math
 import random
@@ -23,7 +22,7 @@ class Z(object):
         self.current_blk_endorser_sig=None
     
     def __repr__(self):
-        buff= f"envirnment of {self.length} stakholders"
+        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_id}"
         for sh in self.stakeholders:
             buff+=str(sh)+"\n"
         return buff
@@ -53,7 +52,7 @@ class Z(object):
 
     @property
     def current_endorser_id(self):
-        return self.current_endorser_id[self.epoch_slot]
+        return self.current_epoch_endorsers[self.epoch_slot]
 
     @property
     def current_endorser(self):
@@ -76,6 +75,26 @@ class Z(object):
     def current_endorser_sig_pk(self):
         return self.stakeholders[self.current_endorser_id].sig_pk
 
+    def endorser(self, epoch_slot):
+        assert epoch_slot >= 0 and epoch_slot < self.epoch_length
+        return self.stakeholders[epoch_slot]
+    
+    def endorser_sig_pk(self, epoch_slot):
+        return self.endorser(epoch_slot).sig_pk
+
+    def endorser_vrf_pk(self, epoch_slot):
+        return self.endorser(epoch_slot).vrf_pk
+
+    def leader(self, epoch_slot):
+        assert epoch_slot >= 0 and epoch_slot < self.epoch_length
+        return self.stakeholders[epoch_slot]
+
+    def leader_sig_pk(self, epoch_slot):
+        return self.leader(epoch_slot).sig_pk
+
+    def leader_vrf_pk(self, epoch_slot):
+        return self.leader(epoch_slot).vrf_pk
+        
     #TODO complete
     def obfuscate_idx(self, i):
         return i
@@ -117,11 +136,11 @@ class Z(object):
             seed = leader_selection_hash(sigma)
             random.seed(seed)
             leader_idx=seed%self.length
-            endorser_idx=random.randint(0,self.length)
+            endorser_idx=random.randint(0,self.length-1)
             # only select an honest leaders
             while leader_idx==endorser_idx or not self.adversary_mask[leader_idx] or not self.adversary_mask[endorser_idx]:
-                leader_idx=random.randint(0,self.length)
-                enderser_idx=random.randint(0,self.length)
+                leader_idx=random.randint(0,self.length-1)
+                endorser_idx=random.randint(0,self.length-1)
 
             #TODO select the following leader for this epoch, note, 
             # under a single condition that no one is able to predict who is next
@@ -133,30 +152,41 @@ class Z(object):
         self.current_slot=slot
         self.log.info(f"stakeholders: {self.stakeholders}")
         current_leader = self.stakeholders[self.current_leader_id]
-        assert current_leader!=None, "current leader cant be None"
-        if current_leader.is_leader:
-            #pass leadership to the current slot leader from the epoch leader
-            self.stakeholders[self.current_epoch_leaders[self.current_leader_id]].set_leader()
-            self.stakeholders[self.current_epoch_endorsers[self.current_endorser_id]].set_endorser()
-    
+        assert current_leader is not None, "current leader cant be None"
+        self.log.highlight('selecting epochs leaders, and ensorsers ---->')
+        self.stakeholders[self.current_epoch_endorsers[self.current_endorser_id]].set_endorser()
+        self.stakeholders[self.current_epoch_leaders[self.current_leader_id]].set_leader()
+        self.log.highlight('selected epochs leaders, and ensorsers <----')
+        
     def new_epoch(self, slot, sigmas, proofs):
         self.current_slot=slot
         leaders, endorsers = self.select_epoch_leaders(sigmas, proofs)
         return leaders, endorsers
 
     def broadcast_block(self, signed_block, slot_uid):
+        while self.current_blk_endorser_sig is None:
+            self.log.info('pending endorsing...')
+            time.sleep(1)
+            #wait for it untill it gets endorsed
+            pass
         for stakeholder in self.stakeholders:
             if not stakeholder.is_leader:
                 stakeholder.receive_block(signed_block, self.current_blk_endorser_sig, slot_uid)
         self.print_blockchain()
 
-    def encorse_block(self, sig, slot_uid):
+    @property
+    def block_id(self):
+        return self.current_slot%self.epoch_length
+ 
+    def endorse_block(self, sig, slot_uid):
         #TODO commit this step to handshake phases
-        self.current_blk_endorser_sig=sig
-        confirmed = self.stakeholders[self.current_leader_id].confirm_endorsing(sig, slot_uid)
+        self.current_blk_endorser_sig=None
+        self.log.info(f"endorsing block for current_leader_id: {self.current_leader_id}")
+        confirmed = self.stakeholders[self.current_leader_id].confirm_endorsing(sig, self.block_id, self.epoch_slot)
         if confirmed:
             self.current_blk_endorser_sig=sig
-
+        else:
+            self.log.warn("unconfirmed endorsed siganture")
 
     def start(self):
         for sh in self.stakeholders:

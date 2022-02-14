@@ -6,9 +6,10 @@ EPOCH_LENGTH = 2
 stakeholders = []
 
 for i in range(2):
-    stakeholders.append(Stakeholder(EPOCH_LENGTH))
+    stakeholders.append(Stakeholder(EPOCH_LENGTH, 'passwd'+str(i)))
 
 stakeholders[0].set_leader()
+stakeholders[1].set_endorser()
 environment = Z(stakeholders, EPOCH_LENGTH, genesis_time=time.time())
 environment.start()
 

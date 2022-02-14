@@ -1,4 +1,5 @@
 import json
+import time
 from ouroboros.utils import encode_genesis_data, decode_gensis_data, state_hash
 from ouroboros.consts import *
 from ouroboros.logger import Logger
@@ -17,7 +18,7 @@ class Block(object):
         it's one-based
     @param gensis: boolean, True for gensis block
     '''
-    def __init__(self, previous_block, data, slot_uid, genesis_time, genesis=False):
+    def __init__(self, previous_block, data, slot_uid, genesis_time=time.time(), genesis=False):
         # state is hte hash of the previous block in the blockchain
         self.state=''
         if slot_uid>1:
@@ -80,7 +81,7 @@ class GensisBlock(Block):
         and stake respectively of the corresponding stakeholder U_i,
         seed of the leader election function.
     '''
-    def __init__(self, previous_block, data, slot_uid):
+    def __init__(self, previous_block, data, slot_uid, genesis_time=time.time()):
         # stakeholders is list of tuple (pk_i, s_i) for the ith stakeholder
         self.stakeholders = data[STAKEHOLDERS]
         self.distribution = data[STAKEHOLDERS_DISTRIBUTIONS]
@@ -90,7 +91,7 @@ class GensisBlock(Block):
             shd_buff +=str(shd)
         #data = encode_genesis_data(shd_buff)
         data_dict = {'seed':self.seed, 'distribution':shd_buff}
-        Block.__init__(self, previous_block, str(data_dict), slot_uid, True)
+        Block.__init__(self, previous_block, str(data_dict), slot_uid, genesis_time, True)
     '''
     @return: the number of participating stakeholders in the blockchain
     '''
@@ -109,5 +110,5 @@ lead by offline leader
 is an empty Block
 '''
 class EmptyBlock(Block):
-    def __init__(self, genesis_time):
+    def __init__(self, genesis_time=time.time()):
         Block.__init__(self, '', -1, genesis_time, False)

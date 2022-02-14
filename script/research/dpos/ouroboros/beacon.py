@@ -23,6 +23,7 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
         self.current_slot = self.slot
         self.log = Logger(self, genesis_time)
         self.log.info(f"constructed for node {str(node)}")
+        self.bb=0 # epoch counts since genesis (big bang)
 
     def __repr__(self):
         return f"trustedbeacon"
@@ -43,11 +44,16 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
     def __callback(self):
         self.current_slot = self.slot
         if self.current_slot%self.epoch_length!=0:
+            if self.bb==0:
+                # new nodes attached to the network, need to either request old blocks, or wait for next epoch's broadcst
+                # it's temporarily, and or simplicity set to the latter 
+                return
             self.log.info(f"callback: new slot of idx: {self.current_slot}")
             y, pi = self.vrf.sign(self.current_slot)
             self.log.info(f"callback: signature calculated for {str(self.node)}")
             self.node.new_slot(self.current_slot, y, pi)
         else:
+            self.bb+=1
             sigmas = []
             proofs = []
             #TODO since it's expensive, but to generate single (y,pi) pair as seed 

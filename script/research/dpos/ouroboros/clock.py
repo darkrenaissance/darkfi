@@ -8,7 +8,7 @@ import math
 
 class SynchedNTPClock(object):
 
-    def __init__(self, slot_length=1, ntp_server='europe.pool.ntp.org'):
+    def __init__(self, slot_length=60, ntp_server='europe.pool.ntp.org'):
         #TODO how long should be the slot length
         self.slot_length=slot_length
         self.ntp_server = ntp_server
@@ -16,7 +16,7 @@ class SynchedNTPClock(object):
         #TODO validate the server
         # when was darkfi birthday? as seconds since the epoch 
         self.darkfi_epoch=0
-        
+        self.offline_cnt=0
     def __repr__(self):
         return 'darkfi time: '+ ctime(self.darkfi_time) + ', current synched time: ' + ctime(self.synched_time)
 
@@ -44,5 +44,10 @@ class SynchedNTPClock(object):
         return self.synched_time - self.darkfi_epoch
 
     @property
-    def slot(self):   
+    def offline_time(self):
+        self.offline_cnt+=1
+        return self.offline_cnt
+
+    @property
+    def slot(self):
         return math.floor(self.darkfi_time/self.slot_length)
