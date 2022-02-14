@@ -4,7 +4,7 @@ use darkfi::{
     util::async_util,
 };
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
@@ -171,18 +171,18 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     is_active: node1["is_active"].as_bool().unwrap(),
                     last_message: node1["message"].to_string(),
                 },
-                NodeInfo {
-                    id: node2["id"].to_string(),
-                    connections: node2["connections"].as_u64().unwrap() as usize,
-                    is_active: node2["is_active"].as_bool().unwrap(),
-                    last_message: node2["message"].to_string(),
-                },
-                NodeInfo {
-                    id: node3["id"].to_string(),
-                    connections: node3["connections"].as_u64().unwrap() as usize,
-                    is_active: node3["is_active"].as_bool().unwrap(),
-                    last_message: node3["message"].to_string(),
-                },
+                //NodeInfo {
+                //    id: node2["id"].to_string(),
+                //    connections: node2["connections"].as_u64().unwrap() as usize,
+                //    is_active: node2["is_active"].as_bool().unwrap(),
+                //    last_message: node2["message"].to_string(),
+                //},
+                //NodeInfo {
+                //    id: node3["id"].to_string(),
+                //    connections: node3["connections"].as_u64().unwrap() as usize,
+                //    is_active: node3["is_active"].as_bool().unwrap(),
+                //    last_message: node3["message"].to_string(),
+                //},
             ];
 
             for node in infos {
@@ -195,16 +195,12 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 // write node id
                 model.id_list.node_id.lock().await.push(node.clone().id);
             }
-
-            //println!("MODEL INFO LIST: {:?}", model.info_list.infos.lock().await);
-            //println!("MODEL INFO INDEX: {:?}", model.info_list.index.lock().await);
-            //println!("MODEL ID LIST: {:?}", model.id_list.node_id.lock().await);
         } else {
             // TODO: error handling
             println!("Reply is an error");
         }
 
-        async_util::sleep(1).await;
+        async_util::sleep(2).await;
     }
 }
 
@@ -212,10 +208,6 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
     let mut asi = async_stdin();
 
     terminal.clear()?;
-
-    //println!("RENDER INFO LIST: {:?}", model.info_list.infos.lock().await);
-    //println!("RENDER INFO INDEX: {:?}", model.info_list.index.lock().await);
-    //println!("RENDER ID LIST: {:?}", model.id_list.node_id.lock().await);
 
     let mut info_vec = Vec::new();
 
@@ -232,18 +224,20 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
 
     let info_list = InfoListView::new(info_vec);
 
-    let mut view = View::new(id_list, info_list);
+    let mut view = View::new(id_list.clone(), info_list.clone());
 
     view.id_list.state.select(Some(0));
 
     view.info_list.index = 0;
 
     loop {
-        //println!("RENDER INFO LIST: {:?}", model.info_list.infos.lock().await);
-        //println!("RENDER INFO INDEX: {:?}", model.info_list.index.lock().await);
-        //println!("RENDER ID LIST: {:?}", model.id_list.node_id.lock().await);
+        let mut view = view.clone();
+        view.update(
+            model.id_list.node_id.lock().await.clone(),
+            model.info_list.infos.lock().await.clone(),
+        );
 
-        //async_util::sleep(1).await;
+        async_util::sleep(1).await;
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;

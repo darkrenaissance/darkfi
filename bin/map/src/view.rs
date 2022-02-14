@@ -11,6 +11,11 @@ impl View {
     pub fn new(id_list: IdListView, info_list: InfoListView) -> View {
         View { id_list, info_list }
     }
+
+    pub fn update(&mut self, node_id: Vec<String>, infos: Vec<NodeInfo>) {
+        self.id_list.update(node_id);
+        self.info_list.update(infos);
+    }
 }
 
 #[derive(Clone)]
@@ -54,6 +59,14 @@ impl IdListView {
     pub fn unselect(&mut self) {
         self.state.select(None);
     }
+
+    pub fn update(&mut self, node_id: Vec<String>) {
+        let index = 0;
+        for id in node_id {
+            self.state.select(Some(index));
+            self.node_id.push(id)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -64,11 +77,7 @@ pub struct InfoListView {
 
 impl InfoListView {
     pub fn new(infos: Vec<NodeInfo>) -> InfoListView {
-        let mut index = 0;
-
-        for _info in infos.clone() {
-            index = index + 1
-        }
+        let index = 0;
 
         InfoListView { index, infos }
     }
@@ -82,6 +91,12 @@ impl InfoListView {
             self.index -= 1;
         } else {
             self.index = self.infos.len() - 1;
+        }
+    }
+
+    pub fn update(&mut self, infos: Vec<NodeInfo>) {
+        for info in infos {
+            self.infos.push(info);
         }
     }
 }
