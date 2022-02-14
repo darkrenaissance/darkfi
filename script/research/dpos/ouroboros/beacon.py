@@ -49,21 +49,22 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
                 # it's temporarily, and or simplicity set to the latter 
                 return
             self.log.info(f"callback: new slot of idx: {self.current_slot}")
-            y, pi = self.vrf.sign(self.current_slot)
-            self.log.info(f"callback: signature calculated for {str(self.node)}")
-            self.node.new_slot(self.current_slot, y, pi)
+            #y, pi = self.vrf.sign(self.current_slot)
+            self.log.info(f"callbaxck: signature calculated for {str(self.node)}")
+            self.node.new_slot(self.current_slot)
         else:
             self.bb+=1
             sigmas = []
             proofs = []
             #TODO since it's expensive, but to generate single (y,pi) pair as seed 
             # and use random hash function to generate the rest randomly. 
-            for i in range(self.epoch_length):
-                self.log.info(f"callback: new slot of idx: {self.current_slot}, epoch slot {i}")
-                y, pi = self.vrf.sign(self.current_slot)
-                self.log.info(f"callback: signature calculated for {str(self.node)}")
-                sigmas.append(y)
-                proofs.append(pi)
+            if self.node.am_current_leader:
+                for i in range(self.epoch_length):
+                    self.log.info(f"callback: new slot of idx: {self.current_slot}, epoch slot {i}")
+                    y, pi = self.vrf.sign(self.current_slot)
+                    self.log.info(f"callback: signature calculated for {str(self.node)}")
+                    sigmas.append(y)
+                    proofs.append(pi)
             self.node.new_epoch(self.current_slot, sigmas, proofs)
 
     def verify(self, y, pi, pk_raw, g):

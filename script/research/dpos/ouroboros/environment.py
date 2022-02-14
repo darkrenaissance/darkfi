@@ -20,6 +20,7 @@ class Z(object):
         self.current_slot=0
         self.log.info("Z initialized")
         self.current_blk_endorser_sig=None
+        self.epoch_inited=False
     
     def __repr__(self):
         buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_id}"
@@ -148,7 +149,7 @@ class Z(object):
             self.current_epoch_endorsers[i]=endorser_idx
         return self.current_epoch_leaders, self.current_epoch_endorsers
 
-    def new_slot(self, slot, sigma, proof):
+    def new_slot(self, slot):
         self.current_slot=slot
         self.log.info(f"stakeholders: {self.stakeholders}")
         current_leader = self.stakeholders[self.current_leader_id]
@@ -159,6 +160,7 @@ class Z(object):
         self.log.highlight('selected epochs leaders, and ensorsers <----')
         
     def new_epoch(self, slot, sigmas, proofs):
+        self.epoch_inited=True
         self.current_slot=slot
         leaders, endorsers = self.select_epoch_leaders(sigmas, proofs)
         return leaders, endorsers

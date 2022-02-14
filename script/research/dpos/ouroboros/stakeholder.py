@@ -13,7 +13,7 @@ from ouroboros.consts import *
 \class Stakeholder
 '''
 class Stakeholder(object):
-    def __init__(self, epoch_length=10, passwd='password'):
+    def __init__(self, epoch_length, passwd='password'):
         #TODO (fix) remove redundant variables reley on environment
         self.passwd=passwd
         self.stake=0
@@ -97,36 +97,38 @@ class Stakeholder(object):
         and at this point, and no delay is considered (for simplicity)
         '''
         self.log.highlight("<new_epoch> start")
-        self.env.new_epoch(slot, sigmas, proofs)
+        if self.am_current_leader:
+            self.env.new_epoch(slot, sigmas, proofs)
         self.current_slot_uid = slot
         #kickoff gensis block
         # add old epoch to the ledger
         if self.current_slot_uid > 1 and self.current_epoch!=None and len(self.current_epoch)>0:
             self.blockchain.add_epoch(self.current_epoch)  
         #if leader, you need to broadcast the block
+        while not self.env.epoch_inited:
+            self.log.info("pending epoch initialization")
+            time.sleep(1)
         self.__gen_genesis_epoch()
         if self.am_current_leader:
             self.broadcast_block()
             self.end_leadership()
         elif self.am_current_endorser:
-            assert self.current_slot_uid==self.env.current_slot, f' current slot: {self.current_slot_uid}, env current slot {self.env.current_slot}'
-            #assert self.sig_pk==self.env.current_endorser_sig_pk, f'current sig_pk: {self.sig_pk}\nZ sig_pk:{self.env.current_endorser_sig_pk}'
-            if not self.sig_pk==self.env.current_endorser_sig_pk:
-                return
             self.endorse_block()
             self.end_endorsing()
 
     '''
     it's a callback function, and called by the diffuser
     '''
-    def new_slot(self, slot, sigma, proof):
+    #def new_slot(self, slot, sigma, proof):
+    def new_slot(self, slot):
         '''
         #TODO implement praos
         for this implementation we assume synchrony,
         and at this point, and no delay is considered (for simplicity)
         '''
         self.log.highlight("<new_slot> start")
-        self.env.new_slot(slot, sigma, proof)
+        self.env.new_slot(slot)
+        '''
         vrf_pk = self.env.current_leader_vrf_pk
         vrf_g = self.env.current_leader_vrf_g
         if not verify(slot, sigma, proof, vrf_pk,vrf_g) :
@@ -138,6 +140,7 @@ class Stakeholder(object):
                 self.__gen_genesis_epoch()
             self.current_epoch.add_block(self.current_block)
             return
+        '''
         if self.current_epoch==None:
             self.log.warn(f"<new_slot> current_epoch is None!")
             self.__gen_genesis_epoch()
@@ -145,18 +148,14 @@ class Stakeholder(object):
         prev_blk = self.blockchain[-1] if len(self.blockchain)>0 else EmptyBlock(self.env.genesis_time)
         self.current_block=Block(prev_blk, self.tx, self.current_slot_uid, self.env.genesis_time)
         self.current_epoch.add_block(self.current_block)
-        assert self.current_block is not None
         if self.am_current_leader:
-            self.log.highlight(f"leader {str(self)} is broadcasting block")
+            self.log.highlight(f"{str(self)} is broadcasting block")
             self.broadcast_block()
             self.end_leadership()
         elif self.am_current_endorser:
-            self.log.highlight(f"endorser {str(self)} is endorsing block")
-            assert self.sig_pk==self.env.current_endorser_sig_pk
+            self.log.highlight(f"{str(self)} is endorsing block")
             self.endorse_block()
             self.end_endorsing()
-        else:
-            self.log.highlight(f"committee memeber is listening...")
 
 
     def end_leadership(self):
@@ -205,7 +204,6 @@ class Stakeholder(object):
         self.log.highlight(f'block to be endorsed  {str(self.current_block)}')
         self.log.highlight(f'block to be endorsed has slot_uid: {self.current_slot_uid}')
         self.log.highlight(f'block to be endorsed has sig_pk: {str(self.sig_pk)}')
-        assert self.env.current_endorser_sig_pk==self.sig_pk
         self.env.endorse_block(sig, self.current_slot_uid)
 
     def __get_blk(self, blk_uid):
@@ -220,13 +218,14 @@ class Stakeholder(object):
         self.log.info(f"current block : {str(cur_blk)}\tblock uid: {blk_uid}\tstashed: {stashed}")
         if cur_blk is None:
             self.log.warn(f'block is none, current block is {str(self.current_block)} and current slot {self.current_slot_uid}, current block uid {blk_uid}, env slot {self.env.current_slot}, env blk {self.env.block_id}')
-        assert cur_blk is not None and self.current_block is not None
+        while cur_blk is None:
+            self.log.info("waiting for start of slot/epoch...")
+            time.sleep(1)
         return cur_blk, stashed
 
     def receive_block(self, signed_block, endorser_sig, blk_uid):
         self.log.highlight("receiving block")
         cur_blk, stashed = self.__get_blk(blk_uid)
-        assert cur_blk is not None
         #TODO to consider deley should retrive leader_pk of corresponding blk_uid
         self.log.highlight(f'receiving block  {str(cur_blk)}')
         self.log.highlight(f'receiving block has slot_uid: {self.current_slot_uid}')
@@ -245,17 +244,13 @@ class Stakeholder(object):
             self.env.corrupt_blk()
 
     def confirm_endorsing(self, endorser_sig, blk_uid, epoch_slot):
-        while not self.current_slot_uid == self.env.current_slot:
-            self.log.info(" ...pending start of slot...")
-            time.sleep(1)
         self.log.highlight("receiving block")
         confirmed = False
         cur_blk, _ = self.__get_blk(blk_uid)
-        assert cur_blk is not None
         self.log.highlight(f'confirming endorsed block  {str(cur_blk)}')
         self.log.highlight(f'confirming endorsed has slot_uid: {self.current_slot_uid}')
         self.log.highlight(f'confirming endorsed has sig_pk: {self.env.current_endorser_sig_pk}')
-        if verify_signature(self.env.current_endorser_sig_pk, cur_blk, endorser_sig):
+        if verify_signature(self.env.endorser_sig_pk(epoch_slot), cur_blk, endorser_sig):
             if self.current_slot_uid==self.env.current_slot:
                 self.current_block.set_endorsed()
             else:
