@@ -535,6 +535,20 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     stack.push(StackVar::Base(product));
                 }
 
+                Opcode::BaseSub => {
+                    debug!("Executing `BaseSub{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs = stack[args[0]].clone().into();
+                    let rhs = stack[args[1]].clone().into();
+
+                    let difference =
+                        arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
+
+                    debug!("Pushing difference to stack index {}", stack.len());
+                    stack.push(StackVar::Base(difference));
+                }
+
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;

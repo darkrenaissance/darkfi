@@ -658,6 +658,16 @@ impl Parser {
                         continue
                     }
 
+                    "base_sub" => {
+                        stmt.args = self.parse_function_call(token, &mut iter);
+                        stmt.opcode = Opcode::BaseSub;
+                        stmt.line = token.line;
+                        stmts.push(stmt.clone());
+
+                        parsing = false;
+                        continue
+                    }
+
                     x => {
                         self.error.emit(
                             format!("Unimplemented function call `{}`", x),

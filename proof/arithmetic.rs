@@ -37,8 +37,9 @@ fn main() -> Result<()> {
     // Create the public inputs
     let sum = a + b;
     let product = a * b;
+    let difference = a - b;
 
-    let public_inputs = vec![sum, product];
+    let public_inputs = vec![sum, product, difference];
 
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

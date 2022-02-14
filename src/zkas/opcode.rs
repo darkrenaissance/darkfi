@@ -34,6 +34,9 @@ pub enum Opcode {
     /// Base field element multiplication
     BaseMul = 0x31,
 
+    /// Base field element subtraction
+    BaseSub = 0x32,
+
     /// Constrain a Base field element to a circuit's public input
     ConstrainInstance = 0xf0,
 
@@ -59,6 +62,7 @@ impl Opcode {
             }
             Opcode::BaseAdd => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::BaseMul => (vec![Type::Base], vec![Type::Base, Type::Base]),
+            Opcode::BaseSub => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::ConstrainInstance => (vec![], vec![Type::Base]),
             Opcode::Noop => (vec![], vec![]),
         }
@@ -76,6 +80,7 @@ impl Opcode {
             0x20 => Self::CalculateMerkleRoot,
             0x30 => Self::BaseAdd,
             0x31 => Self::BaseMul,
+            0x32 => Self::BaseSub,
             0xf0 => Self::ConstrainInstance,
             _ => unimplemented!(),
         }

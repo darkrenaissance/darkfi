@@ -77,8 +77,8 @@ pub enum Error {
     MissingParams,
 
     #[cfg(feature = "crypto")]
-    #[error(transparent)]
-    PlonkError(#[from] halo2_proofs::plonk::Error),
+    #[error("Plonk error: `{0}`")]
+    PlonkError(String),
 
     #[cfg(feature = "crypto")]
     #[error("Unable to decrypt mint note")]
@@ -275,5 +275,12 @@ impl From<Box<bincode::ErrorKind>> for Error {
 impl From<std::convert::Infallible> for Error {
     fn from(err: std::convert::Infallible) -> Error {
         Error::InfallibleError(err.to_string())
+    }
+}
+
+#[cfg(feature = "crypto")]
+impl From<halo2_proofs::plonk::Error> for Error {
+    fn from(err: halo2_proofs::plonk::Error) -> Error {
+        Error::PlonkError(err.to_string())
     }
 }

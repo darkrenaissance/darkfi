@@ -18,6 +18,7 @@ pub struct ArithmeticChipConfig {
     //permute: Permutation,
     s_add: Selector,
     s_mul: Selector,
+    s_sub: Selector,
     //s_pub: Selector,
 }
 
@@ -60,6 +61,7 @@ impl ArithmeticChip {
 
         let s_add = cs.selector();
         let s_mul = cs.selector();
+        let s_sub = cs.selector();
         //let s_pub = cs.selector();
 
         cs.create_gate("add", |cs| {
@@ -80,6 +82,15 @@ impl ArithmeticChip {
             vec![s_mul * (lhs * rhs - out)]
         });
 
+        cs.create_gate("sub", |cs| {
+            let lhs = cs.query_advice(a_col, Rotation::cur());
+            let rhs = cs.query_advice(b_col, Rotation::cur());
+            let out = cs.query_advice(a_col, Rotation::next());
+            let s_sub = cs.query_selector(s_sub);
+
+            vec![s_sub * (lhs - rhs - out)]
+        });
+
         /*
         cs.create_gate("pub", |cs| {
             let a = cs.query_advice(a_col, Rotation::cur());
@@ -90,7 +101,13 @@ impl ArithmeticChip {
         });
         */
 
-        ArithmeticChipConfig { a_col, b_col, /* permute, */ s_add, s_mul /* , s_pub */ }
+        ArithmeticChipConfig {
+            a_col,
+            b_col,
+            /* permute, */ s_add,
+            s_mul,
+            s_sub, /* , s_pub */
+        }
     }
 
     pub fn add(
@@ -170,6 +187,52 @@ impl ArithmeticChip {
                 region.constrain_equal(b.cell(), rhs.cell())?;
 
                 let value = a.value().and_then(|a| b.value().map(|b| a * b));
+                let cell = region.assign_advice(
+                    || "lhs * rhs",
+                    self.config.a_col,
+                    1,
+                    || value.ok_or(Error::Synthesis),
+                )?;
+
+                out = Some(cell);
+                Ok(())
+            },
+        )?;
+
+        Ok(out.unwrap())
+    }
+
+    pub fn sub(
+        &self,
+        mut layouter: impl Layouter<Fp>,
+        a: Variable,
+        b: Variable,
+    ) -> Result<Variable, Error> {
+        let mut out = None;
+
+        layouter.assign_region(
+            || "sub",
+            |mut region| {
+                self.config.s_sub.enable(&mut region, 0)?;
+
+                let lhs = region.assign_advice(
+                    || "lhs",
+                    self.config.a_col,
+                    0,
+                    || Ok(*a.value().ok_or(Error::Synthesis)?),
+                )?;
+
+                let rhs = region.assign_advice(
+                    || "rhs",
+                    self.config.b_col,
+                    0,
+                    || Ok(*b.value().ok_or(Error::Synthesis)?),
+                )?;
+
+                region.constrain_equal(a.cell(), lhs.cell())?;
+                region.constrain_equal(b.cell(), rhs.cell())?;
+
+                let value = a.value().and_then(|a| b.value().map(|b| a - b));
                 let cell = region.assign_advice(
                     || "lhs * rhs",
                     self.config.a_col,
