@@ -1,7 +1,11 @@
 use darkfi::{
+    cli::{
+        cli_config::{log_config, spawn_config},
+        Config, MapConfig,
+    },
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::async_util,
+    util::{async_util, join_config_path},
 };
 
 use async_std::sync::Arc;
@@ -9,7 +13,7 @@ use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
 use smol::Executor;
-use std::{io, io::Read};
+use std::{io, io::Read, path::PathBuf};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -22,6 +26,8 @@ use map::{
     view::{IdListView, InfoListView},
     Model, View,
 };
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../map_config.toml");
 
 struct Map {
     url: String,
@@ -73,6 +79,13 @@ impl Map {
 
 #[async_std::main]
 async fn main() -> Result<()> {
+    let config_path = join_config_path(&PathBuf::from("map_config.toml"))?;
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
+
+    let config = Config::<MapConfig>::load(config_path)?;
+
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -133,7 +146,7 @@ async fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                run_rpc(ex2.clone(), model.clone()).await?;
+                run_rpc(&config, ex2.clone(), model.clone()).await?;
                 render(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
@@ -143,8 +156,9 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run_rpc(ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
-    let client = Map::new("tcp://127.0.0.1:8000".to_string());
+async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
+    // TODO: listen to multiple nodes
+    let client = Map::new(config.nodes[0].node_id.to_string());
 
     ex.spawn(poll(client, model)).detach();
 
@@ -186,10 +200,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             ];
 
             for node in infos {
-                // update the index
-                let mut index = model.info_list.index.lock().await;
-                *index += 1;
-
                 // write nodes
                 model.info_list.infos.lock().await.push(node.clone());
                 // write node id

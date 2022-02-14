@@ -142,6 +142,16 @@ pub struct CashierdConfig {
     pub networks: Vec<FeatureNetwork>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MapConfig {
+    pub nodes: Vec<IrcNode>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct IrcNode {
+    pub node_id: String,
+}
+
 pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     if !path.exists() {
         if let Some(parent) = path.parent() {
