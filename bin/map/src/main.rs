@@ -179,33 +179,33 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
 
             // change NodeInfo
             // TODO: error handling
-            let infos = vec![
-                NodeInfo {
-                    id: node1["id"].to_string(),
-                    connections: node1["connections"].as_u64().unwrap() as usize,
-                    is_active: node1["is_active"].as_bool().unwrap(),
-                    last_message: node1["message"].to_string(),
-                },
-                //NodeInfo {
-                //    id: node2["id"].to_string(),
-                //    connections: node2["connections"].as_u64().unwrap() as usize,
-                //    is_active: node2["is_active"].as_bool().unwrap(),
-                //    last_message: node2["message"].to_string(),
-                //},
-                //NodeInfo {
-                //    id: node3["id"].to_string(),
-                //    connections: node3["connections"].as_u64().unwrap() as usize,
-                //    is_active: node3["is_active"].as_bool().unwrap(),
-                //    last_message: node3["message"].to_string(),
-                //},
-            ];
+            //let infos = vec![
+            //    NodeInfo {
+            //        id: node1["id"].to_string(),
+            //        connections: node1["connections"].as_u64().unwrap() as usize,
+            //        is_active: node1["is_active"].as_bool().unwrap(),
+            //        last_message: node1["message"].to_string(),
+            //    },
+            //    //NodeInfo {
+            //    //    id: node2["id"].to_string(),
+            //    //    connections: node2["connections"].as_u64().unwrap() as usize,
+            //    //    is_active: node2["is_active"].as_bool().unwrap(),
+            //    //    last_message: node2["message"].to_string(),
+            //    //},
+            //    //NodeInfo {
+            //    //    id: node3["id"].to_string(),
+            //    //    connections: node3["connections"].as_u64().unwrap() as usize,
+            //    //    is_active: node3["is_active"].as_bool().unwrap(),
+            //    //    last_message: node3["message"].to_string(),
+            //    //},
+            //];
 
-            for node in infos {
-                // write nodes
-                model.info_list.infos.lock().await.push(node.clone());
-                // write node id
-                model.id_list.node_id.lock().await.push(node.clone().id);
-            }
+            //for node in infos {
+            //    // write nodes
+            //    model.info_list.infos.lock().await.push(node.clone());
+            //    // write node id
+            //    model.id_list.node_id.lock().await.push(node.clone().id);
+            //}
         } else {
             // TODO: error handling
             println!("Reply is an error");

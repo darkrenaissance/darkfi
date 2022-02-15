@@ -1,5 +1,5 @@
 use async_std::sync::Mutex;
-use darkfi::error::{Error, Result};
+use darkfi::error::Result;
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -48,26 +48,33 @@ impl InfoList {
     }
 }
 
-//pub type NodeId = u32;
-
 #[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub id: String,
-    pub connections: usize,
-    pub is_active: bool,
-    pub last_message: String,
+    pub out_connects: Vec<Connection>,
+    pub in_connects: Vec<Connection>,
 }
 
 impl NodeInfo {
     pub fn new() -> NodeInfo {
-        let connections = 0;
-        let is_active = false;
-        NodeInfo { id: String::new(), connections, is_active, last_message: String::new() }
+        NodeInfo { id: String::new(), out_connects: Vec::new(), in_connects: Vec::new() }
     }
 }
 
 impl Default for NodeInfo {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Connection {
+    pub id: String,
+    pub message: String,
+}
+
+impl Connection {
+    pub fn new() -> Connection {
+        Connection { id: String::new(), message: String::new() }
     }
 }
