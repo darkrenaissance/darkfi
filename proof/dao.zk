@@ -1,46 +1,68 @@
 constant "DAO" {
-	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
 contract "DAO" {
-	Base a, # contract address
-	Base s,  # serial number
-	Base T, # treasury balance
-	Base B_b, # bulla blinding
+	Base spend_contract,
+	Base cur_balance,
+	Base old_serial,
+	Base old_bulla_blind,
 
 	Uint32 leaf_pos,
-	MerklePath W, # merkle path to DAO
+	MerklePath merkle_path,
 
-	Base u, # output 0 value
-	Base P_x, # output 0 addr x
-	Base P_y, # output 0 addr y
-	Base b_m, # output blinding
+	Base amount_to_send,
+	Base pub_x,
+	Base pub_y,
+	Base proposal_blind,
+	Scalar proposal_value_blind,
 
-	Base votes,
-	Scalar vote_blinds,
-
-	Scalar output_1_blind,
+	Base new_serial,
+	Base new_bulla_blind,
 }
 
 circuit "DAO" {
-	# Reveal serial number
-	constrain_instance(s);
+	# Enforce spend contract
+	constrain_instance(spend_contract);
 
-	# Poseidon hash of the Bulla
-	bulla = poseidon_hash(a, s, T, B_b);
-	D = calculate_merkle_root(leaf_pos, W, bulla);
+	# Reveal serial number
+	constrain_instance(old_serial);
+
+	# Poseidon hash of the current treasury
+	bulla = poseidon_hash(
+		spend_contract,
+		cur_balance,
+		old_serial,
+		old_bulla_blind,
+	);
+
+	# Enforce the merkle root
+	D = calculate_merkle_root(leaf_pos, merkle_path, bulla);
 	constrain_instance(D);
 
-	# Output 0:
-	M = poseidon_hash(u, P_x, P_y, b_m);
-	constrain_instance(M);
+	# Poseidon hash of the proposal (output 0)
+	proposal = poseidon_hash(amount_to_send, pub_x, pub_y, proposal_blind);
+	constrain_instance(proposal);
 
-	vcv = ec_mul_short(votes, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(vote_blinds, VALUE_COMMIT_RANDOM);
-	vote_commit = ec_add(vcv, vcr);
-	vote_commit_x = ec_get_x(vote_commit);
-	vote_commit_y = ec_get_y(vote_commit);
-	constrain_instance(vote_commit_x);
-	constrain_instance(vote_commit_y);
+	# Pedersen commitment to the amount we're sending
+	valc_v = ec_mul_short(amount_to_send, VALUE_COMMIT_VALUE);
+	valc_r = ec_mul(proposal_value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(valc_v, valc_r);
+	value_commit_x = ec_get_x(value_commit);
+	value_commit_y = ec_get_y(value_commit);
+	constrain_instance(value_commit_x);
+	constrain_instance(value_commit_y);
+
+	# Calculate remaining balance in treasury
+	new_balance = base_sub(cur_balance, amount_to_send);
+
+	# Poseidon hash of the new treasury
+	new_bulla = poseidon_hash(
+		spend_contract,
+		new_balance,
+		new_serial,
+		new_bulla_blind,
+	);
+	constrain_instance(new_bulla);
 }
