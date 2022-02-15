@@ -1,4 +1,4 @@
-use pasta_curves::arithmetic::Field;
+use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
 use super::{

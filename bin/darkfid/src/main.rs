@@ -253,7 +253,7 @@ impl Darkfid {
             let bytes_vec: Vec<u8> = serde_json::from_str(&keypair_str)?;
             bytes.copy_from_slice(bytes_vec.as_slice());
 
-            let secret: SecretKey = SecretKey::from_bytes(&bytes)?;
+            let secret: SecretKey = SecretKey::from_bytes(bytes)?;
             let public: PublicKey = PublicKey::from_secret(secret);
 
             self.client.lock().await.put_keypair(&Keypair { secret, public }).await?;
