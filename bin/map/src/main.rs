@@ -147,7 +147,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
-                render(&mut terminal, model.clone()).await?;
+                render(&config, &mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -174,9 +174,10 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
 
             // TODO: generalize this
             let node1 = &nodes[0];
-            let node2 = &nodes[1];
-            let node3 = &nodes[2];
+            //let node2 = &nodes[1];
+            //let node3 = &nodes[2];
 
+            // change NodeInfo
             // TODO: error handling
             let infos = vec![
                 NodeInfo {
@@ -214,7 +215,11 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     }
 }
 
-async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
+async fn render<B: Backend>(
+    config: &MapConfig,
+    terminal: &mut Terminal<B>,
+    model: Arc<Model>,
+) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -247,7 +252,6 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             model.info_list.infos.lock().await.clone(),
         );
 
-        async_util::sleep(1).await;
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
