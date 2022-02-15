@@ -37,22 +37,17 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 }
 
 fn render_info<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
-    // TODO: create new list of outgoing and incoming connections
     let info = &view.info_list.infos;
     let id = &info[index].id;
-    //for connect in info[index].in_connects.clone() {
-    //    let id = connect.id;
-    //    let message = connect.message;
-    //}
-    //for connect in info[index].out_connects.clone() {
-    //    let id = connect.id;
-    //    let message = connect.message;
-    //}
+
+    let i0 = info[index].incoming.clone();
+
+    let o0 = info[index].outgoing.clone();
+
     let span = vec![
         Spans::from(format!("NodeId: {}", id)),
-        //Spans::from(format!("Number of connections: {}", connections)),
-        //Spans::from(format!("Is active: {}", is_active)),
-        //Spans::from(format!("Last message: {}", message)),
+        Spans::from(format!("Outgoing connections: {:?}", i0)),
+        Spans::from(format!("Incoming connections: {:?}", o0)),
     ];
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());

@@ -171,18 +171,18 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 incoming: in_connections,
             }];
 
-            //for node in infos {
-            //    // write nodes
-            //    model.info_list.infos.lock().await.push(node.clone());
-            //    // write node id
-            //    model.id_list.node_id.lock().await.push(node.clone().id);
-            //}
+            for node in infos {
+                // write nodes
+                model.info_list.infos.lock().await.push(node.clone());
+                // write node id
+                model.id_list.node_id.lock().await.push(node.clone().id);
+            }
         } else {
             // TODO: error handling
             println!("Reply is an error");
         }
 
-        async_util::sleep(2).await;
+        async_util::sleep(5).await;
     }
 }
 
