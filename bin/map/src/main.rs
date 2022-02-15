@@ -21,7 +21,7 @@ use tui::{
 };
 
 use map::{
-    model::{IdList, InfoList, NodeInfo},
+    model::{Connection, IdList, InfoList, NodeInfo},
     ui,
     view::{IdListView, InfoListView},
     Model, View,
@@ -132,35 +132,44 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            let nodes = reply.as_object().unwrap().get("nodes").unwrap();
+            let id = reply.as_object().unwrap().get("id").unwrap();
 
-            // TODO: generalize this
-            //let node1 = &nodes[0];
-            //let node2 = &nodes[1];
-            //let node3 = &nodes[2];
+            let connections = reply.as_object().unwrap().get("connections").unwrap();
+            let outgoing = connections.get("outgoing").unwrap();
+            let incoming = connections.get("incoming").unwrap();
 
-            // change NodeInfo
-            // TODO: error handling
-            //let infos = vec![
-            //    NodeInfo {
-            //        id: node1["id"].to_string(),
-            //        connections: node1["connections"].as_u64().unwrap() as usize,
-            //        is_active: node1["is_active"].as_bool().unwrap(),
-            //        last_message: node1["message"].to_string(),
-            //    },
-            //    //NodeInfo {
-            //    //    id: node2["id"].to_string(),
-            //    //    connections: node2["connections"].as_u64().unwrap() as usize,
-            //    //    is_active: node2["is_active"].as_bool().unwrap(),
-            //    //    last_message: node2["message"].to_string(),
-            //    //},
-            //    //NodeInfo {
-            //    //    id: node3["id"].to_string(),
-            //    //    connections: node3["connections"].as_u64().unwrap() as usize,
-            //    //    is_active: node3["is_active"].as_bool().unwrap(),
-            //    //    last_message: node3["message"].to_string(),
-            //    //},
-            //];
+            let mut out_connections = Vec::new();
+            let mut in_connections = Vec::new();
+
+            let out0 = Connection::new(
+                outgoing[0].get("id").unwrap().to_string(),
+                outgoing[0].get("message").unwrap().to_string(),
+            );
+            let out1 = Connection::new(
+                outgoing[1].get("id").unwrap().to_string(),
+                outgoing[1].get("message").unwrap().to_string(),
+            );
+
+            let in0 = Connection::new(
+                incoming[0].get("id").unwrap().to_string(),
+                incoming[0].get("message").unwrap().to_string(),
+            );
+            let in1 = Connection::new(
+                incoming[1].get("id").unwrap().to_string(),
+                incoming[1].get("message").unwrap().to_string(),
+            );
+
+            out_connections.push(out0);
+            out_connections.push(out1);
+
+            in_connections.push(in0);
+            in_connections.push(in1);
+
+            let infos = vec![NodeInfo {
+                id: id.to_string(),
+                outgoing: out_connections,
+                incoming: in_connections,
+            }];
 
             //for node in infos {
             //    // write nodes

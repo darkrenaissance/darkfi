@@ -51,19 +51,13 @@ impl InfoList {
 #[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub id: String,
-    pub out_connects: Vec<Connection>,
-    pub in_connects: Vec<Connection>,
+    pub outgoing: Vec<Connection>,
+    pub incoming: Vec<Connection>,
 }
 
 impl NodeInfo {
     pub fn new() -> NodeInfo {
-        NodeInfo { id: String::new(), out_connects: Vec::new(), in_connects: Vec::new() }
-    }
-}
-
-impl Default for NodeInfo {
-    fn default() -> Self {
-        Self::new()
+        NodeInfo { id: String::new(), outgoing: Vec::new(), incoming: Vec::new() }
     }
 }
 
@@ -74,7 +68,7 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new() -> Connection {
-        Connection { id: String::new(), message: String::new() }
+    pub fn new(id: String, message: String) -> Connection {
+        Connection { id, message }
     }
 }
