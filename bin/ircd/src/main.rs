@@ -82,7 +82,7 @@ async fn process_user_input(
 ) -> Result<()> {
     if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
-        return Err(Error::ChannelStopped)
+        return Err(Error::ChannelStopped);
     }
     assert!(&line[(line.len() - 1)..] == "\n");
     // Remove the \n character
@@ -92,7 +92,7 @@ async fn process_user_input(
 
     if let Err(err) = connection.update(line, p2p.clone()).await {
         warn!("Connection error: {} for {}", err, peer_addr);
-        return Err(Error::ChannelStopped)
+        return Err(Error::ChannelStopped);
     }
 
     Ok(())
@@ -103,14 +103,14 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         Ok(listener) => listener,
         Err(err) => {
             error!("Bind listener failed: {}", err);
-            return Err(Error::OperationFailed)
+            return Err(Error::OperationFailed);
         }
     };
     let local_addr = match listener.get_ref().local_addr() {
         Ok(addr) => addr,
         Err(err) => {
             error!("Failed to get local address: {}", err);
-            return Err(Error::OperationFailed)
+            return Err(Error::OperationFailed);
         }
     };
     info!("Listening on {}", local_addr);
@@ -177,7 +177,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped)
+                return Err(Error::ServiceStopped);
             }
         };
         info!("Accepted client: {}", peer_addr);
@@ -196,7 +196,7 @@ struct JsonRpcInterface {}
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
@@ -219,24 +219,25 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
         let resp: serde_json::Value = json!({
-            "nodes": [{
-                "id": "dfk34123kl213kp213sd",
-                "connections": 1,
-                "message": "gm",
-                "is_active": true,
-            },
-            {
-                "id": "138032139034903499s8",
-                "connections": 3,
-                "message": "ok",
-                "is_active": false,
-            },
-            {
-                "id": "123423ml1k2j3ll123kl",
-                "connections": 6,
-                "message": "lol",
-                "is_active": true,
-            }]
+                "id": "127.0.0.1:6688",
+                "connections": { "outgoing": [{
+                                              "id": "127.2.1.1:0000",
+                                              "message": "addr",
+                                               },
+                                              {
+                                              "id": "121.1.6.7:9000",
+                                              "message": "get_addr",
+                                              }],
+                               "incoming": [{
+                                              "id": "124.1.1.6:9333",
+                                              "message": "addr",
+                                               },
+                                              {
+                                              "id": "120.1.0.5:2111",
+                                              "message": "get_addr",
+                                              }],
+
+                },
         });
         JsonResult::Resp(jsonresp(resp, id))
     }
