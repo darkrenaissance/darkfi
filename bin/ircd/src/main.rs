@@ -220,23 +220,26 @@ impl JsonRpcInterface {
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
         let resp: serde_json::Value = json!({
                 "id": "127.0.0.1:6688",
-                "connections": { "outgoing": [{
-                                              "id": "127.2.1.1:0000",
-                                              "message": "addr",
-                                               },
-                                              {
-                                              "id": "121.1.6.7:9000",
-                                              "message": "get_addr",
-                                              }],
-                               "incoming": [{
-                                              "id": "124.1.1.6:9333",
-                                              "message": "addr",
-                                               },
-                                              {
-                                              "id": "120.1.0.5:2111",
-                                              "message": "get_addr",
-                                              }],
-
+                "connections": {
+                    "outgoing": [
+                        {
+                            "id": "127.2.1.1:0000",
+                            "message": "addr",
+                        },
+                        {
+                            "id": "121.1.6.7:9000",
+                            "message": "get_addr",
+                        }],
+                    "incoming": [
+                        {
+                            "id": "124.1.1.6:9333",
+                            "message": "addr",
+                        },
+                        {
+                            "id": "120.1.0.5:2111",
+                            "message": "get_addr",
+                        }
+                    ],
                 },
         });
         JsonResult::Resp(jsonresp(resp, id))
