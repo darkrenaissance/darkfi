@@ -81,7 +81,6 @@ impl Map {
 async fn main() -> Result<()> {
     let config_path = join_config_path(&PathBuf::from("map_config.toml"))?;
 
-    // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let config = Config::<MapConfig>::load(config_path)?;
@@ -93,47 +92,11 @@ async fn main() -> Result<()> {
     terminal.clear()?;
 
     let infos = vec![NodeInfo::new()];
-    //let infos = vec![
-    //    NodeInfo {
-    //        id: "0385048034sodisofjhosd1111q3434".to_string(),
-    //        connections: 10,
-    //        is_active: true,
-    //        last_message: "hey how are you?".to_string(),
-    //    },
-    //    NodeInfo {
-    //        id: "09w30we9wsnfksdfkdjflsjkdfjdfsd".to_string(),
-    //        connections: 5,
-    //        is_active: false,
-    //        last_message: "lmao".to_string(),
-    //    },
-    //    NodeInfo {
-    //        id: "038043325alsdlasjfrsdfsdfsdjsdf".to_string(),
-    //        connections: 7,
-    //        is_active: true,
-    //        last_message: "gm".to_string(),
-    //    },
-    //    NodeInfo {
-    //        id: "04985034953ldflsdjflsdjflsdjfii".to_string(),
-    //        connections: 2,
-    //        is_active: true,
-    //        last_message: "hihi".to_string(),
-    //    },
-    //    NodeInfo {
-    //        id: "09850249352asdjapsdikalskasdkas".to_string(),
-    //        connections: 10,
-    //        is_active: true,
-    //        last_message: "wtf".to_string(),
-    //    },
-    //];
-
     let info_list = InfoList::new(infos.clone());
-
     let ids = vec![String::new()];
-
     let id_list = IdList::new(ids);
 
     let model = Arc::new(Model::new(id_list, info_list));
-    //let model = Model::new(id_list, info_list);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -143,7 +106,6 @@ async fn main() -> Result<()> {
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
@@ -173,7 +135,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let nodes = reply.as_object().unwrap().get("nodes").unwrap();
 
             // TODO: generalize this
-            let node1 = &nodes[0];
+            //let node1 = &nodes[0];
             //let node2 = &nodes[1];
             //let node3 = &nodes[2];
 
@@ -225,24 +187,19 @@ async fn render<B: Backend>(
     terminal.clear()?;
 
     let mut info_vec = Vec::new();
-
     for info in model.info_list.infos.lock().await.clone() {
         info_vec.push(info)
     }
     let mut id_vec = Vec::new();
-
     for id in model.id_list.node_id.lock().await.clone() {
         id_vec.push(id)
     }
 
     let id_list = IdListView::new(id_vec);
-
     let info_list = InfoListView::new(info_vec);
-
     let mut view = View::new(id_list.clone(), info_list.clone());
 
     view.id_list.state.select(Some(0));
-
     view.info_list.index = 0;
 
     loop {
