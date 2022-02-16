@@ -166,7 +166,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             in_connections.push(in1);
 
             let infos = vec![NodeInfo {
-                id: id.to_string(),
+                // TODO: should never crash
+                id: id.as_str().unwrap().to_string(),
                 outgoing: out_connections,
                 incoming: in_connections,
             }];
@@ -215,10 +216,6 @@ async fn render<B: Backend>(
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
-        //println!("Model id list: {:?}", model.id_list.node_id.lock().await.clone());
-        //for id in view.id_list.node_id.clone() {
-        //    println!("Cleaned id list: {:?}", id.as_str());
-        //}
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
@@ -236,6 +233,5 @@ async fn render<B: Backend>(
                 _ => (),
             }
         }
-        async_util::sleep(2).await;
     }
 }
