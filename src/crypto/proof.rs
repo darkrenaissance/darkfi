@@ -112,8 +112,8 @@ mod tests {
         crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
         zk::circuit::MintContract,
     };
-    use halo2::arithmetic::Field;
     use rand::rngs::OsRng;
+    use group::ff::Field;
 
     #[test]
     fn test_proof_serialization() -> Result<()> {

@@ -382,8 +382,9 @@ mod tests {
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
     use incrementalmerkletree::{Frontier, Tree};
-    use pasta_curves::{arithmetic::Field, pallas};
+    use pasta_curves::pallas;
     use rand::rngs::OsRng;
+    use group::ff::Field;
 
     const WPASS: &str = "darkfi";
 

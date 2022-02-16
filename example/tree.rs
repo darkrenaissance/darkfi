@@ -1,6 +1,7 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
-use pasta_curves::{arithmetic::Field, pallas};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
+use group::ff::Field;
 
 use darkfi::{crypto::merkle_node::MerkleNode, Result};
 

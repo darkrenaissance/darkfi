@@ -130,7 +130,7 @@ impl CommitDomains<pallas::Affine, OrchardFixedBases, OrchardHashDomains> for Or
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{
+    use crate::crypto::constants::{
         fixed_bases::{COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION},
         sinsemilla::MERKLE_CRH_PERSONALIZATION,
     };
