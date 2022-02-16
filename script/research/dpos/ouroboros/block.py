@@ -28,6 +28,8 @@ class Block(object):
         self.is_genesis=genesis
         self.endorsed=False
         self.log = Logger(genesis_time)
+        self.leader_id=None
+        self.endorser_id=None
 
     def __repr__(self):
         if self.is_genesis:
@@ -59,6 +61,12 @@ class Block(object):
     def set_endorsed(self):
         self.endorsed=True
 
+    def set_endorser(self, id):
+        self.endorser_id=id
+        self.set_endorsed()
+
+    def set_leader(self, id):
+        self.leader_id=id
     
     @property
     def data(self):
@@ -83,9 +91,10 @@ class GensisBlock(Block):
     '''
     def __init__(self, previous_block, data, slot_uid, genesis_time=time.time()):
         # stakeholders is list of tuple (pk_i, s_i) for the ith stakeholder
-        self.stakeholders = data[STAKEHOLDERS]
-        self.distribution = data[STAKEHOLDERS_DISTRIBUTIONS]
-        self.seed = data.get(SEED, '') #needed for pvss
+        dist_block = data[0]
+        self.stakeholders = dist_block[STAKEHOLDERS]
+        self.distribution = dist_block[STAKEHOLDERS_DISTRIBUTIONS]
+        self.seed = dist_block[SEED] #needed for pvss
         shd_buff = ''
         for shd in self.distribution:
             shd_buff +=str(shd)

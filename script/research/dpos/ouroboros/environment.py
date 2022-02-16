@@ -4,9 +4,12 @@ import random
 import time
 from ouroboros.logger import Logger
 from ouroboros.consts import *
+from ouroboros.data import Item, GenesisItem
+from ouroboros import utils
 
 '''
-\class Z is the environment
+\class Z is the environment,
+environment is ought to interfece with the network
 '''
 class Z(object):
     def __init__(self, stakeholdes, epoch_length, genesis_time=time.time()):
@@ -21,22 +24,60 @@ class Z(object):
         self.log.info("Z initialized")
         self.current_blk_endorser_sig=None
         self.epoch_inited=False
+        self.cached_dist = []
+        self.beta = 0.5 # endorser weight
+        #
+        self.l=0
+        #a transaction is declared stable if and only if it is in a block that,
+        # is more than k blocks deep in the ledger.
+        self.k = self.epoch_length/2 - self.l -1 
     
+    @property
+    def endorser_len(self):
+        #TODO (impl)
+        pass
+
     def __repr__(self):
-        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_id}"
+        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_idx}"
         for sh in self.stakeholders:
             buff+=str(sh)+"\n"
         return buff
+   
+    '''
+    issue a coinbase for claimed reward 2(k+l) after the block
+    '''
+    def issue_coinbase(self):
+        #TODO
+        pass
+
+    '''
+    returns true if before time, false otherwise
+    '''
+    @property
+    def iceage(self):
+        return self.block_id==0
+
+    @property
+    def previous_epoch_stake_distribution(self):
+        if self.iceage:
+            return self.get_epoch_distribution()
+        else:
+            return self.cached_dist
+
+    def get_epoch_distribution(self):
+        stakes = [node.stake for node in self.stakeholders]
+        return stakes
 
     '''
         return genesis data of the current epoch
     '''
     def get_genesis_data(self):
         #TODO implement dynaming staking
+        distribution = self.get_epoch_distribution()
         genesis_data = {STAKEHOLDERS: self.stakeholders,
-        STAKEHOLDERS_DISTRIBUTIONS:[],
+        STAKEHOLDERS_DISTRIBUTIONS: distribution,
             SEED: ''}
-        return genesis_data
+        return GenesisItem(genesis_data)
     
     @property
     def epoch_slot(self):
@@ -52,13 +93,16 @@ class Z(object):
         return self.stakeholders[self.current_leader_id]
 
     @property
-    def current_endorser_id(self):
+    def current_endorser_idx(self):
         return self.current_epoch_endorsers[self.epoch_slot]
+
+    def current_endorser_id(self):
+        return self.current_endorser.id
 
     @property
     def current_endorser(self):
         self.log.info(f"getting endorser of id: {self.current_leader_id}")
-        return self.stakeholders[self.current_endorser_id]
+        return self.stakeholders[self.current_endorser_idx]
 
     @property
     def current_leader_vrf_pk(self):
@@ -74,7 +118,7 @@ class Z(object):
     
     @property
     def current_endorser_sig_pk(self):
-        return self.stakeholders[self.current_endorser_id].sig_pk
+        return self.stakeholders[self.current_endorser_idx].sig_pk
 
     def endorser(self, epoch_slot):
         assert epoch_slot >= 0 and epoch_slot < self.epoch_length
@@ -124,6 +168,10 @@ class Z(object):
     def honest(self):
         return len(self.stakeholders[self.adversary_mask])
 
+    @property
+    def random(self):
+        return utils.weighted_random(self.previous_epoch_stake_distribution)
+
     def select_epoch_leaders(self, sigmas, proofs):
         assert len(sigmas)==self.epoch_length and len(proofs)==self.epoch_length, self.log.error(f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
         for i in range(self.epoch_length):
@@ -136,15 +184,15 @@ class Z(object):
                 return y_hypotenuse2
             seed = leader_selection_hash(sigma)
             random.seed(seed)
-            leader_idx=seed%self.length
-            endorser_idx=random.randint(0,self.length-1)
+            leader_idx=self.random
+            endorser_idx=self.random
             # only select an honest leaders
             while leader_idx==endorser_idx or not self.adversary_mask[leader_idx] or not self.adversary_mask[endorser_idx]:
-                leader_idx=random.randint(0,self.length-1)
-                endorser_idx=random.randint(0,self.length-1)
-
+                leader_idx=self.random
+                endorser_idx=self.random
             #TODO select the following leader for this epoch, note, 
             # under a single condition that no one is able to predict who is next
+            assert not leader_idx==endorser_idx
             self.current_epoch_leaders[i]=leader_idx
             self.current_epoch_endorsers[i]=endorser_idx
         return self.current_epoch_leaders, self.current_epoch_endorsers
@@ -155,11 +203,12 @@ class Z(object):
         current_leader = self.stakeholders[self.current_leader_id]
         assert current_leader is not None, "current leader cant be None"
         self.log.highlight('selecting epochs leaders, and ensorsers ---->')
-        self.stakeholders[self.current_epoch_endorsers[self.current_endorser_id]].set_endorser()
+        self.stakeholders[self.current_epoch_endorsers[self.current_endorser_idx]].set_endorser()
         self.stakeholders[self.current_epoch_leaders[self.current_leader_id]].set_leader()
         self.log.highlight('selected epochs leaders, and ensorsers <----')
         
     def new_epoch(self, slot, sigmas, proofs):
+        self.cached_dist = self.get_epoch_distribution()
         self.epoch_inited=True
         self.current_slot=slot
         leaders, endorsers = self.select_epoch_leaders(sigmas, proofs)
@@ -208,7 +257,7 @@ class Z(object):
         self.corrupt(self.current_leader_id)
 
     def corrupt_endorse(self):
-        self.corrupt(self.current_endorser_id)
+        self.corrupt(self.current_endorser_idx)
 
     def corrupt_blk(self):
         self.log.warn(f"<corrupt_blk> at slot: {self.current_slot}")

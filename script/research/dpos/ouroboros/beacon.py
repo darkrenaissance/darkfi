@@ -24,6 +24,8 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
         self.log = Logger(self, genesis_time)
         self.log.info(f"constructed for node {str(node)}")
         self.bb=0 # epoch counts since genesis (big bang)
+        self.sigmas = []
+        self.proofs = []
 
     def __repr__(self):
         return f"trustedbeacon"
@@ -48,24 +50,19 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
                 # new nodes attached to the network, need to either request old blocks, or wait for next epoch's broadcst
                 # it's temporarily, and or simplicity set to the latter 
                 return
-            self.log.info(f"callback: new slot of idx: {self.current_slot}")
-            #y, pi = self.vrf.sign(self.current_slot)
-            self.log.info(f"callbaxck: signature calculated for {str(self.node)}")
-            self.node.new_slot(self.current_slot)
+            self.node.new_slot(self.current_slot, self.sigmas[self.current_slot%self.epoch_length], self.proofs[self.current_slot%self.epoch_length])
         else:
-            self.bb+=1
-            sigmas = []
-            proofs = []
             #TODO since it's expensive, but to generate single (y,pi) pair as seed 
             # and use random hash function to generate the rest randomly. 
             if self.node.am_current_leader:
+                self.bb+=1
+                self.sigmas = []
+                self.proofs = []
                 for i in range(self.epoch_length):
-                    self.log.info(f"callback: new slot of idx: {self.current_slot}, epoch slot {i}")
-                    y, pi = self.vrf.sign(self.current_slot)
-                    self.log.info(f"callback: signature calculated for {str(self.node)}")
-                    sigmas.append(y)
-                    proofs.append(pi)
-            self.node.new_epoch(self.current_slot, sigmas, proofs)
+                    y, pi = self.vrf.sign(self.current_slot+i)
+                    self.sigmas.append(y)
+                    self.proofs.append(pi)
+                self.node.new_epoch(self.current_slot, self.sigmas, self.proofs)
 
     def verify(self, y, pi, pk_raw, g):
         return VRF.verify(self.current_slot, y, pi, pk_raw, g)

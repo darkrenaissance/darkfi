@@ -12,7 +12,6 @@ class Epoch(list):
         self.blocks = []
         self.R = R #maximum epoch legnth, and it's a fixed property of the system
         self.e = epoch_idx
-        self.n=0
         self.log = Logger(genesis_time)
 
     @property
@@ -32,6 +31,13 @@ class Epoch(list):
         if self.length==0:
             return None
         return self.blocks[0]
+
+    @property
+    def coffee(self):
+        epoch_fee = 0
+        for blk in self.blocks:
+            epoch_fee += blk.data.coffee
+        return epoch_fee
 
     def __len__(self):
         return self.length
@@ -53,10 +59,10 @@ class Epoch(list):
     
     def __next__(self):
         blk=None
-        for i in range(self.length):
+        if self.n <= self.length:
             try:
                 blk=self.blocks[self.n]
+                self.n+=1
+                return blk
             except IndexError:
                 raise StopIteration
-            self.n+=1
-            return blk
