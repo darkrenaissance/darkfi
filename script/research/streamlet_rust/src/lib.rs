@@ -17,12 +17,14 @@ mod tests {
         let genesis_time = Utc::now().timestamp();
 
         // We create some nodes to participate in the Protocol.
-        let mut node0 =
-            Node::new(0, genesis_time, String::from("node_password0"), genesis_block.clone());
-        let mut node1 =
-            Node::new(1, genesis_time, String::from("node_password1"), genesis_block.clone());
-        let mut node2 =
-            Node::new(2, genesis_time, String::from("node_password2"), genesis_block.clone());
+        let mut node0 = Node::new(0, genesis_time, genesis_block.clone());
+        let mut node1 = Node::new(1, genesis_time, genesis_block.clone());
+        let mut node2 = Node::new(2, genesis_time, genesis_block.clone());
+
+        // We store nodes public keys for voting.
+        let node0_public_key = node0.public_key;
+        let node1_public_key = node1.public_key;
+        let node2_public_key = node2.public_key;
 
         // We simulate some epochs to test consistency.
         node0.receive_transaction(String::from("tx0"));
@@ -33,7 +35,7 @@ mod tests {
         node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx2"));
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
-        let proposed_block = if node0.check_if_epoch_leader(3) {
+        let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
             node0.propose_block()
         } else if node1.check_if_epoch_leader(3) {
             node1.propose_block()
@@ -42,20 +44,23 @@ mod tests {
         };
 
         // Leader broadcasts the proposed_block to rest nodes and they vote on it.
-        let node0_vote = node0.receive_proposed_block(&proposed_block).unwrap();
-        let node1_vote = node1.receive_proposed_block(&proposed_block).unwrap();
-        let node2_vote = node2.receive_proposed_block(&proposed_block).unwrap();
+        let node0_vote =
+            node0.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node1_vote =
+            node1.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node2_vote =
+            node2.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
 
         // Each node broadcasts its vote to rest nodes.
-        node0.receive_vote(&node0_vote, 3);
-        node0.receive_vote(&node1_vote, 3);
-        node0.receive_vote(&node2_vote, 3);
-        node1.receive_vote(&node0_vote, 3);
-        node1.receive_vote(&node1_vote, 3);
-        node1.receive_vote(&node2_vote, 3);
-        node2.receive_vote(&node0_vote, 3);
-        node2.receive_vote(&node1_vote, 3);
-        node2.receive_vote(&node2_vote, 3);
+        node0.receive_vote(&node0_public_key, &node0_vote, 3);
+        node0.receive_vote(&node1_public_key, &node1_vote, 3);
+        node0.receive_vote(&node2_public_key, &node2_vote, 3);
+        node1.receive_vote(&node0_public_key, &node0_vote, 3);
+        node1.receive_vote(&node1_public_key, &node1_vote, 3);
+        node1.receive_vote(&node2_public_key, &node2_vote, 3);
+        node2.receive_vote(&node0_public_key, &node0_vote, 3);
+        node2.receive_vote(&node1_public_key, &node1_vote, 3);
+        node2.receive_vote(&node2_public_key, &node2_vote, 3);
 
         // We verify that all nodes have the same blockchain on round end.
         verify_outputs(&node0, &node1, &node2);
@@ -71,7 +76,7 @@ mod tests {
         node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx5"));
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
-        let proposed_block = if node0.check_if_epoch_leader(3) {
+        let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
             node0.propose_block()
         } else if node1.check_if_epoch_leader(3) {
             node1.propose_block()
@@ -80,20 +85,23 @@ mod tests {
         };
 
         // Leader broadcasts the proposed_block to rest nodes and they vote on it.
-        let node0_vote = node0.receive_proposed_block(&proposed_block).unwrap();
-        let node1_vote = node1.receive_proposed_block(&proposed_block).unwrap();
-        let node2_vote = node2.receive_proposed_block(&proposed_block).unwrap();
+        let node0_vote =
+            node0.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node1_vote =
+            node1.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node2_vote =
+            node2.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
 
         // Each node broadcasts its vote to rest nodes.
-        node0.receive_vote(&node0_vote, 3);
-        node0.receive_vote(&node1_vote, 3);
-        node0.receive_vote(&node2_vote, 3);
-        node1.receive_vote(&node0_vote, 3);
-        node1.receive_vote(&node1_vote, 3);
-        node1.receive_vote(&node2_vote, 3);
-        node2.receive_vote(&node0_vote, 3);
-        node2.receive_vote(&node1_vote, 3);
-        node2.receive_vote(&node2_vote, 3);
+        node0.receive_vote(&node0_public_key, &node0_vote, 3);
+        node0.receive_vote(&node1_public_key, &node1_vote, 3);
+        node0.receive_vote(&node2_public_key, &node2_vote, 3);
+        node1.receive_vote(&node0_public_key, &node0_vote, 3);
+        node1.receive_vote(&node1_public_key, &node1_vote, 3);
+        node1.receive_vote(&node2_public_key, &node2_vote, 3);
+        node2.receive_vote(&node0_public_key, &node0_vote, 3);
+        node2.receive_vote(&node1_public_key, &node1_vote, 3);
+        node2.receive_vote(&node2_public_key, &node2_vote, 3);
 
         // We verify that all nodes have the same blockchain on round end.
         verify_outputs(&node0, &node1, &node2);
@@ -109,7 +117,7 @@ mod tests {
         node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx8"));
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
-        let proposed_block = if node0.check_if_epoch_leader(3) {
+        let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
             node0.propose_block()
         } else if node1.check_if_epoch_leader(3) {
             node1.propose_block()
@@ -118,20 +126,23 @@ mod tests {
         };
 
         // Leader broadcasts the proposed_block to rest nodes and they vote on it.
-        let node0_vote = node0.receive_proposed_block(&proposed_block).unwrap();
-        let node1_vote = node1.receive_proposed_block(&proposed_block).unwrap();
-        let node2_vote = node2.receive_proposed_block(&proposed_block).unwrap();
+        let node0_vote =
+            node0.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node1_vote =
+            node1.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
+        let node2_vote =
+            node2.receive_proposed_block(&leader_public_key, &block_proposal, 3).unwrap();
 
         // Each node broadcasts its vote to rest nodes.
-        node0.receive_vote(&node0_vote, 3);
-        node0.receive_vote(&node1_vote, 3);
-        node0.receive_vote(&node2_vote, 3);
-        node1.receive_vote(&node0_vote, 3);
-        node1.receive_vote(&node1_vote, 3);
-        node1.receive_vote(&node2_vote, 3);
-        node2.receive_vote(&node0_vote, 3);
-        node2.receive_vote(&node1_vote, 3);
-        node2.receive_vote(&node2_vote, 3);
+        node0.receive_vote(&node0_public_key, &node0_vote, 3);
+        node0.receive_vote(&node1_public_key, &node1_vote, 3);
+        node0.receive_vote(&node2_public_key, &node2_vote, 3);
+        node1.receive_vote(&node0_public_key, &node0_vote, 3);
+        node1.receive_vote(&node1_public_key, &node1_vote, 3);
+        node1.receive_vote(&node2_public_key, &node2_vote, 3);
+        node2.receive_vote(&node0_public_key, &node0_vote, 3);
+        node2.receive_vote(&node1_public_key, &node1_vote, 3);
+        node2.receive_vote(&node2_public_key, &node2_vote, 3);
 
         // We verify that all nodes have the same blockchain on round end.
         verify_outputs(&node0, &node1, &node2);

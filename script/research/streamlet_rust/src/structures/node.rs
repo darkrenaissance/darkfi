@@ -5,6 +5,11 @@ use std::{
 };
 
 use super::{block::Block, blockchain::Blockchain, vote::Vote};
+use darkfi::crypto::{
+    keypair::{PublicKey, SecretKey},
+    schnorr::{SchnorrPublic, SchnorrSecret},
+};
+use rand::rngs::OsRng;
 
 /// This struct represents a protocol node.
 /// Each node is numbered and has a secret-public keys pair, to sign messages.
@@ -14,23 +19,22 @@ use super::{block::Block, blockchain::Blockchain, vote::Vote};
 pub struct Node {
     pub id: u64,
     pub genesis_time: i64,
-    pub password: String,
-    pub private_key: String,
-    pub public_key: String,
+    pub secret_key: SecretKey,
+    pub public_key: PublicKey,
     pub canonical_blockchain: Blockchain,
     pub node_blockchains: Vec<Blockchain>,
     pub unconfirmed_transactions: Vec<String>,
 }
 
 impl Node {
-    pub fn new(id: u64, genesis_time: i64, password: String, init_block: Block) -> Node {
-        // TODO: add keypair generation, clock sync
+    pub fn new(id: u64, genesis_time: i64, init_block: Block) -> Node {
+        // TODO: clock sync
+        let secret = SecretKey::random(&mut OsRng);
         Node {
             id,
             genesis_time,
-            password,
-            private_key: String::from("private_key"),
-            public_key: String::from("public_key"),
+            secret_key: secret,
+            public_key: PublicKey::from_secret(secret),
             canonical_blockchain: Blockchain::new(init_block),
             node_blockchains: Vec::new(),
             unconfirmed_transactions: Vec::new(),
@@ -78,23 +82,34 @@ impl Node {
         self.id == leader
     }
 
-    /// Node generates a block for the current, containing all uncorfirmed transactions.
+    /// Node generates a block proposal(mapped as Vote) for the current epoch,
+    /// containing all uncorfirmed transactions.
     /// Block extends the longest notarized blockchain the node holds.
-    pub fn propose_block(&self) -> Block {
+    pub fn propose_block(&self) -> (PublicKey, Vote) {
         let epoch = self.get_current_epoch();
         let longest_notarized_chain = self.find_longest_notarized_chain();
         let mut hasher = DefaultHasher::new();
         longest_notarized_chain.blocks.last().unwrap().hash(&mut hasher);
         let proposed_block =
             Block::new(hasher.finish().to_string(), epoch, self.unconfirmed_transactions.clone());
-        // TODO: add block signing.
-        proposed_block
+        let signed_block = self.secret_key.sign(proposed_block.signature_encode().as_bytes());
+        (self.public_key, Vote::new(signed_block, proposed_block, self.id))
     }
 
-    /// Node receives the proposed block, verifies its sender(epoch leader), and proceeds with voting on it.
-    pub fn receive_proposed_block(&mut self, proposed_block: &Block) -> Option<Vote> {
-        // TODO: verify leader keys.
-        self.vote_block(proposed_block)
+    /// Node receives the proposed block(mapped as Vote), verifies its sender(epoch leader),
+    /// and proceeds with voting on it.
+    pub fn receive_proposed_block(
+        &mut self,
+        leader_public_key: &PublicKey,
+        proposed_block_vote: &Vote,
+        nodes_count: u64,
+    ) -> Option<Vote> {
+        assert!(self.get_epoch_leader(nodes_count) == proposed_block_vote.id);
+        assert!(leader_public_key.verify(
+            proposed_block_vote.block.signature_encode().as_bytes(),
+            &proposed_block_vote.vote
+        ));
+        self.vote_block(&proposed_block_vote.block)
     }
 
     /// Given a block, node finds which blockchain it extends.
@@ -113,8 +128,9 @@ impl Node {
         };
 
         if self.extends_notarized_blockchain(blockchain) {
-            // TODO: add block signing.
-            return Some(Vote::new(String::from("signed_block"), block.clone(), self.id))
+            let block_copy = block.clone();
+            let signed_block = self.secret_key.sign(block_copy.signature_encode().as_bytes());
+            return Some(Vote::new(signed_block, block_copy, self.id))
         }
         None
     }
@@ -172,8 +188,13 @@ impl Node {
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the block can finalize parent blocks
     ///	in its blockchain.
-    pub fn receive_vote(&mut self, vote: &Vote, nodes_count: usize) -> Option<Vote> {
-        // TODO: verify vote signature.
+    pub fn receive_vote(
+        &mut self,
+        node_public_key: &PublicKey,
+        vote: &Vote,
+        nodes_count: usize,
+    ) -> Option<Vote> {
+        assert!(node_public_key.verify(vote.block.signature_encode().as_bytes(), &vote.vote));
         let vote_block = self.find_block(&vote.block);
         if vote_block == None {
             return self.vote_block(&vote.block)

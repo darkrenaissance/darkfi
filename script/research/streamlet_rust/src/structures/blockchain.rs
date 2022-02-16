@@ -6,7 +6,7 @@ use std::{
 use super::block::Block;
 
 /// This struct represents a sequence of blocks starting with the genesis block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Blockchain {
     pub blocks: Vec<Block>,
 }
@@ -50,11 +50,5 @@ impl Blockchain {
             }
         }
         true
-    }
-}
-
-impl PartialEq for Blockchain {
-    fn eq(&self, other: &Self) -> bool {
-        self.blocks == other.blocks
     }
 }

@@ -24,6 +24,10 @@ impl Block {
     pub fn new(h: String, e: i64, txs: Vec<String>) -> Block {
         Block { h, e, txs, votes: Vec::new(), notarized: false, finalized: false }
     }
+
+    pub fn signature_encode(&self) -> String {
+        self.h.clone() + &self.e.to_string() + &self.txs.clone().join("")
+    }
 }
 
 impl PartialEq for Block {
