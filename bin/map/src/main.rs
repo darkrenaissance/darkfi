@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
 
     let infos = vec![NodeInfo::new()];
     let info_list = InfoList::new(infos.clone());
-    let ids = vec![String::new()];
+    let ids = Vec::new();
     let id_list = IdList::new(ids);
 
     let model = Arc::new(Model::new(id_list, info_list));
@@ -172,22 +172,24 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             }];
 
             for node in infos {
-                // write nodes
-                model.info_list.infos.lock().await.push(node.clone());
-                // write node id
-                model.id_list.node_id.lock().await.push(node.clone().id);
+                // update node info if we don't have it already
+                if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
+                    model.id_list.node_id.lock().await.push(node.clone().id);
+                    // TODO: update new info if we don't have
+                    model.info_list.infos.lock().await.push(node.clone());
+                }
             }
         } else {
             // TODO: error handling
             println!("Reply is an error");
         }
 
-        async_util::sleep(5).await;
+        async_util::sleep(2).await;
     }
 }
 
 async fn render<B: Backend>(
-    config: &MapConfig,
+    _config: &MapConfig,
     terminal: &mut Terminal<B>,
     model: Arc<Model>,
 ) -> io::Result<()> {
@@ -195,37 +197,33 @@ async fn render<B: Backend>(
 
     terminal.clear()?;
 
-    let mut info_vec = Vec::new();
-    for info in model.info_list.infos.lock().await.clone() {
-        info_vec.push(info)
-    }
-    let mut id_vec = Vec::new();
-    for id in model.id_list.node_id.lock().await.clone() {
-        id_vec.push(id)
-    }
-
-    let id_list = IdListView::new(id_vec);
-    let info_list = InfoListView::new(info_vec);
+    let id_list = IdListView::new(Vec::new());
+    let info_list = InfoListView::new(Vec::new());
     let mut view = View::new(id_list.clone(), info_list.clone());
 
-    view.id_list.state.select(Some(0));
+    view.id_list.state.select(Some(1));
     view.info_list.index = 0;
 
     loop {
+        // on first run, add available nodes
+        // every time run the program, simply update nodes
         let mut view = view.clone();
         view.update(
             model.id_list.node_id.lock().await.clone(),
             model.info_list.infos.lock().await.clone(),
         );
-
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
+        //println!("Model id list: {:?}", model.id_list.node_id.lock().await.clone());
+        //for id in view.id_list.node_id.clone() {
+        //    println!("Cleaned id list: {:?}", id.as_str());
+        //}
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
@@ -238,5 +236,6 @@ async fn render<B: Backend>(
                 _ => (),
             }
         }
+        async_util::sleep(2).await;
     }
 }
