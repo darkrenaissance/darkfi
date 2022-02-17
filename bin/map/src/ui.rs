@@ -3,7 +3,7 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Spans,
+    text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
@@ -38,16 +38,52 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
 fn render_info<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
     let info = &view.info_list.infos;
-    let id = &info[index].id;
 
-    let i0 = info[index].incoming.clone();
+    let iconnects = info[index].incoming.clone();
+    let oconnects = info[index].outgoing.clone();
 
-    let o0 = info[index].outgoing.clone();
+    let mut iconnect_ids = Vec::new();
+    let mut iconnect_msgs = Vec::new();
+
+    let mut oconnect_ids = Vec::new();
+    let mut oconnect_msgs = Vec::new();
+
+    if !iconnects.is_empty() {
+        for connect in iconnects {
+            iconnect_ids.push(connect.id);
+            iconnect_msgs.push(connect.message)
+        }
+    } else {
+        // do nothing
+    }
+
+    if !oconnects.is_empty() {
+        for connect in oconnects {
+            oconnect_ids.push(connect.id);
+            oconnect_msgs.push(connect.message)
+        }
+    } else {
+        // do nothing
+    }
 
     let span = vec![
-        Spans::from(format!("NodeId: {}", id)),
-        Spans::from(format!("Outgoing connections: {:?}", i0)),
-        Spans::from(format!("Incoming connections: {:?}", o0)),
+        Spans::from(Span::styled(
+            "Outgoing connections:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Spans::from(format!("   {}", iconnect_ids[0])),
+        Spans::from(format!("   Last message: {}", oconnect_msgs[0])),
+        Spans::from(format!("   {}", iconnect_ids[1])),
+        Spans::from(format!("   Last message: {}", oconnect_msgs[1])),
+        Spans::from(format!("")),
+        Spans::from(Span::styled(
+            "Incoming connections:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Spans::from(format!("   {}", oconnect_ids[0])),
+        Spans::from(format!("   Last message: {}", oconnect_msgs[0])),
+        Spans::from(format!("   {}", oconnect_ids[1])),
+        Spans::from(format!("   Last message: {}", oconnect_msgs[1])),
     ];
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());

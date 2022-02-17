@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let infos = vec![NodeInfo::new()];
+    let infos = Vec::new();
     let info_list = InfoList::new(infos.clone());
     let ids = Vec::new();
     let id_list = IdList::new(ids);
@@ -138,38 +138,38 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let outgoing = connections.get("outgoing").unwrap();
             let incoming = connections.get("incoming").unwrap();
 
-            let mut out_connections = Vec::new();
-            let mut in_connections = Vec::new();
+            let mut outconnects = Vec::new();
+            let mut inconnects = Vec::new();
 
             let out0 = Connection::new(
-                outgoing[0].get("id").unwrap().to_string(),
-                outgoing[0].get("message").unwrap().to_string(),
+                outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
+                outgoing[0].get("message").unwrap().as_str().unwrap().to_string(),
             );
             let out1 = Connection::new(
-                outgoing[1].get("id").unwrap().to_string(),
-                outgoing[1].get("message").unwrap().to_string(),
+                outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
+                outgoing[1].get("message").unwrap().as_str().unwrap().to_string(),
             );
 
             let in0 = Connection::new(
-                incoming[0].get("id").unwrap().to_string(),
-                incoming[0].get("message").unwrap().to_string(),
+                incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
+                incoming[0].get("message").unwrap().as_str().unwrap().to_string(),
             );
             let in1 = Connection::new(
-                incoming[1].get("id").unwrap().to_string(),
-                incoming[1].get("message").unwrap().to_string(),
+                incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
+                incoming[1].get("message").unwrap().as_str().unwrap().to_string(),
             );
 
-            out_connections.push(out0);
-            out_connections.push(out1);
+            outconnects.push(out0);
+            outconnects.push(out1);
 
-            in_connections.push(in0);
-            in_connections.push(in1);
+            inconnects.push(in0);
+            inconnects.push(in1);
 
             let infos = vec![NodeInfo {
                 // TODO: should never crash
                 id: id.as_str().unwrap().to_string(),
-                outgoing: out_connections,
-                incoming: in_connections,
+                outgoing: outconnects,
+                incoming: inconnects,
             }];
 
             for node in infos {
@@ -213,9 +213,16 @@ async fn render<B: Backend>(
             model.id_list.node_id.lock().await.clone(),
             model.info_list.infos.lock().await.clone(),
         );
-        terminal.draw(|f| {
-            ui::ui(f, view.clone());
-        })?;
+        if view.info_list.infos.is_empty() {
+            // TODO: make this a loading widget
+            println!("Initializing...");
+            async_util::sleep(1).await;
+            terminal.clear()?;
+        } else {
+            terminal.draw(|f| {
+                ui::ui(f, view.clone());
+            })?;
+        }
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
