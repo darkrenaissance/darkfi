@@ -33,57 +33,77 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     let index = view.info_list.index;
 
-    render_info(view, f, index, slice);
+    render_info_left(view.clone(), f, index);
+    render_info_right(view.clone(), f, index, slice);
 }
 
-fn render_info<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize) {
+    let slice = Layout::default()
+        .direction(Direction::Horizontal)
+        .vertical_margin(4)
+        .horizontal_margin(7)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .split(f.size());
+
     let info = &view.info_list.infos;
 
     let iconnects = info[index].incoming.clone();
     let oconnects = info[index].outgoing.clone();
 
     let mut iconnect_ids = Vec::new();
-    let mut iconnect_msgs = Vec::new();
-
     let mut oconnect_ids = Vec::new();
-    let mut oconnect_msgs = Vec::new();
 
     if !iconnects.is_empty() {
         for connect in iconnects {
             iconnect_ids.push(connect.id);
-            iconnect_msgs.push(connect.message)
         }
-    } else {
-        // do nothing
     }
-
     if !oconnects.is_empty() {
         for connect in oconnects {
             oconnect_ids.push(connect.id);
-            oconnect_msgs.push(connect.message)
         }
-    } else {
-        // do nothing
     }
-
     let span = vec![
-        Spans::from(Span::styled(
-            "Outgoing connections:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Spans::from(format!("   {}", iconnect_ids[0])),
-        Spans::from(format!("   Last message: {}", oconnect_msgs[0])),
-        Spans::from(format!("   {}", iconnect_ids[1])),
-        Spans::from(format!("   Last message: {}", oconnect_msgs[1])),
+        Spans::from(format!("Outgoing connections:")),
+        Spans::from(format!("{}", iconnect_ids[0])),
+        Spans::from(format!("{}", iconnect_ids[1])),
         Spans::from(format!("")),
-        Spans::from(Span::styled(
-            "Incoming connections:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Spans::from(format!("   {}", oconnect_ids[0])),
-        Spans::from(format!("   Last message: {}", oconnect_msgs[0])),
-        Spans::from(format!("   {}", oconnect_ids[1])),
-        Spans::from(format!("   Last message: {}", oconnect_msgs[1])),
+        Spans::from(format!("Incoming connections:")),
+        Spans::from(format!("{}", oconnect_ids[0])),
+        Spans::from(format!("{}", oconnect_ids[1])),
+    ];
+    let graph = Paragraph::new(span).block(Block::default().style(Style::default()));
+    f.render_widget(graph, slice[0]);
+}
+
+fn render_info_right<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+    let info = &view.info_list.infos;
+
+    let iconnects = info[index].incoming.clone();
+    let oconnects = info[index].outgoing.clone();
+
+    let mut iconnect_msgs = Vec::new();
+    let mut oconnect_msgs = Vec::new();
+
+    if !iconnects.is_empty() {
+        for connect in iconnects {
+            iconnect_msgs.push(connect.message)
+        }
+    }
+    if !oconnects.is_empty() {
+        for connect in oconnects {
+            oconnect_msgs.push(connect.message);
+        }
+    }
+    let span = vec![
+        Spans::from(format!("Last message:")),
+        Spans::from(format!("")),
+        Spans::from(format!("{}", oconnect_msgs[0])),
+        Spans::from(format!("{}", oconnect_msgs[1])),
+        Spans::from(format!("")),
+        Spans::from(format!("")),
+        Spans::from(format!("{}", oconnect_msgs[0])),
+        Spans::from(format!("{}", oconnect_msgs[1])),
     ];
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
