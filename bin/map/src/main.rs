@@ -10,7 +10,7 @@ use darkfi::{
 
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
-use log::debug;
+use log::{debug, info};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -139,8 +139,10 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 }
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
+    info!("RPC connected to {}", client.url);
     loop {
         let reply = client.get_info().await?;
+        info!("RPC reply: {}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
             let id = reply.as_object().unwrap().get("id").unwrap();
@@ -187,8 +189,10 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 // update node info if we don't have it already
                 if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
                     model.id_list.node_id.lock().await.push(node.clone().id);
+                    debug!("Model ID list: {:?}", model.id_list.node_id.lock().await);
                     // TODO: update new info if we don't have
                     model.info_list.infos.lock().await.push(node.clone());
+                    debug!("Model INFO list: {:?}", model.info_list.infos.lock().await);
                 }
             }
         } else {
@@ -226,6 +230,7 @@ async fn render<B: Backend>(
         );
         if view.info_list.infos.is_empty() {
             // TODO: make this a loading widget
+            // TODO: this lags forever if IRC is not running. add an error
             println!("Initializing...");
             async_util::sleep(1).await;
             terminal.clear()?;
