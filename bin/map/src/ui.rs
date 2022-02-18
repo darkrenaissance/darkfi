@@ -65,12 +65,12 @@ fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize) 
     }
     let span = vec![
         Spans::from(format!("Outgoing connections:")),
-        Spans::from(format!("{}", iconnect_ids[0])),
-        Spans::from(format!("{}", iconnect_ids[1])),
+        Spans::from(format!("   {}", iconnect_ids[0])),
+        Spans::from(format!("   {}", iconnect_ids[1])),
         Spans::from(format!("")),
         Spans::from(format!("Incoming connections:")),
-        Spans::from(format!("{}", oconnect_ids[0])),
-        Spans::from(format!("{}", oconnect_ids[1])),
+        Spans::from(format!("   {}", oconnect_ids[0])),
+        Spans::from(format!("   {}", oconnect_ids[1])),
     ];
     let graph = Paragraph::new(span).block(Block::default().style(Style::default()));
     f.render_widget(graph, slice[0]);

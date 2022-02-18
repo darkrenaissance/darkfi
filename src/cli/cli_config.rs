@@ -150,6 +150,7 @@ pub struct MapConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct IrcNode {
     pub node_id: String,
+    //pub rpc_url: String,
 }
 
 pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {

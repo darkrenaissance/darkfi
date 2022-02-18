@@ -19,7 +19,9 @@ easy-parallel = "3.2.0"
 async-channel = "1.6.1"
 
 # Misc
+clap = "3.0.7"
 rand = "0.6.5"
+simplelog = "0.11.2"
 log = "0.4.14"
 num_cpus = "1.13.1"
 

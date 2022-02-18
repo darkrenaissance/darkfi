@@ -12,8 +12,9 @@ use async_std::sync::Arc;
 use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
+use simplelog::*;
 use smol::Executor;
-use std::{io, io::Read, path::PathBuf};
+use std::{fs::File, io, io::Read, path::PathBuf};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -22,6 +23,7 @@ use tui::{
 
 use map::{
     model::{Connection, IdList, InfoList, NodeInfo},
+    options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView},
     Model, View,
@@ -79,6 +81,11 @@ impl Map {
 
 #[async_std::main]
 async fn main() -> Result<()> {
+    let options = ProgramOptions::load()?;
+    let (lvl, cfg) = log_config(options.app.clone())?;
+
+    let file = File::create(&*options.log_path).unwrap();
+    WriteLogger::init(lvl, cfg, file)?;
     let config_path = join_config_path(&PathBuf::from("map_config.toml"))?;
 
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
@@ -119,10 +126,14 @@ async fn main() -> Result<()> {
 }
 
 async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
-    // TODO: listen to multiple nodes
-    let client = Map::new(config.nodes[0].node_id.to_string());
-
-    ex.spawn(poll(client, model)).detach();
+    let mut rpc_vec = Vec::new();
+    for node in config.nodes.clone() {
+        rpc_vec.push(node);
+    }
+    for node in rpc_vec {
+        let client = Map::new(node.node_id);
+        ex.spawn(poll(client, model.clone())).detach();
+    }
 
     Ok(())
 }
