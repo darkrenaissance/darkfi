@@ -112,8 +112,8 @@ mod tests {
         crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
         zk::circuit::MintContract,
     };
-    use rand::rngs::OsRng;
     use group::ff::Field;
+    use rand::rngs::OsRng;
 
     #[test]
     fn test_proof_serialization() -> Result<()> {

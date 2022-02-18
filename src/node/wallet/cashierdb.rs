@@ -480,8 +480,8 @@ impl CashierDb {
 mod tests {
     use super::*;
     use crate::util::serial::serialize;
-    use rand::rngs::OsRng;
     use group::ff::Field;
+    use rand::rngs::OsRng;
 
     const WPASS: &str = "darkfi";
 

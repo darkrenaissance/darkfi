@@ -84,7 +84,12 @@ impl IrcServerConnection {
                 //self.write_stream.write_all(b":f00!f00@127.0.0.1 PRIVMSG #dev :y0\n").await?;
             }
             "PING" => {
-                self.reply("PONG").await?;
+                let line_clone = line.clone();
+                let split_line: Vec<&str> = line_clone.split_whitespace().collect();
+                if split_line.len() > 1 && split_line[0] == "PING" {
+                    let pong = format!("PONG {}\n", split_line[1]);
+                    self.reply(&pong).await?;
+                }
             }
             "PRIVMSG" => {
                 let channel = tokens.next().ok_or(Error::MalformedPacket)?;
