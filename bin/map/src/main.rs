@@ -227,7 +227,7 @@ async fn render<B: Backend>(
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
                     view.id_list.next();

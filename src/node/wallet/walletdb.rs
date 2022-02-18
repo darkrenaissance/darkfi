@@ -381,10 +381,10 @@ mod tests {
         merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
+    use group::ff::Field;
     use incrementalmerkletree::{Frontier, Tree};
     use pasta_curves::pallas;
     use rand::rngs::OsRng;
-    use group::ff::Field;
 
     const WPASS: &str = "darkfi";
 
