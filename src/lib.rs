@@ -25,9 +25,6 @@ pub mod blockchain;
 #[cfg(feature = "system")]
 pub mod system;
 
-#[cfg(feature = "tui")]
-pub mod tui;
-
 #[cfg(feature = "util")]
 pub mod util;
 

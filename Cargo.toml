@@ -151,11 +151,6 @@ blockchain = [
     "util",
 ]
 
-tui = [
-    "async-std",
-    "termion",
-]
-
 system = [
     "rand",
 
