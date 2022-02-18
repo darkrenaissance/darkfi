@@ -33,7 +33,6 @@ class Block(object):
 
     def __repr__(self):
         if self.is_genesis:
-            #return "GensisBlock at {slot:"+str(self.sl)+",data:"+self.tx+",state:"+str(self.state)+"}\n"+decode_gensis_data(self.tx)
             return "GensisBlock at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}\n"+str(self.tx)
         return "Block at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}"
     
@@ -41,11 +40,9 @@ class Block(object):
         if type(self.tx)==str:
             return hash((self.state, self.tx, self.sl))
         elif type(self.tx)==dict:
-            #TODO include distribution
             return hash((self.state, self.tx[SEED], self.tx[TX]))
         else: 
-            #TODO (fix) shouldn't reach here
-            return 0
+            return hash(str(self))
 
     def __eq__(self, block):
         return self.state==block.state and \

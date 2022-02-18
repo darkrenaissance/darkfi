@@ -3,7 +3,6 @@ import time
 from ouroboros.block import Block, GensisBlock, EmptyBlock
 from ouroboros.blockchain import Blockchain
 from ouroboros.epoch import Epoch
-from ouroboros.beacon import TrustedBeacon
 from ouroboros.vrf import verify, VRF
 from ouroboros.utils import *
 from ouroboros.logger import Logger
@@ -31,15 +30,12 @@ class Stakeholder(object):
         #
         self.current_block = None
         self.current_epoch = None
-        self.am_current_leader=False
-        self.am_current_endorser=False
         self.am_corrupt=False
         #
         self.blockchain=None
         #
         self.data = Data()
         #verifiable fingerprint for a stakeholder taking advantage of public sig, vrf
-
         self.id = sign_message(self.passwd, self.sig_sk, str(self.vrf_pk))
 
     def receive_tx(self, tx):
@@ -51,10 +47,6 @@ class Stakeholder(object):
         self.env.broadcast_tx(tx)
 
     @property
-    def is_leader(self):
-        return self.am_current_leader
-
-    @property
     def vrf_pk(self):
         return self.__vrf_pk
 
@@ -64,9 +56,9 @@ class Stakeholder(object):
     
     def __repr__(self):
         buff=''
-        if self.am_current_leader:
+        if self.env.is_current_leader(self.id):
             buff = f"\tleader {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
-        elif self.am_current_endorser:
+        elif self.env.is_current_endorser(self.id):
             buff = f"\tendorser {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
         else:
             buff = f"\thonest committee memeber {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
@@ -76,27 +68,13 @@ class Stakeholder(object):
         self.env=env
         self.log = Logger(self, self.env.genesis_time)
         self.blockchain = Blockchain(self.epoch_length, self.env.genesis_time)
-        self.beacon = TrustedBeacon(self,  self.vrf, self.epoch_length, self.env.genesis_time)
-        self.current_slot_uid = self.beacon.slot
-
-    def start(self):
-        self.log.info("thread [started]")
-        self.beacon.start()  
-        self.log.info("thread [ended]")
+        #self.beacon = TrustedBeacon(self,  self.vrf, self.epoch_length, self.env.genesis_time)
+        #self.current_slot_uid = self.beacon.slot
 
     @property
     def epoch_index(self):
         return round(self.current_slot_uid/self.epoch_length)
-
-    def __gen_genesis_epoch(self):
-        '''
-        '''
-        tx_item = self.env.get_genesis_data()
-        self.data.append(tx_item)
-        self.current_block=GensisBlock(self.current_block, self.data, self.current_slot_uid, self.env.genesis_time)
-        assert self.current_block is not None
-        self.current_epoch=Epoch(self.current_block, self.epoch_length, self.epoch_index, self.env.genesis_time)
-
+        
     def end_slot(self):
         # start new transactions 
         self.data = Data()
@@ -104,70 +82,36 @@ class Stakeholder(object):
     def add_epoch(self):
         self.blockchain.append(self.current_epoch)
         self.update_stake()
-    '''
-    it's a callback function, and called by the diffuser
-    '''
-    def new_epoch(self, slot, sigmas, proofs):
-        '''
-        #TODO implement praos
-        for this implementation we assume synchrony,
-        and at this point, and no delay is considered (for simplicity)
-        '''
-        self.log.highlight("<new_epoch> start")
-        if self.am_current_leader:
-            self.env.new_epoch(slot, sigmas, proofs)
-        self.current_slot_uid = slot
-        # add old epoch to the ledger
-        if self.current_slot_uid > 1 and self.current_epoch!=None and len(self.current_epoch)>0:
+    
+    def new_epoch(self, current_epoch):
+        if self.current_epoch!=None:
             self.add_epoch()
-        while not self.env.epoch_inited:
-            self.log.info("pending epoch initialization")
-            time.sleep(1)
-        self.__gen_genesis_epoch()
-        self.new_slot(self.current_slot_uid, sigmas[0], proofs[0])
+        self.current_epoch = current_epoch
 
-    def terminate_slot(self):
-        pass
-
-    '''
-    it's a callback function, and called by the diffuser
-    '''
     def new_slot(self, slot, sigma, proof):
-        '''
-        #TODO implement praos
-        for this implementation we assume synchrony,
-        and at this point, and no delay is considered (for simplicity)
-        '''
         self.log.highlight("<new_slot> start")
-        self.terminate_slot()
-        self.env.new_slot(slot)
-
-        vrf_pk = self.env.current_leader_vrf_pk
-        vrf_g = self.env.current_leader_vrf_g
-        if not verify(slot, sigma, proof, vrf_pk,vrf_g):
+        vrf_pk = self.env.prev_leader_vrf_pk()
+        vrf_g = self.env.prev_leader_vrf_g()
+        self.log.highlight(f"verifying slot leader with pk: {str(vrf_pk)}, : {str(vrf_g)}")
+        self.log.highlight(f"verifying slot {slot}\nsigma {sigma}\nproof {proof}\npk {vrf_pk} \nbase {vrf_g}")
+        if not verify(slot, sigma, proof, vrf_pk, vrf_g):
             #TODO the leader is corrupted, action to be taken against the corrupt stakeholder
             #in this case this slot is empty
             self.log.warn(f"<new_slot> leader verification fails")
             self.current_block=EmptyBlock(self.env.genesis_time) 
-            if self.current_epoch==None:
-                self.__gen_genesis_epoch()
             self.current_epoch.add_block(self.current_block)
             return
-
         self.current_slot_uid = slot
         if self.current_slot_uid%self.epoch_length!=0:
             prev_blk = self.blockchain[-1] if len(self.blockchain)>0 else EmptyBlock(self.env.genesis_time)
             self.current_block=Block(prev_blk, self.data, self.current_slot_uid, self.env.genesis_time)
             self.current_epoch.add_block(self.current_block)
-
-        if self.am_current_leader:
+        if self.env.is_current_leader(self.id):
             self.log.highlight(f"{str(self)} is broadcasting block")
             self.broadcast_block()
-            self.end_leadership()
-        elif self.am_current_endorser:
+        elif self.env.is_current_endorser(self.id):
             self.log.highlight(f"{str(self)} is endorsing block")
             self.endorse_block()
-            self.end_endorsing()
 
     def update_stake(self):
         if len(self.blockchain)==0:
@@ -184,20 +128,6 @@ class Stakeholder(object):
         self.stake += (self.env.beta * (endorser_cnt/self.env.endorser_len) + \
             (1-self.env.beta) * (leader_cnt/self.env.epoch_length)) * pall
 
-    def end_leadership(self):
-        self.log.info(f"stakeholder:{str(self)} ending leadership for slot{self.current_slot_uid}")
-        self.am_current_leader=False
-
-    def end_endorsing(self):
-        self.log.info(f"stakeholder:{str(self)} ending endorsing for slot{self.current_slot_uid}")
-        self.am_current_endorser=False
-
-    def set_leader(self):
-        self.am_current_leader=True
-
-    def set_endorser(self):
-        self.am_current_endorser=True
-
     def set_corrupt(self):
         self.am_corrupt=False
 
@@ -205,11 +135,11 @@ class Stakeholder(object):
     only leader can broadcast block
     '''
     def broadcast_block(self):
-        if not self.am_current_leader:
+        if not self.env.is_current_leader(self.id):
             return
         self.current_block.set_leader(self.id)
         self.log.highlight("broadcasting block")
-        assert self.am_current_leader and self.current_block is not None
+        assert self.env.is_current_leader(self.id) and self.current_block is not None
         signed_block=None
         #TODO should wait for l slot until block is endorsed
         endorsing_cnt=10
@@ -221,17 +151,17 @@ class Stakeholder(object):
             self.log.warn("failure endorsing the block...")
             self.current_block = EmptyBlock(self.env.genesis_time)
         signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
-        self.env.broadcast_block(signed_block, self.current_slot_uid)
+        self.env.broadcast_block(self.current_block, signed_block, self.current_slot_uid)
     
     '''
     only endorser can broadcast block
     '''
     def endorse_block(self):
-        if not self.am_current_endorser:
+        if not self.env.is_current_endorser(self.id):
             return
         self.current_block.set_endorser(self.id)
         self.log.info(f"endorsing block for current_leader_id: {self.env.current_leader_id}")
-        if not self.am_current_endorser:
+        if not self.env.is_current_endorser(self.id):
             self.log.warn("not endorser")
             return
         assert self.current_block is not None
@@ -252,6 +182,8 @@ class Stakeholder(object):
             stashed=False
         self.log.info(f"current block : {str(cur_blk)}\tblock uid: {blk_uid}\tstashed: {stashed}")
         if cur_blk is None:
+            self.log.warn(f"blk uid {blk_uid}, blockchain length: {len(self.blockchain)}")
+            self.log.warn(f"requested block is None\nblk_uid: {blk_uid}, blockchain: {self.blockchain}")
             self.log.warn(f'block is none, current block is {str(self.current_block)} and current slot {self.current_slot_uid}, current block uid {blk_uid}, env slot {self.env.current_slot}, env blk {self.env.block_id}')
         while cur_blk is None:
             self.log.info("waiting for start of slot/epoch...")
@@ -279,7 +211,7 @@ class Stakeholder(object):
             self.env.corrupt_blk()
 
     def confirm_endorsing(self, endorser_sig, blk_uid, epoch_slot):
-        self.log.highlight("receiving block")
+        self.log.highlight(f"confirming block with epoch slot id {blk_uid}")
         confirmed = False
         cur_blk, _ = self.__get_blk(blk_uid)
         self.log.highlight(f'confirming endorsed block  {str(cur_blk)}')

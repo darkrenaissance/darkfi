@@ -2,26 +2,30 @@ import numpy as np
 import math
 import random
 import time
+from threading import Thread
 from ouroboros.logger import Logger
 from ouroboros.consts import *
-from ouroboros.data import Item, GenesisItem
+from ouroboros.data import GenesisItem, Data
 from ouroboros import utils
+from ouroboros.beacon import TrustedBeacon
+from ouroboros.block import GensisBlock
+from ouroboros.epoch import Epoch
+from ouroboros.stakeholder import Stakeholder
 
 '''
 \class Z is the environment,
 environment is ought to interfece with the network
 '''
 class Z(object):
-    def __init__(self, stakeholdes, epoch_length, genesis_time=time.time()):
+    def __init__(self, stakeholdes,  epoch_length, genesis_time=time.time()):
         self.genesis_time=genesis_time
+        self.beacon = TrustedBeacon(epoch_length, genesis_time)
         self.log = Logger(self, genesis_time)
         self.epoch_length=epoch_length
         self.stakeholders = np.array(stakeholdes)
         self.adversary_mask=np.array([True]*len(stakeholdes))
-        self.current_epoch_leaders=[-1]*self.epoch_length
-        self.current_epoch_endorsers=[-1]*self.epoch_length
+        self.slot_committee = {}
         self.current_slot=0
-        self.log.info("Z initialized")
         self.current_blk_endorser_sig=None
         self.epoch_inited=False
         self.cached_dist = []
@@ -31,14 +35,93 @@ class Z(object):
         #a transaction is declared stable if and only if it is in a block that,
         # is more than k blocks deep in the ledger.
         self.k = self.epoch_length/2 - self.l -1 
-    
+        self.epoch_initialized = {}
+        #TODO (fix) replace those by query from blockchain genesis block
+        self.rands = {}
+        self.prev_leader_id=-1
+        #
+        self.current_block=None
+        self.init()
+
+
+    def init(self):
+        for sh in self.stakeholders:
+            sh(self)
+        assert len(self.stakeholders) > 2
+        #pick initial leader to be the first stakeholder
+        initial_leader = self.stakeholders[0]
+        #pick initial endorser to be the first endorser
+        initial_endorser = self.stakeholders[1]
+        self.current_epoch = self.beacon.epoch
+        self.rands = self.beacon.next_epoch_seeds(initial_leader.vrf)
+        self.current_slot = self.beacon.slot
+        self.select_epoch_leaders()
+        self.prev_leader_id=0
+        self.signal()
+        #TODO need to assign the block from the last slot in the epoch
+        while True:
+            if not self.beacon.slot == self.current_slot:
+                self.current_slot = self.beacon.slot
+                self.signal()
+        
+    def signal(self):
+        ########################
+        #TODO fix cretical
+        ########################
+        # run the state on a member, no static function for new_epoch, new_slot.
+
+        if self.beacon.epoch_slot!=0:
+            ############
+            # NEW SLOT #
+            ############
+            y, pi = self.rands[self.current_slot]
+            threads = []
+            for sk in self.stakeholders:
+                #TODO (fix) failed to synchronized current_slot 1234 for epoch length of 2 is two states
+                # need to pass the slot with it's corresponding sigma, and proof
+                thread = Thread(target=Stakeholder.new_slot, args=(sk, self.current_slot, y, pi))                
+                #sk.new_slot(self.current_slot, y, pi)
+                threads.append(thread)
+                thread.start()
+            for th in threads:
+                th.join()
+        else:
+            #############
+            # NEW EPOCH #
+            #############
+            vrf = self.stakeholders[self.current_leader_id].vrf
+            if self.beacon.epoch != self.current_epoch:
+                self.current_epoch = self.beacon.epoch
+                self.rands = self.beacon.next_epoch_seeds(vrf)
+                self.select_epoch_leaders()
+            for idx, sk in enumerate(self.stakeholders):
+                if sk.id==id:
+                    self.prev_leader_id=idx
+            self.cached_dist = self.get_epoch_distribution()
+            for sk in self.stakeholders:
+                sk.current_slot_uid=self.beacon.slot
+            ###
+            genesis_item = self.get_genesis_data()
+            data = Data()
+            data.append(genesis_item)
+            self.current_block=GensisBlock(self.current_block, data, self.beacon.slot, self.genesis_time)
+            assert self.current_block is not None
+            current_epoch=Epoch(self.current_block, self.epoch_length, self.epoch, self.genesis_time)
+            threads = []
+            for sk in self.stakeholders:
+                #sk.new_epoch(current_epoch)
+                thread = Thread(target=Stakeholder.new_epoch, args=(sk, current_epoch))
+                threads.append(thread)
+                thread.start()
+            for th in threads:
+                th.join()
     @property
     def endorser_len(self):
         #TODO (impl)
         pass
 
     def __repr__(self):
-        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_idx}"
+        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_id}"
         for sh in self.stakeholders:
             buff+=str(sh)+"\n"
         return buff
@@ -85,7 +168,7 @@ class Z(object):
 
     @property
     def current_leader_id(self):
-        return self.current_epoch_leaders[self.epoch_slot]
+        return self.slot_committee[self.current_slot][0]
 
     @property
     def current_stakeholder(self):
@@ -93,16 +176,13 @@ class Z(object):
         return self.stakeholders[self.current_leader_id]
 
     @property
-    def current_endorser_idx(self):
-        return self.current_epoch_endorsers[self.epoch_slot]
-
     def current_endorser_id(self):
-        return self.current_endorser.id
+        return self.slot_committee[self.current_slot][1]
 
     @property
     def current_endorser(self):
         self.log.info(f"getting endorser of id: {self.current_leader_id}")
-        return self.stakeholders[self.current_endorser_idx]
+        return self.stakeholders[self.current_endorser_id]
 
     @property
     def current_leader_vrf_pk(self):
@@ -112,13 +192,26 @@ class Z(object):
     def current_leader_vrf_g(self):
         return self.stakeholders[self.current_leader_id].vrf_base
 
+    '''
+    @property
+    def current_epoch_leader(self):
+        return self.stakeholders[self.current_epoch_leaders[0]]
+
+    @property 
+    def current_epoch_leader_vrf_pk(self):
+        return self.current_epoch_leader.vrf_pk
+
+    @property
+    def current_epoch_leader_vrf_g(self):
+        return self.current_epoch_leader.vrf_base
+    '''
     @property
     def current_leader_sig_pk(self):
         return self.stakeholders[self.current_leader_id].sig_pk
     
     @property
     def current_endorser_sig_pk(self):
-        return self.stakeholders[self.current_endorser_idx].sig_pk
+        return self.stakeholders[self.current_endorser_id].sig_pk
 
     def endorser(self, epoch_slot):
         assert epoch_slot >= 0 and epoch_slot < self.epoch_length
@@ -130,6 +223,7 @@ class Z(object):
     def endorser_vrf_pk(self, epoch_slot):
         return self.endorser(epoch_slot).vrf_pk
 
+    #note! assumes epoch_slot lays in the current epoch
     def leader(self, epoch_slot):
         assert epoch_slot >= 0 and epoch_slot < self.epoch_length
         return self.stakeholders[epoch_slot]
@@ -139,7 +233,16 @@ class Z(object):
 
     def leader_vrf_pk(self, epoch_slot):
         return self.leader(epoch_slot).vrf_pk
-        
+    
+    def leader_vrf_g(self, epoch_slot):
+        return self.leader(epoch_slot).vrf_base
+
+    def prev_leader_vrf_pk(self):
+        return self.stakeholders[self.prev_leader_id].vrf_pk
+    
+    def prev_leader_vrf_g(self):
+        return self.stakeholders[self.prev_leader_id].vrf_base
+
     #TODO complete
     def obfuscate_idx(self, i):
         return i
@@ -169,14 +272,32 @@ class Z(object):
         return len(self.stakeholders[self.adversary_mask])
 
     @property
-    def random(self):
-        return utils.weighted_random(self.previous_epoch_stake_distribution)
+    def epoch_stake_distribution(self):
+        #stakes = {}
+        ordered_stakes = [] #with the same stakeholders order
+        for sk in self.stakeholders:
+            #stakes[sk.id] = sk.stake
+            ordered_stakes.append(sk.stake)
+        return  ordered_stakes
 
-    def select_epoch_leaders(self, sigmas, proofs):
-        assert len(sigmas)==self.epoch_length and len(proofs)==self.epoch_length, self.log.error(f"size mismatch between sigmas: {len(sigmas)}, proofs: {len(proofs)}, and epoch_length: {self.epoch_length}")
+    @property
+    def random(self):
+        return utils.weighted_random(self.epoch_stake_distribution)
+
+    '''
+    since clocks are synched
+    '''
+    @property
+    def epoch(self):
+        return self.beacon.epoch
+
+    def select_epoch_leaders(self):
+        #assert len(self.sigmas)==self.epoch_length and len(self.proofs)==self.epoch_length, \
+            #self.log.error(f"size mismatch between sigmas: {len(self.sigmas)}, proofs: {len(self.proofs)}, and epoch_length: {self.epoch_length}")
         for i in range(self.epoch_length):
-            self.log.info(f"current sigma of index {i} of total {len(sigmas)}, epoch_length: {self.epoch_length}")
-            sigma = sigmas[i]
+            #self.log.info(f"current sigma of index {i} , epoch_length: {self.epoch_length}")
+            slot_idx = self.current_slot + i
+            sigma, _ = self.rands[slot_idx]
             assert sigma!=None, 'proof cant be None'
             def leader_selection_hash(sigma):
                 Y = np.array(sigma)
@@ -193,37 +314,31 @@ class Z(object):
             #TODO select the following leader for this epoch, note, 
             # under a single condition that no one is able to predict who is next
             assert not leader_idx==endorser_idx
-            self.current_epoch_leaders[i]=leader_idx
-            self.current_epoch_endorsers[i]=endorser_idx
-        return self.current_epoch_leaders, self.current_epoch_endorsers
+            #TODO move leader/endorser to a dictionary
 
-    def new_slot(self, slot):
-        self.current_slot=slot
-        self.log.info(f"stakeholders: {self.stakeholders}")
-        current_leader = self.stakeholders[self.current_leader_id]
-        assert current_leader is not None, "current leader cant be None"
-        self.log.highlight('selecting epochs leaders, and ensorsers ---->')
-        self.stakeholders[self.current_epoch_endorsers[self.current_endorser_idx]].set_endorser()
-        self.stakeholders[self.current_epoch_leaders[self.current_leader_id]].set_leader()
-        self.log.highlight('selected epochs leaders, and ensorsers <----')
-        
-    def new_epoch(self, slot, sigmas, proofs):
-        self.cached_dist = self.get_epoch_distribution()
-        self.epoch_inited=True
-        self.current_slot=slot
-        leaders, endorsers = self.select_epoch_leaders(sigmas, proofs)
-        return leaders, endorsers
+            self.slot_committee[slot_idx] = (leader_idx, endorser_idx)
+        self.epoch_initialized[str(self.epoch)] = True
 
-    def broadcast_block(self, signed_block, slot_uid):
+    def broadcast_block(self, cur_block, signed_block, slot_uid):
         while self.current_blk_endorser_sig is None:
             self.log.info('pending endorsing...')
             time.sleep(1)
             #wait for it untill it gets endorsed
             pass
+        self.current_block = cur_block
         for stakeholder in self.stakeholders:
             if not stakeholder.is_leader:
                 stakeholder.receive_block(signed_block, self.current_blk_endorser_sig, slot_uid)
         self.print_blockchain()
+
+
+    def is_current_leader(self, id):
+        ldr_idx, _ = self.slot_committee[self.beacon.current_slot]
+        return id == self.stakeholders[ldr_idx].id
+
+    def is_current_endorser(self, id):
+        _, edr_idx = self.slot_committee[self.beacon.current_slot]
+        return id == self.stakeholders[edr_idx].id
 
     @property
     def block_id(self):
@@ -239,10 +354,6 @@ class Z(object):
         else:
             self.log.warn("unconfirmed endorsed siganture")
 
-    def start(self):
-        for sh in self.stakeholders:
-            sh(self)
-            sh.start()
 
     def print_blockchain(self):
         for sh in self.stakeholders:
@@ -257,7 +368,7 @@ class Z(object):
         self.corrupt(self.current_leader_id)
 
     def corrupt_endorse(self):
-        self.corrupt(self.current_endorser_idx)
+        self.corrupt(self.current_endorser_id)
 
     def corrupt_blk(self):
         self.log.warn(f"<corrupt_blk> at slot: {self.current_slot}")

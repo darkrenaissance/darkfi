@@ -40,7 +40,7 @@ class VRF(object):
         g = ecc.gen()
         pk = ecc.scalar_mult(sk, g)
         #
-        self.pk = pk
+        self.pk = pk 
         self.sk = sk
         self.g=g
 
@@ -52,6 +52,7 @@ class VRF(object):
     def sign(self, x):
         pi = ecc.scalar_mult(inverse_of(x+self.sk, self.order), self.g)
         y = eta.pairing(*self.g[1:], *pi[1:])
+        self.log.highlight(f"signing slot {x}\nsigma {y}\nproof {pi}\npk {self.pk} \nbase {self.g}")
         return (y, pi)
 
     def update(self, pk, sk, g):

@@ -3,22 +3,24 @@ synchronized NTP clock
 '''
 
 import ntplib
-from time import ctime
+import time
 import math
 
 class SynchedNTPClock(object):
 
-    def __init__(self, slot_length=60, ntp_server='europe.pool.ntp.org'):
+    def __init__(self, epoch_length, slot_length=120, ntp_server='europe.pool.ntp.org'):
         #TODO how long should be the slot length
+        self.epoch_length=epoch_length # how many slots in a a block
         self.slot_length=slot_length
         self.ntp_server = ntp_server
         self.ntp_client = ntplib.NTPClient()
         #TODO validate the server
         # when was darkfi birthday? as seconds since the epoch 
-        self.darkfi_epoch=0
+        self.darkfi_epoch=time.mktime(time.strptime("2022-01-01", "%Y-%m-%d"))
         self.offline_cnt=0
+
     def __repr__(self):
-        return 'darkfi time: '+ ctime(self.darkfi_time) + ', current synched time: ' + ctime(self.synched_time)
+        return 'darkfi time: '+ time.ctime(self.darkfi_time) + ', current synched time: ' + ctime(self.synched_time)
 
     def __get_time_stat(self):
         response=None
@@ -36,8 +38,8 @@ class SynchedNTPClock(object):
     @property
     def synched_time(self):
         state = self.__get_time_stat()
-        synched_time = state.tx_time
-        return synched_time
+        stime = state.tx_time
+        return stime
 
     @property
     def darkfi_time(self):
@@ -50,4 +52,12 @@ class SynchedNTPClock(object):
 
     @property
     def slot(self):
-        return math.floor(self.darkfi_time/self.slot_length)
+        return math.floor(self.offline_time/self.slot_length)
+
+    @property
+    def epoch(self):
+        return math.floor(self.slot/self.epoch_length)
+    
+    @property
+    def epoch_slot(self):
+        return self.slot%self.epoch_length
