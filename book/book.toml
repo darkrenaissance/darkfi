@@ -6,6 +6,9 @@ src = "src"
 title = "The DarkFi Book"
 
 [output.html]
+theme = "ayu"
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
 
 [output.katex]
 
