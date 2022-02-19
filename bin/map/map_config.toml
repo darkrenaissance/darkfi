@@ -1,0 +1,16 @@
+## map configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## map properly.
+
+[[nodes]]
+node_id = "tcp://127.0.0.1:7777"
+
+[[nodes]]
+node_id = "tcp://127.0.0.1:6666"
+
+#[[nodes]]
+#node_id = ""
+
+# TODO: RPC URL and node id should be distinct
+
