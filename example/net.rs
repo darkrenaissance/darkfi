@@ -6,10 +6,9 @@ use clap::Parser;
 use darkfi::{net, Result};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let p2p = net::P2p::new(options.network_settings);
+    let p2p = net::P2p::new(options.network_settings).await;
 
     p2p.clone().start(executor.clone()).await?;
-
     p2p.run(executor).await?;
 
     Ok(())
