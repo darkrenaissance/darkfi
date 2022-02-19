@@ -1,4 +1,5 @@
 use crate::model::NodeInfo;
+use log::debug;
 use tui::widgets::ListState;
 
 #[derive(Clone)]
@@ -13,8 +14,12 @@ impl View {
     }
 
     pub fn update(&mut self, node_id: Vec<String>, infos: Vec<NodeInfo>) {
-        self.id_list.update(node_id);
-        self.info_list.update(infos);
+        for node in node_id.clone() {
+            if !self.id_list.node_id.contains(&node) {
+                self.id_list.update(node_id.clone());
+                self.info_list.update(infos.clone());
+            }
+        }
     }
 }
 
@@ -45,9 +50,12 @@ impl IdListView {
     pub fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
+                debug!("if {} == 0", i);
                 if i == 0 {
+                    debug!("{} -1 ", self.node_id.len());
                     self.node_id.len() - 1
                 } else {
+                    debug!("else {} -1 ", i);
                     i - 1
                 }
             }
@@ -61,9 +69,7 @@ impl IdListView {
     }
 
     pub fn update(&mut self, node_id: Vec<String>) {
-        let index = 0;
         for id in node_id {
-            self.state.select(Some(index));
             self.node_id.push(id)
         }
     }

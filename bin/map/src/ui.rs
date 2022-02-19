@@ -1,4 +1,5 @@
 use crate::view::View;
+use log::debug;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -31,10 +32,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
-    let index = view.info_list.index;
+    //let index = view.info_list.index;
 
-    render_info_left(view.clone(), f, index);
-    render_info_right(view.clone(), f, index, slice);
+    //render_info_left(view.clone(), f, index);
+    //render_info_right(view.clone(), f, index, slice);
 }
 
 fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize) {

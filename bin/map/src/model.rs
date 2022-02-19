@@ -1,5 +1,6 @@
 use async_std::sync::Mutex;
 use darkfi::error::Result;
+use log::debug;
 use tui::widgets::ListState;
 
 pub struct Model {

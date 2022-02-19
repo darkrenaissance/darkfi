@@ -10,7 +10,7 @@ use darkfi::{
 
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
-use log::{debug, info};
+use log::{debug, info, trace};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -86,6 +86,8 @@ async fn main() -> Result<()> {
 
     let file = File::create(&*options.log_path).unwrap();
     WriteLogger::init(lvl, cfg, file)?;
+    info!("Log level: {}", lvl);
+
     let config_path = join_config_path(&PathBuf::from("map_config.toml"))?;
 
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
@@ -142,7 +144,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     info!("RPC connected to {}", client.url);
     loop {
         let reply = client.get_info().await?;
-        info!("RPC reply: {}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
             let id = reply.as_object().unwrap().get("id").unwrap();
@@ -200,7 +201,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             println!("Reply is an error");
         }
 
-        async_util::sleep(2).await;
+        async_util::sleep(20).await;
     }
 }
 
@@ -217,13 +218,12 @@ async fn render<B: Backend>(
     let info_list = InfoListView::new(Vec::new());
     let mut view = View::new(id_list.clone(), info_list.clone());
 
-    view.id_list.state.select(Some(1));
-    view.info_list.index = 0;
+    view.id_list.state.select(Some(0));
+    //view.info_list.index = 0;
 
     loop {
         // on first run, add available nodes
         // every time run the program, simply update nodes
-        let mut view = view.clone();
         view.update(
             model.id_list.node_id.lock().await.clone(),
             model.info_list.infos.lock().await.clone(),
@@ -243,15 +243,15 @@ async fn render<B: Backend>(
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
-                    view.info_list.next().await;
+                    //view.info_list.next().await;
                 }
                 Key::Char('k') => {
                     view.id_list.previous();
-                    view.info_list.previous().await;
+                    //view.info_list.previous().await;
                 }
                 _ => (),
             }
