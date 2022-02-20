@@ -57,11 +57,11 @@ class Stakeholder(object):
     def __repr__(self):
         buff=''
         if self.env.is_current_leader(self.id):
-            buff = f"\tleader {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
+            buff = f"\tleader {self.id} with stake:{self.stake}\nsig_pk: {self.sig_pk}"
         elif self.env.is_current_endorser(self.id):
-            buff = f"\tendorser {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
+            buff = f"\tendorser {self.id} with stake:{self.stake}\nsig_pk: {self.sig_pk}"
         else:
-            buff = f"\thonest committee memeber {self.id} with stake:{self.stake}\nsig_sk: {self.sig_pk}"
+            buff = f"\thonest committee memeber {self.id} with stake:{self.stake}\nsig_pk: {self.sig_pk}"
         return buff
 
     def __call__(self, env):
@@ -143,22 +143,30 @@ class Stakeholder(object):
         signed_block=None
         #TODO should wait for l slot until block is endorsed
         endorsing_cnt=10
-        while not self.current_block.endorsed:
+        #TODO (rev)
+        while not self.current_block.endorsed or self.blockchain[self.current_slot_uid]:
             time.sleep(1)
             self.log.info("...waiting for endorsment..")
             endorsing_cnt-=1
+        '''
         if not self.current_block.endorsed:
             self.log.warn("failure endorsing the block...")
             self.current_block = EmptyBlock(self.env.genesis_time)
+        '''
         signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
         self.env.broadcast_block(self.current_block, signed_block, self.current_slot_uid)
     
+    @property
+    def current_slot(self):
+        return self.env.beacon.current_slot
+
     '''
     only endorser can broadcast block
     '''
     def endorse_block(self):
-        if not self.env.is_current_endorser(self.id):
-            return
+        assert self.env.is_current_endorser(self.id)
+        assert self.env.endorser_sig_pk(self.env.beacon.slot) == self.sig_pk, f' assertion failed for beacon slot {self.env.beacon.slot}, current_slot {self.current_slot}, lhs: {self.env.endorser_sig_pk(self.env.beacon.slot)},\nrhs: {self.sig_pk}\nleader\endorser ids {self.env.slot_committee[self.env.beacon.slot][0]}/{self.env.slot_committee[self.env.beacon.slot][1]}'
+        #assert self.env.endorser_sig_pk(self.current_slot) == self.sig_pk, f'lsh: {self.env.endorser_sig_pk(self.current_slot)},\nrhs: {self.sig_pk}'
         self.current_block.set_endorser(self.id)
         self.log.info(f"endorsing block for current_leader_id: {self.env.current_leader_id}")
         if not self.env.is_current_endorser(self.id):
@@ -210,22 +218,26 @@ class Stakeholder(object):
                 self.log.warn("block endorsing verification failed")
             self.env.corrupt_blk()
 
-    def confirm_endorsing(self, endorser_sig, blk_uid, epoch_slot):
+    def confirm_endorsing(self, endorser_sig, blk_uid, slot):
         self.log.highlight(f"confirming block with epoch slot id {blk_uid}")
         confirmed = False
         cur_blk, _ = self.__get_blk(blk_uid)
         self.log.highlight(f'confirming endorsed block  {str(cur_blk)}')
-        self.log.highlight(f'confirming endorsed has slot_uid: {self.current_slot_uid}')
+        self.log.highlight(f'confirming endorsed has slot: {slot} epoch slot_uid: {self.current_slot_uid}')
         self.log.highlight(f'confirming endorsed has sig_pk: {self.env.current_endorser_sig_pk}')
-        if verify_signature(self.env.endorser_sig_pk(epoch_slot), cur_blk, endorser_sig):
+        endorser_sig_pk = self.env.endorser_sig_pk(self.env.beacon.slot)
+        self.log.highlight(f'confirming endorsed sig pk: {endorser_sig_pk}')
+        if verify_signature(endorser_sig_pk, cur_blk, endorser_sig):
             if self.current_slot_uid==self.env.current_slot:
-                self.current_block.set_endorser(self.current_endorser_id)
+                self.log.highlight("set current block as endorsed")
+                self.current_block.set_endorser(self.env.current_endorser_uid)
                 self.current_block.set_endorsed()
             else:
-                self.blockchain[blk_uid].set_endorser(self.current_endorser_id)
+                self.log.highlight(f"set delayed blockchain block with uid: {blk_uid} as endorsed")
+                self.blockchain[blk_uid].set_endorser(self.env.current_endorser_uid)
                 self.blockchain[blk_uid].set_endorsed()
             confirmed=True
         else:
-            self.log.warn(f"confirmed enderser signature failure for pk: {str(self.env.current_endorser_sig_pk)} on block {str(cur_blk)}  of signature {str(endorser_sig)}")
+            self.log.warn(f"confirmed enderser signature failure for pk: {str(endorser_sig_pk)} on block {str(cur_blk)}  of signature {str(endorser_sig)}")
             confirmed=False
         return confirmed
