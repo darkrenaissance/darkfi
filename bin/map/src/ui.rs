@@ -48,10 +48,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
             for line in lines.clone() {
-                lines.push(Spans::from(format!("Outgoing connections:")));
+                lines.push(Spans::from(Span::styled("   Outgoing connections:", Style::default())));
                 lines.push(Spans::from(format!("    {}", oconnect_ids[0])));
                 lines.push(Spans::from(format!("    {}", oconnect_ids[1])));
-                lines.push(Spans::from(format!("Incoming connections:")));
+                lines.push(Spans::from(Span::styled("   Incoming connections:", Style::default())));
                 lines.push(Spans::from(format!("    {}", iconnect_ids[0])));
                 lines.push(Spans::from(format!("    {}", iconnect_ids[1])));
             }
@@ -59,9 +59,8 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         })
         .collect();
 
-    let nodes = List::new(nodes)
-        .block(Block::default().borders(Borders::ALL))
-        .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD));
+    let nodes =
+        List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
     f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
