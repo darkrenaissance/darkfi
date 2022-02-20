@@ -219,7 +219,7 @@ async fn render<B: Backend>(
     let mut view = View::new(id_list.clone(), info_list.clone());
 
     view.id_list.state.select(Some(0));
-    //view.info_list.index = 0;
+    view.info_list.index = 0;
 
     loop {
         // on first run, add available nodes
@@ -243,15 +243,15 @@ async fn render<B: Backend>(
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
                     view.id_list.next();
-                    //view.info_list.next().await;
+                    view.info_list.next().await;
                 }
                 Key::Char('k') => {
                     view.id_list.previous();
-                    //view.info_list.previous().await;
+                    view.info_list.previous().await;
                 }
                 _ => (),
             }
