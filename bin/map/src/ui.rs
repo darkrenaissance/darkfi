@@ -48,10 +48,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
             for line in lines.clone() {
-                lines.push(Spans::from(Span::styled("   Outgoing connections:", Style::default())));
+                lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
                 lines.push(Spans::from(format!("    {}", oconnect_ids[0])));
                 lines.push(Spans::from(format!("    {}", oconnect_ids[1])));
-                lines.push(Spans::from(Span::styled("   Incoming connections:", Style::default())));
+                lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
                 lines.push(Spans::from(format!("    {}", iconnect_ids[0])));
                 lines.push(Spans::from(format!("    {}", iconnect_ids[1])));
             }
