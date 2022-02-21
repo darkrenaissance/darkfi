@@ -14,6 +14,7 @@ use log::{debug, info, trace};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
+use std::collections::HashSet;
 use std::{fs::File, io, io::Read, path::PathBuf};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
@@ -102,7 +103,7 @@ async fn main() -> Result<()> {
 
     let infos = Vec::new();
     let info_list = InfoList::new(infos.clone());
-    let ids = Vec::new();
+    let ids = HashSet::new();
     let id_list = IdList::new(ids);
 
     let model = Arc::new(Model::new(id_list, info_list));
@@ -133,7 +134,9 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
         rpc_vec.push(node);
     }
     for node in rpc_vec {
+        debug!("Created client: {}", node.node_id);
         let client = Map::new(node.node_id);
+        // TODO: ping/ pong protocol
         ex.spawn(poll(client, model.clone())).detach();
     }
 
@@ -141,7 +144,8 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 }
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
-    info!("RPC connected to {}", client.url);
+    debug!("Attemping to poll: {}", client.url);
+    let mut index = 0;
     loop {
         let reply = client.get_info().await?;
 
@@ -155,22 +159,33 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let mut outconnects = Vec::new();
             let mut inconnects = Vec::new();
 
+            let msgs = outgoing[1].get("message").unwrap();
+
+            if index == 0 {
+                index += 1;
+            } else if index >= 5 {
+                index = 0
+            } else {
+                index = index + 1;
+            }
+            debug!("INDEX {}", index);
+
             let out0 = Connection::new(
                 outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
-                outgoing[0].get("message").unwrap().as_str().unwrap().to_string(),
+                msgs[index].as_str().unwrap().to_string(),
             );
             let out1 = Connection::new(
                 outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
-                outgoing[1].get("message").unwrap().as_str().unwrap().to_string(),
+                msgs[index].as_str().unwrap().to_string(),
             );
 
             let in0 = Connection::new(
                 incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
-                incoming[0].get("message").unwrap().as_str().unwrap().to_string(),
+                msgs[index].as_str().unwrap().to_string(),
             );
             let in1 = Connection::new(
                 incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
-                incoming[1].get("message").unwrap().as_str().unwrap().to_string(),
+                msgs[index].as_str().unwrap().to_string(),
             );
 
             outconnects.push(out0);
@@ -186,25 +201,28 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 incoming: inconnects,
             }];
 
+            let mut id_set = HashSet::new();
             for node in infos {
+                id_set.insert(node.id);
                 // update node info if we don't have it already
-                if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
-                    model.id_list.node_id.lock().await.push(node.clone().id);
-                    debug!("Model ID list: {:?}", model.id_list.node_id.lock().await);
-                    // TODO: update new info if we don't have
-                    model.info_list.infos.lock().await.push(node.clone());
-                    debug!("Model INFO list: {:?}", model.info_list.infos.lock().await);
-                }
+                //if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
+
+                //model.info_list.infos.lock().await.push(node.clone());
+                //debug!("Model ID list: {:?}", model.id_list.node_id.lock().await);
             }
+            model.id_list.node_id.lock().await.union(&id_set);
+            //debug!("Model INFO list: {:?}", model.info_list.infos.lock().await);
+            //}
         } else {
             // TODO: error handling
-            println!("Reply is an error");
+            debug!("Reply is empty");
         }
 
-        async_util::sleep(20).await;
+        async_util::sleep(5).await;
     }
 }
 
+// hashmap union
 async fn render<B: Backend>(
     _config: &MapConfig,
     terminal: &mut Terminal<B>,
@@ -224,10 +242,13 @@ async fn render<B: Backend>(
     loop {
         // on first run, add available nodes
         // every time run the program, simply update nodes
-        view.update(
-            model.id_list.node_id.lock().await.clone(),
-            model.info_list.infos.lock().await.clone(),
-        );
+        //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
+        //view.update(
+        //    model.id_list.node_id.lock().await.clone(),
+        //    model.info_list.infos.lock().await.clone(),
+        //);
+        //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
+        //debug!("VIEW {:?}", view.info_list.infos);
         if view.info_list.infos.is_empty() {
             // TODO: make this a loading widget
             // TODO: this lags forever if IRC is not running. add an error
@@ -243,7 +264,7 @@ async fn render<B: Backend>(
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
@@ -256,5 +277,6 @@ async fn render<B: Backend>(
                 _ => (),
             }
         }
+        //async_util::sleep(1).await;
     }
 }

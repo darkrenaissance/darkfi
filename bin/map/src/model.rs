@@ -1,6 +1,7 @@
 use async_std::sync::Mutex;
 use darkfi::error::Result;
 use log::debug;
+use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -14,21 +15,23 @@ impl Model {
     }
 
     pub async fn update(self, infos: Vec<NodeInfo>) -> Result<()> {
-        for node in infos {
-            self.info_list.infos.lock().await.push(node.clone());
-            self.id_list.node_id.lock().await.push(node.clone().id);
-        }
+        //for node in infos {
+        //    self.info_list.infos.lock().await.push(node.clone());
+        //    self.id_list.node_id.lock().await.push(node.clone().id);
+        //}
+        // Hashset will be a union
         Ok(())
     }
 }
 
 pub struct IdList {
     pub state: Mutex<ListState>,
-    pub node_id: Mutex<Vec<String>>,
+    pub node_id: Mutex<HashSet<String>>,
 }
 
 impl IdList {
-    pub fn new(node_id: Vec<String>) -> IdList {
+    // change vec to hashset
+    pub fn new(node_id: HashSet<String>) -> IdList {
         let node_id = Mutex::new(node_id);
         IdList { state: Mutex::new(ListState::default()), node_id }
     }
@@ -36,6 +39,7 @@ impl IdList {
 
 pub struct InfoList {
     pub index: Mutex<usize>,
+    // hashmap
     pub infos: Mutex<Vec<NodeInfo>>,
 }
 
@@ -49,7 +53,7 @@ impl InfoList {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
     pub id: String,
     pub outgoing: Vec<Connection>,
@@ -62,7 +66,7 @@ impl NodeInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Connection {
     pub id: String,
     pub message: String,

@@ -17,29 +17,12 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .split(f.size());
 
     let info = &view.info_list.infos;
+    //debug!("UI ID LIST: {:?}", view.id_list.node_id);
+    //debug!("UI INFO LIST: {:?}", view.info_list.infos);
     let index = view.info_list.index;
 
     let iconnects = info[index].incoming.clone();
     let oconnects = info[index].outgoing.clone();
-
-    let mut iconnect_ids = Vec::new();
-    let mut oconnect_ids = Vec::new();
-
-    if !iconnects.is_empty() {
-        for connect in iconnects {
-            iconnect_ids.push(connect.id);
-        }
-    } else {
-        // TODO: Render 'info not found'
-        debug!("EMPTY VECTOR");
-    }
-    if !oconnects.is_empty() {
-        for connect in oconnects {
-            oconnect_ids.push(connect.id);
-        }
-    } else {
-        debug!("EMPTY VECTOR");
-    }
 
     let nodes: Vec<ListItem> = view
         .id_list
@@ -49,11 +32,23 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             let mut lines = vec![Spans::from(id.to_string())];
             for line in lines.clone() {
                 lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
-                lines.push(Spans::from(format!("    {}", oconnect_ids[0])));
-                lines.push(Spans::from(format!("    {}", oconnect_ids[1])));
+                lines.push(Spans::from(format!(
+                    "    {}         [R: {}]",
+                    oconnects[0].id, oconnects[0].message
+                )));
+                lines.push(Spans::from(format!(
+                    "    {}         [S: {}]",
+                    oconnects[1].id, oconnects[1].message
+                )));
                 lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
-                lines.push(Spans::from(format!("    {}", iconnect_ids[0])));
-                lines.push(Spans::from(format!("    {}", iconnect_ids[1])));
+                lines.push(Spans::from(format!(
+                    "    {}         [R: {}]",
+                    iconnects[0].id, iconnects[0].message
+                )));
+                lines.push(Spans::from(format!(
+                    "    {}         [S: {}]",
+                    iconnects[1].id, iconnects[1].message
+                )));
             }
             ListItem::new(lines).style(Style::default())
         })
@@ -70,34 +65,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 }
 
 fn render_info_right<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
-    let info = &view.info_list.infos;
-
-    let iconnects = info[index].incoming.clone();
-    let oconnects = info[index].outgoing.clone();
-
-    let mut iconnect_msgs = Vec::new();
-    let mut oconnect_msgs = Vec::new();
-
-    if !iconnects.is_empty() {
-        for connect in iconnects {
-            iconnect_msgs.push(connect.message)
-        }
-    }
-    if !oconnects.is_empty() {
-        for connect in oconnects {
-            oconnect_msgs.push(connect.message);
-        }
-    }
-    let span = vec![
-        Spans::from(format!("Last message:")),
-        Spans::from(format!("")),
-        Spans::from(format!("{}", oconnect_msgs[0])),
-        Spans::from(format!("{}", oconnect_msgs[1])),
-        Spans::from(format!("")),
-        Spans::from(format!("")),
-        Spans::from(format!("{}", oconnect_msgs[0])),
-        Spans::from(format!("{}", oconnect_msgs[1])),
-    ];
+    let span = vec![];
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
     f.render_widget(graph, slice[1]);
