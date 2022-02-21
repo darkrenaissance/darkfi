@@ -14,32 +14,11 @@ impl View {
         View { id_list, info_list }
     }
 
-    // do we have this node id?
-    //      if not, add everything
-    //
-    //      if yes, do we have these connections?
-    //          if not, add everything
-    //          if yes, do we have these msgs?
-    //              if not, add
-    pub fn update(&mut self, node_id: Vec<String>, infos: Vec<NodeInfo>) {
-        // TODO: change nodeinfo.id to hashmap(k)
-        //
-        //let mut index = 0;
-        for node in node_id.clone() {
-            if !self.id_list.node_id.contains(&node) {
-                self.id_list.update(node_id.clone());
-                self.info_list.update(infos.clone());
-            }
-            //for info in self.info_list.infos.clone() {
-            //    index = index + 1;
-            //    if !info.outgoing.contains(&infos[index].outgoing[index]) {
-            //        info.outgoing.update(&infos[index].outgoing[index])
-            //    }
-            //}
+    pub fn update(&mut self, node_id: HashSet<String>, infos: Vec<NodeInfo>) {
+        for node in node_id {
+            self.id_list.node_id.insert(node);
         }
         // all node ids that are not contained
-        //debug!("UPDATE CALLED");
-        //debug!("INFOS {:?}", infos);
         // node_id.union(self.id_list.node_id)
         //let new_node_ids =
         //    node_id.into_iter().filter(|id| !self.id_list.node_id.contains(id)).collect();
@@ -74,11 +53,11 @@ impl View {
 #[derive(Clone)]
 pub struct IdListView {
     pub state: ListState,
-    pub node_id: Vec<String>,
+    pub node_id: HashSet<String>,
 }
 
 impl IdListView {
-    pub fn new(node_id: Vec<String>) -> IdListView {
+    pub fn new(node_id: HashSet<String>) -> IdListView {
         IdListView { state: ListState::default(), node_id }
     }
     pub fn next(&mut self) {
@@ -116,11 +95,11 @@ impl IdListView {
         self.state.select(None);
     }
 
-    pub fn update(&mut self, node_id: Vec<String>) {
-        for id in node_id {
-            self.node_id.push(id)
-        }
-    }
+    //pub fn update(&mut self, node_id: HashSet<String>) {
+    //    //for id in node_id {
+    //    //    self.node_id.push(id)
+    //    //}
+    //}
 }
 
 #[derive(Clone)]

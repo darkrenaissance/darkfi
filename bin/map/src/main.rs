@@ -232,7 +232,7 @@ async fn render<B: Backend>(
 
     terminal.clear()?;
 
-    let id_list = IdListView::new(Vec::new());
+    let id_list = IdListView::new(HashSet::new());
     let info_list = InfoListView::new(Vec::new());
     let mut view = View::new(id_list.clone(), info_list.clone());
 
@@ -243,10 +243,10 @@ async fn render<B: Backend>(
         // on first run, add available nodes
         // every time run the program, simply update nodes
         //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
-        //view.update(
-        //    model.id_list.node_id.lock().await.clone(),
-        //    model.info_list.infos.lock().await.clone(),
-        //);
+        view.update(
+            model.id_list.node_id.lock().await.clone(),
+            model.info_list.infos.lock().await.clone(),
+        );
         //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
         //debug!("VIEW {:?}", view.info_list.infos);
         if view.info_list.infos.is_empty() {
