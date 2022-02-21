@@ -168,7 +168,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             } else {
                 index = index + 1;
             }
-            debug!("INDEX {}", index);
+            //debug!("INDEX {}", index);
 
             let out0 = Connection::new(
                 outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
@@ -194,27 +194,17 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             inconnects.push(in0);
             inconnects.push(in1);
 
-            let infos = NodeInfo {
-                // TODO: should never crash
-                //id: id.as_str().unwrap().to_string(),
-                outgoing: outconnects,
-                incoming: inconnects,
-            };
+            let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
 
             let mut node_info = HashMap::new();
             node_info.insert(id.as_str().unwrap().to_string(), infos);
-            let mut id_set = HashSet::new();
-            for (id, value) in node_info {
-                id_set.insert(id.clone());
-                // update node info if we don't have it already
-                //if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
 
+            for (id, value) in node_info.clone() {
+                model.id_list.node_id.lock().await.insert(id.clone());
                 model.info_list.infos.lock().await.insert(id, value);
-                //debug!("Model ID list: {:?}", model.id_list.node_id.lock().await);
             }
-            model.id_list.node_id.lock().await.union(&id_set);
-            //debug!("Model INFO list: {:?}", model.info_list.infos.lock().await);
-            //}
+            //debug!("MODEL UPDATE HASHSET: {:?}", model.id_list.node_id.lock().await.clone());
+            //debug!("MODEL UPDATE HASHMAP: {:?}", model.info_list.infos.lock().await.clone());
         } else {
             // TODO: error handling
             debug!("Reply is empty");
@@ -235,7 +225,7 @@ async fn render<B: Backend>(
     terminal.clear()?;
 
     let id_list = IdListView::new(HashSet::new());
-    let info_list = InfoListView::new(Vec::new());
+    let info_list = InfoListView::new(HashMap::new());
     let mut view = View::new(id_list.clone(), info_list.clone());
 
     view.id_list.state.select(Some(0));
@@ -274,6 +264,6 @@ async fn render<B: Backend>(
                 _ => (),
             }
         }
-        //async_util::sleep(1).await;
+        //async_util::sleep(4).await;
     }
 }

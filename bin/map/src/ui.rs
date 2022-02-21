@@ -21,8 +21,8 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     //debug!("UI INFO LIST: {:?}", view.info_list.infos);
     let index = view.info_list.index;
 
-    let iconnects = info[index].incoming.clone();
-    let oconnects = info[index].outgoing.clone();
+    //let iconnects = info[index].incoming.clone();
+    //let oconnects = info[index].outgoing.clone();
 
     let nodes: Vec<ListItem> = view
         .id_list
@@ -30,26 +30,26 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .iter()
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
-            for line in lines.clone() {
-                lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
-                lines.push(Spans::from(format!(
-                    "    {}         [R: {}]",
-                    oconnects[0].id, oconnects[0].message
-                )));
-                lines.push(Spans::from(format!(
-                    "    {}         [S: {}]",
-                    oconnects[1].id, oconnects[1].message
-                )));
-                lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
-                lines.push(Spans::from(format!(
-                    "    {}         [R: {}]",
-                    iconnects[0].id, iconnects[0].message
-                )));
-                lines.push(Spans::from(format!(
-                    "    {}         [S: {}]",
-                    iconnects[1].id, iconnects[1].message
-                )));
-            }
+            //for line in lines.clone() {
+            //    lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
+            //    lines.push(Spans::from(format!(
+            //        "    {}         [R: {}]",
+            //        oconnects[0].id, oconnects[0].message
+            //    )));
+            //    lines.push(Spans::from(format!(
+            //        "    {}         [S: {}]",
+            //        oconnects[1].id, oconnects[1].message
+            //    )));
+            //    lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
+            //    lines.push(Spans::from(format!(
+            //        "    {}         [R: {}]",
+            //        iconnects[0].id, iconnects[0].message
+            //    )));
+            //    lines.push(Spans::from(format!(
+            //        "    {}         [S: {}]",
+            //        iconnects[1].id, iconnects[1].message
+            //    )));
+            //}
             ListItem::new(lines).style(Style::default())
         })
         .collect();

@@ -15,9 +15,12 @@ impl View {
     }
 
     pub fn update(&mut self, node_id: HashSet<String>, infos: HashMap<String, NodeInfo>) {
-        for node in node_id {
-            self.id_list.node_id.insert(node);
+        for (id, info) in infos.clone() {
+            self.id_list.node_id.insert(id.clone());
+            self.info_list.infos.insert(id, info);
         }
+        debug!("VIEW UPDATE HASHSET: {:?}", self.id_list.node_id);
+        debug!("VIEW UPDATE HASHMAP: {:?}", self.info_list.infos);
         // all node ids that are not contained
         //node_id.union(&self.id_list.node_id)
         //let new_node_ids =
@@ -105,11 +108,11 @@ impl IdListView {
 #[derive(Clone)]
 pub struct InfoListView {
     pub index: usize,
-    pub infos: Vec<NodeInfo>,
+    pub infos: HashMap<String, NodeInfo>,
 }
 
 impl InfoListView {
-    pub fn new(infos: Vec<NodeInfo>) -> InfoListView {
+    pub fn new(infos: HashMap<String, NodeInfo>) -> InfoListView {
         let index = 0;
 
         InfoListView { index, infos }
@@ -129,9 +132,9 @@ impl InfoListView {
         }
     }
 
-    pub fn update(&mut self, infos: Vec<NodeInfo>) {
-        for info in infos {
-            self.infos.push(info);
-        }
-    }
+    //pub fn update(&mut self, infos: Vec<NodeInfo>) {
+    //    for info in infos {
+    //        self.infos.push(info);
+    //    }
+    //}
 }
