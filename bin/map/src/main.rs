@@ -14,8 +14,13 @@ use log::{debug, info, trace};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
-use std::collections::{HashMap, HashSet};
-use std::{fs::File, io, io::Read, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    io,
+    io::Read,
+    path::PathBuf,
+};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -119,7 +124,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
-                render(&config, &mut terminal, model.clone()).await?;
+                render(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -159,8 +164,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let mut outconnects = Vec::new();
             let mut inconnects = Vec::new();
 
+            // here we are simulating new messages by scrolling through a vector
             let msgs = outgoing[1].get("message").unwrap();
-
             if index == 0 {
                 index += 1;
             } else if index >= 5 {
@@ -168,7 +173,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             } else {
                 index = index + 1;
             }
-            //debug!("INDEX {}", index);
 
             let out0 = Connection::new(
                 outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
@@ -203,23 +207,16 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 model.id_list.node_id.lock().await.insert(id.clone());
                 model.info_list.infos.lock().await.insert(id, value);
             }
-            //debug!("MODEL UPDATE HASHSET: {:?}", model.id_list.node_id.lock().await.clone());
-            //debug!("MODEL UPDATE HASHMAP: {:?}", model.info_list.infos.lock().await.clone());
         } else {
             // TODO: error handling
             debug!("Reply is empty");
         }
 
-        async_util::sleep(5).await;
+        async_util::sleep(2).await;
     }
 }
 
-// hashmap union
-async fn render<B: Backend>(
-    _config: &MapConfig,
-    terminal: &mut Terminal<B>,
-    model: Arc<Model>,
-) -> io::Result<()> {
+async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -251,7 +248,7 @@ async fn render<B: Backend>(
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
                     view.id_list.next();
@@ -264,6 +261,5 @@ async fn render<B: Backend>(
                 _ => (),
             }
         }
-        //async_util::sleep(4).await;
     }
 }

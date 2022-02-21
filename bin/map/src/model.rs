@@ -13,15 +13,6 @@ impl Model {
     pub fn new(id_list: IdList, info_list: InfoList) -> Model {
         Model { id_list, info_list }
     }
-
-    pub async fn update(self, infos: Vec<NodeInfo>) -> Result<()> {
-        //for node in infos {
-        //    self.info_list.infos.lock().await.push(node.clone());
-        //    self.id_list.node_id.lock().await.push(node.clone().id);
-        //}
-        // Hashset will be a union
-        Ok(())
-    }
 }
 
 pub struct IdList {
@@ -38,7 +29,6 @@ impl IdList {
 
 pub struct InfoList {
     pub index: Mutex<usize>,
-    // hashmap
     pub infos: Mutex<HashMap<String, NodeInfo>>,
 }
 
@@ -54,7 +44,6 @@ impl InfoList {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
-    //pub id: String,
     pub outgoing: Vec<Connection>,
     pub incoming: Vec<Connection>,
 }

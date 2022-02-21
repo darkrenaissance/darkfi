@@ -17,12 +17,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .split(f.size());
 
     let info = &view.info_list.infos;
-    //debug!("UI ID LIST: {:?}", view.id_list.node_id);
-    //debug!("UI INFO LIST: {:?}", view.info_list.infos);
     let index = view.info_list.index;
-
-    //let iconnects = info[index].incoming.clone();
-    //let oconnects = info[index].outgoing.clone();
 
     let nodes: Vec<ListItem> = view
         .id_list
@@ -30,26 +25,28 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .iter()
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
-            //for line in lines.clone() {
-            //    lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
-            //    lines.push(Spans::from(format!(
-            //        "    {}         [R: {}]",
-            //        oconnects[0].id, oconnects[0].message
-            //    )));
-            //    lines.push(Spans::from(format!(
-            //        "    {}         [S: {}]",
-            //        oconnects[1].id, oconnects[1].message
-            //    )));
-            //    lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
-            //    lines.push(Spans::from(format!(
-            //        "    {}         [R: {}]",
-            //        iconnects[0].id, iconnects[0].message
-            //    )));
-            //    lines.push(Spans::from(format!(
-            //        "    {}         [S: {}]",
-            //        iconnects[1].id, iconnects[1].message
-            //    )));
-            //}
+            // TODO: handle the None case
+            let connects = info.get(id).unwrap();
+            for line in lines.clone() {
+                lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
+                lines.push(Spans::from(format!(
+                    "    {}         [R: {}]",
+                    connects.outgoing[0].id, connects.outgoing[0].message
+                )));
+                lines.push(Spans::from(format!(
+                    "    {}         [S: {}]",
+                    connects.outgoing[1].id, connects.outgoing[1].message
+                )));
+                lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
+                lines.push(Spans::from(format!(
+                    "    {}         [R: {}]",
+                    connects.incoming[0].id, connects.incoming[0].message
+                )));
+                lines.push(Spans::from(format!(
+                    "    {}         [S: {}]",
+                    connects.incoming[1].id, connects.incoming[1].message
+                )));
+            }
             ListItem::new(lines).style(Style::default())
         })
         .collect();
