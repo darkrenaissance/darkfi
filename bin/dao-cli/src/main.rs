@@ -1,7 +1,7 @@
 use async_executor::Executor;
-use clap::{IntoApp, Parser};
+use clap::{IntoApp, Parser, Subcommand};
 use darkfi::{
-    cli::{CliDao, CliDaoSubCommands, Config},
+    cli::Config,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::async_util,
     Error, Result,
@@ -10,6 +10,22 @@ use log::{debug, error};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+#[derive(Subcommand)]
+pub enum CliDaoSubCommands {
+    /// Say hello to the RPC
+    Hello {},
+}
+
+/// DAO cli
+#[derive(Parser)]
+#[clap(name = "dao")]
+pub struct CliDao {
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+    #[clap(subcommand)]
+    pub command: Option<CliDaoSubCommands>,
+}
 pub struct Client {
     url: String,
 }

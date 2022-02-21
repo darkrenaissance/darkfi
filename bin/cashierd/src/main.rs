@@ -8,13 +8,13 @@ use easy_parallel::Parallel;
 use log::{debug, info};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        CashierdConfig, CliCashierd, Config,
+        CashierdConfig, Config,
     },
     crypto::{
         address::Address,
@@ -38,6 +38,24 @@ use darkfi::{
 };
 
 use cashierd::service::{bridge, bridge::Bridge};
+
+/// Cashierd cli
+#[derive(Parser)]
+#[clap(name = "cashierd")]
+pub struct CliCashierd {
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
+    /// Get Cashier Public key
+    #[clap(short, long)]
+    pub address: bool,
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+    /// Refresh the wallet and slabstore
+    #[clap(short, long)]
+    pub refresh: bool,
+}
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../cashierd_config.toml");
 
