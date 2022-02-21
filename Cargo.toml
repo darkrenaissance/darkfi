@@ -224,19 +224,9 @@ path = "example/net.rs"
 required-features = ["async-runtime", "cli", "net"]
 
 [[example]]
-name = "tui"
-path = "example/tui_ex.rs"
-required-features = ["async-runtime", "tui"]
-
-[[example]]
 name = "tx"
 path = "example/tx.rs"
 required-features = ["node"]
-
-[[example]]
-name = "tree"
-path = "example/tree.rs"
-required-features = ["crypto"]
 
 # ZK VM Proof examples
 
@@ -253,9 +243,4 @@ required-features = ["cli", "crypto", "zkas"]
 [[example]]
 name = "burn"
 path = "proof/burn.rs"
-required-features = ["cli", "crypto", "zkas"]
-
-[[example]]
-name = "dao"
-path = "proof/dao.rs"
 required-features = ["cli", "crypto", "zkas"]
