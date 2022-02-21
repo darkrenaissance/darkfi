@@ -15,7 +15,7 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        CliDarkfid, Config, DarkfidConfig,
+        Config, DarkfidConfig,
     },
     crypto::{
         address::Address,
@@ -40,6 +40,24 @@ use darkfi::{
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
+
+/// Darkfid cli
+#[derive(Parser)]
+#[clap(name = "darkfid")]
+pub struct CliDarkfid {
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
+    /// Local cashier public key
+    #[clap(long)]
+    pub cashier: Option<String>,
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+    /// Refresh the wallet and slabstore
+    #[clap(short, long)]
+    pub refresh: bool,
+}
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../darkfid_config.toml");
 

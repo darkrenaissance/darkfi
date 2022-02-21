@@ -10,12 +10,24 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        CliGatewayd, Config, GatewaydConfig,
+        Config, GatewaydConfig,
     },
     node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
     Result,
 };
+
+/// Gatewayd cli
+#[derive(Parser)]
+#[clap(name = "gatewayd")]
+pub struct CliGatewayd {
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+}
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../gatewayd_config.toml");
 
