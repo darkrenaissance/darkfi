@@ -682,11 +682,7 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let conf: simplelog::Config;
-    let lvl: LevelFilter;
-
-    (lvl, conf) = log_config(matches)?;
-
+    let (lvl, conf) = log_config(matches)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;
