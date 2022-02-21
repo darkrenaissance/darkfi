@@ -14,7 +14,7 @@ use log::{debug, info, trace};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{fs::File, io, io::Read, path::PathBuf};
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
@@ -194,20 +194,22 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             inconnects.push(in0);
             inconnects.push(in1);
 
-            let infos = vec![NodeInfo {
+            let infos = NodeInfo {
                 // TODO: should never crash
-                id: id.as_str().unwrap().to_string(),
+                //id: id.as_str().unwrap().to_string(),
                 outgoing: outconnects,
                 incoming: inconnects,
-            }];
+            };
 
+            let mut node_info = HashMap::new();
+            node_info.insert(id.as_str().unwrap().to_string(), infos);
             let mut id_set = HashSet::new();
-            for node in infos {
-                id_set.insert(node.id);
+            for (id, value) in node_info {
+                id_set.insert(id.clone());
                 // update node info if we don't have it already
                 //if !model.id_list.node_id.lock().await.contains(&node.clone().id) {
 
-                //model.info_list.infos.lock().await.push(node.clone());
+                model.info_list.infos.lock().await.insert(id, value);
                 //debug!("Model ID list: {:?}", model.id_list.node_id.lock().await);
             }
             model.id_list.node_id.lock().await.union(&id_set);
@@ -240,15 +242,10 @@ async fn render<B: Backend>(
     view.info_list.index = 0;
 
     loop {
-        // on first run, add available nodes
-        // every time run the program, simply update nodes
-        //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
         view.update(
             model.id_list.node_id.lock().await.clone(),
             model.info_list.infos.lock().await.clone(),
         );
-        //debug!("UPDATE INFO LIST: {:?}", model.info_list.infos.lock().await.clone());
-        //debug!("VIEW {:?}", view.info_list.infos);
         if view.info_list.infos.is_empty() {
             // TODO: make this a loading widget
             // TODO: this lags forever if IRC is not running. add an error

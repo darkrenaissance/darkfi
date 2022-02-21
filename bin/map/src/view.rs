@@ -1,6 +1,6 @@
 use crate::model::NodeInfo;
 use log::debug;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
 #[derive(Clone)]
@@ -14,12 +14,12 @@ impl View {
         View { id_list, info_list }
     }
 
-    pub fn update(&mut self, node_id: HashSet<String>, infos: Vec<NodeInfo>) {
+    pub fn update(&mut self, node_id: HashSet<String>, infos: HashMap<String, NodeInfo>) {
         for node in node_id {
             self.id_list.node_id.insert(node);
         }
         // all node ids that are not contained
-        // node_id.union(self.id_list.node_id)
+        //node_id.union(&self.id_list.node_id)
         //let new_node_ids =
         //    node_id.into_iter().filter(|id| !self.id_list.node_id.contains(id)).collect();
         ////[self.id_list.node_id, new_node_ids].concat();

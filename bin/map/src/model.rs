@@ -30,7 +30,6 @@ pub struct IdList {
 }
 
 impl IdList {
-    // change vec to hashset
     pub fn new(node_id: HashSet<String>) -> IdList {
         let node_id = Mutex::new(node_id);
         IdList { state: Mutex::new(ListState::default()), node_id }
@@ -40,14 +39,14 @@ impl IdList {
 pub struct InfoList {
     pub index: Mutex<usize>,
     // hashmap
-    pub infos: Mutex<Vec<NodeInfo>>,
+    pub infos: Mutex<HashMap<String, NodeInfo>>,
 }
 
 impl InfoList {
     pub fn new(infos: Vec<NodeInfo>) -> InfoList {
         let index = 0;
         let index = Mutex::new(index);
-        let infos = Mutex::new(infos);
+        let infos = Mutex::new(HashMap::new());
 
         InfoList { index, infos }
     }
@@ -55,14 +54,14 @@ impl InfoList {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
-    pub id: String,
+    //pub id: String,
     pub outgoing: Vec<Connection>,
     pub incoming: Vec<Connection>,
 }
 
 impl NodeInfo {
     pub fn new() -> NodeInfo {
-        NodeInfo { id: String::new(), outgoing: Vec::new(), incoming: Vec::new() }
+        NodeInfo { outgoing: Vec::new(), incoming: Vec::new() }
     }
 }
 
