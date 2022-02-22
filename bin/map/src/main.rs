@@ -149,6 +149,8 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     debug!("Attemping to poll: {}", client.url);
+    // TODO: fix this! this can lag forever
+    // check connect() on net/connector.rs
     let reply = client.ping().await?;
     if reply.as_str().is_some() {
         let mut index = 0;
@@ -238,6 +240,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
         counter = counter + 1;
         view.update(model.info_list.infos.lock().await.clone());
         if view.id_list.node_id.is_empty() {
+            // TODO: delete this and display empty data
             if counter == 1 {
                 let mut progress = 0;
                 while progress < 100 {
@@ -249,7 +252,8 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
                 }
             } else if counter == 2 {
                 terminal.clear()?;
-                println!("Could not connect to node. Are you sure IRC is running?");
+                // TODO: continue to display not, mark as offline
+                println!("Could not connect to node. Are you sure RPC is running?");
             }
         } else {
             terminal.draw(|f| {
