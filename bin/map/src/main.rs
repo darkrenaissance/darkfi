@@ -10,16 +10,17 @@ use darkfi::{
 
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
-use log::{debug, info, trace};
+use log::{debug, info};
 use serde_json::{json, Value};
 use simplelog::*;
-use smol::Executor;
+use smol::{Executor, Timer};
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io,
     io::Read,
     path::PathBuf,
+    time::Duration,
 };
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
@@ -150,71 +151,75 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     debug!("Attemping to poll: {}", client.url);
-    let mut index = 0;
-    loop {
-        let reply = client.ping().await?;
+    let reply = client.ping().await?;
+    if reply.as_str().is_some() {
+        let mut index = 0;
+        loop {
+            debug!("Connected to: {}", client.url);
+            let reply = client.get_info().await?;
 
-        let reply = client.get_info().await?;
+            if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                let id = reply.as_object().unwrap().get("id").unwrap();
 
-        if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            let id = reply.as_object().unwrap().get("id").unwrap();
+                let connections = reply.as_object().unwrap().get("connections").unwrap();
+                let outgoing = connections.get("outgoing").unwrap();
+                let incoming = connections.get("incoming").unwrap();
 
-            let connections = reply.as_object().unwrap().get("connections").unwrap();
-            let outgoing = connections.get("outgoing").unwrap();
-            let incoming = connections.get("incoming").unwrap();
+                let mut outconnects = Vec::new();
+                let mut inconnects = Vec::new();
 
-            let mut outconnects = Vec::new();
-            let mut inconnects = Vec::new();
+                // here we are simulating new messages by scrolling through a vector
+                let msgs = outgoing[1].get("message").unwrap();
+                if index == 0 {
+                    index += 1;
+                } else if index >= 5 {
+                    index = 0
+                } else {
+                    index = index + 1;
+                }
 
-            // here we are simulating new messages by scrolling through a vector
-            let msgs = outgoing[1].get("message").unwrap();
-            if index == 0 {
-                index += 1;
-            } else if index >= 5 {
-                index = 0
+                let out0 = Connection::new(
+                    outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
+                    msgs[index].as_str().unwrap().to_string(),
+                );
+                let out1 = Connection::new(
+                    outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
+                    msgs[index].as_str().unwrap().to_string(),
+                );
+
+                let in0 = Connection::new(
+                    incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
+                    msgs[index].as_str().unwrap().to_string(),
+                );
+                let in1 = Connection::new(
+                    incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
+                    msgs[index].as_str().unwrap().to_string(),
+                );
+
+                outconnects.push(out0);
+                outconnects.push(out1);
+
+                inconnects.push(in0);
+                inconnects.push(in1);
+
+                let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
+
+                let mut node_info = HashMap::new();
+                node_info.insert(id.as_str().unwrap().to_string(), infos);
+
+                for (id, value) in node_info.clone() {
+                    model.id_list.node_id.lock().await.insert(id.clone());
+                    model.info_list.infos.lock().await.insert(id, value);
+                }
             } else {
-                index = index + 1;
+                // TODO: error handling
+                debug!("Reply is empty");
             }
-
-            let out0 = Connection::new(
-                outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-            let out1 = Connection::new(
-                outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-
-            let in0 = Connection::new(
-                incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-            let in1 = Connection::new(
-                incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-
-            outconnects.push(out0);
-            outconnects.push(out1);
-
-            inconnects.push(in0);
-            inconnects.push(in1);
-
-            let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
-
-            let mut node_info = HashMap::new();
-            node_info.insert(id.as_str().unwrap().to_string(), infos);
-
-            for (id, value) in node_info.clone() {
-                model.id_list.node_id.lock().await.insert(id.clone());
-                model.info_list.infos.lock().await.insert(id, value);
-            }
-        } else {
-            // TODO: error handling
-            debug!("Reply is empty");
+            async_util::sleep(2).await;
         }
-
-        async_util::sleep(2).await;
+    } else {
+        Timer::after(Duration::from_secs(10)).await;
+        Err(Error::ConnectTimeout)
     }
 }
 
