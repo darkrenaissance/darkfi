@@ -4,6 +4,8 @@
 - [Ideology](IDEOLOGY.md)
 - [Development](development.md)
 - [Tutorial](tutorial.md)
+- [Architecture](architecture/architecture.md)
+  - [Node design](architecture/nodes.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
   - [cashierd JSON-RPC API](clients/cashierd_jsonrpc.md)
