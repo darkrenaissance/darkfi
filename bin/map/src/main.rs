@@ -70,10 +70,10 @@ impl Map {
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
-    async fn _say_hello(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("say_hello"), json!([]));
+    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
+    async fn ping(&self) -> Result<Value> {
+        let req = jsonrpc::request(json!("ping"), json!([]));
         Ok(self.request(req).await?)
     }
 
@@ -152,6 +152,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     debug!("Attemping to poll: {}", client.url);
     let mut index = 0;
     loop {
+        let reply = client.ping().await?;
+
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
@@ -248,7 +250,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();

@@ -26,6 +26,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
             // TODO: handle the None case
+            // TODO: fix formatting (indentation must be margins)
             let connects = info.get(id).unwrap();
             for line in lines.clone() {
                 lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));

@@ -204,7 +204,7 @@ impl RequestHandler for JsonRpcInterface {
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            //Some("ping") => return self.pong(req.id, req.params).await,
+            Some("ping") => return self.pong(req.id, req.params).await,
             Some("get_info") => return self.get_info(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
@@ -214,9 +214,9 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    //async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-    //    JsonResult::Resp(jsonresp(json!("pong"), id))
-    //}
+    async fn pong(&self, id: Value, _params: Value) -> JsonResult {
+        JsonResult::Resp(jsonresp(json!("pong"), id))
+    }
 
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
