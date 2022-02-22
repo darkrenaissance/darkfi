@@ -1,6 +1,4 @@
 use async_std::sync::Mutex;
-use darkfi::error::Result;
-use log::debug;
 use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
@@ -33,7 +31,7 @@ pub struct InfoList {
 }
 
 impl InfoList {
-    pub fn new(infos: Vec<NodeInfo>) -> InfoList {
+    pub fn new() -> InfoList {
         let index = 0;
         let index = Mutex::new(index);
         let infos = Mutex::new(HashMap::new());

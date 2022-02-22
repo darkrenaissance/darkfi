@@ -107,8 +107,7 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let infos = Vec::new();
-    let info_list = InfoList::new(infos.clone());
+    let info_list = InfoList::new();
     let ids = HashSet::new();
     let id_list = IdList::new(ids);
 
@@ -142,7 +141,6 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
     for node in rpc_vec {
         debug!("Created client: {}", node.node_id);
         let client = Map::new(node.node_id);
-        // TODO: ping/ pong protocol
         ex.spawn(poll(client, model.clone())).detach();
     }
 
@@ -236,10 +234,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
     view.info_list.index = 0;
 
     loop {
-        view.update(
-            model.id_list.node_id.lock().await.clone(),
-            model.info_list.infos.lock().await.clone(),
-        );
+        view.update(model.info_list.infos.lock().await.clone());
         if view.info_list.infos.is_empty() {
             // TODO: make this a loading widget
             // TODO: this lags forever if IRC is not running. add an error

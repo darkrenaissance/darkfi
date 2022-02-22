@@ -1,5 +1,4 @@
 use crate::model::NodeInfo;
-use log::debug;
 use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
@@ -14,7 +13,7 @@ impl View {
         View { id_list, info_list }
     }
 
-    pub fn update(&mut self, node_id: HashSet<String>, infos: HashMap<String, NodeInfo>) {
+    pub fn update(&mut self, infos: HashMap<String, NodeInfo>) {
         for (id, info) in infos.clone() {
             self.id_list.node_id.insert(id.clone());
             self.info_list.infos.insert(id, info);

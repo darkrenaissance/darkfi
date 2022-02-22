@@ -1,9 +1,8 @@
 use crate::view::View;
-use log::debug;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
@@ -17,7 +16,6 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .split(f.size());
 
     let info = &view.info_list.infos;
-    let index = view.info_list.index;
 
     let nodes: Vec<ListItem> = view
         .id_list
@@ -28,7 +26,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             // TODO: handle the None case
             // TODO: fix formatting (indentation must be margins)
             let connects = info.get(id).unwrap();
-            for line in lines.clone() {
+            for _line in lines.clone() {
                 lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
                 lines.push(Spans::from(format!(
                     "    {}         [R: {}]",
@@ -62,7 +60,12 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     render_info_right(view.clone(), f, index, slice);
 }
 
-fn render_info_right<B: Backend>(view: View, f: &mut Frame<'_, B>, index: usize, slice: Vec<Rect>) {
+fn render_info_right<B: Backend>(
+    _view: View,
+    f: &mut Frame<'_, B>,
+    _index: usize,
+    slice: Vec<Rect>,
+) {
     let span = vec![];
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
