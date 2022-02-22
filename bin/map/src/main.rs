@@ -216,7 +216,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             async_util::sleep(2).await;
         }
     } else {
-        Timer::after(Duration::from_secs(10)).await;
+        // TODO: fix this
+        async_util::sleep(10).await;
         Err(Error::ConnectTimeout)
     }
 }
@@ -236,10 +237,16 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
     loop {
         view.update(model.info_list.infos.lock().await.clone());
         if view.info_list.infos.is_empty() {
-            // TODO: make this a loading widget
             // TODO: this lags forever if IRC is not running. add an error
-            println!("Initializing...");
-            async_util::sleep(1).await;
+            let mut progress = 0;
+            while progress < 100 {
+                terminal.draw(|f| {
+                    ui::init_panel(f, progress);
+                })?;
+
+                Timer::after(Duration::from_millis(1)).await;
+                progress = progress + 1;
+            }
             terminal.clear()?;
         } else {
             terminal.draw(|f| {

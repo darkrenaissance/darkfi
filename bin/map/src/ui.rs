@@ -2,9 +2,9 @@ use crate::view::View;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Color, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -70,4 +70,20 @@ fn render_info_right<B: Backend>(
     let graph =
         Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
     f.render_widget(graph, slice[1]);
+}
+
+pub fn init_panel<B: Backend>(f: &mut Frame<'_, B>, progress: u16) {
+    let slice = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Percentage(7), Constraint::Percentage(100)].as_ref())
+        .split(f.size());
+
+    let gauge = Gauge::default()
+        .block(Block::default().borders(Borders::ALL).title("Initializing..."))
+        .gauge_style(Style::default().fg(Color::Cyan))
+        .percent(progress);
+
+    f.render_widget(gauge, slice[0]);
+    // TODO: loading widget
 }
