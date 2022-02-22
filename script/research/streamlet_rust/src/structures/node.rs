@@ -1,13 +1,23 @@
-use chrono::Utc;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    time::Instant,
 };
 
 use super::{block::Block, blockchain::Blockchain, vote::Vote};
-use darkfi::crypto::{
-    keypair::{PublicKey, SecretKey},
-    schnorr::{SchnorrPublic, SchnorrSecret},
+use darkfi::{
+    crypto::{
+        keypair::{PublicKey, SecretKey},
+        proof::ProvingKey,
+        schnorr::{SchnorrPublic, SchnorrSecret},
+        types::DrkTokenId,
+    },
+    tx::{
+        Transaction, TransactionBuilder, TransactionBuilderClearInputInfo,
+        TransactionBuilderOutputInfo,
+    },
+    zk::circuit::{mint_contract::MintContract, spend_contract::SpendContract},
+    Result,
 };
 use rand::rngs::OsRng;
 
@@ -18,16 +28,16 @@ use rand::rngs::OsRng;
 #[derive(Debug)]
 pub struct Node {
     pub id: u64,
-    pub genesis_time: i64,
+    pub genesis_time: Instant,
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
     pub canonical_blockchain: Blockchain,
     pub node_blockchains: Vec<Blockchain>,
-    pub unconfirmed_transactions: Vec<String>,
+    pub unconfirmed_transactions: Vec<Transaction>,
 }
 
 impl Node {
-    pub fn new(id: u64, genesis_time: i64, init_block: Block) -> Node {
+    pub fn new(id: u64, genesis_time: Instant, init_block: Block) -> Node {
         // TODO: clock sync
         let secret = SecretKey::random(&mut OsRng);
         Node {
@@ -46,14 +56,39 @@ impl Node {
         &self.canonical_blockchain
     }
 
+    /// Node generates a dummy transaction for provided token.
+    /// Additional validity rules must be defined by the protocol for transactions.
+    pub fn generate_transaction(
+        &self,
+        token_id: DrkTokenId,
+        value: u64,
+        public: &PublicKey,
+    ) -> Result<Transaction> {
+        let builder = TransactionBuilder {
+            clear_inputs: vec![TransactionBuilderClearInputInfo {
+                value,
+                token_id,
+                signature_secret: self.secret_key,
+            }],
+            inputs: vec![],
+            outputs: vec![TransactionBuilderOutputInfo { value, token_id, public: *public }],
+        };
+
+        const K: u32 = 11;
+        let mint_pk = ProvingKey::build(K, &MintContract::default());
+        let spend_pk = ProvingKey::build(K, &SpendContract::default());
+
+        builder.build(&mint_pk, &spend_pk)
+    }
+
     /// Node retreives a transaction and append it to the unconfirmed transactions list.
-    /// Additional validity rules must be defined by the protocol for its blockchain data structure.
-    pub fn receive_transaction(&mut self, transaction: String) {
+    /// Additional validity rules must be defined by the protocol for transactions.
+    pub fn receive_transaction(&mut self, transaction: Transaction) {
         self.unconfirmed_transactions.push(transaction);
     }
 
     /// Node broadcast a transaction to provided nodes list.
-    pub fn broadcast_transaction(&mut self, nodes: Vec<&mut Node>, transaction: String) {
+    pub fn broadcast_transaction(&mut self, nodes: Vec<&mut Node>, transaction: Transaction) {
         for node in nodes {
             node.receive_transaction(transaction.clone())
         }
@@ -61,10 +96,9 @@ impl Node {
 
     /// Node calculates current epoch, based on elapsed time from the genesis block.
     /// Epochs duration is configured using the delta value.
-    pub fn get_current_epoch(&self) -> i64 {
-        let delta = 2;
-        let current_time = Utc::now().timestamp();
-        ((current_time - self.genesis_time) % (2 * delta)) + 1
+    pub fn get_current_epoch(&self) -> u64 {
+        let delta = 5;
+        self.genesis_time.elapsed().as_secs() / (2 * delta)
     }
 
     /// Node finds epochs leader, using a simple hash method.
@@ -149,18 +183,16 @@ impl Node {
     pub fn find_extended_blockchain_index(&self, block: &Block) -> i64 {
         let mut hasher = DefaultHasher::new();
         for (index, blockchain) in self.node_blockchains.iter().enumerate() {
-            blockchain.blocks.last().unwrap().hash(&mut hasher);
-            if block.h == hasher.finish().to_string() &&
-                block.e > blockchain.blocks.last().unwrap().e
-            {
+            let last_block = blockchain.blocks.last().unwrap();
+            last_block.hash(&mut hasher);
+            if block.h == hasher.finish().to_string() && block.e > last_block.e {
                 return index as i64
             }
         }
 
-        self.canonical_blockchain.blocks.last().unwrap().hash(&mut hasher);
-        if block.h != hasher.finish().to_string() ||
-            block.e <= self.canonical_blockchain.blocks.last().unwrap().e
-        {
+        let last_block = self.canonical_blockchain.blocks.last().unwrap();
+        last_block.hash(&mut hasher);
+        if block.h != hasher.finish().to_string() || block.e <= last_block.e {
             panic!("Proposed block doesn't extend any known chains.");
         }
         -1

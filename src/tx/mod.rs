@@ -30,13 +30,14 @@ pub use self::builder::{
     TransactionBuilderOutputInfo,
 };
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     pub clear_inputs: Vec<TransactionClearInput>,
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransactionClearInput {
     pub value: u64,
     pub token_id: DrkTokenId,
@@ -46,14 +47,14 @@ pub struct TransactionClearInput {
     pub signature: schnorr::Signature,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransactionInput {
     pub spend_proof: Proof,
     pub revealed: SpendRevealedValues,
     pub signature: schnorr::Signature,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransactionOutput {
     pub mint_proof: Proof,
     pub revealed: MintRevealedValues,

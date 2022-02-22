@@ -5,10 +5,9 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../../"
-features = ["crypto"]
+features = ["crypto", "node"]
 
 [dependencies]
-chrono = "0.4"
 rand = "0.8.5"
 
 [workspace]

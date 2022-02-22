@@ -44,7 +44,7 @@ impl ProvingKey {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Proof(Vec<u8>);
 
 impl AsRef<[u8]> for Proof {

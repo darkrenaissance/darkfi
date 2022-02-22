@@ -2,6 +2,8 @@ use std::hash::{Hash, Hasher};
 
 use super::vote::Vote;
 
+use darkfi::tx::Transaction;
+
 /// This struct represents a tuple of the form (h, e, txs).
 /// Each blocks parent hash h may be computed simply as a hash of the parent block.
 #[derive(Debug, Clone)]
@@ -9,9 +11,9 @@ pub struct Block {
     /// parent hash
     pub h: String,
     /// epoch number
-    pub e: i64,
+    pub e: u64,
     /// transactions payload
-    pub txs: Vec<String>,
+    pub txs: Vec<Transaction>,
     /// Epoch votes
     pub votes: Vec<Vote>,
     /// block notarization flag
@@ -21,12 +23,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(h: String, e: i64, txs: Vec<String>) -> Block {
+    pub fn new(h: String, e: u64, txs: Vec<Transaction>) -> Block {
         Block { h, e, txs, votes: Vec::new(), notarized: false, finalized: false }
     }
 
     pub fn signature_encode(&self) -> String {
-        self.h.clone() + &self.e.to_string() + &self.txs.clone().join("")
+        format!("{:?}{:?}{:?}", self.h, self.e, self.txs)
     }
 }
 
@@ -38,6 +40,6 @@ impl PartialEq for Block {
 
 impl Hash for Block {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        (&self.h, &self.e, &self.txs).hash(hasher);
+        format!("{:?}{:?}{:?}", self.h, self.e, self.txs).hash(hasher);
     }
 }

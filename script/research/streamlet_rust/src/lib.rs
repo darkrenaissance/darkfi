@@ -2,19 +2,23 @@ pub mod structures;
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
-    use std::{thread, time};
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
 
     use super::structures::{block::Block, node::Node};
+
+    use darkfi::{crypto::token_id::generate_id2, util::NetworkName};
 
     #[test]
     fn protocol_execution() {
         // Genesis block is generated.
-        let mut genesis_block = Block::new(String::from("⊥"), 0, vec![String::from("⊥")]);
+        let mut genesis_block = Block::new(String::from("⊥"), 0, vec![]);
         genesis_block.notarized = true;
         genesis_block.finalized = true;
 
-        let genesis_time = Utc::now().timestamp();
+        let genesis_time = Instant::now();
 
         // We create some nodes to participate in the Protocol.
         let mut node0 = Node::new(0, genesis_time, genesis_block.clone());
@@ -27,12 +31,17 @@ mod tests {
         let node2_public_key = node2.public_key;
 
         // We simulate some epochs to test consistency.
-        node0.receive_transaction(String::from("tx0"));
-        node0.broadcast_transaction(vec![&mut node1, &mut node2], String::from("tx0"));
-        node1.receive_transaction(String::from("tx1"));
-        node1.broadcast_transaction(vec![&mut node0, &mut node2], String::from("tx1"));
-        node2.receive_transaction(String::from("tx2"));
-        node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx2"));
+        let token_id = generate_id2("STREAMLET", &NetworkName::Ethereum).unwrap();
+
+        let tx = node0.generate_transaction(token_id, 100, &node1_public_key).unwrap();
+        node0.receive_transaction(tx.clone());
+        node0.broadcast_transaction(vec![&mut node1, &mut node2], tx);
+        let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
+        node1.receive_transaction(tx.clone());
+        node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
+        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
+        node2.receive_transaction(tx.clone());
+        node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
         let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
@@ -66,14 +75,18 @@ mod tests {
         verify_outputs(&node0, &node1, &node2);
 
         // We use thread sleep to simulate sinchronization period.
-        thread::sleep(time::Duration::from_millis(5000));
+        thread::sleep(Duration::new(5, 0));
 
-        node0.receive_transaction(String::from("tx3"));
-        node0.broadcast_transaction(vec![&mut node1, &mut node2], String::from("tx3"));
-        node1.receive_transaction(String::from("tx4"));
-        node1.broadcast_transaction(vec![&mut node0, &mut node2], String::from("tx4"));
-        node2.receive_transaction(String::from("tx5"));
-        node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx5"));
+        // Next round.
+        let tx = node0.generate_transaction(token_id, 100, &node1_public_key).unwrap();
+        node0.receive_transaction(tx.clone());
+        node0.broadcast_transaction(vec![&mut node1, &mut node2], tx);
+        let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
+        node1.receive_transaction(tx.clone());
+        node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
+        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
+        node2.receive_transaction(tx.clone());
+        node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
         let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
@@ -107,14 +120,18 @@ mod tests {
         verify_outputs(&node0, &node1, &node2);
 
         // We use thread sleep to simulate sinchronization period.
-        thread::sleep(time::Duration::from_millis(5000));
+        thread::sleep(Duration::new(5, 0));
 
-        node0.receive_transaction(String::from("tx6"));
-        node0.broadcast_transaction(vec![&mut node1, &mut node2], String::from("tx6"));
-        node1.receive_transaction(String::from("tx7"));
-        node1.broadcast_transaction(vec![&mut node0, &mut node2], String::from("tx7"));
-        node2.receive_transaction(String::from("tx8"));
-        node2.broadcast_transaction(vec![&mut node0, &mut node1], String::from("tx8"));
+        // Next round.
+        let tx = node0.generate_transaction(token_id, 100, &node1_public_key).unwrap();
+        node0.receive_transaction(tx.clone());
+        node0.broadcast_transaction(vec![&mut node1, &mut node2], tx);
+        let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
+        node1.receive_transaction(tx.clone());
+        node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
+        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
+        node2.receive_transaction(tx.clone());
+        node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
         let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
