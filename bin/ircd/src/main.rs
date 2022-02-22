@@ -82,7 +82,7 @@ async fn process_user_input(
 ) -> Result<()> {
     if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
-        return Err(Error::ChannelStopped)
+        return Err(Error::ChannelStopped);
     }
     assert!(&line[(line.len() - 1)..] == "\n");
     // Remove the \n character
@@ -92,7 +92,7 @@ async fn process_user_input(
 
     if let Err(err) = connection.update(line, p2p.clone()).await {
         warn!("Connection error: {} for {}", err, peer_addr);
-        return Err(Error::ChannelStopped)
+        return Err(Error::ChannelStopped);
     }
 
     Ok(())
@@ -103,14 +103,14 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         Ok(listener) => listener,
         Err(err) => {
             error!("Bind listener failed: {}", err);
-            return Err(Error::OperationFailed)
+            return Err(Error::OperationFailed);
         }
     };
     let local_addr = match listener.get_ref().local_addr() {
         Ok(addr) => addr,
         Err(err) => {
             error!("Failed to get local address: {}", err);
-            return Err(Error::OperationFailed)
+            return Err(Error::OperationFailed);
         }
     };
     info!("Listening on {}", local_addr);
@@ -177,7 +177,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped)
+                return Err(Error::ServiceStopped);
             }
         };
         info!("Accepted client: {}", peer_addr);
@@ -198,13 +198,13 @@ struct JsonRpcInterface {
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
+            return JsonResult::Err(jsonerr(InvalidParams, None, req.id));
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("say_hello") => return self.say_hello(req.id, req.params).await,
+            //Some("ping") => return self.pong(req.id, req.params).await,
             Some("get_info") => return self.get_info(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
@@ -212,11 +212,12 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    // --> {"method": "say_hello", "params": []}
-    // <-- {"result": "hello world"}
-    async fn say_hello(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!("hello world"), id))
-    }
+    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
+    //async fn pong(&self, id: Value, _params: Value) -> JsonResult {
+    //    JsonResult::Resp(jsonresp(json!("pong"), id))
+    //}
+
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
@@ -226,20 +227,48 @@ impl JsonRpcInterface {
                     "outgoing": [
                         {
                             "id": "127.2.1.1:0000",
-                            "message": "addr",
+                            "message": [
+                                "addr",
+                                "get_addr",
+                                "info",
+                                "get_info",
+                                "ping",
+                                "pong",
+                            ]
                         },
                         {
                             "id": "121.1.6.7:9000",
-                            "message": "get_addr",
+                            "message": [
+                                "addr",
+                                "get_addr",
+                                "info",
+                                "get_info",
+                                "ping",
+                                "pong",
+                            ]
                         }],
                     "incoming": [
                         {
                             "id": "124.1.1.6:9333",
-                            "message": "addr",
+                            "message": [
+                                "addr",
+                                "get_addr",
+                                "info",
+                                "get_info",
+                                "ping",
+                                "pong",
+                            ]
                         },
                         {
                             "id": "120.1.0.5:2111",
-                            "message": "get_addr",
+                            "message": [
+                                "addr",
+                                "get_addr",
+                                "info",
+                                "get_info",
+                                "ping",
+                                "pong",
+                            ]
                         }
                     ],
                 },
