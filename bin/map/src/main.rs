@@ -216,7 +216,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             async_util::sleep(2).await;
         }
     } else {
-        // TODO: fix this
         async_util::sleep(10).await;
         Err(Error::ConnectTimeout)
     }
@@ -233,21 +232,25 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
 
     view.id_list.state.select(Some(0));
     view.info_list.index = 0;
+    let mut counter = 0;
 
     loop {
+        counter = counter + 1;
         view.update(model.info_list.infos.lock().await.clone());
-        if view.info_list.infos.is_empty() {
-            // TODO: this lags forever if IRC is not running. add an error
-            let mut progress = 0;
-            while progress < 100 {
-                terminal.draw(|f| {
-                    ui::init_panel(f, progress);
-                })?;
-
-                Timer::after(Duration::from_millis(1)).await;
-                progress = progress + 1;
+        if view.id_list.node_id.is_empty() {
+            if counter == 1 {
+                let mut progress = 0;
+                while progress < 100 {
+                    terminal.draw(|f| {
+                        ui::init_panel(f, progress);
+                    })?;
+                    Timer::after(Duration::from_millis(1)).await;
+                    progress = progress + 1;
+                }
+            } else if counter == 2 {
+                terminal.clear()?;
+                println!("Could not connect to node. Are you sure IRC is running?");
             }
-            terminal.clear()?;
         } else {
             terminal.draw(|f| {
                 ui::ui(f, view.clone());

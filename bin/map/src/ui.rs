@@ -85,5 +85,8 @@ pub fn init_panel<B: Backend>(f: &mut Frame<'_, B>, progress: u16) {
         .percent(progress);
 
     f.render_widget(gauge, slice[0]);
-    // TODO: loading widget
+}
+
+pub fn error<B: Backend>(f: &mut Frame<'_, B>) {
+    // thing
 }
