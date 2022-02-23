@@ -1,13 +1,11 @@
-use crate::{model::NodeInfo, view::View};
-use log::debug;
-use std::collections::HashMap;
+use crate::view::View;
 
 use tui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Span, Spans},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -41,11 +39,11 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     let index = view.info_list.index;
 
-    render_info_left(view.clone(), f, index, slice.clone());
-    render_info_right(view.clone(), f, index, slice.clone());
+    render_info_left(view.clone(), f, index);
+    render_info_right(view.clone(), f, index, slice);
 }
 
-fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, _index: usize, slice: Vec<Rect>) {
+fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, _index: usize) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .horizontal_margin(8)

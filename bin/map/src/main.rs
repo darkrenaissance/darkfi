@@ -13,14 +13,13 @@ use easy_parallel::Parallel;
 use log::{debug, info};
 use serde_json::{json, Value};
 use simplelog::*;
-use smol::{Executor, Timer};
+use smol::Executor;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io,
     io::Read,
     path::PathBuf,
-    time::Duration,
 };
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
@@ -74,7 +73,7 @@ impl Map {
 
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn ping(&self) -> Result<Value> {
+    async fn _ping(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("ping"), json!([]));
         Ok(self.request(req).await?)
     }
@@ -265,7 +264,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
