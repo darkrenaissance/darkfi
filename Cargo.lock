@@ -816,6 +816,7 @@ dependencies = [
  "spl-token",
  "thiserror",
  "tungstenite",
+ "url",
 ]
 
 [[package]]
@@ -1354,6 +1355,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "smol",
+ "url",
 ]
 
 [[package]]
@@ -1681,6 +1683,7 @@ dependencies = [
  "prettytable-rs",
  "serde_json",
  "simplelog",
+ "url",
 ]
 
 [[package]]
@@ -2847,6 +2850,7 @@ dependencies = [
  "smol",
  "termion",
  "tui",
+ "url",
 ]
 
 [[package]]

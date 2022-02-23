@@ -1,14 +1,17 @@
 use async_executor::Executor;
+use std::sync::Arc;
+
 use clap::{IntoApp, Parser, Subcommand};
+use log::{debug, error};
+use serde_json::{json, Value};
+use url::Url;
+
 use darkfi::{
     cli::Config,
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::async_util,
     Error, Result,
 };
-use log::{debug, error};
-use serde_json::{json, Value};
-use std::sync::Arc;
 
 #[derive(Subcommand)]
 pub enum CliDaoSubCommands {
@@ -36,7 +39,8 @@ impl Client {
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r)).await {
+        let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&self.url)?, json!(r)).await
+        {
             Ok(v) => v,
             Err(e) => return Err(e),
         };

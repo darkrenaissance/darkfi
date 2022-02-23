@@ -10,6 +10,7 @@ use log::{debug, error, info, trace};
 use num_bigint::{BigUint, RandBigInt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use url::Url;
 
 use super::bridge::{NetworkClient, TokenNotification, TokenSubscribtion};
 
@@ -347,11 +348,9 @@ impl EthClient {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> EthResult<Value> {
         debug!(target: "ETH RPC", "--> {}", serde_json::to_string(&r)?);
+        let url = Url::parse(&format!("unix://{}", self.socket_path)).map_err(Error::from)?;
         let reply: JsonResult =
-            match jsonrpc::send_request(&format!("unix://{}", self.socket_path), json!(r))
-                .await
-                .map_err(EthFailed::from)
-            {
+            match jsonrpc::send_request(&url, json!(r)).await.map_err(EthFailed::from) {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };

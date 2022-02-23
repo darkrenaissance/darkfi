@@ -16,6 +16,7 @@ clap = {version = "3.0.7", features = ["derive"]}
 log = "0.4.14"
 simplelog = "0.11.2"
 prettytable-rs = "0.8.0"
+url = "2.2.2"
 
 # Encoding and parsing
 serde_json = "1.0.74"

@@ -5,6 +5,7 @@ use log::{debug, error};
 use prettytable::{cell, format, row, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use url::Url;
 
 use darkfi::{
     cli::{
@@ -120,11 +121,11 @@ pub struct CliDrk {
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../drk_config.toml");
 
 struct Drk {
-    url: String,
+    url: Url,
 }
 
 impl Drk {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: Url) -> Self {
         Self { url }
     }
 
@@ -292,7 +293,7 @@ impl Drk {
 }
 
 async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
-    let client = Drk::new(config.darkfid_rpc_url.clone());
+    let client = Drk::new(Url::parse(&config.darkfid_rpc_url)?);
 
     match options.command {
         Some(CliDrkSubCommands::Hello {}) => {

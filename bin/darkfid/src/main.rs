@@ -66,7 +66,7 @@ pub const ETH_NATIVE_TOKEN_ID: &str = "0x000000000000000000000000000000000000000
 #[derive(Clone, Debug)]
 pub struct Cashier {
     pub name: String,
-    pub rpc_url: String,
+    pub rpc_url: Url,
     pub public_key: PublicKey,
 }
 
@@ -758,7 +758,7 @@ async fn start(
 
         cashiers.push(Cashier {
             name: "localCashier".into(),
-            rpc_url: "tcp://127.0.0.1:9000".into(),
+            rpc_url: Url::parse("tcp://127.0.0.1:9000")?,
             public_key: cashier_public,
         });
 
@@ -774,7 +774,7 @@ async fn start(
 
             cashiers.push(Cashier {
                 name: cashier.name,
-                rpc_url: cashier.rpc_url,
+                rpc_url: Url::parse(&cashier.rpc_url)?,
                 public_key: cashier_public,
             });
 

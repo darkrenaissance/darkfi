@@ -27,6 +27,7 @@ use tui::{
     backend::{Backend, TermionBackend},
     Terminal,
 };
+use url::Url;
 
 use map::{
     model::{Connection, IdList, InfoList, NodeInfo},
@@ -39,11 +40,11 @@ use map::{
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../map_config.toml");
 
 struct Map {
-    url: String,
+    url: Url,
 }
 
 impl Map {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: Url) -> Self {
         Self { url }
     }
 
@@ -140,7 +141,7 @@ async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
     }
     for node in rpc_vec {
         debug!("Created client: {}", node.node_id);
-        let client = Map::new(node.node_id);
+        let client = Map::new(Url::parse(&node.node_id)?);
         ex.spawn(poll(client, model.clone())).detach();
     }
 
@@ -264,7 +265,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(());
+                    return Ok(())
                 }
                 Key::Char('j') => {
                     view.id_list.next();

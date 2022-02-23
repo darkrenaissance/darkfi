@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use smol::Async;
 use url::Url;
 
-use crate::Error;
+use crate::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub enum ErrorCode {
@@ -141,15 +141,14 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
-pub async fn send_request(uri: &str, data: Value) -> Result<JsonResult, Error> {
+pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
     // let mut use_tor = false;
     // let mut use_nym = false;
     let mut use_tcp = false;
     let mut use_tls = false;
     let mut use_unix = false;
 
-    let parsed_uri = Url::parse(uri)?;
-    match parsed_uri.scheme() {
+    match uri.scheme() {
         "tor" => unimplemented!(),
         "nym" => unimplemented!(),
         "tcp" => use_tcp = true,
@@ -163,13 +162,13 @@ pub async fn send_request(uri: &str, data: Value) -> Result<JsonResult, Error> {
     let data_str = serde_json::to_string(&data)?;
 
     if use_tcp || use_tls {
-        let host = parsed_uri
+        let host = uri
             .host()
             .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
             .to_string();
-        let port = parsed_uri
-            .port()
-            .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
+
+        let port =
+            uri.port().ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
 
         let socket_addr = {
             let host = host.clone();
@@ -195,7 +194,7 @@ pub async fn send_request(uri: &str, data: Value) -> Result<JsonResult, Error> {
     }
 
     if use_unix {
-        let mut stream = Async::<UnixStream>::connect(parsed_uri.path()).await?;
+        let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
         stream.write_all(data_str.as_bytes()).await?;
 
         bytes_read = stream.read(&mut buf[..]).await?;
