@@ -1,4 +1,6 @@
 use crate::view::View;
+use log::debug;
+
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -23,29 +25,41 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         .iter()
         .map(|id| {
             let mut lines = vec![Spans::from(id.to_string())];
-            // TODO: handle the None case
             // TODO: fix formatting (indentation must be margins)
-            let connects = info.get(id).unwrap();
-            for _line in lines.clone() {
-                lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
-                lines.push(Spans::from(format!(
-                    "    {}         [R: {}]",
-                    connects.outgoing[0].id, connects.outgoing[0].message
-                )));
-                lines.push(Spans::from(format!(
-                    "    {}         [S: {}]",
-                    connects.outgoing[1].id, connects.outgoing[1].message
-                )));
-                lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
-                lines.push(Spans::from(format!(
-                    "    {}         [R: {}]",
-                    connects.incoming[0].id, connects.incoming[0].message
-                )));
-                lines.push(Spans::from(format!(
-                    "    {}         [S: {}]",
-                    connects.incoming[1].id, connects.incoming[1].message
-                )));
-            }
+            match info.get(id) {
+                Some(connects) => {
+                    for _line in lines.clone() {
+                        lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
+                        lines.push(Spans::from(format!(
+                            "    {}         [R: {}]",
+                            connects.outgoing[0].id, connects.outgoing[0].message
+                        )));
+                        lines.push(Spans::from(format!(
+                            "    {}         [S: {}]",
+                            connects.outgoing[1].id, connects.outgoing[1].message
+                        )));
+                        lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
+                        lines.push(Spans::from(format!(
+                            "    {}         [R: {}]",
+                            connects.incoming[0].id, connects.incoming[0].message
+                        )));
+                        lines.push(Spans::from(format!(
+                            "    {}         [S: {}]",
+                            connects.incoming[1].id, connects.incoming[1].message
+                        )));
+                    }
+                }
+                None => {
+                    for _line in lines.clone() {
+                        lines.push(Spans::from(Span::styled("  Outgoing:", Style::default())));
+                        lines.push(Spans::from(format!("             [R: ]",)));
+                        lines.push(Spans::from(format!("             [S: ]",)));
+                        lines.push(Spans::from(Span::styled("  Incoming:", Style::default())));
+                        lines.push(Spans::from(format!("            [R: ]",)));
+                        lines.push(Spans::from(format!("             [S: ]",)));
+                    }
+                }
+            };
             ListItem::new(lines).style(Style::default())
         })
         .collect();
@@ -72,21 +86,21 @@ fn render_info_right<B: Backend>(
     f.render_widget(graph, slice[1]);
 }
 
-pub fn init_panel<B: Backend>(f: &mut Frame<'_, B>, progress: u16) {
-    let slice = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([Constraint::Percentage(7), Constraint::Percentage(100)].as_ref())
-        .split(f.size());
-
-    let gauge = Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title("Initializing..."))
-        .gauge_style(Style::default().fg(Color::Cyan))
-        .percent(progress);
-
-    f.render_widget(gauge, slice[0]);
-}
-
-pub fn error<B: Backend>(f: &mut Frame<'_, B>) {
-    // thing
-}
+//pub fn init_panel<B: Backend>(f: &mut Frame<'_, B>, progress: u16) {
+//    let slice = Layout::default()
+//        .direction(Direction::Vertical)
+//        .margin(2)
+//        .constraints([Constraint::Percentage(7), Constraint::Percentage(100)].as_ref())
+//        .split(f.size());
+//
+//    let gauge = Gauge::default()
+//        .block(Block::default().borders(Borders::ALL).title("Initializing..."))
+//        .gauge_style(Style::default().fg(Color::Cyan))
+//        .percent(progress);
+//
+//    f.render_widget(gauge, slice[0]);
+//}
+//
+//pub fn error<B: Backend>(f: &mut Frame<'_, B>) {
+//    // thing
+//}
