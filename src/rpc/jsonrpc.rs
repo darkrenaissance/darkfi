@@ -2,9 +2,10 @@ use std::{
     net::{TcpStream, ToSocketAddrs},
     os::unix::net::UnixStream,
     str,
+    time::Duration,
 };
 
-use async_std::io::{ReadExt, WriteExt};
+use async_std::io::{timeout, ReadExt, WriteExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -75,7 +76,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum JsonResult {
     Resp(JsonResponse),
@@ -157,6 +158,9 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
         s => unimplemented!("Protocol `{}` not supported.", s),
     }
 
+    // If we don't get a reply after 30 seconds, we'll fail.
+    let read_timeout = Duration::from_secs(30);
+
     let mut buf = [0; 2048];
     let bytes_read: usize;
     let data_str = serde_json::to_string(&data)?;
@@ -183,10 +187,10 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
         if use_tls {
             let mut stream = async_native_tls::connect(&host, stream).await?;
             stream.write_all(data_str.as_bytes()).await?;
-            bytes_read = stream.read(&mut buf[..]).await?;
+            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
         } else {
             stream.write_all(data_str.as_bytes()).await?;
-            bytes_read = stream.read(&mut buf[..]).await?;
+            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
         }
 
         let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
@@ -197,7 +201,7 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
         let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
         stream.write_all(data_str.as_bytes()).await?;
 
-        bytes_read = stream.read(&mut buf[..]).await?;
+        bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
 
         let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
         return Ok(reply)
