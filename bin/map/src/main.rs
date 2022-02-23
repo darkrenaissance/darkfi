@@ -1,7 +1,7 @@
 use darkfi::{
     cli::{
         cli_config::{log_config, spawn_config},
-        Config, MapConfig,
+        Config,
     },
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
@@ -11,6 +11,7 @@ use darkfi::{
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
 use log::{debug, info};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -37,6 +38,17 @@ use map::{
 };
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../map_config.toml");
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MapConfig {
+    pub nodes: Vec<IrcNode>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct IrcNode {
+    pub node_id: String,
+    //pub rpc_url: String,
+}
 
 struct Map {
     url: Url,

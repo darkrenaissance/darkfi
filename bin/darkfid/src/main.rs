@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -7,6 +7,7 @@ use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::{debug, info};
 use num_bigint::BigUint;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -15,7 +16,7 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        Config, DarkfidConfig,
+        Config,
     },
     crypto::{
         address::Address,
@@ -40,6 +41,41 @@ use darkfi::{
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CashierC {
+    /// Cashier name
+    pub name: String,
+    /// The RPC endpoint for a selected cashier
+    pub rpc_url: String,
+    /// The selected cashier public key
+    pub public_key: String,
+}
+
+/// The configuration for darkfid
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DarkfidConfig {
+    /// The address where darkfid should bind its RPC socket
+    pub rpc_listen_address: SocketAddr,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+    pub tls_identity_path: String,
+    /// Password for the TLS identity. (Unused if serve_tls=false)
+    pub tls_identity_password: String,
+    /// The endpoint to a gatewayd protocol API
+    pub gateway_protocol_url: String,
+    /// The endpoint to a gatewayd publisher API
+    pub gateway_publisher_url: String,
+    /// Path to the client database
+    pub database_path: String,
+    /// Path to the wallet database
+    pub wallet_path: String,
+    /// The wallet password
+    pub wallet_password: String,
+    /// The configured cashiers to use
+    pub cashiers: Vec<CashierC>,
+}
 
 /// Darkfid cli
 #[derive(Parser)]

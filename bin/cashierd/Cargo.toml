@@ -29,7 +29,7 @@ thiserror = "1.0.30"
 url = "2.2.2"
 
 # Encoding and parsing
-serde = {version = "1.0.133", features = ["derive"], optional = true}
+serde = {version = "1.0.133", features = ["derive"]}
 serde_json = "1.0.74"
 
 # Bitcoin bridge dependencies
@@ -63,7 +63,6 @@ btc = [
 ]
 
 eth = [
-    "serde",
     "num-bigint",
     "keccak-hasher",
     "hash-db",
@@ -74,7 +73,6 @@ eth = [
 sol = [
     "async-native-tls",
     "native-tls",
-    "serde",
     "solana-client",
     "solana-sdk",
     "spl-associated-token-account",

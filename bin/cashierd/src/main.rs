@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -7,6 +7,7 @@ use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::{debug, info};
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
@@ -14,7 +15,7 @@ use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        CashierdConfig, Config,
+        Config,
     },
     crypto::{
         address::Address,
@@ -38,6 +39,50 @@ use darkfi::{
 };
 
 use cashierd::service::{bridge, bridge::Bridge};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FeatureNetwork {
+    /// Network name
+    pub name: String,
+    /// Blockchain (mainnet/testnet/etc.)
+    pub blockchain: String,
+    /// Keypair
+    pub keypair: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CashierdConfig {
+    /// The DNS name of the cashier (can also be an IP, or a .onion address)
+    pub dns_addr: String,
+    /// The endpoint where cashierd will bind its RPC socket
+    pub rpc_listen_address: SocketAddr,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+    pub tls_identity_path: String,
+    /// Password for the TLS identity. (Unused if serve_tls=false)
+    pub tls_identity_password: String,
+    /// The endpoint to a gatewayd protocol API
+    pub gateway_protocol_url: String,
+    /// The endpoint to a gatewayd publisher API
+    pub gateway_publisher_url: String,
+    /// Path to cashierd wallet
+    pub cashier_wallet_path: String,
+    /// Password for cashierd wallet
+    pub cashier_wallet_password: String,
+    /// Path to client wallet
+    pub client_wallet_path: String,
+    /// Password for client wallet
+    pub client_wallet_password: String,
+    /// Path to database
+    pub database_path: String,
+    /// Geth IPC endpoint
+    pub geth_socket: String,
+    /// Geth passphrase
+    pub geth_passphrase: String,
+    /// The configured networks to use
+    pub networks: Vec<FeatureNetwork>,
+}
 
 /// Cashierd cli
 #[derive(Parser)]

@@ -1,21 +1,39 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
     cli::{
         cli_config::{log_config, spawn_config},
-        Config, GatewaydConfig,
+        Config,
     },
     node::service::gateway::GatewayService,
     util::{expand_path, join_config_path},
     Result,
 };
+
+/// The configuration for gatewayd
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GatewaydConfig {
+    /// The address where gatewayd should bind its protocol socket
+    pub protocol_listen_address: SocketAddr,
+    /// The address where gatewayd should bind its publisher socket
+    pub publisher_listen_address: SocketAddr,
+    /// Whether to listen with TLS or plain TCP
+    pub serve_tls: bool,
+    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+    pub tls_identity_path: String,
+    /// Password for the TLS identity. (Unused if serve_tls=false)
+    pub tls_identity_password: String,
+    /// Path to the database
+    pub database_path: String,
+}
 
 /// Gatewayd cli
 #[derive(Parser)]
