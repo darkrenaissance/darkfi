@@ -34,11 +34,14 @@ pub struct Node {
     pub canonical_blockchain: Blockchain,
     pub node_blockchains: Vec<Blockchain>,
     pub unconfirmed_transactions: Vec<Transaction>,
+    pub mint_proving_key: ProvingKey,
+    pub spent_proving_key: ProvingKey,
 }
 
 impl Node {
     pub fn new(id: u64, genesis_time: Instant, init_block: Block) -> Node {
         // TODO: clock sync
+        const K: u32 = 11;
         let secret = SecretKey::random(&mut OsRng);
         Node {
             id,
@@ -48,6 +51,8 @@ impl Node {
             canonical_blockchain: Blockchain::new(init_block),
             node_blockchains: Vec::new(),
             unconfirmed_transactions: Vec::new(),
+            mint_proving_key: ProvingKey::build(K, &MintContract::default()),
+            spent_proving_key: ProvingKey::build(K, &SpendContract::default()),
         }
     }
 
@@ -74,11 +79,7 @@ impl Node {
             outputs: vec![TransactionBuilderOutputInfo { value, token_id, public: *public }],
         };
 
-        const K: u32 = 11;
-        let mint_pk = ProvingKey::build(K, &MintContract::default());
-        let spend_pk = ProvingKey::build(K, &SpendContract::default());
-
-        builder.build(&mint_pk, &spend_pk)
+        builder.build(&self.mint_proving_key, &self.spent_proving_key)
     }
 
     /// Node retreives a transaction and append it to the unconfirmed transactions list.
