@@ -3,6 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use clap::{AppSettings, IntoApp, Parser, Subcommand};
 use log::{debug, error};
 use prettytable::{cell, format, row, Table};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -10,12 +11,19 @@ use url::Url;
 use darkfi::{
     cli::{
         cli_config::{log_config, spawn_config},
-        Config, DrkConfig,
+        Config,
     },
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{join_config_path, path::expand_path, NetworkName},
     Error, Result,
 };
+
+/// The configuration for drk
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DrkConfig {
+    /// The URL where darkfid RPC is listening on
+    pub darkfid_rpc_url: String,
+}
 
 #[derive(Subcommand)]
 pub enum CliDrkSubCommands {
