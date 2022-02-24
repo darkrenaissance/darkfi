@@ -1392,6 +1392,7 @@ dependencies = [
  "blake2b_simd 1.0.0",
  "bs58",
  "bytes",
+ "clap 3.0.7",
  "crypto_api_chachapoly",
  "dirs 4.0.0",
  "futures",

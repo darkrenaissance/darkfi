@@ -104,6 +104,9 @@ features = ["zstd"]
 optional = true
 
 
+[dev-dependencies]
+clap = {version = "3.0.7", features = ["derive"]}
+
 [features]
 async-runtime = [
     "async-std",
