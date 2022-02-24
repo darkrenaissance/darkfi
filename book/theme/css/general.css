@@ -58,7 +58,7 @@
   font-style:  normal;
   font-weight: 700;
   font-display: swap;
-  src:  url("../fonts/Chomsky.otf") format("otf"),
+  src:  url("../fonts/Chomsky.otf") format("otf");
 }
 
 @font-face {
