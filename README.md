@@ -1,9 +1,10 @@
 # DarkFi
 
-![Build Status](https://github.com/darkrenaissance/darkfi/actions/workflows/ci.yml/badge.svg)
-[![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-white?logo=firefox&logoColor=white)](https://dark.fi)
-[![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white)](https://lists.dyne.org/lurker/message/20211021.123016.3dccaf0c.en.html)
-[![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white)](https://darkrenaissance.github.io/darkfi)
+![Build Status](https://img.shields.io/github/workflow/status/darkrenaissance/darkfi/CI%20Checks?style=flat-square)
+[![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-white?logo=firefox&logoColor=white&style=flat-square)](https://dark.fi)
+[![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://lists.dyne.org/lurker/message/20211021.123016.3dccaf0c.en.html)
+[![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
+
 
 ## Build
 

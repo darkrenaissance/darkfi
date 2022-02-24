@@ -10,8 +10,12 @@ all:
 		>> src/clients/cashierd_jsonrpc.md
 
 	mdbook build
+	cp -f theme/logo* book/html/
+
+clean:
+	rm -rf book
 
 github: all
 	ghp-import -m "Generate mdbook" -b gh-pages book/html
 
-.PHONY: all github
+.PHONY: all clean github
