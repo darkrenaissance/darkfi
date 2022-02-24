@@ -39,7 +39,7 @@ mod tests {
         let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
         node1.receive_transaction(tx.clone());
         node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
-        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
+        let tx = node2.generate_transaction(token_id, 300, &node1_public_key).unwrap();
         node2.receive_transaction(tx.clone());
         node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
@@ -78,15 +78,15 @@ mod tests {
         thread::sleep(Duration::new(5, 0));
 
         // Next round.
-        let tx = node0.generate_transaction(token_id, 100, &node1_public_key).unwrap();
+        let tx = node0.generate_transaction(token_id, 400, &node1_public_key).unwrap();
         node0.receive_transaction(tx.clone());
         node0.broadcast_transaction(vec![&mut node1, &mut node2], tx);
-        let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
+        let tx = node1.generate_transaction(token_id, 500, &node2_public_key).unwrap();
         node1.receive_transaction(tx.clone());
         node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
-        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
-        node2.receive_transaction(tx.clone());
-        node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
+        //let tx = node2.generate_transaction(token_id, 600, &node1_public_key).unwrap();
+        //node2.receive_transaction(tx.clone());
+        //node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
         let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {
@@ -123,15 +123,15 @@ mod tests {
         thread::sleep(Duration::new(5, 0));
 
         // Next round.
-        let tx = node0.generate_transaction(token_id, 100, &node1_public_key).unwrap();
+        let tx = node0.generate_transaction(token_id, 700, &node1_public_key).unwrap();
         node0.receive_transaction(tx.clone());
         node0.broadcast_transaction(vec![&mut node1, &mut node2], tx);
-        let tx = node1.generate_transaction(token_id, 200, &node2_public_key).unwrap();
-        node1.receive_transaction(tx.clone());
-        node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
-        let tx = node2.generate_transaction(token_id, 150, &node1_public_key).unwrap();
-        node2.receive_transaction(tx.clone());
-        node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
+        //let tx = node1.generate_transaction(token_id, 800, &node2_public_key).unwrap();
+        //node1.receive_transaction(tx.clone());
+        //node1.broadcast_transaction(vec![&mut node0, &mut node2], tx);
+        //let tx = node2.generate_transaction(token_id, 900, &node1_public_key).unwrap();
+        //node2.receive_transaction(tx.clone());
+        //node2.broadcast_transaction(vec![&mut node0, &mut node1], tx);
 
         // Each node checks if they are the epoch leader. Leader will propose the block.
         let (leader_public_key, block_proposal) = if node0.check_if_epoch_leader(3) {

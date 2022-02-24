@@ -50,6 +50,16 @@ class Node:
 				longest_notarized_chain = blockchain
 				length = len(blockchain.blocks)
 		return longest_notarized_chain
+		
+	def get_unproposed_transactions(self):
+		''' Node retrieves all unconfiremd transactions not proposed in previous blocks. '''
+		unproposed_transactions = self.unconfirmed_transactions
+		for blockchain in self.node_blockchains:
+			for block in blockchain.blocks:
+				for transaction in block.txs:
+						if transaction in unproposed_transactions:
+							unproposed_transactions.remove(transaction)
+		return unproposed_transactions
 
 	def propose_block(self, epoch, nodes):
 		''' Node generates a block for that epoch, containing all uncorfirmed transactions.
@@ -57,8 +67,9 @@ class Node:
 			Node signs the block, and broadcasts it to rest nodes. '''
 	
 		longest_notarized_chain = self.find_longest_notarized_chain()
+		unproposed_transactions = self.get_unproposed_transactions()
 		proposed_block = copy.deepcopy(Block(
-			hash(longest_notarized_chain.blocks[-1]), epoch, self.unconfirmed_transactions))
+			hash(longest_notarized_chain.blocks[-1]), epoch, unproposed_transactions))
 		signed_proposed_block = copy.deepcopy(
 			utils.sign_message(
 				self.password,
@@ -139,6 +150,7 @@ class Node:
 		''' For the provided block, node checks if the blockchain it extends can be finalized.
 			Consensus finalization logic: If node has observed the notarization of 3 consecutive
 			blocks in a fork chain, it finalizes (appends to canonical blockchain) all blocks up to the middle block.
+			When a block gets finalized, the transactions it contains are removed from nodes unconfirmed transactions list.
 			When fork chain blocks are finalized, rest fork chains not starting by those blocks are removed. '''
 		
 		if block in self.canonical_blockchain.blocks:
@@ -152,6 +164,9 @@ class Node:
 				for block in blockchain.blocks[:-1]:
 					block.finalized = True
 					self.canonical_blockchain.blocks.append(block)
+					for transaction in block.txs:
+						if transaction in self.unconfirmed_transactions:
+							self.unconfirmed_transactions.remove(transaction)
 				for node_blockchain in self.node_blockchains:
 					if node_blockchain.blocks[-len(blockchain.blocks[:-1]):] != blockchain.blocks[:-1]:
 						self.node_blockchains.remove(node_blockchain)
@@ -163,9 +178,7 @@ class Node:
 			First, sender is verified using their public key.
 			Block is searched in nodes blockchains.
 			If the vote wasn't received before, it is appended to block votes list.
-			When a node sees 2n/3 votes for a block it notarizes it.
-			When a block gets notarized, the transactions it contains are removed from
-			nodes unconfirmed transactions list.
+			When a node sees 2n/3 votes for a block it notarizes it.			
 			Finally, we check if the notarization of the block can finalize parent blocks
 			in its blockchain. '''
 	
@@ -178,7 +191,4 @@ class Node:
 			vote_block.votes.append(vote)
 		if not vote_block.notarized and len(vote_block.votes) > (2 * len(nodes) / 3):
 			vote_block.notarized = True
-			for transaction in vote_block.txs:
-				if transaction in self.unconfirmed_transactions:
-					self.unconfirmed_transactions.remove(transaction)
 			self.check_blockchain_finalization(vote_block)

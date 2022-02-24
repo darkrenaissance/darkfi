@@ -117,6 +117,23 @@ impl Node {
         self.id == leader
     }
 
+    /// Node retrieves all unconfiremd transactions not proposed in previous blocks.
+    pub fn get_unproposed_transactions(&self) -> Vec<Transaction> {
+        let mut unproposed_transactions = self.unconfirmed_transactions.clone();
+        for blockchain in &self.node_blockchains {
+            for block in &blockchain.blocks {
+                for transaction in &block.txs {
+                    if let Some(pos) =
+                        unproposed_transactions.iter().position(|txs| *txs == *transaction)
+                    {
+                        unproposed_transactions.remove(pos);
+                    }
+                }
+            }
+        }
+        unproposed_transactions
+    }
+
     /// Node generates a block proposal(mapped as Vote) for the current epoch,
     /// containing all uncorfirmed transactions.
     /// Block extends the longest notarized blockchain the node holds.
@@ -125,8 +142,9 @@ impl Node {
         let longest_notarized_chain = self.find_longest_notarized_chain();
         let mut hasher = DefaultHasher::new();
         longest_notarized_chain.blocks.last().unwrap().hash(&mut hasher);
+        let unproposed_transactions = self.get_unproposed_transactions();
         let proposed_block =
-            Block::new(hasher.finish().to_string(), epoch, self.unconfirmed_transactions.clone());
+            Block::new(hasher.finish().to_string(), epoch, unproposed_transactions);
         let signed_block = self.secret_key.sign(proposed_block.signature_encode().as_bytes());
         (self.public_key, Vote::new(signed_block, proposed_block, self.id))
     }
@@ -221,16 +239,11 @@ impl Node {
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the block can finalize parent blocks
     ///	in its blockchain.
-    pub fn receive_vote(
-        &mut self,
-        node_public_key: &PublicKey,
-        vote: &Vote,
-        nodes_count: usize,
-    ) -> Option<Vote> {
+    pub fn receive_vote(&mut self, node_public_key: &PublicKey, vote: &Vote, nodes_count: usize) {
         assert!(node_public_key.verify(vote.block.signature_encode().as_bytes(), &vote.vote));
         let vote_block = self.find_block(&vote.block);
         if vote_block == None {
-            return self.vote_block(&vote.block)
+            panic!("Received vote for unknown block.");
         }
 
         let (unwrapped_vote_block, blockchain_index) = vote_block.unwrap();
@@ -242,19 +255,8 @@ impl Node {
             unwrapped_vote_block.votes.len() > (2 * nodes_count / 3)
         {
             unwrapped_vote_block.notarized = true;
-
-            for transaction in unwrapped_vote_block.txs.clone() {
-                let txs_clone = transaction.clone();
-                if let Some(pos) =
-                    self.unconfirmed_transactions.iter().position(|txs| *txs == txs_clone)
-                {
-                    self.unconfirmed_transactions.remove(pos);
-                }
-            }
-
             self.check_blockchain_finalization(blockchain_index);
         }
-        None
     }
 
     /// Node searches it the blockchains it holds for provided block.
@@ -302,6 +304,13 @@ impl Node {
                 for block in &mut blockchain.blocks[..(consecutive_notarized - 1)] {
                     block.finalized = true;
                     finalized_blocks.push(block.clone());
+                    for transaction in block.txs.clone() {
+                        if let Some(pos) =
+                            self.unconfirmed_transactions.iter().position(|txs| *txs == transaction)
+                        {
+                            self.unconfirmed_transactions.remove(pos);
+                        }
+                    }
                 }
                 blockchain.blocks.drain(0..(consecutive_notarized - 1));
                 for block in &finalized_blocks {
