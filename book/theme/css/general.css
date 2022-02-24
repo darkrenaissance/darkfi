@@ -1,3 +1,75 @@
+/* Fonts */
+
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/Inter-Regular.woff2?v=3.19") format("woff2"),
+       url("../fonts/Inter-Regular.woff?v=3.19") format("woff");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/Inter-Italic.woff2?v=3.19") format("woff2"),
+       url("../fonts/Inter-Italic.woff?v=3.19") format("woff");
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/Inter-Bold.woff2?v=3.19") format("woff2"),
+       url("../fonts/Inter-Bold.woff?v=3.19") format("woff");
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style:  italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/Inter-BoldItalic.woff2?v=3.19") format("woff2"),
+       url("../fonts/Inter-BoldItalic.woff?v=3.19") format("woff");
+}
+
+@font-face {
+  font-family: 'InterDisplay';
+  font-style:  normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../fonts/InterDisplay-Black.woff2?v=3.19") format("woff2"),
+       url("../fonts/InterDisplay-Black.woff?v=3.19") format("woff");
+}
+
+@font-face {
+  font-family: 'InterDisplay';
+  font-style:  italic;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../fonts/InterDisplay-BlackItalic.woff2?v=3.19") format("woff2"),
+       url("../fonts/InterDisplay-BlackItalic.woff?v=3.19") format("woff");
+}
+
+@font-face {
+  font-family: 'Chomsky';
+  font-style:  normal;
+  font-weight: 700;
+  font-display: swap;
+  src:  url("../fonts/Chomsky.otf") format("otf"),
+}
+
+@font-face {
+  font-family: 'IBMPlexMono';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/IBMPlexMono-Regular.otf") format("otf"),
+	     url("../fonts/IBMPlexMono-Regular.woff?v=3.19") format("woff");
+}
+
 /* Base styles and content styles */
 
 @import 'variables.css';
@@ -8,20 +80,22 @@
 }
 
 html {
-    font-family: "Open Sans", sans-serif;
+    font-family: "Inter", sans-serif;
     color: var(--fg);
     background-color: var(--bg);
     text-size-adjust: none;
+    -webkit-text-size-adjust: none;
 }
 
 body {
     margin: 0;
     font-size: 1.6rem;
     overflow-x: hidden;
+    padding-bottom:80px;
 }
 
 code {
-    font-family: "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, "DejaVu Sans Mono", monospace, monospace !important;
+    font-family: "IBMPlexMono", Consolas, "Ubuntu Mono", Menlo, "DejaVu Sans Mono", monospace, monospace !important;
     font-size: 0.875em; /* please adjust the ace font size accordingly in editor.js */
 }
 
@@ -91,7 +165,7 @@ h6:target::before {
 .content ol { line-height: 1.45em; }
 .content ul { line-height: 1.45em; }
 .content a { text-decoration: none; }
-.content a:hover { text-decoration: underline; }
+.content a:hover { text-decoration: underline }
 .content img, .content video { max-width: 100%; }
 .content .header:link,
 .content .header:visited {

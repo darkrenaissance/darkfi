@@ -11,37 +11,37 @@
 /* Themes */
 
 .ayu {
-    --bg: hsl(210, 25%, 8%);
-    --fg: #c5c5c5;
+    --bg: #0B0B0C;
+    --fg: #E0E0E0;
 
-    --sidebar-bg: #14191f;
-    --sidebar-fg: #c8c9db;
+    --sidebar-bg: #0B0B0C;
+    --sidebar-fg: #fff;
     --sidebar-non-existant: #5c6773;
-    --sidebar-active: #ffb454;
+    --sidebar-active: #29BFBF;
     --sidebar-spacer: #2d334f;
 
-    --scrollbar: var(--sidebar-fg);
+    --scrollbar: #333333;
 
     --icons: #737480;
     --icons-hover: #b7b9cc;
 
-    --links: #0096cf;
+    --links: #29BFBF;
 
-    --inline-code-color: #ffb454;
+    --inline-code-color: #B6B6B6;
 
     --theme-popup-bg: #14191f;
     --theme-popup-border: #5c6773;
-    --theme-hover: #191f26;
+    --theme-hover: #181818;
 
-    --quote-bg: hsl(226, 15%, 17%);
-    --quote-border: hsl(226, 15%, 22%);
+    --quote-bg: #181818;
+    --quote-border: #181818;
 
-    --table-border-color: hsl(210, 25%, 13%);
-    --table-header-bg: hsl(210, 25%, 28%);
-    --table-alternate-bg: hsl(210, 25%, 11%);
+    --table-border-color: none;
+    --table-header-bg: #181818;
+    --table-alternate-bg: none;
 
     --searchbar-border-color: #848484;
-    --searchbar-bg: #424242;
+    --searchbar-bg: #131313;
     --searchbar-fg: #fff;
     --searchbar-shadow-color: #d4c89f;
     --searchresults-header-fg: #666;
