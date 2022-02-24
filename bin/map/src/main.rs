@@ -1,11 +1,11 @@
 use darkfi::{
-    cli::{
-        cli_config::{log_config, spawn_config},
-        Config,
-    },
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::{async_util, join_config_path},
+    util::{
+        async_util,
+        cli::{log_config, spawn_config, Config},
+        join_config_path,
+    },
 };
 
 use async_std::sync::Arc;
@@ -101,7 +101,10 @@ impl Map {
 #[async_std::main]
 async fn main() -> Result<()> {
     let options = ProgramOptions::load()?;
-    let (lvl, cfg) = log_config(options.app.clone())?;
+
+    let verbosity_level = options.app.occurrences_of("verbose");
+
+    let (lvl, cfg) = log_config(verbosity_level)?;
 
     let file = File::create(&*options.log_path).unwrap();
     WriteLogger::init(lvl, cfg, file)?;

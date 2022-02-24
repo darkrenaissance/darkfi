@@ -7,8 +7,6 @@ use std::{
 };
 
 use serde::{de::DeserializeOwned, Serialize};
-
-use clap::ArgMatches;
 use simplelog::ConfigBuilder;
 
 use crate::{Error, Result};
@@ -53,9 +51,7 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn log_config(matches: ArgMatches) -> Result<(simplelog::LevelFilter, simplelog::Config)> {
-    let mut verbosity_level = 0;
-    verbosity_level += matches.occurrences_of("verbose");
+pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simplelog::Config)> {
     let log_level = match verbosity_level {
         0 => simplelog::LevelFilter::Info,
         1 => simplelog::LevelFilter::Debug,

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path= "../../"
-features = ["node", "cli"]
+features = ["node"]
 
 [dependencies]
 # Async

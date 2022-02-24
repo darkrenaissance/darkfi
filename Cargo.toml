@@ -56,7 +56,6 @@ url = {version = "2.2.2", optional = true}
 dirs = {version = "4.0.0", optional = true}
 subtle = {version = "2.4.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
-clap = {version = "3.0.7", features = ["derive"], optional = true}
 indexmap = {version = "1.7.0", optional = true}
 itertools = {version = "0.10.3", optional = true}
 
@@ -129,6 +128,8 @@ util = [
     "hex",
     "bincode",
     "serde",
+	"toml",
+    "simplelog",
     "serde_json",
     "dirs",
     "num-bigint",
@@ -155,14 +156,6 @@ system = [
     "rand",
 
     "async-runtime",
-]
-
-cli = [
-    "simplelog",
-    "toml",
-    "clap",
-
-    "util",
 ]
 
 net = [
@@ -221,7 +214,7 @@ zkas = [
 [[example]]
 name = "net"
 path = "example/net.rs"
-required-features = ["async-runtime", "cli", "net"]
+required-features = ["async-runtime", "net"]
 
 [[example]]
 name = "tx"
@@ -233,14 +226,14 @@ required-features = ["node"]
 [[example]]
 name = "arithmetic"
 path = "proof/arithmetic.rs"
-required-features = ["cli", "crypto", "zkas"]
+required-features = ["crypto", "zkas"]
 
 [[example]]
 name = "mint"
 path = "proof/mint.rs"
-required-features = ["cli", "crypto", "zkas"]
+required-features = ["crypto", "zkas"]
 
 [[example]]
 name = "burn"
 path = "proof/burn.rs"
-required-features = ["cli", "crypto", "zkas"]
+required-features = ["crypto", "zkas"]

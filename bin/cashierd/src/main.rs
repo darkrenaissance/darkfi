@@ -13,10 +13,6 @@ use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{
-        cli_config::{log_config, spawn_config},
-        Config,
-    },
     crypto::{
         address::Address,
         keypair::{PublicKey, SecretKey},
@@ -33,7 +29,13 @@ use darkfi::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::{expand_path, join_config_path, parse::truncate, serial::serialize, NetworkName},
+    util::{
+        cli::{log_config, spawn_config, Config},
+        expand_path, join_config_path,
+        parse::truncate,
+        serial::serialize,
+        NetworkName,
+    },
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
@@ -745,7 +747,10 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let (lvl, conf) = log_config(matches)?;
+    let verbosity_level = matches.occurrences_of("verbose");
+
+    let (lvl, conf) = log_config(verbosity_level)?;
+
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: CashierdConfig = Config::<CashierdConfig>::load(config_path)?;

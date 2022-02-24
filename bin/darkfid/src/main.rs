@@ -14,10 +14,6 @@ use url::Url;
 
 use darkfi::{
     blockchain::{rocks::columns, Rocks, RocksColumn},
-    cli::{
-        cli_config::{log_config, spawn_config},
-        Config,
-    },
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -37,7 +33,10 @@ use darkfi::{
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::{decode_base10, encode_base10, expand_path, join_config_path, NetworkName},
+    util::{
+        cli::{log_config, spawn_config, Config},
+        decode_base10, encode_base10, expand_path, join_config_path, NetworkName,
+    },
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
@@ -872,7 +871,10 @@ async fn main() -> Result<()> {
     // Spawn config file if it's not in place already.
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let (lvl, conf) = log_config(matches)?;
+    let verbosity_level = matches.occurrences_of("verbose");
+
+    let (lvl, conf) = log_config(verbosity_level)?;
+
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let config: DarkfidConfig = Config::<DarkfidConfig>::load(config_path)?;

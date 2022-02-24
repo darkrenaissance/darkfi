@@ -56,7 +56,7 @@ pub enum Error {
     #[error("Json serialization error: `{0}`")]
     SerdeJsonError(String),
 
-    #[cfg(feature = "cli")]
+    #[cfg(feature = "util")]
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
 

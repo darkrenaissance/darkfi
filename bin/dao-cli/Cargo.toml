@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../"
-features = ["rpc", "cli"]
+features = ["rpc"]
 
 [dependencies]
 # Async

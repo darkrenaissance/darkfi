@@ -13,13 +13,12 @@ use std::{
 };
 
 use darkfi::{
-    cli::cli_config::log_config,
     net,
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::expand_path,
+    util::{cli::log_config, expand_path},
     Error, Result,
 };
 
@@ -222,56 +221,56 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
         let resp: serde_json::Value = json!({
-                "id": self.rpc_listen_addr,
-                "connections": {
-                    "outgoing": [
-                        {
-                            "id": "127.2.1.1:0000",
-                            "message": [
-                                "addr",
-                                "get_addr",
-                                "info",
-                                "get_info",
-                                "ping",
-                                "pong",
-                            ]
-                        },
-                        {
-                            "id": "121.1.6.7:9000",
-                            "message": [
-                                "addr",
-                                "get_addr",
-                                "info",
-                                "get_info",
-                                "ping",
-                                "pong",
-                            ]
-                        }],
-                    "incoming": [
-                        {
-                            "id": "124.1.1.6:9333",
-                            "message": [
-                                "addr",
-                                "get_addr",
-                                "info",
-                                "get_info",
-                                "ping",
-                                "pong",
-                            ]
-                        },
-                        {
-                            "id": "120.1.0.5:2111",
-                            "message": [
-                                "addr",
-                                "get_addr",
-                                "info",
-                                "get_info",
-                                "ping",
-                                "pong",
-                            ]
-                        }
-                    ],
+            "id": self.rpc_listen_addr,
+            "connections": {
+                "outgoing": [
+                {
+                    "id": "127.2.1.1:0000",
+                    "message": [
+                        "addr",
+                        "get_addr",
+                        "info",
+                        "get_info",
+                        "ping",
+                        "pong",
+                    ]
                 },
+                {
+                    "id": "121.1.6.7:9000",
+                    "message": [
+                        "addr",
+                        "get_addr",
+                        "info",
+                        "get_info",
+                        "ping",
+                        "pong",
+                    ]
+                }],
+                "incoming": [
+                {
+                    "id": "124.1.1.6:9333",
+                    "message": [
+                        "addr",
+                        "get_addr",
+                        "info",
+                        "get_info",
+                        "ping",
+                        "pong",
+                    ]
+                },
+                {
+                    "id": "120.1.0.5:2111",
+                    "message": [
+                        "addr",
+                        "get_addr",
+                        "info",
+                        "get_info",
+                        "ping",
+                        "pong",
+                    ]
+                }
+                ],
+            },
         });
         JsonResult::Resp(jsonresp(resp, id))
     }
@@ -279,7 +278,10 @@ impl JsonRpcInterface {
 
 fn main() -> Result<()> {
     let options = ProgramOptions::load()?;
-    let (lvl, cfg) = log_config(options.app.clone())?;
+
+    let verbosity_level = options.app.occurrences_of("verbose");
+
+    let (lvl, cfg) = log_config(verbosity_level)?;
 
     TermLogger::init(lvl, cfg, TerminalMode::Mixed, ColorChoice::Auto)?;
 

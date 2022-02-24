@@ -16,9 +16,6 @@ pub mod tx;
 #[cfg(feature = "net")]
 pub mod net;
 
-#[cfg(feature = "cli")]
-pub mod cli;
-
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
 

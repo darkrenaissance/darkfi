@@ -7,9 +7,8 @@ use serde_json::{json, Value};
 use url::Url;
 
 use darkfi::{
-    cli::Config,
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::async_util,
+    util::{async_util, cli::Config},
     Error, Result,
 };
 
