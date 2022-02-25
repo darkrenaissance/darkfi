@@ -46,9 +46,9 @@ $(VM_BIN): zkas $(VM_SRC)
 	./zkas $(basename $@) -o $@
 
 test-vm: $(VM_BIN)
-	$(CARGO) run --release --features=cli,crypto,zkas --example arithmetic
-	$(CARGO) run --release --features=cli,crypto,zkas --example mint
-	$(CARGO) run --release --features=cli,crypto,zkas --example burn
+	$(CARGO) run --release --features=crypto,zkas --example arithmetic
+	$(CARGO) run --release --features=crypto,zkas --example mint
+	$(CARGO) run --release --features=crypto,zkas --example burn
 
 clean:
 	rm -f $(BINS)
