@@ -6,7 +6,7 @@ use std::{
     str,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Serialize, Deserialize};
 use simplelog::ConfigBuilder;
 
 use crate::{Error, Result};
@@ -72,4 +72,28 @@ pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simpl
     };
 
     Ok((log_level, log_config))
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UrlConfig {
+    pub url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl TryFrom<UrlConfig> for url::Url {
+    type Error = url::ParseError;
+
+    // TODO remove unwraps 
+    fn try_from(urlc: UrlConfig) -> std::result::Result<Self, Self::Error> {
+        let mut url = url::Url::parse(&urlc.url)?;
+
+        url.set_password(urlc.password.as_deref()).unwrap();
+
+        if urlc.username.is_some() {
+            url.set_username(&urlc.username.unwrap()).unwrap();
+        }
+
+        Ok(url)
+    }
 }

@@ -132,6 +132,7 @@ util = [
     "bincode",
     "serde",
 	"toml",
+	"url",
     "simplelog",
     "serde_json",
     "dirs",
