@@ -6,7 +6,7 @@ use std::{
     str,
 };
 
-use serde::{de::DeserializeOwned, Serialize, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use simplelog::ConfigBuilder;
 
 use crate::{Error, Result};
@@ -84,7 +84,7 @@ pub struct UrlConfig {
 impl TryFrom<UrlConfig> for url::Url {
     type Error = url::ParseError;
 
-    // TODO remove unwraps 
+    // TODO remove unwraps
     fn try_from(urlc: UrlConfig) -> std::result::Result<Self, Self::Error> {
         let mut url = url::Url::parse(&urlc.url)?;
 

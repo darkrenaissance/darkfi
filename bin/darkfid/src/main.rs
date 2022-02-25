@@ -51,7 +51,6 @@ pub struct CashierC {
     pub rpc_url: UrlConfig,
 }
 
-
 /// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
@@ -66,13 +65,12 @@ pub struct DarkfidConfig {
     /// The address where darkfid should bind its RPC socket
     pub rpc_listener_url: UrlConfig,
     /// The endpoint to a gatewayd protocol API
-    pub gateway_url: UrlConfig ,
+    pub gateway_url: UrlConfig,
     /// The endpoint to a gatewayd publisher API
-    pub gateway_pub_url: UrlConfig ,
+    pub gateway_pub_url: UrlConfig,
     /// The configured cashiers to use
     pub cashiers: Vec<CashierC>,
 }
-
 
 /// Darkfid cli
 #[derive(Parser)]
@@ -817,7 +815,10 @@ async fn start(
 
     let client = Client::new(
         rocks.clone(),
-        (Url::try_from(config.gateway_url.clone())?, Url::try_from(config.gateway_pub_url.clone())?),
+        (
+            Url::try_from(config.gateway_url.clone())?,
+            Url::try_from(config.gateway_pub_url.clone())?,
+        ),
         wallet.clone(),
     )
     .await?;

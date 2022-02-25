@@ -11,7 +11,7 @@ use url::Url;
 use darkfi::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
     util::{
-        cli::{log_config, spawn_config, Config},
+        cli::{log_config, spawn_config, Config, UrlConfig},
         join_config_path,
         path::expand_path,
         NetworkName,
@@ -23,7 +23,7 @@ use darkfi::{
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DrkConfig {
     /// The URL where darkfid RPC is listening on
-    pub darkfid_rpc_url: String,
+    pub darkfid_rpc_url: UrlConfig,
 }
 
 #[derive(Subcommand)]
@@ -302,7 +302,7 @@ impl Drk {
 }
 
 async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
-    let client = Drk::new(Url::parse(&config.darkfid_rpc_url)?);
+    let client = Drk::new(Url::try_from(config.darkfid_rpc_url.clone())?);
 
     match options.command {
         Some(CliDrkSubCommands::Hello {}) => {
