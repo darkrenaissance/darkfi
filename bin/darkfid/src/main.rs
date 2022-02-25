@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -34,7 +34,7 @@ use darkfi::{
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     util::{
-        cli::{log_config, spawn_config, Config},
+        cli::{log_config, spawn_config, Config, UrlConfig},
         decode_base10, encode_base10, expand_path, join_config_path, NetworkName,
     },
     zk::circuit::{MintContract, SpendContract},
@@ -45,36 +45,34 @@ use darkfi::{
 pub struct CashierC {
     /// Cashier name
     pub name: String,
-    /// The RPC endpoint for a selected cashier
-    pub rpc_url: String,
     /// The selected cashier public key
     pub public_key: String,
+    /// The RPC endpoint for a selected cashier
+    pub rpc_url: UrlConfig,
 }
+
 
 /// The configuration for darkfid
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DarkfidConfig {
-    /// The address where darkfid should bind its RPC socket
-    pub rpc_listen_address: SocketAddr,
-    /// Whether to listen with TLS or plain TCP
-    pub serve_tls: bool,
-    /// Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
-    pub tls_identity_path: String,
-    /// Password for the TLS identity. (Unused if serve_tls=false)
-    pub tls_identity_password: String,
-    /// The endpoint to a gatewayd protocol API
-    pub gateway_protocol_url: String,
-    /// The endpoint to a gatewayd publisher API
-    pub gateway_publisher_url: String,
     /// Path to the client database
     pub database_path: String,
     /// Path to the wallet database
     pub wallet_path: String,
     /// The wallet password
     pub wallet_password: String,
+    /// Path to DER-formatted PKCS#12 archive. (used only with tls listener url)
+    pub tls_identity_path: String,
+    /// The address where darkfid should bind its RPC socket
+    pub rpc_listener_url: UrlConfig,
+    /// The endpoint to a gatewayd protocol API
+    pub gateway_url: UrlConfig ,
+    /// The endpoint to a gatewayd publisher API
+    pub gateway_pub_url: UrlConfig ,
     /// The configured cashiers to use
     pub cashiers: Vec<CashierC>,
 }
+
 
 /// Darkfid cli
 #[derive(Parser)]
@@ -809,7 +807,7 @@ async fn start(
 
             cashiers.push(Cashier {
                 name: cashier.name,
-                rpc_url: Url::parse(&cashier.rpc_url)?,
+                rpc_url: Url::try_from(cashier.rpc_url)?,
                 public_key: cashier_public,
             });
 
@@ -819,7 +817,7 @@ async fn start(
 
     let client = Client::new(
         rocks.clone(),
-        (Url::parse(&config.gateway_protocol_url)?, Url::parse(&config.gateway_publisher_url)?),
+        (Url::try_from(config.gateway_url.clone())?, Url::try_from(config.gateway_pub_url.clone())?),
         wallet.clone(),
     )
     .await?;
@@ -846,11 +844,12 @@ async fn start(
 
     let mut darkfid = Darkfid::new(client, state, cashiers).await?;
 
+    // TODO fix this
     let server_config = RpcServerConfig {
-        socket_addr: config.rpc_listen_address,
-        use_tls: config.serve_tls,
+        socket_addr: config.rpc_listener_url.url.parse()?,
+        use_tls: false,
         identity_path: expand_path(&config.tls_identity_path.clone())?,
-        identity_pass: config.tls_identity_password.clone(),
+        identity_pass: config.rpc_listener_url.password.clone().unwrap(),
     };
 
     darkfid.start(executor.clone()).await?;
