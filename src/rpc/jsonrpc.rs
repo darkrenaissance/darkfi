@@ -144,13 +144,13 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
 }
 
 pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Result<JsonResult> {
-    let host = uri
-        .host()
-        .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
-        .to_string();
+    if uri.host().is_none() && uri.port().is_none() {
+        return Err(Error::UrlParseError(format!("Missing port in {}", uri)))
+    }
 
-    let port =
-        uri.port().ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
+    let host = uri.host().unwrap().to_string();
+
+    let port = uri.port().unwrap();
 
     let socket_addr = {
         let host = host.clone();
@@ -177,15 +177,19 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
             let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
             get_reply(&mut stream, data_str).await
         }
-        "tor" => {
+        "tor" | "nym" => {
             use fast_socks5::client::{Config, Socks5Stream};
 
             let mut stream;
 
+            if socks_url.is_none() {
+                return Err(Error::NoSocks5UrlFound)
+            }
+
             let socks_url = socks_url.unwrap();
             let config = Config::default();
 
-            if !socks_url.username().is_empty() && !socks_url.password().is_some() {
+            if !socks_url.username().is_empty() && socks_url.password().is_some() {
                 stream = Socks5Stream::connect_with_password(
                     socks_url.as_str(),
                     host,
@@ -194,27 +198,25 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
                     socks_url.password().unwrap().to_string(),
                     config,
                 )
-                .await
-                .unwrap();
+                .await?;
             } else {
-                stream =
-                    Socks5Stream::connect(socks_url.as_str(), host, port, config).await.unwrap();
+                stream = Socks5Stream::connect(socks_url.as_str(), host, port, config).await?;
             }
 
             get_reply(&mut stream, data_str).await
         }
-        "nym" => unimplemented!(),
-        _ => unreachable!(),
+        _ => unimplemented!(),
     }
 }
+
 async fn get_reply<T: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut T,
     data_str: String,
 ) -> Result<JsonResult> {
     // If we don't get a reply after 30 seconds, we'll fail.
-    let mut buf = [0; 2048];
-
     let read_timeout = Duration::from_secs(30);
+
+    let mut buf = [0; 2048];
 
     stream.write_all(data_str.as_bytes()).await?;
 

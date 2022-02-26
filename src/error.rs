@@ -33,6 +33,10 @@ pub enum Error {
     #[error("Url parse error `{0}`")]
     UrlParseError(String),
 
+    #[cfg(any(feature = "rpc"))]
+    #[error("Socks error `{0}`")]
+    SocksError(String),
+
     #[error("No url found")]
     NoUrlFound,
 
@@ -272,6 +276,13 @@ impl From<tungstenite::Error> for Error {
 impl From<Box<bincode::ErrorKind>> for Error {
     fn from(err: Box<bincode::ErrorKind>) -> Error {
         Error::BincodeError(err.to_string())
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl From<fast_socks5::SocksError> for Error {
+    fn from(err: fast_socks5::SocksError) -> Error {
+        Error::SocksError(err.to_string())
     }
 }
 
