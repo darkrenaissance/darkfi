@@ -40,6 +40,14 @@ n = 2^k
 omega = omega^(2^32 / n)
 assert omega^n == 1
 
+# def foo(s, x, y):
+#   if s:
+#       return x * y
+#   else:
+#       return x + y
+
+# z = foo(s, x, y)
+
 # Arithmetization for:
 # sxy + (s - 1)(x + y) - z = 0
 # s(s - 1) = 0
