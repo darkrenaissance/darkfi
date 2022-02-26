@@ -62,7 +62,7 @@ pub struct DarkfidConfig {
     pub wallet_password: String,
     /// Path to DER-formatted PKCS#12 archive. (used only with tls listener url)
     pub tls_identity_path: String,
-    /// Socks5 server url. eg. `127.0.0.1:9050`
+    /// Socks5 server url. eg. `socks5://127.0.0.1:9050` used for tor and nym protocols
     pub socks_url: UrlConfig,
     /// The address where darkfid should bind its RPC socket
     pub rpc_listener_url: UrlConfig,
@@ -111,6 +111,7 @@ struct Darkfid {
     btc_tokenlist: TokenList,
     drk_tokenlist: DrkTokenList,
     cashiers: Vec<Cashier>,
+    socks_url: Url,
 }
 
 #[async_trait]
@@ -157,6 +158,7 @@ impl Darkfid {
         client: Arc<Mutex<Client>>,
         state: Arc<Mutex<State>>,
         cashiers: Vec<Cashier>,
+        socks_url: Url,
     ) -> Result<Self> {
         let sol_tokenlist =
             TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.json"))?;
@@ -174,6 +176,7 @@ impl Darkfid {
             btc_tokenlist,
             drk_tokenlist,
             cashiers,
+            socks_url,
         })
     }
 
@@ -504,7 +507,7 @@ impl Darkfid {
         let req = jsonreq(json!("features"), json!([]));
         let rep: JsonResult =
             // NOTE: this just selects the first cashier in the list
-            match send_request(&self.cashiers[0].rpc_url, json!(req), None).await {
+            match send_request(&self.cashiers[0].rpc_url, json!(req), Some(self.socks_url.clone())).await {
                 Ok(v) => v,
                 Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
             };
@@ -569,14 +572,16 @@ impl Darkfid {
         // (and token), it shall return a valid address where tokens can be deposited.
         // If not, an error is returned, and forwarded to the method caller.
         let req = jsonreq(json!("deposit"), json!([network, token_id, pubkey]));
-        let rep: JsonResult = match send_request(&self.cashiers[0].rpc_url, json!(req), None).await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                debug!(target: "DARKFID", "REQUEST IS ERR");
-                return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
-            }
-        };
+        let rep: JsonResult =
+            match send_request(&self.cashiers[0].rpc_url, json!(req), Some(self.socks_url.clone()))
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    debug!(target: "DARKFID", "REQUEST IS ERR");
+                    return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
+                }
+            };
 
         match rep {
             JsonResult::Resp(r) => JsonResult::Resp(r),
@@ -647,12 +652,15 @@ impl Darkfid {
         };
 
         let req = jsonreq(json!("withdraw"), json!([network, token_id, address, amount_in_apo]));
-        let mut rep: JsonResult = match send_request(&self.cashiers[0].rpc_url, json!(req), None)
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id)),
-        };
+        let mut rep: JsonResult =
+            match send_request(&self.cashiers[0].rpc_url, json!(req), Some(self.socks_url.clone()))
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    return JsonResult::Err(jsonerr(ServerError(-32004), Some(e.to_string()), id))
+                }
+            };
 
         let token_id: &DrkTokenId;
 
@@ -848,7 +856,8 @@ async fn start(
         public_keys: cashier_keys,
     }));
 
-    let mut darkfid = Darkfid::new(client, state, cashiers).await?;
+    let mut darkfid =
+        Darkfid::new(client, state, cashiers, Url::try_from(config.socks_url.clone())?).await?;
 
     // TODO fix this
     let server_config = RpcServerConfig {

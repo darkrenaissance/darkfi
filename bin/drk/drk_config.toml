@@ -7,3 +7,7 @@
 [darkfid_rpc_url] 
 url = "tcp://127.0.0.1:8000"
 #url = "tls://127.0.0.1:8000"
+
+# Socks5 server url. eg. `socks5://127.0.0.1:9050` used for tor and nym protocols 
+[socks_url]
+url = "socks5://127.0.0.1:9050"

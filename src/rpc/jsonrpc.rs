@@ -145,7 +145,7 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
 
 pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Result<JsonResult> {
     if uri.host().is_none() && uri.port().is_none() {
-        return Err(Error::UrlParseError(format!("Missing port in {}", uri)))
+        return Err(Error::UrlParseError(format!("Missing part of url: {}", uri)))
     }
 
     let host = uri.host().unwrap().to_string();
@@ -187,11 +187,21 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
             }
 
             let socks_url = socks_url.unwrap();
+
+            if socks_url.host().is_none() && socks_url.port().is_none() {
+                return Err(Error::UrlParseError(format!("Missing part of socks5 url: {}", uri)))
+            }
+
             let config = Config::default();
+
+            let socks_url_str = (socks_url.host().unwrap().to_string(), socks_url.port().unwrap())
+                .to_socket_addrs()?
+                .next()
+                .ok_or(Error::NoSocks5UrlFound)?;
 
             if !socks_url.username().is_empty() && socks_url.password().is_some() {
                 stream = Socks5Stream::connect_with_password(
-                    socks_url.as_str(),
+                    socks_url_str,
                     host,
                     port,
                     socks_url.username().to_string(),
@@ -200,7 +210,7 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
                 )
                 .await?;
             } else {
-                stream = Socks5Stream::connect(socks_url.as_str(), host, port, config).await?;
+                stream = Socks5Stream::connect(socks_url_str, host, port, config).await?;
             }
 
             get_reply(&mut stream, data_str).await

@@ -24,6 +24,8 @@ use darkfi::{
 pub struct DrkConfig {
     /// The URL where darkfid RPC is listening on
     pub darkfid_rpc_url: UrlConfig,
+    /// Socks5 server url. eg. `socks5://127.0.0.1:9050` used for tor and nym protocols
+    pub socks_url: UrlConfig,
 }
 
 #[derive(Subcommand)]
@@ -131,11 +133,12 @@ const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../drk_config.toml");
 
 struct Drk {
     url: Url,
+    socks_url: Url,
 }
 
 impl Drk {
-    pub fn new(url: Url) -> Self {
-        Self { url }
+    pub fn new(url: Url, socks_url: Url) -> Self {
+        Self { url, socks_url }
     }
 
     // Retrieve cashier features and error if they
@@ -162,10 +165,11 @@ impl Drk {
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r), None).await {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+        let reply: JsonResult =
+            match jsonrpc::send_request(&self.url, json!(r), Some(self.socks_url.clone())).await {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
 
         match reply {
             JsonResult::Resp(r) => {
@@ -302,7 +306,10 @@ impl Drk {
 }
 
 async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
-    let client = Drk::new(Url::try_from(config.darkfid_rpc_url.clone())?);
+    let client = Drk::new(
+        Url::try_from(config.darkfid_rpc_url.clone())?,
+        Url::try_from(config.socks_url.clone())?,
+    );
 
     match options.command {
         Some(CliDrkSubCommands::Hello {}) => {
