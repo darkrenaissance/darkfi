@@ -62,6 +62,8 @@ pub struct DarkfidConfig {
     pub wallet_password: String,
     /// Path to DER-formatted PKCS#12 archive. (used only with tls listener url)
     pub tls_identity_path: String,
+    /// Socks5 server url. eg. `127.0.0.1:9050`
+    pub socks_url: UrlConfig,
     /// The address where darkfid should bind its RPC socket
     pub rpc_listener_url: UrlConfig,
     /// The endpoint to a gatewayd protocol API

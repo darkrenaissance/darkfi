@@ -17,6 +17,10 @@ wallet_password = "TEST_PASSWORD"
 # openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
 tls_identity_path = "~/.config/darkfi/darkfid_identity.pfx"
 
+# Socks5 server url. eg. `127.0.0.1:9050`
+[socks_url]
+url = "127.0.0.1:9050"
+
 # The address where darkfid should bind its RPC socket
 [rpc_listener_url]
 url="127.0.0.1:8000"
