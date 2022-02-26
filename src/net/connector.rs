@@ -1,11 +1,13 @@
-use futures::FutureExt;
+use async_std::future::timeout;
 use smol::Async;
-use std::net::{SocketAddr, TcpStream};
+use std::{
+    net::{SocketAddr, TcpStream},
+    time::Duration,
+};
 
 use crate::{
     error::{Error, Result},
     net::{Channel, ChannelPtr, SettingsPtr},
-    util::sleep,
 };
 
 /// Create outbound socket connections.
@@ -21,14 +23,17 @@ impl Connector {
 
     /// Establish an outbound connection.
     pub async fn connect(&self, hostaddr: SocketAddr) -> Result<ChannelPtr> {
-        futures::select! {
-            stream_result = Async::<TcpStream>::connect(hostaddr).fuse() => {
-                match stream_result {
+        let stream_result =
+            timeout(Duration::from_secs(self.settings.connect_timeout_seconds.into()), async {
+                match Async::<TcpStream>::connect(hostaddr).await {
                     Ok(stream) => Ok(Channel::new(stream, hostaddr).await),
-                    Err(_) => Err(Error::ConnectFailed)
+                    Err(_) => Err(Error::ConnectFailed),
                 }
-            }
-            _ = sleep(self.settings.connect_timeout_seconds).fuse() => Err(Error::ConnectTimeout)
+            })
+            .await;
+        match stream_result {
+            Ok(t) => t,
+            Err(_) => Err(Error::ConnectTimeout),
         }
     }
 }

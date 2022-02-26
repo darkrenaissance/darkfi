@@ -1,12 +1,11 @@
-use futures::FutureExt;
+use async_std::future::timeout;
 use log::*;
 use smol::Executor;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     error::{Error, Result},
     net::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr},
-    util::sleep,
 };
 
 /// Implements the protocol version handshake sent out by nodes at the beginning
@@ -48,9 +47,14 @@ impl ProtocolVersion {
         // Send version, wait for verack
         // Wait for version, send verack
         // Fin.
-        let result = futures::select! {
-            _ = self.clone().exchange_versions(executor).fuse() => Ok(()),
-            _ = sleep(self.settings.channel_handshake_seconds).fuse() => Err(Error::ChannelTimeout)
+        let result = match timeout(
+            Duration::from_secs(self.settings.channel_handshake_seconds.into()),
+            self.clone().exchange_versions(executor),
+        )
+        .await
+        {
+            Ok(t) => t,
+            Err(_) => Err(Error::ChannelTimeout),
         };
         debug!(target: "net", "ProtocolVersion::run() [END]");
         result

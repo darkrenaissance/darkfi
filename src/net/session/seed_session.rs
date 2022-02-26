@@ -1,9 +1,10 @@
 use async_executor::Executor;
-use futures::FutureExt;
+use async_std::future::timeout;
 use log::*;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
+    time::Duration,
 };
 
 use crate::{
@@ -13,7 +14,6 @@ use crate::{
         session::{Session, SessionBitflag, SESSION_SEED},
         ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
     },
-    util::sleep,
 };
 
 /// Defines seed connections session.
@@ -49,8 +49,8 @@ impl SeedSession {
         // This line loops through all the tasks and waits for them to finish.
         // But if the seed_query_timeout_seconds times out before they are finished,
         // then it will simply quit and the tasks will get dropped.
-        futures::select! {
-            _ = async move {
+        let result =
+            timeout(Duration::from_secs(settings.seed_query_timeout_seconds.into()), async move {
                 for (i, task) in tasks.into_iter().enumerate() {
                     // Ignore errors
                     match task.await {
@@ -58,11 +58,13 @@ impl SeedSession {
                         Err(err) => warn!("Seed query #{} failed for reason: {}", i, err),
                     }
                 }
-            }.fuse() => {
-            }
-            _ = sleep(settings.seed_query_timeout_seconds).fuse() => {
+            })
+            .await;
+        match result {
+            Ok(_) => {}
+            Err(_) => {
                 error!("Querying seeds timed out");
-                return Err(Error::OperationFailed);
+                return Err(Error::OperationFailed)
             }
         }
 
