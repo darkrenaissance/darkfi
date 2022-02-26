@@ -60,7 +60,7 @@ impl Map {
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r)).await {
+        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r), None).await {
             Ok(v) => v,
             Err(e) => return Err(e),
         };

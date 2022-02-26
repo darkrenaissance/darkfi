@@ -142,7 +142,7 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
-pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
+pub async fn send_request(uri: &Url, data: Value, _socks_url: Option<Url>) -> Result<JsonResult> {
     // If we don't get a reply after 30 seconds, we'll fail.
     let read_timeout = Duration::from_secs(30);
 
