@@ -1395,6 +1395,7 @@ dependencies = [
  "clap 3.0.7",
  "crypto_api_chachapoly",
  "dirs 4.0.0",
+ "fast-socks5",
  "futures",
  "group",
  "halo2_gadgets",
@@ -1860,6 +1861,18 @@ dependencies = [
  "quote 1.0.14",
  "syn 1.0.85",
  "synstructure",
+]
+
+[[package]]
+name = "fast-socks5"
+version = "0.4.3"
+source = "git+https://github.com/ghassmo/fast-socks5#52118864c981a418b167bfa4f0a92de6fbed30e7"
+dependencies = [
+ "anyhow",
+ "async-std",
+ "futures",
+ "log",
+ "thiserror",
 ]
 
 [[package]]
