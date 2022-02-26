@@ -5,7 +5,8 @@ use std::{
     time::Duration,
 };
 
-use async_std::io::{timeout, ReadExt, WriteExt};
+use async_std::io::timeout;
+use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -142,62 +143,83 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
-pub async fn send_request(uri: &Url, data: Value, _socks_url: Option<Url>) -> Result<JsonResult> {
-    // If we don't get a reply after 30 seconds, we'll fail.
-    let read_timeout = Duration::from_secs(30);
+pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Result<JsonResult> {
+    let host = uri
+        .host()
+        .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
+        .to_string();
 
-    let mut buf = [0; 2048];
-    let bytes_read: usize;
+    let port =
+        uri.port().ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
+
+    let socket_addr = {
+        let host = host.clone();
+        smol::unblock(move || (host.as_str(), port).to_socket_addrs())
+            .await?
+            .next()
+            .ok_or(Error::NoUrlFound)?
+    };
+
     let data_str = serde_json::to_string(&data)?;
 
     match uri.scheme() {
         "tcp" | "tls" => {
-            let host = uri
-                .host()
-                .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
-                .to_string();
-
-            let port = uri
-                .port()
-                .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
-
-            let socket_addr = {
-                let host = host.clone();
-                smol::unblock(move || (host.as_str(), port).to_socket_addrs())
-                    .await?
-                    .next()
-                    .ok_or(Error::NoUrlFound)?
-            };
-
             let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
 
             if uri.scheme() == "tls" {
                 let mut stream = async_native_tls::connect(&host, stream).await?;
-                stream.write_all(data_str.as_bytes()).await?;
-                bytes_read =
-                    timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+                get_reply(&mut stream, data_str).await
             } else {
-                stream.write_all(data_str.as_bytes()).await?;
-                bytes_read =
-                    timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+                get_reply(&mut stream, data_str).await
             }
-
-            let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-            Ok(reply)
         }
-
         "unix" => {
             let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
-            stream.write_all(data_str.as_bytes()).await?;
-
-            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
-
-            let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-            Ok(reply)
+            get_reply(&mut stream, data_str).await
         }
+        "tor" => {
+            use fast_socks5::client::{Config, Socks5Stream};
 
-        "tor" => unimplemented!(),
+            let mut stream;
+
+            let socks_url = socks_url.unwrap();
+            let config = Config::default();
+
+            if !socks_url.username().is_empty() && !socks_url.password().is_some() {
+                stream = Socks5Stream::connect_with_password(
+                    socks_url.as_str(),
+                    host,
+                    port,
+                    socks_url.username().to_string(),
+                    socks_url.password().unwrap().to_string(),
+                    config,
+                )
+                .await
+                .unwrap();
+            } else {
+                stream =
+                    Socks5Stream::connect(socks_url.as_str(), host, port, config).await.unwrap();
+            }
+
+            get_reply(&mut stream, data_str).await
+        }
         "nym" => unimplemented!(),
         _ => unreachable!(),
     }
+}
+async fn get_reply<T: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut T,
+    data_str: String,
+) -> Result<JsonResult> {
+    // If we don't get a reply after 30 seconds, we'll fail.
+    let mut buf = [0; 2048];
+
+    let read_timeout = Duration::from_secs(30);
+
+    stream.write_all(data_str.as_bytes()).await?;
+
+    let bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+
+    let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+    Ok(reply)
 }
