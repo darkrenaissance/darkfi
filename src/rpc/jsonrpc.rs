@@ -143,21 +143,6 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
 }
 
 pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
-    // let mut use_tor = false;
-    // let mut use_nym = false;
-    let mut use_tcp = false;
-    let mut use_tls = false;
-    let mut use_unix = false;
-
-    match uri.scheme() {
-        "tor" => unimplemented!(),
-        "nym" => unimplemented!(),
-        "tcp" => use_tcp = true,
-        "tls" => use_tls = true,
-        "unix" => use_unix = true,
-        s => unimplemented!("Protocol `{}` not supported.", s),
-    }
-
     // If we don't get a reply after 30 seconds, we'll fail.
     let read_timeout = Duration::from_secs(30);
 
@@ -165,47 +150,54 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
     let bytes_read: usize;
     let data_str = serde_json::to_string(&data)?;
 
-    if use_tcp || use_tls {
-        let host = uri
-            .host()
-            .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
-            .to_string();
+    match uri.scheme() {
+        "tcp" | "tls" => {
+            let host = uri
+                .host()
+                .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", uri)))?
+                .to_string();
 
-        let port =
-            uri.port().ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
+            let port = uri
+                .port()
+                .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", uri)))?;
 
-        let socket_addr = {
-            let host = host.clone();
-            smol::unblock(move || (host.as_str(), port).to_socket_addrs())
-                .await?
-                .next()
-                .ok_or(Error::NoUrlFound)?
-        };
+            let socket_addr = {
+                let host = host.clone();
+                smol::unblock(move || (host.as_str(), port).to_socket_addrs())
+                    .await?
+                    .next()
+                    .ok_or(Error::NoUrlFound)?
+            };
 
-        let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
+            let mut stream = Async::<TcpStream>::connect(socket_addr).await?;
 
-        if use_tls {
-            let mut stream = async_native_tls::connect(&host, stream).await?;
-            stream.write_all(data_str.as_bytes()).await?;
-            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
-        } else {
-            stream.write_all(data_str.as_bytes()).await?;
-            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+            if uri.scheme() == "tls" {
+                let mut stream = async_native_tls::connect(&host, stream).await?;
+                stream.write_all(data_str.as_bytes()).await?;
+                bytes_read =
+                    timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+            } else {
+                stream.write_all(data_str.as_bytes()).await?;
+                bytes_read =
+                    timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+            }
+
+            let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+            Ok(reply)
         }
 
-        let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-        return Ok(reply)
+        "unix" => {
+            let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
+            stream.write_all(data_str.as_bytes()).await?;
+
+            bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
+
+            let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
+            Ok(reply)
+        }
+
+        "tor" => unimplemented!(),
+        "nym" => unimplemented!(),
+        _ => unreachable!(),
     }
-
-    if use_unix {
-        let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
-        stream.write_all(data_str.as_bytes()).await?;
-
-        bytes_read = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
-
-        let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
-        return Ok(reply)
-    }
-
-    unreachable!();
 }
