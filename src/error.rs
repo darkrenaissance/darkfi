@@ -36,6 +36,9 @@ pub enum Error {
     #[error("No url found")]
     NoUrlFound,
 
+    #[error("No socks5 url found")]
+    NoSocks5UrlFound,
+
     #[error(transparent)]
     AddrParseError(#[from] std::net::AddrParseError),
 
