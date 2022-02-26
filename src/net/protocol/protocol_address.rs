@@ -1,7 +1,8 @@
-use async_trait::async_trait;
-use log::{debug, error};
-use smol::Executor;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use log::debug;
+use smol::Executor;
 
 use crate::{
     error::Result,

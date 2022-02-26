@@ -9,9 +9,8 @@ use std::{
 use crate::{
     error::{Error, Result},
     net::{
-        protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
         session::{Session, SessionBitflag, SESSION_OUTBOUND},
-        ChannelPtr, Connector, P2p,
+        Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
 };

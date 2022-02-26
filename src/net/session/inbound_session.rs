@@ -1,14 +1,14 @@
-use async_executor::Executor;
-use log::*;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
+use async_executor::Executor;
+use log::*;
+
 use crate::{
     error::{Error, Result},
     net::{
-        protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
         session::{Session, SessionBitflag, SESSION_INBOUND},
         Acceptor, AcceptorPtr, ChannelPtr, P2p,
     },

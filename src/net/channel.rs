@@ -3,22 +3,22 @@ use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
 };
+use std::{
+    net::{SocketAddr, TcpStream},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
 use log::*;
 use smol::{Async, Executor};
-
-use std::net::{SocketAddr, TcpStream};
-
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
 
 use crate::{
     error::{Error, Result},
     net::{
         message,
         message_subscriber::{MessageSubscription, MessageSubsystem},
-        protocol::{ProtocolBase, ProtocolBasePtr},
     },
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
 };

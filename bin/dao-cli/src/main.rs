@@ -1,6 +1,3 @@
-use async_executor::Executor;
-use std::sync::Arc;
-
 use clap::{IntoApp, Parser, Subcommand};
 use log::{debug, error};
 use serde_json::{json, Value};
@@ -8,7 +5,6 @@ use url::Url;
 
 use darkfi::{
     rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::{async_util, cli::Config},
     Error, Result,
 };
 
@@ -89,7 +85,7 @@ async fn start(options: CliDao) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDao::parse();
-    let matches = CliDao::into_app().get_matches();
+    let _matches = CliDao::into_app().get_matches();
 
     //let config_path = if args.config.is_some() {
     //    expand_path(&args.config.clone().unwrap())?

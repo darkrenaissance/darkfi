@@ -1,17 +1,17 @@
-use async_executor::Executor;
 use async_std::sync::Mutex;
-use log::*;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
+use async_executor::Executor;
+use log::*;
+
 use crate::{
     error::{Error, Result},
     net::{
-        protocol::{ProtocolAddress, ProtocolBase, ProtocolPing},
         session::{Session, SessionBitflag, SESSION_MANUAL},
-        ChannelPtr, Connector, P2p,
+        Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::sleep,

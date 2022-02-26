@@ -1,18 +1,18 @@
-use async_executor::Executor;
 use async_std::future::timeout;
-use log::*;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
     time::Duration,
 };
 
+use async_executor::Executor;
+use log::*;
+
 use crate::{
     error::{Error, Result},
     net::{
-        protocol::{ProtocolBase, ProtocolPing, ProtocolSeed},
         session::{Session, SessionBitflag, SESSION_SEED},
-        ChannelPtr, Connector, HostsPtr, P2p, SettingsPtr,
+        Connector, P2p,
     },
 };
 
@@ -88,7 +88,7 @@ impl SeedSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!(target: "net", "SeedSession::start_seed(i={}) [START]", seed_index);
-        let (hosts, settings) = {
+        let (_hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
         };
