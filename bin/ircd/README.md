@@ -12,7 +12,7 @@ connect to when they first connect to the network. The `seed_session` simply
 connects to a seed node and runs `protocol_seed`, which requests a list of
 addresses from the seed node and disconnects straight after receiving them.
 
-    cargo run -- -vv --accept 0.0.0.0:9999 --irc 127.0.0.1:6688
+    LOG_TARGETS=net cargo run -- -vv --accept 0.0.0.0:9999 --irc 127.0.0.1:6688
 
 Note that the above command doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
@@ -26,7 +26,7 @@ making any outbound connections.
 
 The external address is important and must be correct.
 
-    cargo run -- --accept 0.0.0.0:11004 --external $LOCAL_IP:11004 --seeds $SEED_IP:9999 --irc 127.0.0.1:6667
+    LOG_TARGETS=net cargo run -- -vv --accept 0.0.0.0:11004 --external $LOCAL_IP:11004 --seeds $SEED_IP:9999 --irc 127.0.0.1:6667
 
 ### Outbound Node
 
@@ -34,7 +34,7 @@ This is a node which has 8 outbound connection slots and no inbound connections.
 This means the node has 8 slots which will actively search for unique nodes to
 connect to in the p2p network.
 
-    cargo run -- --slots 5 --seeds $SEED_IP:9999 --irc 127.0.0.1:6668
+    LOG_TARGETS=net cargo run -- -vv --slots 5 --seeds $SEED_IP:9999 --irc 127.0.0.1:6668
 
 ### Attaching the IRC Frontend
 
