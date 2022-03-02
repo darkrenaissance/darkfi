@@ -18,7 +18,7 @@ use darkfi::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    util::{cli::log_config, expand_path},
+    util::cli::log_config,
     Error, Result,
 };
 
@@ -118,9 +118,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         socket_addr: options.rpc_listen_addr,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
-        // TODO: cleanup
-        identity_path: expand_path("../..")?,
-        identity_pass: "test".to_string(),
+        identity_path: Default::default(),
+        identity_pass: Default::default(),
     };
 
     let seen_privmsg_ids = SeenPrivMsgIds::new();
