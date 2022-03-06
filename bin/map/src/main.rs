@@ -172,64 +172,65 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     loop {
         //debug!("Connected to: {}", client.url);
         let reply = client.get_info().await?;
+        debug!("{:?}", reply);
 
-        if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            let id = reply.as_object().unwrap().get("id").unwrap();
+        //if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+        //    let id = reply.as_object().unwrap().get("id").unwrap();
 
-            let connections = reply.as_object().unwrap().get("connections").unwrap();
-            let outgoing = connections.get("outgoing").unwrap();
-            let incoming = connections.get("incoming").unwrap();
+        //    let connections = reply.as_object().unwrap().get("connections").unwrap();
+        //    let outgoing = connections.get("outgoing").unwrap();
+        //    let incoming = connections.get("incoming").unwrap();
 
-            let mut outconnects = Vec::new();
-            let mut inconnects = Vec::new();
+        //    let mut outconnects = Vec::new();
+        //    let mut inconnects = Vec::new();
 
-            // here we are simulating new messages by scrolling through a vector
-            let msgs = outgoing[1].get("message").unwrap();
-            if index == 0 {
-                index += 1;
-            } else if index >= 5 {
-                index = 0
-            } else {
-                index = index + 1;
-            }
+        //    // here we are simulating new messages by scrolling through a vector
+        //    let msgs = outgoing[1].get("message").unwrap();
+        //    if index == 0 {
+        //        index += 1;
+        //    } else if index >= 5 {
+        //        index = 0
+        //    } else {
+        //        index = index + 1;
+        //    }
 
-            let out0 = Connection::new(
-                outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-            let out1 = Connection::new(
-                outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
+        //    let out0 = Connection::new(
+        //        outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
+        //        msgs[index].as_str().unwrap().to_string(),
+        //    );
+        //    let out1 = Connection::new(
+        //        outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
+        //        msgs[index].as_str().unwrap().to_string(),
+        //    );
 
-            let in0 = Connection::new(
-                incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
-            let in1 = Connection::new(
-                incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
-                msgs[index].as_str().unwrap().to_string(),
-            );
+        //    let in0 = Connection::new(
+        //        incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
+        //        msgs[index].as_str().unwrap().to_string(),
+        //    );
+        //    let in1 = Connection::new(
+        //        incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
+        //        msgs[index].as_str().unwrap().to_string(),
+        //    );
 
-            outconnects.push(out0);
-            outconnects.push(out1);
+        //    outconnects.push(out0);
+        //    outconnects.push(out1);
 
-            inconnects.push(in0);
-            inconnects.push(in1);
+        //    inconnects.push(in0);
+        //    inconnects.push(in1);
 
-            let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
+        //    let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
 
-            let mut node_info = HashMap::new();
-            node_info.insert(id.as_str().unwrap().to_string(), infos);
+        //    let mut node_info = HashMap::new();
+        //    node_info.insert(id.as_str().unwrap().to_string(), infos);
 
-            for (id, value) in node_info.clone() {
-                model.id_list.node_id.lock().await.insert(id.clone());
-                model.info_list.infos.lock().await.insert(id, value);
-            }
-        } else {
-            // TODO: error handling
-            debug!("Reply is empty");
-        }
+        //    for (id, value) in node_info.clone() {
+        //        model.id_list.node_id.lock().await.insert(id.clone());
+        //        model.info_list.infos.lock().await.insert(id, value);
+        //    }
+        //} else {
+        //    // TODO: error handling
+        //    debug!("Reply is empty");
+        //}
         async_util::sleep(2).await;
     }
     //} else {
@@ -279,7 +280,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
