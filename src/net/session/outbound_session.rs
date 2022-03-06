@@ -1,6 +1,7 @@
 use async_executor::Executor;
 use async_std::{sync::Mutex, task::yield_now};
 use log::*;
+use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
@@ -26,6 +27,7 @@ impl OutboundSession {
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         Arc::new(Self { p2p, connect_slots: Mutex::new(Vec::new()) })
     }
+
     /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let slots_count = self.p2p().settings().outbound_connections;
@@ -169,6 +171,12 @@ impl OutboundSession {
 }
 
 impl Session for OutboundSession {
+    fn get_info(&self) -> serde_json::Value {
+        json!({
+            "key": 110
+        })
+    }
+
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
     }

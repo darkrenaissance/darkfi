@@ -1,4 +1,5 @@
 use async_std::future::timeout;
+use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
@@ -136,6 +137,12 @@ impl SeedSession {
 }
 
 impl Session for SeedSession {
+    fn get_info(&self) -> serde_json::Value {
+        json!({
+            "key": 110
+        })
+    }
+
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
     }

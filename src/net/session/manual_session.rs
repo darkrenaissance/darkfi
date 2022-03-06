@@ -1,4 +1,5 @@
 use async_std::sync::Mutex;
+use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
@@ -131,6 +132,12 @@ impl ManualSession {
 }
 
 impl Session for ManualSession {
+    fn get_info(&self) -> serde_json::Value {
+        json!({
+            "key": 110
+        })
+    }
+
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
     }

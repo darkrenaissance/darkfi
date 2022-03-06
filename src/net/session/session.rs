@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use log::debug;
+use serde_json::Value;
 use smol::Executor;
 use std::sync::Arc;
 
@@ -94,6 +95,8 @@ pub trait Session: Sync {
         // Channel is ready for use
         Ok(())
     }
+
+    fn get_info(&self) -> serde_json::Value;
 
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;

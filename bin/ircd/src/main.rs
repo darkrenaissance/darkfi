@@ -162,7 +162,8 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     //
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface { rpc_listen_addr: options.rpc_listen_addr });
+    let rpc_interface =
+        Arc::new(JsonRpcInterface { p2p: p2p.clone(), rpc_listen_addr: options.rpc_listen_addr });
     executor
         .spawn(async move { listen_and_serve(server_config, rpc_interface, ex3).await })
         .detach();
@@ -189,6 +190,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 }
 
 struct JsonRpcInterface {
+    p2p: net::P2pPtr,
     rpc_listen_addr: SocketAddr,
 }
 
@@ -219,58 +221,7 @@ impl JsonRpcInterface {
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        let resp: serde_json::Value = json!({
-            "id": self.rpc_listen_addr,
-            "connections": {
-                "outgoing": [
-                {
-                    "id": "127.2.1.1:0000",
-                    "message": [
-                        "addr",
-                        "get_addr",
-                        "info",
-                        "get_info",
-                        "ping",
-                        "pong",
-                    ]
-                },
-                {
-                    "id": "121.1.6.7:9000",
-                    "message": [
-                        "addr",
-                        "get_addr",
-                        "info",
-                        "get_info",
-                        "ping",
-                        "pong",
-                    ]
-                }],
-                "incoming": [
-                {
-                    "id": "124.1.1.6:9333",
-                    "message": [
-                        "addr",
-                        "get_addr",
-                        "info",
-                        "get_info",
-                        "ping",
-                        "pong",
-                    ]
-                },
-                {
-                    "id": "120.1.0.5:2111",
-                    "message": [
-                        "addr",
-                        "get_addr",
-                        "info",
-                        "get_info",
-                        "ping",
-                        "pong",
-                    ]
-                }
-                ],
-            },
-        });
+        let resp = self.p2p.get_info().await;
         JsonResult::Resp(jsonresp(resp, id))
     }
 }

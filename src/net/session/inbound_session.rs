@@ -1,3 +1,4 @@
+use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
@@ -29,6 +30,7 @@ impl InboundSession {
 
         Arc::new(Self { p2p, acceptor, accept_task: StoppableTask::new() })
     }
+
     /// Starts the inbound session. Begins by accepting connections and fails if
     /// the address is not configured. Then runs the channel subscription
     /// loop.
@@ -119,6 +121,12 @@ impl InboundSession {
 }
 
 impl Session for InboundSession {
+    fn get_info(&self) -> serde_json::Value {
+        json!({
+            "key": 110
+        })
+    }
+
     fn p2p(&self) -> Arc<P2p> {
         self.p2p.upgrade().unwrap()
     }

@@ -1,6 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use log::debug;
+use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -12,7 +13,7 @@ use crate::{
     net::{
         message::Message,
         protocol::{register_default_protocols, ProtocolRegistry},
-        session::{InboundSession, ManualSession, OutboundSession, SeedSession},
+        session::{InboundSession, ManualSession, OutboundSession, SeedSession, Session},
         Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
     },
     system::{Subscriber, SubscriberPtr, Subscription},
@@ -34,6 +35,12 @@ pub struct P2p {
     stop_subscriber: SubscriberPtr<Error>,
     hosts: HostsPtr,
     protocol_registry: ProtocolRegistry,
+
+    // We keep a reference to the sessions used for get info
+    session_manual: Mutex<Option<Arc<ManualSession>>>,
+    session_inbound: Mutex<Option<Arc<InboundSession>>>,
+    session_outbound: Mutex<Option<Arc<OutboundSession>>>,
+
     settings: SettingsPtr,
 }
 
@@ -42,19 +49,42 @@ impl P2p {
     pub async fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
 
-        let self_ = Arc::new(Self {
+        let mut self_ = Arc::new(Self {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(),
             protocol_registry: ProtocolRegistry::new(),
+            session_manual: Mutex::new(None),
+            session_inbound: Mutex::new(None),
+            session_outbound: Mutex::new(None),
             settings,
         });
+
+        let parent = Arc::downgrade(&self_);
+
+        *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
+        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
+        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
 
         register_default_protocols(self_.clone()).await;
 
         self_
+    }
+
+    pub async fn get_info(&self) -> serde_json::Value {
+        json!({
+            "session_manual": self.session_manual().await.get_info(),
+            "session_inbound": self.session_inbound().await.get_info(),
+            "session_outbound": self.session_inbound().await.get_info(),
+            // Possible states:
+            //   open - the p2p object has been created but not yet started.
+            //   start - we are performing the initial seed session
+            //   started - seed session finished, but not yet running
+            //   run - p2p is running and the network is active.
+            "state": "open",
+        })
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
@@ -70,20 +100,30 @@ impl P2p {
         Ok(())
     }
 
+    pub async fn session_manual(&self) -> Arc<ManualSession> {
+        self.session_manual.lock().await.as_ref().unwrap().clone()
+    }
+    pub async fn session_inbound(&self) -> Arc<InboundSession> {
+        self.session_inbound.lock().await.as_ref().unwrap().clone()
+    }
+    pub async fn session_outbound(&self) -> Arc<OutboundSession> {
+        self.session_outbound.lock().await.as_ref().unwrap().clone()
+    }
+
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
 
-        let manual = ManualSession::new(Arc::downgrade(&self));
+        let manual = self.session_manual().await;
         for peer in &self.settings.peers {
             manual.clone().connect(peer, executor.clone()).await;
         }
 
-        let inbound = InboundSession::new(Arc::downgrade(&self));
+        let inbound = self.session_inbound().await;
         inbound.clone().start(executor.clone())?;
 
-        let outbound = OutboundSession::new(Arc::downgrade(&self));
+        let outbound = self.session_outbound().await;
         outbound.clone().start(executor.clone()).await?;
 
         let stop_sub = self.subscribe_stop().await;
