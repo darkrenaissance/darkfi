@@ -29,7 +29,7 @@ use tui::{
 };
 use url::Url;
 
-use map::{
+use dnetview::{
     model::{Connection, IdList, InfoList, NodeInfo},
     options::ProgramOptions,
     ui,
@@ -37,7 +37,7 @@ use map::{
     Model, View,
 };
 
-const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../map_config.toml");
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../dnetview_config.toml");
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct MapConfig {
@@ -110,7 +110,7 @@ async fn main() -> Result<()> {
     WriteLogger::init(lvl, cfg, file)?;
     info!("Log level: {}", lvl);
 
-    let config_path = join_config_path(&PathBuf::from("map_config.toml"))?;
+    let config_path = join_config_path(&PathBuf::from("dnetview_config.toml"))?;
 
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 

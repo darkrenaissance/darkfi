@@ -19,7 +19,7 @@ members = [
     "bin/drk",
     "bin/gatewayd",
     "bin/ircd",
-    "bin/map",
+    "bin/dnetview",
     "bin/daod",
     "bin/dao-cli",
 ]

@@ -9,10 +9,10 @@ pub struct ProgramOptions {
 
 impl ProgramOptions {
     pub fn load() -> Result<ProgramOptions> {
-        let app = App::new("dfi")
+        let app = App::new("dnetview")
             .version("0.1.0")
             .author("lunar_mining")
-            .about("Map")
+            .about("dnetview")
             .arg(
                 Arg::new("LOG_PATH")
                     .long("log")
@@ -33,7 +33,7 @@ impl ProgramOptions {
             if let Some(log_path) = app.value_of("LOG_PATH") {
                 std::path::Path::new(log_path)
             } else {
-                std::path::Path::new("/tmp/map.log")
+                std::path::Path::new("/tmp/dnetview.log")
             }
             .to_path_buf(),
         );

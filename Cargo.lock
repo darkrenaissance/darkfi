@@ -1669,6 +1669,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "dnetview"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-std",
+ "clap 3.0.7",
+ "darkfi",
+ "easy-parallel",
+ "log",
+ "num_cpus",
+ "rand 0.6.5",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "termion",
+ "tui",
+ "url",
+]
+
+[[package]]
 name = "dotenv"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2847,27 +2868,6 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if 1.0.0",
  "value-bag",
-]
-
-[[package]]
-name = "map"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-std",
- "clap 3.0.7",
- "darkfi",
- "easy-parallel",
- "log",
- "num_cpus",
- "rand 0.6.5",
- "serde",
- "serde_json",
- "simplelog",
- "smol",
- "termion",
- "tui",
- "url",
 ]
 
 [[package]]
