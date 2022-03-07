@@ -109,7 +109,7 @@ impl P2p {
             "external_addr": external_addr,
             "session_manual": self.session_manual().await.get_info().await,
             "session_inbound": self.session_inbound().await.get_info().await,
-            "session_outbound": self.session_inbound().await.get_info().await,
+            "session_outbound": self.session_outbound().await.get_info().await,
             "state": self.state.lock().await.to_string(),
         })
     }
