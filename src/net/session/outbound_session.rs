@@ -156,7 +156,6 @@ impl OutboundSession {
                     self.p2p().remove_pending(&addr).await;
                     {
                         let info = &mut self.slot_info.lock().await[slot_number as usize];
-                        info.addr = None;
                         info.channel = Some(channel.clone());
                         info.state = OutboundState::Connected;
                     }
