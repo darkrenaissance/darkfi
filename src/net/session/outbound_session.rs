@@ -160,8 +160,6 @@ impl OutboundSession {
                         info.state = OutboundState::Connected;
                     }
 
-                    //self.clone().attach_protocols(channel, executor.clone()).await?;
-
                     // Wait for channel to close
                     stop_sub.receive().await;
                 }
@@ -225,23 +223,6 @@ impl OutboundSession {
             None => false,
         }
     }
-
-    // Starts sending keep-alive and address messages across the channels.
-    /*async fn attach_protocols(
-        self: Arc<Self>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        let hosts = self.p2p().hosts();
-
-        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
-        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
-
-        protocol_ping.start(executor.clone()).await;
-        protocol_addr.start(executor).await;
-
-        Ok(())
-    }*/
 }
 
 #[async_trait]
@@ -253,7 +234,6 @@ impl Session for OutboundSession {
         }
 
         json!({
-            "key": 110,
             "slots": slots,
         })
     }

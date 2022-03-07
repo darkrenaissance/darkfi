@@ -1,12 +1,14 @@
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
 use async_executor::Executor;
-use log::*;
+use log::{error, info};
 
 use crate::{
     error::{Error, Result},
@@ -17,11 +19,22 @@ use crate::{
     system::{StoppableTask, StoppableTaskPtr},
 };
 
+struct InboundInfo {
+    channel: ChannelPtr,
+}
+
+impl InboundInfo {
+    async fn get_info(&self) -> serde_json::Value {
+        self.channel.get_info().await
+    }
+}
+
 /// Defines inbound connections session.
 pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,
     accept_task: StoppableTaskPtr,
+    connect_infos: Mutex<HashMap<SocketAddr, InboundInfo>>,
 }
 
 impl InboundSession {
@@ -29,7 +42,12 @@ impl InboundSession {
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         let acceptor = Acceptor::new();
 
-        Arc::new(Self { p2p, acceptor, accept_task: StoppableTask::new() })
+        Arc::new(Self {
+            p2p,
+            acceptor,
+            accept_task: StoppableTask::new(),
+            connect_infos: Mutex::new(HashMap::new()),
+        })
     }
 
     /// Starts the inbound session. Begins by accepting connections and fails if
@@ -99,33 +117,32 @@ impl InboundSession {
 
         self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-        //self.attach_protocols(channel, executor).await
+        self.manage_channel_for_get_info(channel).await;
+
         Ok(())
     }
 
-    // Starts sending keep-alive and address messages across the channels.
-    /*async fn attach_protocols(
-        self: Arc<Self>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        let hosts = self.p2p().hosts();
+    async fn manage_channel_for_get_info(&self, channel: ChannelPtr) {
+        let key = channel.address();
+        self.connect_infos.lock().await.insert(key, InboundInfo { channel: channel.clone() });
 
-        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
-        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
+        let stop_sub = channel.subscribe_stop().await;
+        stop_sub.receive().await;
 
-        protocol_ping.start(executor.clone()).await;
-        protocol_addr.start(executor).await;
-
-        Ok(())
-    }*/
+        self.connect_infos.lock().await.remove(&key);
+    }
 }
 
 #[async_trait]
 impl Session for InboundSession {
     async fn get_info(&self) -> serde_json::Value {
+        let mut infos = HashMap::new();
+        for (addr, info) in self.connect_infos.lock().await.iter() {
+            infos.insert(addr.to_string(), info.get_info().await);
+        }
+
         json!({
-            "key": 110
+            "connected": infos,
         })
     }
 
