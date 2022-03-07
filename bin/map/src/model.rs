@@ -42,13 +42,14 @@ impl InfoList {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
-    pub outgoing: Vec<Connection>,
-    pub incoming: Vec<Connection>,
+    pub outbound: Vec<Connection>,
+    pub manual: Vec<Connection>,
+    pub inbound: Vec<Connection>,
 }
 
 impl NodeInfo {
     pub fn new() -> NodeInfo {
-        NodeInfo { outgoing: Vec::new(), incoming: Vec::new() }
+        NodeInfo { outbound: Vec::new(), manual: Vec::new(), inbound: Vec::new() }
     }
 }
 

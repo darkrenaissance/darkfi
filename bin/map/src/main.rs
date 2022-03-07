@@ -174,63 +174,50 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         let reply = client.get_info().await?;
         debug!("{:?}", reply);
 
-        //if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-        //    let id = reply.as_object().unwrap().get("id").unwrap();
+        if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+            let session_inbound = reply.as_object().unwrap().get("session_inbound");
+            let si_key =
+                session_inbound.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-        //    let connections = reply.as_object().unwrap().get("connections").unwrap();
-        //    let outgoing = connections.get("outgoing").unwrap();
-        //    let incoming = connections.get("incoming").unwrap();
+            let session_manual = reply.as_object().unwrap().get("session_manual");
+            let sm_key =
+                session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-        //    let mut outconnects = Vec::new();
-        //    let mut inconnects = Vec::new();
+            let session_outbound = reply.as_object().unwrap().get("session_outbound");
+            let so_key =
+                session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-        //    // here we are simulating new messages by scrolling through a vector
-        //    let msgs = outgoing[1].get("message").unwrap();
-        //    if index == 0 {
-        //        index += 1;
-        //    } else if index >= 5 {
-        //        index = 0
-        //    } else {
-        //        index = index + 1;
-        //    }
+            let channel_state = reply.as_object().unwrap().get("state").unwrap().as_str().unwrap();
+            debug!("{:?}", channel_state);
 
-        //    let out0 = Connection::new(
-        //        outgoing[0].get("id").unwrap().as_str().unwrap().to_string(),
-        //        msgs[index].as_str().unwrap().to_string(),
-        //    );
-        //    let out1 = Connection::new(
-        //        outgoing[1].get("id").unwrap().as_str().unwrap().to_string(),
-        //        msgs[index].as_str().unwrap().to_string(),
-        //    );
+            let session_in = Connection::new(si_key.to_string(), channel_state.to_string());
+            let session_man = Connection::new(sm_key.to_string(), channel_state.to_string());
+            let session_out = Connection::new(so_key.to_string(), channel_state.to_string());
 
-        //    let in0 = Connection::new(
-        //        incoming[0].get("id").unwrap().as_str().unwrap().to_string(),
-        //        msgs[index].as_str().unwrap().to_string(),
-        //    );
-        //    let in1 = Connection::new(
-        //        incoming[1].get("id").unwrap().as_str().unwrap().to_string(),
-        //        msgs[index].as_str().unwrap().to_string(),
-        //    );
+            let mut outconnects = Vec::new();
+            let mut inconnects = Vec::new();
+            let mut manconnects = Vec::new();
 
-        //    outconnects.push(out0);
-        //    outconnects.push(out1);
+            outconnects.push(session_out);
+            inconnects.push(session_in);
+            manconnects.push(session_man);
 
-        //    inconnects.push(in0);
-        //    inconnects.push(in1);
+            let infos =
+                NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
 
-        //    let infos = NodeInfo { outgoing: outconnects, incoming: inconnects };
+            let mut node_info = HashMap::new();
+            // TODO: fix this. this key should be global identifier for each connection
+            // right now we are using si_key, which is the inbound session key.
+            node_info.insert(si_key, infos);
 
-        //    let mut node_info = HashMap::new();
-        //    node_info.insert(id.as_str().unwrap().to_string(), infos);
-
-        //    for (id, value) in node_info.clone() {
-        //        model.id_list.node_id.lock().await.insert(id.clone());
-        //        model.info_list.infos.lock().await.insert(id, value);
-        //    }
-        //} else {
-        //    // TODO: error handling
-        //    debug!("Reply is empty");
-        //}
+            for (si_key, value) in node_info.clone() {
+                model.id_list.node_id.lock().await.insert(si_key.to_string().clone());
+                model.info_list.infos.lock().await.insert(si_key.to_string(), value);
+            }
+        } else {
+            // TODO: error handling
+            debug!("Reply is empty");
+        }
         async_util::sleep(2).await;
     }
     //} else {

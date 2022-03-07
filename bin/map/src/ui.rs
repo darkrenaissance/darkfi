@@ -57,10 +57,13 @@ fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, _index: usize)
     for id in &view.id_list.node_id {
         match info.get(id) {
             Some(_) => {
-                titles.push(Spans::from(Span::styled("Outgoing:", Style::default())));
+                titles.push(Spans::from(Span::styled("Outbound:", Style::default())));
                 titles.push(Spans::from(""));
                 titles.push(Spans::from(""));
-                titles.push(Spans::from(Span::styled("Incoming:", Style::default())));
+                titles.push(Spans::from(Span::styled("Inbound:", Style::default())));
+                titles.push(Spans::from(""));
+                titles.push(Spans::from(""));
+                titles.push(Spans::from(Span::styled("Manual:", Style::default())));
                 titles.push(Spans::from(""));
                 titles.push(Spans::from(""));
                 titles.push(Spans::from(""));
@@ -87,11 +90,14 @@ fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, _index: usize)
         match info.get(id) {
             Some(connects) => {
                 msgs.push(Spans::from(""));
-                msgs.push(Spans::from(format!("[R: {}]", connects.outgoing[0].message)));
-                msgs.push(Spans::from(format!("[S: {}]", connects.outgoing[1].message)));
+                msgs.push(Spans::from(format!("[R: {}]", connects.outbound[0].message)));
+                //msgs.push(Spans::from(format!("[S: {}]", connects.outgoing[1].message)));
                 msgs.push(Spans::from(""));
-                msgs.push(Spans::from(format!("[R: {}]", connects.incoming[0].message)));
-                msgs.push(Spans::from(format!("[S: {}]", connects.incoming[1].message)));
+                msgs.push(Spans::from(format!("[R: {}]", connects.inbound[0].message)));
+                //msgs.push(Spans::from(format!("[S: {}]", connects.incoming[1].message)));
+                msgs.push(Spans::from(""));
+                msgs.push(Spans::from(""));
+                msgs.push(Spans::from(format!("[R: {}]", connects.manual[0].message)));
                 msgs.push(Spans::from(""));
             }
             None => {
@@ -117,11 +123,16 @@ fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>, _index: usize)
         match info.get(id) {
             Some(connects) => {
                 ids.push(Spans::from(""));
-                ids.push(Spans::from(format!("{}", connects.outgoing[0].id)));
-                ids.push(Spans::from(format!("{}", connects.outgoing[1].id)));
+                ids.push(Spans::from(format!("{}", connects.outbound[0].id)));
+                //ids.push(Spans::from(format!("{}", connects.outgoing[1].id)));
                 ids.push(Spans::from(""));
-                ids.push(Spans::from(format!("{}", connects.incoming[0].id)));
-                ids.push(Spans::from(format!("{}", connects.incoming[1].id)));
+                ids.push(Spans::from(""));
+                ids.push(Spans::from(format!("{}", connects.inbound[0].id)));
+                //ids.push(Spans::from(format!("{}", connects.incoming[1].id)));
+                ids.push(Spans::from(""));
+                ids.push(Spans::from(""));
+                ids.push(Spans::from(format!("{}", connects.manual[0].id)));
+                ids.push(Spans::from(""));
                 ids.push(Spans::from(""));
             }
             None => {
