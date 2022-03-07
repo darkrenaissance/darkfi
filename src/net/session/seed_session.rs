@@ -1,4 +1,5 @@
 use async_std::future::timeout;
+use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
@@ -136,8 +137,9 @@ impl SeedSession {
     }*/
 }
 
+#[async_trait]
 impl Session for SeedSession {
-    fn get_info(&self) -> serde_json::Value {
+    async fn get_info(&self) -> serde_json::Value {
         json!({
             "key": 110
         })

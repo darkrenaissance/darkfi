@@ -96,7 +96,7 @@ pub trait Session: Sync {
         Ok(())
     }
 
-    fn get_info(&self) -> serde_json::Value;
+    async fn get_info(&self) -> serde_json::Value;
 
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;

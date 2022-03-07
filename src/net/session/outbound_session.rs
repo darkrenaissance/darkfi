@@ -1,6 +1,7 @@
 use async_executor::Executor;
 use async_std::{sync::Mutex, task::yield_now};
-use log::*;
+use async_trait::async_trait;
+use log::{error, info};
 use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
@@ -11,21 +12,76 @@ use crate::{
     error::{Error, Result},
     net::{
         session::{Session, SessionBitflag, SESSION_OUTBOUND},
-        Connector, P2p,
+        ChannelPtr, Connector, P2p,
     },
     system::{StoppableTask, StoppableTaskPtr},
 };
+
+#[derive(Clone)]
+enum OutboundState {
+    Open,
+    Pending,
+    Connected,
+}
+
+impl OutboundState {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Open => "open".to_string(),
+            Self::Pending => "pending".to_string(),
+            Self::Connected => "connected".to_string(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct OutboundInfo {
+    addr: Option<SocketAddr>,
+    channel: Option<ChannelPtr>,
+    state: OutboundState,
+}
+
+impl OutboundInfo {
+    async fn get_info(&self) -> serde_json::Value {
+        let addr = match self.addr {
+            Some(addr) => serde_json::Value::String(addr.to_string()),
+            None => serde_json::Value::Null,
+        };
+
+        let channel = match &self.channel {
+            Some(channel) => channel.get_info().await,
+            None => serde_json::Value::Null,
+        };
+
+        json!({
+            "addr": addr,
+            "state": self.state.to_string(),
+            "channel": channel,
+        })
+    }
+}
+
+impl Default for OutboundInfo {
+    fn default() -> Self {
+        Self { addr: None, channel: None, state: OutboundState::Open }
+    }
+}
 
 /// Defines outbound connections session.
 pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
+    slot_info: Mutex<Vec<OutboundInfo>>,
 }
 
 impl OutboundSession {
     /// Create a new outbound session.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
-        Arc::new(Self { p2p, connect_slots: Mutex::new(Vec::new()) })
+        Arc::new(Self {
+            p2p,
+            connect_slots: Mutex::new(Vec::new()),
+            slot_info: Mutex::new(Vec::new()),
+        })
     }
 
     /// Start the outbound session. Runs the channel connect loop.
@@ -34,6 +90,8 @@ impl OutboundSession {
         info!(target: "net", "Starting {} outbound connection slots.", slots_count);
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
+
+        self.slot_info.lock().await.resize(slots_count as usize, Default::default());
 
         for i in 0..slots_count {
             let task = StoppableTask::new();
@@ -76,6 +134,11 @@ impl OutboundSession {
         loop {
             let addr = self.load_address(slot_number).await?;
             info!(target: "net", "#{} connecting to outbound [{}]", slot_number, addr);
+            {
+                let info = &mut self.slot_info.lock().await[slot_number as usize];
+                info.addr = Some(addr);
+                info.state = OutboundState::Pending;
+            }
 
             match connector.connect(addr).await {
                 Ok(channel) => {
@@ -91,6 +154,12 @@ impl OutboundSession {
 
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
+                    {
+                        let info = &mut self.slot_info.lock().await[slot_number as usize];
+                        info.addr = None;
+                        info.channel = Some(channel.clone());
+                        info.state = OutboundState::Connected;
+                    }
 
                     //self.clone().attach_protocols(channel, executor.clone()).await?;
 
@@ -99,6 +168,12 @@ impl OutboundSession {
                 }
                 Err(err) => {
                     info!(target: "net", "Unable to connect to outbound [{}]: {}", addr, err);
+                    {
+                        let info = &mut self.slot_info.lock().await[slot_number as usize];
+                        info.addr = None;
+                        info.channel = None;
+                        info.state = OutboundState::Open;
+                    }
                 }
             }
         }
@@ -170,10 +245,17 @@ impl OutboundSession {
     }*/
 }
 
+#[async_trait]
 impl Session for OutboundSession {
-    fn get_info(&self) -> serde_json::Value {
+    async fn get_info(&self) -> serde_json::Value {
+        let mut slots = Vec::new();
+        for info in &*self.slot_info.lock().await {
+            slots.push(info.get_info().await);
+        }
+
         json!({
-            "key": 110
+            "key": 110,
+            "slots": slots,
         })
     }
 

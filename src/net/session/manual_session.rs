@@ -1,4 +1,5 @@
 use async_std::sync::Mutex;
+use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::{
     net::SocketAddr,
@@ -131,8 +132,9 @@ impl ManualSession {
     }*/
 }
 
+#[async_trait]
 impl Session for ManualSession {
-    fn get_info(&self) -> serde_json::Value {
+    async fn get_info(&self) -> serde_json::Value {
         json!({
             "key": 110
         })

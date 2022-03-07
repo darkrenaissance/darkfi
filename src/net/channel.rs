@@ -3,6 +3,7 @@ use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
 };
+use serde_json::json;
 use std::{
     net::{SocketAddr, TcpStream},
     sync::{
@@ -11,7 +12,7 @@ use std::{
     },
 };
 
-use log::*;
+use log::{debug, error, info};
 use smol::{Async, Executor};
 
 use crate::{
@@ -26,6 +27,24 @@ use crate::{
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
+struct ChannelInfo {
+    last_msg: String,
+    last_status: String,
+}
+
+impl ChannelInfo {
+    fn new() -> Self {
+        Self { last_msg: String::new(), last_status: String::new() }
+    }
+
+    async fn get_info(&self) -> serde_json::Value {
+        json!({
+            "last_msg": self.last_msg,
+            "last_status": self.last_status,
+        })
+    }
+}
+
 /// Async channel for communication between nodes.
 pub struct Channel {
     reader: Mutex<ReadHalf<Async<TcpStream>>>,
@@ -35,6 +54,7 @@ pub struct Channel {
     stop_subscriber: SubscriberPtr<Error>,
     receive_task: StoppableTaskPtr,
     stopped: AtomicBool,
+    info: Mutex<ChannelInfo>,
 }
 
 impl Channel {
@@ -57,7 +77,12 @@ impl Channel {
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
+            info: Mutex::new(ChannelInfo::new()),
         })
+    }
+
+    pub async fn get_info(&self) -> serde_json::Value {
+        self.info.lock().await.get_info().await
     }
 
     /// Starts the channel. Runs a receive loop to start receiving messages or
@@ -127,11 +152,18 @@ impl Channel {
                 Err(Error::ChannelStopped)
             }
         };
+
         debug!(target: "net",
             "Channel::send() [END, command={:?}, address={}]",
             M::name(),
             self.address()
         );
+        {
+            let info = &mut *self.info.lock().await;
+            info.last_msg = M::name().to_string();
+            info.last_status = "sent".to_string();
+        }
+
         result
     }
 
@@ -219,6 +251,11 @@ impl Channel {
                     return Err(Error::ChannelStopped)
                 }
             };
+            {
+                let info = &mut *self.info.lock().await;
+                info.last_msg = packet.command.clone();
+                info.last_status = "recv".to_string();
+            }
 
             // Send result to our subscribers
             self.message_subsystem.notify(&packet.command, packet.payload).await;

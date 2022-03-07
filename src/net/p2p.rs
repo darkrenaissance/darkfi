@@ -26,6 +26,28 @@ pub type ConnectedChannels<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
+enum P2pState {
+    // The p2p object has been created but not yet started.
+    Open,
+    // We are performing the initial seed session
+    Start,
+    // Seed session finished, but not yet running
+    Started,
+    // p2p is running and the network is active.
+    Run,
+}
+
+impl P2pState {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Open => "open".to_string(),
+            Self::Start => "start".to_string(),
+            Self::Started => "started".to_string(),
+            Self::Run => "run".to_string(),
+        }
+    }
+}
+
 /// Top level peer-to-peer networking interface.
 pub struct P2p {
     pending: PendingChannels,
@@ -41,6 +63,8 @@ pub struct P2p {
     session_inbound: Mutex<Option<Arc<InboundSession>>>,
     session_outbound: Mutex<Option<Arc<OutboundSession>>>,
 
+    state: Mutex<P2pState>,
+
     settings: SettingsPtr,
 }
 
@@ -49,7 +73,7 @@ impl P2p {
     pub async fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
 
-        let mut self_ = Arc::new(Self {
+        let self_ = Arc::new(Self {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
@@ -59,6 +83,7 @@ impl P2p {
             session_manual: Mutex::new(None),
             session_inbound: Mutex::new(None),
             session_outbound: Mutex::new(None),
+            state: Mutex::new(P2pState::Open),
             settings,
         });
 
@@ -74,16 +99,18 @@ impl P2p {
     }
 
     pub async fn get_info(&self) -> serde_json::Value {
+        let external_addr = self
+            .settings
+            .external_addr
+            .map(|addr| serde_json::Value::from(addr.to_string()))
+            .unwrap_or(serde_json::Value::Null);
+
         json!({
-            "session_manual": self.session_manual().await.get_info(),
-            "session_inbound": self.session_inbound().await.get_info(),
-            "session_outbound": self.session_inbound().await.get_info(),
-            // Possible states:
-            //   open - the p2p object has been created but not yet started.
-            //   start - we are performing the initial seed session
-            //   started - seed session finished, but not yet running
-            //   run - p2p is running and the network is active.
-            "state": "open",
+            "external_addr": external_addr,
+            "session_manual": self.session_manual().await.get_info().await,
+            "session_inbound": self.session_inbound().await.get_info().await,
+            "session_outbound": self.session_inbound().await.get_info().await,
+            "state": self.state.lock().await.to_string(),
         })
     }
 
@@ -91,10 +118,14 @@ impl P2p {
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::start() [BEGIN]");
 
+        *self.state.lock().await = P2pState::Start;
+
         // Start seed session
         let seed = SeedSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
         seed.start(executor.clone()).await?;
+
+        *self.state.lock().await = P2pState::Started;
 
         debug!(target: "net", "P2p::start() [END]");
         Ok(())
@@ -114,6 +145,8 @@ impl P2p {
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
+
+        *self.state.lock().await = P2pState::Run;
 
         let manual = self.session_manual().await;
         for peer in &self.settings.peers {
