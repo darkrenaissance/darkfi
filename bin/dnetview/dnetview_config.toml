@@ -4,10 +4,10 @@
 ## map properly.
 
 [[nodes]]
-node_id = "tcp://127.0.0.1:7777"
+node_id = "tcp://127.0.0.1:8000"
 
 [[nodes]]
-node_id = "tcp://127.0.0.1:6666"
+node_id = "tcp://127.0.0.1:7777"
 
 #[[nodes]]
 #node_id = ""
