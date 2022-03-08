@@ -149,32 +149,21 @@ async fn main() -> Result<()> {
 }
 
 async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
-    let mut rpc_vec = Vec::new();
     for node in config.nodes.clone() {
-        rpc_vec.push(node);
-    }
-    for node in rpc_vec {
-        debug!("Created client: {}", node.node_id);
         let client = Map::new(Url::parse(&node.node_id)?);
         ex.spawn(poll(client, model.clone())).detach();
     }
-
     Ok(())
 }
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     debug!("Attemping to poll: {}", client.url);
-    // TODO: fix this! this can lag forever
-    // check connect() on net/connector.rs
-    //let reply = client.ping().await?;
-    //if reply.as_str().is_some() {
-    let mut index = 0;
     loop {
-        //debug!("Connected to: {}", client.url);
         let reply = client.get_info().await?;
         debug!("{:?}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+            let external_addr = reply.as_object().unwrap().get("external_addr");
             let session_inbound = reply.as_object().unwrap().get("session_inbound");
             let si_key =
                 session_inbound.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
@@ -188,7 +177,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
             let channel_state = reply.as_object().unwrap().get("state").unwrap().as_str().unwrap();
-            debug!("{:?}", channel_state);
+            let slots = reply.as_object().unwrap().get("slots");
 
             let session_in = Connection::new(si_key.to_string(), channel_state.to_string());
             let session_man = Connection::new(sm_key.to_string(), channel_state.to_string());
@@ -220,10 +209,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         }
         async_util::sleep(2).await;
     }
-    //} else {
-    //    async_util::sleep(10).await;
-    //    Err(Error::ConnectTimeout)
-    //}
 }
 
 async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
@@ -237,37 +222,17 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
 
     view.id_list.state.select(Some(0));
     view.info_list.index = 0;
-    //let mut counter = 0;
 
     loop {
-        //counter = counter + 1;
         view.update(model.info_list.infos.lock().await.clone());
-        //if view.id_list.node_id.is_empty() {
-        //    // TODO: delete this and display empty data
-        //    if counter == 1 {
-        //        let mut progress = 0;
-        //        while progress < 100 {
-        //            terminal.draw(|f| {
-        //                ui::init_panel(f, progress);
-        //            })?;
-        //            Timer::after(Duration::from_millis(1)).await;
-        //            progress = progress + 1;
-        //        }
-        //    } else if counter == 2 {
-        //        terminal.clear()?;
-        //        // TODO: continue to display not, mark as offline
-        //        println!("Could not connect to node. Are you sure RPC is running?");
-        //    }
-        //} else {
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
-        //}
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
