@@ -1,12 +1,14 @@
-use async_executor::Executor;
 use async_std::sync::Mutex;
-use log::debug;
-use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     net::SocketAddr,
     sync::Arc,
 };
+
+use async_executor::Executor;
+use log::debug;
+use serde_json::json;
 
 use crate::{
     error::{Error, Result},
@@ -37,14 +39,18 @@ enum P2pState {
     Run,
 }
 
-impl P2pState {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Open => "open".to_string(),
-            Self::Start => "start".to_string(),
-            Self::Started => "started".to_string(),
-            Self::Run => "run".to_string(),
-        }
+impl fmt::Display for P2pState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Open => "open",
+                Self::Start => "start",
+                Self::Started => "started",
+                Self::Run => "run",
+            }
+        )
     }
 }
 

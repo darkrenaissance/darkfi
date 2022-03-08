@@ -1,12 +1,14 @@
-use async_executor::Executor;
 use async_std::{sync::Mutex, task::yield_now};
-use async_trait::async_trait;
-use log::{error, info};
-use serde_json::json;
 use std::{
+    fmt,
     net::SocketAddr,
     sync::{Arc, Weak},
 };
+
+use async_executor::Executor;
+use async_trait::async_trait;
+use log::{error, info};
+use serde_json::json;
 
 use crate::{
     error::{Error, Result},
@@ -24,13 +26,17 @@ enum OutboundState {
     Connected,
 }
 
-impl OutboundState {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Open => "open".to_string(),
-            Self::Pending => "pending".to_string(),
-            Self::Connected => "connected".to_string(),
-        }
+impl fmt::Display for OutboundState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Open => "open",
+                Self::Pending => "pending",
+                Self::Connected => "connected",
+            }
+        )
     }
 }
 
