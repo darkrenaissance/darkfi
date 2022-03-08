@@ -1,6 +1,6 @@
 use async_std::future::timeout;
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},

@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_std::{sync::Mutex, task::yield_now};
 use async_trait::async_trait;
 use log::{error, info};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},

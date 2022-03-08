@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Mutex;
 use log::debug;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
