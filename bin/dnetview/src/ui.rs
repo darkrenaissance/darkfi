@@ -1,4 +1,5 @@
 use crate::view::View;
+use crate::DnvConfig;
 
 use tui::{
     backend::Backend,
@@ -9,7 +10,7 @@ use tui::{
     Frame,
 };
 
-pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
+pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View, config: &DnvConfig) {
     let slice = Layout::default()
         .direction(Direction::Horizontal)
         .margin(2)

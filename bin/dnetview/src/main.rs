@@ -11,7 +11,6 @@ use darkfi::{
 use async_std::sync::Arc;
 use easy_parallel::Parallel;
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -30,25 +29,13 @@ use tui::{
 use url::Url;
 
 use dnetview::{
+    config::{DnvConfig, CONFIG_FILE_CONTENTS},
     model::{Connection, IdList, InfoList, NodeInfo},
     options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView},
     Model, View,
 };
-
-const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../dnetview_config.toml");
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct DnvConfig {
-    pub nodes: Vec<IrcNode>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct IrcNode {
-    pub node_id: String,
-    //pub rpc_url: String,
-}
 
 struct Map {
     url: Url,
@@ -230,7 +217,7 @@ async fn render<B: Backend>(
     loop {
         view.update(model.info_list.infos.lock().await.clone());
         terminal.draw(|f| {
-            ui::ui(f, view.clone());
+            ui::ui(f, view.clone(), &config);
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
