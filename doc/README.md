@@ -6,3 +6,9 @@ https://darkrenaissance.github.io/darkfi
 
 When adding or removing a section of the book, make sure to update the
 [SUMMARY.md](src/SUMMARY.md) file to actually list the contents.
+
+For the mdbook-katex backend run:
+
+```
+cargo install --git "https://github.com/lzanini/mdbook-katex"
+```
