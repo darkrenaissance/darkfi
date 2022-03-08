@@ -180,8 +180,6 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
         "tor" | "nym" => {
             use fast_socks5::client::{Config, Socks5Stream};
 
-            let mut stream;
-
             if socks_url.is_none() {
                 return Err(Error::NoSocks5UrlFound)
             }
@@ -199,8 +197,8 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
                 .next()
                 .ok_or(Error::NoSocks5UrlFound)?;
 
-            if !socks_url.username().is_empty() && socks_url.password().is_some() {
-                stream = Socks5Stream::connect_with_password(
+            let mut stream = if !socks_url.username().is_empty() && socks_url.password().is_some() {
+                Socks5Stream::connect_with_password(
                     socks_url_str,
                     host,
                     port,
@@ -208,10 +206,10 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
                     socks_url.password().unwrap().to_string(),
                     config,
                 )
-                .await?;
+                .await?
             } else {
-                stream = Socks5Stream::connect(socks_url_str, host, port, config).await?;
-            }
+                Socks5Stream::connect(socks_url_str, host, port, config).await?
+            };
 
             get_reply(&mut stream, data_str).await
         }
