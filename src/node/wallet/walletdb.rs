@@ -77,9 +77,9 @@ impl WalletDb {
 
     pub async fn init_db(&self) -> Result<()> {
         info!("Initializing wallet database");
-        let tree = include_str!("../../../sql/tree.sql");
-        let keys = include_str!("../../../sql/keys.sql");
-        let coins = include_str!("../../../sql/coins.sql");
+        let tree = include_str!("../../../script/sql/tree.sql");
+        let keys = include_str!("../../../script/sql/keys.sql");
+        let coins = include_str!("../../../script/sql/coins.sql");
 
         let mut conn = self.conn.acquire().await?;
 
