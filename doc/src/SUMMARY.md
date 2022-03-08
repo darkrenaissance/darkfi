@@ -5,6 +5,7 @@
 - [Development](development.md)
 - [Tutorial](tutorial.md)
 - [Architecture](architecture/architecture.md)
+  - [Blockchain](architecture/blockchain.md)
   - [Node design](architecture/nodes.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
