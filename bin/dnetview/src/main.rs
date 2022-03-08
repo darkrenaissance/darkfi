@@ -40,7 +40,7 @@ use dnetview::{
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../dnetview_config.toml");
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct MapConfig {
+pub struct DnvConfig {
     pub nodes: Vec<IrcNode>,
 }
 
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
 
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let config = Config::<MapConfig>::load(config_path)?;
+    let config = Config::<DnvConfig>::load(config_path)?;
 
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
-                render(&mut terminal, model.clone()).await?;
+                render(&mut terminal, model.clone(), config).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run_rpc(config: &MapConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
+async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
     for node in config.nodes.clone() {
         let client = Map::new(Url::parse(&node.node_id)?);
         ex.spawn(poll(client, model.clone())).detach();
@@ -211,7 +211,11 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     }
 }
 
-async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
+async fn render<B: Backend>(
+    terminal: &mut Terminal<B>,
+    model: Arc<Model>,
+    config: DnvConfig,
+) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
