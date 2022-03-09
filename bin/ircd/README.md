@@ -60,6 +60,6 @@ And send messages to yourself.
 
 ### Running a Fullnode
 
-See the script `run_node.sh` for an example of how to deploy a full node which
+See the script `script/run_node.sh` for an example of how to deploy a full node which
 does seed session synchronization, and accepts both inbound and outbound
 connections.
