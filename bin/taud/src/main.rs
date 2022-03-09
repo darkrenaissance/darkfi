@@ -188,31 +188,20 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn add(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array();
-        if args.is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id))
-        }
-        let args = args.unwrap();
 
-        if args.len() != 6 {
+        if args.is_none() && args.unwrap().len() != 6 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
+
+        let args = args.unwrap();
 
         let mut task: TaskInfo;
 
         match (args[0].as_str(), args[1].as_str(), args[5].as_u64()) {
             (Some(title), Some(desc), Some(rank)) => {
-                let due: Option<Timestamp> = if args[4].as_str().is_some() {
-                    let timestamp = args[4].as_str().unwrap().parse::<i64>();
-
-                    if timestamp.is_err() {
-                        return JsonResult::Err(jsonerr(
-                            InvalidParams,
-                            Some("invalid timestamp".into()),
-                            id,
-                        ))
-                    }
-
-                    Some(Timestamp(Utc.timestamp(timestamp.unwrap(), 0).to_string()))
+                let due: Option<Timestamp> = if args[4].is_i64() {
+                    let timestamp = args[4].as_i64().unwrap();
+                    Some(Timestamp(Utc.timestamp(timestamp, 0).to_string()))
                 } else {
                     None
                 };
