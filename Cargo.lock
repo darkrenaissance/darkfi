@@ -5273,6 +5273,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "taucli"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "clap 3.0.7",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "log",
+ "num_cpus",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "url",
+]
+
+[[package]]
+name = "taud"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "log",
+ "num_cpus",
+ "serde_json",
+ "simplelog",
+ "smol",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

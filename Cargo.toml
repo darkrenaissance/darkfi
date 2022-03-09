@@ -22,6 +22,8 @@ members = [
     "bin/dnetview",
     "bin/daod",
     "bin/dao-cli",
+    "bin/taud",
+    "bin/tau-cli"
 ]
 
 [dependencies]
