@@ -30,7 +30,7 @@ use url::Url;
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{Connection, IdList, InfoList, NodeInfo},
+    model::{IdList, InfoList, NodeInfo},
     options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView},
@@ -150,46 +150,45 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         debug!("{:?}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            let external_addr = reply.as_object().unwrap().get("external_addr");
-            let session_inbound = reply.as_object().unwrap().get("session_inbound");
-            let si_key =
-                session_inbound.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            //let external_addr = reply.as_object().unwrap().get("external_addr");
+            //let session_inbound = reply.as_object().unwrap().get("session_inbound");
+            //let si_key =
+            //    session_inbound.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-            let session_manual = reply.as_object().unwrap().get("session_manual");
-            let sm_key =
-                session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            //let session_manual = reply.as_object().unwrap().get("session_manual");
+            //let sm_key =
+            //    session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-            let session_outbound = reply.as_object().unwrap().get("session_outbound");
-            let so_key =
-                session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            //let session_outbound = reply.as_object().unwrap().get("session_outbound");
+            //let so_key =
+            //    session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
 
-            let channel_state = reply.as_object().unwrap().get("state").unwrap().as_str().unwrap();
-            let slots = reply.as_object().unwrap().get("slots");
+            //let channel_state = reply.as_object().unwrap().get("state").unwrap().as_str().unwrap();
+            //let slots = reply.as_object().unwrap().get("slots");
 
-            let session_in = Connection::new(si_key.to_string(), channel_state.to_string());
-            let session_man = Connection::new(sm_key.to_string(), channel_state.to_string());
-            let session_out = Connection::new(so_key.to_string(), channel_state.to_string());
+            //let session_in = Connection::new(si_key.to_string(), channel_state.to_string());
+            //let session_man = Connection::new(sm_key.to_string(), channel_state.to_string());
+            //let session_out = Connection::new(so_key.to_string(), channel_state.to_string());
 
-            let mut outconnects = Vec::new();
-            let mut inconnects = Vec::new();
-            let mut manconnects = Vec::new();
+            //let mut outconnects = Vec::new();
+            //let mut inconnects = Vec::new();
+            //let mut manconnects = Vec::new();
 
-            outconnects.push(session_out);
-            inconnects.push(session_in);
-            manconnects.push(session_man);
+            //outconnects.push(session_out);
+            //inconnects.push(session_in);
+            //manconnects.push(session_man);
 
-            let infos =
-                NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
+            //let infos =
+            //    NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
 
-            let mut node_info = HashMap::new();
-            // TODO: fix this. this key should be global identifier for each connection
-            // right now we are using si_key, which is the inbound session key.
-            node_info.insert(si_key, infos);
+            //let mut node_info = HashMap::new();
+            //// TODO: here we are setting the client url as the ID
+            //node_info.insert(client.url.clone(), infos);
 
-            for (si_key, value) in node_info.clone() {
-                model.id_list.node_id.lock().await.insert(si_key.to_string().clone());
-                model.info_list.infos.lock().await.insert(si_key.to_string(), value);
-            }
+            //for (si_key, value) in node_info.clone() {
+            //    model.id_list.node_id.lock().await.insert(si_key.to_string().clone());
+            //    model.info_list.infos.lock().await.insert(si_key.to_string(), value);
+            //}
         } else {
             // TODO: error handling
             debug!("Reply is empty");

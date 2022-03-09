@@ -1,5 +1,6 @@
 use async_std::sync::Mutex;
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -42,9 +43,9 @@ impl InfoList {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
-    pub outbound: Vec<Connection>,
-    pub manual: Vec<Connection>,
-    pub inbound: Vec<Connection>,
+    pub outbound: Vec<OutboundInfo>,
+    pub manual: Vec<ManualInfo>,
+    pub inbound: Vec<InboundInfo>,
 }
 
 impl NodeInfo {
@@ -54,13 +55,50 @@ impl NodeInfo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Connection {
-    pub id: String,
-    pub message: String,
+pub struct ManualInfo {
+    pub key: u64,
 }
 
-impl Connection {
-    pub fn new(id: String, message: String) -> Connection {
-        Connection { id, message }
+impl ManualInfo {
+    pub fn new(key: u64) -> ManualInfo {
+        ManualInfo { key }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OutboundInfo {
+    // TODO:  make this a socket addr?
+    addr: String,
+    channel: Channel,
+    state: String,
+}
+
+impl OutboundInfo {
+    pub fn new(addr: String, channel: Channel, state: String) -> OutboundInfo {
+        OutboundInfo { addr, channel, state }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Channel {
+    last_msg: String,
+    last_status: String,
+}
+
+impl Channel {
+    pub fn new(last_msg: String, last_status: String) -> Channel {
+        Channel { last_msg, last_status }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InboundInfo {
+    connected: SocketAddr,
+    channel: Channel,
+}
+
+impl InboundInfo {
+    pub fn new(connected: SocketAddr, channel: Channel) -> InboundInfo {
+        InboundInfo { connected, channel }
     }
 }
