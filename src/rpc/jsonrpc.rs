@@ -1,9 +1,4 @@
-use std::{
-    net::{TcpStream, ToSocketAddrs},
-    os::unix::net::UnixStream,
-    str,
-    time::Duration,
-};
+use std::{net::TcpStream, os::unix::net::UnixStream, str, time::Duration};
 
 use async_std::io::timeout;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -144,23 +139,11 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
 }
 
 pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Result<JsonResult> {
-    if uri.host().is_none() && uri.port().is_none() {
-        return Err(Error::UrlParseError(format!("Missing part of url: {}", uri)))
-    }
-
-    let host = uri.host().unwrap().to_string();
-
-    let port = uri.port().unwrap();
-
-    let socket_addr = {
-        let host = host.clone();
-        smol::unblock(move || (host.as_str(), port).to_socket_addrs())
-            .await?
-            .next()
-            .ok_or(Error::NoUrlFound)?
-    };
-
     let data_str = serde_json::to_string(&data)?;
+
+    let socket_addr = uri.socket_addrs(|| None)?[0];
+    let host = socket_addr.ip().to_string();
+    let port = socket_addr.port();
 
     match uri.scheme() {
         "tcp" | "tls" => {
@@ -186,16 +169,9 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
 
             let socks_url = socks_url.unwrap();
 
-            if socks_url.host().is_none() && socks_url.port().is_none() {
-                return Err(Error::UrlParseError(format!("Missing part of socks5 url: {}", uri)))
-            }
-
             let config = Config::default();
 
-            let socks_url_str = (socks_url.host().unwrap().to_string(), socks_url.port().unwrap())
-                .to_socket_addrs()?
-                .next()
-                .ok_or(Error::NoSocks5UrlFound)?;
+            let socks_url_str = socks_url.socket_addrs(|| None)?[0].to_string();
 
             let mut stream = if !socks_url.username().is_empty() && socks_url.password().is_some() {
                 Socks5Stream::connect_with_password(
