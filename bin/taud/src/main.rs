@@ -2,8 +2,10 @@ use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use async_trait::async_trait;
+use chrono::{TimeZone, Utc};
 use clap::{IntoApp, Parser};
 use log::debug;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -34,11 +36,12 @@ pub struct CliTaud {
     pub verbose: u8,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct Timestamp {
-    //XXX change this
-    time: String,
+fn random_ref_id() -> String {
+    thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Timestamp(String);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TauConfig {
@@ -69,55 +72,66 @@ struct Comment {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct TaskInfo {
-    ref_id: String,
-    id: u32,
-    title: String,
-    desc: String,
-    assign: String,
-    project: String,
-    due: Timestamp,
-    rank: u32,
-    created_at: Timestamp,
-    events: Vec<TaskEvent>,
-    comments: Vec<Comment>,
-    settings: Settings,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 struct MonthTasks {
     created_at: Timestamp,
     settings: Settings,
     task_tks: Vec<TaskInfo>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TaskInfo {
+    ref_id: String,
+    id: u32,
+    title: String,
+    desc: String,
+    assign: Vec<String>,
+    project: Vec<String>,
+    due: Option<Timestamp>,
+    rank: u32,
+    created_at: Timestamp,
+    events: Vec<TaskEvent>,
+    comments: Vec<Comment>,
+}
+
 impl TaskInfo {
-    pub fn new(
-        ref_id: String,
-        id: u32,
-        title: String,
-        desc: String,
-        assign: String,
-        project: String,
-        due: Timestamp,
-        rank: u32,
-        created_at: Timestamp,
-        settings: Settings,
-    ) -> Self {
+    pub fn new(title: String, desc: String, due: Option<Timestamp>, rank: u32) -> Self {
+        // TODO
+        // check due date
+
+        // generate ref_id
+        let ref_id = random_ref_id();
+
+        // XXX must find the next free id
+        let mut rng = rand::thread_rng();
+        let id: u32 = rng.gen();
+
+        let created_at: Timestamp = Timestamp(Utc::now().to_string());
+
         Self {
             ref_id,
             id,
             title,
             desc,
-            assign,
-            project,
+            assign: vec![],
+            project: vec![],
             due,
             rank,
             created_at,
             comments: vec![],
             events: vec![],
-            settings,
         }
+    }
+
+    fn assign(&mut self, n: String) {
+        self.assign.push(n);
+    }
+
+    fn project(&mut self, p: String) {
+        self.project.push(p);
+    }
+
+    fn save(&self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -132,6 +146,8 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
     create_dir_all(dataset_path.join("month"))?;
     create_dir_all(dataset_path.join("task"))?;
 
+    let settings = Settings { dataset_path };
+
     let server_config = RpcServerConfig {
         socket_addr: config.rpc_listener_url.url.parse()?,
         use_tls: false,
@@ -140,12 +156,14 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
         identity_pass: Default::default(),
     };
 
-    let rpc_interface = Arc::new(JsonRpcInterface {});
+    let rpc_interface = Arc::new(JsonRpcInterface { settings });
 
     listen_and_serve(server_config, rpc_interface, executor).await
 }
 
-struct JsonRpcInterface {}
+struct JsonRpcInterface {
+    settings: Settings,
+}
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
@@ -157,17 +175,79 @@ impl RequestHandler for JsonRpcInterface {
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("cmd_add") => return self.cmd_add(req.id, req.params).await,
+            Some("add") => return self.add(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
 }
 
 impl JsonRpcInterface {
-    // --> {"method": "cmd_add", "params": [String]}
-    // <-- {"result": "params"}
-    async fn cmd_add(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!("New task added"), id))
+    // RPCAPI:
+    // Add new task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn add(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array();
+        if args.is_none() {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+        let args = args.unwrap();
+
+        if args.len() != 6 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let mut task: TaskInfo;
+
+        match (args[0].as_str(), args[1].as_str(), args[5].as_u64()) {
+            (Some(title), Some(desc), Some(rank)) => {
+                let due: Option<Timestamp> = if args[4].as_str().is_some() {
+                    let timestamp = args[4].as_str().unwrap().parse::<i64>();
+
+                    if timestamp.is_err() {
+                        return JsonResult::Err(jsonerr(
+                            InvalidParams,
+                            Some("invalid timestamp".into()),
+                            id,
+                        ))
+                    }
+
+                    Some(Timestamp(Utc.timestamp(timestamp.unwrap(), 0).to_string()))
+                } else {
+                    None
+                };
+
+                task = TaskInfo::new(title.to_string(), desc.to_string(), due, rank as u32);
+            }
+            (None, _, _) => {
+                return JsonResult::Err(jsonerr(InvalidParams, Some("invalid title".into()), id))
+            }
+            (_, None, _) => {
+                return JsonResult::Err(jsonerr(InvalidParams, Some("invalid desc".into()), id))
+            }
+            (_, _, None) => {
+                return JsonResult::Err(jsonerr(InvalidParams, Some("invalid rank".into()), id))
+            }
+        }
+
+        let assign = args[2].as_array();
+        if assign.is_some() && assign.unwrap().len() > 0 {
+            for a in assign.unwrap() {
+                task.assign(a.as_str().unwrap().into());
+            }
+        }
+
+        let project = args[3].as_array();
+        if project.is_some() && project.unwrap().len() > 0 {
+            for p in project.unwrap() {
+                task.project(p.as_str().unwrap().into());
+            }
+        }
+
+        match task.save() {
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
+        }
     }
 }
 
