@@ -1,23 +1,38 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use async_trait::async_trait;
+use clap::{IntoApp, Parser};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
-    Result,
+    util::{
+        cli::{log_config, spawn_config, Config, UrlConfig},
+        expand_path, join_config_path,
+    },
+    Error, Result,
 };
+
+const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../taud_config.toml");
+
+/// taud cli
+#[derive(Parser)]
+#[clap(name = "taud")]
+pub struct CliTaud {
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
+    /// Increase verbosity
+    #[clap(short, parse(from_occurrences))]
+    pub verbose: u8,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Timestamp {
@@ -26,13 +41,18 @@ struct Timestamp {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct Config {
-    path: PathBuf,
+struct TauConfig {
+    /// path to dataset
+    pub dataset_path: String,
+    /// Path to DER-formatted PKCS#12 archive. (used only with tls listener url)
+    pub tls_identity_path: String,
+    /// The address where taud should bind its RPC socket
+    pub rpc_listener_url: UrlConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Settings {
-    config: Config,
+    dataset_path: PathBuf,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,11 +121,19 @@ impl TaskInfo {
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7777);
+async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
+    if config.dataset_path.is_empty() {
+        return Err(Error::ParseFailed("Failed to parse dataset_path"))
+    }
+
+    let dataset_path = expand_path(&config.dataset_path)?;
+
+    // mkdir dataset_path if not exists
+    create_dir_all(dataset_path.join("month"))?;
+    create_dir_all(dataset_path.join("task"))?;
 
     let server_config = RpcServerConfig {
-        socket_addr: rpc_addr,
+        socket_addr: config.rpc_listener_url.url.parse()?,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
         identity_path: Default::default(),
@@ -145,13 +173,26 @@ impl JsonRpcInterface {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    TermLogger::init(
-        LevelFilter::Debug,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    let args = CliTaud::parse();
+    let matches = CliTaud::into_app().get_matches();
+
+    let config_path = if args.config.is_some() {
+        expand_path(&args.config.unwrap())?
+    } else {
+        join_config_path(&PathBuf::from("taud_config.toml"))?
+    };
+
+    // Spawn config file if it's not in place already.
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
+
+    let verbosity_level = matches.occurrences_of("verbose");
+
+    let (lvl, conf) = log_config(verbosity_level)?;
+
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+
+    let config: TauConfig = Config::<TauConfig>::load(config_path)?;
 
     let ex = Arc::new(Executor::new());
-    smol::block_on(start(ex))
+    smol::block_on(start(config, ex))
 }
