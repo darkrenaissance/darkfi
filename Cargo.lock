@@ -5302,7 +5302,6 @@ dependencies = [
  "async-std",
  "async-trait",
  "darkfi",
- "easy-parallel",
  "futures",
  "log",
  "num_cpus",

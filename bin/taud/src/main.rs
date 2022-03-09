@@ -1,19 +1,20 @@
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
+
 use async_executor::Executor;
 use async_trait::async_trait;
+use log::debug;
+use serde_json::{json, Value};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+
 use darkfi::{
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
     },
     Result,
-};
-use easy_parallel::Parallel;
-use log::debug;
-use serde_json::{json, Value};
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
 };
 
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
@@ -67,19 +68,6 @@ async fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
-    let nthreads = num_cpus::get();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
     let ex = Arc::new(Executor::new());
-    let ex3 = ex.clone();
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex3.clone()).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
+    smol::block_on(start(ex))
 }
