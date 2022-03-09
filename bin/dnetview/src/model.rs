@@ -1,6 +1,9 @@
 use async_std::sync::Mutex;
-use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
+use serde::Deserialize;
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+};
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -54,7 +57,7 @@ impl NodeInfo {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct ManualInfo {
     pub key: u64,
 }
@@ -65,21 +68,31 @@ impl ManualInfo {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct OutboundInfo {
-    // TODO:  make this a socket addr?
+    slots: Vec<Slot>,
+}
+
+impl OutboundInfo {
+    pub fn new(slots: Vec<Slot>) -> OutboundInfo {
+        OutboundInfo { slots }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
+pub struct Slot {
     addr: String,
     channel: Channel,
     state: String,
 }
 
-impl OutboundInfo {
-    pub fn new(addr: String, channel: Channel, state: String) -> OutboundInfo {
-        OutboundInfo { addr, channel, state }
+impl Slot {
+    pub fn new(addr: String, channel: Channel, state: String) -> Slot {
+        Slot { addr, channel, state }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
 pub struct Channel {
     last_msg: String,
     last_status: String,
@@ -91,14 +104,14 @@ impl Channel {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct InboundInfo {
-    connected: SocketAddr,
+    connected: String,
     channel: Channel,
 }
 
 impl InboundInfo {
-    pub fn new(connected: SocketAddr, channel: Channel) -> InboundInfo {
+    pub fn new(connected: String, channel: Channel) -> InboundInfo {
         InboundInfo { connected, channel }
     }
 }

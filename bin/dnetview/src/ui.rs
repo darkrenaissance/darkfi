@@ -1,5 +1,4 @@
-use crate::view::View;
-use crate::DnvConfig;
+use crate::{view::View, DnvConfig};
 
 use tui::{
     backend::Backend,

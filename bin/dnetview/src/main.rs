@@ -19,6 +19,7 @@ use std::{
     fs::File,
     io,
     io::Read,
+    net::SocketAddr,
     path::PathBuf,
 };
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
@@ -30,7 +31,7 @@ use url::Url;
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{IdList, InfoList, NodeInfo},
+    model::{Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo, Slot},
     options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView},
@@ -150,36 +151,60 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         debug!("{:?}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            //let external_addr = reply.as_object().unwrap().get("external_addr");
-            //let session_inbound = reply.as_object().unwrap().get("session_inbound");
-            //let si_key =
-            //    session_inbound.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            let ext_addr_option = reply.as_object().unwrap().get("external_addr");
 
-            //let session_manual = reply.as_object().unwrap().get("session_manual");
-            //let sm_key =
-            //    session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
+            let manual_obj = &reply.as_object().unwrap()["session_manual"];
+            let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
 
-            //let session_outbound = reply.as_object().unwrap().get("session_outbound");
-            //let so_key =
-            //    session_manual.unwrap().as_object().unwrap().get("key").unwrap().as_u64().unwrap();
+            let mut inconnects = Vec::new();
+            let mut manconnects = Vec::new();
+            let mut outconnects = Vec::new();
+            let mut slots = Vec::new();
 
-            //let channel_state = reply.as_object().unwrap().get("state").unwrap().as_str().unwrap();
-            //let slots = reply.as_object().unwrap().get("slots");
+            // parse inbound connection data
+            let inbound_connected = &inbound_obj["connected"];
 
-            //let session_in = Connection::new(si_key.to_string(), channel_state.to_string());
-            //let session_man = Connection::new(sm_key.to_string(), channel_state.to_string());
-            //let session_out = Connection::new(so_key.to_string(), channel_state.to_string());
+            if !inbound_connected.as_object().unwrap().is_empty() {
+                let inbound_connect: InboundInfo =
+                    serde_json::from_value(inbound_connected.clone())?;
+                inconnects.push(inbound_connect);
+            }
 
-            //let mut outconnects = Vec::new();
-            //let mut inconnects = Vec::new();
-            //let mut manconnects = Vec::new();
+            // parse manual connection data
+            let manual_connect: ManualInfo = serde_json::from_value(manual_obj.clone())?;
+            manconnects.push(manual_connect);
 
-            //outconnects.push(session_out);
-            //inconnects.push(session_in);
-            //manconnects.push(session_man);
+            // parse outbound connection data
+            let outbound_slots = &outbound_obj["slots"];
 
-            //let infos =
-            //    NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
+            for slot in outbound_slots.as_array().unwrap() {
+                if slot["channel"].is_null() {
+                    // channel is empty. initialize with empty values
+                    let state = &slot["state"];
+                    let channel = Channel::new(String::new(), String::new());
+                    let new_slot =
+                        Slot::new(String::new(), channel, state.as_str().unwrap().to_string());
+                    slots.push(new_slot)
+                } else {
+                    // channel is not empty. initialize with whole values
+                    let addr = &slot["addr"];
+                    let state = &slot["state"];
+                    let channel: Channel = serde_json::from_value(slot["channel"].clone())?;
+                    let new_slot = Slot::new(
+                        addr.as_str().unwrap().to_string(),
+                        channel,
+                        state.as_str().unwrap().to_string(),
+                    );
+                    slots.push(new_slot)
+                }
+            }
+
+            let oconnect = OutboundInfo::new(slots);
+            outconnects.push(oconnect);
+
+            let infos =
+                NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
 
             //let mut node_info = HashMap::new();
             //// TODO: here we are setting the client url as the ID
