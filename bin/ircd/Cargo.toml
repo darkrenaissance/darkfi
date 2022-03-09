@@ -15,6 +15,7 @@ async-std = "1.10.0"
 async-trait = "0.1.52"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
+easy-parallel = "3.2.0"
 
 # Crypto
 rand = "0.8.4"

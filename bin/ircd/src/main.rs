@@ -1,16 +1,18 @@
+use async_std::io::BufReader;
+use std::{
+    net::{SocketAddr, TcpListener, TcpStream},
+    sync::Arc,
+};
+
 extern crate clap;
 use async_executor::Executor;
-use async_std::io::BufReader;
 use async_trait::async_trait;
+use easy_parallel::Parallel;
 use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::Async;
-use std::{
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::Arc,
-};
 
 use darkfi::{
     net,
@@ -236,5 +238,23 @@ fn main() -> Result<()> {
     TermLogger::init(lvl, cfg, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
-    smol::block_on(ex.run(start(ex.clone(), options)))
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let ex2 = ex.clone();
+
+    // let nthreads = num_cpus::get();
+    // debug!(target: "IRC DAEMON", "Run {} executor threads", nthreads);
+
+    let (_, result) = Parallel::new()
+        .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        // Run the main future on the current thread.
+        .finish(|| {
+            smol::future::block_on(async move {
+                start(ex2.clone(), options).await?;
+                drop(signal);
+                Ok::<(), darkfi::Error>(())
+            })
+        });
+
+    result
 }

@@ -2653,6 +2653,7 @@ dependencies = [
  "async-trait",
  "clap 3.0.7",
  "darkfi",
+ "easy-parallel",
  "futures",
  "log",
  "rand 0.8.5",
