@@ -25,3 +25,4 @@ simplelog = "0.11.2"
 
 # Encoding and parsing
 serde_json = "1.0.74"
+serde = {version = "1.0.133", features = ["derive"]}

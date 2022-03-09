@@ -5305,6 +5305,7 @@ dependencies = [
  "futures",
  "log",
  "num_cpus",
+ "serde",
  "serde_json",
  "simplelog",
  "smol",

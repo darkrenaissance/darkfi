@@ -1,11 +1,13 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
     sync::Arc,
 };
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 
@@ -17,8 +19,91 @@ use darkfi::{
     Result,
 };
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Timestamp {
+    //XXX change this
+    time: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Config {
+    path: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Settings {
+    config: Config,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TaskEvent {
+    action: String,
+    timestamp: Timestamp,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Comment {
+    content: String,
+    author: String,
+    timestamp: Timestamp,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TaskInfo {
+    ref_id: String,
+    id: u32,
+    title: String,
+    desc: String,
+    assign: String,
+    project: String,
+    due: Timestamp,
+    rank: u32,
+    created_at: Timestamp,
+    events: Vec<TaskEvent>,
+    comments: Vec<Comment>,
+    settings: Settings,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct MonthTasks {
+    created_at: Timestamp,
+    settings: Settings,
+    task_tks: Vec<TaskInfo>,
+}
+
+impl TaskInfo {
+    pub fn new(
+        ref_id: String,
+        id: u32,
+        title: String,
+        desc: String,
+        assign: String,
+        project: String,
+        due: Timestamp,
+        rank: u32,
+        created_at: Timestamp,
+        settings: Settings,
+    ) -> Self {
+        Self {
+            ref_id,
+            id,
+            title,
+            desc,
+            assign,
+            project,
+            due,
+            rank,
+            created_at,
+            comments: vec![],
+            events: vec![],
+            settings,
+        }
+    }
+}
+
 async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
     let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7777);
+
     let server_config = RpcServerConfig {
         socket_addr: rpc_addr,
         use_tls: false,
@@ -29,8 +114,7 @@ async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
 
     let rpc_interface = Arc::new(JsonRpcInterface {});
 
-    listen_and_serve(server_config, rpc_interface, executor).await?;
-    Ok(())
+    listen_and_serve(server_config, rpc_interface, executor).await
 }
 
 struct JsonRpcInterface {}
