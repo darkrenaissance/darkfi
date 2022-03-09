@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use super::vote::Vote;
 
-use darkfi::tx::Transaction;
+use darkfi::{tx::Transaction, util::serial::Encodable};
 
 /// This struct represents a tuple of the form (h, e, txs).
 /// Each blocks parent hash h may be computed simply as a hash of the parent block.
@@ -27,8 +27,14 @@ impl Block {
         Block { h, e, txs, votes: Vec::new(), notarized: false, finalized: false }
     }
 
-    pub fn signature_encode(&self) -> String {
-        format!("{:?}{:?}{:?}", self.h, self.e, self.txs)
+    pub fn signature_encode(&self) -> Vec<u8> {
+        let mut encoded_block = Vec::new();
+        let mut len = 0;
+        len += self.h.encode(&mut encoded_block).unwrap();
+        len += self.e.encode(&mut encoded_block).unwrap();
+        len += self.txs.encode(&mut encoded_block).unwrap();
+        assert_eq!(len, encoded_block.len());
+        encoded_block
     }
 }
 

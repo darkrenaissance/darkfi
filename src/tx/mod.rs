@@ -299,3 +299,4 @@ impl_vec_without_signature!(TransactionInput);
 impl_vec!(TransactionClearInput);
 impl_vec!(TransactionInput);
 impl_vec!(TransactionOutput);
+impl_vec!(Transaction);

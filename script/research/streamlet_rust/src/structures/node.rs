@@ -145,7 +145,7 @@ impl Node {
         let unproposed_transactions = self.get_unproposed_transactions();
         let proposed_block =
             Block::new(hasher.finish().to_string(), epoch, unproposed_transactions);
-        let signed_block = self.secret_key.sign(proposed_block.signature_encode().as_bytes());
+        let signed_block = self.secret_key.sign(&proposed_block.signature_encode());
         (self.public_key, Vote::new(signed_block, proposed_block, self.id))
     }
 
@@ -158,10 +158,8 @@ impl Node {
         nodes_count: u64,
     ) -> Option<Vote> {
         assert!(self.get_epoch_leader(nodes_count) == proposed_block_vote.id);
-        assert!(leader_public_key.verify(
-            proposed_block_vote.block.signature_encode().as_bytes(),
-            &proposed_block_vote.vote
-        ));
+        assert!(leader_public_key
+            .verify(&proposed_block_vote.block.signature_encode(), &proposed_block_vote.vote));
         self.vote_block(&proposed_block_vote.block)
     }
 
@@ -182,7 +180,7 @@ impl Node {
 
         if self.extends_notarized_blockchain(blockchain) {
             let block_copy = block.clone();
-            let signed_block = self.secret_key.sign(block_copy.signature_encode().as_bytes());
+            let signed_block = self.secret_key.sign(&block_copy.signature_encode());
             return Some(Vote::new(signed_block, block_copy, self.id))
         }
         None
@@ -240,7 +238,7 @@ impl Node {
     /// Finally, we check if the notarization of the block can finalize parent blocks
     ///	in its blockchain.
     pub fn receive_vote(&mut self, node_public_key: &PublicKey, vote: &Vote, nodes_count: usize) {
-        assert!(node_public_key.verify(vote.block.signature_encode().as_bytes(), &vote.vote));
+        assert!(node_public_key.verify(&vote.block.signature_encode(), &vote.vote));
         let vote_block = self.find_block(&vote.block);
         if vote_block == None {
             panic!("Received vote for unknown block.");
