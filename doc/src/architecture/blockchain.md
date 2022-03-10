@@ -41,13 +41,11 @@ $$T_{i} = 2^{l_{VRF}}\phi_{f}(\alpha_i^j)$$
 note that $\phi_f(1)=f$, \textbf{f}: the active slot coefficient is the probability that a party holding all the stake will be selected to be a leader.
 stakeholder is selected as leader for slot j with probability $\phi_f(\alpha_i)$, $\alpha_i$ is $U_i$ stake.
 
-## beacon
-built on top of globally synchronized clock, that leaks the nonce $\eta$ of the next epoch a head of time (thus called leaky).
-$\eta_j$ for epoch $e_j$, is the hash of the last epoch $e_i$ block's VRF y that lasted 24k slots, up to the middle 8k block, note that k is a persistence security parameter,used to set the clock.
-$$ \eta_j = hash(B_{iR}.B_{\pi}.y|| \dots ||B_{iR+\frac{R}{2}+4}.B_{\pi}.y) $$
-$$\small\text{\emph{R is the epoch length}}$$
-
-
+## leaky non-resettable beacon
+built on top of globally synchronized clock, that leaks the nonce $\eta$ of the next epoch a head of time (thus called leaky), non-resettable in the sense that the random nonce is deterministic at slot s, while assuring security against adversary controlling some stakeholders.
+for an epoch j, the nonce $\eta_j$ is calculated by hash function H, as:
+$$\eta_j = H(\eta_{j-1}||j||v)$$
+v is the  concatentation of the value $\rho$ in all blocks from the beginning of epoch $e_{i-1}$ to the slot with timestamp up to $(j-2)R + \frac{16k}{1+\epsilon}$, note that k is a persistence security parameter, R is the epoch length in terms of slots.
 
 
 # Protocol
