@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
-                render(&mut terminal, model.clone(), config).await?;
+                render(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
@@ -232,11 +232,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
     }
 }
 
-async fn render<B: Backend>(
-    terminal: &mut Terminal<B>,
-    model: Arc<Model>,
-    config: DnvConfig,
-) -> io::Result<()> {
+async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -251,7 +247,7 @@ async fn render<B: Backend>(
     loop {
         view.update(model.info_list.infos.lock().await.clone());
         terminal.draw(|f| {
-            ui::ui(f, view.clone(), &config);
+            ui::ui(f, view.clone());
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
