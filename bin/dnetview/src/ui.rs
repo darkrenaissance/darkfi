@@ -163,7 +163,7 @@ fn render_inbound<B: Backend>(view: View, f: &mut Frame<'_, B>, length: usize) -
     f.render_widget(info_graph, info_slice[0]);
     f.render_widget(title_graph, title_slice[0]);
 
-    return inbound_info.len() + title.len() + length + 2;
+    return inbound_info.len() + title.len() + length + 2
 }
 
 fn render_outbound<B: Backend>(view: View, f: &mut Frame<'_, B>) -> usize {
@@ -223,7 +223,7 @@ fn render_outbound<B: Backend>(view: View, f: &mut Frame<'_, B>) -> usize {
     f.render_widget(title_graph, title_slice[0]);
 
     let out_len = slots.len() + title.len();
-    return out_len;
+    return out_len
 }
 
 fn render_info_right<B: Backend>(

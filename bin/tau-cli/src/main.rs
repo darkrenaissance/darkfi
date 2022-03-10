@@ -19,13 +19,13 @@ pub enum CliTauSubCommands {
         #[clap(long)]
         desc: String,
         #[clap(short, long)]
-        assign: String,
+        assign: Option<String>,
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
         #[clap(short, long)]
-        due: String,
+        due: Option<String>,
         #[clap(short, long)]
-        rank: u64,
+        rank: Option<u64>,
     },
 }
 
@@ -44,64 +44,52 @@ pub struct CliTau {
     pub command: Option<CliTauSubCommands>,
 }
 
-pub struct Client {
-    url: String,
-}
+async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
+    let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&url)?, json!(r), None).await {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
 
-impl Client {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
+    match reply {
+        JsonResult::Resp(r) => {
+            debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
+            Ok(r.result)
+        }
 
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult =
-            match jsonrpc::send_request(&Url::parse(&self.url)?, json!(r), None).await {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
+        JsonResult::Err(e) => {
+            debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
+            Err(Error::JsonRpcError(e.error.message.to_string()))
+        }
 
-        match reply {
-            JsonResult::Resp(r) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
-                Ok(r.result)
-            }
-
-            JsonResult::Err(e) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
-            }
-
-            JsonResult::Notif(n) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
-            }
+        JsonResult::Notif(n) => {
+            debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
+            Err(Error::JsonRpcError("Unexpected reply".to_string()))
         }
     }
+}
 
-    // Add new task and returns `true` upon success.
-    // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn add(
-        &self,
-        title: &str,
-        desc: &str,
-        assign: &str,
-        project: &str,
-        due: &str,
-        rank: u64,
-    ) -> Result<Value> {
-        let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
-        Ok(self.request(req).await?)
-    }
+// Add new task and returns `true` upon success.
+// --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+async fn add(
+    url: String,
+    title: String,
+    desc: String,
+    assign: Option<String>,
+    project: Option<String>,
+    due: Option<String>,
+    rank: Option<u64>,
+) -> Result<Value> {
+    let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
+    Ok(request(req, url).await?)
 }
 
 async fn start(options: CliTau) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:8875";
-    let client = Client::new(rpc_addr.to_string());
     if let Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) =
         options.command
     {
-        client.add(&title, &desc, &assign, &project, &due, rank).await?;
+        add(rpc_addr.to_string(), title.clone(), desc, assign, project, due, rank).await?;
         println!("Added task: {}", title);
         return Ok(())
     }
