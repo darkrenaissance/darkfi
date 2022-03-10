@@ -263,5 +263,5 @@ async fn main() -> Result<()> {
     let config: TauConfig = Config::<TauConfig>::load(config_path)?;
 
     let ex = Arc::new(Executor::new());
-    smol::block_on(start(config, ex))
+    smol::block_on(ex.run(start(config, ex.clone())))
 }
