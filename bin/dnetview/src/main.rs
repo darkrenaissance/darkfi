@@ -151,8 +151,10 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         debug!("{:?}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+            // TODO: clean up this section into seperate functions.
+            // TODO: replace if/else with match where possible
+            // TODO: test than all of these unwraps will never ever crash
             let ext_addr_option = reply.as_object().unwrap().get("external_addr");
-
             let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
             let manual_obj = &reply.as_object().unwrap()["session_manual"];
             let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
@@ -164,7 +166,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
 
             // parse inbound connection data
             let inbound_connected = &inbound_obj["connected"];
-
             if !inbound_connected.as_object().unwrap().is_empty() {
                 let inbound_connect: InboundInfo =
                     serde_json::from_value(inbound_connected.clone())?;
@@ -177,7 +178,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
 
             // parse outbound connection data
             let outbound_slots = &outbound_obj["slots"];
-
             for slot in outbound_slots.as_array().unwrap() {
                 if slot["channel"].is_null() {
                     // channel is empty. initialize with empty values
@@ -199,21 +199,31 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     slots.push(new_slot)
                 }
             }
-
             let oconnect = OutboundInfo::new(slots);
             outconnects.push(oconnect);
 
             let infos =
                 NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
+            let mut node_info = HashMap::new();
 
-            //let mut node_info = HashMap::new();
-            //// TODO: here we are setting the client url as the ID
-            //node_info.insert(client.url.clone(), infos);
+            // TODO: if the external_addr is empty, we set the display address as the rpc url.
+            // however we need to add a 'name' param to the config file to display instead
+            match ext_addr_option {
+                Some(addr) => {
+                    debug!("{:?}", addr);
+                    let external_addr = addr.as_str().unwrap();
+                    node_info.insert(external_addr, infos);
+                }
+                _ => {
+                    let external_addr = &client.url;
+                    node_info.insert(external_addr.as_str(), infos);
+                }
+            }
 
-            //for (si_key, value) in node_info.clone() {
-            //    model.id_list.node_id.lock().await.insert(si_key.to_string().clone());
-            //    model.info_list.infos.lock().await.insert(si_key.to_string(), value);
-            //}
+            for (key, value) in node_info.clone() {
+                model.id_list.node_id.lock().await.insert(key.to_string().clone());
+                model.info_list.infos.lock().await.insert(key.to_string(), value);
+            }
         } else {
             // TODO: error handling
             debug!("Reply is empty");
