@@ -82,7 +82,7 @@ This section gives further details about the structures that will be used by the
  \hline
  Field & Type & Description \\ [0.5ex] 
  \hline\hline
- om & Euroboros\_Metadata & Block information used by Ouroboros consensus. \\ 
+ om & Ouroboros\_Metadata & Block information used by Ouroboros consensus. \\ 
  \hline
  sm & Streamlet\_Metadata & Block information used by Streamlet consenus. \\
  \hline
@@ -90,7 +90,7 @@ This section gives further details about the structures that will be used by the
  \hline
 \end{tabular}
 
-## Euroboros\_Metadata
+## Ouroboros\_Metadata
 \begin{tabular}{||c c c||} 
  \hline
  Field & Type & Description \\ [0.5ex] 
