@@ -70,7 +70,7 @@ impl ManualInfo {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct OutboundInfo {
-    slots: Vec<Slot>,
+    pub slots: Vec<Slot>,
 }
 
 impl OutboundInfo {
@@ -81,9 +81,9 @@ impl OutboundInfo {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct Slot {
-    addr: String,
-    channel: Channel,
-    state: String,
+    pub addr: String,
+    pub channel: Channel,
+    pub state: String,
 }
 
 impl Slot {
@@ -94,8 +94,8 @@ impl Slot {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
 pub struct Channel {
-    last_msg: String,
-    last_status: String,
+    pub last_msg: String,
+    pub last_status: String,
 }
 
 impl Channel {
@@ -106,8 +106,8 @@ impl Channel {
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct InboundInfo {
-    connected: String,
-    channel: Channel,
+    pub connected: String,
+    pub channel: Channel,
 }
 
 impl InboundInfo {
