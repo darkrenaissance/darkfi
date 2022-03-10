@@ -1,4 +1,4 @@
-use clap::{IntoApp, Parser};
+use clap::{AppSettings, IntoApp, Parser, Subcommand};
 use log::{debug, error};
 
 use darkfi::{
@@ -10,37 +10,38 @@ use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
+#[derive(Subcommand)]
+pub enum CliTauSubCommands {
+    /// Add a new task
+    Add {
+        #[clap(short, long)]
+        title: String,
+        #[clap(long)]
+        desc: String,
+        #[clap(short, long)]
+        assign: String,
+        #[clap(short, long)]
+        project: String,
+        #[clap(short, long)]
+        due: String,
+        #[clap(short, long)]
+        rank: u64,
+    },
+}
+
 /// Tau cli
 #[derive(Parser)]
 #[clap(name = "tau")]
+#[clap(author, version, about)]
+#[clap(global_setting(AppSettings::PropagateVersion))]
+#[clap(global_setting(AppSettings::UseLongFormatForHelpSubcommand))]
+#[clap(setting(AppSettings::SubcommandRequiredElseHelp))]
 pub struct CliTau {
-    /// Add a new task
-    #[clap(long)]
-    pub add: Option<String>,
-    /// list open tasks
-    #[clap(long)]
-    pub list: Option<String>,
-    /// Show task by ID
-    #[clap(long)]
-    pub show: Option<u32>,
-    /// Start task by ID
-    #[clap(long)]
-    pub start: Option<u32>,
-    /// Pause task by ID
-    #[clap(long)]
-    pub pause: Option<u32>,
-    /// Stop task by ID
-    #[clap(long)]
-    pub stop: Option<u32>,
-    /// Comment on task by ID
-    #[clap(long)]
-    pub comment: Option<u32>,
-    /// Log drawdown
-    #[clap(long)]
-    pub log: Option<String>,
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
+    #[clap(subcommand)]
+    pub command: Option<CliTauSubCommands>,
 }
 
 pub struct Client {
@@ -77,20 +78,31 @@ impl Client {
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "cmd_add", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "params", "id": 42}
-    async fn cmd_add(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("cmd_add"), json!([]));
+    // Add new task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn add(
+        &self,
+        title: &str,
+        desc: &str,
+        assign: &str,
+        project: &str,
+        due: &str,
+        rank: u64,
+    ) -> Result<Value> {
+        let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
         Ok(self.request(req).await?)
     }
 }
 
 async fn start(options: CliTau) -> Result<()> {
-    let rpc_addr = "tcp://127.0.0.1:7777";
+    let rpc_addr = "tcp://127.0.0.1:8875";
     let client = Client::new(rpc_addr.to_string());
-    if options.add.is_some() {
-        let reply = client.cmd_add().await?;
-        println!("Server replied: {}", &reply.to_string());
+    if let Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) =
+        options.command
+    {
+        client.add(&title, &desc, &assign, &project, &due, rank).await?;
+        println!("Added task: {}", title);
         return Ok(())
     }
     error!("Please run 'tau help' to see usage.");
