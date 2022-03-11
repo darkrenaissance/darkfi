@@ -1,4 +1,9 @@
-use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
+use std::{
+    fs::{create_dir_all, File},
+    io::BufReader,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -6,7 +11,7 @@ use chrono::{TimeZone, Utc};
 use clap::{IntoApp, Parser};
 use log::debug;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
@@ -49,7 +54,21 @@ fn find_free_id(tasks_ids: &Vec<u32>) -> u32 {
     1
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+fn load<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let value: T = serde_json::from_reader(reader)?;
+    Ok(value)
+}
+
+fn save<T: Serialize>(path: &PathBuf, value: &T) -> Result<()> {
+    let file = File::create(path)?;
+    serde_json::to_writer_pretty(file, value)?;
+    Ok(())
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct Timestamp(String);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -67,13 +86,19 @@ struct Settings {
     dataset_path: PathBuf,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+impl Default for Settings {
+    fn default() -> Self {
+        Self { dataset_path: PathBuf::from("") }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct TaskEvent {
     action: String,
     timestamp: Timestamp,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct Comment {
     content: String,
     author: String,
@@ -83,11 +108,42 @@ struct Comment {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct MonthTasks {
     created_at: Timestamp,
+    #[serde(skip_serializing, skip_deserializing)]
     settings: Settings,
-    task_tks: Vec<TaskInfo>,
+    task_tks: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+impl MonthTasks {
+    fn add(&mut self, tk_hash: &str) {
+        self.task_tks.push(tk_hash.into());
+    }
+
+    fn objects(&self) -> Result<Vec<TaskInfo>> {
+        let mut tks: Vec<TaskInfo> = vec![];
+
+        for tk_hash in self.task_tks.iter() {
+            tks.push(TaskInfo::load(&tk_hash, &self.settings)?);
+        }
+
+        Ok(tks)
+    }
+
+    fn remove(&mut self, tk_hash: &str) {
+        if let Some(index) = self.task_tks.iter().position(|t| *t == tk_hash) {
+            self.task_tks.remove(index);
+        }
+    }
+
+    fn load(date: Timestamp, settings: Settings) -> Result<Timestamp> {
+        Ok(Timestamp(Utc::now().to_string()))
+    }
+
+    fn load_or_create(date: Timestamp, settings: Settings) -> Result<Timestamp> {
+        Ok(Timestamp(Utc::now().to_string()))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct TaskInfo {
     ref_id: String,
     id: u32,
@@ -103,7 +159,7 @@ struct TaskInfo {
 }
 
 impl TaskInfo {
-    pub fn new(title: String, desc: String, due: Option<Timestamp>, rank: u32) -> Self {
+    pub fn new(title: &str, desc: &str, due: Option<Timestamp>, rank: u32) -> Self {
         // TODO
         // check due date
 
@@ -119,8 +175,8 @@ impl TaskInfo {
         Self {
             ref_id,
             id,
-            title,
-            desc,
+            title: title.into(),
+            desc: desc.into(),
             assign: vec![],
             project: vec![],
             due,
@@ -139,7 +195,11 @@ impl TaskInfo {
         self.project.push(p);
     }
 
-    fn save(&self) -> Result<()> {
+    fn load(tk_hash: &str, settings: &Settings) -> Result<TaskInfo> {
+        Ok(TaskInfo::new("test", "test", None, 0))
+    }
+
+    fn save(&self, settings: &Settings) -> Result<()> {
         Ok(())
     }
 }
@@ -213,7 +273,7 @@ impl JsonRpcInterface {
                     None
                 };
 
-                task = TaskInfo::new(title.to_string(), desc.to_string(), due, rank as u32);
+                task = TaskInfo::new(title, desc, due, rank as u32);
             }
             (None, _, _) => {
                 return JsonResult::Err(jsonerr(InvalidParams, Some("invalid title".into()), id))
@@ -240,7 +300,7 @@ impl JsonRpcInterface {
             }
         }
 
-        match task.save() {
+        match task.save(&self.settings) {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
         }
@@ -277,6 +337,12 @@ async fn main() -> Result<()> {
 mod tests {
     use super::*;
 
+    impl PartialEq for MonthTasks {
+        fn eq(&self, other: &Self) -> bool {
+            self.created_at == other.created_at && self.task_tks == other.task_tks
+        }
+    }
+
     #[test]
     fn find_free_id_test() -> Result<()> {
         let mut ids: Vec<u32> = vec![1, 3, 8, 9, 10, 3];
@@ -294,6 +360,59 @@ mod tests {
         assert_eq!(find_free_id(&ids_empty), 1);
 
         assert_eq!(find_free_id(&ids_duplicate), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn load_and_save_data() -> Result<()> {
+        let path = PathBuf::from("/tmp/test_tau_data");
+
+        // mkdir dataset_path if not exists
+        create_dir_all(path.join("month"))?;
+        create_dir_all(path.join("task"))?;
+
+        // test with MonthTasks
+        ///////////////////////
+        let mt_path = path.join("month");
+        let mt_path = mt_path.join("022");
+
+        let settings = Settings { dataset_path: path.clone() };
+        let task_tks = vec![];
+        let created_at = Timestamp(Utc::now().to_string());
+
+        let mut mt = MonthTasks { created_at, task_tks, settings };
+
+        save::<MonthTasks>(&mt_path, &mt)?;
+
+        let mt_load = load::<MonthTasks>(&mt_path)?;
+        assert_eq!(mt, mt_load);
+
+        mt.add("test_hash");
+
+        save::<MonthTasks>(&mt_path, &mt)?;
+
+        let mt_load = load::<MonthTasks>(&mt_path)?;
+        assert_eq!(mt, mt_load);
+
+        // test with TaskInfo
+        ///////////////////////
+        let t_path = path.join("task");
+        let t_path = t_path.join("test_hash");
+
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0);
+
+        save::<TaskInfo>(&t_path, &task)?;
+
+        let t_load = load::<TaskInfo>(&t_path)?;
+        assert_eq!(task, t_load);
+
+        task.title = "test_title_2".into();
+
+        save::<TaskInfo>(&t_path, &task)?;
+
+        let t_load = load::<TaskInfo>(&t_path)?;
+        assert_eq!(task, t_load);
 
         Ok(())
     }
