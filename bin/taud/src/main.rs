@@ -40,6 +40,15 @@ fn random_ref_id() -> String {
     thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
 }
 
+fn find_free_id(tasks_ids: &Vec<u32>) -> u32 {
+    for i in 1.. {
+        if !tasks_ids.contains(&i) {
+            return i
+        }
+    }
+    1
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Timestamp(String);
 
@@ -187,13 +196,11 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn add(&self, id: Value, params: Value) -> JsonResult {
-        let args = params.as_array();
+        let args = params.as_array().unwrap();
 
-        if args.is_none() && args.unwrap().len() != 6 {
+        if args.len() != 6 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
-
-        let args = args.unwrap();
 
         let mut task: TaskInfo;
 
@@ -264,4 +271,30 @@ async fn main() -> Result<()> {
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(config, ex.clone())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_free_id_test() -> Result<()> {
+        let mut ids: Vec<u32> = vec![1, 3, 8, 9, 10, 3];
+        let ids_empty: Vec<u32> = vec![];
+        let ids_duplicate: Vec<u32> = vec![1; 100];
+
+        let find_id = find_free_id(&ids);
+
+        assert_eq!(find_id, 2);
+
+        ids.push(find_id);
+
+        assert_eq!(find_free_id(&ids), 4);
+
+        assert_eq!(find_free_id(&ids_empty), 1);
+
+        assert_eq!(find_free_id(&ids_duplicate), 2);
+
+        Ok(())
+    }
 }
