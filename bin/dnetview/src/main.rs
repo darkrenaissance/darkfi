@@ -206,14 +206,19 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
             let mut node_info = HashMap::new();
 
-            // TODO: if the external_addr is empty, we set the display address as the rpc url.
-            // however we need to add a 'name' param to the config file to display instead
+            // RPC either returns an external addr or a Null value.
             match ext_addr_option {
                 Some(addr) => {
                     debug!("{:?}", addr);
-                    let external_addr = addr.as_str().unwrap();
-                    node_info.insert(external_addr, infos);
+                    if addr.is_null() {
+                        let external_addr = "Null";
+                        node_info.insert(external_addr, infos.clone());
+                    } else {
+                        let external_addr = addr.as_str().unwrap();
+                        node_info.insert(external_addr, infos.clone());
+                    }
                 }
+                // TODO: this condition is never met.
                 _ => {
                     let external_addr = &client.url;
                     node_info.insert(external_addr.as_str(), infos);
@@ -253,7 +258,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
