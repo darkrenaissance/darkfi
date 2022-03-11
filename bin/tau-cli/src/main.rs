@@ -26,9 +26,9 @@ pub enum CliTauSubCommands {
         #[clap(long)]
         desc: Option<String>,
         #[clap(short, long)]
-        assign: Option<String>,
+        assign: Option<Vec<String>>,
         #[clap(short, long)]
-        project: Option<String>,
+        project: Option<Vec<String>>,
         #[clap(short, long)]
         due: Option<String>,
         #[clap(short, long)]
@@ -82,8 +82,8 @@ async fn add(
     url: String,
     title: Option<String>,
     desc: Option<String>,
-    assign: Option<String>,
-    project: Option<String>,
+    assign: Option<Vec<String>>,
+    project: Option<Vec<String>>,
     due: Option<String>,
     rank: Option<u32>,
 ) -> Result<Value> {
