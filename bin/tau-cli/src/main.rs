@@ -1,6 +1,12 @@
 use clap::{AppSettings, IntoApp, Parser, Subcommand};
 use log::{debug, error};
 
+use std::{
+    env::{temp_dir, var},
+    fs::{self, File},
+    io::{Read, Write},
+};
+
 use darkfi::{
     rpc::jsonrpc::{self, JsonResult},
     util::cli::log_config,
@@ -8,6 +14,7 @@ use darkfi::{
 };
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use std::{io, process::Command};
 use url::Url;
 
 #[derive(Subcommand)]
@@ -15,9 +22,9 @@ pub enum CliTauSubCommands {
     /// Add a new task
     Add {
         #[clap(short, long)]
-        title: String,
+        title: Option<String>,
         #[clap(long)]
-        desc: String,
+        desc: Option<String>,
         #[clap(short, long)]
         assign: Option<String>,
         #[clap(short, long)]
@@ -25,7 +32,7 @@ pub enum CliTauSubCommands {
         #[clap(short, long)]
         due: Option<String>,
         #[clap(short, long)]
-        rank: Option<u64>,
+        rank: Option<u32>,
     },
 }
 
@@ -73,12 +80,12 @@ async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn add(
     url: String,
-    title: String,
-    desc: String,
+    title: Option<String>,
+    desc: Option<String>,
     assign: Option<String>,
     project: Option<String>,
     due: Option<String>,
-    rank: Option<u64>,
+    rank: Option<u32>,
 ) -> Result<Value> {
     let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
     Ok(request(req, url).await?)
@@ -89,8 +96,50 @@ async fn start(options: CliTau) -> Result<()> {
     if let Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) =
         options.command
     {
-        add(rpc_addr.to_string(), title.clone(), desc, assign, project, due, rank).await?;
-        println!("Added task: {}", title);
+        let t = if title.is_none() {
+            print!("Title: ");
+            io::stdout().flush().unwrap();
+            let mut t = String::new();
+            io::stdin().read_line(&mut t)?;
+            if &t[(t.len() - 1)..] == "\n" {
+                t.pop();
+            }
+            Some(t)
+        } else {
+            title
+        };
+
+        let des = if desc.is_none() {
+            let editor = var("EDITOR").unwrap();
+            let mut file_path = temp_dir();
+            file_path.push("temp_file");
+            File::create(&file_path)?;
+            fs::write(
+                &file_path,
+                "\n# Write task description above this line\n# These lines will be removed\n",
+            )?;
+
+            Command::new(editor).arg(&file_path).status()?;
+
+            let mut lines = String::new();
+            File::open(file_path)?.read_to_string(&mut lines)?;
+
+            let mut description = String::new();
+            for line in lines.split('\n') {
+                if !line.starts_with('#') {
+                    description.push_str(line)
+                }
+            }
+
+            Some(description)
+        } else {
+            desc
+        };
+
+        let r = if rank.is_none() { Some(0) } else { rank };
+
+        add(rpc_addr.to_string(), t, des, assign, project, due, r).await?;
+        //println!("Added task: {:#?}", t);
         return Ok(())
     }
     error!("Please run 'tau help' to see usage.");
