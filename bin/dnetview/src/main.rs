@@ -54,7 +54,7 @@ impl Map {
 
         match reply {
             JsonResult::Resp(r) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
+                //debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
                 Ok(r.result)
             }
 
@@ -144,36 +144,54 @@ async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 }
 
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
-    debug!("Attemping to poll: {}", client.url);
+    // TODO: clean up into seperate functions.
+    // TODO: replace if/else with match where possible
+    // TODO: test unwraps will never ever crash
+    //debug!("Attemping to poll: {}", client.url);
     loop {
         let reply = client.get_info().await?;
-        debug!("{:?}", reply);
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            // TODO: clean up this section into seperate functions.
-            // TODO: replace if/else with match where possible
-            // TODO: test than all of these unwraps will never ever crash
-            let ext_addr_option = reply.as_object().unwrap().get("external_addr");
+            // TODO: we are ignoring this value for now
+            let _ext_addr = reply.as_object().unwrap().get("external_addr");
+
             let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
             let manual_obj = &reply.as_object().unwrap()["session_manual"];
             let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
 
-            let mut inconnects = Vec::new();
-            let mut manconnects = Vec::new();
-            let mut outconnects = Vec::new();
+            let mut iconnects = Vec::new();
+            let mut mconnects = Vec::new();
+            let mut oconnects = Vec::new();
             let mut slots = Vec::new();
 
             // parse inbound connection data
-            let inbound_connected = &inbound_obj["connected"];
-            if !inbound_connected.as_object().unwrap().is_empty() {
-                let inbound_connect: InboundInfo =
-                    serde_json::from_value(inbound_connected.clone())?;
-                inconnects.push(inbound_connect);
+            let i_connected = &inbound_obj["connected"];
+            if i_connected.as_object().unwrap().is_empty() {
+                // channel is empty. initialize with empty values
+                let connected = "Null".to_string();
+                let msg = "Null".to_string();
+                let status = "Null".to_string();
+                let channel = Channel::new(msg, status);
+                let iinfo = InboundInfo::new(connected, channel);
+                iconnects.push(iinfo);
+            } else {
+                // channel is not empty. initialize with whole values
+                let ic = i_connected.as_object().unwrap();
+                for k in ic.keys() {
+                    let addr = k.to_string();
+                    for v in ic.values() {
+                        let msg = v.get("last_msg").unwrap().to_string();
+                        let status = v.get("last_status").unwrap().to_string();
+                        let channel = Channel::new(msg, status);
+                        let iinfo = InboundInfo::new(addr.clone(), channel);
+                        iconnects.push(iinfo);
+                    }
+                }
             }
 
             // parse manual connection data
-            let manual_connect: ManualInfo = serde_json::from_value(manual_obj.clone())?;
-            manconnects.push(manual_connect);
+            let minfo: ManualInfo = serde_json::from_value(manual_obj.clone())?;
+            mconnects.push(minfo);
 
             // parse outbound connection data
             let outbound_slots = &outbound_obj["slots"];
@@ -198,31 +216,16 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     slots.push(new_slot)
                 }
             }
-            let oconnect = OutboundInfo::new(slots);
-            outconnects.push(oconnect);
+            let oinfo = OutboundInfo::new(slots);
+            oconnects.push(oinfo);
 
-            let infos =
-                NodeInfo { outbound: outconnects, manual: manconnects, inbound: inconnects };
+            let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = HashMap::new();
 
-            // RPC either returns an external addr or a Null value.
-            match ext_addr_option {
-                Some(addr) => {
-                    debug!("{:?}", addr);
-                    if addr.is_null() {
-                        let external_addr = "Null";
-                        node_info.insert(external_addr, infos.clone());
-                    } else {
-                        let external_addr = addr.as_str().unwrap();
-                        node_info.insert(external_addr, infos.clone());
-                    }
-                }
-                // TODO: this condition is never met.
-                _ => {
-                    let external_addr = &client.url;
-                    node_info.insert(external_addr.as_str(), infos);
-                }
-            }
+            // TODO: here we are setting the RPC url as the node_id.
+            // next step is to read the string variable 'name' from dnetview.toml
+            let node_id = &client.url.as_str();
+            node_info.insert(&node_id, infos.clone());
 
             for (key, value) in node_info.clone() {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
@@ -257,7 +260,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
             match k.unwrap() {
                 Key::Char('q') => {
                     terminal.clear()?;
-                    return Ok(())
+                    return Ok(());
                 }
                 Key::Char('j') => {
                     view.id_list.next();
