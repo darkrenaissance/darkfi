@@ -1,3 +1,4 @@
+use chrono::{Datelike, Local, NaiveDate};
 use clap::{AppSettings, IntoApp, Parser, Subcommand};
 use log::{debug, error};
 
@@ -21,16 +22,22 @@ use url::Url;
 pub enum CliTauSubCommands {
     /// Add a new task
     Add {
+        /// Specify task title
         #[clap(short, long)]
         title: Option<String>,
+        /// Specify task description
         #[clap(long)]
         desc: Option<String>,
+        /// Assign task to user
         #[clap(short, long)]
         assign: Option<Vec<String>>,
+        /// Task project (can be hierarchical: crypto.zk)
         #[clap(short, long)]
         project: Option<Vec<String>>,
+        /// Due date in DDMM format: "2202" for 22 Feb
         #[clap(short, long)]
-        due: Option<String>,
+        due: Option<u64>,
+        /// Project rank
         #[clap(short, long)]
         rank: Option<u32>,
     },
@@ -84,7 +91,7 @@ async fn add(
     desc: Option<String>,
     assign: Option<Vec<String>>,
     project: Option<Vec<String>>,
-    due: Option<String>,
+    due: Option<u64>,
     rank: Option<u32>,
 ) -> Result<Value> {
     let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
@@ -98,7 +105,7 @@ async fn start(options: CliTau) -> Result<()> {
     {
         let t = if title.is_none() {
             print!("Title: ");
-            io::stdout().flush().unwrap();
+            io::stdout().flush()?;
             let mut t = String::new();
             io::stdin().read_line(&mut t)?;
             if &t[(t.len() - 1)..] == "\n" {
@@ -136,9 +143,28 @@ async fn start(options: CliTau) -> Result<()> {
             desc
         };
 
+        let d = if due.is_some() {
+            let du = due.unwrap().to_string();
+            assert!(du.len() == 4);
+            let (day, month) = (du[..2].parse::<u32>()?, du[2..].parse::<u32>()?);
+            let mut year = Local::today().year();
+            if month < Local::today().month() {
+                year += 1;
+            }
+            if month == Local::today().month() && day < Local::today().day() {
+                year += 1;
+            }
+            let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+            // let dt_string = dt.format("%A %-d %B").to_string(); // Format: Weekday Day Month
+            let timestamp = dt.timestamp().try_into().unwrap();
+            Some(timestamp)
+        } else {
+            None
+        };
+
         let r = if rank.is_none() { Some(0) } else { rank };
 
-        add(rpc_addr.to_string(), t, des, assign, project, due, r).await?;
+        add(rpc_addr.to_string(), t, des, assign, project, d, r).await?;
         //println!("Added task: {:#?}", t);
         return Ok(())
     }
