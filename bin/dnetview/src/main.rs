@@ -19,7 +19,6 @@ use std::{
     fs::File,
     io,
     io::Read,
-    net::SocketAddr,
     path::PathBuf,
 };
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};

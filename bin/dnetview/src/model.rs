@@ -1,9 +1,6 @@
 use async_std::sync::Mutex;
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-};
+use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
 pub struct Model {

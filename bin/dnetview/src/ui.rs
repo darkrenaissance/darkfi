@@ -1,5 +1,4 @@
 use crate::view::View;
-use log::debug;
 
 use tui::{
     backend::Backend,
@@ -39,109 +38,109 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 }
 
 fn render_info_left<B: Backend>(view: View, f: &mut Frame<'_, B>) {
-    // TODO: this is a hack. there must be a better way of doing this.
-    // e.g. a function called get_length()
-    let length = render_outbound(view.clone(), f);
-    let length = render_inbound(view.clone(), f, length);
-    //render_manual(view.clone(), f, length);
+    let len = draw_outbound(view.clone(), f);
+    let len = draw_inbound(view.clone(), f, len);
+    draw_manual(view.clone(), f, len);
 }
 
-//fn render_manual<B: Backend>(view: View, f: &mut Frame<'_, B>, length: usize) {
-//    let new_num: u16 = length.try_into().unwrap();
-//    let title_slice = Layout::default()
-//        .direction(Direction::Horizontal)
-//        .horizontal_margin(8)
-//        .vertical_margin(new_num)
-//        .constraints([Constraint::Percentage(100)].as_ref())
-//        .split(f.size());
-//
-//    let info_slice = Layout::default()
-//        .direction(Direction::Horizontal)
-//        .horizontal_margin(10)
-//        .vertical_margin(new_num)
-//        .constraints([Constraint::Percentage(45), Constraint::Percentage(55)].as_ref())
-//        .split(f.size());
-//
-//    let info = &view.info_list.infos;
-//    let mut title = Vec::new();
-//    for id in &view.id_list.node_id {
-//        match info.get(id) {
-//            Some(_) => {
-//                title.push(Spans::from(Span::styled("Manual:", Style::default())));
-//            }
-//            None => {
-//                // TODO
-//            }
-//        }
-//    }
-//
-//    let mut man_info = Vec::new();
-//    for id in &view.id_list.node_id {
-//        match info.get(id) {
-//            Some(connects) => {
-//                man_info.push(Spans::from(""));
-//                man_info.push(Spans::from(format!("Key: {}", connects.manual[0].key)));
-//                man_info.push(Spans::from(""));
-//            }
-//            None => {
-//                // TODO
-//            }
-//        }
-//    }
-//
-//    let info_graph = Paragraph::new(man_info).style(Style::default()).alignment(Alignment::Left);
-//    let title_graph = Paragraph::new(title).style(Style::default()).alignment(Alignment::Left);
-//
-//    f.render_widget(info_graph, info_slice[0]);
-//    f.render_widget(title_graph, title_slice[0]);
-//}
+// We're not doing anything here right now.
+fn render_info_right<B: Backend>(
+    _view: View,
+    f: &mut Frame<'_, B>,
+    _index: usize,
+    slice: Vec<Rect>,
+) {
+    let span = vec![];
+    let graph =
+        Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
+    f.render_widget(graph, slice[1]);
+}
 
-fn render_inbound<B: Backend>(view: View, f: &mut Frame<'_, B>, length: usize) -> usize {
-    let mut i_info = Vec::new();
+fn draw_outbound<B: Backend>(view: View, f: &mut Frame<'_, B>) -> usize {
+    let t_len = 4;
+    let m_len = 4;
+    let s_len = 4;
+
+    let t_width = 8;
+    let m_width = 8;
+    let s_width = 10;
+
+    let t_align = Alignment::Left;
+    let m_align = Alignment::Right;
+    let s_align = Alignment::Left;
+
+    let t_cnstrnt = vec![Constraint::Percentage(100)];
+    let m_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
+    let s_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
+
+    let mut titles = Vec::new();
     let mut msgs = Vec::new();
-    // TODO: find better way of doing this
-    let new_num: u16 = length.try_into().unwrap();
-    let num = new_num + 3;
-    let title_slice = Layout::default()
-        .direction(Direction::Horizontal)
-        .horizontal_margin(8)
-        .vertical_margin(num)
-        .constraints([Constraint::Percentage(100)].as_ref())
-        .split(f.size());
+    let mut slots = Vec::new();
 
-    let info_slice = Layout::default()
-        .direction(Direction::Horizontal)
-        .horizontal_margin(10)
-        .vertical_margin(num)
-        .constraints([Constraint::Percentage(45), Constraint::Percentage(55)].as_ref())
-        .split(f.size());
-
-    let info = &view.info_list.infos;
-    let mut title = Vec::new();
     for id in &view.id_list.node_id {
-        match info.get(id) {
-            Some(_) => {
-                title.push(Spans::from(Span::styled("Inbound:", Style::default())));
+        match &view.info_list.infos.get(id) {
+            Some(connects) => {
+                titles.push(Spans::from(Span::styled("Outbound:", Style::default())));
+                for slot in &connects.outbound[0].slots {
+                    slots.push(Spans::from(format!("{}", slot.addr)));
+                    match slot.channel.last_status.as_str() {
+                        "recv" => {
+                            msgs.push(Spans::from(format!("[R: {}]", slot.channel.last_msg)));
+                        }
+                        "sent" => {
+                            msgs.push(Spans::from(format!("[S: {}]", slot.channel.last_msg)));
+                        }
+                        _ => {
+                            // TODO: right now we do nothing with these values
+                        }
+                    }
+                }
             }
             None => {
-                // TODO
+                // TODO: Error
             }
         }
     }
 
+    let s_len = s_len + titles.len() as u16;
+    let m_len = m_len + titles.len() as u16;
+
+    draw(t_len, t_width, titles, t_align, t_cnstrnt, f);
+    draw(s_len, s_width, slots, s_align, s_cnstrnt, f);
+    draw(m_len, m_width, msgs, m_align, m_cnstrnt, f);
+
+    let total_len = t_len as usize + s_len as usize;
+    total_len
+}
+
+fn draw_inbound<B: Backend>(view: View, f: &mut Frame<'_, B>, len: usize) -> usize {
+    let t_len = len as u16;
+    let a_len = len as u16;
+    let m_len = len as u16;
+
+    let t_width = 8;
+    let a_width = 10;
+    let m_width = 10;
+
+    let t_align = Alignment::Left;
+    let m_align = Alignment::Right;
+    let a_align = Alignment::Left;
+
+    let t_cnstrnt = vec![Constraint::Percentage(100)];
+    let a_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
+    let m_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
+
+    let mut titles = Vec::new();
+    let mut addrs = Vec::new();
+    let mut msgs = Vec::new();
+
     for id in &view.id_list.node_id {
-        match info.get(id) {
-            Some(connects) => {
-                if connects.inbound.is_empty() {
-                    i_info.push(Spans::from(""));
-                    i_info.push(Spans::from("Null"));
-                    msgs.push(Spans::from(""));
-                    msgs.push(Spans::from("[R: Null]"));
-                    msgs.push(Spans::from("[S: Null]"));
-                } else {
-                    for connect in &connects.inbound {
-                        i_info.push(Spans::from(""));
-                        i_info.push(Spans::from(connect.connected.clone()));
+        match &view.info_list.infos.get(id) {
+            Some(connection) => {
+                if !connection.inbound.is_empty() {
+                    for connect in &connection.inbound {
+                        addrs.push(Spans::from(""));
+                        addrs.push(Spans::from(connect.connected.clone()));
                         match connect.channel.last_status.as_str() {
                             "recv" => {
                                 msgs.push(Spans::from(""));
@@ -162,81 +161,54 @@ fn render_inbound<B: Backend>(view: View, f: &mut Frame<'_, B>, length: usize) -
                             }
                         }
                     }
+                } else {
+                    // Inbound connection is empty. Render empty data
+                    titles.push(Spans::from(Span::styled("Inbound:", Style::default())));
+                    addrs.push(Spans::from("Null"));
+                    msgs.push(Spans::from("[R: Null]"));
+                    msgs.push(Spans::from("[S: Null]"));
                 }
             }
             None => {
-                // TODO
+                // This should never happen. TODO: make this an error.
             }
         }
     }
-    for _n in 1..info.len() {
-        i_info.push(Spans::from(""))
-    }
 
-    let info_graph =
-        Paragraph::new(i_info.clone()).style(Style::default()).alignment(Alignment::Left);
-    let msg_graph = Paragraph::new(msgs).style(Style::default()).alignment(Alignment::Right);
-    let title_graph =
-        Paragraph::new(title.clone()).style(Style::default()).alignment(Alignment::Left);
+    let a_len = a_len + titles.len() as u16;
+    let m_len = m_len + titles.len() as u16;
 
-    f.render_widget(info_graph, info_slice[0]);
-    f.render_widget(msg_graph, info_slice[0]);
-    f.render_widget(title_graph, title_slice[0]);
+    draw(t_len, t_width, titles, t_align, t_cnstrnt, f);
+    draw(a_len, a_width, addrs, a_align, a_cnstrnt, f);
+    draw(m_len, m_width, msgs, m_align, m_cnstrnt, f);
 
-    return i_info.len() + title.len() + length + 2
+    let total_len = t_len as usize + a_len as usize;
+    total_len
 }
 
-fn render_outbound<B: Backend>(view: View, f: &mut Frame<'_, B>) -> usize {
-    // TODO: move all this boilerplate into functions
-    let title_slice = Layout::default()
-        .direction(Direction::Horizontal)
-        .horizontal_margin(8)
-        .vertical_margin(4)
-        .constraints([Constraint::Percentage(100)].as_ref())
-        .split(f.size());
+fn draw_manual<B: Backend>(view: View, f: &mut Frame<'_, B>, len: usize) {
+    let t_len = len as u16;
+    let k_len = len as u16;
 
-    let info_slice = Layout::default()
-        .direction(Direction::Horizontal)
-        .horizontal_margin(10)
-        .vertical_margin(4)
-        .constraints([Constraint::Percentage(45), Constraint::Percentage(55)].as_ref())
-        .split(f.size());
+    let t_width = 8;
+    let k_width = 10;
 
-    let info = &view.info_list.infos;
-    let mut title = Vec::new();
+    let t_align = Alignment::Left;
+    let k_align = Alignment::Left;
+
+    let t_cnstrnt = vec![Constraint::Percentage(100)];
+    let k_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
+
+    let mut titles = Vec::new();
+    let mut keys = Vec::new();
+
     for id in &view.id_list.node_id {
-        match info.get(id) {
-            Some(_) => {
-                title.push(Spans::from(Span::styled("Outbound:", Style::default())));
-            }
-            None => {
-                // TODO
-            }
-        }
-    }
-
-    let mut slots = Vec::new();
-    let mut msgs = Vec::new();
-    for id in &view.id_list.node_id {
-        match info.get(id) {
+        match &view.info_list.infos.get(id) {
             Some(connects) => {
-                for slot in &connects.outbound[0].slots {
-                    slots.push(Spans::from(""));
-                    slots.push(Spans::from(format!("{}", slot.addr)));
-                    match slot.channel.last_status.as_str() {
-                        "recv" => {
-                            msgs.push(Spans::from(""));
-                            msgs.push(Spans::from(format!("[R: {}]", slot.channel.last_msg)));
-                        }
-                        "sent" => {
-                            msgs.push(Spans::from(""));
-                            msgs.push(Spans::from(format!("[S: {}]", slot.channel.last_msg)));
-                        }
-                        _ => {
-                            // TODO: right now we do nothing with these values
-                        }
-                    }
-                }
+                titles.push(Spans::from(Span::styled("Manual:", Style::default())));
+                keys.push(Spans::from(""));
+                keys.push(Spans::from(format!("Key: {}", connects.manual[0].key)));
+                keys.push(Spans::from(""));
             }
             None => {
                 // TODO
@@ -244,32 +216,24 @@ fn render_outbound<B: Backend>(view: View, f: &mut Frame<'_, B>) -> usize {
         }
     }
 
-    for _n in 1..info.len() {
-        slots.push(Spans::from(""))
-    }
-
-    let slots_graph =
-        Paragraph::new(slots.clone()).style(Style::default()).alignment(Alignment::Left);
-    let msgs_graph = Paragraph::new(msgs).style(Style::default()).alignment(Alignment::Right);
-    let title_graph =
-        Paragraph::new(title.clone()).style(Style::default()).alignment(Alignment::Left);
-
-    f.render_widget(msgs_graph, info_slice[0]);
-    f.render_widget(slots_graph, info_slice[0]);
-    f.render_widget(title_graph, title_slice[0]);
-
-    let out_len = slots.len() + title.len();
-    return out_len
+    draw(t_len, t_width, titles, t_align, t_cnstrnt, f);
+    draw(k_len, k_width, keys, k_align, k_cnstrnt, f);
 }
 
-fn render_info_right<B: Backend>(
-    _view: View,
+fn draw<B: Backend>(
+    length: u16,
+    width: u16,
+    vec: Vec<Spans>,
+    align: Alignment,
+    cnstrnts: Vec<Constraint>,
     f: &mut Frame<'_, B>,
-    _index: usize,
-    slice: Vec<Rect>,
 ) {
-    let span = vec![];
-    let graph =
-        Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
-    f.render_widget(graph, slice[1]);
+    let slice = Layout::default()
+        .direction(Direction::Horizontal)
+        .horizontal_margin(width)
+        .vertical_margin(length)
+        .constraints(cnstrnts.as_ref())
+        .split(f.size());
+    let graph = Paragraph::new(vec).style(Style::default()).alignment(align);
+    f.render_widget(graph, slice[0]);
 }
