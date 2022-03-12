@@ -82,9 +82,9 @@ This section gives further details about the structures that will be used by the
  \hline
  Field & Type & Description \\ [0.5ex] 
  \hline\hline
- om & Ouroboros\_Metadata & Block information used by Ouroboros consensus. \\ 
+ om & OuroborosMetadata & Block information used by Ouroboros consensus. \\ 
  \hline
- sm & Streamlet\_Metadata & Block information used by Streamlet consenus. \\
+ sm & StreamletMetadata & Block information used by Streamlet consensus. \\
  \hline
  timestamp & Timestamp & Block creation timestamp. \\ [1ex] 
  \hline
@@ -95,7 +95,7 @@ This section gives further details about the structures that will be used by the
  \hline
  Field & Type & Description \\ [0.5ex] 
  \hline\hline
- proof & VRF\_Output & Proof the stakeholder is the block owner. \\ 
+ proof & VRFOutput & Proof the stakeholder is the block owner. \\ 
  \hline
  r & Seed & Random seed for VRF. \\
  \hline

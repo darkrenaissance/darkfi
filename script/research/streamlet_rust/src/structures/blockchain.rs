@@ -20,11 +20,11 @@ impl Blockchain {
     /// previous block and their epochs are incremental, exluding genesis.
     /// Additional validity rules can be applied.
     pub fn check_block_validity(&self, block: &Block, previous_block: &Block) {
-        assert!(block.h != "⊥", "Genesis block provided.");
+        assert!(block.st != "⊥", "Genesis block provided.");
         let mut hasher = DefaultHasher::new();
         previous_block.hash(&mut hasher);
         assert!(
-            block.h == hasher.finish().to_string() && block.e > previous_block.e,
+            block.st == hasher.finish().to_string() && block.sl > previous_block.sl,
             "Provided block is invalid."
         );
     }
@@ -45,7 +45,7 @@ impl Blockchain {
     /// Blockchain notarization check.
     pub fn is_notarized(&self) -> bool {
         for block in &self.blocks {
-            if !block.notarized {
+            if !block.metadata.sm.notarized {
                 return false
             }
         }

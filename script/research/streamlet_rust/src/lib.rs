@@ -14,9 +14,16 @@ mod tests {
     #[test]
     fn protocol_execution() {
         // Genesis block is generated.
-        let mut genesis_block = Block::new(String::from("⊥"), 0, vec![]);
-        genesis_block.notarized = true;
-        genesis_block.finalized = true;
+        let mut genesis_block = Block::new(
+            String::from("⊥"),
+            0,
+            vec![],
+            String::from("proof"),
+            String::from("r"),
+            String::from("s"),
+        );
+        genesis_block.metadata.sm.notarized = true;
+        genesis_block.metadata.sm.finalized = true;
 
         let genesis_time = Instant::now();
 

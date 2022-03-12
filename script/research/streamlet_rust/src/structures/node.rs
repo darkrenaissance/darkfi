@@ -143,8 +143,14 @@ impl Node {
         let mut hasher = DefaultHasher::new();
         longest_notarized_chain.blocks.last().unwrap().hash(&mut hasher);
         let unproposed_transactions = self.get_unproposed_transactions();
-        let proposed_block =
-            Block::new(hasher.finish().to_string(), epoch, unproposed_transactions);
+        let proposed_block = Block::new(
+            hasher.finish().to_string(),
+            epoch,
+            unproposed_transactions,
+            String::from("proof"),
+            String::from("r"),
+            String::from("s"),
+        );
         let signed_block = self.secret_key.sign(&proposed_block.signature_encode());
         (self.public_key, Vote::new(signed_block, proposed_block, self.id))
     }
@@ -189,7 +195,7 @@ impl Node {
     /// Node verifies if provided blockchain is notarized excluding the last block.
     pub fn extends_notarized_blockchain(&self, blockchain: &Blockchain) -> bool {
         for block in &blockchain.blocks[..(blockchain.blocks.len() - 1)] {
-            if !block.notarized {
+            if !block.metadata.sm.notarized {
                 return false
             }
         }
@@ -202,14 +208,14 @@ impl Node {
         for (index, blockchain) in self.node_blockchains.iter().enumerate() {
             let last_block = blockchain.blocks.last().unwrap();
             last_block.hash(&mut hasher);
-            if block.h == hasher.finish().to_string() && block.e > last_block.e {
+            if block.st == hasher.finish().to_string() && block.sl > last_block.sl {
                 return index as i64
             }
         }
 
         let last_block = self.canonical_blockchain.blocks.last().unwrap();
         last_block.hash(&mut hasher);
-        if block.h != hasher.finish().to_string() || block.e <= last_block.e {
+        if block.st != hasher.finish().to_string() || block.sl <= last_block.sl {
             panic!("Proposed block doesn't extend any known chains.");
         }
         -1
@@ -245,14 +251,14 @@ impl Node {
         }
 
         let (unwrapped_vote_block, blockchain_index) = vote_block.unwrap();
-        if !unwrapped_vote_block.votes.contains(vote) {
-            unwrapped_vote_block.votes.push(vote.clone());
+        if !unwrapped_vote_block.metadata.sm.votes.contains(vote) {
+            unwrapped_vote_block.metadata.sm.votes.push(vote.clone());
         }
 
-        if !unwrapped_vote_block.notarized &&
-            unwrapped_vote_block.votes.len() > (2 * nodes_count / 3)
+        if !unwrapped_vote_block.metadata.sm.notarized &&
+            unwrapped_vote_block.metadata.sm.votes.len() > (2 * nodes_count / 3)
         {
-            unwrapped_vote_block.notarized = true;
+            unwrapped_vote_block.metadata.sm.notarized = true;
             self.check_blockchain_finalization(blockchain_index);
         }
     }
@@ -290,7 +296,7 @@ impl Node {
         if blockchain_len > 2 {
             let mut consecutive_notarized = 0;
             for block in &blockchain.blocks {
-                if block.notarized {
+                if block.metadata.sm.notarized {
                     consecutive_notarized = consecutive_notarized + 1;
                 } else {
                     break
@@ -300,7 +306,7 @@ impl Node {
             if consecutive_notarized > 2 {
                 let mut finalized_blocks = Vec::new();
                 for block in &mut blockchain.blocks[..(consecutive_notarized - 1)] {
-                    block.finalized = true;
+                    block.metadata.sm.finalized = true;
                     finalized_blocks.push(block.clone());
                     for transaction in block.txs.clone() {
                         if let Some(pos) =
@@ -322,8 +328,8 @@ impl Node {
                 let mut dropped_blockchains = Vec::new();
                 for (index, blockchain) in self.node_blockchains.iter().enumerate() {
                     let first_block = blockchain.blocks.first().unwrap();
-                    if first_block.h != last_finalized_block_hash ||
-                        first_block.e <= last_finalized_block.e
+                    if first_block.st != last_finalized_block_hash ||
+                        first_block.sl <= last_finalized_block.sl
                     {
                         dropped_blockchains.push(index);
                     }
