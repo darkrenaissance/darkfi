@@ -56,6 +56,10 @@ impl MonthTasks {
         self.created_at = date.clone();
     }
 
+    pub fn get_task_tks(&self) -> Vec<String> {
+        self.task_tks.clone()
+    }
+
     fn get_path(date: &Timestamp, settings: &Settings) -> PathBuf {
         settings
             .dataset_path

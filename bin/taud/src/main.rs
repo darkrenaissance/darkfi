@@ -170,3 +170,92 @@ async fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(config, ex.clone())))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs::create_dir_all;
+
+    use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
+
+    use super::*;
+
+    fn get_path() -> Result<PathBuf> {
+        let path = PathBuf::from("/tmp/test_tau_data");
+
+        // mkdir dataset_path if not exists
+        create_dir_all(path.join("month"))?;
+        create_dir_all(path.join("task"))?;
+        Ok(path)
+    }
+
+    #[test]
+    fn load_and_save_tasks() -> Result<()> {
+        let settings = Settings { dataset_path: get_path()?.clone() };
+
+        // load and save TaskInfo
+        ///////////////////////
+
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0, &settings)?;
+
+        task.save()?;
+
+        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+
+        assert_eq!(task, t_load);
+
+        task.set_title("test_title_2");
+
+        task.save()?;
+
+        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+
+        assert_eq!(task, t_load);
+
+        // load and save MonthTasks
+        ///////////////////////
+
+        let task_tks = vec![];
+
+        let mut mt = MonthTasks::new(&task_tks, &settings);
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert_eq!(mt, mt_load);
+
+        mt.add(&task.get_ref_id());
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert_eq!(mt, mt_load);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_activate_task() -> Result<()> {
+        let settings = Settings { dataset_path: get_path()?.clone() };
+
+        // activate task
+        ///////////////////////
+
+        let task = TaskInfo::new("test_title_3", "test_desc", None, 0, &settings)?;
+
+        task.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert!(!mt_load.get_task_tks().contains(&task.get_ref_id()));
+
+        task.activate()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert!(mt_load.get_task_tks().contains(&task.get_ref_id()));
+
+        Ok(())
+    }
+}
