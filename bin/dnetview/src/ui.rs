@@ -97,7 +97,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, view: View) {
     let mframe = make_mframe(iframe.clone());
     draw_manual(f, view.clone(), mframe.clone());
 
-    let top_widget = ListWidget::new(oframe, iframe, mframe);
+    let top_widget = ListObject::new(oframe, iframe, mframe);
 
     let list_margin = 2;
     let list_direction = Direction::Horizontal;
@@ -117,15 +117,15 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, view: View) {
 
 // Top level widget
 #[derive(Clone)]
-pub struct ListWidget {
+pub struct ListObject {
     pub outbound: NetFrame,
     pub inbound: NetFrame,
     pub manual: NetFrame,
 }
 
-impl ListWidget {
-    pub fn new(outbound: NetFrame, inbound: NetFrame, manual: NetFrame) -> ListWidget {
-        ListWidget { outbound, inbound, manual }
+impl ListObject {
+    pub fn new(outbound: NetFrame, inbound: NetFrame, manual: NetFrame) -> ListObject {
+        ListObject { outbound, inbound, manual }
     }
 }
 
