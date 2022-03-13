@@ -201,7 +201,9 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 if slot["channel"].is_null() {
                     // channel is empty. initialize with empty values
                     let state = &slot["state"];
-                    let channel = Channel::new(String::new(), String::new());
+                    let msg = "Null".to_string();
+                    let status = "Null".to_string();
+                    let channel = Channel::new(msg, status);
                     let new_slot =
                         Slot::new(String::new(), channel, state.as_str().unwrap().to_string());
                     slots.push(new_slot)
