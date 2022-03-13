@@ -152,12 +152,14 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+            debug!("reply: {:?}", reply);
             // TODO: we are ignoring this value for now
             let _ext_addr = reply.as_object().unwrap().get("external_addr");
 
             let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
             let manual_obj = &reply.as_object().unwrap()["session_manual"];
             let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
+            //debug!("OOBJ {:?}", outbound_obj);
 
             let mut iconnects = Vec::new();
             let mut mconnects = Vec::new();
@@ -168,7 +170,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let i_connected = &inbound_obj["connected"];
             if i_connected.as_object().unwrap().is_empty() {
                 // channel is empty. initialize with empty values
-                let connected = "Null".to_string();
+                let connected = "Empty".to_string();
                 let msg = "Null".to_string();
                 let status = "Null".to_string();
                 let channel = Channel::new(msg, status);
