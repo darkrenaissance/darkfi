@@ -1,5 +1,6 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
+use chrono::Utc;
 use clap::Parser;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -12,9 +13,13 @@ pub fn random_ref_id() -> String {
     thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
 }
 
-pub fn find_free_id(tasks_ids: &Vec<u32>) -> u32 {
+pub fn get_current_time() -> Timestamp {
+    Timestamp(Utc::now().timestamp())
+}
+
+pub fn find_free_id(task_ids: &Vec<u32>) -> u32 {
     for i in 1.. {
-        if !tasks_ids.contains(&i) {
+        if !task_ids.contains(&i) {
             return i
         }
     }
@@ -35,7 +40,7 @@ pub fn save<T: Serialize>(path: &PathBuf, value: &T) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
     pub dataset_path: PathBuf,
 }
@@ -46,8 +51,8 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Timestamp(pub String);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
+pub struct Timestamp(pub i64);
 
 /// taud cli
 #[derive(Parser)]
@@ -74,8 +79,6 @@ pub struct TauConfig {
 #[cfg(test)]
 mod tests {
     use std::fs::create_dir_all;
-
-    use chrono::Utc;
 
     use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
 
@@ -110,47 +113,47 @@ mod tests {
         create_dir_all(path.join("month"))?;
         create_dir_all(path.join("task"))?;
 
-        // test with MonthTasks
-        ///////////////////////
-        let mt_path = path.join("month");
-        let mt_path = mt_path.join("022");
-
         let settings = Settings { dataset_path: path.clone() };
-        let task_tks = vec![];
-        let created_at = Timestamp(Utc::now().to_string());
-
-        let mut mt = MonthTasks { created_at, task_tks, settings };
-
-        save::<MonthTasks>(&mt_path, &mt)?;
-
-        let mt_load = load::<MonthTasks>(&mt_path)?;
-        assert_eq!(mt, mt_load);
-
-        mt.add("test_hash");
-
-        save::<MonthTasks>(&mt_path, &mt)?;
-
-        let mt_load = load::<MonthTasks>(&mt_path)?;
-        assert_eq!(mt, mt_load);
 
         // test with TaskInfo
         ///////////////////////
-        let t_path = path.join("task");
-        let t_path = t_path.join("test_hash");
 
-        let mut task = TaskInfo::new("test_title", "test_desc", None, 0);
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0, &settings)?;
 
-        save::<TaskInfo>(&t_path, &task)?;
+        task.save()?;
 
-        let t_load = load::<TaskInfo>(&t_path)?;
+        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+
         assert_eq!(task, t_load);
 
-        task.title = "test_title_2".into();
+        task.set_title("test_title_2");
 
-        save::<TaskInfo>(&t_path, &task)?;
+        task.save()?;
 
-        let t_load = load::<TaskInfo>(&t_path)?;
+        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+
         assert_eq!(task, t_load);
+
+        // test with MonthTasks
+        ///////////////////////
+
+        let task_tks = vec![];
+
+        let mut mt = MonthTasks::new(&task_tks, &settings);
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert_eq!(mt, mt_load);
+
+        mt.add(&task.get_ref_id());
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+
+        assert_eq!(mt, mt_load);
 
         Ok(())
     }

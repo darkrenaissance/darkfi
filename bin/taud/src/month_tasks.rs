@@ -1,55 +1,89 @@
-use chrono::Utc;
+use std::path::PathBuf;
+
+use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 use darkfi::Result;
 
 use crate::{
     task_info::TaskInfo,
-    util::{Settings, Timestamp},
+    util::{get_current_time, Settings, Timestamp},
 };
 
 // XXX
 #[allow(dead_code)]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MonthTasks {
-    pub created_at: Timestamp,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub settings: Settings,
-    pub task_tks: Vec<String>,
+    created_at: Timestamp,
+    settings: Settings,
+    task_tks: Vec<String>,
 }
 
 impl MonthTasks {
-    pub fn add(&mut self, tk_hash: &str) {
-        self.task_tks.push(tk_hash.into());
+    pub fn new(task_tks: &Vec<String>, settings: &Settings) -> Self {
+        Self {
+            created_at: get_current_time(),
+            settings: settings.clone(),
+            task_tks: task_tks.clone(),
+        }
+    }
+
+    pub fn add(&mut self, ref_id: &str) {
+        self.task_tks.push(ref_id.into());
     }
 
     pub fn objects(&self) -> Result<Vec<TaskInfo>> {
         let mut tks: Vec<TaskInfo> = vec![];
 
-        for tk_hash in self.task_tks.iter() {
-            tks.push(TaskInfo::load(&tk_hash, &self.settings)?);
+        for ref_id in self.task_tks.iter() {
+            tks.push(TaskInfo::load(&ref_id, &self.settings)?);
         }
 
         Ok(tks)
     }
 
-    pub fn remove(&mut self, tk_hash: &str) {
-        if let Some(index) = self.task_tks.iter().position(|t| *t == tk_hash) {
+    pub fn remove(&mut self, ref_id: &str) {
+        if let Some(index) = self.task_tks.iter().position(|t| *t == ref_id) {
             self.task_tks.remove(index);
         }
     }
 
-    fn load(_date: Timestamp, _settings: Settings) -> Result<Timestamp> {
-        Ok(Timestamp(Utc::now().to_string()))
+    pub fn set_settings(&mut self, settings: &Settings) {
+        self.settings = settings.clone();
     }
 
-    fn load_or_create(_date: Timestamp, _settings: Settings) -> Result<Timestamp> {
-        Ok(Timestamp(Utc::now().to_string()))
+    pub fn set_date(&mut self, date: &Timestamp) {
+        self.created_at = date.clone();
     }
-}
 
-impl PartialEq for MonthTasks {
-    fn eq(&self, other: &Self) -> bool {
-        self.created_at == other.created_at && self.task_tks == other.task_tks
+    fn get_path(date: &Timestamp, settings: &Settings) -> PathBuf {
+        settings
+            .dataset_path
+            .join("month")
+            .join(Utc.timestamp(date.0, 0).format("%m%y").to_string())
+    }
+
+    pub fn save(&self) -> Result<()> {
+        crate::util::save::<Self>(&Self::get_path(&self.created_at, &self.settings), self)
+    }
+
+    pub fn load_or_create(date: &Timestamp, settings: &Settings) -> Result<Self> {
+        match crate::util::load::<Self>(&Self::get_path(date, settings)) {
+            Ok(mut mt) => {
+                mt.set_settings(settings);
+                Ok(mt)
+            }
+            Err(_) => {
+                let mut mt = Self::new(&vec![], settings);
+                mt.set_date(date);
+                mt.save()?;
+                return Ok(mt)
+            }
+        }
+    }
+
+    pub fn load_current_open_tasks(settings: &Settings) -> Result<Vec<TaskInfo>> {
+        let mt = Self::load_or_create(&get_current_time(), settings)?;
+        Ok(mt.objects()?.into_iter().filter(|t| t.get_state() != "stop").collect())
     }
 }

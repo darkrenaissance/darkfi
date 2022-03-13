@@ -2,7 +2,6 @@ use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use chrono::{TimeZone, Utc};
 use clap::{IntoApp, Parser};
 use log::debug;
 use serde_json::{json, Value};
@@ -26,7 +25,7 @@ mod util;
 
 use crate::{
     task_info::TaskInfo,
-    util::{CliTaud, Settings, TauConfig, Timestamp, CONFIG_FILE_CONTENTS},
+    util::{get_current_time, CliTaud, Settings, TauConfig, Timestamp, CONFIG_FILE_CONTENTS},
 };
 struct JsonRpcInterface {
     settings: Settings,
@@ -66,12 +65,27 @@ impl JsonRpcInterface {
             (Some(title), Some(desc), Some(rank)) => {
                 let due: Option<Timestamp> = if args[4].is_i64() {
                     let timestamp = args[4].as_i64().unwrap();
-                    Some(Timestamp(Utc.timestamp(timestamp, 0).to_string()))
+                    let timestamp = Timestamp(timestamp);
+
+                    if timestamp < get_current_time() {
+                        return JsonResult::Err(jsonerr(
+                            InvalidParams,
+                            Some("invalid due date".into()),
+                            id,
+                        ))
+                    }
+
+                    Some(timestamp)
                 } else {
                     None
                 };
 
-                task = TaskInfo::new(title, desc, due, rank as u32);
+                match TaskInfo::new(title, desc, due, rank as u32, &self.settings) {
+                    Ok(t) => task = t,
+                    Err(e) => {
+                        return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id))
+                    }
+                }
             }
             (None, _, _) => {
                 return JsonResult::Err(jsonerr(InvalidParams, Some("invalid title".into()), id))
@@ -87,18 +101,18 @@ impl JsonRpcInterface {
         let assign = args[2].as_array();
         if assign.is_some() && assign.unwrap().len() > 0 {
             for a in assign.unwrap() {
-                task.assign(a.as_str().unwrap().into());
+                task.assign(a.as_str().unwrap());
             }
         }
 
         let project = args[3].as_array();
         if project.is_some() && project.unwrap().len() > 0 {
             for p in project.unwrap() {
-                task.project(p.as_str().unwrap().into());
+                task.project(p.as_str().unwrap());
             }
         }
 
-        match task.save(&self.settings) {
+        match task.save() {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
         }
