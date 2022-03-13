@@ -44,6 +44,7 @@ impl RequestHandler for JsonRpcInterface {
         match req.method.as_str() {
             Some("add") => return self.add(req.id, req.params).await,
             Some("list") => return self.list(req.id, req.params).await,
+            Some("update") => return self.update(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
@@ -102,16 +103,26 @@ impl JsonRpcInterface {
 
         let assign = args[2].as_array();
         if assign.is_some() && assign.unwrap().len() > 0 {
-            for a in assign.unwrap() {
-                task.assign(a.as_str().unwrap());
-            }
+            task.set_assign(
+                &assign
+                    .unwrap()
+                    .into_iter()
+                    .filter(|a| a.as_str().is_some())
+                    .map(|a| a.as_str().unwrap().to_string())
+                    .collect(),
+            );
         }
 
         let project = args[3].as_array();
         if project.is_some() && project.unwrap().len() > 0 {
-            for p in project.unwrap() {
-                task.project(p.as_str().unwrap());
-            }
+            task.set_project(
+                &project
+                    .unwrap()
+                    .into_iter()
+                    .filter(|p| p.as_str().is_some())
+                    .map(|p| p.as_str().unwrap().to_string())
+                    .collect(),
+            );
         }
 
         let result = || -> Result<()> {
@@ -128,14 +139,150 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // List tasks
-    // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "list", "params": [month_date], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-    async fn list(&self, id: Value, _params: Value) -> JsonResult {
-        let tasks: Result<Vec<TaskInfo>> = MonthTasks::load_current_open_tasks(&self.settings);
+    async fn list(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array().unwrap();
 
-        match tasks {
+        if args.len() != 1 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let result = || -> Result<Vec<TaskInfo>> {
+            let tasks: Vec<TaskInfo>;
+
+            if args[0].is_i64() {
+                tasks = MonthTasks::load_or_create(
+                    &Timestamp(args[0].as_i64().unwrap()),
+                    &self.settings,
+                )?
+                .objects()?;
+            } else {
+                tasks = MonthTasks::load_current_open_tasks(&self.settings)?;
+            }
+
+            Ok(tasks)
+        };
+
+        match result() {
             Ok(tks) => JsonResult::Resp(jsonresp(json!(tks), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
+        }
+    }
+
+    // RPCAPI:
+    // Update task returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "id", "params": [task_id, {"title": "new title"} ], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn update(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array().unwrap();
+
+        if args.len() != 2 {
+            return JsonResult::Err(jsonerr(InvalidParams, None, id))
+        }
+
+        let tasks: Vec<TaskInfo>;
+
+        if !args[0].is_u64() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid id".into()), id))
+        }
+
+        if !args[1].is_object() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid update data".into()), id))
+        }
+
+        let task_id = args[0].as_u64().unwrap();
+        let data = args[0].as_object().unwrap();
+
+        match MonthTasks::load_current_open_tasks(&self.settings) {
+            Ok(tks) => tasks = tks,
+            Err(_) => return JsonResult::Err(jsonerr(InvalidParams, None, id)),
+        }
+
+        let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
+
+        if task.is_none() {
+            return JsonResult::Err(jsonerr(
+                InvalidRequest,
+                Some("Didn't find a task with the provided id".into()),
+                id,
+            ))
+        }
+
+        let mut task = task.unwrap();
+
+        let mut result = || -> std::result::Result<(), &str> {
+            if data.contains_key("title") {
+                let title = data
+                    .get("title")
+                    .ok_or("error parsing title")?
+                    .as_str()
+                    .ok_or("invalid value for title")?;
+                task.set_title(title);
+            }
+
+            if data.contains_key("description") {
+                let description = data
+                    .get("description")
+                    .ok_or("error parsing description")?
+                    .as_str()
+                    .ok_or("invalid value for description")?;
+                task.set_desc(description);
+            }
+
+            if data.contains_key("rank") {
+                let rank = data
+                    .get("rank")
+                    .ok_or("error parsing rank")?
+                    .as_u64()
+                    .ok_or("invalid value for rank")?;
+
+                task.set_rank(rank as u32);
+            }
+
+            if data.contains_key("due") {
+                let due = Some(Timestamp(
+                    data.get("due")
+                        .ok_or("error parsing rank")?
+                        .as_i64()
+                        .ok_or("invalid value for rank")?,
+                ));
+                task.set_due(due);
+            }
+
+            if data.contains_key("assign") {
+                task.set_assign(
+                    &data
+                        .get("assign")
+                        .ok_or("error parsing assign")?
+                        .as_array()
+                        .ok_or("invalid value for assign")?
+                        .into_iter()
+                        .filter(|a| a.as_str().is_some())
+                        .map(|a| a.as_str().unwrap().to_string())
+                        .collect(),
+                );
+            }
+
+            if data.contains_key("project") {
+                task.set_project(
+                    &data
+                        .get("project")
+                        .ok_or("error parsing project")?
+                        .as_array()
+                        .ok_or("invalid value for project")?
+                        .into_iter()
+                        .filter(|p| p.as_str().is_some())
+                        .map(|p| p.as_str().unwrap().to_string())
+                        .collect(),
+                );
+            }
+            Ok(())
+        };
+
+        match result() {
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => JsonResult::Err(jsonerr(InvalidParams, Some(e.to_string()), id)),
         }
     }
 }

@@ -87,18 +87,6 @@ impl TaskInfo {
         })
     }
 
-    pub fn assign(&mut self, n: &str) {
-        self.assign.push(n.into());
-    }
-
-    pub fn project(&mut self, p: &str) {
-        self.project.push(p.into());
-    }
-
-    pub fn set_comment(&mut self, c: Comment) {
-        self.comments.push(c);
-    }
-
     pub fn load(ref_id: &str, settings: &Settings) -> Result<Self> {
         let mut task = crate::util::load::<Self>(&Self::get_path(ref_id, settings))?;
         task.set_settings(settings);
@@ -109,6 +97,12 @@ impl TaskInfo {
         crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.settings), self)
     }
 
+    pub fn activate(&self) -> Result<()> {
+        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.settings)?;
+        mt.add(&self.ref_id);
+        mt.save()
+    }
+
     pub fn get_state(&self) -> String {
         if let Some(ev) = self.events.last() {
             return ev.action.clone()
@@ -117,18 +111,12 @@ impl TaskInfo {
         }
     }
 
-    pub fn activate(&self) -> Result<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.settings)?;
-        mt.add(&self.ref_id);
-        mt.save()
-    }
-
-    pub fn set_settings(&mut self, settings: &Settings) {
-        self.settings = settings.clone();
-    }
-
     fn get_path(ref_id: &str, settings: &Settings) -> PathBuf {
         settings.dataset_path.join("task").join(ref_id)
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.id.clone()
     }
 
     pub fn get_ref_id(&self) -> String {
@@ -137,6 +125,34 @@ impl TaskInfo {
 
     pub fn set_title(&mut self, title: &str) {
         self.title = title.into();
+    }
+
+    pub fn set_desc(&mut self, desc: &str) {
+        self.desc = desc.into();
+    }
+
+    pub fn set_assign(&mut self, assign: &Vec<String>) {
+        self.assign = assign.clone();
+    }
+
+    pub fn set_project(&mut self, project: &Vec<String>) {
+        self.project = project.clone();
+    }
+
+    pub fn set_comment(&mut self, c: Comment) {
+        self.comments.push(c);
+    }
+
+    pub fn set_rank(&mut self, r: u32) {
+        self.rank = r;
+    }
+
+    pub fn set_due(&mut self, d: Option<Timestamp>) {
+        self.due = d;
+    }
+
+    pub fn set_settings(&mut self, settings: &Settings) {
+        self.settings = settings.clone();
     }
 
     pub fn set_state(&mut self, action: &str) {
