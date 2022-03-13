@@ -152,7 +152,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            debug!("reply: {:?}", reply);
+            //debug!("reply: {:?}", reply);
             // TODO: we are ignoring this value for now
             let _ext_addr = reply.as_object().unwrap().get("external_addr");
 
@@ -182,8 +182,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 for k in ic.keys() {
                     let addr = k.to_string();
                     for v in ic.values() {
-                        let msg = v.get("last_msg").unwrap().to_string();
-                        let status = v.get("last_status").unwrap().to_string();
+                        let msg = v.get("last_msg").unwrap().as_str().unwrap().to_string();
+                        let status = v.get("last_status").unwrap().as_str().unwrap().to_string();
                         let channel = Channel::new(msg, status);
                         let iinfo = InboundInfo::new(addr.clone(), channel);
                         iconnects.push(iinfo);
@@ -235,7 +235,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             }
         } else {
             // TODO: error handling
-            debug!("Reply is empty");
+            //debug!("Reply is empty");
         }
         async_util::sleep(2).await;
     }
@@ -275,5 +275,6 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
                 _ => (),
             }
         }
+        //async_util::sleep(3).await;
     }
 }
