@@ -277,6 +277,14 @@ impl JsonRpcInterface {
                         .collect(),
                 );
             }
+
+            let save = task.save();
+
+            // TODO print the error
+            if let Err(_e) = save {
+                return Err("Unable to save the task")
+            }
+
             Ok(())
         };
 
