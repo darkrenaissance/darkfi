@@ -24,6 +24,7 @@ mod task_info;
 mod util;
 
 use crate::{
+    month_tasks::MonthTasks,
     task_info::TaskInfo,
     util::{get_current_time, CliTaud, Settings, TauConfig, Timestamp, CONFIG_FILE_CONTENTS},
 };
@@ -42,6 +43,7 @@ impl RequestHandler for JsonRpcInterface {
 
         match req.method.as_str() {
             Some("add") => return self.add(req.id, req.params).await,
+            Some("list") => return self.list(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
@@ -112,8 +114,27 @@ impl JsonRpcInterface {
             }
         }
 
-        match task.save() {
+        let result = || -> Result<()> {
+            task.save()?;
+            task.activate()?;
+            Ok(())
+        };
+
+        match result() {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
+        }
+    }
+
+    // RPCAPI:
+    // List tasks
+    // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
+    async fn list(&self, id: Value, _params: Value) -> JsonResult {
+        let tasks: Result<Vec<TaskInfo>> = MonthTasks::load_current_open_tasks(&self.settings);
+
+        match tasks {
+            Ok(tks) => JsonResult::Resp(jsonresp(json!(tks), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
         }
     }
