@@ -201,39 +201,43 @@ impl NetWidget {
 // parse outbound data by creating a text object called Vec<Spans>
 // send Vec<Spans> to render_widget()
 fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: NetFrame) {
-    let mut titles = Vec::new();
-    let mut msgs = Vec::new();
-    let mut slots = Vec::new();
-    let mut data = Vec::new();
-
-    titles.push(Spans::from(Span::styled("Outgoing", Style::default())));
-    data.push("Outgoing".to_string());
     for id in &view.id_list.node_id {
+        let mut titles = Vec::new();
+        let mut msgs = Vec::new();
+        let mut slots = Vec::new();
+        let mut data = Vec::new();
+
+        titles.push(Spans::from(Span::styled("Outgoing", Style::default())));
+        data.push("Outgoing".to_string());
         //debug!("Looping through nodes: {}", id);
         match &view.info_list.infos.get(id) {
-            Some(connects) => {
-                // there is only a single outbound connection so this works
-                // this is probably a bug lol
-                for slot in &connects.outbound[0].slots {
-                    if slot.addr.is_empty() {
-                        slots.push(Spans::from(format!("Empty")));
-                        data.push("empty".to_string());
-                    } else {
-                        slots.push(Spans::from(format!("{}", slot.addr)));
-                        data.push(format!("{}", slot.addr));
-                    }
-                    match slot.channel.last_status.as_str() {
-                        "recv" => {
-                            msgs.push(Spans::from(format!("[R: {}]", slot.channel.last_msg)));
-                            data.push(format!("{}", slot.channel.last_msg));
+            Some(node) => {
+                for outbound in &node.outbound.clone() {
+                    for slot in outbound.slots.clone() {
+                        if slot.addr.is_empty() {
+                            slots.push(Spans::from(format!("Empty")));
+                            data.push("empty".to_string());
+                        } else {
+                            slots.push(Spans::from(format!("{}", slot.addr)));
+                            data.push(format!("{}", slot.addr));
                         }
-                        "sent" => {
-                            msgs.push(Spans::from(format!("[S: {}]", slot.channel.last_msg)));
-                            data.push(format!("{}", slot.channel.last_msg));
-                        }
-                        e => {
-                            //debug!("data getting lost {}", e);
-                            // TODO: right now we do nothing with these values
+                        debug!("last status: {}", slot.channel.last_status.as_str());
+                        match slot.channel.last_status.as_str() {
+                            "recv" => {
+                                msgs.push(Spans::from(format!("[R: {}]", slot.channel.last_msg)));
+                                data.push(format!("{}", slot.channel.last_msg));
+                            }
+                            "sent" => {
+                                msgs.push(Spans::from(format!("[S: {}]", slot.channel.last_msg)));
+                                data.push(format!("{}", slot.channel.last_msg));
+                            }
+                            "Null" => {
+                                data.push("Null".to_string());
+                            }
+                            _ => {
+                                // TODO
+                                debug!("This is a bug");
+                            }
                         }
                     }
                 }
@@ -243,20 +247,19 @@ fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: N
                 // TODO: Error
             }
         }
+        debug!("{:?}", data);
+        oframe.title.clone().draw(titles.clone(), f);
+        let t_len2 = titles.clone().len();
+        oframe.title.clone().update(t_len2);
+
+        oframe.addrs.clone().draw(slots.clone(), f);
+        let s_len2 = slots.clone().len();
+        oframe.addrs.clone().update(s_len2);
+
+        oframe.msgs.clone().draw(msgs.clone(), f);
+        let m_len2 = msgs.clone().len();
+        oframe.msgs.clone().update(m_len2);
     }
-
-    //debug!("{:?}", data);
-    oframe.title.clone().draw(titles.clone(), f);
-    let t_len2 = titles.clone().len();
-    oframe.title.clone().update(t_len2);
-
-    oframe.addrs.clone().draw(slots.clone(), f);
-    let s_len2 = slots.clone().len();
-    oframe.addrs.clone().update(s_len2);
-
-    oframe.msgs.clone().draw(msgs.clone(), f);
-    let m_len2 = msgs.clone().len();
-    oframe.msgs.clone().update(m_len2);
 }
 
 fn print_type_of<T>(_: &T) {
@@ -272,18 +275,19 @@ fn get_and_draw_inbound<B: Backend>(
     outframe: NetFrame,
 ) {
     let slots_len = outframe.addrs.get_len();
-    let mut titles = Vec::new();
-    let mut addrs = Vec::new();
-    let mut msgs = Vec::new();
-    let mut data = Vec::new();
 
-    // need to have access to slots_len
-    for _i in 1..slots_len {
-        titles.push(Spans::from(""));
-    }
-    titles.push(Spans::from(Span::styled("Incoming", Style::default())));
-    data.push("Incoming".to_string());
     for id in &view.id_list.node_id {
+        // create a new data thing
+        let mut titles = Vec::new();
+        let mut addrs = Vec::new();
+        let mut msgs = Vec::new();
+        let mut data = Vec::new();
+        // need to have access to slots_len
+        for _i in 1..slots_len {
+            titles.push(Spans::from(""));
+        }
+        titles.push(Spans::from(Span::styled("Incoming", Style::default())));
+        data.push("Incoming".to_string());
         //debug!("Looping through nodes: {}", id);
         match &view.info_list.infos.get(id) {
             Some(node) => {
@@ -318,20 +322,17 @@ fn get_and_draw_inbound<B: Backend>(
                 // This should never happen. TODO: make this an error.
             }
         }
+        debug!("{:?}", data);
+        iframe.title.clone().draw(titles.clone(), f);
+        let t_len2 = titles.clone().len();
+        iframe.title.clone().update(t_len2);
+        iframe.addrs.clone().draw(addrs.clone(), f);
+        let s_len2 = addrs.clone().len();
+        iframe.addrs.clone().update(s_len2);
+        iframe.msgs.clone().draw(msgs.clone(), f);
+        let m_len2 = msgs.clone().len();
+        iframe.msgs.clone().update(m_len2);
     }
-
-    //debug!("{:?}", data);
-    iframe.title.clone().draw(titles.clone(), f);
-    let t_len2 = titles.clone().len();
-    iframe.title.clone().update(t_len2);
-
-    iframe.addrs.clone().draw(addrs.clone(), f);
-    let s_len2 = addrs.clone().len();
-    iframe.addrs.clone().update(s_len2);
-
-    iframe.msgs.clone().draw(msgs.clone(), f);
-    let m_len2 = msgs.clone().len();
-    iframe.msgs.clone().update(m_len2);
 }
 
 fn draw_manual<B: Backend>(f: &mut Frame<'_, B>, view: View, mframe: NetFrame) {
