@@ -193,7 +193,7 @@ impl NetWidget {
         f.render_widget(graph, slice[0]);
     }
     pub fn get_len(self) -> usize {
-        return self.len;
+        return self.len
     }
 }
 
