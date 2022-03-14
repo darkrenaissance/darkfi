@@ -207,21 +207,21 @@ fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: N
         let mut slots = Vec::new();
         let mut data = Vec::new();
 
-        titles.push(Spans::from(Span::styled("Outgoing", Style::default())));
-        data.push("Outgoing".to_string());
         //debug!("Looping through nodes: {}", id);
         match &view.info_list.infos.get(id) {
             Some(node) => {
+                data.push(id.to_string());
                 for outbound in &node.outbound.clone() {
+                    titles.push(Spans::from(Span::styled("Outgoing", Style::default())));
+                    data.push("Outgoing".to_string());
                     for slot in outbound.slots.clone() {
-                        if slot.addr.is_empty() {
-                            slots.push(Spans::from(format!("Empty")));
-                            data.push("empty".to_string());
+                        if slot.addr.as_str() == "Empty" {
+                            slots.push(Spans::from(format!("{}", slot.addr.as_str())));
+                            data.push("Empty".to_string());
                         } else {
                             slots.push(Spans::from(format!("{}", slot.addr)));
                             data.push(format!("{}", slot.addr));
                         }
-                        debug!("last status: {}", slot.channel.last_status.as_str());
                         match slot.channel.last_status.as_str() {
                             "recv" => {
                                 msgs.push(Spans::from(format!("[R: {}]", slot.channel.last_msg)));
@@ -247,7 +247,7 @@ fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: N
                 // TODO: Error
             }
         }
-        debug!("{:?}", data);
+        //debug!("{:?}", data);
         oframe.title.clone().draw(titles.clone(), f);
         let t_len2 = titles.clone().len();
         oframe.title.clone().update(t_len2);
@@ -286,13 +286,13 @@ fn get_and_draw_inbound<B: Backend>(
         for _i in 1..slots_len {
             titles.push(Spans::from(""));
         }
-        titles.push(Spans::from(Span::styled("Incoming", Style::default())));
-        data.push("Incoming".to_string());
         //debug!("Looping through nodes: {}", id);
         match &view.info_list.infos.get(id) {
             Some(node) => {
                 data.push(id.to_string());
                 for connect in &node.inbound {
+                    titles.push(Spans::from(Span::styled("Incoming", Style::default())));
+                    data.push("Incoming".to_string());
                     addrs.push(Spans::from(connect.connected.clone()));
                     data.push(connect.connected.clone());
 
@@ -322,7 +322,7 @@ fn get_and_draw_inbound<B: Backend>(
                 // This should never happen. TODO: make this an error.
             }
         }
-        debug!("{:?}", data);
+        //debug!("{:?}", data);
         iframe.title.clone().draw(titles.clone(), f);
         let t_len2 = titles.clone().len();
         iframe.title.clone().update(t_len2);
