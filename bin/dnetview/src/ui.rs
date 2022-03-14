@@ -11,78 +11,86 @@ use tui::{
 };
 
 // create top level outgoing widget
-pub fn make_oframe() -> NetFrame {
+pub fn make_oframe() -> ConnectBox {
     let ot_len = 4;
     let ot_width = 8;
     let ot_align = Alignment::Left;
     let ot_cnstrnt = vec![Constraint::Percentage(100)];
-    let ot_widget = NetWidget::new(ot_len, ot_width, ot_align, ot_cnstrnt);
+    let ot_widget = InfoBox::new(ot_len, ot_width, ot_align, ot_cnstrnt);
 
     let om_len = 5;
     let om_width = 8;
     let om_align = Alignment::Right;
     let om_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let om_widget = NetWidget::new(om_len, om_width, om_align, om_cnstrnt);
+    let om_widget = InfoBox::new(om_len, om_width, om_align, om_cnstrnt);
 
     let os_len = 5;
     let os_width = 10;
     let os_align = Alignment::Left;
     let os_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let os_widget = NetWidget::new(os_len, os_width, os_align, os_cnstrnt);
+    let os_widget = InfoBox::new(os_len, os_width, os_align, os_cnstrnt);
 
-    let oframe = NetFrame::new(ot_widget, os_widget, om_widget);
+    let oframe = ConnectBox::new(ot_widget, os_widget, om_widget);
     oframe
 }
 
 // create top level ingoing widget
-pub fn make_iframe(oframe: NetFrame) -> NetFrame {
-    let it_len = oframe.addrs.len;
+pub fn make_iframe(oframe: ConnectBox) -> ConnectBox {
+    let it_len = oframe.addrs_box.len;
     let it_width = 8;
     let it_align = Alignment::Left;
     let it_cnstrnt = vec![Constraint::Percentage(100)];
-    let it_widget = NetWidget::new(it_len, it_width, it_align, it_cnstrnt);
+    let it_widget = InfoBox::new(it_len, it_width, it_align, it_cnstrnt);
 
-    let is_len = oframe.addrs.len + oframe.title.len + 1;
+    let is_len = oframe.addrs_box.len + oframe.title_box.len + 1;
     let is_width = 10;
     let is_align = Alignment::Left;
     let is_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let is_widget = NetWidget::new(is_len, is_width, is_align, is_cnstrnt);
+    let is_widget = InfoBox::new(is_len, is_width, is_align, is_cnstrnt);
 
     let im_len = is_len;
     let im_width = 8;
     let im_align = Alignment::Right;
     let im_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let im_widget = NetWidget::new(im_len, im_width, im_align, im_cnstrnt);
+    let im_widget = InfoBox::new(im_len, im_width, im_align, im_cnstrnt);
 
-    let iframe = NetFrame::new(it_widget, is_widget, im_widget);
+    let iframe = ConnectBox::new(it_widget, is_widget, im_widget);
     iframe
 }
 
 // create top level manual widget
-pub fn make_mframe(iframe: NetFrame) -> NetFrame {
-    let mt_len = iframe.title.len + iframe.addrs.len + 1;
+pub fn make_mframe(iframe: ConnectBox) -> ConnectBox {
+    let mt_len = iframe.title_box.len + iframe.addrs_box.len + 1;
     let mt_width = 8;
     let mt_align = Alignment::Left;
     let mt_cnstrnt = vec![Constraint::Percentage(100)];
-    let mt_widget = NetWidget::new(mt_len, mt_width, mt_align, mt_cnstrnt);
+    let mt_widget = InfoBox::new(mt_len, mt_width, mt_align, mt_cnstrnt);
 
     let mk_len = mt_len + 1;
     let mk_width = 10;
     let mk_align = Alignment::Left;
     let mk_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let mk_widget = NetWidget::new(mk_len, mk_width, mk_align, mk_cnstrnt);
+    let mk_widget = InfoBox::new(mk_len, mk_width, mk_align, mk_cnstrnt);
 
     let mm_len = mt_len + 1;
     let mm_width = 10;
     let mm_align = Alignment::Left;
     let mm_cnstrnt = vec![Constraint::Percentage(45), Constraint::Percentage(55)];
-    let mm_widget = NetWidget::new(mm_len, mm_width, mm_align, mm_cnstrnt);
+    let mm_widget = InfoBox::new(mm_len, mm_width, mm_align, mm_cnstrnt);
 
-    let mframe = NetFrame::new(mt_widget.clone(), mk_widget.clone(), mm_widget);
+    let mframe = ConnectBox::new(mt_widget.clone(), mk_widget.clone(), mm_widget);
     mframe
 }
 
 pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
+    // for id in node_id {
+    //     let Outbox = get_outbound(node_id)
+    //     make_frame(spans.len())
+    //     draw(spans)
+    // }
+    // render_outbound(node_id);
+    // render_inbound(node_id)
+    // render_manual(node_id)
     let oframe = make_oframe();
     get_and_draw_outbound(f, view.clone(), oframe.clone());
     let iframe = make_iframe(oframe.clone());
@@ -90,13 +98,13 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let mframe = make_mframe(iframe.clone());
     draw_manual(f, view.clone(), mframe.clone());
 
-    let top_widget = ListObject::new(oframe, iframe, mframe);
+    let top_widget = NodeBox::new(oframe, iframe, mframe);
 
     let list_margin = 2;
     let list_direction = Direction::Horizontal;
     let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
-    let prev_len = top_widget.manual.addrs.len;
+    let prev_len = top_widget.manual.addrs_box.len;
     //draw_list(list_margin, prev_len, list_direction, list_cnstrnts, view.clone(), top_widget, f);
     let mut nodes = Vec::new();
 
@@ -129,36 +137,34 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 //    f.render_widget(graph, slice[1]);
 //}
 
-// Top level widget
 #[derive(Clone)]
-pub struct ListObject {
-    pub outbound: NetFrame,
-    pub inbound: NetFrame,
-    pub manual: NetFrame,
+pub struct NodeBox {
+    pub outbound: ConnectBox,
+    pub inbound: ConnectBox,
+    pub manual: ConnectBox,
 }
 
-impl ListObject {
-    pub fn new(outbound: NetFrame, inbound: NetFrame, manual: NetFrame) -> ListObject {
-        ListObject { outbound, inbound, manual }
+impl NodeBox {
+    pub fn new(outbound: ConnectBox, inbound: ConnectBox, manual: ConnectBox) -> NodeBox {
+        NodeBox { outbound, inbound, manual }
     }
 }
 
-// Middle level widgets
 #[derive(Clone)]
-pub struct NetFrame {
-    pub title: NetWidget,
-    pub addrs: NetWidget,
-    pub msgs: NetWidget,
+pub struct ConnectBox {
+    pub title_box: InfoBox,
+    pub addrs_box: InfoBox,
+    pub msgs_box: InfoBox,
 }
 
-impl NetFrame {
-    pub fn new(title: NetWidget, addrs: NetWidget, msgs: NetWidget) -> NetFrame {
-        NetFrame { title, addrs, msgs }
+impl ConnectBox {
+    pub fn new(title_box: InfoBox, addrs_box: InfoBox, msgs_box: InfoBox) -> ConnectBox {
+        ConnectBox { title_box, addrs_box, msgs_box }
     }
     pub fn get_total_len(self) -> usize {
-        let t_len = self.title.len;
-        let a_len = self.addrs.len;
-        let m_len = self.msgs.len;
+        let t_len = self.title_box.len;
+        let a_len = self.addrs_box.len;
+        let m_len = self.msgs_box.len;
         let total_len = t_len + a_len + m_len;
         total_len
     }
@@ -166,16 +172,16 @@ impl NetFrame {
 
 // Lowest level widgets
 #[derive(Clone)]
-pub struct NetWidget {
+pub struct InfoBox {
     pub len: usize,
     pub width: usize,
     pub align: Alignment,
     pub cnstrnts: Vec<Constraint>,
 }
 
-impl NetWidget {
-    pub fn new(len: usize, width: usize, align: Alignment, cnstrnts: Vec<Constraint>) -> NetWidget {
-        NetWidget { len, width, align, cnstrnts }
+impl InfoBox {
+    pub fn new(len: usize, width: usize, align: Alignment, cnstrnts: Vec<Constraint>) -> InfoBox {
+        InfoBox { len, width, align, cnstrnts }
     }
 
     pub fn update(mut self, len: usize) {
@@ -193,14 +199,14 @@ impl NetWidget {
         f.render_widget(graph, slice[0]);
     }
     pub fn get_len(self) -> usize {
-        return self.len
+        return self.len;
     }
 }
 
 // loop through all connected nodes in Model
 // parse outbound data by creating a text object called Vec<Spans>
 // send Vec<Spans> to render_widget()
-fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: NetFrame) {
+fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: ConnectBox) {
     for id in &view.id_list.node_id {
         let mut titles = Vec::new();
         let mut msgs = Vec::new();
@@ -247,18 +253,18 @@ fn get_and_draw_outbound<B: Backend>(f: &mut Frame<'_, B>, view: View, oframe: N
                 // TODO: Error
             }
         }
-        //debug!("{:?}", data);
-        oframe.title.clone().draw(titles.clone(), f);
+        debug!("{:?}", data);
+        oframe.title_box.clone().draw(titles.clone(), f);
         let t_len2 = titles.clone().len();
-        oframe.title.clone().update(t_len2);
+        oframe.title_box.clone().update(t_len2);
 
-        oframe.addrs.clone().draw(slots.clone(), f);
-        let s_len2 = slots.clone().len();
-        oframe.addrs.clone().update(s_len2);
+        //oframe.addrs.clone().draw(slots.clone(), f);
+        //let s_len2 = slots.clone().len();
+        //oframe.addrs.clone().update(s_len2);
 
-        oframe.msgs.clone().draw(msgs.clone(), f);
-        let m_len2 = msgs.clone().len();
-        oframe.msgs.clone().update(m_len2);
+        //oframe.msgs.clone().draw(msgs.clone(), f);
+        //let m_len2 = msgs.clone().len();
+        //oframe.msgs.clone().update(m_len2);
     }
 }
 
@@ -271,10 +277,10 @@ fn print_type_of<T>(_: &T) {
 fn get_and_draw_inbound<B: Backend>(
     f: &mut Frame<'_, B>,
     view: View,
-    iframe: NetFrame,
-    outframe: NetFrame,
+    iframe: ConnectBox,
+    outframe: ConnectBox,
 ) {
-    let slots_len = outframe.addrs.get_len();
+    let slots_len = outframe.addrs_box.get_len();
 
     for id in &view.id_list.node_id {
         // create a new data thing
@@ -298,12 +304,10 @@ fn get_and_draw_inbound<B: Backend>(
 
                     match connect.channel.last_status.as_str() {
                         "recv" => {
-                            data.push("".to_string());
                             msgs.push(Spans::from(format!("[R: {}]", connect.channel.last_msg)));
                             data.push(format!("[R: {}]", connect.channel.last_msg));
                         }
                         "sent" => {
-                            data.push("".to_string());
                             msgs.push(Spans::from(format!("[S: {}]", connect.channel.last_msg)));
                             data.push(format!("[S: {}]", connect.channel.last_msg));
                         }
@@ -322,20 +326,20 @@ fn get_and_draw_inbound<B: Backend>(
                 // This should never happen. TODO: make this an error.
             }
         }
-        //debug!("{:?}", data);
-        iframe.title.clone().draw(titles.clone(), f);
-        let t_len2 = titles.clone().len();
-        iframe.title.clone().update(t_len2);
-        iframe.addrs.clone().draw(addrs.clone(), f);
-        let s_len2 = addrs.clone().len();
-        iframe.addrs.clone().update(s_len2);
-        iframe.msgs.clone().draw(msgs.clone(), f);
-        let m_len2 = msgs.clone().len();
-        iframe.msgs.clone().update(m_len2);
+        debug!("{:?}", data);
+        //iframe.title.clone().draw(titles.clone(), f);
+        //let t_len2 = titles.clone().len();
+        //iframe.title.clone().update(t_len2);
+        //iframe.addrs.clone().draw(addrs.clone(), f);
+        //let s_len2 = addrs.clone().len();
+        //iframe.addrs.clone().update(s_len2);
+        //iframe.msgs.clone().draw(msgs.clone(), f);
+        //let m_len2 = msgs.clone().len();
+        //iframe.msgs.clone().update(m_len2);
     }
 }
 
-fn draw_manual<B: Backend>(f: &mut Frame<'_, B>, view: View, mframe: NetFrame) {
+fn draw_manual<B: Backend>(f: &mut Frame<'_, B>, view: View, mframe: ConnectBox) {
     let mut titles = Vec::new();
     let mut keys = Vec::new();
 
@@ -353,13 +357,13 @@ fn draw_manual<B: Backend>(f: &mut Frame<'_, B>, view: View, mframe: NetFrame) {
         }
     }
 
-    mframe.title.clone().draw(titles.clone(), f);
-    let t_len2 = titles.clone().len();
-    mframe.title.clone().update(t_len2);
+    //mframe.title.clone().draw(titles.clone(), f);
+    //let t_len2 = titles.clone().len();
+    //mframe.title.clone().update(t_len2);
 
-    mframe.addrs.clone().draw(keys.clone(), f);
-    let s_len2 = keys.clone().len();
-    mframe.addrs.clone().update(s_len2);
+    //mframe.addrs.clone().draw(keys.clone(), f);
+    //let s_len2 = keys.clone().len();
+    //mframe.addrs.clone().update(s_len2);
 }
 
 //fn draw_list<B: Backend>(
@@ -368,7 +372,7 @@ fn draw_manual<B: Backend>(f: &mut Frame<'_, B>, view: View, mframe: NetFrame) {
 //    direction: Direction,
 //    cnstrnts: Vec<Constraint>,
 //    mut view: View,
-//    connects: ListObject,
+//    connects: NodeBox,
 //    f: &mut Frame<'_, B>,
 //) {
 //    let mut nodes = Vec::new();
