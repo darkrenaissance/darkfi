@@ -204,9 +204,12 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     let msg = "Null".to_string();
                     let status = "Null".to_string();
                     let channel = Channel::new(msg, status);
-                    let new_slot =
-                        Slot::new(String::new(), channel, state.as_str().unwrap().to_string());
-                    slots.push(new_slot)
+                    let new_slot = Slot::new(
+                        String::from("Empty"),
+                        channel,
+                        state.as_str().unwrap().to_string(),
+                    );
+                    slots.push(new_slot.clone())
                 } else {
                     // channel is not empty. initialize with whole values
                     let addr = &slot["addr"];
@@ -219,10 +222,11 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     );
                     slots.push(new_slot)
                 }
+                let oinfo = OutboundInfo::new(slots.clone());
+                oconnects.push(oinfo);
             }
-            let oinfo = OutboundInfo::new(slots);
-            oconnects.push(oinfo);
 
+            debug!("OCONNECTS: {:?}", oconnects);
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = HashMap::new();
 
