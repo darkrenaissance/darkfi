@@ -23,7 +23,8 @@ members = [
     "bin/daod",
     "bin/dao-cli",
     "bin/taud",
-    "bin/tau-cli"
+    "bin/tau-cli",
+    "bin/vanityaddr",
 ]
 
 [dependencies]

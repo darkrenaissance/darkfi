@@ -792,7 +792,7 @@ dependencies = [
  "async-trait",
  "bdk",
  "bitcoin",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -897,9 +897,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.7"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
@@ -909,14 +909,14 @@ dependencies = [
  "os_str_bytes",
  "strsim 0.10.0",
  "termcolor",
- "textwrap 0.14.2",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.0.6"
+version = "3.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "517358c28fcef6607bf6f76108e02afad7e82297d132a6b846dcc1fc3efcd153"
+checksum = "da95d038ede1a964ce99f49cbe27a7fb538d1da595e4b4f70b8c8f338d17bf16"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -1346,7 +1346,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -1392,7 +1392,7 @@ dependencies = [
  "blake2b_simd 1.0.0",
  "bs58",
  "bytes",
- "clap 3.0.7",
+ "clap 3.1.6",
  "crypto_api_chachapoly",
  "dirs 4.0.0",
  "fast-socks5",
@@ -1437,7 +1437,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "log",
@@ -1674,7 +1674,7 @@ version = "0.3.0"
 dependencies = [
  "async-channel",
  "async-std",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "log",
@@ -1700,7 +1700,7 @@ name = "drk"
 version = "0.3.0"
 dependencies = [
  "async-std",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "log",
  "prettytable-rs",
@@ -2206,7 +2206,7 @@ dependencies = [
  "async-channel",
  "async-executor",
  "async-std",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "log",
@@ -2651,7 +2651,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -4208,9 +4208,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.75"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c059c05b48c5c0067d4b4b2b4f0732dd65feb52daf7e0ea09cd87e7dadc1af79"
+checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
@@ -5282,7 +5282,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -5303,7 +5303,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
  "futures",
  "log",
@@ -5382,9 +5382,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
@@ -5717,6 +5717,19 @@ checksum = "79923f7731dc61ebfba3633098bf3ac533bbd35ccd8c57e7088d9a5eebe0263f"
 dependencies = [
  "ctor",
  "version_check",
+]
+
+[[package]]
+name = "vanityaddr"
+version = "0.3.0"
+dependencies = [
+ "bs58",
+ "clap 3.1.6",
+ "darkfi",
+ "num_cpus",
+ "rand 0.8.5",
+ "rayon",
+ "serde_json",
 ]
 
 [[package]]
@@ -6071,7 +6084,7 @@ dependencies = [
 name = "zkas"
 version = "0.3.0"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "darkfi",
 ]
 

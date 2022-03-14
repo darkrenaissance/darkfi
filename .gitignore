@@ -1,5 +1,6 @@
 *.pyc
 *.sage.py
+.vscode/
 
 /target/*
 /proof/*.bin
@@ -11,4 +12,4 @@
 /gatewayd
 /ircd
 /map
-.vscode/
+/vanityaddr
