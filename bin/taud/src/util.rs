@@ -78,10 +78,6 @@ pub struct TauConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::create_dir_all;
-
-    use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
-
     use super::*;
 
     #[test]

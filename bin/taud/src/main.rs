@@ -25,7 +25,7 @@ mod util;
 
 use crate::{
     month_tasks::MonthTasks,
-    task_info::TaskInfo,
+    task_info::{Comment, TaskInfo},
     util::{get_current_time, CliTaud, Settings, TauConfig, Timestamp, CONFIG_FILE_CONTENTS},
 };
 struct JsonRpcInterface {
@@ -45,6 +45,9 @@ impl RequestHandler for JsonRpcInterface {
             Some("add") => return self.add(req.id, req.params).await,
             Some("list") => return self.list(req.id, req.params).await,
             Some("update") => return self.update(req.id, req.params).await,
+            Some("get_state") => return self.get_state(req.id, req.params).await,
+            Some("set_state") => return self.set_state(req.id, req.params).await,
+            Some("set_comment") => return self.set_comment(req.id, req.params).await,
             Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
         }
     }
@@ -171,8 +174,8 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Update task returns `true` upon success.
-    // --> {"jsonrpc": "2.0", "method": "id", "params": [task_id, {"title": "new title"} ], "id": 1}
+    // Update task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn update(&self, id: Value, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
@@ -180,8 +183,6 @@ impl JsonRpcInterface {
         if args.len() != 2 {
             return JsonResult::Err(jsonerr(InvalidParams, None, id))
         }
-
-        let tasks: Vec<TaskInfo>;
 
         if !args[0].is_u64() {
             return JsonResult::Err(jsonerr(InvalidParams, Some("invalid id".into()), id))
@@ -194,22 +195,12 @@ impl JsonRpcInterface {
         let task_id = args[0].as_u64().unwrap();
         let data = args[0].as_object().unwrap();
 
-        match MonthTasks::load_current_open_tasks(&self.settings) {
-            Ok(tks) => tasks = tks,
-            Err(_) => return JsonResult::Err(jsonerr(InvalidParams, None, id)),
+        let mut task: TaskInfo;
+
+        match self.load_task_by_id(task_id) {
+            Ok(t) => task = t,
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
         }
-
-        let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
-
-        if task.is_none() {
-            return JsonResult::Err(jsonerr(
-                InvalidRequest,
-                Some("Didn't find a task with the provided id".into()),
-                id,
-            ))
-        }
-
-        let mut task = task.unwrap();
 
         let mut result = || -> std::result::Result<(), &str> {
             if data.contains_key("title") {
@@ -292,6 +283,129 @@ impl JsonRpcInterface {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(InvalidParams, Some(e.to_string()), id)),
         }
+    }
+
+    // RPCAPI:
+    // Get task's state.
+    // --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
+    async fn get_state(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array().unwrap();
+
+        if !args[0].is_u64() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid id".into()), id))
+        }
+
+        let task_id = args[0].as_u64().unwrap();
+
+        let task: TaskInfo;
+
+        match self.load_task_by_id(task_id) {
+            Ok(t) => task = t,
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+        }
+
+        return JsonResult::Resp(jsonresp(json!(task.get_state()), id))
+    }
+
+    // RPCAPI:
+    // Set state for a task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn set_state(&self, id: Value, params: Value) -> JsonResult {
+        //
+        // TODO remove from MonthTasks
+        //
+
+        let args = params.as_array().unwrap();
+
+        if !args[0].is_u64() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid id".into()), id))
+        }
+
+        if !args[1].is_string() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid state".into()), id))
+        }
+
+        let task_id = args[0].as_u64().unwrap();
+        let state = args[1].as_str().unwrap();
+
+        let mut task: TaskInfo;
+
+        match self.load_task_by_id(task_id) {
+            Ok(t) => task = t,
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+        }
+
+        task.set_state(state);
+
+        match task.save() {
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+        }
+    }
+
+    // RPCAPI:
+    // Set comment for a task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn set_comment(&self, id: Value, params: Value) -> JsonResult {
+        let args = params.as_array().unwrap();
+
+        if !args[0].is_u64() {
+            return JsonResult::Err(jsonerr(InvalidParams, Some("invalid id".into()), id))
+        }
+
+        if !args[1].is_string() {
+            return JsonResult::Err(jsonerr(
+                InvalidParams,
+                Some("invalid comment author".into()),
+                id,
+            ))
+        }
+
+        if !args[2].is_string() {
+            return JsonResult::Err(jsonerr(
+                InvalidParams,
+                Some("invalid comment content".into()),
+                id,
+            ))
+        }
+
+        let task_id = args[0].as_u64().unwrap();
+        let comment_author = args[1].as_str().unwrap();
+        let comment_content = args[2].as_str().unwrap();
+
+        let mut task: TaskInfo;
+
+        match self.load_task_by_id(task_id) {
+            Ok(t) => task = t,
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+        }
+
+        task.set_comment(Comment::new(comment_content, comment_author));
+
+        match task.save() {
+            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
+            Err(e) => JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+        }
+    }
+
+    fn load_task_by_id(&self, task_id: u64) -> std::result::Result<TaskInfo, String> {
+        let tasks: Vec<TaskInfo>;
+
+        match MonthTasks::load_current_open_tasks(&self.settings) {
+            Ok(tks) => tasks = tks,
+            Err(e) => return Err(e.to_string()),
+        }
+
+        let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
+
+        if task.is_none() {
+            return Err("Didn't find a task with the provided id".into())
+        }
+
+        Ok(task.unwrap())
     }
 }
 
