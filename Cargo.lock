@@ -5288,6 +5288,7 @@ dependencies = [
  "futures",
  "log",
  "num_cpus",
+ "prettytable-rs",
  "serde_json",
  "simplelog",
  "smol",

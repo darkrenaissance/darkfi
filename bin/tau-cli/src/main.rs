@@ -1,11 +1,14 @@
-use chrono::{Datelike, Local, NaiveDate};
-use clap::{AppSettings, IntoApp, Parser, Subcommand};
+// TODO: This whole code needs refactoring, clean-up and comments
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
+use clap::{CommandFactory, Parser, Subcommand};
 use log::{debug, error};
 
+use prettytable::{cell, format, row, Table};
 use std::{
     env::{temp_dir, var},
     fs::{self, File},
     io::{Read, Write},
+    ops::Index,
 };
 
 use darkfi::{
@@ -30,16 +33,21 @@ pub enum CliTauSubCommands {
         desc: Option<String>,
         /// Assign task to user
         #[clap(short, long)]
-        assign: Option<Vec<String>>,
+        assign: Option<String>,
         /// Task project (can be hierarchical: crypto.zk)
         #[clap(short, long)]
-        project: Option<Vec<String>>,
+        project: Option<String>,
         /// Due date in DDMM format: "2202" for 22 Feb
         #[clap(short, long)]
-        due: Option<u64>,
+        due: Option<String>,
         /// Project rank
         #[clap(short, long)]
         rank: Option<u32>,
+    },
+    /// List open tasks
+    List {
+        #[clap(short, long)]
+        month: Option<String>,
     },
 }
 
@@ -47,9 +55,6 @@ pub enum CliTauSubCommands {
 #[derive(Parser)]
 #[clap(name = "tau")]
 #[clap(author, version, about)]
-#[clap(global_setting(AppSettings::PropagateVersion))]
-#[clap(global_setting(AppSettings::UseLongFormatForHelpSubcommand))]
-#[clap(setting(AppSettings::SubcommandRequiredElseHelp))]
 pub struct CliTau {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
@@ -86,87 +91,182 @@ async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
 // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn add(
-    url: String,
-    title: Option<String>,
-    desc: Option<String>,
-    assign: Option<Vec<String>>,
-    project: Option<Vec<String>>,
-    due: Option<u64>,
+    url: &str,
+    title: Option<&str>,
+    desc: Option<&str>,
+    assign: Option<Vec<&str>>,
+    project: Option<Vec<&str>>,
+    due: Option<i64>,
     rank: Option<u32>,
 ) -> Result<Value> {
     let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
-    Ok(request(req, url).await?)
+    Ok(request(req, url.to_string()).await?)
+}
+
+// List tasks
+// --> {"jsonrpc": "2.0", "method": "list", "params": [month_date], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
+async fn list(url: &str, month: Option<i64>) -> Result<Value> {
+    let req = jsonrpc::request(json!("list"), json!([month]));
+    Ok(request(req, url.to_string()).await?)
 }
 
 async fn start(options: CliTau) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:8875";
-    if let Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) =
-        options.command
-    {
-        let t = if title.is_none() {
-            print!("Title: ");
-            io::stdout().flush()?;
-            let mut t = String::new();
-            io::stdin().read_line(&mut t)?;
-            if &t[(t.len() - 1)..] == "\n" {
-                t.pop();
-            }
-            Some(t)
-        } else {
-            title
-        };
-
-        let des = if desc.is_none() {
-            let editor = var("EDITOR").unwrap();
-            let mut file_path = temp_dir();
-            file_path.push("temp_file");
-            File::create(&file_path)?;
-            fs::write(
-                &file_path,
-                "\n# Write task description above this line\n# These lines will be removed\n",
-            )?;
-
-            Command::new(editor).arg(&file_path).status()?;
-
-            let mut lines = String::new();
-            File::open(file_path)?.read_to_string(&mut lines)?;
-
-            let mut description = String::new();
-            for line in lines.split('\n') {
-                if !line.starts_with('#') {
-                    description.push_str(line)
+    match options.command {
+        Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
+            let t = if title.is_none() {
+                print!("Title: ");
+                io::stdout().flush()?;
+                let mut t = String::new();
+                io::stdin().read_line(&mut t)?;
+                if &t[(t.len() - 1)..] == "\n" {
+                    t.pop();
                 }
+                Some(t)
+            } else {
+                title
+            };
+
+            let des = if desc.is_none() {
+                let editor = var("EDITOR").unwrap();
+                let mut file_path = temp_dir();
+                file_path.push("temp_file");
+                File::create(&file_path)?;
+                fs::write(
+                    &file_path,
+                    "\n# Write task description above this line\n# These lines will be removed\n",
+                )?;
+
+                Command::new(editor).arg(&file_path).status()?;
+
+                let mut lines = String::new();
+                File::open(file_path)?.read_to_string(&mut lines)?;
+
+                let mut description = String::new();
+                for line in lines.split('\n') {
+                    if !line.starts_with('#') {
+                        description.push_str(line)
+                    }
+                }
+
+                Some(description)
+            } else {
+                desc
+            };
+
+            // fix this
+            let assignee;
+            let assigned;
+            let a = if assign.is_some() {
+                assignee = assign.unwrap();
+                assigned = assignee.as_str();
+                let somevec = assigned.split(',').collect();
+
+                Some(somevec)
+            } else {
+                None
+            };
+
+            // fix this
+            let projecte;
+            let projectd;
+            let p = if project.is_some() {
+                projecte = project.unwrap();
+                projectd = projecte.as_str();
+                let somevec = projectd.split(',').collect();
+
+                Some(somevec)
+            } else {
+                None
+            };
+
+            let d = if due.is_some() {
+                let du = due.unwrap();
+                assert!(du.len() == 4);
+                let (day, month) = (du[..2].parse::<u32>()?, du[2..].parse::<u32>()?);
+                let mut year = Local::today().year();
+                if month < Local::today().month() {
+                    year += 1;
+                }
+                if month == Local::today().month() && day < Local::today().day() {
+                    year += 1;
+                }
+                let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+                // let dt_string = dt.format("%A %-d %B").to_string(); // Format: Weekday Day Month
+                let timestamp = dt.timestamp();
+                Some(timestamp)
+            } else {
+                None
+            };
+
+            let r = if rank.is_none() { Some(0) } else { rank };
+
+            add(rpc_addr, t.as_deref(), des.as_deref(), a, p, d, r).await?;
+            //println!("Added task: {:#?}", t);
+            return Ok(())
+        }
+        Some(CliTauSubCommands::List { month }) => {
+            let ts = if month.is_some() {
+                let month = month.unwrap();
+                assert!(month.len() == 4);
+                let (m, y) = (month[..2].parse::<u32>()?, month[2..].parse::<i32>()?);
+                let dt = NaiveDate::from_ymd(y + 2000, m, 1).and_hms(0, 0, 0);
+
+                Some(dt.timestamp())
+            } else {
+                None
+            };
+
+            let mut table = Table::new();
+            table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+            table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
+
+            let rep = list(rpc_addr, ts).await?;
+
+            let tasks = rep.as_array().unwrap();
+            for task in tasks {
+                let project = task["project"].as_array().unwrap();
+                let mut projects = String::new();
+                for (i, _) in project.iter().enumerate() {
+                    if !projects.is_empty() {
+                        projects.push(',');
+                    }
+                    projects.push_str(project.index(i).as_str().unwrap());
+                }
+
+                let assign = task["assign"].as_array().unwrap();
+                let mut asgn = String::new();
+                for (i, _) in assign.iter().enumerate() {
+                    if !asgn.is_empty() {
+                        asgn.push(',');
+                    }
+                    asgn.push_str(assign.index(i).as_str().unwrap());
+                }
+
+                let date = if task["due"].is_u64() {
+                    let due = task["due"].as_i64().unwrap();
+                    NaiveDateTime::from_timestamp(due, 0).date().format("%A %-d %B").to_string()
+                } else {
+                    "".to_string()
+                };
+
+                // TODO: sort lines in table by rank
+                // TODO: the higher the rank the brighter it is
+                table.add_row(row![
+                    task["id"],
+                    task["title"].as_str().unwrap(),
+                    projects,
+                    asgn,
+                    date,
+                    Fb->task["rank"]
+                ]);
             }
+            table.printstd();
 
-            Some(description)
-        } else {
-            desc
-        };
-
-        let d = if due.is_some() {
-            let du = due.unwrap().to_string();
-            assert!(du.len() == 4);
-            let (day, month) = (du[..2].parse::<u32>()?, du[2..].parse::<u32>()?);
-            let mut year = Local::today().year();
-            if month < Local::today().month() {
-                year += 1;
-            }
-            if month == Local::today().month() && day < Local::today().day() {
-                year += 1;
-            }
-            let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
-            // let dt_string = dt.format("%A %-d %B").to_string(); // Format: Weekday Day Month
-            let timestamp = dt.timestamp().try_into().unwrap();
-            Some(timestamp)
-        } else {
-            None
-        };
-
-        let r = if rank.is_none() { Some(0) } else { rank };
-
-        add(rpc_addr.to_string(), t, des, assign, project, d, r).await?;
-        //println!("Added task: {:#?}", t);
-        return Ok(())
+            return Ok(())
+        }
+        _ => (),
     }
     error!("Please run 'tau help' to see usage.");
 
@@ -176,7 +276,7 @@ async fn start(options: CliTau) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliTau::parse();
-    let matches = CliTau::into_app().get_matches();
+    let matches = CliTau::command().get_matches();
     let verbosity_level = matches.occurrences_of("verbose");
 
     //let config_path = if args.config.is_some() {
