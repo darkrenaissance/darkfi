@@ -1,4 +1,4 @@
-use clap::{App, Arg, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
 use std::net::SocketAddr;
 
 use darkfi::{net, Result};
@@ -13,7 +13,7 @@ pub struct ProgramOptions {
 
 impl ProgramOptions {
     pub fn load() -> Result<ProgramOptions> {
-        let app = App::new("dfi")
+        let app = Command::new("dfi")
             .version("0.1.0")
             .author("Amir Taaki <amir@dyne.org>")
             .about("Dark node")
