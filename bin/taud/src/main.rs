@@ -193,7 +193,7 @@ impl JsonRpcInterface {
         }
 
         let task_id = args[0].as_u64().unwrap();
-        let data = args[0].as_object().unwrap();
+        let data = args[1].as_object().unwrap();
 
         let mut task: TaskInfo;
 
