@@ -736,7 +736,7 @@ async fn start(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliCashierd::parse();
-    let matches = CliCashierd::into_app().get_matches();
+    let matches = CliCashierd::command().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?

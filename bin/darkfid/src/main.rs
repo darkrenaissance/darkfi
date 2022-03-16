@@ -874,7 +874,7 @@ async fn start(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDarkfid::parse();
-    let matches = CliDarkfid::into_app().get_matches();
+    let matches = CliDarkfid::command().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?

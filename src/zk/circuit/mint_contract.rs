@@ -183,7 +183,7 @@ impl Circuit<pallas::Base> for MintContract {
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
 
@@ -206,7 +206,7 @@ impl Circuit<pallas::Base> for MintContract {
             let value_commit_v = ValueCommitV;
             let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
             value_commit_v
-                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value.clone(), one.clone()))?
+                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one.clone()))?
         };
 
         // r_V * G_2
@@ -239,8 +239,7 @@ impl Circuit<pallas::Base> for MintContract {
         let (commitment, _) = {
             let token_commit_v = ValueCommitV;
             let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
-            token_commit_v
-                .mul(layouter.namespace(|| "[token] ValueCommitV"), (token.clone(), one.clone()))?
+            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
         };
 
         // r_A * G_2

@@ -42,7 +42,7 @@ impl<'a> Lexer<'a> {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
-        let error = ErrorEmitter::new("Lexer", filename, lines.clone());
+        let error = ErrorEmitter::new("Lexer", filename, lines);
 
         Self { source, error }
     }

@@ -85,7 +85,7 @@ async fn start(options: CliDao) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDao::parse();
-    let _matches = CliDao::into_app().get_matches();
+    let _matches = CliDao::command().get_matches();
 
     //let config_path = if args.config.is_some() {
     //    expand_path(&args.config.clone().unwrap())?

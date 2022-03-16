@@ -1,6 +1,6 @@
 use log::{error, warn};
 
-use super::{memory::MemoryManipulation, runtime::Env};
+use super::{memory::MemoryManipulation, vm_runtime::Env};
 
 /// Serialize contract payload to format accepted by the runtime entrypoint.
 /// We keep the same payload as a slice of bytes, and prepend it with a

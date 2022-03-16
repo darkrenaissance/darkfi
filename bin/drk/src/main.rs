@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use clap::{AppSettings, IntoApp, Parser, Subcommand};
+use clap::{IntoApp, Parser, Subcommand};
 use log::{debug, error};
 use prettytable::{cell, format, row, Table};
 use serde::{Deserialize, Serialize};
@@ -115,9 +115,6 @@ pub enum CliDrkSubCommands {
 #[derive(Parser)]
 #[clap(name = "drk")]
 #[clap(author, version, about)]
-#[clap(global_setting(AppSettings::PropagateVersion))]
-#[clap(global_setting(AppSettings::UseLongFormatForHelpSubcommand))]
-#[clap(setting(AppSettings::SubcommandRequiredElseHelp))]
 pub struct CliDrk {
     /// Sets a custom config file
     #[clap(short, long)]
@@ -471,7 +468,8 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliDrk::parse();
-    let matches = CliDrk::into_app().get_matches();
+    let matches =
+        CliDrk::command().propagate_version(true).arg_required_else_help(true).get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.clone().unwrap())?

@@ -64,7 +64,7 @@ async fn start(executor: Arc<Executor<'_>>, config: &GatewaydConfig) -> Result<(
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliGatewayd::parse();
-    let matches = CliGatewayd::into_app().get_matches();
+    let matches = CliGatewayd::command().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?

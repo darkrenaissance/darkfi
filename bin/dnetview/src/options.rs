@@ -1,4 +1,4 @@
-use clap::{App, Arg, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
 
 use darkfi::Result;
 
@@ -9,7 +9,7 @@ pub struct ProgramOptions {
 
 impl ProgramOptions {
     pub fn load() -> Result<ProgramOptions> {
-        let app = App::new("dnetview")
+        let app = Command::new("dnetview")
             .version("0.1.0")
             .author("lunar_mining")
             .about("dnetview")

@@ -31,7 +31,7 @@ impl Analyzer {
         // For nice error reporting, we'll load everything into a string
         // vector so we have references to lines.
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
-        let error = ErrorEmitter::new("Semantic", filename, lines.clone());
+        let error = ErrorEmitter::new("Semantic", filename, lines);
 
         Analyzer { constants, witnesses, statements, stack: vec![], error }
     }

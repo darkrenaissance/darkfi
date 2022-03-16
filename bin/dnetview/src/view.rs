@@ -14,7 +14,7 @@ impl View {
     }
 
     pub fn update(&mut self, infos: HashMap<String, NodeInfo>) {
-        for (id, info) in infos.clone() {
+        for (id, info) in infos {
             self.id_list.node_id.insert(id.clone());
             self.info_list.infos.insert(id, info);
         }

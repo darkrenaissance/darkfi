@@ -761,7 +761,7 @@ pub struct BtcTransaction(bitcoin::Transaction);
 pub struct BtcAddress(bitcoin::Address);
 pub struct BtcPublicKey(bitcoin::PublicKey);
 pub struct BtcPrivateKey(bitcoin::PrivateKey);
-pub struct SecPublicKey(secp256k1::key::PublicKey);
+pub struct SecPublicKey(secp256k1::PublicKey);
 
 impl Encodable for BtcTransaction {
     fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
@@ -830,7 +830,7 @@ impl Encodable for SecPublicKey {
 impl Decodable for SecPublicKey {
     fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
         let key: Vec<u8> = Decodable::decode(&mut d)?;
-        let key = secp256k1::key::PublicKey::from_slice(&key)
+        let key = secp256k1::PublicKey::from_slice(&key)
             .map_err(|err| darkfi::Error::from(BtcFailed::from(err)))?;
         Ok(SecPublicKey(key))
     }

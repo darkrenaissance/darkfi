@@ -171,12 +171,8 @@ impl Circuit<pallas::Base> for SpendContract {
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config = EccChip::<OrchardFixedBases>::configure(
-            meta,
-            advices,
-            lagrange_coeffs,
-            range_check.clone(),
-        );
+        let ecc_config =
+            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
@@ -198,7 +194,7 @@ impl Circuit<pallas::Base> for SpendContract {
                 advices[6],
                 lagrange_coeffs[0],
                 lookup,
-                range_check.clone(),
+                range_check,
             );
             let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
             (sinsemilla_config_1, merkle_config_1)
@@ -271,7 +267,7 @@ impl Circuit<pallas::Base> for SpendContract {
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
 
@@ -317,7 +313,7 @@ impl Circuit<pallas::Base> for SpendContract {
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output.into();
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
 

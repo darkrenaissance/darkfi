@@ -1,4 +1,8 @@
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+};
 
 use chrono::Utc;
 use clap::Parser;
@@ -17,7 +21,7 @@ pub fn get_current_time() -> Timestamp {
     Timestamp(Utc::now().timestamp())
 }
 
-pub fn find_free_id(task_ids: &Vec<u32>) -> u32 {
+pub fn find_free_id(task_ids: &[u32]) -> u32 {
     for i in 1.. {
         if !task_ids.contains(&i) {
             return i
@@ -26,7 +30,7 @@ pub fn find_free_id(task_ids: &Vec<u32>) -> u32 {
     1
 }
 
-pub fn load<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
+pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
@@ -34,7 +38,7 @@ pub fn load<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
     Ok(value)
 }
 
-pub fn save<T: Serialize>(path: &PathBuf, value: &T) -> Result<()> {
+pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let file = File::create(path)?;
     serde_json::to_writer_pretty(file, value)?;
     Ok(())

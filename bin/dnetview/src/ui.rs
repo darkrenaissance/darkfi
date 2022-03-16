@@ -3,7 +3,7 @@ use log::debug;
 
 use tui::{
     backend::Backend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -37,7 +37,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                                     format!("               [S: {}]", slot.channel.last_msg),
                                     style,
                                 ),
-                                a => Span::styled(format!("{}", a), style),
+                                a => Span::styled(a.to_string(), style),
                             };
                             lines.push(Spans::from(vec![addr, msg]));
                         } else {
@@ -59,7 +59,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                                 format!("               [R: {}]", connect.channel.last_msg),
                                 style,
                             ),
-                            a => Span::styled(format!("{}", a), style),
+                            a => Span::styled(a.to_string(), style),
                         };
                         lines.push(Spans::from(vec![addr, msg]));
                     } else {

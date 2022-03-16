@@ -42,7 +42,7 @@ impl DrkAddr {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    if args.prefix.chars().next() != Some('1') {
+    if !args.prefix.starts_with('1') {
         return Err(Error::ParseFailed("Address prefix must start with '1'"))
     }
 

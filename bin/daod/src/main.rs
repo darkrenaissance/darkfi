@@ -64,7 +64,7 @@ impl JsonRpcInterface {
 async fn main() -> Result<()> {
     //let args = CliDao::parse();
 
-    //let matches = CliDao::into_app().get_matches();
+    //let matches = CliDao::command().get_matches();
 
     TermLogger::init(
         LevelFilter::Debug,

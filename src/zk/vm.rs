@@ -171,12 +171,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config = EccChip::<OrchardFixedBases>::configure(
-            meta,
-            advices,
-            lagrange_coeffs,
-            range_check.clone(),
-        );
+        let ecc_config =
+            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
@@ -201,7 +197,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 advices[6],
                 lagrange_coeffs[0],
                 lookup,
-                range_check.clone(),
+                range_check,
             );
             let merkle_cfg1 = MerkleChip::configure(meta, sinsemilla_cfg1.clone());
             (sinsemilla_cfg1, merkle_cfg1)

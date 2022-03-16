@@ -152,17 +152,12 @@ impl JsonRpcInterface {
         }
 
         let result = || -> Result<Vec<TaskInfo>> {
-            let tasks: Vec<TaskInfo>;
-
-            if args[0].is_i64() {
-                tasks = MonthTasks::load_or_create(
-                    &Timestamp(args[0].as_i64().unwrap()),
-                    &self.settings,
-                )?
-                .objects()?;
+            let tasks: Vec<TaskInfo> = if args[0].is_i64() {
+                MonthTasks::load_or_create(&Timestamp(args[0].as_i64().unwrap()), &self.settings)?
+                    .objects()?
             } else {
-                tasks = MonthTasks::load_current_open_tasks(&self.settings)?;
-            }
+                MonthTasks::load_current_open_tasks(&self.settings)?
+            };
 
             Ok(tasks)
         };
@@ -195,12 +190,10 @@ impl JsonRpcInterface {
         let task_id = args[0].as_u64().unwrap();
         let data = args[1].as_object().unwrap();
 
-        let mut task: TaskInfo;
-
-        match self.load_task_by_id(task_id) {
-            Ok(t) => task = t,
+        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
+            Ok(t) => t,
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
-        }
+        };
 
         let mut result = || -> std::result::Result<(), String> {
             if data.contains_key("title") {
@@ -297,12 +290,10 @@ impl JsonRpcInterface {
 
         let task_id = args[0].as_u64().unwrap();
 
-        let task: TaskInfo;
-
-        match self.load_task_by_id(task_id) {
-            Ok(t) => task = t,
+        let task: TaskInfo = match self.load_task_by_id(task_id) {
+            Ok(t) => t,
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
-        }
+        };
 
         JsonResult::Resp(jsonresp(json!(task.get_state()), id))
     }
@@ -325,12 +316,10 @@ impl JsonRpcInterface {
         let task_id = args[0].as_u64().unwrap();
         let state = args[1].as_str().unwrap();
 
-        let mut task: TaskInfo;
-
-        match self.load_task_by_id(task_id) {
-            Ok(t) => task = t,
+        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
+            Ok(t) => t,
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
-        }
+        };
 
         task.set_state(state);
 
@@ -371,12 +360,10 @@ impl JsonRpcInterface {
         let comment_author = args[1].as_str().unwrap();
         let comment_content = args[2].as_str().unwrap();
 
-        let mut task: TaskInfo;
-
-        match self.load_task_by_id(task_id) {
-            Ok(t) => task = t,
+        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
+            Ok(t) => t,
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
-        }
+        };
 
         task.set_comment(Comment::new(comment_content, comment_author));
 
@@ -387,12 +374,10 @@ impl JsonRpcInterface {
     }
 
     fn load_task_by_id(&self, task_id: u64) -> std::result::Result<TaskInfo, String> {
-        let tasks: Vec<TaskInfo>;
-
-        match MonthTasks::load_current_open_tasks(&self.settings) {
-            Ok(tks) => tasks = tks,
+        let tasks: Vec<TaskInfo> = match MonthTasks::load_current_open_tasks(&self.settings) {
+            Ok(v) => v,
             Err(e) => return Err(e.to_string()),
-        }
+        };
 
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 

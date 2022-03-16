@@ -1,3 +1,3 @@
 pub mod memory;
-pub mod runtime;
 pub mod util;
+pub mod vm_runtime;

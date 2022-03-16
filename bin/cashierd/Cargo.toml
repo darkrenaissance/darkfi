@@ -36,7 +36,7 @@ serde_json = "1.0.79"
 bdk = {version = "0.16.1", optional = true}
 anyhow = {version = "1.0.56", optional = true}
 bitcoin = {version = "0.27.1", optional = true}
-secp256k1 = {version = "0.22.1", default-features = false, features = ["rand-std"], optional = true}
+secp256k1 = {version = "0.20.1", default-features = false, features = ["rand-std"], optional = true}
 
 # Ethereum bridge dependencies
 hex = {version = "0.4.3", optional = true}
