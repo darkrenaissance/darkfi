@@ -54,7 +54,7 @@ impl Map {
 
         match reply {
             JsonResult::Resp(r) => {
-                //debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
+                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
                 Ok(r.result)
             }
 
@@ -143,23 +143,20 @@ async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
     Ok(())
 }
 
+// TODO: clean up into seperate functions.
+// TODO: replace if/else with match where possible
+// TODO: test unwraps will never ever crash
 async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
-    // TODO: clean up into seperate functions.
-    // TODO: replace if/else with match where possible
-    // TODO: test unwraps will never ever crash
-    //debug!("Attemping to poll: {}", client.url);
     loop {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            //debug!("reply: {:?}", reply);
             // TODO: we are ignoring this value for now
             let _ext_addr = reply.as_object().unwrap().get("external_addr");
 
             let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
             let manual_obj = &reply.as_object().unwrap()["session_manual"];
             let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
-            //debug!("OOBJ {:?}", outbound_obj);
 
             let mut iconnects = Vec::new();
             let mut mconnects = Vec::new();
@@ -226,7 +223,6 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 oconnects.push(oinfo);
             }
 
-            debug!("OCONNECTS: {:?}", oconnects);
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = HashMap::new();
 

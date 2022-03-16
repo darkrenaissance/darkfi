@@ -3,7 +3,7 @@ use log::debug;
 
 use tui::{
     backend::Backend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -26,43 +26,45 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                 for outbound in &node.outbound.clone() {
                     lines.push(Spans::from(Span::styled("   Outgoing", style)));
                     for slot in outbound.slots.clone() {
-                        lines.push(Spans::from(Span::styled(
-                            format!("       {}", slot.addr),
-                            style,
-                        )));
+                        let addr = Span::styled(format!("       {}", slot.addr), style);
                         if slot.channel.last_status.as_str() != "Null" {
                             let msg: Span = match slot.channel.last_status.as_str() {
-                                "recv" => {
-                                    Span::styled(format!("[R: {}]", slot.channel.last_msg), style)
-                                }
-                                "sent" => {
-                                    Span::styled(format!("[S: {}]", slot.channel.last_msg), style)
-                                }
+                                "recv" => Span::styled(
+                                    format!("               [R: {}]", slot.channel.last_msg),
+                                    style,
+                                ),
+                                "sent" => Span::styled(
+                                    format!("               [S: {}]", slot.channel.last_msg),
+                                    style,
+                                ),
                                 a => Span::styled(format!("{}", a), style),
                             };
+                            lines.push(Spans::from(vec![addr, msg]));
                         } else {
-                            // TODO
+                            // discard Null values for now
+                            lines.push(Spans::from(addr));
                         }
                     }
                 }
                 for connect in &node.inbound {
                     lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
-                    lines.push(Spans::from(Span::styled(
-                        format!("       {}", connect.connected),
-                        style,
-                    )));
-
+                    let addr = Span::styled(format!("       {}", connect.connected), style);
                     if connect.channel.last_status.as_str() != "Null" {
                         let msg: Span = match connect.channel.last_status.as_str() {
-                            "recv" => {
-                                Span::styled(format!("[R: {}]", connect.channel.last_msg), style)
-                            }
-                            "sent" => {
-                                Span::styled(format!("[R: {}]", connect.channel.last_msg), style)
-                            }
+                            "recv" => Span::styled(
+                                format!("               [R: {}]", connect.channel.last_msg),
+                                style,
+                            ),
+                            "sent" => Span::styled(
+                                format!("               [R: {}]", connect.channel.last_msg),
+                                style,
+                            ),
                             a => Span::styled(format!("{}", a), style),
                         };
-                    };
+                        lines.push(Spans::from(vec![addr, msg]));
+                    } else {
+                        lines.push(Spans::from(addr));
+                    }
                 }
                 for connect in &node.manual {
                     lines.push(Spans::from(Span::styled("   Manual", Style::default())));
@@ -89,15 +91,12 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     f.render_stateful_widget(nodes, slice[0], &mut view.id_list.state);
 
-    //let msgs = Paragraph::new(msgs).style(Style::default()).alignment(Alignment::Right);
-    //f.render_widget(msgs, slice[0]);
-
-    //render_info_right(view.clone(), f, slice);
+    render_info_right(view.clone(), f, slice);
 }
 
-//fn render_info_right<B: Backend>(_view: View, f: &mut Frame<'_, B>, slice: Vec<Rect>) {
-//    let span = vec![];
-//    let graph =
-//        Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
-//    f.render_widget(graph, slice[1]);
-//}
+fn render_info_right<B: Backend>(_view: View, f: &mut Frame<'_, B>, slice: Vec<Rect>) {
+    let span = vec![];
+    let graph =
+        Paragraph::new(span).block(Block::default().borders(Borders::ALL)).style(Style::default());
+    f.render_widget(graph, slice[1]);
+}
