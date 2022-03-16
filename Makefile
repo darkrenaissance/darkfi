@@ -33,22 +33,18 @@ fix:
 clippy:
 	$(CARGO) clippy --release --all-features --all
 
-test: test-vm test-tx
-	$(CARGO) test --release --all-features --all
-
-test-tx:
-	$(CARGO) run --release --features=node,zkas --example tx
-
+# zkas source files which we want to compile for tests
 VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk
 VM_BIN = $(VM_SRC:=.bin)
 
 $(VM_BIN): zkas $(VM_SRC)
 	./zkas $(basename $@) -o $@
 
-test-vm: $(VM_BIN)
-	$(CARGO) run --release --features=crypto,zkas --example arithmetic
-	$(CARGO) run --release --features=crypto,zkas --example mint
-	$(CARGO) run --release --features=crypto,zkas --example burn
+test: $(VM_BIN) test-tx
+	$(CARGO) test --release --all-features --all
+
+test-tx:
+	$(CARGO) run --release --features=node,zkas --example tx
 
 clean:
 	rm -f $(BINS)
@@ -63,4 +59,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy test test-tx test-vm clean install uninstall
+.PHONY: all check fix clippy test test-tx clean install uninstall

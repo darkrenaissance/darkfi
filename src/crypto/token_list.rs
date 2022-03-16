@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     fn _get_sol_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../testdata/solanatokenlisttest.json");
+        let file_contents = include_bytes!("../../tests/data/solanatokenlisttest.json");
         let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
         let tokens = sol_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
@@ -195,7 +195,7 @@ mod tests {
     }
 
     fn _get_eth_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../testdata/erc20tokenlisttest.json");
+        let file_contents = include_bytes!("../../tests/data/erc20tokenlisttest.json");
         let eth_tokenlist: Value = serde_json::from_slice(file_contents)?;
 
         let tokens = eth_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();

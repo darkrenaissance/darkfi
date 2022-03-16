@@ -5,12 +5,15 @@
 /target/*
 /proof/*.bin
 
-/zkas
-/drk
-/darkfid
 /cashierd
+/dao-cli
+/daod
+/darkfid
+/dnetview
+/drk
 /gatewayd
 /ircd
-/map
+/tau-cli
+/taud
 /vanityaddr
-/dnetview
+/zkas

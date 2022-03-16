@@ -251,20 +251,3 @@ required-features = ["node"]
 name = "dao-process"
 path = "example/dao_process.rs"
 required-features = ["crypto", "zkas"]
-
-# ZK VM Proof examples
-
-[[example]]
-name = "arithmetic"
-path = "proof/arithmetic.rs"
-required-features = ["crypto", "zkas"]
-
-[[example]]
-name = "mint"
-path = "proof/mint.rs"
-required-features = ["crypto", "zkas"]
-
-[[example]]
-name = "burn"
-path = "proof/burn.rs"
-required-features = ["crypto", "zkas"]

@@ -13,25 +13,17 @@ use halo2_gadgets::primitives::{
     poseidon,
     poseidon::{ConstantLength, P128Pow5T3},
 };
-use log::info;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
-use simplelog::{ColorChoice::Auto, Config, LevelFilter, TermLogger, TerminalMode::Mixed};
 
-fn main() -> Result<()> {
-    let loglevel = match option_env!("RUST_LOG") {
-        Some("debug") => LevelFilter::Debug,
-        Some("trace") => LevelFilter::Trace,
-        Some(_) | None => LevelFilter::Info,
-    };
-    TermLogger::init(loglevel, Config::default(), Mixed, Auto)?;
-
+#[test]
+fn mint_proof() -> Result<()> {
     /* ANCHOR: main */
-    let bincode = include_bytes!("mint.zk.bin");
+    let bincode = include_bytes!("../proof/mint.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
     // ======
@@ -75,7 +67,6 @@ fn main() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
 
-    info!(target: "PROVER", "Building proving key and creating the zero-knowledge proof");
     let proving_key = ProvingKey::build(11, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
@@ -98,7 +89,6 @@ fn main() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
 
-    info!(target: "VERIFIER", "Building verifying key and verifying the zero-knowledge proof");
     let verifying_key = VerifyingKey::build(11, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
     /* ANCHOR_END: main */
