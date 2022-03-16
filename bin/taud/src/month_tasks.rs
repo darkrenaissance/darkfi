@@ -36,7 +36,7 @@ impl MonthTasks {
         let mut tks: Vec<TaskInfo> = vec![];
 
         for ref_id in self.task_tks.iter() {
-            tks.push(TaskInfo::load(&ref_id, &self.settings)?);
+            tks.push(TaskInfo::load(ref_id, &self.settings)?);
         }
 
         Ok(tks)
@@ -81,7 +81,7 @@ impl MonthTasks {
                 let mut mt = Self::new(&vec![], settings);
                 mt.set_date(date);
                 mt.save()?;
-                return Ok(mt)
+                Ok(mt)
             }
         }
     }

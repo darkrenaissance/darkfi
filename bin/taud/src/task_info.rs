@@ -68,7 +68,7 @@ impl TaskInfo {
         let created_at: Timestamp = get_current_time();
 
         let task_ids: Vec<u32> =
-            MonthTasks::load_current_open_tasks(&settings)?.into_iter().map(|t| t.id).collect();
+            MonthTasks::load_current_open_tasks(settings)?.into_iter().map(|t| t.id).collect();
         let id: u32 = find_free_id(&task_ids);
 
         Ok(Self {
@@ -105,9 +105,9 @@ impl TaskInfo {
 
     pub fn get_state(&self) -> String {
         if let Some(ev) = self.events.last() {
-            return ev.action.clone()
+            ev.action.clone()
         } else {
-            return "open".into()
+            "open".into()
         }
     }
 
@@ -116,7 +116,7 @@ impl TaskInfo {
     }
 
     pub fn get_id(&self) -> u32 {
-        self.id.clone()
+        self.id
     }
 
     pub fn get_ref_id(&self) -> String {

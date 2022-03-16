@@ -105,11 +105,11 @@ impl JsonRpcInterface {
         }
 
         let assign = args[2].as_array();
-        if assign.is_some() && assign.unwrap().len() > 0 {
+        if assign.is_some() && !assign.unwrap().is_empty() {
             task.set_assign(
                 &assign
                     .unwrap()
-                    .into_iter()
+                    .iter()
                     .filter(|a| a.as_str().is_some())
                     .map(|a| a.as_str().unwrap().to_string())
                     .collect(),
@@ -117,11 +117,11 @@ impl JsonRpcInterface {
         }
 
         let project = args[3].as_array();
-        if project.is_some() && project.unwrap().len() > 0 {
+        if project.is_some() && !project.unwrap().is_empty() {
             task.set_project(
                 &project
                     .unwrap()
-                    .into_iter()
+                    .iter()
                     .filter(|p| p.as_str().is_some())
                     .map(|p| p.as_str().unwrap().to_string())
                     .collect(),
@@ -199,7 +199,7 @@ impl JsonRpcInterface {
 
         match self.load_task_by_id(task_id) {
             Ok(t) => task = t,
-            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
         }
 
         let mut result = || -> std::result::Result<(), String> {
@@ -248,7 +248,7 @@ impl JsonRpcInterface {
                         .ok_or("error parsing assign")?
                         .as_array()
                         .ok_or("invalid value for assign")?
-                        .into_iter()
+                        .iter()
                         .filter(|a| a.as_str().is_some())
                         .map(|a| a.as_str().unwrap().to_string())
                         .collect(),
@@ -262,7 +262,7 @@ impl JsonRpcInterface {
                         .ok_or("error parsing project")?
                         .as_array()
                         .ok_or("invalid value for project")?
-                        .into_iter()
+                        .iter()
                         .filter(|p| p.as_str().is_some())
                         .map(|p| p.as_str().unwrap().to_string())
                         .collect(),
@@ -280,7 +280,7 @@ impl JsonRpcInterface {
 
         match result() {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(InvalidParams, Some(e.to_string()), id)),
+            Err(e) => JsonResult::Err(jsonerr(InvalidParams, Some(e), id)),
         }
     }
 
@@ -301,10 +301,10 @@ impl JsonRpcInterface {
 
         match self.load_task_by_id(task_id) {
             Ok(t) => task = t,
-            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
         }
 
-        return JsonResult::Resp(jsonresp(json!(task.get_state()), id))
+        JsonResult::Resp(jsonresp(json!(task.get_state()), id))
     }
 
     // RPCAPI:
@@ -329,7 +329,7 @@ impl JsonRpcInterface {
 
         match self.load_task_by_id(task_id) {
             Ok(t) => task = t,
-            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
         }
 
         task.set_state(state);
@@ -375,7 +375,7 @@ impl JsonRpcInterface {
 
         match self.load_task_by_id(task_id) {
             Ok(t) => task = t,
-            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
+            Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e), id)),
         }
 
         task.set_comment(Comment::new(comment_content, comment_author));
@@ -450,7 +450,7 @@ async fn main() -> Result<()> {
 
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let config: TauConfig = Config::<TauConfig>::load(config_path.to_path_buf())?;
+    let config: TauConfig = Config::<TauConfig>::load(config_path)?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(config, ex.clone())))
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn load_and_save_tasks() -> Result<()> {
-        let settings = Settings { dataset_path: get_path()?.clone() };
+        let settings = Settings { dataset_path: get_path()? };
 
         // load and save TaskInfo
         ///////////////////////
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn test_activate_task() -> Result<()> {
-        let settings = Settings { dataset_path: get_path()?.clone() };
+        let settings = Settings { dataset_path: get_path()? };
 
         // activate task
         ///////////////////////
