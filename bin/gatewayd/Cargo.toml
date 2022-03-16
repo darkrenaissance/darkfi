@@ -16,10 +16,10 @@ async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
 # Misc
-clap = {version = "3.0.7", features = ["derive"]}
+clap = {version = "3.1.6", features = ["derive"]}
 log = "0.4.14"
 num_cpus = "1.13.1"
 simplelog = "0.11.2"
 
 # Encoding and parsing
-serde = {version = "1.0.133", features = ["derive"]}
+serde = {version = "1.0.136", features = ["derive"]}

@@ -96,7 +96,7 @@ wasmer-middlewares = {version = "2.2.1", optional = true}
 
 # Wallet management
 sqlx = {version = "0.5.11", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
-libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optional = true }
+libsqlite3-sys = {version = "0.23.2", features = ["bundled-sqlcipher"],  optional = true }
 
 # Node utilities
 signal-hook = {version = "0.3.13", optional = true}
