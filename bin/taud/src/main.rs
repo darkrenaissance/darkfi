@@ -202,7 +202,7 @@ impl JsonRpcInterface {
             Err(e) => return JsonResult::Err(jsonerr(InternalError, Some(e.to_string()), id)),
         }
 
-        let mut result = || -> std::result::Result<(), &str> {
+        let mut result = || -> std::result::Result<(), String> {
             if data.contains_key("title") {
                 let title = data
                     .get("title")
@@ -271,9 +271,8 @@ impl JsonRpcInterface {
 
             let save = task.save();
 
-            // TODO print the error
-            if let Err(_e) = save {
-                return Err("Unable to save the task")
+            if let Err(e) = save {
+                return Err(format!("Unable to save the task: {}", e))
             }
 
             Ok(())
@@ -313,10 +312,6 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_state(&self, id: Value, params: Value) -> JsonResult {
-        //
-        // TODO remove from MonthTasks
-        //
-
         let args = params.as_array().unwrap();
 
         if !args[0].is_u64() {
@@ -438,7 +433,7 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = CliTaud::parse();
-    let matches = CliTaud::into_app().get_matches();
+    let matches = CliTaud::command().get_matches();
 
     let config_path = if args.config.is_some() {
         expand_path(&args.config.unwrap())?
