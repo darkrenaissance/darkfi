@@ -1,6 +1,6 @@
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
     #[error("io error: `{0:?}`")]
     Io(std::io::ErrorKind),
@@ -195,6 +195,26 @@ pub enum Error {
 
     #[error("Invalid bincode: {0}")]
     ZkasDecoderError(&'static str),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm export error: {0}")]
+    WasmerExportError(String),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm runtime error: {0}")]
+    WasmerRuntimeError(String),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm instantiation error: {0}")]
+    WasmerInstantiationError(String),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm compile error: {0}")]
+    WasmerCompileError(String),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm runtime out of memory")]
+    WasmerOomError,
 }
 
 #[cfg(feature = "node")]
@@ -296,5 +316,33 @@ impl From<std::convert::Infallible> for Error {
 impl From<halo2_proofs::plonk::Error> for Error {
     fn from(err: halo2_proofs::plonk::Error) -> Error {
         Error::PlonkError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::CompileError> for Error {
+    fn from(err: wasmer::CompileError) -> Error {
+        Error::WasmerCompileError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::ExportError> for Error {
+    fn from(err: wasmer::ExportError) -> Error {
+        Error::WasmerExportError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::RuntimeError> for Error {
+    fn from(err: wasmer::RuntimeError) -> Error {
+        Error::WasmerRuntimeError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::InstantiationError> for Error {
+    fn from(err: wasmer::InstantiationError) -> Error {
+        Error::WasmerInstantiationError(err.to_string())
     }
 }

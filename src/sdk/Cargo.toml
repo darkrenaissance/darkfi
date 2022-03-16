@@ -1,0 +1,9 @@
+[package]
+name = "drk-sdk"
+version = "0.3.0"
+edition = "2021"
+
+[dependencies]
+borsh = "0.9.3"
+thiserror = "1.0.30"
+wee_alloc = "0.4.5"

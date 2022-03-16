@@ -25,6 +25,9 @@ pub mod system;
 #[cfg(feature = "util")]
 pub mod util;
 
+#[cfg(feature = "wasm-runtime")]
+pub mod runtime;
+
 #[cfg(feature = "rpc")]
 pub mod rpc;
 

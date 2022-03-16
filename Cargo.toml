@@ -25,6 +25,8 @@ members = [
     "bin/taud",
     "bin/tau-cli",
     "bin/vanityaddr",
+
+    "src/sdk",
 ]
 
 [dependencies]
@@ -34,7 +36,7 @@ thiserror = "1.0.30"
 
 # async-runtime
 smol = {version = "1.2.5", optional = true}
-futures = {version = "0.3.19", optional = true}
+futures = {version = "0.3.21", optional = true}
 async-std = {version = "1.10.0", features = ["attributes"], optional = true}
 async-trait = {version = "0.1.52", optional = true}
 async-channel = {version = "1.6.1", optional = true}
@@ -51,15 +53,15 @@ toml = {version = "0.5.8", optional = true}
 bytes = {version = "1.1.0", optional = true}
 bincode = {version = "1.3.3", optional = true}
 num-bigint = {version = "0.4.3", optional = true}
-serde_json = {version = "1.0.74", optional = true}
-serde = {version = "1.0.133", features = ["derive"], optional = true}
+serde_json = {version = "1.0.79", optional = true}
+serde = {version = "1.0.136", features = ["derive"], optional = true}
 
 # Utilities
 url = {version = "2.2.2", optional = true}
 dirs = {version = "4.0.0", optional = true}
 subtle = {version = "2.4.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
-indexmap = {version = "1.7.0", optional = true}
+indexmap = {version = "1.8.0", optional = true}
 itertools = {version = "0.10.3", optional = true}
 
 # Misc
@@ -67,8 +69,8 @@ termion = {version = "1.5.6", optional = true}
 simplelog = {version = "0.11.2", optional = true}
 
 # Websockets
-tungstenite = {version = "0.16.0", optional = true}
-async-tungstenite = {version = "0.16.1", optional = true}
+tungstenite = {version = "0.17.2", optional = true}
+async-tungstenite = {version = "0.17.1", optional = true}
 
 # socks5 
 fast-socks5 = {git = "https://github.com/ghassmo/fast-socks5", optional = true}
@@ -86,9 +88,15 @@ incrementalmerkletree = {version = "0.2.0", optional = true}
 halo2_proofs = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "gadget-traces", "sanity-checks"], optional = true}
 halo2_gadgets = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "test-dependencies"], optional = true}
 
+# Smart contract runtime
+drk-sdk = {path = "src/sdk", optional = true}
+wasmer = {version = "2.2.1", optional = true}
+wasmer-compiler-singlepass = {version = "2.2.1", optional = true}
+wasmer-middlewares = {version = "2.2.1", optional = true}
+
 # Wallet management
-sqlx = {version = "0.5.10", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
-libsqlite3-sys = {version = "0.23.1", features = ["bundled-sqlcipher"],  optional = true }
+sqlx = {version = "0.5.11", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
+libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optional = true }
 
 # Node utilities
 signal-hook = {version = "0.3.13", optional = true}
@@ -111,7 +119,7 @@ optional = true
 
 
 [dev-dependencies]
-clap = {version = "3.0.7", features = ["derive"]}
+clap = {version = "3.1.6", features = ["derive"]}
 
 [features]
 async-runtime = [
@@ -196,7 +204,14 @@ crypto = [
 
 wallet = [
     "sqlx",
-    "libsqlite3-sys"
+    "libsqlite3-sys",
+]
+
+wasm-runtime = [
+    "drk-sdk",
+    "wasmer",
+    "wasmer-compiler-singlepass",
+    "wasmer-middlewares",
 ]
 
 node = [
