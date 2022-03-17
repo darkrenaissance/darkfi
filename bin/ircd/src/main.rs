@@ -139,7 +139,7 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
         .register(!net::SESSION_SEED, move |channel, p2p| {
             let sender = sender2.clone();
             let seen_privmsg_ids = seen_privmsg_ids2.clone();
-            async move { ProtocolPrivMsg::new(channel, sender, seen_privmsg_ids, p2p).await }
+            async move { ProtocolPrivMsg::init(channel, sender, seen_privmsg_ids, p2p).await }
         })
         .await;
 

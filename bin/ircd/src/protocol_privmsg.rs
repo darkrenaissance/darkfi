@@ -16,7 +16,7 @@ pub struct ProtocolPrivMsg {
 }
 
 impl ProtocolPrivMsg {
-    pub async fn new(
+    pub async fn init(
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<Arc<PrivMsg>>,
         seen_privmsg_ids: SeenPrivMsgIdsPtr,

@@ -12,6 +12,12 @@ pub struct ProtocolRegistry {
     protocol_constructors: Mutex<Vec<(SessionBitflag, Constructor)>>,
 }
 
+impl Default for ProtocolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProtocolRegistry {
     pub fn new() -> Self {
         Self { protocol_constructors: Mutex::new(Vec::new()) }

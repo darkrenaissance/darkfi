@@ -1,3 +1,13 @@
+use async_trait::async_trait;
+use log::debug;
+use smol::Executor;
+use std::sync::Arc;
+
+use crate::{
+    error::Result,
+    net::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr},
+};
+
 /// Seed connections session. Manages the creation of seed sessions. Used on
 /// first time connecting to the network. The seed node stores a list of other
 /// nodes in the network.
@@ -23,10 +33,6 @@ pub mod inbound_session;
 /// no other part of the program uses the slots at the same time.
 pub mod outbound_session;
 
-/// Defines methods that are used across sessions. Implements registering the
-/// channel and initializing the channel by performing a network handshake.
-pub mod session;
-
 // bitwise selectors for the protocol_registry
 pub type SessionBitflag = u32;
 pub const SESSION_INBOUND: SessionBitflag = 0b0001;
@@ -39,4 +45,100 @@ pub use inbound_session::InboundSession;
 pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;
 pub use seed_session::SeedSession;
-pub use session::Session;
+
+/// Removes channel from the list of connected channels when a stop signal is
+/// received.
+async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
+    debug!(target: "net", "remove_sub_on_stop() [START]");
+    // Subscribe to stop events
+    let stop_sub = channel.clone().subscribe_stop().await;
+    // Wait for a stop event
+    let _ = stop_sub.receive().await;
+    debug!(target: "net",
+        "remove_sub_on_stop(): received stop event. Removing channel {}",
+        channel.address()
+    );
+    // Remove channel from p2p
+    p2p.remove(channel).await;
+    debug!(target: "net", "remove_sub_on_stop() [END]");
+}
+
+#[async_trait]
+/// Session trait.
+/// Defines methods that are used across sessions. Implements registering the
+/// channel and initializing the channel by performing a network handshake.
+pub trait Session: Sync {
+    /// Registers a new channel with the session. Performs a network handshake
+    /// and starts the channel.
+    async fn register_channel(
+        self: Arc<Self>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        debug!(target: "net", "Session::register_channel() [START]");
+
+        // Protocols should all be initialized but not started
+        // We do this so that the protocols can begin receiving and buffering messages
+        // while the handshake protocol is ongoing.
+        // They are currently in sleep mode.
+        let p2p = self.p2p();
+        let protocols =
+            p2p.protocol_registry().attach(self.selector_id(), channel.clone(), p2p.clone()).await;
+
+        // Perform the handshake protocol
+        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
+        let handshake_task =
+            self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
+
+        // Switch on the channel
+        channel.start(executor.clone());
+
+        // Wait for handshake to finish.
+        handshake_task.await?;
+
+        // Now the channel is ready
+        debug!(target: "net", "Session handshake complete. Activating remaining protocols");
+
+        // Now start all the protocols
+        // They are responsible for managing their own lifetimes and
+        // correctly self destructing when the channel ends.
+        for protocol in protocols {
+            // Activate protocol
+            protocol.start(executor.clone()).await?;
+        }
+
+        debug!(target: "net", "Session::register_channel() [END]");
+        Ok(())
+    }
+
+    /// Performs network handshake to initialize channel. Adds the channel to
+    /// the list of connected channels, and prepares to remove the channel
+    /// when a stop signal is received.
+    async fn perform_handshake_protocols(
+        &self,
+        protocol_version: Arc<ProtocolVersion>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        // Perform handshake
+        protocol_version.run(executor.clone()).await?;
+
+        // Channel is now initialized
+
+        // Add channel to p2p
+        self.p2p().store(channel.clone()).await;
+
+        // Subscribe to stop, so can remove from p2p
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
+
+        // Channel is ready for use
+        Ok(())
+    }
+
+    async fn get_info(&self) -> serde_json::Value;
+
+    /// Returns a pointer to the p2p network interface.
+    fn p2p(&self) -> P2pPtr;
+
+    fn selector_id(&self) -> u32;
+}

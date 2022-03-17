@@ -26,7 +26,7 @@ pub struct ProtocolAddress {
 impl ProtocolAddress {
     /// Create a new address protocol. Makes an address and get-address
     /// subscription and adds them to the address protocol instance.
-    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
 
         // Creates a subscription to address message.

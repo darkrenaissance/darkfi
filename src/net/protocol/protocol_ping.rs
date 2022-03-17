@@ -26,7 +26,7 @@ pub struct ProtocolPing {
 
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
-    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
 
         // Creates a subscription to ping message.

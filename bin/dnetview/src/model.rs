@@ -41,6 +41,12 @@ impl InfoList {
     }
 }
 
+impl Default for InfoList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
     pub outbound: Vec<OutboundInfo>,
@@ -51,6 +57,12 @@ pub struct NodeInfo {
 impl NodeInfo {
     pub fn new() -> NodeInfo {
         NodeInfo { outbound: Vec::new(), manual: Vec::new(), inbound: Vec::new() }
+    }
+}
+
+impl Default for NodeInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

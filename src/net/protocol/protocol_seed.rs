@@ -21,7 +21,7 @@ pub struct ProtocolSeed {
 
 impl ProtocolSeed {
     /// Create a new seed protocol.
-    pub async fn new(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
 
