@@ -33,6 +33,10 @@ jobs:
         run: |
           make test
 
+      - name: Compile all bins
+        run: |
+          ./scripts/compile_all_bins.sh
+
   feature-powerset:
     name: Test crate feature powerset on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
