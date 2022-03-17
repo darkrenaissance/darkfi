@@ -9,6 +9,7 @@ use pasta_curves::{
     pallas,
 };
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     crypto::{address::Address, constants::NullifierK, util::mod_r_p},
@@ -16,7 +17,7 @@ use crate::{
     Error, Result,
 };
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Keypair {
     pub secret: SecretKey,
     pub public: PublicKey,
@@ -188,6 +189,98 @@ impl Decodable for PublicKey {
         } else {
             Err(Error::BadOperationType)
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for SecretKey {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        self.encode(&mut bytes).unwrap();
+        let hex_repr = hex::encode(&bytes);
+        serializer.serialize_str(&hex_repr)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct SecretKeyVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for SecretKeyVisitor {
+    type Value = SecretKey;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("hex string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<SecretKey, E>
+    where
+        E: serde::de::Error,
+    {
+        let bytes = hex::decode(value).unwrap();
+        let mut r = std::io::Cursor::new(bytes);
+        let decoded: SecretKey = SecretKey::decode(&mut r).unwrap();
+        Ok(decoded)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SecretKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<SecretKey, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserializer.deserialize_str(SecretKeyVisitor).unwrap();
+        Ok(bytes)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        self.encode(&mut bytes).unwrap();
+        let hex_repr = hex::encode(&bytes);
+        serializer.serialize_str(&hex_repr)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct PublicKeyVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for PublicKeyVisitor {
+    type Value = PublicKey;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("hex string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<PublicKey, E>
+    where
+        E: serde::de::Error,
+    {
+        let bytes = hex::decode(value).unwrap();
+        let mut r = std::io::Cursor::new(bytes);
+        let decoded: PublicKey = PublicKey::decode(&mut r).unwrap();
+        Ok(decoded)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<PublicKey, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserializer.deserialize_str(PublicKeyVisitor).unwrap();
+        Ok(bytes)
     }
 }
 

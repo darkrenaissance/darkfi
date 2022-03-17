@@ -67,6 +67,52 @@ impl Decodable for Signature {
     }
 }
 
+#[cfg(feature = "serde")]
+impl serde::Serialize for Signature {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        self.encode(&mut bytes).unwrap();
+        let hex_repr = hex::encode(&bytes);
+        serializer.serialize_str(&hex_repr)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct SignatureVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
+    type Value = Signature;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("hex string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Signature, E>
+    where
+        E: serde::de::Error,
+    {
+        let bytes = hex::decode(value).unwrap();
+        let mut r = std::io::Cursor::new(bytes);
+        let decoded: Signature = Signature::decode(&mut r).unwrap();
+        Ok(decoded)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Signature {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Signature, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserializer.deserialize_str(SignatureVisitor).unwrap();
+        Ok(bytes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
