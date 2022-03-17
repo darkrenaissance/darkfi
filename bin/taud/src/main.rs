@@ -225,13 +225,11 @@ impl JsonRpcInterface {
             }
 
             if data.contains_key("due") {
-                let due = Some(Timestamp(
-                    data.get("due")
-                        .ok_or("error parsing rank")?
-                        .as_i64()
-                        .ok_or("invalid value for rank")?,
-                ));
-                task.set_due(due);
+                if let Some(due) = data.get("due").ok_or("error parsing due")?.as_i64() {
+                    task.set_due(Some(Timestamp(due)));
+                } else {
+                    task.set_due(None);
+                }
             }
 
             if data.contains_key("assign") {
