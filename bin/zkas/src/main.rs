@@ -1,49 +1,53 @@
 use std::{
     fs::{read_to_string, File},
     io::Write,
+    process::exit,
 };
 
 use clap::Parser as ClapParser;
 
-use darkfi::{
-    zkas::{
-        analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
-    },
-    Result,
+use darkfi::zkas::{
+    analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
 };
 
 #[derive(clap::Parser)]
-#[clap(name = "zkas", version)]
+#[clap(name = "zkas", about, version)]
 struct Args {
     /// Place the output into <FILE>
-    #[clap(short, value_name = "FILE")]
+    #[clap(short = 'o', value_name = "FILE")]
     output: Option<String>,
 
     /// Strip debug symbols
-    #[clap(short)]
+    #[clap(short = 's')]
     strip: bool,
 
     /// Preprocess only; do not compile
-    #[clap(short)]
+    #[clap(short = 'E')]
     evaluate: bool,
 
     /// Interactive semantic analysis
-    #[clap(short)]
+    #[clap(short = 'i')]
     interactive: bool,
 
     /// Examine decoded bytecode
-    #[clap(long)]
+    #[clap(short = 'e')]
     examine: bool,
 
     /// ZK script to compile
     input: String,
 }
 
-fn main() -> Result<()> {
+fn main() {
     let args = Args::parse();
 
     let filename = args.input.as_str();
-    let source = read_to_string(filename)?;
+    let source = match read_to_string(filename) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: Failed reading from \"{}\". {}", filename, e);
+            exit(1);
+        }
+    };
 
     let lexer = Lexer::new(filename, source.chars());
     let tokens = lexer.lex();
@@ -63,7 +67,7 @@ fn main() -> Result<()> {
         println!("{:#?}", analyzer.witnesses);
         println!("{:#?}", analyzer.statements);
         println!("{:#?}", analyzer.stack);
-        return Ok(())
+        exit(0);
     }
 
     let compiler = Compiler::new(
@@ -82,14 +86,26 @@ fn main() -> Result<()> {
         None => format!("{}.bin", args.input),
     };
 
-    let mut file = File::create(&output)?;
-    file.write_all(&bincode)?;
+    let mut file = match File::create(&output) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: Failed to create \"{}\". {}", output, e);
+            exit(1);
+        }
+    };
+
+    match file.write_all(&bincode) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Error: Failed to write bincode to \"{}\". {}", output, e);
+            exit(1);
+        }
+    };
+
     println!("Wrote output to {}", &output);
 
     if args.examine {
-        let zkbin = ZkBinary::decode(&bincode)?;
+        let zkbin = ZkBinary::decode(&bincode).unwrap();
         println!("{:#?}", zkbin);
     }
-
-    Ok(())
 }

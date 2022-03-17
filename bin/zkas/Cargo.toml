@@ -1,11 +1,13 @@
 [package]
 name = "zkas"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "Compiler for the Halo2 zkVM language used in DarkFi."
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
-
-[dependencies.darkfi]
-path= "../../"
-features = ["zkas"]
 
 [dependencies]
 clap = {version = "3.1.6", features = ["derive"]}
+darkfi = {path = "../../", features = ["zkas"]}
