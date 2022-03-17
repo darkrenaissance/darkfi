@@ -49,6 +49,13 @@ pub enum CliTauSubCommands {
         #[clap(short, long)]
         month: Option<String>,
     },
+    /// Update/Edit an existing task by ID
+    Update {
+        #[clap(short, long)]
+        id: Option<u64>,
+        #[clap(short, long)]
+        data: Option<String>,
+    },
 }
 
 /// Tau cli
@@ -61,6 +68,26 @@ pub struct CliTau {
     pub verbose: u8,
     #[clap(subcommand)]
     pub command: Option<CliTauSubCommands>,
+}
+
+fn due_as_timestamp(due: Option<String>) -> Option<i64> {
+    match due {
+        Some(du) => {
+            assert!(du.len() == 4);
+            let (day, month) = (du[..2].parse::<u32>().unwrap(), du[2..].parse::<u32>().unwrap());
+            let mut year = Local::today().year();
+            if month < Local::today().month() {
+                year += 1;
+            }
+            if month == Local::today().month() && day < Local::today().day() {
+                year += 1;
+            }
+            let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+
+            Some(dt.timestamp())
+        }
+        None => None,
+    }
 }
 
 async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
@@ -108,6 +135,14 @@ async fn add(
 // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
 async fn list(url: &str, month: Option<i64>) -> Result<Value> {
     let req = jsonrpc::request(json!("list"), json!([month]));
+    Ok(request(req, url.to_string()).await?)
+}
+
+// Update task and returns `true` upon success.
+// --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
+    let req = jsonrpc::request(json!("update"), json!([id, data]));
     Ok(request(req, url.to_string()).await?)
 }
 
@@ -181,29 +216,12 @@ async fn start(options: CliTau) -> Result<()> {
                 None
             };
 
-            let d = if due.is_some() {
-                let du = due.unwrap();
-                assert!(du.len() == 4);
-                let (day, month) = (du[..2].parse::<u32>()?, du[2..].parse::<u32>()?);
-                let mut year = Local::today().year();
-                if month < Local::today().month() {
-                    year += 1;
-                }
-                if month == Local::today().month() && day < Local::today().day() {
-                    year += 1;
-                }
-                let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
-                // let dt_string = dt.format("%A %-d %B").to_string(); // Format: Weekday Day Month
-                let timestamp = dt.timestamp();
-                Some(timestamp)
-            } else {
-                None
-            };
+            let d = due_as_timestamp(due);
 
             let r = if rank.is_none() { Some(0) } else { rank };
 
             add(rpc_addr, t.as_deref(), des.as_deref(), a, p, d, r).await?;
-            //println!("Added task: {:#?}", t);
+
             return Ok(())
         }
         Some(CliTauSubCommands::List { month }) => {
@@ -263,6 +281,33 @@ async fn start(options: CliTau) -> Result<()> {
                 ]);
             }
             table.printstd();
+
+            return Ok(())
+        }
+
+        Some(CliTauSubCommands::Update { id, data }) => {
+            let data = data.unwrap();
+            let kv: Vec<&str> = data.as_str().split(':').collect();
+
+            let new_data = match kv[0] {
+                "title" | "description" => {
+                    json!({kv[0]: kv[1].trim()})
+                }
+                "due" => {
+                    let parsed_data: Option<i64> = due_as_timestamp(Some(kv[1].trim().to_string()));
+                    json!({ kv[0]: parsed_data })
+                }
+                "rank" => {
+                    let parsed_data: Option<u64> = Some(kv[1].trim().parse()?);
+                    json!({ kv[0]: parsed_data })
+                }
+                _ => {
+                    let parsed_data: Vec<&str> = kv[1].trim().split(',').collect();
+                    json!({ kv[0]: parsed_data })
+                }
+            };
+
+            update(rpc_addr, id, new_data).await?;
 
             return Ok(())
         }
