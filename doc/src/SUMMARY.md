@@ -15,3 +15,5 @@
   - [Examples](zkas/examples.md)
     - [Sapling scheme](zkas/examples/sapling.md)
     - [Anonymous voting](zkas/examples/voting.md)
+- [Miscellaneous tools](misc/misc.md)
+  - [vanityaddr](misc/vanityaddr.md)

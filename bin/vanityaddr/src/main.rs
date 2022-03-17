@@ -1,25 +1,35 @@
+use std::process::exit;
+
 use clap::Parser;
-use darkfi::{
-    crypto::{
-        address::Address,
-        keypair::{Keypair, SecretKey},
-    },
-    Error, Result,
-};
+use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 use serde_json::json;
 
+use darkfi::crypto::{
+    address::Address,
+    keypair::{Keypair, SecretKey},
+};
+
 #[derive(Parser)]
-#[clap(version)]
+#[clap(name = "vanityaddr", about, version)]
+#[clap(arg_required_else_help(true))]
 struct Args {
-    /// Prefix to search (must start with 1)
-    prefix: String,
+    /// Prefixes to search (must start with 1)
+    prefix: Vec<String>,
+
+    /// Should the search be case-sensitive
+    #[clap(short)]
+    case_sensitive: bool,
+
+    /// Number of threads to use (defaults to number of available CPUs)
+    #[clap(short)]
+    threads: Option<String>,
 }
 
 struct DrkAddr {
-    pub secret: SecretKey,
     pub address: String,
+    pub secret: SecretKey,
 }
 
 impl DrkAddr {
@@ -30,50 +40,82 @@ impl DrkAddr {
         Self { secret: kp.secret, address: format!("{}", addr) }
     }
 
-    pub fn starts_with(&self, prefix: &str, is_case_sensitive: bool) -> bool {
-        if is_case_sensitive {
+    pub fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
+        if case_sensitive {
             self.address.starts_with(prefix)
         } else {
             self.address.to_lowercase().starts_with(prefix.to_lowercase().as_str())
         }
     }
+
+    pub fn starts_with_any(&self, prefixes: &[String], case_sensitive: bool) -> bool {
+        for prefix in prefixes {
+            if self.starts_with(prefix, case_sensitive) {
+                return true
+            }
+        }
+        false
+    }
 }
 
-fn main() -> Result<()> {
+fn main() {
     let args = Args::parse();
 
-    if !args.prefix.starts_with('1') {
-        return Err(Error::ParseFailed("Address prefix must start with '1'"))
+    for (idx, prefix) in args.prefix.iter().enumerate() {
+        if !prefix.starts_with('1') {
+            eprintln!("Error: Address prefix at index {} must start with \"1\".", idx);
+            exit(1);
+        }
     }
 
-    let is_case_sensitive = false;
-
-    // Check if prefix is valid base58
-    match bs58::decode(args.prefix.clone()).into_vec() {
-        Ok(_) => {}
-        Err(_) => return Err(Error::ParseFailed("Invalid base58 for prefix")),
-    };
+    // Check if prefixes are valid base58
+    for (idx, prefix) in args.prefix.iter().enumerate() {
+        match bs58::decode(prefix).into_vec() {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error: Invalid base58 for prefix {}: {}", idx, e);
+                exit(1);
+            }
+        };
+    }
 
     // Threadpool
-    let num_threads = num_cpus::get();
-    let rayon_pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build()
-        .expect("Unable to create threadpool");
+    let num_threads = if args.threads.is_some() {
+        match args.threads.unwrap().parse::<usize>() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Error: Invalid thread number: {}", e);
+                exit(1);
+            }
+        }
+    } else {
+        num_cpus::get()
+    };
 
-    let drkaddr: DrkAddr = rayon_pool.install(|| {
+    let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
+
+    // Something fancy
+    let progress = ProgressBar::new_spinner();
+    progress.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts"));
+    progress.set_draw_rate(10);
+
+    // Fire off the threadpool
+    let addr = rayon_pool.install(|| {
         rayon::iter::repeat(DrkAddr::new)
+            .inspect(|_| progress.inc(1))
             .map(|create| create())
-            .find_any(|address| address.starts_with(&args.prefix, is_case_sensitive))
+            .find_any(|address| address.starts_with_any(&args.prefix, args.case_sensitive))
             .expect("Failed to find an address match")
     });
 
+    let attempts = progress.position();
+    progress.finish_and_clear();
+
     let result = json!({
-        "secret_key": format!("{:?}", drkaddr.secret.0),
-        "address": drkaddr.address,
+        "address": addr.address,
+        "secret": format!("{:?}", addr.secret.0),
+        "attempts": attempts,
     });
 
     println!("{}", result);
-
-    Ok(())
 }

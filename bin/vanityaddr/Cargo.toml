@@ -1,15 +1,18 @@
 [package]
 name = "vanityaddr"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "Vanity address generation tool for DarkFi keypairs."
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
 
-[dependencies.darkfi]
-path = "../../"
-features = ["crypto", "util"]
-
 [dependencies]
-clap = {version = "3.1.6", features = ["derive"]}
 bs58 = "0.4.0"
+clap = {version = "3.1.6", features = ["derive"]}
+darkfi = {path = "../../", features = ["crypto", "util"]}
+indicatif = "0.16.2"
 num_cpus = "1.13.1"
 rand = "0.8.5"
 rayon = "1.5.1"

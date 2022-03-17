@@ -6375,6 +6375,7 @@ dependencies = [
  "bs58",
  "clap 3.1.6",
  "darkfi",
+ "indicatif",
  "num_cpus",
  "rand 0.8.5",
  "rayon",
