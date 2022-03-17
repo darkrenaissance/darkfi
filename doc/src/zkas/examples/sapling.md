@@ -87,7 +87,7 @@ Knowing this we can extend our pseudo-code and build the
 before-mentioned public inputs for the circuit:
 
 ```rust
-{{#include ../../../../proof/mint.rs:main}}
+{{#include ../../../../tests/mint_proof.rs:main}}
 ```
 
 
@@ -162,7 +162,7 @@ Knowing this we can extend our pseudo-code and build the
 before-mentioned public inputs for the circuit:
 
 ```rust
-{{#include ../../../../proof/burn.rs:main}}
+{{#include ../../../../tests/burn_proof.rs:main}}
 ```
 
 
