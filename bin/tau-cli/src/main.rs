@@ -1,25 +1,26 @@
 // TODO: This whole code needs refactoring, clean-up and comments
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-use clap::{CommandFactory, Parser, Subcommand};
-use log::{debug, error};
-
-use prettytable::{cell, format, row, Table};
 use std::{
     env::{temp_dir, var},
     fs::{self, File},
+    io,
     io::{Read, Write},
     ops::Index,
+    process::Command,
 };
+
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
+use clap::{CommandFactory, Parser, Subcommand};
+use log::{debug, error};
+use prettytable::{cell, format, row, Table};
+use serde_json::{json, Value};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use url::Url;
 
 use darkfi::{
     rpc::jsonrpc::{self, JsonResult},
     util::cli::log_config,
     Error, Result,
 };
-use serde_json::{json, Value};
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use std::{io, process::Command};
-use url::Url;
 
 #[derive(Subcommand)]
 pub enum CliTauSubCommands {
@@ -72,20 +73,27 @@ pub struct CliTau {
 
 fn due_as_timestamp(due: Option<String>) -> Option<i64> {
     match due {
-        Some(du) => {
-            assert!(du.len() == 4);
-            let (day, month) = (du[..2].parse::<u32>().unwrap(), du[2..].parse::<u32>().unwrap());
-            let mut year = Local::today().year();
-            if month < Local::today().month() {
-                year += 1;
-            }
-            if month == Local::today().month() && day < Local::today().day() {
-                year += 1;
-            }
-            let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+        Some(du) => match du.len() {
+            0 => None,
+            4 => {
+                let (day, month) =
+                    (du[..2].parse::<u32>().unwrap(), du[2..].parse::<u32>().unwrap());
+                let mut year = Local::today().year();
+                if month < Local::today().month() {
+                    year += 1;
+                }
+                if month == Local::today().month() && day < Local::today().day() {
+                    year += 1;
+                }
+                let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
 
-            Some(dt.timestamp())
-        }
+                Some(dt.timestamp())
+            }
+            _ => {
+                error!("due date must be of length 4 (e.g \"1503\" for 15 March)");
+                None
+            }
+        },
         None => None,
     }
 }
@@ -112,22 +120,6 @@ async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
             Err(Error::JsonRpcError("Unexpected reply".to_string()))
         }
     }
-}
-
-// Add new task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn add(
-    url: &str,
-    title: Option<&str>,
-    desc: Option<&str>,
-    assign: Option<Vec<&str>>,
-    project: Option<Vec<&str>>,
-    due: Option<i64>,
-    rank: Option<u32>,
-) -> Result<Value> {
-    let req = jsonrpc::request(json!("add"), json!([title, desc, assign, project, due, rank]));
-    Ok(request(req, url.to_string()).await?)
 }
 
 // List tasks
@@ -193,7 +185,7 @@ async fn start(options: CliTau) -> Result<()> {
             // fix this
             let assignee;
             let assigned;
-            let a = if assign.is_some() {
+            let a: Option<Vec<&str>> = if assign.is_some() {
                 assignee = assign.unwrap();
                 assigned = assignee.as_str();
                 let somevec = assigned.split(',').collect();
@@ -206,7 +198,7 @@ async fn start(options: CliTau) -> Result<()> {
             // fix this
             let projecte;
             let projectd;
-            let p = if project.is_some() {
+            let p: Option<Vec<&str>> = if project.is_some() {
                 projecte = project.unwrap();
                 projectd = projecte.as_str();
                 let somevec = projectd.split(',').collect();
@@ -220,7 +212,12 @@ async fn start(options: CliTau) -> Result<()> {
 
             let r = if rank.is_none() { Some(0) } else { rank };
 
-            add(rpc_addr, t.as_deref(), des.as_deref(), a, p, d, r).await?;
+            // Add new task and returns `true` upon success.
+            // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+            // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+            let req =
+                jsonrpc::request(json!("add"), json!([t.as_deref(), des.as_deref(), a, p, d, r]));
+            request(req, rpc_addr.to_string()).await?;
 
             return Ok(())
         }
@@ -289,21 +286,21 @@ async fn start(options: CliTau) -> Result<()> {
             let data = data.unwrap();
             let kv: Vec<&str> = data.as_str().split(':').collect();
 
-            let new_data = match kv[0] {
+            let new_data = match kv[0].trim() {
                 "title" | "description" => {
-                    json!({kv[0]: kv[1].trim()})
+                    json!({kv[0].trim(): kv[1].trim()})
                 }
                 "due" => {
                     let parsed_data: Option<i64> = due_as_timestamp(Some(kv[1].trim().to_string()));
-                    json!({ kv[0]: parsed_data })
+                    json!({ kv[0].trim(): parsed_data })
                 }
                 "rank" => {
                     let parsed_data: Option<u64> = Some(kv[1].trim().parse()?);
-                    json!({ kv[0]: parsed_data })
+                    json!({ kv[0].trim(): parsed_data })
                 }
                 _ => {
                     let parsed_data: Vec<&str> = kv[1].trim().split(',').collect();
-                    json!({ kv[0]: parsed_data })
+                    json!({ kv[0].trim(): parsed_data })
                 }
             };
 
