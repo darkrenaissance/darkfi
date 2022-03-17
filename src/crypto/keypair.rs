@@ -9,7 +9,6 @@ use pasta_curves::{
     pallas,
 };
 use rand::RngCore;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     crypto::{address::Address, constants::NullifierK, util::mod_r_p},
@@ -17,7 +16,9 @@ use crate::{
     Error, Result,
 };
 
-#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, PartialEq, Debug)]
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Keypair {
     pub secret: SecretKey,
     pub public: PublicKey,
