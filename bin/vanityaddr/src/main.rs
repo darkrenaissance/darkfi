@@ -23,8 +23,8 @@ struct Args {
     case_sensitive: bool,
 
     /// Number of threads to use (defaults to number of available CPUs)
-    #[clap(short)]
-    threads: Option<String>,
+    #[clap(short, parse(try_from_str))]
+    threads: Option<usize>,
 }
 
 struct DrkAddr {
@@ -61,6 +61,11 @@ impl DrkAddr {
 fn main() {
     let args = Args::parse();
 
+    if args.prefix.is_empty() {
+        eprintln!("Error: No prefix given to search.");
+        exit(1);
+    }
+
     for (idx, prefix) in args.prefix.iter().enumerate() {
         if !prefix.starts_with('1') {
             eprintln!("Error: Address prefix at index {} must start with \"1\".", idx);
@@ -80,18 +85,7 @@ fn main() {
     }
 
     // Threadpool
-    let num_threads = if args.threads.is_some() {
-        match args.threads.unwrap().parse::<usize>() {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("Error: Invalid thread number: {}", e);
-                exit(1);
-            }
-        }
-    } else {
-        num_cpus::get()
-    };
-
+    let num_threads = if args.threads.is_some() { args.threads.unwrap() } else { num_cpus::get() };
     let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
     // Something fancy
