@@ -1,6 +1,7 @@
-use crate::model::NodeInfo;
-use std::collections::{HashMap, HashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use tui::widgets::ListState;
+
+use crate::model::NodeInfo;
 
 #[derive(Clone)]
 pub struct View {
@@ -13,7 +14,7 @@ impl View {
         View { id_list, info_list }
     }
 
-    pub fn update(&mut self, infos: HashMap<String, NodeInfo>) {
+    pub fn update(&mut self, infos: FxHashMap<String, NodeInfo>) {
         for (id, info) in infos {
             self.id_list.node_id.insert(id.clone());
             self.info_list.infos.insert(id, info);
@@ -24,11 +25,11 @@ impl View {
 #[derive(Clone)]
 pub struct IdListView {
     pub state: ListState,
-    pub node_id: HashSet<String>,
+    pub node_id: FxHashSet<String>,
 }
 
 impl IdListView {
-    pub fn new(node_id: HashSet<String>) -> IdListView {
+    pub fn new(node_id: FxHashSet<String>) -> IdListView {
         IdListView { state: ListState::default(), node_id }
     }
     pub fn next(&mut self) {
@@ -67,11 +68,11 @@ impl IdListView {
 #[derive(Clone)]
 pub struct InfoListView {
     pub index: usize,
-    pub infos: HashMap<String, NodeInfo>,
+    pub infos: FxHashMap<String, NodeInfo>,
 }
 
 impl InfoListView {
-    pub fn new(infos: HashMap<String, NodeInfo>) -> InfoListView {
+    pub fn new(infos: FxHashMap<String, NodeInfo>) -> InfoListView {
         let index = 0;
 
         InfoListView { index, infos }

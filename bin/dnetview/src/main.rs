@@ -1,3 +1,20 @@
+use async_std::sync::Arc;
+use std::{fs::File, io, io::Read, path::PathBuf};
+
+use easy_parallel::Parallel;
+use fxhash::{FxHashMap, FxHashSet};
+use log::{debug, info};
+use serde_json::{json, Value};
+use simplelog::*;
+use smol::Executor;
+
+use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
+use tui::{
+    backend::{Backend, TermionBackend},
+    Terminal,
+};
+use url::Url;
+
 use darkfi::{
     error::{Error, Result},
     rpc::{jsonrpc, jsonrpc::JsonResult},
@@ -7,26 +24,6 @@ use darkfi::{
         join_config_path,
     },
 };
-
-use async_std::sync::Arc;
-use easy_parallel::Parallel;
-use log::{debug, info};
-use serde_json::{json, Value};
-use simplelog::*;
-use smol::Executor;
-use std::{
-    collections::{HashMap, HashSet},
-    fs::File,
-    io,
-    io::Read,
-    path::PathBuf,
-};
-use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
-use tui::{
-    backend::{Backend, TermionBackend},
-    Terminal,
-};
-use url::Url;
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
@@ -110,7 +107,7 @@ async fn main() -> Result<()> {
     terminal.clear()?;
 
     let info_list = InfoList::new();
-    let ids = HashSet::new();
+    let ids = FxHashSet::default();
     let id_list = IdList::new(ids);
 
     let model = Arc::new(Model::new(id_list, info_list));
@@ -231,7 +228,7 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             let oinfo = OutboundInfo::new(is_empty, slots.clone());
             oconnects.push(oinfo);
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
-            let mut node_info = HashMap::new();
+            let mut node_info = FxHashMap::default();
 
             // TODO: here we are setting the RPC url as the node_id.
             // next step is to read the string variable 'name' from dnetview.toml
@@ -259,8 +256,8 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
 
     terminal.clear()?;
 
-    let id_list = IdListView::new(HashSet::new());
-    let info_list = InfoListView::new(HashMap::new());
+    let id_list = IdListView::new(FxHashSet::default());
+    let info_list = InfoListView::new(FxHashMap::default());
     let mut view = View::new(id_list.clone(), info_list.clone());
 
     view.id_list.state.select(Some(0));

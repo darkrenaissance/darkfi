@@ -1,6 +1,7 @@
 use async_std::sync::Mutex;
+
+use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
 use tui::widgets::ListState;
 
 pub struct Model {
@@ -16,11 +17,11 @@ impl Model {
 
 pub struct IdList {
     pub state: Mutex<ListState>,
-    pub node_id: Mutex<HashSet<String>>,
+    pub node_id: Mutex<FxHashSet<String>>,
 }
 
 impl IdList {
-    pub fn new(node_id: HashSet<String>) -> IdList {
+    pub fn new(node_id: FxHashSet<String>) -> IdList {
         let node_id = Mutex::new(node_id);
         IdList { state: Mutex::new(ListState::default()), node_id }
     }
@@ -28,14 +29,14 @@ impl IdList {
 
 pub struct InfoList {
     pub index: Mutex<usize>,
-    pub infos: Mutex<HashMap<String, NodeInfo>>,
+    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
 }
 
 impl InfoList {
     pub fn new() -> InfoList {
         let index = 0;
         let index = Mutex::new(index);
-        let infos = Mutex::new(HashMap::new());
+        let infos = Mutex::new(FxHashMap::default());
 
         InfoList { index, infos }
     }
