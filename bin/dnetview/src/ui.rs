@@ -17,7 +17,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     let mut nodes = Vec::new();
     // we write all the span data to a Vec<String> for debugging purposes
-    //let mut data = Vec::new();
+    let mut data = Vec::new();
     let style = Style::default();
 
     for id in &view.id_list.node_id {
@@ -27,7 +27,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             Some(node) => {
                 for outbound in &node.outbound.clone() {
                     lines.push(Spans::from(Span::styled("   Outgoing", style)));
-                    //data.push("Outgoing");
+                    data.push("Outgoing".to_string());
                     for slot in outbound.slots.clone() {
                         let addr = Span::styled(format!("       {}", slot.addr), style);
                         data.push(format!("{}", slot.addr));
@@ -43,6 +43,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                                 ),
                                 a => Span::styled(a.to_string(), style),
                             };
+                            data.push(format!("{}", slot.channel.last_msg));
                             lines.push(Spans::from(vec![addr, msg]));
                         } else {
                             // discard Null values for now
@@ -53,7 +54,9 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                 for connect in &node.inbound {
                     if connect.connected != "Empty" {
                         lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
+                        data.push("Incoming".to_string());
                         let addr = Span::styled(format!("       {}", connect.connected), style);
+                        data.push(format!("{}", connect.connected));
                         if connect.channel.last_status.as_str() != "Null" {
                             let msg: Span = match connect.channel.last_status.as_str() {
                                 "recv" => Span::styled(
@@ -66,6 +69,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                                 ),
                                 a => Span::styled(a.to_string(), style),
                             };
+                            data.push(format!("{}", connect.channel.last_msg));
                             lines.push(Spans::from(vec![addr, msg]));
                         } else {
                             lines.push(Spans::from(addr));
@@ -74,7 +78,9 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                 }
                 for connect in &node.manual {
                     lines.push(Spans::from(Span::styled("   Manual", Style::default())));
+                    data.push("Manual".to_string());
                     lines.push(Spans::from(Span::styled(format!("       {}", connect.key), style)));
+                    data.push(format!("{}", connect.key));
                 }
             }
             None => {
@@ -83,6 +89,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             }
         }
 
+        debug!("{:?}", data);
         let ids = ListItem::new(lines);
         nodes.push(ids);
     }
