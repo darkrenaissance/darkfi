@@ -80,6 +80,24 @@ pub enum JsonResult {
     Notif(JsonNotification),
 }
 
+impl From<JsonResponse> for JsonResult {
+    fn from(resp: JsonResponse) -> Self {
+        Self::Resp(resp)
+    }
+}
+
+impl From<JsonError> for JsonResult {
+    fn from(err: JsonError) -> Self {
+        Self::Err(err)
+    }
+}
+
+impl From<JsonNotification> for JsonResult {
+    fn from(notif: JsonNotification) -> Self {
+        Self::Notif(notif)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JsonRequest {
     pub jsonrpc: Value,
