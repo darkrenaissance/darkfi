@@ -171,7 +171,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 let msg = "Null".to_string();
                 let status = "Null".to_string();
                 let channel = Channel::new(msg, status);
-                let iinfo = InboundInfo::new(connected, channel);
+                let is_empty = true;
+                let iinfo = InboundInfo::new(is_empty, connected, channel);
                 iconnects.push(iinfo);
             } else {
                 // channel is not empty. initialize with whole values
@@ -182,7 +183,8 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                         let msg = v.get("last_msg").unwrap().as_str().unwrap().to_string();
                         let status = v.get("last_status").unwrap().as_str().unwrap().to_string();
                         let channel = Channel::new(msg, status);
-                        let iinfo = InboundInfo::new(addr.clone(), channel);
+                        let is_empty = false;
+                        let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
                         iconnects.push(iinfo);
                     }
                 }
@@ -197,11 +199,13 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
             for slot in outbound_slots.as_array().unwrap() {
                 if slot["channel"].is_null() {
                     // channel is empty. initialize with empty values
+                    let is_empty = true;
                     let state = &slot["state"];
                     let msg = "Null".to_string();
                     let status = "Null".to_string();
                     let channel = Channel::new(msg, status);
                     let new_slot = Slot::new(
+                        is_empty,
                         String::from("Empty"),
                         channel,
                         state.as_str().unwrap().to_string(),
@@ -209,17 +213,20 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     slots.push(new_slot.clone())
                 } else {
                     // channel is not empty. initialize with whole values
+                    let is_empty = false;
                     let addr = &slot["addr"];
                     let state = &slot["state"];
                     let channel: Channel = serde_json::from_value(slot["channel"].clone())?;
                     let new_slot = Slot::new(
+                        is_empty,
                         addr.as_str().unwrap().to_string(),
                         channel,
                         state.as_str().unwrap().to_string(),
                     );
                     slots.push(new_slot)
                 }
-                let oinfo = OutboundInfo::new(slots.clone());
+                let is_empty = is_empty_outbound(slots.clone());
+                let oinfo = OutboundInfo::new(is_empty, slots.clone());
                 oconnects.push(oinfo);
             }
 
@@ -241,6 +248,10 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
         }
         async_util::sleep(2).await;
     }
+}
+
+fn is_empty_outbound(slots: Vec<Slot>) -> bool {
+    return slots.iter().all(|slot| slot.is_empty == true)
 }
 
 async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {

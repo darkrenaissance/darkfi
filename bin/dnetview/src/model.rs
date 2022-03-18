@@ -79,25 +79,27 @@ impl ManualInfo {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct OutboundInfo {
+    pub is_empty: bool,
     pub slots: Vec<Slot>,
 }
 
 impl OutboundInfo {
-    pub fn new(slots: Vec<Slot>) -> OutboundInfo {
-        OutboundInfo { slots }
+    pub fn new(is_empty: bool, slots: Vec<Slot>) -> OutboundInfo {
+        OutboundInfo { is_empty, slots }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
 pub struct Slot {
+    pub is_empty: bool,
     pub addr: String,
     pub channel: Channel,
     pub state: String,
 }
 
 impl Slot {
-    pub fn new(addr: String, channel: Channel, state: String) -> Slot {
-        Slot { addr, channel, state }
+    pub fn new(is_empty: bool, addr: String, channel: Channel, state: String) -> Slot {
+        Slot { is_empty, addr, channel, state }
     }
 }
 
@@ -115,12 +117,13 @@ impl Channel {
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct InboundInfo {
+    pub is_empty: bool,
     pub connected: String,
     pub channel: Channel,
 }
 
 impl InboundInfo {
-    pub fn new(connected: String, channel: Channel) -> InboundInfo {
-        InboundInfo { connected, channel }
+    pub fn new(is_empty: bool, connected: String, channel: Channel) -> InboundInfo {
+        InboundInfo { is_empty, connected, channel }
     }
 }
