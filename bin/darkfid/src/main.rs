@@ -1,10 +1,11 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use clap::{IntoApp, Parser};
 use easy_parallel::Parallel;
+use fxhash::FxHashMap;
 use log::{debug, info};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
@@ -392,9 +393,9 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "get_balances", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
     async fn get_balances(&self, id: Value, _params: Value) -> JsonResult {
-        let result: Result<HashMap<String, (String, String)>> = async {
+        let result: Result<FxHashMap<String, (String, String)>> = async {
             let balances = self.client.lock().await.get_balances().await?;
-            let mut symbols: HashMap<String, (String, String)> = HashMap::new();
+            let mut symbols: FxHashMap<String, (String, String)> = FxHashMap::default();
 
             for b in balances.list.iter() {
                 let network: String;

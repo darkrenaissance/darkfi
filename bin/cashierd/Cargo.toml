@@ -27,6 +27,7 @@ num_cpus = "1.13.1"
 simplelog = "0.11.2"
 thiserror = "1.0.30"
 url = "2.2.2"
+fxhash = "0.2.1"
 
 # Encoding and parsing
 serde = {version = "1.0.136", features = ["derive"]}

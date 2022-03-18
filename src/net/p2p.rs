@@ -1,12 +1,8 @@
 use async_std::sync::Mutex;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{fmt, net::SocketAddr, sync::Arc};
 
 use async_executor::Executor;
+use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use serde_json::json;
 
@@ -22,9 +18,9 @@ use crate::{
 };
 
 /// List of channels that are awaiting connection.
-pub type PendingChannels = Mutex<HashSet<SocketAddr>>;
+pub type PendingChannels = Mutex<FxHashSet<SocketAddr>>;
 /// List of connected channels.
-pub type ConnectedChannels<T> = Mutex<HashMap<SocketAddr, Arc<T>>>;
+pub type ConnectedChannels<T> = Mutex<fxhash::FxHashMap<SocketAddr, Arc<T>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
@@ -80,8 +76,8 @@ impl P2p {
         let settings = Arc::new(settings);
 
         let self_ = Arc::new(Self {
-            pending: Mutex::new(HashSet::new()),
-            channels: Mutex::new(HashMap::new()),
+            pending: Mutex::new(FxHashSet::default()),
+            channels: Mutex::new(FxHashMap::default()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(),

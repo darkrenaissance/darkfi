@@ -174,12 +174,15 @@ blockchain = [
 ]
 
 system = [
+	"fxhash",
     "rand",
 
     "async-runtime",
 ]
 
 net = [
+	"fxhash",
+
     "util",
     "system",
 ]

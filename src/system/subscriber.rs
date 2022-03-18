@@ -1,6 +1,8 @@
 use async_std::sync::Mutex;
+use std::sync::Arc;
+
+use fxhash::FxHashMap;
 use rand::Rng;
-use std::{collections::HashMap, sync::Arc};
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 
@@ -32,12 +34,12 @@ impl<T: Clone> Subscription<T> {
 
 // Simple broadcast (publish-subscribe) class
 pub struct Subscriber<T> {
-    subs: Mutex<HashMap<u64, async_channel::Sender<T>>>,
+    subs: Mutex<FxHashMap<u64, async_channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { subs: Mutex::new(HashMap::new()) })
+        Arc::new(Self { subs: Mutex::new(FxHashMap::default()) })
     }
 
     fn random_id() -> SubscriptionId {

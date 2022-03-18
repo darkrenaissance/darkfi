@@ -2,12 +2,12 @@ use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde_json::json;
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
 use async_executor::Executor;
+use fxhash::FxHashMap;
 use log::{error, info};
 
 use crate::{
@@ -34,7 +34,7 @@ pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,
     accept_task: StoppableTaskPtr,
-    connect_infos: Mutex<HashMap<SocketAddr, InboundInfo>>,
+    connect_infos: Mutex<FxHashMap<SocketAddr, InboundInfo>>,
 }
 
 impl InboundSession {
@@ -46,7 +46,7 @@ impl InboundSession {
             p2p,
             acceptor,
             accept_task: StoppableTask::new(),
-            connect_infos: Mutex::new(HashMap::new()),
+            connect_infos: Mutex::new(FxHashMap::default()),
         })
     }
 
@@ -136,7 +136,7 @@ impl InboundSession {
 #[async_trait]
 impl Session for InboundSession {
     async fn get_info(&self) -> serde_json::Value {
-        let mut infos = HashMap::new();
+        let mut infos = FxHashMap::default();
         for (addr, info) in self.connect_infos.lock().await.iter() {
             infos.insert(addr.to_string(), info.get_info().await);
         }

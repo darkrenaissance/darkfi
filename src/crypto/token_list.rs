@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use fxhash::FxHashMap;
 use serde_json::Value;
 
 use crate::{
@@ -57,7 +56,7 @@ impl TokenList {
 
 #[derive(Debug, Clone)]
 pub struct DrkTokenList {
-    pub tokens: HashMap<NetworkName, HashMap<String, DrkTokenId>>,
+    pub tokens: FxHashMap<NetworkName, FxHashMap<String, DrkTokenId>>,
 }
 
 impl DrkTokenList {
@@ -66,32 +65,33 @@ impl DrkTokenList {
         let eth_symbols = eth_list.get_symbols()?;
         let btc_symbols = btc_list.get_symbols()?;
 
-        let sol_tokens: HashMap<String, DrkTokenId> = sol_symbols
+        let sol_tokens: FxHashMap<String, DrkTokenId> = sol_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
             })
             .collect();
 
-        let eth_tokens: HashMap<String, DrkTokenId> = eth_symbols
+        let eth_tokens: FxHashMap<String, DrkTokenId> = eth_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
             })
             .collect();
 
-        let btc_tokens: HashMap<String, DrkTokenId> = btc_symbols
+        let btc_tokens: FxHashMap<String, DrkTokenId> = btc_symbols
             .iter()
             .filter_map(|symbol| {
                 Self::generate_hash_pair(btc_list, &NetworkName::Bitcoin, symbol).ok()
             })
             .collect();
 
-        let tokens: HashMap<NetworkName, HashMap<String, DrkTokenId>> = HashMap::from([
-            (NetworkName::Solana, sol_tokens),
-            (NetworkName::Ethereum, eth_tokens),
-            (NetworkName::Bitcoin, btc_tokens),
-        ]);
+        let mut tokens: FxHashMap<NetworkName, FxHashMap<String, DrkTokenId>> =
+            FxHashMap::default();
+
+        tokens.insert(NetworkName::Solana, sol_tokens);
+        tokens.insert(NetworkName::Ethereum, eth_tokens);
+        tokens.insert(NetworkName::Bitcoin, btc_tokens);
 
         Ok(Self { tokens })
     }

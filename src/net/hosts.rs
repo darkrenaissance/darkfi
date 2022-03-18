@@ -1,6 +1,8 @@
 use async_std::sync::Mutex;
+use std::{net::SocketAddr, sync::Arc};
+
+use fxhash::FxHashSet;
 use rand::seq::SliceRandom;
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 
 /// Pointer to hosts class.
 pub type HostsPtr = Arc<Hosts>;
@@ -18,7 +20,7 @@ impl Hosts {
 
     /// Checks if a host address is in the host list.
     async fn contains(&self, addrs: &[SocketAddr]) -> bool {
-        let a_set: HashSet<_> = addrs.iter().copied().collect();
+        let a_set: FxHashSet<_> = addrs.iter().copied().collect();
         self.addrs.lock().await.iter().any(|item| a_set.contains(item))
     }
 

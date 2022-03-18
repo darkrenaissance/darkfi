@@ -1,8 +1,10 @@
 use async_std::sync::Mutex;
+use std::{any::Any, io, io::Cursor, sync::Arc};
+
 use async_trait::async_trait;
+use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::Rng;
-use std::{any::Any, collections::HashMap, io, io::Cursor, sync::Arc};
 
 use crate::{
     net::message::Message,
@@ -52,13 +54,13 @@ trait MessageDispatcherInterface: Send + Sync {
 /// Maintains a list of active subscribers and handles sending messages across
 /// subscriptions.
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<HashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
+    subs: Mutex<FxHashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
     /// Create a new message dispatcher.
     fn new() -> Self {
-        MessageDispatcher { subs: Mutex::new(HashMap::new()) }
+        MessageDispatcher { subs: Mutex::new(FxHashMap::default()) }
     }
 
     /// Create a random ID.
@@ -161,13 +163,13 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 /// Publish/subscribe class that can dispatch any kind of message to a
 /// list of dispatchers.
 pub struct MessageSubsystem {
-    dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
+    dispatchers: Mutex<FxHashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
 
 impl MessageSubsystem {
     /// Create a new message subsystem.
     pub fn new() -> Self {
-        MessageSubsystem { dispatchers: Mutex::new(HashMap::new()) }
+        MessageSubsystem { dispatchers: Mutex::new(FxHashMap::default()) }
     }
 
     /// Add a new message dispatcher.

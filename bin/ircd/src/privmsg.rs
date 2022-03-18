@@ -1,6 +1,7 @@
-use std::{collections::HashSet, io, sync::Arc};
-
 use async_std::sync::Mutex;
+use std::{io, sync::Arc};
+
+use fxhash::FxHashSet;
 
 use darkfi::{
     net,
@@ -47,14 +48,14 @@ impl Decodable for PrivMsg {
 }
 
 pub struct SeenPrivMsgIds {
-    privmsg_ids: Mutex<HashSet<PrivMsgId>>,
+    privmsg_ids: Mutex<FxHashSet<PrivMsgId>>,
 }
 
 pub type SeenPrivMsgIdsPtr = Arc<SeenPrivMsgIds>;
 
 impl SeenPrivMsgIds {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { privmsg_ids: Mutex::new(HashSet::new()) })
+        Arc::new(Self { privmsg_ids: Mutex::new(FxHashSet::default()) })
     }
 
     pub async fn add_seen(&self, id: u32) {
