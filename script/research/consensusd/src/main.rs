@@ -1,10 +1,8 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::net::SocketAddr;
 
 use async_executor::Executor;
 use async_std::sync::Arc;
 use clap::{IntoApp, Parser};
-use easy_parallel::Parallel;
-use log::debug;
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
@@ -12,7 +10,8 @@ use darkfi::{
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config, Config},
-        expand_path, join_config_path,
+        expand_path,
+        path::get_config_path,
     },
     Result,
 };
@@ -73,34 +72,15 @@ async fn main() -> Result<()> {
     let args = CliConsensusd::parse();
     let matches = CliConsensusd::command().get_matches();
 
-    let config_path = if args.config.is_some() {
-        expand_path(&args.config.unwrap())?
-    } else {
-        join_config_path(&PathBuf::from("consensusd.toml"))?
-    };
-
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
     let verbosity_level = matches.occurrences_of("verbose");
     let (lvl, conf) = log_config(verbosity_level)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+
+    let config_path = get_config_path(args.config, "consensusd_config.toml")?;
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
+
     let config: ConsensusdConfig = Config::<ConsensusdConfig>::load(config_path)?;
 
     let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-    let ex2 = ex.clone();
-
-    let nthreads = num_cpus::get();
-    debug!(target: "CONSENSUS DAEMON", "Run {} executor threads", nthreads);
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex2, config).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
+    smol::block_on(ex.run(start(ex.clone(), config)))
 }

@@ -11,7 +11,11 @@ use darkfi::{
     crypto::keypair::PublicKey,
     rpc::{
         jsonrpc,
-        jsonrpc::{response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
+        jsonrpc::{
+            response as jsonresp,
+            ErrorCode::{InvalidParams, MethodNotFound, ServerError},
+            JsonRequest, JsonResult,
+        },
         rpcserver::RequestHandler,
     },
     Result,
@@ -82,7 +86,7 @@ impl ConsensusService {
     /// Node checks if its the current slot leader and generates the slot Block (represented as a Vote structure).
     /// --> {"jsonrpc": "2.0", "method": "consensus_task", "params": [1], "id": 0}
     /// <-- {"jsonrpc": "2.0", "result": [PublicKey, Vote], "id": 0}
-    /// TODO: 1, This should be an scheduled task.
+    /// TODO: 1, This should be a scheduled task.
     ///       2. Nodes count not from request.
     ///       3. Proposed block broadcast.
     async fn consensus_task(&self, params: Value) -> JsonResult {
