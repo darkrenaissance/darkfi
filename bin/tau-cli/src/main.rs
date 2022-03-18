@@ -1,4 +1,3 @@
-// TODO: This whole code needs refactoring, clean-up and comments
 use std::{
     env::{temp_dir, var},
     fs::{self, File},
@@ -101,31 +100,30 @@ pub struct CliTau {
     pub command: Option<CliTauSubCommands>,
 }
 
-fn due_as_timestamp(due: Option<String>) -> Option<i64> {
-    match due {
-        Some(du) => match du.len() {
-            0 => None,
-            4 => {
-                let (day, month) =
-                    (du[..2].parse::<u32>().unwrap(), du[2..].parse::<u32>().unwrap());
-                let mut year = Local::today().year();
-                if month < Local::today().month() {
-                    year += 1;
-                }
-                if month == Local::today().month() && day < Local::today().day() {
-                    year += 1;
-                }
-                let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+fn due_as_timestamp(due: &str) -> Option<i64> {
+    if due.len() == 4 {
+        let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());
 
-                Some(dt.timestamp())
-            }
-            _ => {
-                error!("due date must be of length 4 (e.g \"1503\" for 15 March)");
-                None
-            }
-        },
-        None => None,
+        let mut year = Local::today().year();
+
+        if month < Local::today().month() {
+            year += 1;
+        }
+
+        if month == Local::today().month() && day < Local::today().day() {
+            year += 1;
+        }
+
+        let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+
+        return Some(dt.timestamp())
     }
+
+    if due.len() > 4 {
+        error!("due date must be of length 4 (e.g \"1503\" for 15 March)");
+    }
+
+    None
 }
 
 async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
@@ -152,12 +150,20 @@ async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
     }
 }
 
+// Add new task and returns `true` upon success.
+// --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+async fn add(url: &str, params: Value) -> Result<Value> {
+    let req = jsonrpc::request(json!("add"), params);
+    request(req, url.to_string()).await
+}
+
 // List tasks
 // --> {"jsonrpc": "2.0", "method": "list", "params": [month_date], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
 async fn list(url: &str, month: Option<i64>) -> Result<Value> {
     let req = jsonrpc::request(json!("list"), json!([month]));
-    Ok(request(req, url.to_string()).await?)
+    request(req, url.to_string()).await
 }
 
 // Update task and returns `true` upon success.
@@ -165,7 +171,7 @@ async fn list(url: &str, month: Option<i64>) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
     let req = jsonrpc::request(json!("update"), json!([id, data]));
-    Ok(request(req, url.to_string()).await?)
+    request(req, url.to_string()).await
 }
 
 // Set state for a task and returns `true` upon success.
@@ -173,7 +179,7 @@ async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn set_state(url: &str, id: u64, state: &str) -> Result<Value> {
     let req = jsonrpc::request(json!("set_state"), json!([id, state]));
-    Ok(request(req, url.to_string()).await?)
+    request(req, url.to_string()).await
 }
 
 // Get task's state.
@@ -181,7 +187,7 @@ async fn set_state(url: &str, id: u64, state: &str) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
 async fn get_state(url: &str, id: u64) -> Result<Value> {
     let req = jsonrpc::request(json!("get_state"), json!([id]));
-    Ok(request(req, url.to_string()).await?)
+    request(req, url.to_string()).await
 }
 
 // Set comment for a task and returns `true` upon success.
@@ -189,14 +195,14 @@ async fn get_state(url: &str, id: u64) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<Value> {
     let req = jsonrpc::request(json!("set_comment"), json!([id, author, content]));
-    Ok(request(req, url.to_string()).await?)
+    request(req, url.to_string()).await
 }
 
 async fn start(options: CliTau) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:8875";
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
-            let t = if title.is_none() {
+            let title = if title.is_none() {
                 print!("Title: ");
                 io::stdout().flush()?;
                 let mut t = String::new();
@@ -209,7 +215,7 @@ async fn start(options: CliTau) -> Result<()> {
                 title
             };
 
-            let des = if desc.is_none() {
+            let desc = if desc.is_none() {
                 let editor = var("EDITOR").unwrap();
                 let mut file_path = temp_dir();
                 file_path.push("temp_file");
@@ -236,44 +242,24 @@ async fn start(options: CliTau) -> Result<()> {
                 desc
             };
 
-            // fix this
-            let assignee;
-            let assigned;
-            let a: Option<Vec<&str>> = if assign.is_some() {
-                assignee = assign.unwrap();
-                assigned = assignee.as_str();
-                let somevec = assigned.split(',').collect();
-
-                Some(somevec)
-            } else {
-                None
+            let assign: Vec<String> = match assign {
+                Some(a) => a.split(':').map(|s| s.into()).collect(),
+                None => vec![],
             };
 
-            // fix this
-            let projecte;
-            let projectd;
-            let p: Option<Vec<&str>> = if project.is_some() {
-                projecte = project.unwrap();
-                projectd = projecte.as_str();
-                let somevec = projectd.split(',').collect();
-
-                Some(somevec)
-            } else {
-                None
+            let project: Vec<String> = match project {
+                Some(p) => p.split(':').map(|s| s.into()).collect(),
+                None => vec![],
             };
 
-            let d = due_as_timestamp(due);
+            let due = match due {
+                Some(d) => due_as_timestamp(&d),
+                None => None,
+            };
 
-            let r = if rank.is_none() { Some(0) } else { rank };
+            let rank = rank.unwrap_or(0);
 
-            // Add new task and returns `true` upon success.
-            // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
-            // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-            let req =
-                jsonrpc::request(json!("add"), json!([t.as_deref(), des.as_deref(), a, p, d, r]));
-            request(req, rpc_addr.to_string()).await?;
-
-            return Ok(())
+            add(rpc_addr, json!([title, desc, project, assign, due, rank])).await?;
         }
 
         Some(CliTauSubCommands::List { month }) => {
@@ -333,60 +319,51 @@ async fn start(options: CliTau) -> Result<()> {
                 ]);
             }
             table.printstd();
-
-            return Ok(())
         }
 
         Some(CliTauSubCommands::Update { id, data }) => {
             let data = data.unwrap();
-            let kv: Vec<&str> = data.as_str().split(':').collect();
+            let kv: Vec<&str> = data.split(':').collect();
 
             let new_data = match kv[0].trim() {
                 "title" | "description" => {
                     json!({kv[0].trim(): kv[1].trim()})
                 }
                 "due" => {
-                    let parsed_data: Option<i64> = due_as_timestamp(Some(kv[1].trim().to_string()));
+                    let parsed_data: Option<i64> = due_as_timestamp(kv[1].trim());
                     json!({ kv[0].trim(): parsed_data })
                 }
                 "rank" => {
-                    let parsed_data: Option<u64> = Some(kv[1].trim().parse()?);
+                    let parsed_data: u64 = kv[1].trim().parse()?;
                     json!({ kv[0].trim(): parsed_data })
                 }
                 _ => {
-                    let parsed_data: Vec<&str> = kv[1].trim().split(',').collect();
+                    let parsed_data: Vec<&str> = kv[1].trim().split(':').collect();
                     json!({ kv[0].trim(): parsed_data })
                 }
             };
 
             update(rpc_addr, id, new_data).await?;
-
-            return Ok(())
         }
 
         Some(CliTauSubCommands::SetState { id, state }) => {
             set_state(rpc_addr, id, state.trim()).await?;
-
-            return Ok(())
         }
 
         Some(CliTauSubCommands::GetState { id }) => {
             let state = get_state(rpc_addr, id).await?;
             println!("Task with id: {} is {}", id, state);
-
-            return Ok(())
         }
 
         Some(CliTauSubCommands::SetComment { id, author, content }) => {
             set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
-
-            return Ok(())
         }
-        _ => (),
+        _ => {
+            error!("Please run 'tau help' to see usage.");
+            return Err(Error::MissingParams)
+        }
     }
-    error!("Please run 'tau help' to see usage.");
-
-    Err(Error::MissingParams)
+    Ok(())
 }
 
 #[async_std::main]
@@ -394,15 +371,6 @@ async fn main() -> Result<()> {
     let args = CliTau::parse();
     let matches = CliTau::command().get_matches();
     let verbosity_level = matches.occurrences_of("verbose");
-
-    //let config_path = if args.config.is_some() {
-    //    expand_path(&args.config.clone().unwrap())?
-    //} else {
-    //    join_config_path(&PathBuf::from("tau.toml"))?
-    //};
-
-    // Spawn config file if it's not in place already.
-    //spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let (lvl, conf) = log_config(verbosity_level)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
