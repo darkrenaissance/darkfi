@@ -57,6 +57,27 @@ pub enum CliTauSubCommands {
         #[clap(short, long)]
         data: Option<String>,
     },
+    /// Set task state
+    SetState {
+        #[clap(short, long)]
+        id: u64,
+        #[clap(short, long)]
+        state: String,
+    },
+    /// Get task state
+    GetState {
+        #[clap(short, long)]
+        id: u64,
+    },
+    /// Set comment for a task
+    SetComment {
+        #[clap(short, long)]
+        id: Option<u64>,
+        #[clap(short, long)]
+        author: Option<String>,
+        #[clap(short, long)]
+        content: Option<String>,
+    },
 }
 
 /// Tau cli
@@ -135,6 +156,22 @@ async fn list(url: &str, month: Option<i64>) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
     let req = jsonrpc::request(json!("update"), json!([id, data]));
+    Ok(request(req, url.to_string()).await?)
+}
+
+// Set state for a task and returns `true` upon success.
+// --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+async fn set_state(url: &str, id: u64, state: String) -> Result<Value> {
+    let req = jsonrpc::request(json!("set_state"), json!([id, state]));
+    Ok(request(req, url.to_string()).await?)
+}
+
+// Get task's state.
+// --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
+async fn get_state(url: &str, id: u64) -> Result<Value> {
+    let req = jsonrpc::request(json!("get_state"), json!([id]));
     Ok(request(req, url.to_string()).await?)
 }
 
@@ -221,6 +258,7 @@ async fn start(options: CliTau) -> Result<()> {
 
             return Ok(())
         }
+
         Some(CliTauSubCommands::List { month }) => {
             let ts = if month.is_some() {
                 let month = month.unwrap();
@@ -305,6 +343,19 @@ async fn start(options: CliTau) -> Result<()> {
             };
 
             update(rpc_addr, id, new_data).await?;
+
+            return Ok(())
+        }
+
+        Some(CliTauSubCommands::SetState { id, state }) => {
+            set_state(rpc_addr, id, state).await?;
+
+            return Ok(())
+        }
+
+        Some(CliTauSubCommands::GetState { id }) => {
+            let state = get_state(rpc_addr, id).await?;
+            println!("Task with id: {} is {}", id, state);
 
             return Ok(())
         }
