@@ -24,12 +24,17 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         let id_span = Span::raw(id.to_string());
         let mut lines = vec![Spans::from(id_span)];
         data.push(id.to_string());
+
         match &view.info_list.infos.get(id) {
+            // TODO:
+            //      1. Only print 'outbound' or 'inbound':
+            //              * if in/outbound is not empty
+            //              * only print it once
+            //
+            //      2. Fix error whereby duplicates outbounds are being printed (nested loop)
             Some(node) => {
                 for outbound in &node.outbound.clone() {
                     if outbound.is_empty == false {
-                        lines.push(Spans::from(Span::styled("   Outbound", Style::default())));
-                        data.push("Outbound".to_string());
                         for slot in outbound.slots.clone() {
                             let addr = Span::styled(format!("       {}", slot.addr), style);
                             data.push(format!("{}", slot.addr));
@@ -49,7 +54,9 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                         }
                     }
                 }
+                //debug!("{:?}", &node.inbound);
                 for inbound in &node.inbound {
+                    //debug!("{:?}", inbound);
                     if inbound.is_empty == false {
                         lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
                         data.push("Incoming".to_string());

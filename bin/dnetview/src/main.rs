@@ -178,15 +178,15 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                 // channel is not empty. initialize with whole values
                 let ic = i_connected.as_object().unwrap();
                 for k in ic.keys() {
+                    let node = ic.get(k);
                     let addr = k.to_string();
-                    for v in ic.values() {
-                        let msg = v.get("last_msg").unwrap().as_str().unwrap().to_string();
-                        let status = v.get("last_status").unwrap().as_str().unwrap().to_string();
-                        let channel = Channel::new(msg, status);
-                        let is_empty = false;
-                        let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
-                        iconnects.push(iinfo);
-                    }
+                    let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
+                    let status =
+                        node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
+                    let channel = Channel::new(msg, status);
+                    let is_empty = false;
+                    let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
+                    iconnects.push(iinfo);
                 }
             }
 
