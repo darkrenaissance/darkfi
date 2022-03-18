@@ -225,11 +225,11 @@ async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
                     );
                     slots.push(new_slot)
                 }
-                let is_empty = is_empty_outbound(slots.clone());
-                let oinfo = OutboundInfo::new(is_empty, slots.clone());
-                oconnects.push(oinfo);
             }
 
+            let is_empty = is_empty_outbound(slots.clone());
+            let oinfo = OutboundInfo::new(is_empty, slots.clone());
+            oconnects.push(oinfo);
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = HashMap::new();
 

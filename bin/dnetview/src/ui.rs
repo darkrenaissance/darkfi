@@ -33,14 +33,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             //
             //      2. Fix error whereby duplicates outbounds are being printed (nested loop)
             Some(node) => {
-                // create the title
                 if !node.outbound.is_empty() {
                     lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
                     data.push("Outgoing".to_string());
-                }
-                for outbound in &node.outbound.clone() {
-                    debug!("{:?}", outbound);
-                    if outbound.is_empty == false {
+                    for outbound in &node.outbound.clone() {
                         for slot in outbound.slots.clone() {
                             let addr = Span::styled(format!("       {}", slot.addr), style);
                             data.push(format!("{}", slot.addr));
@@ -60,38 +56,39 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                         }
                     }
                 }
-                // create the title
                 if !node.inbound.is_empty() {
                     lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
                     data.push("Incoming".to_string());
-                }
-                for inbound in &node.inbound {
-                    if inbound.is_empty == false {
-                        let addr = Span::styled(format!("       {}", inbound.connected), style);
-                        data.push(format!("{}", inbound.connected));
-                        let msg: Span = match inbound.channel.last_status.as_str() {
-                            "recv" => Span::styled(
-                                format!("               [R: {}]", inbound.channel.last_msg),
-                                style,
-                            ),
-                            "sent" => Span::styled(
-                                format!("               [R: {}]", inbound.channel.last_msg),
-                                style,
-                            ),
-                            a => Span::styled(a.to_string(), style),
-                        };
-                        data.push(format!("{}", inbound.channel.last_msg));
-                        lines.push(Spans::from(vec![addr, msg]));
+                    for inbound in &node.inbound {
+                        if inbound.is_empty == false {
+                            let addr = Span::styled(format!("       {}", inbound.connected), style);
+                            data.push(format!("{}", inbound.connected));
+                            let msg: Span = match inbound.channel.last_status.as_str() {
+                                "recv" => Span::styled(
+                                    format!("               [R: {}]", inbound.channel.last_msg),
+                                    style,
+                                ),
+                                "sent" => Span::styled(
+                                    format!("               [R: {}]", inbound.channel.last_msg),
+                                    style,
+                                ),
+                                a => Span::styled(a.to_string(), style),
+                            };
+                            data.push(format!("{}", inbound.channel.last_msg));
+                            lines.push(Spans::from(vec![addr, msg]));
+                        }
                     }
                 }
-                // create the title
                 if !node.manual.is_empty() {
                     lines.push(Spans::from(Span::styled("   Manual", Style::default())));
                     data.push("Manual".to_string());
-                }
-                for connect in &node.manual {
-                    lines.push(Spans::from(Span::styled(format!("       {}", connect.key), style)));
-                    data.push(format!("{}", connect.key));
+                    for connect in &node.manual {
+                        lines.push(Spans::from(Span::styled(
+                            format!("       {}", connect.key),
+                            style,
+                        )));
+                        data.push(format!("{}", connect.key));
+                    }
                 }
             }
             None => {
@@ -100,7 +97,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             }
         }
 
-        debug!("{:?}", data);
+        //debug!("{:?}", data);
         let ids = ListItem::new(lines);
         nodes.push(ids);
     }
