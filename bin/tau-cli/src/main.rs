@@ -47,36 +47,45 @@ pub enum CliTauSubCommands {
     },
     /// List open tasks
     List {
+        /// Month tasks
         #[clap(short, long)]
         month: Option<String>,
     },
     /// Update/Edit an existing task by ID
     Update {
+        /// Task ID
         #[clap(short, long)]
         id: Option<u64>,
+        /// Data you want to change: "title: new title"
         #[clap(short, long)]
         data: Option<String>,
     },
     /// Set task state
     SetState {
+        /// Task ID
         #[clap(short, long)]
         id: u64,
+        /// Set task state
         #[clap(short, long)]
         state: String,
     },
     /// Get task state
     GetState {
+        /// Task ID
         #[clap(short, long)]
         id: u64,
     },
     /// Set comment for a task
     SetComment {
+        /// Task ID
         #[clap(short, long)]
-        id: Option<u64>,
+        id: u64,
+        /// Comment author
         #[clap(short, long)]
-        author: Option<String>,
+        author: String,
+        /// Comment content
         #[clap(short, long)]
-        content: Option<String>,
+        content: String,
     },
 }
 
@@ -162,7 +171,7 @@ async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
 // Set state for a task and returns `true` upon success.
 // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn set_state(url: &str, id: u64, state: String) -> Result<Value> {
+async fn set_state(url: &str, id: u64, state: &str) -> Result<Value> {
     let req = jsonrpc::request(json!("set_state"), json!([id, state]));
     Ok(request(req, url.to_string()).await?)
 }
@@ -172,6 +181,14 @@ async fn set_state(url: &str, id: u64, state: String) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
 async fn get_state(url: &str, id: u64) -> Result<Value> {
     let req = jsonrpc::request(json!("get_state"), json!([id]));
+    Ok(request(req, url.to_string()).await?)
+}
+
+// Set comment for a task and returns `true` upon success.
+// --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<Value> {
+    let req = jsonrpc::request(json!("set_comment"), json!([id, author, content]));
     Ok(request(req, url.to_string()).await?)
 }
 
@@ -348,7 +365,7 @@ async fn start(options: CliTau) -> Result<()> {
         }
 
         Some(CliTauSubCommands::SetState { id, state }) => {
-            set_state(rpc_addr, id, state).await?;
+            set_state(rpc_addr, id, state.trim()).await?;
 
             return Ok(())
         }
@@ -356,6 +373,12 @@ async fn start(options: CliTau) -> Result<()> {
         Some(CliTauSubCommands::GetState { id }) => {
             let state = get_state(rpc_addr, id).await?;
             println!("Task with id: {} is {}", id, state);
+
+            return Ok(())
+        }
+
+        Some(CliTauSubCommands::SetComment { id, author, content }) => {
+            set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
 
             return Ok(())
         }
