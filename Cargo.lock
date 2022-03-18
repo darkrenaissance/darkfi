@@ -1538,6 +1538,7 @@ dependencies = [
  "drk-sdk",
  "fast-socks5",
  "futures",
+ "fxhash",
  "group",
  "halo2_gadgets",
  "halo2_proofs",

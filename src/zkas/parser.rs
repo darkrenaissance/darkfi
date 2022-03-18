@@ -1,5 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
+use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
 use itertools::Itertools;
 
@@ -43,7 +44,7 @@ impl Parser {
         // All the circuit statements
         let mut circuit_statements = vec![];
 
-        let mut ast = IndexMap::new();
+        let mut ast = IndexMap::with_hasher(FxBuildHasher::default());
         let mut namespace = String::new();
         let mut ast_inner = IndexMap::new();
         let mut namespace_found = false; // Nasty

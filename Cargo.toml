@@ -61,6 +61,7 @@ url = {version = "2.2.2", optional = true}
 dirs = {version = "4.0.0", optional = true}
 subtle = {version = "2.4.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
+fxhash = {version = "0.2.1", optional = true}
 indexmap = {version = "1.8.0", optional = true}
 itertools = {version = "0.10.3", optional = true}
 
@@ -151,6 +152,7 @@ util = [
     "serde_json",
     "dirs",
     "num-bigint",
+    "fxhash",
 ]
 
 rpc = [
