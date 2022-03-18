@@ -16,6 +16,8 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
     let mut nodes = Vec::new();
+    // we write all the span data to a Vec<String> for debugging purposes
+    //let mut data = Vec::new();
     let style = Style::default();
 
     for id in &view.id_list.node_id {
@@ -25,8 +27,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             Some(node) => {
                 for outbound in &node.outbound.clone() {
                     lines.push(Spans::from(Span::styled("   Outgoing", style)));
+                    //data.push("Outgoing");
                     for slot in outbound.slots.clone() {
                         let addr = Span::styled(format!("       {}", slot.addr), style);
+                        data.push(format!("{}", slot.addr));
                         if slot.channel.last_status.as_str() != "Null" {
                             let msg: Span = match slot.channel.last_status.as_str() {
                                 "recv" => Span::styled(
@@ -47,23 +51,25 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                     }
                 }
                 for connect in &node.inbound {
-                    lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
-                    let addr = Span::styled(format!("       {}", connect.connected), style);
-                    if connect.channel.last_status.as_str() != "Null" {
-                        let msg: Span = match connect.channel.last_status.as_str() {
-                            "recv" => Span::styled(
-                                format!("               [R: {}]", connect.channel.last_msg),
-                                style,
-                            ),
-                            "sent" => Span::styled(
-                                format!("               [R: {}]", connect.channel.last_msg),
-                                style,
-                            ),
-                            a => Span::styled(a.to_string(), style),
-                        };
-                        lines.push(Spans::from(vec![addr, msg]));
-                    } else {
-                        lines.push(Spans::from(addr));
+                    if connect.connected != "Empty" {
+                        lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
+                        let addr = Span::styled(format!("       {}", connect.connected), style);
+                        if connect.channel.last_status.as_str() != "Null" {
+                            let msg: Span = match connect.channel.last_status.as_str() {
+                                "recv" => Span::styled(
+                                    format!("               [R: {}]", connect.channel.last_msg),
+                                    style,
+                                ),
+                                "sent" => Span::styled(
+                                    format!("               [R: {}]", connect.channel.last_msg),
+                                    style,
+                                ),
+                                a => Span::styled(a.to_string(), style),
+                            };
+                            lines.push(Spans::from(vec![addr, msg]));
+                        } else {
+                            lines.push(Spans::from(addr));
+                        }
                     }
                 }
                 for connect in &node.manual {
