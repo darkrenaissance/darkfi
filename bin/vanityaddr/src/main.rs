@@ -106,6 +106,9 @@ fn main() {
             .find_any(|address| address.starts_with_any(&args.prefix, args.case_sensitive))
             .expect("Failed to find an address match");
 
+        // The above will keep running until it finds a match or until the
+        // program terminates. Only if a match is found shall the following
+        // code be executed and the program exit successfully:
         let attempts = progress.position();
         progress.finish_and_clear();
 
