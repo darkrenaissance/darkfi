@@ -1,0 +1,25 @@
+## chaind configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+
+# The endpoint where chaind will bind its RPC socket
+rpc_listen_address = "127.0.0.1:9000"
+
+# Whether to listen with TLS or plain TCP
+serve_tls = false
+
+# Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+# This can be created using openssl:
+# openssl pkcs12 -export -out chaind_identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
+tls_identity_path = "~/.config/darkfi/consensusd_identity.pfx"
+
+# Password for the created TLS identity. (Unused if serve_tls=false)
+tls_identity_password = "FOOBAR"
+
+# Path to the state file 
+state_path = "~/.config/darkfi/consensusd_state_0"
+
+# Node ID, used only for testing
+id = 0
+
