@@ -36,8 +36,8 @@ pub fn join_config_path(file: &Path) -> Result<PathBuf> {
 }
 
 pub fn get_config_path(arg: Option<String>, fallback: &str) -> Result<PathBuf> {
-    if arg.is_some() {
-        expand_path(&arg.unwrap())
+    if let Some(a) = arg {
+        expand_path(&a)
     } else {
         join_config_path(&PathBuf::from(fallback))
     }

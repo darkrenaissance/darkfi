@@ -14,7 +14,8 @@ use darkfi::{
     },
     util::{
         cli::{log_config, spawn_config, Config},
-        expand_path, join_config_path,
+        expand_path,
+        path::get_config_path,
     },
     Error, Result,
 };
@@ -418,20 +419,12 @@ async fn main() -> Result<()> {
     let args = CliTaud::parse();
     let matches = CliTaud::command().get_matches();
 
-    let config_path = if args.config.is_some() {
-        expand_path(&args.config.unwrap())?
-    } else {
-        join_config_path(&PathBuf::from("taud_config.toml"))?
-    };
-
-    // Spawn config file if it's not in place already.
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
-
     let verbosity_level = matches.occurrences_of("verbose");
-
     let (lvl, conf) = log_config(verbosity_level)?;
-
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+
+    let config_path = get_config_path(args.config, "taud_config.toml")?;
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let config: TauConfig = Config::<TauConfig>::load(config_path)?;
 
