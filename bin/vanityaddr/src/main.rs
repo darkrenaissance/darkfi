@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{process::exit, sync::mpsc::channel};
 
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -88,28 +88,39 @@ fn main() {
     let num_threads = if args.threads.is_some() { args.threads.unwrap() } else { num_cpus::get() };
     let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
+    // Handle SIGINT
+    let (tx, rx) = channel();
+    ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel"))
+        .expect("Error setting SIGINT handler");
+
     // Something fancy
     let progress = ProgressBar::new_spinner();
     progress.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts"));
     progress.set_draw_rate(10);
 
     // Fire off the threadpool
-    let addr = rayon_pool.install(|| {
-        rayon::iter::repeat(DrkAddr::new)
+    rayon_pool.spawn(move || {
+        let addr = rayon::iter::repeat(DrkAddr::new)
             .inspect(|_| progress.inc(1))
             .map(|create| create())
             .find_any(|address| address.starts_with_any(&args.prefix, args.case_sensitive))
-            .expect("Failed to find an address match")
+            .expect("Failed to find an address match");
+
+        let attempts = progress.position();
+        progress.finish_and_clear();
+
+        let result = json!({
+            "address": addr.address,
+            "secret": format!("{:?}", addr.secret.0),
+            "attempts": attempts,
+        });
+
+        println!("{}", result);
+        exit(0);
     });
 
-    let attempts = progress.position();
-    progress.finish_and_clear();
-
-    let result = json!({
-        "address": addr.address,
-        "secret": format!("{:?}", addr.secret.0),
-        "attempts": attempts,
-    });
-
-    println!("{}", result);
+    // This now blocks and lets our threadpool execute in the background.
+    rx.recv().expect("Could not receive from channel");
+    eprintln!("\rCaught SIGINT, exiting...");
+    exit(127);
 }
