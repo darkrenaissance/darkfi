@@ -441,13 +441,15 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::create_dir_all;
+    use std::fs::{create_dir_all, remove_dir_all};
 
     use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
 
     use super::*;
 
     fn get_path() -> Result<PathBuf> {
+        remove_dir_all("/tmp/test_tau_data").ok();
+
         let path = PathBuf::from("/tmp/test_tau_data");
 
         // mkdir dataset_path if not exists
@@ -499,13 +501,6 @@ mod tests {
         let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
 
         assert_eq!(mt, mt_load);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_activate_task() -> Result<()> {
-        let settings = Settings { dataset_path: get_path()? };
 
         // activate task
         ///////////////////////
