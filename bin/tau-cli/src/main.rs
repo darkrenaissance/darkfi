@@ -53,38 +53,37 @@ pub enum CliTauSubCommands {
     /// Update/Edit an existing task by ID
     Update {
         /// Task ID
-        #[clap(short, long)]
-        id: Option<u64>,
-        /// Data you want to change: "title: new title"
-        #[clap(short, long)]
-        data: Option<String>,
+        id: u64,
+        /// Field's name (ex title)
+        key: String,
+        /// New value
+        value: String,
     },
     /// Set task state
     SetState {
         /// Task ID
-        #[clap(short, long)]
         id: u64,
         /// Set task state
-        #[clap(short, long)]
         state: String,
     },
     /// Get task state
     GetState {
         /// Task ID
-        #[clap(short, long)]
         id: u64,
     },
     /// Set comment for a task
     SetComment {
         /// Task ID
-        #[clap(short, long)]
         id: u64,
         /// Comment author
-        #[clap(short, long)]
         author: String,
         /// Comment content
-        #[clap(short, long)]
         content: String,
+    },
+    /// Get task's comments
+    GetComment {
+        /// Task ID
+        id: u64,
     },
 }
 
@@ -169,7 +168,7 @@ async fn list(url: &str, month: Option<i64>) -> Result<Value> {
 // Update task and returns `true` upon success.
 // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn update(url: &str, id: Option<u64>, data: Value) -> Result<Value> {
+async fn update(url: &str, id: u64, data: Value) -> Result<Value> {
     let req = jsonrpc::request(json!("update"), json!([id, data]));
     request(req, url.to_string()).await
 }
@@ -322,29 +321,27 @@ async fn start(options: CliTau) -> Result<()> {
             table.printstd();
         }
 
-        Some(CliTauSubCommands::Update { id, data }) => {
-            let data = data.unwrap();
-            let kv: Vec<&str> = data.split(':').collect();
+        Some(CliTauSubCommands::Update { id, key, value }) => {
+            let value = value.as_str().trim();
 
-            let new_data = match kv[0].trim() {
-                "title" | "description" => {
-                    json!({kv[0].trim(): kv[1].trim()})
-                }
+            let updated_value: Value;
+
+            match key.as_str() {
                 "due" => {
-                    let parsed_data: Option<i64> = due_as_timestamp(kv[1].trim());
-                    json!({ kv[0].trim(): parsed_data })
+                    updated_value = json!(due_as_timestamp(value));
                 }
                 "rank" => {
-                    let parsed_data: u64 = kv[1].trim().parse()?;
-                    json!({ kv[0].trim(): parsed_data })
+                    updated_value = json!(value.parse::<u64>()?);
+                }
+                "project" | "assign" => {
+                    updated_value = json!(value.split(',').collect::<Vec<&str>>());
                 }
                 _ => {
-                    let parsed_data: Vec<&str> = kv[1].trim().split(':').collect();
-                    json!({ kv[0].trim(): parsed_data })
+                    updated_value = json!(value);
                 }
             };
 
-            update(rpc_addr, id, new_data).await?;
+            update(rpc_addr, id, json!({ key: updated_value })).await?;
         }
 
         Some(CliTauSubCommands::SetState { id, state }) => {
@@ -359,6 +356,12 @@ async fn start(options: CliTau) -> Result<()> {
         Some(CliTauSubCommands::SetComment { id, author, content }) => {
             set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
         }
+
+        Some(CliTauSubCommands::GetComment { id }) => {
+            // TODO
+            println!("no comments: {}", id);
+        }
+
         _ => {
             error!("Please run 'tau help' to see usage.");
             return Err(Error::MissingParams)
