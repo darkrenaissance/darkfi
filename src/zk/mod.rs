@@ -3,6 +3,6 @@ pub mod arith_chip;
 
 /// Halo2 zkas virtual machine
 pub mod vm;
-mod vm_stack;
+pub mod vm_stack;
 
 pub mod circuit;

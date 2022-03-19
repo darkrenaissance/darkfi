@@ -3,7 +3,10 @@ use halo2_gadgets::ecc::{chip::EccChip, FixedPoint, FixedPointBaseField, FixedPo
 use halo2_proofs::circuit::AssignedCell;
 use pasta_curves::{pallas, EpAffine};
 
-use crate::crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode};
+use crate::{
+    crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode},
+    zkas::{decoder::ZkBinary, types::Type},
+};
 
 /// These represent the witness types outside of the circuit
 #[allow(clippy::large_enum_variant)]
@@ -16,6 +19,27 @@ pub enum Witness {
     MerklePath(Option<[MerkleNode; 32]>),
     Uint32(Option<u32>),
     Uint64(Option<u64>),
+}
+
+/// Helper function for verifiers to generate empty witnesses for
+/// a given decoded zkas binary
+pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
+    let mut ret = Vec::with_capacity(zkbin.witnesses.len());
+
+    for witness in &zkbin.witnesses {
+        match witness {
+            Type::EcPoint => ret.push(Witness::EcPoint(None)),
+            Type::EcFixedPoint => ret.push(Witness::EcFixedPoint(None)),
+            Type::Base => ret.push(Witness::Base(None)),
+            Type::Scalar => ret.push(Witness::Scalar(None)),
+            Type::MerklePath => ret.push(Witness::MerklePath(None)),
+            Type::Uint32 => ret.push(Witness::Uint32(None)),
+            Type::Uint64 => ret.push(Witness::Uint64(None)),
+            _ => todo!("Handle this gracefully"),
+        }
+    }
+
+    ret
 }
 
 /// These represent the witness types inside the circuit

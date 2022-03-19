@@ -3,7 +3,10 @@ use darkfi::{
         proof::{ProvingKey, VerifyingKey},
         Proof,
     },
-    zk::vm::{Witness, ZkCircuit},
+    zk::{
+        vm::{Witness, ZkCircuit},
+        vm_stack::empty_witnesses,
+    },
     zkas::decoder::ZkBinary,
     Result,
 };
@@ -44,7 +47,7 @@ fn arithmetic_proof() -> Result<()> {
     // ========
 
     // Construct empty witnesses
-    let verifier_witnesses = vec![Witness::Base(None), Witness::Base(None)];
+    let verifier_witnesses = empty_witnesses(&zkbin);
 
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);

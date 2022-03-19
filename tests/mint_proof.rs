@@ -5,7 +5,10 @@ use darkfi::{
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
         Proof,
     },
-    zk::vm::{Witness, ZkCircuit},
+    zk::{
+        vm::{Witness, ZkCircuit},
+        vm_stack::empty_witnesses,
+    },
     zkas::decoder::ZkBinary,
     Result,
 };
@@ -75,16 +78,7 @@ fn mint_proof() -> Result<()> {
     // ========
 
     // Construct empty witnesses
-    let verifier_witnesses = vec![
-        Witness::Base(None),
-        Witness::Base(None),
-        Witness::Base(None),
-        Witness::Base(None),
-        Witness::Base(None),
-        Witness::Base(None),
-        Witness::Scalar(None),
-        Witness::Scalar(None),
-    ];
+    let verifier_witnesses = empty_witnesses(&zkbin);
 
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
