@@ -55,23 +55,21 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                     data.push("Incoming".to_string());
                 }
                 for inbound in &node.inbound {
-                    if inbound.is_empty == false {
-                        let addr = Span::styled(format!("       {}", inbound.connected), style);
-                        data.push(format!("{}", inbound.connected));
-                        let msg: Span = match inbound.channel.last_status.as_str() {
-                            "recv" => Span::styled(
-                                format!("               [R: {}]", inbound.channel.last_msg),
-                                style,
-                            ),
-                            "sent" => Span::styled(
-                                format!("               [R: {}]", inbound.channel.last_msg),
-                                style,
-                            ),
-                            a => Span::styled(a.to_string(), style),
-                        };
-                        data.push(format!("{}", inbound.channel.last_msg));
-                        lines.push(Spans::from(vec![addr, msg]));
-                    }
+                    let addr = Span::styled(format!("       {}", inbound.connected), style);
+                    data.push(format!("{}", inbound.connected));
+                    let msg: Span = match inbound.channel.last_status.as_str() {
+                        "recv" => Span::styled(
+                            format!("               [R: {}]", inbound.channel.last_msg),
+                            style,
+                        ),
+                        "sent" => Span::styled(
+                            format!("               [R: {}]", inbound.channel.last_msg),
+                            style,
+                        ),
+                        a => Span::styled(a.to_string(), style),
+                    };
+                    data.push(format!("{}", inbound.channel.last_msg));
+                    lines.push(Spans::from(vec![addr, msg]));
                 }
                 lines.push(Spans::from(Span::styled("   Manual", Style::default())));
                 data.push("Manual".to_string());
