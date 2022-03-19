@@ -204,7 +204,7 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
                     let channel = Channel::new(msg, status);
                     let new_slot = Slot::new(
                         is_empty,
-                        String::from("Empty"),
+                        String::new(),
                         channel,
                         state.as_str().unwrap().to_string(),
                     );
