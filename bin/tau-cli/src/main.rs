@@ -243,12 +243,12 @@ async fn start(options: CliTau) -> Result<()> {
             };
 
             let assign: Vec<String> = match assign {
-                Some(a) => a.split(':').map(|s| s.into()).collect(),
+                Some(a) => a.split(',').map(|s| s.into()).collect(),
                 None => vec![],
             };
 
             let project: Vec<String> = match project {
-                Some(p) => p.split(':').map(|s| s.into()).collect(),
+                Some(p) => p.split(',').map(|s| s.into()).collect(),
                 None => vec![],
             };
 
@@ -259,7 +259,7 @@ async fn start(options: CliTau) -> Result<()> {
 
             let rank = rank.unwrap_or(0);
 
-            add(rpc_addr, json!([title, desc, project, assign, due, rank])).await?;
+            add(rpc_addr, json!([title, desc, assign, project, due, rank])).await?;
         }
 
         Some(CliTauSubCommands::List { month }) => {
@@ -280,7 +280,9 @@ async fn start(options: CliTau) -> Result<()> {
 
             let rep = list(rpc_addr, ts).await?;
 
-            let tasks = rep.as_array().unwrap();
+            let mut tasks = rep.as_array().unwrap().to_owned();
+            tasks.sort_by(|a, b| b["rank"].as_u64().cmp(&a["rank"].as_u64()));
+
             for task in tasks {
                 let project = task["project"].as_array().unwrap();
                 let mut projects = String::new();
@@ -307,8 +309,7 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                // TODO: sort lines in table by rank
-                // TODO: the higher the rank the brighter it is
+                // TODO: the highest rank should be brighter
                 table.add_row(row![
                     task["id"],
                     task["title"].as_str().unwrap(),
