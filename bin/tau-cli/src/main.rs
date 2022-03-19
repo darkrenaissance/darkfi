@@ -324,20 +324,18 @@ async fn start(options: CliTau) -> Result<()> {
         Some(CliTauSubCommands::Update { id, key, value }) => {
             let value = value.as_str().trim();
 
-            let updated_value: Value;
-
-            match key.as_str() {
+            let updated_value: Value = match key.as_str() {
                 "due" => {
-                    updated_value = json!(due_as_timestamp(value));
+                    json!(due_as_timestamp(value))
                 }
                 "rank" => {
-                    updated_value = json!(value.parse::<u64>()?);
+                    json!(value.parse::<u64>()?)
                 }
                 "project" | "assign" => {
-                    updated_value = json!(value.split(',').collect::<Vec<&str>>());
+                    json!(value.split(',').collect::<Vec<&str>>())
                 }
                 _ => {
-                    updated_value = json!(value);
+                    json!(value)
                 }
             };
 
@@ -358,8 +356,24 @@ async fn start(options: CliTau) -> Result<()> {
         }
 
         Some(CliTauSubCommands::GetComment { id }) => {
-            // TODO
-            println!("no comments: {}", id);
+            let rep = list(rpc_addr, None).await?;
+            let tasks = rep.as_array().unwrap();
+
+            for task in tasks {
+                if id == task["id"].as_u64().unwrap() {
+                    let comments = task["comments"].as_array().unwrap().to_owned();
+                    let mut cmnt = String::new();
+
+                    for comment in comments {
+                        cmnt.push_str(comment["author"].as_str().unwrap());
+                        cmnt.push_str(": ");
+                        cmnt.push_str(comment["content"].as_str().unwrap());
+                        cmnt.push('\n');
+                    }
+
+                    println!("Comments on Task with id {}:\n{}", id, cmnt);
+                }
+            }
         }
 
         _ => {
