@@ -9,6 +9,6 @@ pub struct DnvConfig {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct IrcNode {
-    pub node_id: String,
-    //pub rpc_url: String,
+    pub name: String,
+    pub rpc_url: String,
 }

@@ -36,11 +36,12 @@ use dnetview::{
 
 struct DNetView {
     url: Url,
+    name: String,
 }
 
 impl DNetView {
-    pub fn new(url: Url) -> Self {
-        Self { url }
+    pub fn new(url: Url, name: String) -> Self {
+        Self { url, name }
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
@@ -134,7 +135,7 @@ async fn main() -> Result<()> {
 
 async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
     for node in config.nodes.clone() {
-        let client = DNetView::new(Url::parse(&node.node_id)?);
+        let client = DNetView::new(Url::parse(&node.rpc_url)?, node.name);
         ex.spawn(poll(client, model.clone())).detach();
     }
     Ok(())
@@ -230,10 +231,8 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = FxHashMap::default();
 
-            // TODO: here we are setting the RPC url as the node_id.
-            // next step is to read the string variable 'name' from dnetview.toml
-            let node_id = &client.url.as_str();
-            node_info.insert(&node_id, infos.clone());
+            let node_name = &client.name.as_str();
+            node_info.insert(&node_name, infos.clone());
 
             for (key, value) in node_info.clone() {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
