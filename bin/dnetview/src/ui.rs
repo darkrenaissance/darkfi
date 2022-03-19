@@ -24,7 +24,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         let id_span = Span::raw(id.to_string());
         let mut lines = vec![Spans::from(id_span)];
         data.push(id.to_string());
+        debug!("1 LINES: {:?}", lines);
 
+        // create a new vector of addresses
+        // render as a sub node
         match &view.info_list.infos.get(id) {
             Some(node) => {
                 if !node.outbound.iter().all(|node| node.is_empty == true) {
@@ -84,8 +87,11 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             }
         }
 
+        debug!("2 LINES: {:?}", lines);
         let ids = ListItem::new(lines);
+        debug!("1 IDS: {:?}", ids);
         nodes.push(ids);
+        debug!("1 NODES: {:?}", nodes);
     }
 
     let nodes =

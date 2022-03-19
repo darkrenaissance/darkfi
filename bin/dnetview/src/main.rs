@@ -27,10 +27,13 @@ use darkfi::{
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo, Slot},
+    model::{
+        AddrInfo, AddrList, Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo,
+        OutboundInfo, Slot,
+    },
     options::ProgramOptions,
     ui,
-    view::{IdListView, InfoListView},
+    view::{AddrListView, IdListView, InfoListView},
     Model, View,
 };
 
@@ -110,8 +113,9 @@ async fn main() -> Result<()> {
     let info_list = InfoList::new();
     let ids = FxHashSet::default();
     let id_list = IdList::new(ids);
+    let addr_list = AddrList::new();
 
-    let model = Arc::new(Model::new(id_list, info_list));
+    let model = Arc::new(Model::new(id_list, info_list, addr_list));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -160,6 +164,8 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             let mut mconnects = Vec::new();
             let mut oconnects = Vec::new();
             let mut slots = Vec::new();
+            let mut addrs = Vec::new();
+            let mut msgs = Vec::new();
 
             // parse inbound connection data
             let i_connected = &inbound_obj["connected"];
@@ -181,10 +187,12 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
                     let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
                     let status =
                         node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
-                    let channel = Channel::new(msg, status);
+                    let channel = Channel::new(msg.clone(), status);
                     let is_empty = false;
                     let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
                     iconnects.push(iinfo);
+                    addrs.push(addr);
+                    msgs.push(msg.clone());
                 }
             }
 
@@ -218,25 +226,40 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
                     let new_slot = Slot::new(
                         is_empty,
                         addr.as_str().unwrap().to_string(),
-                        channel,
+                        channel.clone(),
                         state.as_str().unwrap().to_string(),
                     );
-                    slots.push(new_slot)
+                    slots.push(new_slot);
+                    addrs.push(addr.as_str().unwrap().to_string());
+                    msgs.push(channel.last_msg.clone());
                 }
             }
 
+            // create node_info
             let is_empty = is_empty_outbound(slots.clone());
             let oinfo = OutboundInfo::new(is_empty, slots.clone());
             oconnects.push(oinfo);
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
             let mut node_info = FxHashMap::default();
-
             let node_name = &client.name.as_str();
             node_info.insert(&node_name, infos.clone());
 
+            // insert into model
             for (key, value) in node_info.clone() {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
                 model.info_list.infos.lock().await.insert(key.to_string(), value);
+            }
+
+            // TODO: this is just a placeholder. Later this will contain a message log.
+            // There's an obvious bug here (all addrs are matched with the same ainfo)
+            let mut addr_info = FxHashMap::default();
+            let ainfos = AddrInfo::new(msgs);
+            for addr in addrs {
+                addr_info.insert(addr, ainfos.clone());
+            }
+
+            for (key, value) in addr_info.clone() {
+                model.addr_list.infos.lock().await.insert(key.to_string(), value);
             }
         } else {
             // TODO: error handling
