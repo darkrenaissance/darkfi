@@ -4,13 +4,14 @@
 ## map properly.
 
 [[nodes]]
+name = "Node 1"
 node_id = "tcp://127.0.0.1:8000"
 
 [[nodes]]
+name = "Node 2"
 node_id = "tcp://127.0.0.1:7777"
 
-#[[nodes]]
-#node_id = ""
-
-# TODO: RPC URL and node id should be distinct
+[[nodes]]
+name = "Node 3"
+node_id = "tcp://127.0.0.1:1234"
 
