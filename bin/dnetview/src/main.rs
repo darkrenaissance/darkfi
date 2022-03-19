@@ -34,11 +34,11 @@ use dnetview::{
     Model, View,
 };
 
-struct Map {
+struct DNetView {
     url: Url,
 }
 
-impl Map {
+impl DNetView {
     pub fn new(url: Url) -> Self {
         Self { url }
     }
@@ -134,7 +134,7 @@ async fn main() -> Result<()> {
 
 async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -> Result<()> {
     for node in config.nodes.clone() {
-        let client = Map::new(Url::parse(&node.node_id)?);
+        let client = DNetView::new(Url::parse(&node.node_id)?);
         ex.spawn(poll(client, model.clone())).detach();
     }
     Ok(())
@@ -143,7 +143,7 @@ async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
 // TODO: clean up into seperate functions.
 // TODO: replace if/else with match where possible
 // TODO: test unwraps will never ever crash
-async fn poll(client: Map, model: Arc<Model>) -> Result<()> {
+async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
