@@ -16,15 +16,12 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
     let mut nodes = Vec::new();
-    // we write all the span data to a Vec<String> for debugging purposes
-    let mut data = Vec::new();
     let style = Style::default();
 
+    // lines.push(sublist)
     for id in &view.id_list.node_id {
         let id_span = Span::raw(id.to_string());
         let mut lines = vec![Spans::from(id_span)];
-        data.push(id.to_string());
-        debug!("1 LINES: {:?}", lines);
 
         // create a new vector of addresses
         // render as a sub node
@@ -32,12 +29,10 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             Some(node) => {
                 if !node.outbound.iter().all(|node| node.is_empty == true) {
                     lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
-                    data.push("Outgoing".to_string());
                 }
                 for outbound in &node.outbound.clone() {
                     for slot in outbound.slots.clone() {
                         let addr = Span::styled(format!("       {}", slot.addr), style);
-                        data.push(format!("{}", slot.addr));
                         let msg: Span = match slot.channel.last_status.as_str() {
                             "recv" => Span::styled(
                                 format!("               [R: {}]", slot.channel.last_msg),
@@ -49,17 +44,14 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                             ),
                             a => Span::styled(a.to_string(), style),
                         };
-                        data.push(format!("{}", slot.channel.last_msg));
                         lines.push(Spans::from(vec![addr, msg]));
                     }
                 }
                 if !node.inbound.iter().all(|node| node.is_empty == true) {
                     lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
-                    data.push("Incoming".to_string());
                 }
                 for inbound in &node.inbound {
                     let addr = Span::styled(format!("       {}", inbound.connected), style);
-                    data.push(format!("{}", inbound.connected));
                     let msg: Span = match inbound.channel.last_status.as_str() {
                         "recv" => Span::styled(
                             format!("               [R: {}]", inbound.channel.last_msg),
@@ -71,14 +63,11 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                         ),
                         a => Span::styled(a.to_string(), style),
                     };
-                    data.push(format!("{}", inbound.channel.last_msg));
                     lines.push(Spans::from(vec![addr, msg]));
                 }
                 lines.push(Spans::from(Span::styled("   Manual", Style::default())));
-                data.push("Manual".to_string());
                 for connect in &node.manual {
                     lines.push(Spans::from(Span::styled(format!("       {}", connect.key), style)));
-                    data.push(format!("{}", connect.key));
                 }
             }
             None => {
@@ -87,11 +76,8 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
             }
         }
 
-        debug!("2 LINES: {:?}", lines);
         let ids = ListItem::new(lines);
-        debug!("1 IDS: {:?}", ids);
         nodes.push(ids);
-        debug!("1 NODES: {:?}", nodes);
     }
 
     let nodes =

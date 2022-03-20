@@ -1,5 +1,5 @@
 use fxhash::{FxHashMap, FxHashSet};
-use log::debug;
+//use log::debug;
 use tui::widgets::ListState;
 
 use crate::model::NodeInfo;
@@ -45,7 +45,6 @@ impl IdListView {
             None => 0,
         };
         self.state.select(Some(i));
-        debug!("NEXT STATE {:?}", i);
     }
 
     pub fn previous(&mut self) {
@@ -60,7 +59,6 @@ impl IdListView {
             None => 0,
         };
         self.state.select(Some(i));
-        debug!("PREV STATE {:?}", i);
     }
 
     pub fn unselect(&mut self) {
@@ -79,32 +77,6 @@ impl InfoListView {
         let index = 0;
 
         InfoListView { index, infos }
-    }
-
-    pub async fn next(&mut self) {
-        self.index = (self.index + 1) % self.infos.len();
-    }
-
-    pub async fn previous(&mut self) {
-        if self.index > 0 {
-            self.index -= 1;
-        } else {
-            self.index = self.infos.len() - 1;
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct AddrListView {
-    pub index: usize,
-    pub infos: FxHashMap<String, NodeInfo>,
-}
-
-impl AddrListView {
-    pub fn new(infos: FxHashMap<String, NodeInfo>) -> AddrListView {
-        let index = 0;
-
-        AddrListView { index, infos }
     }
 
     pub async fn next(&mut self) {

@@ -7,12 +7,11 @@ use tui::widgets::ListState;
 pub struct Model {
     pub id_list: IdList,
     pub info_list: InfoList,
-    pub addr_list: AddrList,
 }
 
 impl Model {
-    pub fn new(id_list: IdList, info_list: InfoList, addr_list: AddrList) -> Model {
-        Model { id_list, info_list, addr_list }
+    pub fn new(id_list: IdList, info_list: InfoList) -> Model {
+        Model { id_list, info_list }
     }
 }
 
@@ -46,21 +45,6 @@ impl InfoList {
 impl Default for InfoList {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub struct AddrList {
-    pub index: Mutex<usize>,
-    pub infos: Mutex<FxHashMap<String, AddrInfo>>,
-}
-
-impl AddrList {
-    pub fn new() -> AddrList {
-        let index = 0;
-        let index = Mutex::new(index);
-        let infos = Mutex::new(FxHashMap::default());
-
-        AddrList { index, infos }
     }
 }
 
@@ -142,17 +126,5 @@ pub struct InboundInfo {
 impl InboundInfo {
     pub fn new(is_empty: bool, connected: String, channel: Channel) -> InboundInfo {
         InboundInfo { is_empty, connected, channel }
-    }
-}
-
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct AddrInfo {
-    // TODO: this will be a message log
-    pub msgs: Vec<String>,
-}
-
-impl AddrInfo {
-    pub fn new(msgs: Vec<String>) -> AddrInfo {
-        AddrInfo { msgs }
     }
 }

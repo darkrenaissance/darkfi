@@ -27,13 +27,10 @@ use darkfi::{
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{
-        AddrInfo, AddrList, Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo,
-        OutboundInfo, Slot,
-    },
+    model::{Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo, Slot},
     options::ProgramOptions,
     ui,
-    view::{AddrListView, IdListView, InfoListView},
+    view::{IdListView, InfoListView},
     Model, View,
 };
 
@@ -113,9 +110,8 @@ async fn main() -> Result<()> {
     let info_list = InfoList::new();
     let ids = FxHashSet::default();
     let id_list = IdList::new(ids);
-    let addr_list = AddrList::new();
 
-    let model = Arc::new(Model::new(id_list, info_list, addr_list));
+    let model = Arc::new(Model::new(id_list, info_list));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -249,18 +245,6 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
                 model.info_list.infos.lock().await.insert(key.to_string(), value);
             }
-
-            // TODO: this is just a placeholder. Later this will contain a message log.
-            // There's an obvious bug here (all addrs are matched with the same ainfo)
-            let mut addr_info = FxHashMap::default();
-            let ainfos = AddrInfo::new(msgs);
-            for addr in addrs {
-                addr_info.insert(addr, ainfos.clone());
-            }
-
-            for (key, value) in addr_info.clone() {
-                model.addr_list.infos.lock().await.insert(key.to_string(), value);
-            }
         } else {
             // TODO: error handling
             //debug!("Reply is empty");
@@ -298,15 +282,12 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
                 }
                 Key::Char('j') => {
                     view.id_list.next();
-                    view.info_list.next().await;
                 }
                 Key::Char('k') => {
                     view.id_list.previous();
-                    view.info_list.previous().await;
                 }
                 _ => (),
             }
         }
-        //async_util::sleep(3).await;
     }
 }
