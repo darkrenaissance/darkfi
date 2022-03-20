@@ -1,0 +1,13 @@
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\indexmap-b1b21440f3e553a5.rmeta: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\macros.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\equivalent.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\mutable_keys.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\util.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core\raw.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\set.rs
+
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\indexmap-b1b21440f3e553a5.d: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\macros.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\equivalent.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\mutable_keys.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\util.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core\raw.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\set.rs
+
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\lib.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\macros.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\equivalent.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\mutable_keys.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\util.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\map\core\raw.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\indexmap-1.8.0\src\set.rs:

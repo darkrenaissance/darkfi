@@ -6,11 +6,9 @@ from ouroboros.logger import Logger
 '''
 \class TrustedBeacon
 
-the trusted beacon is decentralized, such that at the onset of the Epoch,
-the leader of the first slot generated the signed seed, and release the signature, 
-proof, and base to the ge nesis block.
-
-#TODO implement trustedbeacon as a node
+leaky, non-resettable beacon, leaky in the sense that the slots are 
+predictable, and non-resettable, beacon is basically a synchronized 
+timestamp.
 '''
 class TrustedBeacon(SynchedNTPClock, threading.Thread):
 
@@ -42,7 +40,3 @@ class TrustedBeacon(SynchedNTPClock, threading.Thread):
             y, pi = vrf.sign(slot_idx)
             rands[slot_idx] = (y,pi)
         return rands
-    '''
-    def verify(self, y, pi, pk_raw, g):
-        return VRF.verify(self.current_slot, y, pi, pk_raw, g)
-    '''

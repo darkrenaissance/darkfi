@@ -1,0 +1,11 @@
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\generic_array-e2f7a77fd24c9748.rmeta: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\hex.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\impls.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\arr.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\functional.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\iter.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\sequence.rs
+
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\generic_array-e2f7a77fd24c9748.d: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\hex.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\impls.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\arr.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\functional.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\iter.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\sequence.rs
+
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\lib.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\hex.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\impls.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\arr.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\functional.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\iter.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\generic-array-0.14.5\src\sequence.rs:

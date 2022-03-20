@@ -1,0 +1,11 @@
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\blake2b_simd-b49de164c60ae72a.rmeta: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\avx2.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\portable.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\sse41.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\blake2bp.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\guts.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\many.rs
+
+c:\Users\mohab\opt\darkfimain\darkfi\script\research\streamlet_rust\target\debug\deps\blake2b_simd-b49de164c60ae72a.d: C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\lib.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\avx2.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\portable.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\sse41.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\blake2bp.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\guts.rs C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\many.rs
+
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\lib.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\avx2.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\portable.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\sse41.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\blake2bp.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\guts.rs:
+C:\Users\mohab\.cargo\registry\src\github.com-1ecc6299db9ec823\blake2b_simd-1.0.0\src\many.rs:

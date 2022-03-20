@@ -25,17 +25,27 @@ class Block(object):
             self.state=state_hash(previous_block)
         self.tx = data
         self.sl = slot_uid
+        self.signature = None # block issuer signature
+        self.sigma = None #  proof that the block is valid.
         self.is_genesis=genesis
         self.endorsed=False
         self.log = Logger(genesis_time)
         self.leader_id=None
         self.endorser_id=None
 
+    @property
+    def slot(self):
+        return self.sl
+    
     def __repr__(self):
         if self.is_genesis:
-            return "GensisBlock at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}\n"+str(self.tx)
-        return "Block at {slot:"+str(self.sl)+",data:"+str(self.tx)+",state:"+str(self.state)+"}"
+            return "GensisBlock " + str(self.__to_dict)
+        return "Block " + str(self.__to_dict)
     
+    @property
+    def __to_dict(self):
+        return  {SLOT: self.st, STATE: self.state, DATA: self.tx, PROOF: self.sigma, SIGN: self.signature}
+
     def __hash__(self):
         if type(self.tx)==str:
             return hash((self.state, self.tx, self.sl))
@@ -50,9 +60,7 @@ class Block(object):
             self.sl == block.sl
 
     def to_json(self):
-        d = {'state':self.state, \
-            'data': self.tx, \
-            'sl': self.sl}
+        d = self.__to_dict
         return json.encoder(d)
 
     def set_endorsed(self):
@@ -65,6 +73,12 @@ class Block(object):
     def set_leader(self, id):
         self.leader_id=id
     
+    def set_sigma(self, sigma):
+        self.sigma = sigma
+    
+    def set_signature(self, sign):
+        self.signature = sign
+
     @property
     def data(self):
         return self.tx
@@ -78,7 +92,7 @@ class Block(object):
         return (self.tx=='' or self.slot<0) and self.state==''
 
     def encode(self):
-        return str(self).encode()
+        return str(self.__to_dict).encode()
 
 class GensisBlock(Block):
     '''
