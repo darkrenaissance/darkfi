@@ -17,7 +17,7 @@ from ouroboros.stakeholder import Stakeholder
 environment is ought to interfece with the network
 '''
 class Z(object):
-    def __init__(self, stakeholdes,  epoch_length, genesis_time=time.time()):
+    def __init__(self, stakeholdes,  epoch_length, genesis_time=time.time(), f=0.1):
         self.genesis_time=genesis_time
         self.beacon = TrustedBeacon(epoch_length, genesis_time)
         self.log = Logger(self, genesis_time)
@@ -41,7 +41,18 @@ class Z(object):
         self.prev_leader_id=-1
         #
         self.current_block=None
+        self.f = f
         self.init()
+
+    '''
+    active slot coefficient  determine the relation between,
+    probability of leader being selected, and the relative stake,
+    it's defined as the probability that a party holding all the stake
+    will be selected to be a leader for given slot.
+    '''
+    @property
+    def slot_coef(self):
+        return self.f
 
 
     def init(self):
@@ -51,9 +62,10 @@ class Z(object):
         #pick initial leader to be the first stakeholder
         initial_leader = self.stakeholders[0]
         #pick initial endorser to be the first endorser
-        initial_endorser = self.stakeholders[1]
+        #initial_endorser = self.stakeholders[1]
         self.current_epoch = self.beacon.epoch
         self.rands = self.beacon.next_epoch_seeds(initial_leader.vrf)
+        self.log.info(f"rands length: {len(self.rands)}")
         self.current_slot = self.beacon.slot
         self.select_epoch_leaders()
         self.prev_leader_id=0
@@ -116,9 +128,15 @@ class Z(object):
 
 
     def __repr__(self):
-        buff= f"envirnment of {self.length} stakholders\tcurrent leader's id: {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: {self.current_endorser_id}"
-        for sh in self.stakeholders:
-            buff+=str(sh)+"\n"
+        buff = ''
+        if len (self.slot_committee)>0:
+            buff = f"envirnment of {self.length} stakholders\tcurrent leader's id: \
+                {self.current_leader_id}\tepoch_slot: {self.epoch_slot}\tendorser_id: \
+                     {self.current_endorser_id}"
+            for sh in self.stakeholders:
+                buff+=str(sh)+"\n"
+        else: 
+            buff =  f"envirnment of {self.length} stakholders\tepoch_slot: {self.epoch_slot}"
         return buff
    
     '''
@@ -163,7 +181,7 @@ class Z(object):
 
     @property
     def current_leader_id(self):
-        return self.slot_committee[self.current_slot][0]
+        return self.slot_committee[self.epoch_slot][0]
 
     @property
     def current_stakeholder(self):
@@ -172,7 +190,7 @@ class Z(object):
 
     @property
     def current_endorser_id(self):
-        return self.slot_committee[self.current_slot][1]
+        return self.slot_committee[self.epoch_slot][1]
 
     @property
     def current_endorser_uid(self):
@@ -197,7 +215,7 @@ class Z(object):
         return self.endorser(slot).vrf_pk
 
     def is_current_endorser(self, id):
-        _, edr_idx = self.slot_committee[self.beacon.slot]
+        _, edr_idx = self.slot_committee[self.epoch_slot]
         return id == self.stakeholders[edr_idx].id
 
     @property
@@ -209,7 +227,7 @@ class Z(object):
         return self.stakeholders[self.current_leader_id].vrf_base
 
     def is_current_leader(self, id):
-        ldr_idx, _ = self.slot_committee[self.beacon.current_slot]
+        ldr_idx, _ = self.slot_committee[self.epoch_slot]
         return id == self.stakeholders[ldr_idx].id
 
     
@@ -230,8 +248,6 @@ class Z(object):
     def current_leader_sig_pk(self):
         return self.stakeholders[self.current_leader_id].sig_pk
     
-
-
     #note! assumes epoch_slot lays in the current epoch
     def leader(self, slot):
         return self.stakeholders[self.slot_committee[slot][0]]
@@ -301,11 +317,14 @@ class Z(object):
         return self.beacon.epoch
 
     def select_epoch_leaders(self):
+        self.log.info("[Z/select_epoch_leaders]")
         #assert len(self.sigmas)==self.epoch_length and len(self.proofs)==self.epoch_length, \
             #self.log.error(f"size mismatch between sigmas: {len(self.sigmas)}, proofs: {len(self.proofs)}, and epoch_length: {self.epoch_length}")
         for i in range(self.epoch_length):
-            #self.log.info(f"current sigma of index {i} , epoch_length: {self.epoch_length}")
+            self.log.info(f"current sigma of index {i} , epoch_length: {self.epoch_length}, rand : {self.rands}")
             slot_idx = self.current_slot + i
+            assert len(self.rands)>0
+            slot_idx_relative = slot_idx%self.epoch_length
             sigma, _ = self.rands[slot_idx]
             assert sigma!=None, 'proof cant be None'
             def leader_selection_hash(sigma):
@@ -324,11 +343,11 @@ class Z(object):
             # under a single condition that no one is able to predict who is next
             assert not leader_idx==endorser_idx
             #TODO move leader/endorser to a dictionary
-            self.slot_committee[slot_idx] = (leader_idx, endorser_idx)
+            self.slot_committee[slot_idx_relative] = (leader_idx, endorser_idx)
             self.log.highlight(f'slot {slot_idx} has committee leader/endorser {leader_idx}/{endorser_idx}\nleader: {self.stakeholders[leader_idx]}\nendorser: {self.stakeholders[endorser_idx]}')
         self.epoch_initialized[str(self.epoch)] = True
 
-    def broadcast_block(self, cur_block, signed_block, slot_uid):
+    def broadcast_block(self, cur_block):
         while self.current_blk_endorser_sig is None:
             self.log.info('pending endorsing...')
             time.sleep(1)
@@ -337,10 +356,9 @@ class Z(object):
         self.current_block = cur_block
         for stakeholder in self.stakeholders:
             if not stakeholder.is_leader:
-                stakeholder.receive_block(signed_block, self.current_blk_endorser_sig, slot_uid)
+                stakeholder.receive_block(cur_block, self.current_blk_endorser_sig)
+                #stakeholder.receive_block(cur_block.signature, self.current_blk_endorser_sig, cur_block.slot)
         self.print_blockchain()
-
-
 
     @property
     def block_id(self):

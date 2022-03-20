@@ -1,5 +1,6 @@
 from copy import deepcopy
 import time
+import numpy as np
 from ouroboros.block import Block, GensisBlock, EmptyBlock
 from ouroboros.blockchain import Blockchain
 from ouroboros.epoch import Epoch
@@ -8,6 +9,7 @@ from ouroboros.utils import *
 from ouroboros.logger import Logger
 from ouroboros.consts import *
 from ouroboros.data import Data, Transaction, Item
+
 
 '''
 \class Stakeholder
@@ -53,7 +55,21 @@ class Stakeholder(object):
     @property
     def vrf_base(self):
         return self.__vrf_base
+
+    @property
+    def probability_leader_election(self):
+        return 1 - np.pow(1 - self.env.slot_coef, self.stake)
     
+    '''
+    true random oracle from the blockchain
+    it's simulate by a hash function that is modeled as a random oracle. This hash function
+    is applied to the concatenation of VRF values that are inserted into each block, using values from
+    all blocks up to and including the middle ~ 8k slots of an epoch that lasts approximately 24k slots
+    in entirety
+    '''
+    def random_oracle(self):
+        pass
+
     def __repr__(self):
         buff=''
         if self.env.is_current_leader(self.id):
@@ -154,7 +170,8 @@ class Stakeholder(object):
             self.current_block = EmptyBlock(self.env.genesis_time)
         '''
         signed_block = sign_message(self.passwd, self.sig_sk, self.current_block)
-        self.env.broadcast_block(self.current_block, signed_block, self.current_slot_uid)
+        self.current_block.set_signature(signed_block)
+        self.env.broadcast_block(self.current_block)
     
     @property
     def current_slot(self):
@@ -198,14 +215,14 @@ class Stakeholder(object):
             time.sleep(1)
         return cur_blk, stashed
 
-    def receive_block(self, signed_block, endorser_sig, blk_uid):
+    def receive_block(self, blk, endorser_sig):
         self.log.highlight("receiving block")
-        cur_blk, stashed = self.__get_blk(blk_uid)
+        cur_blk, stashed = self.__get_blk(blk.slot)
         #TODO to consider deley should retrive leader_pk of corresponding blk_uid
         self.log.highlight(f'receiving block  {str(cur_blk)}')
         self.log.highlight(f'receiving block has slot_uid: {self.current_slot_uid}')
         self.log.highlight(f'receiving block has sig_pk: {self.env.current_endorser_sig_pk}')
-        blk_verified = verify_signature(self.env.current_leader_sig_pk, cur_blk, signed_block)
+        blk_verified = verify_signature(self.env.current_leader_sig_pk, cur_blk, blk.signature)
         self.log.info("endorser sig_pk {self.env.current_endorser_sig_pk}, cur_blk: {cur_blk}, endorser_sig: {endorser_sig}")
         blk_edrs_verified = verify_signature(self.env.current_endorser_sig_pk, cur_blk, endorser_sig)
         if blk_verified and blk_edrs_verified:
