@@ -417,7 +417,10 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{create_dir_all, remove_dir_all};
+    use std::{
+        fs::{create_dir_all, remove_dir_all},
+        path::PathBuf,
+    };
 
     use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
 
