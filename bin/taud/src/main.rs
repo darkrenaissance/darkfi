@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
+use std::{fs::create_dir_all, sync::Arc};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -143,27 +143,10 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // List tasks
-    // --> {"jsonrpc": "2.0", "method": "list", "params": [month_date], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-    async fn list(&self, id: Value, params: Value) -> JsonResult {
-        let args = params.as_array().unwrap();
-
-        if args.len() != 1 {
-            return JsonResult::Err(jsonerr(InvalidParams, None, id))
-        }
-
-        let result = || -> Result<Vec<TaskInfo>> {
-            let tasks: Vec<TaskInfo> = if args[0].is_i64() {
-                MonthTasks::load_or_create(&Timestamp(args[0].as_i64().unwrap()), &self.settings)?
-                    .objects()?
-            } else {
-                MonthTasks::load_current_open_tasks(&self.settings)?
-            };
-
-            Ok(tasks)
-        };
-
-        match result() {
+    async fn list(&self, id: Value, _params: Value) -> JsonResult {
+        match MonthTasks::load_current_open_tasks(&self.settings) {
             Ok(tks) => JsonResult::Resp(jsonresp(json!(tks), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32603), Some(e.to_string()), id)),
         }
@@ -434,7 +417,10 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{create_dir_all, remove_dir_all};
+    use std::{
+        fs::{create_dir_all, remove_dir_all},
+        path::PathBuf,
+    };
 
     use crate::{month_tasks::MonthTasks, task_info::TaskInfo};
 
