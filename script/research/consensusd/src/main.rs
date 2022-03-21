@@ -1,13 +1,9 @@
-use std::{
-    net::SocketAddr,
-    thread,
-    time,
-};
+use std::{net::SocketAddr, thread, time};
 
-use easy_parallel::Parallel;
 use async_executor::Executor;
 use async_std::sync::Arc;
 use clap::{IntoApp, Parser};
+use easy_parallel::Parallel;
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
@@ -75,23 +71,22 @@ async fn api_service_init(executor: Arc<Executor<'_>>, config: &ConsensusdConfig
 ///       2. Nodes count not hard coded.
 ///       3. Proposed block broadcast.
 fn consensus_task(config: &ConsensusdConfig) {
-    
     let state_path = expand_path(&config.state_path).unwrap();
     let id = config.id;
     let nodes_count = 1;
-    
+
     println!("Waiting for state initialization...");
     thread::sleep(time::Duration::from_secs(10));
-    
+
     // After initialization node should wait for next epoch
     let state = State::load_current_state(id, &state_path).unwrap();
     let seconds_until_next_epoch = state.get_seconds_until_next_epoch_start();
     println!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
-    
+
     loop {
-        let state = State::load_current_state(id, &state_path).unwrap();            
-        let proposed_block = 
+        let state = State::load_current_state(id, &state_path).unwrap();
+        let proposed_block =
             if state.check_if_epoch_leader(nodes_count) { state.propose_block() } else { None };
         if proposed_block.is_none() {
             println!("Node is not the epoch leader. Sleeping till next epoch...");
@@ -99,11 +94,11 @@ fn consensus_task(config: &ConsensusdConfig) {
             // TODO: Proposed block broadcast.
             println!("Node is the epoch leader. Proposed block: {:?}", proposed_block);
         }
-        
+
         let seconds_until_next_epoch = state.get_seconds_until_next_epoch_start();
         println!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
         thread::sleep(seconds_until_next_epoch);
-    };
+    }
 }
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../consensusd_config.toml");
@@ -127,7 +122,7 @@ async fn main() -> Result<()> {
     let api_ex = main_ex.clone();
     let (signal, shutdown) = async_channel::unbounded::<()>();
     let signal1 = signal.clone();
-    let signal2 = signal.clone();    
+    let signal2 = signal.clone();
     let (result, _) = Parallel::new()
         // Run the RCP API service future in background.
         .add(|| {
