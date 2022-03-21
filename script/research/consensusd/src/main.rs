@@ -67,10 +67,9 @@ async fn api_service_init(executor: Arc<Executor<'_>>, config: &ConsensusdConfig
 
 /// RPCAPI:
 /// Node checks if its the current slot leader and generates the slot Block (represented as a Vote structure).
-/// TODO: 1, This should be a scheduled task.
-///       2. Nodes count not hard coded.
-///       3. Proposed block broadcast.
-fn consensus_task(config: &ConsensusdConfig) {
+/// TODO: 1. Nodes count not hard coded.
+///       2. Proposed block broadcast.
+fn proposal_task(config: &ConsensusdConfig) {
     let state_path = expand_path(&config.state_path).unwrap();
     let id = config.id;
     let nodes_count = 1;
@@ -132,9 +131,9 @@ async fn main() -> Result<()> {
                 Ok::<(), darkfi::Error>(())
             })
         })
-        // Run the consensus task in background.
+        // Run the proposal task in background.
         .add(|| {
-            consensus_task(&config);
+            proposal_task(&config);
             drop(signal2);
             Ok::<(), darkfi::Error>(())
         })
