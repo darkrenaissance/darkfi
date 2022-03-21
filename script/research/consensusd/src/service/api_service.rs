@@ -25,19 +25,19 @@ use super::{state::State, vote::Vote};
 
 /// This struct represent the Consensus service RPC daemon.
 #[derive(Serialize)]
-pub struct ConsensusService {
+pub struct APIService {
     id: u64,
     state_path: PathBuf,
 }
 
-impl ConsensusService {
-    pub fn new(id: u64, state_path: PathBuf) -> Result<Arc<ConsensusService>> {
+impl APIService {
+    pub fn new(id: u64, state_path: PathBuf) -> Result<Arc<APIService>> {
         match State::reset(id, &state_path) {
             Err(e) => return Err(e),
             _ => (),
         }
 
-        Ok(Arc::new(ConsensusService { id, state_path }))
+        Ok(Arc::new(APIService { id, state_path }))
     }
 
     /// RPCAPI:
@@ -221,7 +221,7 @@ impl ConsensusService {
 }
 
 #[async_trait]
-impl RequestHandler for ConsensusService {
+impl RequestHandler for APIService {
     /// RPC methods configuration.
     async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
         if req.id.as_u64().unwrap() != self.id || req.params.as_array().is_none() {

@@ -1,4 +1,8 @@
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    thread,
+    time,
+};
 
 use easy_parallel::Parallel;
 use async_executor::Executor;
@@ -17,7 +21,7 @@ use darkfi::{
     Result,
 };
 
-use consensusd::service::ConsensusService;
+use consensusd::service::{APIService, State};
 
 /// This struct represent the configuration parameters used by the Consensus daemon.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -48,8 +52,8 @@ pub struct CliConsensusd {
     pub verbose: u8,
 }
 
-/// Consensus service initialization.
-async fn start(executor: Arc<Executor<'_>>, config: &ConsensusdConfig) -> Result<()> {
+/// RPCAPI service initialization.
+async fn api_service_init(executor: Arc<Executor<'_>>, config: &ConsensusdConfig) -> Result<()> {
     let server_config = RpcServerConfig {
         socket_addr: config.rpc_listen_address,
         use_tls: config.serve_tls,
@@ -60,17 +64,41 @@ async fn start(executor: Arc<Executor<'_>>, config: &ConsensusdConfig) -> Result
     let state_path = expand_path(&config.state_path)?;
     let id = config.id;
 
-    let chain_service = ConsensusService::new(id, state_path)?;
+    let api_service = APIService::new(id, state_path)?;
 
-    listen_and_serve(server_config, chain_service, executor).await
+    listen_and_serve(server_config, api_service, executor).await
 }
 
-async fn start2(executor: Arc<Executor<'_>>, config: &ConsensusdConfig) -> Result<()> {
+/// RPCAPI:
+/// Node checks if its the current slot leader and generates the slot Block (represented as a Vote structure).
+/// TODO: 1, This should be a scheduled task.
+///       2. Nodes count not hard coded.
+///       3. Proposed block broadcast.
+fn consensus_task(config: &ConsensusdConfig) {
     
-    while true {
-        println!("sss");
+    let state_path = expand_path(&config.state_path).unwrap();
+    let id = config.id;
+    let nodes_count = 1;
+    
+    println!("Waiting for state initialization...");
+    thread::sleep(time::Duration::from_secs(20));
+    
+    // After initialization node should wait for next epoch
+    
+    loop {
+        let state = State::load_current_state(id, &state_path).unwrap();            
+        let proposed_block = 
+            if state.check_if_epoch_leader(nodes_count) { state.propose_block() } else { None };
+        if proposed_block.is_none() {
+            println!("Node is not the epoch leader. Sleeping till next epoch...");
+        } else {
+            // TODO: Proposed block broadcast.
+            println!("Node is the epoch leader. Proposed block: {:?}", proposed_block);
+        }
+        
+        // node should sleep till text epoch
+        thread::sleep(time::Duration::from_secs(20)); // 2 * delta
     };
-    Ok(())
 }
 
 const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../consensusd_config.toml");
@@ -90,29 +118,28 @@ async fn main() -> Result<()> {
 
     let config: ConsensusdConfig = Config::<ConsensusdConfig>::load(config_path)?;
 
-    let ex = Arc::new(Executor::new());
-    let ex2 = ex.clone();
-    let ex3 = ex.clone();
+    let main_ex = Arc::new(Executor::new());
+    let api_ex = main_ex.clone();
     let (signal, shutdown) = async_channel::unbounded::<()>();
     let signal1 = signal.clone();
     let signal2 = signal.clone();    
     let (result, _) = Parallel::new()
+        // Run the RCP API service future in background.
         .add(|| {
             smol::future::block_on(async {
-                start(ex2, &config).await?;
+                api_service_init(api_ex, &config).await?;
                 drop(signal1);
                 Ok::<(), darkfi::Error>(())
             })
         })
+        // Run the consensus task in background.
         .add(|| {
-            smol::future::block_on(async {
-                start2(ex3, &config).await?;
-                drop(signal2);
-                Ok::<(), darkfi::Error>(())
-            })
+            consensus_task(&config);
+            drop(signal2);
+            Ok::<(), darkfi::Error>(())
         })
-        // Run the main future on the current thread.
-        .finish(|| smol::future::block_on(ex.run(shutdown.recv())));
+        // Run the shutdown signal receive future on the current thread.
+        .finish(|| smol::future::block_on(main_ex.run(shutdown.recv())));
 
-    Ok(())
+    result.first().unwrap().clone()
 }
