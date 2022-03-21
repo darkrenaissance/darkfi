@@ -81,9 +81,13 @@ fn consensus_task(config: &ConsensusdConfig) {
     let nodes_count = 1;
     
     println!("Waiting for state initialization...");
-    thread::sleep(time::Duration::from_secs(20));
+    thread::sleep(time::Duration::from_secs(10));
     
     // After initialization node should wait for next epoch
+    let state = State::load_current_state(id, &state_path).unwrap();
+    let seconds_until_next_epoch = state.get_seconds_until_next_epoch_start();
+    println!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+    thread::sleep(seconds_until_next_epoch);
     
     loop {
         let state = State::load_current_state(id, &state_path).unwrap();            
@@ -96,8 +100,9 @@ fn consensus_task(config: &ConsensusdConfig) {
             println!("Node is the epoch leader. Proposed block: {:?}", proposed_block);
         }
         
-        // node should sleep till text epoch
-        thread::sleep(time::Duration::from_secs(20)); // 2 * delta
+        let seconds_until_next_epoch = state.get_seconds_until_next_epoch_start();
+        println!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+        thread::sleep(seconds_until_next_epoch);
     };
 }
 
