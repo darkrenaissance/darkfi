@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
@@ -5,7 +6,6 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use chrono::{NaiveDateTime, Utc};
 
 use super::{
     block::Block,
@@ -58,17 +58,19 @@ impl State {
     pub fn append_tx(&mut self, tx: String) {
         self.unconfirmed_txs.push(tx);
     }
-    
+
     /// Node calculates seconds until next epoch starting time.
     /// Epochs duration is configured using the delta value.
     pub fn get_seconds_until_next_epoch_start(&self) -> Duration {
         let delta = 10;
         let start_time = NaiveDateTime::from_timestamp(self.genesis_time.0, 0);
-        let current_epoch = self.get_current_epoch() + 1;        
-        let next_epoch_start_timestamp = (current_epoch * (2 * delta)) + (start_time.timestamp() as u64);
-        let next_epoch_start = NaiveDateTime::from_timestamp(next_epoch_start_timestamp.try_into().unwrap(), 0);
+        let current_epoch = self.get_current_epoch() + 1;
+        let next_epoch_start_timestamp =
+            (current_epoch * (2 * delta)) + (start_time.timestamp() as u64);
+        let next_epoch_start =
+            NaiveDateTime::from_timestamp(next_epoch_start_timestamp.try_into().unwrap(), 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
-        let diff = next_epoch_start - current_time;        
+        let diff = next_epoch_start - current_time;
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
     }
 
