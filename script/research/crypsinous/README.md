@@ -20,12 +20,12 @@ for $x=(cm_{c_2},sn_{c_1},\eta,sl,\rho,h,ptr,\mu_{\rho},\mu_{y},root)$, and
 $w=(path,root_{sk^{COIN}},path_{sk^{COIN}},\tau_c,\rho_c,r_{c_1},v,r_{c_2})$
 for tuple $(x,w) \in L_{lead}$ iff:
 
- * $pk^{COIN} = RPF_{root_{sk^{COIN}}}^{pk}(\tau_c)$.
- * $\rho_{c_2}=RPF_{root_{sk_{c_1}^{COIN}}}^{evl}(\rho_{c_1})$.
+ * $pk^{COIN} = PRF_{root_{sk^{COIN}}}^{pk}(\tau_c)$.
+ * $\rho_{c_2}=PRF_{root_{sk_{c_1}^{COIN}}}^{evl}(\rho_{c_1})$.
  * $\forall i \in \{1,2\} : DeComm(cm_{c_i},pk^{COIN}||v||\rho_{c_i},r_{c_i})=T$.
  * \emph{path} is a valid Merkle tree path to cm_c_1 in the tree with the root \emph{root}.
  * \emph{$path_{sk^{COIN}}$} is a valid path to a leaf at position $sl-\tau_c$ in a tree with a root $root_{sk^{COIN}}$.
- * $sn_{c_1}= RPF_{root_{sk}^{COIN}}^{sn}(\rho_{c_1})$
+ * $sn_{c_1}= PRF_{root_{sk}^{COIN}}^{sn}(\rho_{c_1})$
  * $y = \mu_{y}^{root_{sk_{c_1}^{COIN}}||\rho_c}$
  * $\rho = \mu_{\rho}^{root_{sk_{c_1}^{COIN}}||\rho_c}$
  * $y< ord(G)\phi_f(v)$

@@ -7,7 +7,7 @@ zerocoin isn't used in daily transaction due to performance limitations, but rat
 minting coin $c := ((a_{pk}, PK_{enc}), v, \rho, r, s, cm)$ is:
 $$tx_{mint}:=(v,k,s,cm)$$
 $$cm :=COMM_{s}(v||k)$$
-$$a_{pk} :=RPF_{a_{sk}}^{addr}(0)$$
+$$a_{pk} :=PRF_{a_{sk}}^{addr}(0)$$
 $$k:=COMM_{r}(a_{pk}||\rho)$$
 
 # spending
