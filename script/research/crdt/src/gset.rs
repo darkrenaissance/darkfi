@@ -22,21 +22,21 @@ impl<T: Ord + Clone> Node<T> {
         Self { name: name.into(), gset: GSet::new(), time: 0 }
     }
 
-    pub fn receive_event(&mut self, event: Event<T>) {
+    pub fn receive_event(&mut self, event: &Event<T>) {
         self.time = max(self.time, event.counter) + 1;
         self.gset.insert(event);
     }
 
-    pub fn send_event(&mut self, value: T) -> Event<T> {
+    pub fn send_event(&mut self, value: &T) -> Event<T> {
         self.time += 1;
         let event = Event::new(value, self.time, self.name.clone());
-        self.gset.insert(event.clone());
+        self.gset.insert(&event);
         event
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd)]
-struct Event<T> {
+struct Event<T: Clone> {
     // the msg in the event
     value: T,
     // the counter for lamport clock
@@ -46,13 +46,13 @@ struct Event<T> {
     name: String,
 }
 
-impl<T> Event<T> {
-    pub fn new(value: T, counter: u64, name: String) -> Self {
-        Self { value, counter, name }
+impl<T: Clone> Event<T> {
+    pub fn new(value: &T, counter: u64, name: String) -> Self {
+        Self { value: value.clone(), counter, name }
     }
 }
 
-impl<T: Eq + PartialOrd> Ord for Event<T> {
+impl<T: Eq + PartialOrd + Clone> Ord for Event<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         let ord = self.counter.cmp(&other.counter);
         if ord == Ordering::Equal {
@@ -67,13 +67,13 @@ pub struct GSet<T: Ord> {
     set: BTreeSet<T>,
 }
 
-impl<T: Ord> GSet<T> {
+impl<T: Ord + Clone> GSet<T> {
     pub fn new() -> Self {
         Self { set: BTreeSet::new() }
     }
 
-    pub fn insert(&mut self, element: T) {
-        self.set.insert(element);
+    pub fn insert(&mut self, element: &T) {
+        self.set.insert(element.clone());
     }
 
     pub fn contains(&self, element: &T) -> bool {
@@ -84,8 +84,14 @@ impl<T: Ord> GSet<T> {
         self.set.len()
     }
 
-    pub fn merge(&mut self, other: Self) {
-        other.set.into_iter().for_each(|e| self.insert(e))
+    pub fn merge(&mut self, other: &Self) {
+        other.set.iter().for_each(|e| self.insert(e))
+    }
+}
+
+impl<T: Ord + Clone> Default for GSet<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -99,14 +105,14 @@ mod tests {
         mut b: Node<String>,
         mut c: Node<String>,
     ) -> (Node<String>, Node<String>, Node<String>) {
-        a.gset.merge(b.gset.clone());
-        a.gset.merge(c.gset.clone());
+        a.gset.merge(&b.gset);
+        a.gset.merge(&c.gset);
 
-        b.gset.merge(a.gset.clone());
-        b.gset.merge(c.gset.clone());
+        b.gset.merge(&a.gset);
+        b.gset.merge(&c.gset);
 
-        c.gset.merge(a.gset.clone());
-        c.gset.merge(b.gset.clone());
+        c.gset.merge(&a.gset);
+        c.gset.merge(&b.gset);
 
         (a, b, c)
     }
@@ -118,17 +124,17 @@ mod tests {
         let mut c: Node<String> = Node::new("Node C");
 
         // node a
-        a.send_event("a_msg1".into());
-        a.send_event("a_msg2".into());
+        a.send_event(&"a_msg1".to_string());
+        a.send_event(&"a_msg2".to_string());
 
         // node b
-        b.send_event("b_msg1".into());
+        b.send_event(&"b_msg1".to_string());
 
         // node c
-        c.send_event("c_msg1".into());
+        c.send_event(&"c_msg1".to_string());
 
         // node b
-        b.send_event("b_msg2".into());
+        b.send_event(&"b_msg2".to_string());
 
         let (a, mut b, mut c) = sync_simulation(a, b, c);
 
@@ -137,13 +143,13 @@ mod tests {
         assert_eq!(c.gset.len(), 5);
 
         // node c
-        c.send_event("c_msg2".into());
-        c.send_event("c_msg3".into());
-        c.send_event("c_msg4".into());
-        c.send_event("c_msg5".into());
+        c.send_event(&"c_msg2".to_string());
+        c.send_event(&"c_msg3".to_string());
+        c.send_event(&"c_msg4".to_string());
+        c.send_event(&"c_msg5".to_string());
 
         // node b
-        b.send_event("b_msg3".into());
+        b.send_event(&"b_msg3".to_string());
 
         let (a, b, c) = sync_simulation(a, b, c);
 
