@@ -1,13 +1,12 @@
+use std::sync::Arc;
+
 use async_executor::Executor;
 use async_trait::async_trait;
-
-use darkfi::{
-    net,
-    util::serial::{Decodable, Encodable},
-    Result,
-};
 use log::debug;
-use std::{io, sync::Arc};
+
+use darkfi::{net, Result};
+
+use crate::Event;
 
 pub struct CrdtP2p {}
 
@@ -33,28 +32,6 @@ impl CrdtP2p {
         p2p.clone().start(executor.clone()).await?;
         // Actual main p2p session
         p2p.run(executor).await
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Event {}
-
-impl net::Message for Event {
-    fn name() -> &'static str {
-        "event"
-    }
-}
-
-impl Encodable for Event {
-    fn encode<S: io::Write>(&self, mut _s: S) -> Result<usize> {
-        let len = 0;
-        Ok(len)
-    }
-}
-
-impl Decodable for Event {
-    fn decode<D: io::Read>(mut _d: D) -> Result<Self> {
-        Ok(Self {})
     }
 }
 

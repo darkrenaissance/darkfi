@@ -7,7 +7,7 @@ use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::Result;
 
-use crdt::CrdtP2p;
+use crdt::{CrdtP2p, Event};
 
 fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     // let nthreads = num_cpus::get();
     // debug!(target: "IRC DAEMON", "Run {} executor threads", nthreads);
 
-    let (sender, _) = async_channel::unbounded::<crdt::net::Event>();
+    let (sender, _) = async_channel::unbounded::<Event>();
 
     let (_, result) = Parallel::new()
         .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))

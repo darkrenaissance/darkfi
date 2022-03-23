@@ -1,10 +1,6 @@
 use std::collections::BTreeSet;
 
-use serde::{Deserialize, Serialize};
-
-// CRDT using gset and lamport clock
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GSet<T: Ord> {
     set: BTreeSet<T>,
 }
