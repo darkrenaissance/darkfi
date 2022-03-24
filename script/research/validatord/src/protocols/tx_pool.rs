@@ -11,7 +11,7 @@ use darkfi::{
 
 pub type TxHash = u32; // Change this to a proper hash type
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct Tx {
     pub hash: TxHash,
     pub payload: String,
@@ -39,22 +39,22 @@ impl Decodable for Tx {
 }
 
 #[derive(Debug)]
-pub struct SeenTxHashes {
-    seen_tx_hashes: Mutex<FxHashSet<TxHash>>,
+pub struct TxPool {
+    tx_pool: Mutex<FxHashSet<Tx>>,
 }
 
-pub type SeenTxHashesPtr = Arc<SeenTxHashes>;
+pub type TxPoolPtr = Arc<TxPool>;
 
-impl SeenTxHashes {
+impl TxPool {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { seen_tx_hashes: Mutex::new(FxHashSet::default()) })
+        Arc::new(Self { tx_pool: Mutex::new(FxHashSet::default()) })
     }
 
-    pub async fn add_seen(&self, hash: u32) {
-        self.seen_tx_hashes.lock().await.insert(hash);
+    pub async fn add_tx(&self, tx: Tx) {
+        self.tx_pool.lock().await.insert(tx);
     }
 
-    pub async fn is_seen(&self, hash: u32) -> bool {
-        self.seen_tx_hashes.lock().await.contains(&hash)
+    pub async fn tx_exists(&self, tx: &Tx) -> bool {
+        self.tx_pool.lock().await.contains(tx)
     }
 }

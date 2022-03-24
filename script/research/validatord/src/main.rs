@@ -29,12 +29,9 @@ use darkfi::{
     Result,
 };
 
-mod protocol_tx_pool;
-mod tx_pool;
-
-use crate::{
+use validatord::protocols::{
     protocol_tx_pool::ProtocolTxPool,
-    tx_pool::{SeenTxHashes, SeenTxHashesPtr, Tx},
+    tx_pool::{Tx, TxPool, TxPoolPtr},
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -108,22 +105,22 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         ..Default::default()
     };
 
-    let seen_tx_hashes = SeenTxHashes::new();
+    let tx_pool = TxPool::new();
 
     // P2P registry setup
     let p2p = net::P2p::new(network_settings).await;
     let registry = p2p.protocol_registry();
 
     let (sender, _) = async_channel::unbounded();
-    let seen_tx_hashes2 = seen_tx_hashes.clone();
+    let tx_pool2 = tx_pool.clone();
     let sender2 = sender.clone();
 
     // Adding ProtocolTxPool to the registry
     registry
         .register(!net::SESSION_SEED, move |channel, p2p| {
             let sender = sender2.clone();
-            let seen_tx_hashes = seen_tx_hashes2.clone();
-            async move { ProtocolTxPool::init(channel, sender, seen_tx_hashes, p2p).await }
+            let tx_pool = tx_pool2.clone();
+            async move { ProtocolTxPool::init(channel, sender, tx_pool, p2p).await }
         })
         .await;
     // TODO: Add protocols for rest message types (block, vote)
@@ -145,7 +142,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {
-        seen_tx_hashes: seen_tx_hashes.clone(),
+        tx_pool: tx_pool.clone(),
         p2p: p2p.clone(),
         _rpc_listen_addr: opts.rpc,
     });
@@ -166,7 +163,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
 }
 
 struct JsonRpcInterface {
-    seen_tx_hashes: SeenTxHashesPtr,
+    tx_pool: TxPoolPtr,
     p2p: net::P2pPtr,
     _rpc_listen_addr: SocketAddr,
 }
@@ -205,9 +202,9 @@ impl JsonRpcInterface {
     }
 
     // --> {"jsonrpc": "2.0", "method": "get_tx_pool", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": {"tx_pool", "id": 42}
     async fn get_tx_pool(&self, id: Value, _params: Value) -> JsonResult {
-        let pool = format!("{:?}", self.seen_tx_hashes);
+        let pool = format!("{:?}", self.tx_pool);
         JsonResult::Resp(jsonresp(json!(pool), id))
     }
 
@@ -220,8 +217,12 @@ impl JsonRpcInterface {
             return jsonrpc::error(InvalidParams, None, id).into()
         }
 
+        // TODO: add proper tx hash here and check if its already in the pool
         let random_id = OsRng.next_u32();
-        self.seen_tx_hashes.add_seen(random_id).await;
+        let payload = String::from(args[0].as_str().unwrap());
+        let tx = Tx { hash: random_id, payload };
+
+        self.tx_pool.add_tx(tx).await;
         let protocol_tx = Tx { hash: random_id, payload: args[0].to_string() };
         let result = self.p2p.broadcast(protocol_tx).await;
 
