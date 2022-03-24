@@ -2,13 +2,13 @@
 $ cargo +nightly run -- -v
 
 // In a new terminal start node 1
-$ cargo +nightly run -- -v --accept 0.0.0.0:11001 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6661 --external 127.0.0.1:1101
+$ cargo +nightly run -- -v --accept 0.0.0.0:11001 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6661 --external 127.0.0.1:11001
 
 // In a new terminal start node 2
-$ cargo +nightly run -- -v --accept 0.0.0.0:11002 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6662 --external 127.0.0.1:1102
+$ cargo +nightly run -- -v --accept 0.0.0.0:11002 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6662 --external 127.0.0.1:11002
 
 // In a new terminal start node 3
-$ cargo +nightly run -- -v --accept 0.0.0.0:11003 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6663 --external 127.0.0.1:1103
+$ cargo +nightly run -- -v --accept 0.0.0.0:11003 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6663 --external 127.0.0.1:11003
 
 // In a new terminal, telnet to one of the nodes and submit a tx json command
 $ telnet 127.0.0.1 6661
