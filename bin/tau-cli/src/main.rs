@@ -211,7 +211,13 @@ async fn start(options: CliTau) -> Result<()> {
             };
 
             let desc = if desc.is_none() {
-                let editor = var("EDITOR").unwrap();
+                let editor = match var("EDITOR") {
+                    Ok(t) => t,
+                    Err(e) => {
+                        error!("EDITOR {}", e);
+                        return Err(Error::BadOperationType)
+                    }
+                };
                 let mut file_path = temp_dir();
                 file_path.push("temp_file");
                 File::create(&file_path)?;
@@ -267,6 +273,8 @@ async fn start(options: CliTau) -> Result<()> {
             let mut tasks = rep.as_array().unwrap().to_owned();
             tasks.sort_by(|a, b| b["rank"].as_u64().cmp(&a["rank"].as_u64()));
 
+            let max_rank = if !tasks.is_empty() { tasks[0]["rank"].as_u64().unwrap() } else { 0 };
+
             for task in tasks {
                 let project = task["project"].as_array().unwrap();
                 let mut projects = String::new();
@@ -293,15 +301,25 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                // TODO: the highest rank should be brighter
-                table.add_row(row![
-                    task["id"],
-                    task["title"].as_str().unwrap(),
-                    projects,
-                    asgn,
-                    date,
-                    Fb->task["rank"]
-                ]);
+                if task["rank"].as_u64().unwrap() == max_rank {
+                    table.add_row(row![
+                        task["id"],
+                        task["title"].as_str().unwrap(),
+                        projects,
+                        asgn,
+                        date,
+                        bFC->task["rank"]
+                    ]);
+                } else {
+                    table.add_row(row![
+                        task["id"],
+                        task["title"].as_str().unwrap(),
+                        projects,
+                        asgn,
+                        date,
+                        Fb->task["rank"]
+                    ]);
+                }
             }
             table.printstd();
         }
@@ -344,20 +362,19 @@ async fn start(options: CliTau) -> Result<()> {
             let rep = list(rpc_addr, json!([])).await?;
             let tasks = rep.as_array().unwrap();
 
-            for task in tasks {
-                if id == task["id"].as_u64().unwrap() {
-                    let comments = task["comments"].as_array().unwrap().to_owned();
-                    let mut cmnt = String::new();
+            if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
+                let index: usize = (id - 1).try_into().unwrap();
+                let comments = tasks[index]["comments"].as_array().unwrap();
+                let mut cmnt = String::new();
 
-                    for comment in comments {
-                        cmnt.push_str(comment["author"].as_str().unwrap());
-                        cmnt.push_str(": ");
-                        cmnt.push_str(comment["content"].as_str().unwrap());
-                        cmnt.push('\n');
-                    }
-
-                    println!("Comments on Task with id {}:\n{}", id, cmnt);
+                for comment in comments {
+                    cmnt.push_str(comment["author"].as_str().unwrap());
+                    cmnt.push_str(": ");
+                    cmnt.push_str(comment["content"].as_str().unwrap());
+                    cmnt.push('\n');
                 }
+
+                println!("Comments on Task with id {}:\n{}", id, cmnt);
             }
         }
 
