@@ -14,13 +14,13 @@ tui = {version = "0.17.0", features = ["termion"]}
 
 # Async
 smol = "1.2.5"
-async-std = {version = "1.10.0", features = ["attributes"]}
+async-std = {version = "1.11.0", features = ["attributes"]}
 easy-parallel = "3.2.0"
 async-channel = "1.6.1"
 
 # Misc
 clap = "3.1.6"
-rand = "0.6.5"
+rand = "0.8.5"
 simplelog = "0.11.2"
 log = "0.4.14"
 num_cpus = "1.13.1"

@@ -11,14 +11,14 @@ features = ["rpc"]
 # Async
 smol = "1.2.5"
 futures = "0.3.21"
-async-std = {version = "1.10.0", features = ["attributes"]}
+async-std = {version = "1.11.0", features = ["attributes"]}
 async-trait = "0.1.52"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
 
 # Misc
 clap = {version = "3.1.6", features = ["derive"]}
-log = "0.4.14"
+log = "0.4.16"
 num_cpus = "1.13.1"
 simplelog = "0.11.2"
 rand = "0.8.5"

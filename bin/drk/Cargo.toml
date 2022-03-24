@@ -9,11 +9,11 @@ features = ["rpc"]
 
 [dependencies]
 # Async
-async-std = {version = "1.10.0", features = ["attributes"]}
+async-std = {version = "1.11.0", features = ["attributes"]}
 
 # Misc
 clap = {version = "3.1.6", features = ["derive"]}
-log = "0.4.14"
+log = "0.4.16"
 simplelog = "0.11.2"
 prettytable-rs = "0.8.0"
 url = "2.2.2"
