@@ -32,7 +32,7 @@ local type = token(l.TYPE, word_match{
 local instruction = token('instruction', word_match{
   'ec_add', 'ec_mul', 'ec_mul_base', 'ec_mul_short',
   'ec_get_x', 'ec_get_y',
-  'base_add', 'base_mul', 'base_sub',
+  'base_add', 'base_mul', 'base_sub', 'greater_than',
   'poseidon_hash', 'calculate_merkle_root',
   'constrain_instance',
 })
