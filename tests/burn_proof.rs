@@ -116,7 +116,7 @@ fn burn_proof() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
 
-    let proving_key = ProvingKey::build(11, &circuit);
+    let proving_key = ProvingKey::build(13, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     // ========
@@ -129,7 +129,7 @@ fn burn_proof() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
 
-    let verifying_key = VerifyingKey::build(11, &circuit);
+    let verifying_key = VerifyingKey::build(13, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
     /* ANCHOR_END: main */
 
