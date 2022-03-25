@@ -1,13 +1,10 @@
 use async_std::sync::{Arc, Mutex};
-use std::cmp::max;
+use std::{cmp::max, fmt::Debug};
 
 use async_executor::Executor;
+use log::debug;
 
-use darkfi::{
-    net,
-    util::serial::{serialize, Decodable, Encodable},
-    Result,
-};
+use darkfi::{net, util::serial::Encodable, Result};
 
 use crate::{Event, GSet, ProtocolCrdt};
 
@@ -23,6 +20,7 @@ pub struct Node {
 
 impl Node {
     pub async fn new(name: &str, net_settings: net::Settings) -> Arc<Self> {
+        debug!(target: "crdt", "Node::new() [BEGIN]");
         let p2p = net::P2p::new(net_settings).await;
         Arc::new(Self {
             name: name.into(),
@@ -33,6 +31,7 @@ impl Node {
     }
 
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "crdt", "Node::start() [BEGIN]");
         let (snd, rcv) = async_channel::unbounded::<Event>();
 
         let p2p = self.p2p.clone();
@@ -58,9 +57,9 @@ impl Node {
 
         let recv_task = executor.spawn(async move {
             loop {
-                // XXX remove unwrap
-                let event = rcv.recv().await.unwrap();
-                self.clone().receive_event(&event).await;
+                if let Ok(event) = rcv.recv().await {
+                    self.clone().receive_event(&event).await;
+                }
             }
         });
 
@@ -68,20 +67,41 @@ impl Node {
 
         recv_task.cancel().await;
 
+        debug!(target: "crdt", "Node::start() [END]");
+
         Ok(())
     }
 
     pub async fn receive_event(self: Arc<Self>, event: &Event) {
+        debug!(target: "crdt", "Node receive an event: {:?}", event);
+
         let mut time = self.time.lock().await;
         *time = max(*time, event.counter) + 1;
+
         self.gset.lock().await.insert(event);
     }
 
-    pub async fn send_event<T: Decodable + Encodable>(self: Arc<Self>, value: T) -> Result<()> {
-        let mut time = self.time.lock().await;
-        *time += 1;
-        let event = Event::new(serialize(&value), *time, self.name.clone());
-        self.gset.lock().await.insert(&event);
-        self.p2p.broadcast(event).await
+    pub async fn send_event<T: Encodable + Debug>(self: Arc<Self>, value: T) -> Result<()> {
+        debug!(target: "crdt", "Node send an event: {:?}", value);
+
+        let event_time: u64;
+
+        {
+            let mut time = self.time.lock().await;
+            *time += 1;
+            event_time = *time;
+        }
+
+        let event = Event::new(value, event_time, self.name.clone());
+        debug!(target: "crdt", "Node create new event: {:?}", event);
+
+        {
+            self.gset.lock().await.insert(&event);
+        }
+
+        debug!(target: "crdt", "Node broadcast the event: {:?}", event);
+        self.p2p.broadcast(event).await?;
+
+        Ok(())
     }
 }
