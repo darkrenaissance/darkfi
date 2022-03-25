@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -6,40 +6,14 @@ use log::debug;
 
 use darkfi::{net, Result};
 
-use crate::Event;
+use crate::{Event, GSet};
 
-pub struct CrdtP2p {}
-
-impl CrdtP2p {
-    pub async fn start(
-        executor: Arc<Executor<'_>>,
-        notify_queue_sender: async_channel::Sender<Event>,
-    ) -> Result<()> {
-        let p2p = net::P2p::new(net::Settings::default()).await;
-        let registry = p2p.protocol_registry();
-
-        registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let sender = notify_queue_sender.clone();
-                async move { ProtocolCrdt::init(channel, sender, p2p).await }
-            })
-            .await;
-
-        //
-        // p2p network main instance
-        //
-        // Performs seed session
-        p2p.clone().start(executor.clone()).await?;
-        // Actual main p2p session
-        p2p.run(executor).await
-    }
-}
-
-struct ProtocolCrdt {
+pub struct ProtocolCrdt {
     jobsman: net::ProtocolJobsManagerPtr,
     notify_queue_sender: async_channel::Sender<Event>,
     event_sub: net::MessageSubscription<Event>,
     p2p: net::P2pPtr,
+    gset: Arc<Mutex<GSet<Event>>>,
 }
 
 impl ProtocolCrdt {
@@ -47,6 +21,7 @@ impl ProtocolCrdt {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<Event>,
         p2p: net::P2pPtr,
+        gset: Arc<Mutex<GSet<Event>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Event>().await;
@@ -58,6 +33,7 @@ impl ProtocolCrdt {
             event_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolCrdt", channel),
             p2p,
+            gset,
         })
     }
 
@@ -71,6 +47,10 @@ impl ProtocolCrdt {
                 "ProtocolCrdt::handle_receive_event() received {:?}",
                 event
             );
+
+            if self.gset.lock().await.contains(&event) {
+                continue
+            }
 
             let event = (*event).clone();
             self.p2p.broadcast(event.clone()).await?;

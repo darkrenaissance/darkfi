@@ -2,7 +2,7 @@ use std::{cmp::Ordering, io};
 
 use darkfi::{
     net,
-    util::serial::{serialize, Decodable, Encodable},
+    util::serial::{Decodable, Encodable},
     Result,
 };
 
@@ -38,8 +38,8 @@ impl Decodable for Event {
 }
 
 impl Event {
-    pub fn new<T: Encodable + Decodable>(value: &T, counter: u64, name: String) -> Self {
-        Self { value: serialize(value), counter, name }
+    pub fn new(value: Vec<u8>, counter: u64, name: String) -> Self {
+        Self { value, counter, name }
     }
 }
 
