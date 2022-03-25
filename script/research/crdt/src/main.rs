@@ -3,9 +3,9 @@ use std::{env, sync::Arc};
 extern crate clap;
 use async_executor::Executor;
 use easy_parallel::Parallel;
-use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
-use darkfi::{net, Result};
+use darkfi::{net, util::cli::log_config, Result};
 
 use crdt::Node;
 
@@ -64,18 +64,11 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
+    let (lvl, cfg) = log_config(1)?;
+
+    TermLogger::init(lvl, cfg, TerminalMode::Mixed, ColorChoice::Auto)?;
+
     let ex2 = ex.clone();
-
-    TermLogger::init(
-        LevelFilter::Debug,
-        Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
-
-    // let nthreads = num_cpus::get();
-    // debug!(target: "IRC DAEMON", "Run {} executor threads", nthreads);
-
     let (_, result) = Parallel::new()
         .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
         // Run the main future on the current thread.
