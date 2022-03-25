@@ -10,7 +10,7 @@ use std::{
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use clap::{CommandFactory, Parser, Subcommand};
 use log::{debug, error};
-use prettytable::{cell, format, row, Table};
+use prettytable::{cell, format, row, Cell, Row, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -301,25 +301,20 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                if task["rank"].as_u64().unwrap() == max_rank {
-                    table.add_row(row![
-                        task["id"],
-                        task["title"].as_str().unwrap(),
-                        projects,
-                        asgn,
-                        date,
-                        bFC->task["rank"]
-                    ]);
-                } else {
-                    table.add_row(row![
-                        task["id"],
-                        task["title"].as_str().unwrap(),
-                        projects,
-                        asgn,
-                        date,
-                        Fb->task["rank"]
-                    ]);
-                }
+                let rank = task["rank"].as_u64().unwrap_or(0);
+
+                table.add_row(Row::new(vec![
+                    Cell::new(&task["id"].to_string()),
+                    Cell::new(task["title"].as_str().unwrap()),
+                    Cell::new(&projects),
+                    Cell::new(&asgn),
+                    Cell::new(&date),
+                    if rank == max_rank {
+                        Cell::new(&rank.to_string()).style_spec("bFC")
+                    } else {
+                        Cell::new(&rank.to_string()).style_spec("Fb")
+                    },
+                ]));
             }
             table.printstd();
         }
