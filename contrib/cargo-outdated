@@ -1,0 +1,165 @@
+#!/usr/bin/env python3.9
+import json
+import pickle
+import subprocess
+
+from argparse import ArgumentParser
+from os import getenv
+from os.path import exists, join
+from subprocess import PIPE
+
+import semver
+import toml
+from colorama import Fore, Style
+from prettytable import PrettyTable
+
+# Path to git repository holding crates.io index
+CRATESIO_REPO = "https://github.com/rust-lang/crates.io-index"
+CRATESIO_INDEX = join(getenv("HOME"), ".cache", "crates.io-index")
+
+# Path to pickle cache for storing paths to dependency metadata
+PICKLE_CACHE = join(getenv("HOME"), ".cache", "cargo-outdated.pickle")
+
+# Set of packages that are ignored by this tool
+IGNORES = {"drk-sdk", "darkfi"}
+
+# Cached paths for metadata to not have to search through the crates index
+METADATA_PATHS = {}
+
+if exists(PICKLE_CACHE):
+    with open(PICKLE_CACHE, "rb") as f:
+        json_data = pickle.load(f)
+        METADATA_PATHS = json.loads(json_data)
+
+
+def parse_toml(file):
+    with open(file) as f:
+        content = f.read()
+
+    p = toml.loads(content)
+    deps = p.get("dependencies")
+    devdeps = p.get("dev-dependencies")
+
+    if deps and devdeps:
+        dependencies = deps | devdeps
+    elif deps:
+        dependencies = deps
+    elif devdeps:
+        dependencies = devdeps
+    else:
+        dependencies = None
+
+    return (p["package"]["name"], dependencies)
+
+
+def get_metadata_path(name):
+    find_output = subprocess.run(
+        ["find", CRATESIO_INDEX, "-type", "f", "-name", name], stdout=PIPE)
+
+    metadata_path = find_output.stdout.decode().strip()
+
+    if metadata_path == '':
+        return None
+
+    # Place the path into cache
+    METADATA_PATHS[name] = metadata_path
+    return metadata_path
+
+
+def check_dep(name, data):
+    if name in IGNORES:
+        return None
+
+    metadata_path = METADATA_PATHS.get(name)
+
+    if not metadata_path:
+        metadata_path = get_metadata_path(name)
+        if not metadata_path:
+            print(f"No crate found for {Fore.YELLOW}{name}{Style.RESET_ALL}")
+            return None
+
+    # Read the metadata. It's split as JSON objects, each in its own line.
+    with open(metadata_path, encoding="utf-8") as f:
+        lines = f.readlines()
+        lines = [i.strip() for i in lines]
+
+    # Latest one is at the end
+    metadata = json.loads(lines[-1])
+
+    # Get the version from the local data
+    if isinstance(data, str):
+        # This is just the semver
+        local_version = data
+    elif isinstance(data, dict):
+        local_version = data.get("version")
+        if not local_version:
+            # Not a versioned dependency (can be path/git/...)
+            return None
+    else:
+        raise ValueError(f"Invalid dependency: {name}")
+
+    if semver.compare(local_version, metadata["vers"], loose=True) < 0:
+        return (local_version, metadata["vers"])
+
+    return None
+
+
+def main():
+    parser = ArgumentParser(
+        description="Prettyprint outdated dependencies in a cargo project")
+
+    parser.add_argument("-i",
+                        "--ignore",
+                        type=str,
+                        help="Comma-separated list of deps to ignore")
+
+    args = parser.parse_args()
+
+    if args.ignore:
+        for i in args.ignore.split(","):
+            IGNORES.add(i)
+
+    if not exists(CRATESIO_INDEX):
+        print("Cloning crates.io index...")
+        subprocess.run(["git", "clone", CRATESIO_REPO, CRATESIO_INDEX],
+                       capture_output=False)
+
+    print("Updating crates.io index...")
+    subprocess.run(["git", "-C", CRATESIO_INDEX, "fetch", "-a"],
+                   capture_output=False)
+
+    subprocess.run(
+        ["git", "-C", CRATESIO_INDEX, "reset", "--hard", "origin/master"],
+        capture_output=False)
+
+    find_output = subprocess.run(
+        ["find", ".", "-type", "f", "-name", "Cargo.toml"], stdout=PIPE)
+    files = [i.strip() for i in find_output.stdout.decode().split("\n")][:-1]
+
+    x = PrettyTable()
+    x.field_names = ["package", "crate", "current", "latest", "path"]
+
+    for file in files:
+        package, deps = parse_toml(file)
+        parse_toml(file)
+        print(f"Checking deps for {Fore.GREEN}{package}{Style.RESET_ALL}")
+        for dep in deps:
+            ret = check_dep(dep, deps[dep])
+            if ret:
+                x.add_row([
+                    package,
+                    dep,
+                    f"{Fore.YELLOW}{ret[0]}{Style.RESET_ALL}",
+                    f"{Fore.GREEN}{ret[1]}{Style.RESET_ALL}",
+                    file,
+                ])
+
+    print(x)
+
+    # Write the pickle
+    with open(PICKLE_CACHE, "wb") as pfile:
+        pickle.dump(json.dumps(METADATA_PATHS).encode(), pfile)
+
+
+if __name__ == "__main__":
+    main()
