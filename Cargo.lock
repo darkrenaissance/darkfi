@@ -1607,7 +1607,7 @@ name = "darkfi-derive"
 version = "0.3.0"
 dependencies = [
  "darkfi-derive-internal",
- "proc-macro-crate 0.1.5",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.36",
  "syn 1.0.89",
 ]
