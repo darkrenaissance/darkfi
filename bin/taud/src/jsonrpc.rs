@@ -20,7 +20,8 @@ use crate::{
 };
 
 pub struct JsonRpcInterface {
-    pub settings: Settings,
+    settings: Settings,
+    notify_queue_sender: async_channel::Sender<TaskInfo>,
 }
 
 #[async_trait]
@@ -47,6 +48,10 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
+    pub fn new(notify_queue_sender: async_channel::Sender<TaskInfo>, settings: Settings) -> Self {
+        Self { notify_queue_sender, settings }
+    }
+
     // RPCAPI:
     // Add new task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}

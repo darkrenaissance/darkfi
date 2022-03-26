@@ -5,6 +5,7 @@ use clap::{IntoApp, Parser};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
+    net::Settings as P2pSettings,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config, Config},
@@ -20,9 +21,12 @@ mod month_tasks;
 mod task_info;
 mod util;
 
-use jsonrpc::JsonRpcInterface;
-
-use crate::util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS};
+use crate::{
+    crdt::Node,
+    jsonrpc::JsonRpcInterface,
+    task_info::TaskInfo,
+    util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
+};
 
 async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
     if config.dataset_path.is_empty() {
@@ -37,6 +41,21 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let settings = Settings { dataset_path };
 
+    //
+    // Crdt
+    //
+
+    let p2p_settings = P2pSettings::default();
+
+    let node = Node::new("node", p2p_settings).await;
+
+    let ex2 = executor.clone();
+    let node2 = node.clone();
+    let crdt_task = executor.spawn(node2.start(ex2.clone()));
+
+    //
+    // RPC
+    //
     let server_config = RpcServerConfig {
         socket_addr: config.rpc_listener_url.url.parse()?,
         use_tls: false,
@@ -45,9 +64,14 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
         identity_pass: Default::default(),
     };
 
-    let rpc_interface = Arc::new(JsonRpcInterface { settings });
+    let (snd, _rcv) = async_channel::unbounded::<TaskInfo>();
 
-    listen_and_serve(server_config, rpc_interface, executor).await
+    let rpc_interface = Arc::new(JsonRpcInterface::new(snd, settings));
+
+    listen_and_serve(server_config, rpc_interface, executor).await?;
+
+    crdt_task.cancel().await;
+    Ok(())
 }
 
 #[async_std::main]
