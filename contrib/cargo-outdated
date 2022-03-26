@@ -1,10 +1,10 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3
 import json
 import pickle
 import subprocess
 
 from argparse import ArgumentParser
-from os import getenv
+from os import chdir, getenv
 from os.path import exists, join
 from subprocess import PIPE
 
@@ -131,6 +131,12 @@ def main():
     subprocess.run(
         ["git", "-C", CRATESIO_INDEX, "reset", "--hard", "origin/master"],
         capture_output=False)
+
+    # chdir to the root of the project
+    toplevel = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                              capture_output=True)
+    toplevel = toplevel.stdout.decode().strip()
+    chdir(toplevel)
 
     find_output = subprocess.run(
         ["find", ".", "-type", "f", "-name", "Cargo.toml"], stdout=PIPE)
