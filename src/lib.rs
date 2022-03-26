@@ -33,3 +33,6 @@ pub mod rpc;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;
+
+#[cfg(feature = "blockchain")]
+pub mod consensus;
