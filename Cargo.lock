@@ -1557,6 +1557,7 @@ dependencies = [
  "blake3",
  "bs58",
  "bytes",
+ "chrono",
  "clap 3.1.6",
  "crypto_api_chachapoly",
  "darkfi-derive",

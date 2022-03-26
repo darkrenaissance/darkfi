@@ -99,14 +99,15 @@ mod tests {
         path::PathBuf,
     };
 
+    use super::*;
     use crate::{month_tasks::MonthTasks, task_info::TaskInfo, util::get_current_time};
 
-    use super::*;
+    const TEST_DATA_PATH: &str = "/tmp/test_tau_data";
 
     fn get_path() -> Result<PathBuf> {
-        remove_dir_all("/tmp/test_tau_data").ok();
+        remove_dir_all(TEST_DATA_PATH).ok();
 
-        let path = PathBuf::from("/tmp/test_tau_data");
+        let path = PathBuf::from(TEST_DATA_PATH);
 
         // mkdir dataset_path if not exists
         create_dir_all(path.join("month"))?;
@@ -174,6 +175,8 @@ mod tests {
         let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
 
         assert!(mt_load.get_task_tks().contains(&task.get_ref_id()));
+
+        remove_dir_all(TEST_DATA_PATH).ok();
 
         Ok(())
     }

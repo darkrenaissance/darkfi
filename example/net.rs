@@ -2,8 +2,9 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use async_executor::Executor;
 use clap::Parser;
+use simplelog::*;
 
-use darkfi::{net, Result};
+use darkfi::{net, util::cli::log_config, Result};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings).await;
@@ -93,38 +94,11 @@ impl ProgramOptions {
 }
 
 fn main() -> Result<()> {
-    use simplelog::*;
-
     let options = ProgramOptions::load()?;
 
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-
-    CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed, ColorChoice::Auto),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            std::fs::File::create(options.log_path.as_path()).unwrap(),
-        ),
-    ])
-    .unwrap();
+    let (lvl, conf) = log_config(1)?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(ex.clone(), options)))
-
-    /*
-       let (_, result) = Parallel::new()
-    // Run four executor threads.
-    .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-    // Run the main future on the current thread.
-    .finish(|| {
-    smol::future::block_on(async move {
-    start(ex2, options).await?;
-    drop(signal);
-    Ok::<(), drk::Error>(())
-    })
-    });
-
-    result
-    */
 }
