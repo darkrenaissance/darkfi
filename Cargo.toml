@@ -264,8 +264,3 @@ required-features = ["async-runtime", "net"]
 name = "tx"
 path = "example/tx.rs"
 required-features = ["node"]
-
-[[example]]
-name = "dao-process"
-path = "example/dao_process.rs"
-required-features = ["crypto", "zkas"]
