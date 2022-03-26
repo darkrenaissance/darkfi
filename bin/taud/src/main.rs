@@ -20,6 +20,7 @@ use darkfi::{
     Error, Result,
 };
 
+mod crdt;
 mod month_tasks;
 mod task_info;
 mod util;

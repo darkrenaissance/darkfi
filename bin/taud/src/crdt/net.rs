@@ -6,7 +6,7 @@ use log::debug;
 
 use darkfi::{net, Result};
 
-use crate::{Event, GSet};
+use super::{Event, GSet};
 
 pub struct ProtocolCrdt {
     jobsman: net::ProtocolJobsManagerPtr,
@@ -43,7 +43,7 @@ impl ProtocolCrdt {
             let event = self.event_sub.receive().await?;
 
             debug!(
-                target: "ircd",
+                target: "crdt",
                 "ProtocolCrdt::handle_receive_event() received {:?}",
                 event
             );

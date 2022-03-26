@@ -5983,6 +5983,7 @@ dependencies = [
  "chrono",
  "clap 3.1.6",
  "darkfi",
+ "easy-parallel",
  "futures",
  "log",
  "num_cpus",

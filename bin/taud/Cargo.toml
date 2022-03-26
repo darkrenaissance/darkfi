@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../"
-features = ["rpc"]
+features = ["rpc", "net"]
 
 [dependencies]
 # Async
@@ -15,6 +15,7 @@ async-std = {version = "1.11.0", features = ["attributes"]}
 async-trait = "0.1.52"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
+easy-parallel = "3.2.0"
 
 # Misc
 clap = {version = "3.1.6", features = ["derive"]}

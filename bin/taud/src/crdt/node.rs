@@ -6,7 +6,7 @@ use log::debug;
 
 use darkfi::{net, util::serial::Encodable, Result};
 
-use crate::{Event, GSet, ProtocolCrdt};
+use super::{Event, GSet, ProtocolCrdt};
 
 pub struct Node {
     // name to idnetifie the node
