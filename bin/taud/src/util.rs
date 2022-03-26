@@ -1,5 +1,6 @@
 use std::{
     fs::File,
+    io,
     io::BufReader,
     path::{Path, PathBuf},
 };
@@ -9,7 +10,13 @@ use clap::Parser;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use darkfi::{util::cli::UrlConfig, Result};
+use darkfi::{
+    util::{
+        cli::UrlConfig,
+        serial::{Decodable, Encodable},
+    },
+    Result,
+};
 
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../taud_config.toml");
 
@@ -57,6 +64,20 @@ impl Default for Settings {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub struct Timestamp(pub i64);
+
+impl Encodable for Timestamp {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.0.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Timestamp {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self(Decodable::decode(&mut d)?))
+    }
+}
 
 /// taud cli
 #[derive(Parser)]
