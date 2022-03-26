@@ -21,7 +21,7 @@ CRATESIO_INDEX = join(getenv("HOME"), ".cache", "crates.io-index")
 PICKLE_CACHE = join(getenv("HOME"), ".cache", "cargo-outdated.pickle")
 
 # Set of packages that are ignored by this tool
-IGNORES = {"drk-sdk", "darkfi"}
+IGNORES = {"drk-sdk", "darkfi", "darkfi-derive", "darkfi-derive-internal"}
 
 # Cached paths for metadata to not have to search through the crates index
 METADATA_PATHS = {}
