@@ -48,8 +48,6 @@ struct TaskProjects(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct TaskAssigns(Vec<String>);
 
-// XXX
-#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TaskInfo {
     ref_id: String,

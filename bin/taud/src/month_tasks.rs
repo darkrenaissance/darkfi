@@ -10,8 +10,6 @@ use crate::{
     util::{get_current_time, Settings, Timestamp},
 };
 
-// XXX
-#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MonthTasks {
     created_at: Timestamp,
