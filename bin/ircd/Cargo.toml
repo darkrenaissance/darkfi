@@ -12,7 +12,7 @@ features = ["net", "rpc"]
 smol = "1.2.5"
 futures = "0.3.21"
 async-std = "1.11.0"
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
 easy-parallel = "3.2.0"
@@ -23,7 +23,7 @@ rand = "0.8.5"
 # Misc
 clap = "3.1.6"
 log = "0.4.16"
-simplelog = "0.11.2"
+simplelog = "0.12.0-alpha1"
 fxhash = "0.2.1"
 
 # Encoding and parsing
