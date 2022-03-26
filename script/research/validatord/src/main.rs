@@ -12,6 +12,10 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
+    consensus::{
+        state::{State, StatePtr},
+        tx::Tx,
+    },
     net,
     rpc::{
         jsonrpc,
@@ -24,14 +28,14 @@ use darkfi::{
     },
     util::{
         cli::{log_config, spawn_config},
+        expand_path,
         path::get_config_path,
     },
     Result,
 };
 
 use validatord::protocols::{
-    protocol_tx_pool::ProtocolTxPool,
-    tx_pool::{Tx, TxPool, TxPoolPtr},
+    protocol_proposal::ProtocolProposal, protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -43,36 +47,42 @@ struct Opt {
     #[structopt(short, long, default_value = CONFIG_FILE)]
     /// Configuration file to use
     config: String,
-    #[structopt(long)]
+    #[structopt(long, default_value = "0.0.0.0:11000")]
     /// Accept address
-    accept: Option<SocketAddr>,
+    accept: SocketAddr,
     #[structopt(long)]
     /// Seed nodes
     seeds: Vec<SocketAddr>,
     #[structopt(long)]
     /// Manual connections
     connect: Vec<SocketAddr>,
-    #[structopt(long, default_value = "0")]
+    #[structopt(long, default_value = "5")]
     /// Connection slots
     slots: u32,
-    #[structopt(long)]
+    #[structopt(long, default_value = "127.0.0.1:11000")]
     /// External address
-    external: Option<SocketAddr>,
+    external: SocketAddr,
     #[structopt(long, default_value = "/tmp/darkfid.log")]
     /// Logfile path
     log: String,
-    #[structopt(long, default_value = "127.0.0.1:9000")]
+    #[structopt(long, default_value = "127.0.0.1:6660")]
     /// The endpoint where validatord will bind its RPC socket
     rpc: SocketAddr,
     #[structopt(long)]
     /// Whether to listen with TLS or plain TCP
-    serve_tls: bool,
+    tls: bool,
     #[structopt(long, default_value = "~/.config/darkfi/validatord_identity.pfx")]
     /// TLS certificate to use
-    tls_identity_path: PathBuf,
+    identity: PathBuf,
     #[structopt(long, default_value = "FOOBAR")]
     /// Password for the created TLS identity
-    tls_identity_password: String,
+    password: String,
+    #[structopt(long, default_value = "~/.config/darkfi/validatord_state_0")]
+    /// Path to the state file
+    state: String,
+    #[structopt(long, default_value = "0")]
+    /// How many threads to utilize
+    id: u64,
     #[structopt(short, long, default_value = "0")]
     /// How many threads to utilize
     threads: usize,
@@ -81,49 +91,130 @@ struct Opt {
     verbose: u8,
 }
 
-fn proposal_task() {
+// TODO:
+//      1. Nodes count not hardcoded.
+//      2. Remove dummy delay.
+async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) {
+    let nodes_count = 4;
+    // After initialization node should wait for next epoch
+    let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
+    info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+    thread::sleep(seconds_until_next_epoch);
+
     loop {
-        info!("Waiting for next epoch({:?} sec)...", 20);
-        thread::sleep(time::Duration::from_secs(20));
+        let result = if state.read().unwrap().check_if_epoch_leader(nodes_count) {
+            state.read().unwrap().propose_block()
+        } else {
+            Ok(None)
+        };
+        match result {
+            Ok(proposal) => {
+                if proposal.is_none() {
+                    info!("Node is not the epoch leader. Sleeping till next epoch...");
+                } else {
+                    let unwrapped = proposal.unwrap();
+                    info!("Node is the epoch leader. Proposed block: {:?}", unwrapped);
+                    let vote = state.write().unwrap().receive_proposed_block(
+                        &unwrapped,
+                        nodes_count,
+                        true,
+                    );
+                    match vote {
+                        Ok(x) => {
+                            if x.is_none() {
+                                debug!("Node did not vote for the proposed block.");
+                            } else {
+                                let vote = x.unwrap();
+                                state.write().unwrap().receive_vote(&vote, nodes_count as usize);
+                                // Broadcasting block
+                                let result = p2p.broadcast(unwrapped).await;
+                                match result {
+                                    Ok(()) => info!("Proposal broadcasted successfuly."),
+                                    Err(e) => error!("Broadcast failed. Error: {:?}", e),
+                                }
+                                // Broadcasting leader vote
+                                thread::sleep(time::Duration::from_secs(10)); // communication delay simulation
+                                let result = p2p.broadcast(vote).await;
+                                match result {
+                                    Ok(()) => info!("Leader vote broadcasted successfuly."),
+                                    Err(e) => error!("Broadcast failed. Error: {:?}", e),
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            debug!(target: "ircd", "ProtocolBlock::handle_receive_proposal() error prosessing proposal: {:?}", e)
+                        }
+                    }
+                }
+            }
+            Err(e) => error!("Broadcast failed. Error: {:?}", e),
+        }
+
+        let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
+        info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+        thread::sleep(seconds_until_next_epoch);
+        let result = state.read().unwrap().save(state_path);
+        match result {
+            Ok(()) => (),
+            Err(e) => {
+                debug!(target: "ircd", "ProtocolVote::handle_receive_proposal() error saving state: {:?}", e)
+            }
+        };
     }
 }
 
 async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let rpc_server_config = RpcServerConfig {
         socket_addr: opts.rpc,
-        use_tls: opts.serve_tls,
-        identity_path: opts.tls_identity_path.clone(),
-        identity_pass: opts.tls_identity_password.clone(),
+        use_tls: opts.tls,
+        identity_path: opts.identity.clone(),
+        identity_pass: opts.password.clone(),
     };
 
     let network_settings = net::Settings {
-        inbound: opts.accept,
+        inbound: Some(opts.accept),
         outbound_connections: opts.slots,
-        external_addr: opts.external,
+        external_addr: Some(opts.external),
         peers: opts.connect.clone(),
         seeds: opts.seeds.clone(),
         ..Default::default()
     };
 
-    let tx_pool = TxPool::new();
+    // State setup
+    let state_path = expand_path(&opts.state).unwrap();
+    let id = opts.id.clone();
+    let state = State::load_current_state(id, &state_path).unwrap();
 
     // P2P registry setup
     let p2p = net::P2p::new(network_settings).await;
     let registry = p2p.protocol_registry();
 
-    let (sender, _) = async_channel::unbounded();
-    let tx_pool2 = tx_pool.clone();
-    let sender2 = sender.clone();
-
-    // Adding ProtocolTxPool to the registry
+    // Adding ProtocolTx to the registry
+    let state2 = state.clone();
     registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let sender = sender2.clone();
-            let tx_pool = tx_pool2.clone();
-            async move { ProtocolTxPool::init(channel, sender, tx_pool, p2p).await }
+        .register(net::SESSION_ALL, move |channel, _p2p| {
+            let state = state2.clone();
+            async move { ProtocolTx::init(channel, state).await }
         })
         .await;
-    // TODO: Add protocols for rest message types (block, vote)
+
+    // Adding PropotolVote to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, _p2p| {
+            let state = state2.clone();
+            async move { ProtocolVote::init(channel, state).await }
+        })
+        .await;
+
+    // Adding ProtocolProposal to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = state2.clone();
+            async move { ProtocolProposal::init(channel, state, p2p).await }
+        })
+        .await;
 
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
@@ -142,7 +233,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let ex2 = executor.clone();
     let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {
-        tx_pool: tx_pool.clone(),
+        state: state.clone(),
         p2p: p2p.clone(),
         _rpc_listen_addr: opts.rpc,
     });
@@ -150,20 +241,13 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task();
-
-    // TODO:
-    // - Add protocols for tx message type - DONE
-    // - Add p2p impl - DONE
-    // - Add prc impl (to receive network staff) - DONE
-    // - Add block proposal task impl
-    // - Add tx receival like irc - DONE
+    proposal_task(p2p, state, &state_path).await;
 
     Ok(())
 }
 
 struct JsonRpcInterface {
-    tx_pool: TxPoolPtr,
+    state: StatePtr,
     p2p: net::P2pPtr,
     _rpc_listen_addr: SocketAddr,
 }
@@ -180,7 +264,6 @@ impl RequestHandler for JsonRpcInterface {
         return match req.method.as_str() {
             Some("ping") => self.pong(req.id, req.params).await,
             Some("get_info") => self.get_info(req.id, req.params).await,
-            Some("get_tx_pool") => self.get_tx_pool(req.id, req.params).await,
             Some("receive_tx") => self.receive_tx(req.id, req.params).await,
             Some(_) | None => jsonrpc::error(MethodNotFound, None, req.id).into(),
         }
@@ -201,13 +284,6 @@ impl JsonRpcInterface {
         JsonResult::Resp(jsonresp(resp, id))
     }
 
-    // --> {"jsonrpc": "2.0", "method": "get_tx_pool", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": {"tx_pool", "id": 42}
-    async fn get_tx_pool(&self, id: Value, _params: Value) -> JsonResult {
-        let pool = format!("{:?}", self.tx_pool);
-        JsonResult::Resp(jsonresp(json!(pool), id))
-    }
-
     // --> {"jsonrpc": "2.0", "method": "receive_tx", "params": ["tx"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 0}
     async fn receive_tx(&self, id: Value, params: Value) -> JsonResult {
@@ -217,15 +293,14 @@ impl JsonRpcInterface {
             return jsonrpc::error(InvalidParams, None, id).into()
         }
 
-        // TODO: add proper tx hash here and check if its already in the pool
+        // TODO: add proper tx hash here
         let random_id = OsRng.next_u32();
         let payload = String::from(args[0].as_str().unwrap());
         let tx = Tx { hash: random_id, payload };
 
-        self.tx_pool.add_tx(tx).await;
-        let protocol_tx = Tx { hash: random_id, payload: args[0].to_string() };
-        let result = self.p2p.broadcast(protocol_tx).await;
+        self.state.write().unwrap().append_tx(tx.clone());
 
+        let result = self.p2p.broadcast(tx).await;
         match result {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => jsonrpc::error(ServerError(-32603), Some(e.to_string()), id).into(),

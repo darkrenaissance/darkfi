@@ -1,23 +1,18 @@
 // In a terminal start a seed node
-$ cargo +nightly run -- -v
+$ cargo +nightly run -- 
 
 // In a new terminal start node 1
-$ cargo +nightly run -- -v --accept 0.0.0.0:11001 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6661 --external 127.0.0.1:11001
+$ cargo +nightly run -- --accept 0.0.0.0:11001 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6661 --external 127.0.0.1:11001 --id 1 --state ~/.config/darkfi/validator_state_1
 
 // In a new terminal start node 2
-$ cargo +nightly run -- -v --accept 0.0.0.0:11002 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6662 --external 127.0.0.1:11002
+$ cargo +nightly run -- --accept 0.0.0.0:11002 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6662 --external 127.0.0.1:11002 --id 2 --state ~/.config/darkfi/validator_state_2
 
 // In a new terminal start node 3
-$ cargo +nightly run -- -v --accept 0.0.0.0:11003 --slots 5 --seeds 127.0.0.1:9999 --rpc 127.0.0.1:6663 --external 127.0.0.1:11003
+$ cargo +nightly run -- --accept 0.0.0.0:11003 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6663 --external 127.0.0.1:11003 --id 3 --state ~/.config/darkfi/validator_state_3
 
 // In a new terminal, telnet to one of the nodes and submit a tx json command
 $ telnet 127.0.0.1 6661
 json: {"jsonrpc": "2.0", "method": "receive_tx", "params": ["tx"], "id": 42}
 
-// In new terminal windows(one for each node), telnet rest nodes
-$ telnet 127.0.0.1 6661
-$ telnet 127.0.0.1 6662
-$ telnet 127.0.0.1 6663
+// verify they all hold the same tx in the state file of each node
 
-// verify they all hold the same tx by submiting the following json in each terminal
-json: {"jsonrpc": "2.0", "method": "get_tx_pool", "params": [], "id": 42}

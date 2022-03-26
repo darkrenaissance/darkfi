@@ -1,5 +1,7 @@
-pub mod protocol_tx_pool;
-pub mod tx_pool;
+pub mod protocol_proposal;
+pub mod protocol_tx;
+pub mod protocol_vote;
 
-pub use protocol_tx_pool::ProtocolTxPool;
-pub use tx_pool::{Tx, TxPool, TxPoolPtr};
+pub use protocol_proposal::ProtocolProposal;
+pub use protocol_tx::ProtocolTx;
+pub use protocol_vote::ProtocolVote;

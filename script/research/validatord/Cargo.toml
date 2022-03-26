@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../../"
-features = ["net", "rpc"]
+features = ["blockchain", "crypto", "net", "rpc"]
 
 [dependencies]
 
@@ -21,17 +21,14 @@ easy-parallel = "3.2.0"
 rand = "0.8.5"
 
 # Structopt dependencies for arguments parsing
-serde = "1.0.136"
+serde = "1.0.104"
 serde_json = "1.0.79"
-serde_derive = "1.0.136"
-structopt = "0.3.26"
+structopt = "0.3.11"
 structopt-toml = "0.5.0"
-toml = "0.5.8"
 
 # Misc
 log = "0.4.16"
 num_cpus = "1.13.1"
-simplelog = "0.12.0-alpha1"
-fxhash = "0.2.1"
+simplelog = "0.11.2"
 
 [workspace]
