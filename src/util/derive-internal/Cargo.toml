@@ -1,0 +1,9 @@
+[package]
+name = "darkfi-derive-internal"
+version = "0.3.0"
+edition = "2021"
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = {version = "1", features = ["full", "fold"]}

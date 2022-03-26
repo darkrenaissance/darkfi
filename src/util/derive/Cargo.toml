@@ -1,0 +1,14 @@
+[package]
+name = "darkfi-derive"
+version = "0.3.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro-crate = "0.1.5"
+proc-macro2 = "1"
+syn = {version = "1", features = ["full", "fold"]}
+
+darkfi-derive-internal = {path = "../derive-internal"}

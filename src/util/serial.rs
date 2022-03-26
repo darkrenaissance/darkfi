@@ -8,6 +8,8 @@ use std::{
 
 use num_bigint::BigUint;
 
+pub use darkfi_derive::{SerialDecodable, SerialEncodable};
+
 use super::endian;
 use crate::{Error, Result};
 
@@ -596,7 +598,7 @@ mod tests {
     use super::{
         deserialize, deserialize_partial,
         endian::{u16_to_array_le, u32_to_array_le, u64_to_array_le},
-        serialize, Encodable, Error, Result, VarInt,
+        serialize, Encodable, Error, Result, SerialDecodable, SerialEncodable, VarInt,
     };
     use std::{io, mem::discriminant};
 
@@ -833,5 +835,36 @@ mod tests {
             deserialize(&[6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]).ok(),
             Some(::std::borrow::Cow::Borrowed("Andrew"))
         );
+    }
+
+    #[derive(Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive0 {
+        foo: String,
+        bar: u64,
+    }
+
+    #[derive(Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive1 {
+        baz: TestDerive0,
+        meh: bool,
+    }
+
+    #[test]
+    fn serialize_deserialize_struct() {
+        let t0 = TestDerive0 { foo: String::from("Andrew"), bar: 42 };
+
+        let t1 = TestDerive1 { baz: t0.clone(), meh: false };
+
+        let t0_bytes = serialize(&t0);
+        let t1_bytes = serialize(&t1);
+
+        let t0_de: TestDerive0 = deserialize(&t0_bytes).unwrap();
+        let t1_de: TestDerive1 = deserialize(&t1_bytes).unwrap();
+
+        assert_eq!(t0.foo, t0_de.foo);
+        assert_eq!(t0.bar, t0_de.bar);
+        assert_eq!(t0.foo, t1_de.baz.foo);
+        assert_eq!(t0.bar, t1_de.baz.bar);
+        assert_eq!(t1.meh, t1_de.meh);
     }
 }

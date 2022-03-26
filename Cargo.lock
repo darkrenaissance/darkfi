@@ -1559,6 +1559,8 @@ dependencies = [
  "bytes",
  "clap 3.1.6",
  "crypto_api_chachapoly",
+ "darkfi-derive",
+ "darkfi-derive-internal",
  "dirs 4.0.0",
  "drk-sdk",
  "fast-socks5",
@@ -1598,6 +1600,25 @@ dependencies = [
  "wasmer-compiler-singlepass",
  "wasmer-middlewares",
  "zeromq",
+]
+
+[[package]]
+name = "darkfi-derive"
+version = "0.3.0"
+dependencies = [
+ "darkfi-derive-internal",
+ "proc-macro-crate 0.1.5",
+ "proc-macro2 1.0.36",
+ "syn 1.0.89",
+]
+
+[[package]]
+name = "darkfi-derive-internal"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2 1.0.36",
+ "quote 1.0.17",
+ "syn 1.0.89",
 ]
 
 [[package]]
