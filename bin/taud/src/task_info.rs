@@ -1,8 +1,13 @@
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use darkfi::Result;
+use darkfi::{
+    util::serial::{Decodable, Encodable},
+    Result,
+};
+
+use darkfi::util::serial::VarInt;
 
 use crate::{
     month_tasks::MonthTasks,
@@ -10,7 +15,6 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-
 struct TaskEvent {
     action: String,
     timestamp: Timestamp,
@@ -35,6 +39,15 @@ impl Comment {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TaskEvents(Vec<TaskEvent>);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TaskComments(Vec<Comment>);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TaskProjects(Vec<String>);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TaskAssigns(Vec<String>);
+
 // XXX
 #[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -43,13 +56,13 @@ pub struct TaskInfo {
     id: u32,
     title: String,
     desc: String,
-    assign: Vec<String>,
-    project: Vec<String>,
+    assign: TaskAssigns,
+    project: TaskProjects,
     due: Option<Timestamp>,
     rank: u32,
     created_at: Timestamp,
-    events: Vec<TaskEvent>,
-    comments: Vec<Comment>,
+    events: TaskEvents,
+    comments: TaskComments,
     #[serde(skip_serializing, skip_deserializing)]
     settings: Settings,
 }
@@ -76,13 +89,13 @@ impl TaskInfo {
             id,
             title: title.into(),
             desc: desc.into(),
-            assign: vec![],
-            project: vec![],
+            assign: TaskAssigns(vec![]),
+            project: TaskProjects(vec![]),
             due,
             rank,
             created_at,
-            comments: vec![],
-            events: vec![],
+            comments: TaskComments(vec![]),
+            events: TaskEvents(vec![]),
             settings: settings.clone(),
         })
     }
@@ -104,7 +117,7 @@ impl TaskInfo {
     }
 
     pub fn get_state(&self) -> String {
-        if let Some(ev) = self.events.last() {
+        if let Some(ev) = self.events.0.last() {
             ev.action.clone()
         } else {
             "open".into()
@@ -132,15 +145,15 @@ impl TaskInfo {
     }
 
     pub fn set_assign(&mut self, assign: &Vec<String>) {
-        self.assign = assign.clone();
+        self.assign = TaskAssigns(assign.clone());
     }
 
     pub fn set_project(&mut self, project: &Vec<String>) {
-        self.project = project.clone();
+        self.project = TaskProjects(project.clone());
     }
 
     pub fn set_comment(&mut self, c: Comment) {
-        self.comments.push(c);
+        self.comments.0.push(c);
     }
 
     pub fn set_rank(&mut self, r: u32) {
@@ -159,6 +172,142 @@ impl TaskInfo {
         if self.get_state() == action {
             return
         }
-        self.events.push(TaskEvent::new(action.into()));
+        self.events.0.push(TaskEvent::new(action.into()));
     }
+}
+
+impl Encodable for TaskEvent {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.action.encode(&mut s)?;
+        len += self.timestamp.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for TaskEvent {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self { action: Decodable::decode(&mut d)?, timestamp: Decodable::decode(&mut d)? })
+    }
+}
+
+impl Encodable for Comment {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.content.encode(&mut s)?;
+        len += self.author.encode(&mut s)?;
+        len += self.timestamp.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Comment {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            content: Decodable::decode(&mut d)?,
+            author: Decodable::decode(&mut d)?,
+            timestamp: Decodable::decode(&mut d)?,
+        })
+    }
+}
+
+impl Encodable for TaskInfo {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.ref_id.encode(&mut s)?;
+        len += self.id.encode(&mut s)?;
+        len += self.title.encode(&mut s)?;
+        len += self.desc.encode(&mut s)?;
+        len += self.assign.encode(&mut s)?;
+        len += self.project.encode(&mut s)?;
+        len += self.due.encode(&mut s)?;
+        len += self.rank.encode(&mut s)?;
+        len += self.created_at.encode(&mut s)?;
+        len += self.events.encode(&mut s)?;
+        len += self.comments.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for TaskInfo {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self {
+            ref_id: Decodable::decode(&mut d)?,
+            id: Decodable::decode(&mut d)?,
+            title: Decodable::decode(&mut d)?,
+            desc: Decodable::decode(&mut d)?,
+            assign: Decodable::decode(&mut d)?,
+            project: Decodable::decode(&mut d)?,
+            due: Decodable::decode(&mut d)?,
+            rank: Decodable::decode(&mut d)?,
+            created_at: Decodable::decode(&mut d)?,
+            events: Decodable::decode(&mut d)?,
+            comments: Decodable::decode(&mut d)?,
+            settings: Settings::default(),
+        })
+    }
+}
+
+impl Encodable for TaskEvents {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskEvents {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+impl Encodable for TaskComments {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskComments {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+impl Encodable for TaskProjects {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskProjects {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+
+impl Encodable for TaskAssigns {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskAssigns {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+
+fn encode_vec<T: Encodable, S: io::Write>(vec: &Vec<T>, mut s: S) -> Result<usize> {
+    let mut len = 0;
+    len += VarInt(vec.len() as u64).encode(&mut s)?;
+    for c in vec.iter() {
+        len += c.encode(&mut s)?;
+    }
+    Ok(len)
+}
+
+fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> Result<Vec<T>> {
+    let len = VarInt::decode(&mut d)?.0;
+    let mut ret = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        ret.push(Decodable::decode(&mut d)?);
+    }
+    Ok(ret)
 }
