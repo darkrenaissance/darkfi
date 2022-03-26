@@ -1,7 +1,7 @@
 //! Derive (de)serialization for structs, see src/util/derive
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{Fields, Ident, ItemStruct, WhereClause};
+use syn::{Fields, Ident, Index, ItemStruct, WhereClause};
 
 pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
@@ -42,7 +42,28 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
             };
             body.extend(ret)
         }
-        Fields::Unnamed(_fields) => todo!(),
+        Fields::Unnamed(fields) => {
+            let ln = quote! {
+                let mut len = 0;
+            };
+            body.extend(ln);
+
+            for field_idx in 0..fields.unnamed.len() {
+                let field_idx = Index {
+                    index: u32::try_from(field_idx).expect("up to 2^32 fields are supported"),
+                    span: Span::call_site(),
+                };
+                let delta = quote! {
+                    len += self.#field_idx.encode(&mut s)?;
+                };
+                body.extend(delta);
+            }
+
+            let ret = quote! {
+                Ok(len)
+            };
+            body.extend(ret)
+        }
         Fields::Unit => {}
     }
 
@@ -91,7 +112,19 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
                 Self { #body }
             }
         }
-        Fields::Unnamed(_fields) => todo!(),
+        Fields::Unnamed(fields) => {
+            let mut body = TokenStream2::new();
+            for _ in 0..fields.unnamed.len() {
+                let delta = quote! {
+                    #cratename::util::serial::Decodable::decode(&mut d)?,
+                };
+                body.extend(delta);
+            }
+
+            quote! {
+                Self( #body )
+            }
+        }
         Fields::Unit => {
             quote! {
                 Self {}

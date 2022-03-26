@@ -837,34 +837,37 @@ mod tests {
         );
     }
 
-    #[derive(Clone, SerialEncodable, SerialDecodable)]
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
     struct TestDerive0 {
         foo: String,
         bar: u64,
     }
 
-    #[derive(Clone, SerialEncodable, SerialDecodable)]
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
     struct TestDerive1 {
         baz: TestDerive0,
         meh: bool,
     }
 
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive2(u64);
+
     #[test]
     fn serialize_deserialize_struct() {
         let t0 = TestDerive0 { foo: String::from("Andrew"), bar: 42 };
-
         let t1 = TestDerive1 { baz: t0.clone(), meh: false };
+        let t2 = TestDerive2(u64::MAX);
 
         let t0_bytes = serialize(&t0);
         let t1_bytes = serialize(&t1);
+        let t2_bytes = serialize(&t2);
 
         let t0_de: TestDerive0 = deserialize(&t0_bytes).unwrap();
         let t1_de: TestDerive1 = deserialize(&t1_bytes).unwrap();
+        let t2_de: TestDerive2 = deserialize(&t2_bytes).unwrap();
 
-        assert_eq!(t0.foo, t0_de.foo);
-        assert_eq!(t0.bar, t0_de.bar);
-        assert_eq!(t0.foo, t1_de.baz.foo);
-        assert_eq!(t0.bar, t1_de.baz.bar);
-        assert_eq!(t1.meh, t1_de.meh);
+        assert_eq!(t0, t0_de);
+        assert_eq!(t1, t1_de);
+        assert_eq!(t2, t2_de);
     }
 }
