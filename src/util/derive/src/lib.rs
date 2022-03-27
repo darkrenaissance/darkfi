@@ -6,7 +6,7 @@ use syn::{Ident, ItemStruct};
 
 use darkfi_derive_internal::{struct_de, struct_ser};
 
-#[proc_macro_derive(SerialEncodable)]
+#[proc_macro_derive(SerialEncodable, attributes(skip_serialize))]
 pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
     let found_crate = crate_name("darkfi").expect("darkfi is found in Cargo.toml");
 
@@ -30,7 +30,7 @@ pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
     })
 }
 
-#[proc_macro_derive(SerialDecodable)]
+#[proc_macro_derive(SerialDecodable, attributes(skip_serialize))]
 pub fn darkfi_deserialize(input: TokenStream) -> TokenStream {
     let found_crate = crate_name("darkfi").expect("darkfi is found in Cargo.toml");
 

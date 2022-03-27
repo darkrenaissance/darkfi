@@ -852,22 +852,34 @@ mod tests {
     #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
     struct TestDerive2(u64);
 
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive3 {
+        foo: u64,
+        #[skip_serialize]
+        bar: u64,
+        meh: u64,
+    }
+
     #[test]
     fn serialize_deserialize_struct() {
         let t0 = TestDerive0 { foo: String::from("Andrew"), bar: 42 };
         let t1 = TestDerive1 { baz: t0.clone(), meh: false };
         let t2 = TestDerive2(u64::MAX);
+        let t3 = TestDerive3 { foo: 30, bar: 20, meh: 44 };
 
         let t0_bytes = serialize(&t0);
         let t1_bytes = serialize(&t1);
         let t2_bytes = serialize(&t2);
+        let t3_bytes = serialize(&t3);
 
         let t0_de: TestDerive0 = deserialize(&t0_bytes).unwrap();
         let t1_de: TestDerive1 = deserialize(&t1_bytes).unwrap();
         let t2_de: TestDerive2 = deserialize(&t2_bytes).unwrap();
+        let t3_de: TestDerive3 = deserialize(&t3_bytes).unwrap();
 
         assert_eq!(t0, t0_de);
         assert_eq!(t1, t1_de);
         assert_eq!(t2, t2_de);
+        assert_eq!(t3_de, TestDerive3 { foo: 30, bar: 0, meh: 44 });
     }
 }
