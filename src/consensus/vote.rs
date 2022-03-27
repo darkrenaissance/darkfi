@@ -6,12 +6,12 @@ use super::block::BlockProposal;
 use crate::{
     crypto::{keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
-    util::serial::{Decodable, Encodable, VarInt},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
 
 /// This struct represents a tuple of the form (vote, B, id).
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, SerialDecodable, SerialEncodable)]
 pub struct Vote {
     /// Node public key
     pub node_public_key: PublicKey,
@@ -32,28 +32,6 @@ impl Vote {
 impl net::Message for Vote {
     fn name() -> &'static str {
         "vote"
-    }
-}
-
-impl Encodable for Vote {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.node_public_key.encode(&mut s)?;
-        len += self.vote.encode(&mut s)?;
-        len += self.block.encode(&mut s)?;
-        len += self.id.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Vote {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            node_public_key: Decodable::decode(&mut d)?,
-            vote: Decodable::decode(&mut d)?,
-            block: Decodable::decode(&mut d)?,
-            id: Decodable::decode(&mut d)?,
-        })
     }
 }
 
