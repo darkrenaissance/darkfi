@@ -155,8 +155,8 @@ util = [
     "hex",
     "bincode",
     "serde",
-	"toml",
-	"url",
+    "toml",
+    "url",
     "simplelog",
     "serde_json",
     "dirs",
@@ -170,7 +170,7 @@ util = [
 rpc = [
     "rand",
     "url",
-	"fast-socks5",
+    "fast-socks5",
 
     "async-net",
     "async-runtime",
@@ -188,14 +188,14 @@ blockchain = [
 ]
 
 system = [
-	"fxhash",
+    "fxhash",
     "rand",
 
     "async-runtime",
 ]
 
 net = [
-	"fxhash",
+    "fxhash",
 
     "util",
     "system",
@@ -246,7 +246,7 @@ node = [
     "crypto",
     "wallet",
     "util",
-	"net",
+    "net",
 ]
 
 zkas = [
