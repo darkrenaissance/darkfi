@@ -21,7 +21,7 @@ use darkfi::{
         jsonrpc,
         jsonrpc::{
             response as jsonresp,
-            ErrorCode::{InvalidParams, MethodNotFound, ServerError},
+            ErrorCode::{InternalError, InvalidParams},
             JsonRequest, JsonResult,
         },
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
@@ -31,6 +31,7 @@ use darkfi::{
         expand_path,
         path::get_config_path,
     },
+    Error::JsonRpcError,
     Result,
 };
 
@@ -261,36 +262,38 @@ impl RequestHandler for JsonRpcInterface {
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
-        return match req.method.as_str() {
-            Some("ping") => self.pong(req.id, req.params).await,
-            Some("get_info") => self.get_info(req.id, req.params).await,
-            Some("receive_tx") => self.receive_tx(req.id, req.params).await,
-            Some(_) | None => jsonrpc::error(MethodNotFound, None, req.id).into(),
-        }
+        from_result(
+            match req.method.as_str() {
+                Some("ping") => self.pong().await,
+                Some("get_info") => self.get_info().await,
+                Some("receive_tx") => self.receive_tx(req.params).await,
+                Some(_) | None => Err(JsonRpcError("MethodNotFound".into())),
+            },
+            req.id,
+        )
     }
 }
 
 impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!("pong"), id))
+    async fn pong(&self) -> Result<Value> {
+        Ok(json!("pong"))
     }
 
     // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
-    async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        let resp = self.p2p.get_info().await;
-        JsonResult::Resp(jsonresp(resp, id))
+    async fn get_info(&self) -> Result<Value> {
+        Ok(self.p2p.get_info().await)
     }
 
     // --> {"jsonrpc": "2.0", "method": "receive_tx", "params": ["tx"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 0}
-    async fn receive_tx(&self, id: Value, params: Value) -> JsonResult {
+    async fn receive_tx(&self, params: Value) -> Result<Value> {
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {
-            return jsonrpc::error(InvalidParams, None, id).into()
+            return Err(JsonRpcError("MissingParams".into()))
         }
 
         // TODO: add proper tx hash here
@@ -302,9 +305,16 @@ impl JsonRpcInterface {
 
         let result = self.p2p.broadcast(tx).await;
         match result {
-            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => jsonrpc::error(ServerError(-32603), Some(e.to_string()), id).into(),
+            Ok(()) => Ok(json!(true)),
+            Err(e) => Err(JsonRpcError(e.to_string())),
         }
+    }
+}
+
+fn from_result(res: Result<Value>, id: Value) -> JsonResult {
+    match res {
+        Ok(v) => JsonResult::Resp(jsonresp(v, id)),
+        Err(e) => jsonrpc::error(InternalError, Some(e.to_string()), id).into(),
     }
 }
 

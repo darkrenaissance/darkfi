@@ -52,9 +52,6 @@ impl ProtocolVote {
 
 #[async_trait]
 impl ProtocolBase for ProtocolVote {
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
-    /// protocol task manager, then queues the reply. Sends out a ping and
-    /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "ircd", "ProtocolVote::start() [START]");
         self.jobsman.clone().start(executor.clone());
