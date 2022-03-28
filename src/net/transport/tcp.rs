@@ -10,7 +10,10 @@ use super::{Transport, TransportError};
 
 #[derive(Clone)]
 pub struct TcpTransport {
-    pub ttl: Option<u32>,
+    /// TTL to set for opened sockets, or `None` for default
+    ttl: Option<u32>,
+    /// Size of the listen backlog for listen sockets
+    backlog: i32,
 }
 
 impl Transport for TcpTransport {
@@ -44,6 +47,10 @@ impl Transport for TcpTransport {
 }
 
 impl TcpTransport {
+    pub fn new(ttl: Option<u32>, backlog: i32) -> Self {
+        Self { ttl, backlog }
+    }
+
     fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
         let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
@@ -62,8 +69,7 @@ impl TcpTransport {
     async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener, io::Error> {
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
-        // TODO: make backlog configurable
-        socket.listen(1024)?;
+        socket.listen(self.backlog)?;
         socket.set_nonblocking(true)?;
         Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }

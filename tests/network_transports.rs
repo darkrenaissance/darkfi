@@ -10,7 +10,7 @@ use darkfi::net::transport::{TcpTransport, TlsTransport, Transport};
 
 #[async_std::test]
 async fn tcp_transport() {
-    let tcp = TcpTransport { ttl: None };
+    let tcp = TcpTransport::new(None, 1024);
     let url = Url::parse("tcp://127.0.0.1:5432").unwrap();
 
     let listener = tcp.clone().listen_on(url.clone()).unwrap().await.unwrap();
@@ -36,7 +36,7 @@ async fn tcp_transport() {
 
 #[async_std::test]
 async fn tls_transport() {
-    let tls = TlsTransport { ttl: None };
+    let tls = TlsTransport::new(None, 1024);
     let url = Url::parse("tls://127.0.0.1:5433").unwrap();
 
     let (acceptor, listener) = tls.clone().listen_on(url.clone()).unwrap().await.unwrap();

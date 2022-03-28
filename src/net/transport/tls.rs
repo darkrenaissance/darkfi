@@ -69,7 +69,14 @@ impl ClientCertVerifier for ClientCertificateVerifier {
 
 #[derive(Clone)]
 pub struct TlsTransport {
-    pub ttl: Option<u32>,
+    /// TTL to set for opened sockets, or `None` for default
+    ttl: Option<u32>,
+    /// Size of the listen backlog for listen sockets
+    backlog: i32,
+    /// TLS server configuration
+    server_config: Arc<ServerConfig>,
+    /// TLS client configuration
+    client_config: Arc<ClientConfig>,
 }
 
 impl Transport for TlsTransport {
@@ -101,6 +108,48 @@ impl Transport for TlsTransport {
 }
 
 impl TlsTransport {
+    pub fn new(ttl: Option<u32>, backlog: i32) -> Self {
+        // On each instantiation, generate a new keypair and certificate
+        let keypair_pem = ed25519_compact::KeyPair::generate().to_pem();
+        let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes()).unwrap();
+        let secret_key = rustls::PrivateKey(secret_key[0].clone());
+
+        let altnames = vec![String::from("dark.fi")];
+        let mut cert_params = rcgen::CertificateParams::new(altnames);
+        cert_params.alg = &rcgen::PKCS_ED25519;
+        cert_params.key_pair = Some(rcgen::KeyPair::from_pem(&keypair_pem).unwrap());
+
+        let certificate = rcgen::Certificate::from_params(cert_params).unwrap();
+        let certificate = certificate.serialize_der().unwrap();
+        let certificate = rustls::Certificate(certificate);
+
+        let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
+        let server_config = Arc::new(
+            ServerConfig::builder()
+                .with_cipher_suites(&[cipher_suite()])
+                .with_kx_groups(&[&X25519])
+                .with_protocol_versions(&[&TLS13])
+                .unwrap()
+                .with_client_cert_verifier(client_cert_verifier)
+                .with_single_cert(vec![certificate.clone()], secret_key.clone())
+                .unwrap(),
+        );
+
+        let server_cert_verifier = Arc::new(ServerCertificateVerifier {});
+        let client_config = Arc::new(
+            ClientConfig::builder()
+                .with_cipher_suites(&[cipher_suite()])
+                .with_kx_groups(&[&X25519])
+                .with_protocol_versions(&[&TLS13])
+                .unwrap()
+                .with_custom_certificate_verifier(server_cert_verifier)
+                .with_single_cert(vec![certificate], secret_key)
+                .unwrap(),
+        );
+
+        Self { ttl, backlog, server_config, client_config }
+    }
+
     fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
         let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
@@ -120,62 +169,21 @@ impl TlsTransport {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
-        // TODO: make backlog configurable
-        socket.listen(1024)?;
+        socket.listen(self.backlog)?;
         socket.set_nonblocking(true)?;
 
-        // TODO: This should be in the struct
-        // TODO: Client auth (see upsycle)
-        let keypair_pem = ed25519_compact::KeyPair::generate().to_pem();
-        let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes())?;
-        let secret_key = rustls::PrivateKey(secret_key[0].clone());
-
-        // TODO: Into util
-        let altnames = vec![String::from("example.com")];
-        let mut cert_params = rcgen::CertificateParams::new(altnames);
-        cert_params.alg = &rcgen::PKCS_ED25519;
-        cert_params.key_pair = Some(rcgen::KeyPair::from_pem(&keypair_pem).unwrap());
-
-        let certificate = rcgen::Certificate::from_params(cert_params).unwrap();
-        let cert_der = certificate.serialize_der().unwrap();
-        let certificate = rustls::Certificate(cert_der);
-
-        let _client_cert_verifier = Arc::new(ClientCertificateVerifier {});
-        let config = ServerConfig::builder()
-            .with_cipher_suites(&[cipher_suite()])
-            .with_kx_groups(&[&X25519])
-            .with_protocol_versions(&[&TLS13])
-            .unwrap()
-            // TODO: .with_client_cert_verifier(client_cert_verifier)
-            .with_no_client_auth()
-            .with_single_cert(vec![certificate], secret_key)
-            .unwrap();
-
         let listener = TcpListener::from(std::net::TcpListener::from(socket));
-        let acceptor = TlsAcceptor::from(Arc::new(config));
+        let acceptor = TlsAcceptor::from(self.server_config);
         Ok((acceptor, listener))
     }
 
     async fn do_dial(self, url: Url) -> Result<TlsStream<TcpStream>, io::Error> {
         let socket_addr = url.socket_addrs(|| None)?[0];
-        // TODO: Handle host
-        let server_name = ServerName::try_from("example.com").unwrap();
-
+        let server_name = ServerName::try_from("dark.fi").unwrap();
         let socket = self.create_socket(socket_addr)?;
         socket.set_nonblocking(true)?;
 
-        // TODO: This should be in the struct
-        // TODO: Client auth (see upsycle)
-        let server_cert_verifier = Arc::new(ServerCertificateVerifier {});
-        let config = ClientConfig::builder()
-            .with_cipher_suites(&[cipher_suite()])
-            .with_kx_groups(&[&X25519])
-            .with_protocol_versions(&[&TLS13])
-            .unwrap()
-            .with_custom_certificate_verifier(server_cert_verifier)
-            .with_no_client_auth();
-
-        let connector = TlsConnector::from(Arc::new(config));
+        let connector = TlsConnector::from(self.client_config);
 
         match socket.connect(&socket_addr.into()) {
             Ok(()) => {}
