@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use darkfi::{
@@ -14,15 +15,25 @@ use darkfi::{
 };
 
 use crate::{
-    error::TaudResult,
+    error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::{get_current_time, Settings, Timestamp},
+    util::{Settings, Timestamp},
 };
 
 pub struct JsonRpcInterface {
     settings: Settings,
     notify_queue_sender: async_channel::Sender<TaskInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BaseTaskInfo {
+    title: String,
+    desc: String,
+    assign: Vec<String>,
+    project: Vec<String>,
+    due: Option<Timestamp>,
+    rank: u32,
 }
 
 #[async_trait]
@@ -35,12 +46,14 @@ impl RequestHandler for JsonRpcInterface {
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("add") => return self.add(req.id, req.params).await,
-            Some("list") => return self.list(req.id, req.params).await,
-            Some("update") => return self.update(req.id, req.params).await,
-            Some("get_state") => return self.get_state(req.id, req.params).await,
-            Some("set_state") => return self.set_state(req.id, req.params).await,
-            Some("set_comment") => return self.set_comment(req.id, req.params).await,
+            Some("add") => return from_taud_result(self.add(req.params).await, req.id),
+            Some("list") => return from_taud_result(self.list(req.params).await, req.id),
+            Some("update") => return from_taud_result(self.update(req.params).await, req.id),
+            Some("get_state") => return from_taud_result(self.get_state(req.params).await, req.id),
+            Some("set_state") => return from_taud_result(self.set_state(req.params).await, req.id),
+            Some("set_comment") => {
+                return from_taud_result(self.set_comment(req.params).await, req.id)
+            }
             Some(_) | None => {
                 return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
             }
@@ -55,362 +68,198 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Add new task and returns `true` upon success.
-    // --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "add",
+    //      "params":
+    //          [{
+    //          "title": "..",
+    //          "desc": ".."
+    //          assign: [..],
+    //          project: [..],
+    //          "due": ..,
+    //          "rank": ..
+    //          }],
+    //      "id": 1
+    //      }
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn add(&self, id: Value, params: Value) -> JsonResult {
+    async fn add(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
-        if args.len() != 6 {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, id))
-        }
+        let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;
+        let mut new_task: TaskInfo =
+            TaskInfo::new(&task.title, &task.desc, task.due, task.rank, &self.settings)?;
+        new_task.set_project(&task.project);
+        new_task.set_assign(&task.assign);
 
-        let mut task: TaskInfo;
+        new_task.save()?;
+        new_task.activate()?;
+        self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
 
-        match (args[0].as_str(), args[1].as_str(), args[5].as_u64()) {
-            (Some(title), Some(desc), Some(rank)) => {
-                let due: Option<Timestamp> = if args[4].is_i64() {
-                    let timestamp = args[4].as_i64().unwrap();
-                    let timestamp = Timestamp(timestamp);
-
-                    if timestamp < get_current_time() {
-                        return JsonResult::Err(jsonerr(
-                            ErrorCode::InvalidParams,
-                            Some("invalid due date".into()),
-                            id,
-                        ))
-                    }
-
-                    Some(timestamp)
-                } else {
-                    None
-                };
-
-                match TaskInfo::new(title, desc, due, rank as u32, &self.settings) {
-                    Ok(t) => task = t,
-                    Err(e) => {
-                        return JsonResult::Err(jsonerr(
-                            ErrorCode::InternalError,
-                            Some(e.to_string()),
-                            id,
-                        ))
-                    }
-                }
-            }
-            (None, _, _) => {
-                return JsonResult::Err(jsonerr(
-                    ErrorCode::InvalidParams,
-                    Some("invalid title".into()),
-                    id,
-                ))
-            }
-            (_, None, _) => {
-                return JsonResult::Err(jsonerr(
-                    ErrorCode::InvalidParams,
-                    Some("invalid desc".into()),
-                    id,
-                ))
-            }
-            (_, _, None) => {
-                return JsonResult::Err(jsonerr(
-                    ErrorCode::InvalidParams,
-                    Some("invalid rank".into()),
-                    id,
-                ))
-            }
-        }
-
-        let assign = args[2].as_array();
-        if assign.is_some() && !assign.unwrap().is_empty() {
-            task.set_assign(
-                &assign
-                    .unwrap()
-                    .iter()
-                    .filter(|a| a.as_str().is_some())
-                    .map(|a| a.as_str().unwrap().to_string())
-                    .collect(),
-            );
-        }
-
-        let project = args[3].as_array();
-        if project.is_some() && !project.unwrap().is_empty() {
-            task.set_project(
-                &project
-                    .unwrap()
-                    .iter()
-                    .filter(|p| p.as_str().is_some())
-                    .map(|p| p.as_str().unwrap().to_string())
-                    .collect(),
-            );
-        }
-
-        let result: TaudResult<()> = async move {
-            task.save()?;
-            task.activate()?;
-            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
-            Ok(())
-        }
-        .await;
-
-        match result {
-            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
-        }
+        Ok(json!(true))
     }
 
     // RPCAPI:
     // List tasks
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-    async fn list(&self, id: Value, _params: Value) -> JsonResult {
-        match MonthTasks::load_current_open_tasks(&self.settings) {
-            Ok(tks) => JsonResult::Resp(jsonresp(json!(tks), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
-        }
+    async fn list(&self, _params: Value) -> TaudResult<Value> {
+        let tks = MonthTasks::load_current_open_tasks(&self.settings)?;
+        Ok(json!(tks))
     }
 
     // RPCAPI:
     // Update task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn update(&self, id: Value, params: Value) -> JsonResult {
+    async fn update(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, id))
+            return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        if !args[0].is_u64() {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some("invalid id".into()), id))
-        }
+        let task = self.check_data_for_update(&args[0], &args[1])?;
+        task.save()?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
-        let task_id = args[0].as_u64().unwrap();
-
-        let task = match self.check_data_for_update(task_id, args[1].clone()) {
-            Ok(t) => t,
-            Err(e) => {
-                return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e.to_string()), id))
-            }
-        };
-
-        let result: TaudResult<()> = async move {
-            task.save()?;
-            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
-            Ok(())
-        }
-        .await;
-
-        match result {
-            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
-        }
+        Ok(json!(true))
     }
 
     // RPCAPI:
     // Get task's state.
     // --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
-    async fn get_state(&self, id: Value, params: Value) -> JsonResult {
+    async fn get_state(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
-        if !args[0].is_u64() {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some("invalid id".into()), id))
+        if args.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
 
-        let task_id = args[0].as_u64().unwrap();
+        let task: TaskInfo = self.load_task_by_id(&args[0])?;
 
-        let task: TaskInfo = match self.load_task_by_id(task_id) {
-            Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
-        };
-
-        JsonResult::Resp(jsonresp(json!(task.get_state()), id))
+        Ok(json!(task.get_state()))
     }
 
     // RPCAPI:
     // Set state for a task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn set_state(&self, id: Value, params: Value) -> JsonResult {
+    async fn set_state(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
-        if !args[0].is_u64() {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some("invalid id".into()), id))
+        if args.len() != 2 {
+            return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        if !args[1].is_string() {
-            return JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid state".into()),
-                id,
-            ))
-        }
+        let state: String = serde_json::from_value(args[1].clone())?;
 
-        let task_id = args[0].as_u64().unwrap();
-        let state = args[1].as_str().unwrap();
+        let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
+        task.set_state(&state);
+        task.save()?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
-        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
-            Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
-        };
-
-        task.set_state(state);
-
-        let result: TaudResult<()> = async move {
-            task.save()?;
-            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
-            Ok(())
-        }
-        .await;
-
-        match result {
-            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
-        }
+        Ok(json!(true))
     }
 
     // RPCAPI:
     // Set comment for a task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn set_comment(&self, id: Value, params: Value) -> JsonResult {
+    async fn set_comment(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
-        if !args[0].is_u64() {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some("invalid id".into()), id))
+        if args.len() != 3 {
+            return Err(TaudError::InvalidData("len of params should be 3".into()))
         }
 
-        if !args[1].is_string() {
-            return JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid comment author".into()),
-                id,
-            ))
-        }
+        let comment_author: String = serde_json::from_value(args[1].clone())?;
+        let comment_content: String = serde_json::from_value(args[2].clone())?;
 
-        if !args[2].is_string() {
-            return JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid comment content".into()),
-                id,
-            ))
-        }
-
-        let task_id = args[0].as_u64().unwrap();
-        let comment_author = args[1].as_str().unwrap();
-        let comment_content = args[2].as_str().unwrap();
-
-        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
-            Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
-        };
-
-        task.set_comment(Comment::new(comment_content, comment_author));
-
-        let result: TaudResult<()> = async move {
-            task.save()?;
-            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
-            Ok(())
-        }
-        .await;
-
-        match result {
-            Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
-        }
+        let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
+        task.set_comment(Comment::new(&comment_content, &comment_author));
+        task.save()?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+        Ok(json!(true))
     }
 
-    fn load_task_by_id(&self, task_id: u64) -> std::result::Result<TaskInfo, String> {
-        let tasks: Vec<TaskInfo> = match MonthTasks::load_current_open_tasks(&self.settings) {
-            Ok(v) => v,
-            Err(e) => return Err(e.to_string()),
-        };
+    fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {
+        let task_id: u64 = serde_json::from_value(task_id.clone())?;
 
+        let tasks = MonthTasks::load_current_open_tasks(&self.settings)?;
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 
-        if task.is_none() {
-            return Err("Didn't find a task with the provided id".into())
-        }
-
-        Ok(task.unwrap())
+        task.ok_or(TaudError::InvalidId)
     }
 
-    fn check_data_for_update(
-        &self,
-        task_id: u64,
-        data: Value,
-    ) -> std::result::Result<TaskInfo, String> {
-        let mut task: TaskInfo = self.load_task_by_id(task_id)?;
+    fn check_data_for_update(&self, task_id: &Value, data: &Value) -> TaudResult<TaskInfo> {
+        let mut task: TaskInfo = self.load_task_by_id(&task_id)?;
 
         if !data.is_object() {
-            return Err("invalid data for update".into())
+            return Err(TaudError::InvalidData("Invalid task's data".into()))
         }
 
         let data = data.as_object().unwrap();
 
         if data.contains_key("title") {
-            let title = data
-                .get("title")
-                .ok_or("error parsing title")?
-                .as_str()
-                .ok_or("invalid value for title")?;
-            task.set_title(title);
+            let title = data.get("title").unwrap().clone();
+            let title: String = serde_json::from_value(title)?;
+            task.set_title(&title);
         }
 
         if data.contains_key("description") {
-            let description = data
-                .get("description")
-                .ok_or("error parsing description")?
-                .as_str()
-                .ok_or("invalid value for description")?;
-            task.set_desc(description);
+            let description = data.get("description").unwrap().clone();
+            let description: String = serde_json::from_value(description)?;
+            task.set_desc(&description);
         }
 
         if data.contains_key("rank") {
-            let rank = data
-                .get("rank")
-                .ok_or("error parsing rank")?
-                .as_u64()
-                .ok_or("invalid value for rank")?;
-
-            task.set_rank(rank as u32);
+            let rank = data.get("rank").unwrap().clone();
+            let rank: u32 = serde_json::from_value(rank)?;
+            task.set_rank(rank);
         }
 
         if data.contains_key("due") {
-            if let Some(due) = data.get("due").ok_or("error parsing due")?.as_i64() {
-                task.set_due(Some(Timestamp(due)));
-            } else {
-                task.set_due(None);
-            }
+            let due = data.get("due").unwrap().clone();
+            let due = serde_json::from_value(due)?;
+            task.set_due(Some(due));
         }
 
         if data.contains_key("assign") {
-            task.set_assign(
-                &data
-                    .get("assign")
-                    .ok_or("error parsing assign")?
-                    .as_array()
-                    .ok_or("invalid value for assign")?
-                    .iter()
-                    .filter(|a| a.as_str().is_some())
-                    .map(|a| a.as_str().unwrap().to_string())
-                    .collect(),
-            );
+            let assign = data.get("assign").unwrap().clone();
+            let assign = serde_json::from_value(assign)?;
+            task.set_assign(&assign);
         }
 
         if data.contains_key("project") {
-            task.set_project(
-                &data
-                    .get("project")
-                    .ok_or("error parsing project")?
-                    .as_array()
-                    .ok_or("invalid value for project")?
-                    .iter()
-                    .filter(|p| p.as_str().is_some())
-                    .map(|p| p.as_str().unwrap().to_string())
-                    .collect(),
-            );
+            let project = data.get("project").unwrap().clone();
+            let project = serde_json::from_value(project)?;
+            task.set_project(&project);
         }
 
         Ok(task)
+    }
+}
+
+fn from_taud_result(res: TaudResult<Value>, id: Value) -> JsonResult {
+    match res {
+        Ok(v) => JsonResult::Resp(jsonresp(v, id)),
+        Err(err) => match err {
+            TaudError::InvalidId => JsonResult::Err(jsonerr(
+                ErrorCode::InvalidParams,
+                Some("invalid task's id".into()),
+                id,
+            )),
+            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
+                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e.to_string()), id))
+            }
+            TaudError::InvalidDueTime => JsonResult::Err(jsonerr(
+                ErrorCode::InvalidParams,
+                Some("invalid due time".into()),
+                id,
+            )),
+            TaudError::Darkfi(e) => {
+                JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id))
+            }
+        },
     }
 }
