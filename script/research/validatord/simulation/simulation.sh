@@ -9,21 +9,21 @@ do
 done
 
 # Starting node 0 (seed) in background
-cargo +nightly run -- &
+cargo run -- &
 NODE0=$!
 
 # Waiting for seed to setup
 sleep 10
 
 # Starting node 1 in background
-cargo +nightly run -- --accept 0.0.0.0:11001 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6661 --external 127.0.0.1:11001 --id 1 --state ~/.config/darkfi/validatord_state_1 &
+cargo run -- --accept 0.0.0.0:11001 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6661 --external 127.0.0.1:11001 --id 1 --state ~/.config/darkfi/validatord_state_1 &
 NODE1=$!
 
 # Waiting for node 1 to setup
 sleep 5
 
 # Starting node 2 in background
-cargo +nightly run -- --accept 0.0.0.0:11002 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6662 --external 127.0.0.1:11002 --id 2 --state ~/.config/darkfi/validatord_state_2 &
+cargo run -- --accept 0.0.0.0:11002 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6662 --external 127.0.0.1:11002 --id 2 --state ~/.config/darkfi/validatord_state_2 &
 NODE2=$!
 
 # Waiting for node 2 to setup
@@ -40,7 +40,7 @@ function ctrl_c() {
 }
 
 # Starting node 3
-cargo +nightly run -- --accept 0.0.0.0:11003 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6663 --external 127.0.0.1:11003 --id 3 --state ~/.config/darkfi/validatord_state_3
+cargo run -- --accept 0.0.0.0:11003 --seeds 127.0.0.1:11000 --rpc 127.0.0.1:6663 --external 127.0.0.1:11003 --id 3 --state ~/.config/darkfi/validatord_state_3
 
 # Node states are flushed on each node state file at epoch end (every 2 minutes).
 # To sugmit a TX, telnet to a node and push the json as per following example:

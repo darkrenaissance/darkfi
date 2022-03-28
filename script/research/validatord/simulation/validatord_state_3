@@ -26,5 +26,6 @@
     ]
   },
   "node_blockchains": [],
-  "unconfirmed_txs": []
+  "unconfirmed_txs": [],
+  "orphan_votes": []
 }

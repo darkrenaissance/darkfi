@@ -1,5 +1,5 @@
 use chrono::{NaiveDateTime, Utc};
-use log::error;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
@@ -45,6 +45,7 @@ pub struct State {
     pub canonical_blockchain: Blockchain,
     pub node_blockchains: Vec<Blockchain>,
     pub unconfirmed_txs: Vec<Tx>,
+    pub orphan_votes: Vec<Vote>,
 }
 
 impl State {
@@ -59,6 +60,7 @@ impl State {
             canonical_blockchain: Blockchain::new(init_block),
             node_blockchains: Vec::new(),
             unconfirmed_txs: Vec::new(),
+            orphan_votes: Vec::new(),
         }
     }
 
@@ -177,7 +179,7 @@ impl State {
     /// If block extends the canonical blockchain, a new fork blockchain is created.
     /// Node votes on the block, only if it extends the longest notarized chain it has seen.
     pub fn vote_block(&mut self, proposal: &BlockProposal, leader: bool) -> Result<Option<Vote>> {
-        let block = Block::new(
+        let mut block = Block::new(
             proposal.st.clone(),
             proposal.sl,
             proposal.txs.clone(),
@@ -185,6 +187,18 @@ impl State {
             String::from("r"),
             String::from("s"),
         );
+
+        // Add orphan votes
+        let mut orphans = Vec::new();
+        for (index, vote) in self.orphan_votes.iter().enumerate() {
+            if proposal_eq_block(&vote.block, &block) {
+                block.metadata.sm.votes.push(vote.clone());
+                orphans.push(index);
+            }
+        }
+        for index in orphans {
+            self.orphan_votes.remove(index);
+        }
 
         let index = self.find_extended_blockchain_index(&block, leader);
 
@@ -240,7 +254,7 @@ impl State {
         if (leader && block.st != hasher.finish().to_string() || block.sl < last_block.sl) ||
             (!leader && block.st != hasher.finish().to_string() || block.sl <= last_block.sl)
         {
-            error!("Proposed block doesn't extend any known chains.");
+            debug!("Proposed block doesn't extend any known chains.");
             return -2
         }
         -1
@@ -268,7 +282,10 @@ impl State {
         assert!(&vote.node_public_key.verify(&encoded_block[..], &vote.vote));
         let vote_block = self.find_block(&vote.block);
         if vote_block == None {
-            error!("Received vote for unknown block.");
+            debug!("Received vote for unknown block.");
+            if !self.orphan_votes.contains(vote) {
+                self.orphan_votes.push(vote.clone());
+            }
             return
         }
 
@@ -356,6 +373,17 @@ impl State {
                 }
                 for index in dropped_blockchains {
                     self.node_blockchains.remove(index);
+                }
+
+                // Remove orphan votes
+                let mut orphans = Vec::new();
+                for (index, vote) in self.orphan_votes.iter().enumerate() {
+                    if vote.block.sl <= last_finalized_block.sl {
+                        orphans.push(index);
+                    }
+                }
+                for index in orphans {
+                    self.orphan_votes.remove(index);
                 }
             }
         }

@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, thread, time};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, thread};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -133,7 +133,6 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) 
                                     Err(e) => error!("Broadcast failed. Error: {:?}", e),
                                 }
                                 // Broadcasting leader vote
-                                thread::sleep(time::Duration::from_secs(10)); // communication delay simulation
                                 let result = p2p.broadcast(vote).await;
                                 match result {
                                     Ok(()) => info!("Leader vote broadcasted successfuly."),

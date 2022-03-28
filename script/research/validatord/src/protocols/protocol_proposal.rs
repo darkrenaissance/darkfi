@@ -1,5 +1,3 @@
-use std::{thread, time};
-
 use async_executor::Executor;
 use async_trait::async_trait;
 
@@ -64,7 +62,6 @@ impl ProtocolProposal {
                     } else {
                         let vote = x.unwrap();
                         self.state.write().unwrap().receive_vote(&vote, nodes_count as usize);
-                        thread::sleep(time::Duration::from_secs(10)); // communication delay simulation
                         self.p2p.broadcast(vote).await?;
                     }
                 }
