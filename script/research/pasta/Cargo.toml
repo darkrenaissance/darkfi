@@ -4,11 +4,13 @@ version = "0.1.0"
 authors = ["narodnik <x@x.org>"]
 edition = "2018"
 
+[workspace]
+
 [dependencies]
-pasta_curves = { path = "/home/narodnik/src/sw/zectings/pasta_curves" }
-ff = "0.9"
-group = "0.9"
-rand = "0.8.4"
+pasta_curves = "0.3.0"
+ff = "0.11.0"
+group = "0.11.0"
+rand = "0.8.5"
 
 [[bin]]
 name = "pasta"

@@ -27,7 +27,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         // render as a sub node
         match &view.info_list.infos.get(id) {
             Some(node) => {
-                if !node.outbound.iter().all(|node| node.is_empty == true) {
+                if !node.outbound.iter().all(|node| node.is_empty) {
                     lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
                 }
                 for outbound in &node.outbound.clone() {
@@ -47,7 +47,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
                         lines.push(Spans::from(vec![addr, msg]));
                     }
                 }
-                if !node.inbound.iter().all(|node| node.is_empty == true) {
+                if !node.inbound.iter().all(|node| node.is_empty) {
                     lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
                 }
                 for inbound in &node.inbound {

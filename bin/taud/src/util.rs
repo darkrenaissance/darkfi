@@ -9,7 +9,13 @@ use clap::Parser;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use darkfi::{util::cli::UrlConfig, Result};
+use darkfi::{
+    util::{
+        cli::UrlConfig,
+        serial::{SerialDecodable, SerialEncodable},
+    },
+    Result,
+};
 
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../taud_config.toml");
 
@@ -44,7 +50,7 @@ pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct Settings {
     pub dataset_path: PathBuf,
 }
@@ -55,7 +61,9 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, PartialOrd,
+)]
 pub struct Timestamp(pub i64);
 
 /// taud cli

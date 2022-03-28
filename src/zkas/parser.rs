@@ -548,125 +548,71 @@ impl Parser {
                 // from the analyzer, to see if the calls actually exist and are
                 // supported.
                 // But for now, we'll just leave it here and expand later.
-                match token.token.as_str() {
-                    "poseidon_hash" => {
+                let func_name = token.token.as_str();
+
+                macro_rules! parse_func {
+                    ($opcode: expr) => {
                         stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::PoseidonHash;
+                        stmt.opcode = $opcode;
                         stmt.line = token.line;
                         stmts.push(stmt.clone());
 
                         parsing = false;
                         continue
+                    };
+                }
+
+                match func_name {
+                    "poseidon_hash" => {
+                        parse_func!(Opcode::PoseidonHash);
                     }
 
                     "constrain_instance" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::ConstrainInstance;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::ConstrainInstance);
                     }
 
                     "calculate_merkle_root" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::CalculateMerkleRoot;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::CalculateMerkleRoot);
                     }
 
                     "ec_mul_short" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcMulShort;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcMulShort);
                     }
 
                     "ec_mul_base" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcMulBase;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcMulBase);
                     }
 
                     "ec_mul" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcMul;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcMul);
                     }
 
                     "ec_get_x" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcGetX;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcGetX);
                     }
 
                     "ec_get_y" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcGetY;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcGetY);
                     }
 
                     "ec_add" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::EcAdd;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::EcAdd);
                     }
 
                     "base_add" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::BaseAdd;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::BaseAdd);
                     }
 
                     "base_mul" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::BaseMul;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
+                        parse_func!(Opcode::BaseMul);
                     }
 
                     "base_sub" => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = Opcode::BaseSub;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
+                        parse_func!(Opcode::BaseSub);
+                    }
 
-                        parsing = false;
-                        continue
+                    "greater_than" => {
+                        parse_func!(Opcode::GreaterThan);
                     }
 
                     x => {

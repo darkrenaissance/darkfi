@@ -25,7 +25,7 @@ pub enum Opcode {
     /// Poseidon hash of N elements
     PoseidonHash = 0x10,
 
-    /// Calculate merkle root given given a position, Merkle path, and an element
+    /// Calculate merkle root  given a position, Merkle path, and an element
     CalculateMerkleRoot = 0x20,
 
     /// Base field element addition
@@ -36,6 +36,9 @@ pub enum Opcode {
 
     /// Base field element subtraction
     BaseSub = 0x32,
+
+    /// Base field greater than comparison
+    GreaterThan = 0x33,
 
     /// Constrain a Base field element to a circuit's public input
     ConstrainInstance = 0xf0,
@@ -63,6 +66,7 @@ impl Opcode {
             Opcode::BaseAdd => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::BaseMul => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::BaseSub => (vec![Type::Base], vec![Type::Base, Type::Base]),
+            Opcode::GreaterThan => (vec![Type::Base], vec![Type::Base, Type::Base]),
             Opcode::ConstrainInstance => (vec![], vec![Type::Base]),
             Opcode::Noop => (vec![], vec![]),
         }
@@ -81,6 +85,7 @@ impl Opcode {
             0x30 => Self::BaseAdd,
             0x31 => Self::BaseMul,
             0x32 => Self::BaseSub,
+            0x33 => Self::GreaterThan,
             0xf0 => Self::ConstrainInstance,
             _ => unimplemented!(),
         }

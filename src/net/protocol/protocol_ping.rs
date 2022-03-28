@@ -75,12 +75,14 @@ impl ProtocolPing {
             // Wait for pong, check nonce matches.
             let pong_msg = self.pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
+                // TODO: this is too extreme
                 error!("Wrong nonce for ping reply. Disconnecting from channel.");
                 self.channel.stop().await;
                 return Err(Error::ChannelStopped)
             }
             let duration = start.elapsed().as_millis();
-            debug!(target: "net", "Received Pong message {}ms from [{:?}]", duration, self.channel.address());
+            debug!(target: "net", "Received Pong message {}ms from [{:?}]",
+                   duration, self.channel.address());
         }
     }
 

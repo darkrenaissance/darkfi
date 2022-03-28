@@ -2,8 +2,9 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use async_executor::Executor;
 use clap::Parser;
+use simplelog::*;
 
-use darkfi::{net, Result};
+use darkfi::{net, util::cli::log_config, Result};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings).await;
@@ -16,7 +17,6 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
 struct ProgramOptions {
     network_settings: net::Settings,
-    log_path: Box<std::path::PathBuf>,
 }
 
 #[derive(Parser)]
@@ -34,9 +34,6 @@ pub struct DarkCli {
     ///  connections slots
     #[clap(long)]
     pub connect_slots: Option<u32>,
-    /// Logfile path
-    #[clap(long)]
-    pub log_path: Option<String>,
     /// RPC port
     #[clap(long)]
     pub rpc_port: Option<String>,
@@ -72,12 +69,6 @@ impl ProgramOptions {
             0
         };
 
-        let log_path = Box::new(if let Some(log_path) = programcli.log_path {
-            std::path::PathBuf::from_str(&log_path)?
-        } else {
-            std::path::PathBuf::from_str("hello")?
-        });
-
         Ok(ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
@@ -87,44 +78,16 @@ impl ProgramOptions {
                 seeds: seed_addrs,
                 ..Default::default()
             },
-            log_path,
         })
     }
 }
 
 fn main() -> Result<()> {
-    use simplelog::*;
-
     let options = ProgramOptions::load()?;
 
-    let logger_config = ConfigBuilder::new().set_time_format_str("%T%.6f").build();
-
-    CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, logger_config, TerminalMode::Mixed, ColorChoice::Auto),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            std::fs::File::create(options.log_path.as_path()).unwrap(),
-        ),
-    ])
-    .unwrap();
+    let (lvl, conf) = log_config(1)?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
     smol::block_on(ex.run(start(ex.clone(), options)))
-
-    /*
-       let (_, result) = Parallel::new()
-    // Run four executor threads.
-    .each(0..3, |_| smol::future::block_on(ex.run(shutdown.recv())))
-    // Run the main future on the current thread.
-    .finish(|| {
-    smol::future::block_on(async move {
-    start(ex2, options).await?;
-    drop(signal);
-    Ok::<(), drk::Error>(())
-    })
-    });
-
-    result
-    */
 }

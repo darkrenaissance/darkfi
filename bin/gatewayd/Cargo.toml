@@ -10,16 +10,16 @@ features = ["node"]
 [dependencies]
 # Async
 smol = "1.2.5"
-async-std = "1.10.0"
+async-std = "1.11.0"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
 # Misc
 clap = {version = "3.1.6", features = ["derive"]}
-log = "0.4.14"
+log = "0.4.16"
 num_cpus = "1.13.1"
-simplelog = "0.11.2"
+simplelog = "0.12.0-alpha1"
 
 # Encoding and parsing
 serde = {version = "1.0.136", features = ["derive"]}

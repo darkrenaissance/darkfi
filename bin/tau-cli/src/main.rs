@@ -10,7 +10,7 @@ use std::{
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use clap::{CommandFactory, Parser, Subcommand};
 use log::{debug, error};
-use prettytable::{cell, format, row, Table};
+use prettytable::{cell, format, row, Cell, Row, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -43,12 +43,6 @@ pub enum CliTauSubCommands {
         /// Project rank
         #[clap(short, long)]
         rank: Option<u32>,
-    },
-    /// List open tasks
-    List {
-        /// Month tasks
-        #[clap(short, long)]
-        month: Option<String>,
     },
     /// Update/Edit an existing task by ID
     Update {
@@ -85,6 +79,8 @@ pub enum CliTauSubCommands {
         /// Task ID
         id: u64,
     },
+    /// List open tasks
+    List {},
 }
 
 /// Tau cli
@@ -158,10 +154,10 @@ async fn add(url: &str, params: Value) -> Result<Value> {
 }
 
 // List tasks
-// --> {"jsonrpc": "2.0", "method": "list", "params": [month_date], "id": 1}
+// --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-async fn list(url: &str, month: Option<i64>) -> Result<Value> {
-    let req = jsonrpc::request(json!("list"), json!([month]));
+async fn list(url: &str, params: Value) -> Result<Value> {
+    let req = jsonrpc::request(json!("list"), json!(params));
     request(req, url.to_string()).await
 }
 
@@ -215,7 +211,13 @@ async fn start(options: CliTau) -> Result<()> {
             };
 
             let desc = if desc.is_none() {
-                let editor = var("EDITOR").unwrap();
+                let editor = match var("EDITOR") {
+                    Ok(t) => t,
+                    Err(e) => {
+                        error!("EDITOR {}", e);
+                        return Err(Error::BadOperationType)
+                    }
+                };
                 let mut file_path = temp_dir();
                 file_path.push("temp_file");
                 File::create(&file_path)?;
@@ -261,26 +263,17 @@ async fn start(options: CliTau) -> Result<()> {
             add(rpc_addr, json!([title, desc, assign, project, due, rank])).await?;
         }
 
-        Some(CliTauSubCommands::List { month }) => {
-            let ts = if month.is_some() {
-                let month = month.unwrap();
-                assert!(month.len() == 4);
-                let (m, y) = (month[..2].parse::<u32>()?, month[2..].parse::<i32>()?);
-                let dt = NaiveDate::from_ymd(y + 2000, m, 1).and_hms(0, 0, 0);
-
-                Some(dt.timestamp())
-            } else {
-                None
-            };
+        Some(CliTauSubCommands::List {}) => {
+            let rep = list(rpc_addr, json!([])).await?;
 
             let mut table = Table::new();
             table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
             table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
-            let rep = list(rpc_addr, ts).await?;
-
             let mut tasks = rep.as_array().unwrap().to_owned();
             tasks.sort_by(|a, b| b["rank"].as_u64().cmp(&a["rank"].as_u64()));
+
+            let max_rank = if !tasks.is_empty() { tasks[0]["rank"].as_u64().unwrap() } else { 0 };
 
             for task in tasks {
                 let project = task["project"].as_array().unwrap();
@@ -308,15 +301,20 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                // TODO: the highest rank should be brighter
-                table.add_row(row![
-                    task["id"],
-                    task["title"].as_str().unwrap(),
-                    projects,
-                    asgn,
-                    date,
-                    Fb->task["rank"]
-                ]);
+                let rank = task["rank"].as_u64().unwrap_or(0);
+
+                table.add_row(Row::new(vec![
+                    Cell::new(&task["id"].to_string()),
+                    Cell::new(task["title"].as_str().unwrap()),
+                    Cell::new(&projects),
+                    Cell::new(&asgn),
+                    Cell::new(&date),
+                    if rank == max_rank {
+                        Cell::new(&rank.to_string()).style_spec("bFC")
+                    } else {
+                        Cell::new(&rank.to_string()).style_spec("Fb")
+                    },
+                ]));
             }
             table.printstd();
         }
@@ -356,23 +354,22 @@ async fn start(options: CliTau) -> Result<()> {
         }
 
         Some(CliTauSubCommands::GetComment { id }) => {
-            let rep = list(rpc_addr, None).await?;
+            let rep = list(rpc_addr, json!([])).await?;
             let tasks = rep.as_array().unwrap();
 
-            for task in tasks {
-                if id == task["id"].as_u64().unwrap() {
-                    let comments = task["comments"].as_array().unwrap().to_owned();
-                    let mut cmnt = String::new();
+            if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
+                let index: usize = (id - 1).try_into().unwrap();
+                let comments = tasks[index]["comments"].as_array().unwrap();
+                let mut cmnt = String::new();
 
-                    for comment in comments {
-                        cmnt.push_str(comment["author"].as_str().unwrap());
-                        cmnt.push_str(": ");
-                        cmnt.push_str(comment["content"].as_str().unwrap());
-                        cmnt.push('\n');
-                    }
-
-                    println!("Comments on Task with id {}:\n{}", id, cmnt);
+                for comment in comments {
+                    cmnt.push_str(comment["author"].as_str().unwrap());
+                    cmnt.push_str(": ");
+                    cmnt.push_str(comment["content"].as_str().unwrap());
+                    cmnt.push('\n');
                 }
+
+                println!("Comments on Task with id {}:\n{}", id, cmnt);
             }
         }
 

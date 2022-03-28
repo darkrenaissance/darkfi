@@ -7,26 +7,20 @@ use pasta_curves::pallas;
 
 type Variable = AssignedCell<pallas::Base, pallas::Base>;
 
-// Replace with use pasta::Fp and pasta::Fq
-type Fp = pallas::Base;
-//type Fq = pallas::Scalar;
-
 #[derive(Clone, Debug)]
 pub struct ArithmeticChipConfig {
     a_col: Column<Advice>,
     b_col: Column<Advice>,
-    //permute: Permutation,
     s_add: Selector,
     s_mul: Selector,
     s_sub: Selector,
-    //s_pub: Selector,
 }
 
 pub struct ArithmeticChip {
     config: ArithmeticChipConfig,
 }
 
-impl Chip<Fp> for ArithmeticChip {
+impl Chip<pallas::Base> for ArithmeticChip {
     type Config = ArithmeticChipConfig;
     type Loaded = ();
 
@@ -44,25 +38,16 @@ impl ArithmeticChip {
         Self { config }
     }
 
-    pub fn configure(cs: &mut ConstraintSystem<Fp>) -> ArithmeticChipConfig {
+    pub fn configure(cs: &mut ConstraintSystem<pallas::Base>) -> ArithmeticChipConfig {
         let a_col = cs.advice_column();
         let b_col = cs.advice_column();
 
         cs.enable_equality(a_col);
         cs.enable_equality(b_col);
 
-        //let instance = cs.instance_column();
-
-        /*let permute = {
-            // Convert advice columns into an "any" columns.
-            let cols: [Column<Any>; 2] = [a_col.into(), b_col.into()];
-            Permutation::new(cs, &cols)
-        };*/
-
         let s_add = cs.selector();
         let s_mul = cs.selector();
         let s_sub = cs.selector();
-        //let s_pub = cs.selector();
 
         cs.create_gate("add", |cs| {
             let lhs = cs.query_advice(a_col, Rotation::cur());
@@ -91,28 +76,12 @@ impl ArithmeticChip {
             vec![s_sub * (lhs - rhs - out)]
         });
 
-        /*
-        cs.create_gate("pub", |cs| {
-            let a = cs.query_advice(a_col, Rotation::cur());
-            let p = cs.query_instance(instance, Rotation::cur());
-            let s_pub = cs.query_selector(s_pub);
-
-            vec![s_pub * (p - a)]
-        });
-        */
-
-        ArithmeticChipConfig {
-            a_col,
-            b_col,
-            /* permute, */ s_add,
-            s_mul,
-            s_sub, /* , s_pub */
-        }
+        ArithmeticChipConfig { a_col, b_col, s_add, s_mul, s_sub }
     }
 
     pub fn add(
         &self,
-        mut layouter: impl Layouter<Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
         a: Variable,
         b: Variable,
     ) -> Result<Variable, Error> {
@@ -158,7 +127,7 @@ impl ArithmeticChip {
 
     pub fn mul(
         &self,
-        mut layouter: impl Layouter<Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
         a: Variable,
         b: Variable,
     ) -> Result<Variable, Error> {
@@ -204,7 +173,7 @@ impl ArithmeticChip {
 
     pub fn sub(
         &self,
-        mut layouter: impl Layouter<Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
         a: Variable,
         b: Variable,
     ) -> Result<Variable, Error> {
@@ -247,25 +216,4 @@ impl ArithmeticChip {
 
         Ok(out.unwrap())
     }
-
-    /*
-    fn expose_public(&self, layouter: &mut impl Layouter<Fp>, num: Number) -> Result<(), Error> {
-        layouter.assign_region(
-            || "expose public",
-            |mut region| {
-                self.config.s_pub.enable(&mut region, 0)?;
-
-                let out = region.assign_advice(
-                    || "public advice",
-                    self.config.b_col,
-                    0,
-                    || num.value.ok_or(Error::SynthesisError),
-                )?;
-                region.constrain_equal(num.cell, out)?;
-
-                Ok(())
-            },
-        )
-    }
-    */
 }

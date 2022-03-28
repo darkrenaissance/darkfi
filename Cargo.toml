@@ -27,24 +27,36 @@ members = [
     "bin/vanityaddr",
 
     "src/sdk",
+    "src/util/derive",
+    "src/util/derive-internal",
 ]
 
 [dependencies]
 # Hard dependencies
-log = "0.4.14"
+libc = "0.2.121"
+log = "0.4.16"
 thiserror = "1.0.30"
 
 # async-runtime
 smol = {version = "1.2.5", optional = true}
 futures = {version = "0.3.21", optional = true}
-async-std = {version = "1.10.0", features = ["attributes"], optional = true}
-async-trait = {version = "0.1.52", optional = true}
+async-std = {version = "1.11.0", features = ["attributes"], optional = true}
+async-trait = {version = "0.1.53", optional = true}
 async-channel = {version = "1.6.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
 
 # async-net
 async-native-tls = {version = "0.4.0", optional = true}
 native-tls = {version = "0.2.8", optional = true}
+
+# Networking
+socket2 = {version = "0.4.4", optional = true}
+futures-rustls = {version = "0.22.1", features = ["dangerous_configuration"], optional = true}
+
+# TLS cert utilities
+ed25519-compact = {version = "1.0.11", features = ["pem"], optional = true}
+rcgen = {version = "0.9.2", features = ["pem"], optional = true}
+rustls-pemfile = {version = "0.3.0", optional = true}
 
 # Encoding
 hex = {version = "0.4.3", optional = true}
@@ -64,14 +76,17 @@ lazy_static = {version = "1.4.0", optional = true}
 fxhash = {version = "0.2.1", optional = true}
 indexmap = {version = "1.8.0", optional = true}
 itertools = {version = "0.10.3", optional = true}
+darkfi-derive = {path = "src/util/derive", optional = true}
+darkfi-derive-internal = {path = "src/util/derive-internal", optional = true}
+chrono = {version = "0.4.19", optional = true}
 
 # Misc
 termion = {version = "1.5.6", optional = true}
-simplelog = {version = "0.11.2", optional = true}
+simplelog = {version = "0.12.0-alpha1", optional = true}
 
 # Websockets
 tungstenite = {version = "0.17.2", optional = true}
-async-tungstenite = {version = "0.17.1", optional = true}
+async-tungstenite = {version = "0.17.2", optional = true}
 
 # socks5 
 fast-socks5 = {git = "https://github.com/ghassmo/fast-socks5", optional = true}
@@ -79,15 +94,16 @@ fast-socks5 = {git = "https://github.com/ghassmo/fast-socks5", optional = true}
 # Crypto
 bitvec = {version = "1.0.0", optional = true}
 rand = {version = "0.8.5", optional = true}
-sha2 = {version = "0.10.1", optional = true}
+blake3 = {version = "1.3.1", optional = true}
+sha2 = {version = "0.10.2", optional = true}
 group = {version = "0.11.0", optional = true}
 arrayvec = {version = "0.7.2", optional = true}
 blake2b_simd = {version = "1.0.0", optional = true}
 pasta_curves = {version = "0.3.0", optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 incrementalmerkletree = {version = "0.2.0", optional = true}
-halo2_proofs = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "gadget-traces", "sanity-checks"], optional = true}
-halo2_gadgets = {git = "https://github.com/zcash/halo2", branch = "main", features = ["dev-graph", "test-dependencies"], optional = true}
+halo2_proofs = {version = "0.1.0-beta.3", features = ["dev-graph", "gadget-traces", "sanity-checks"], optional = true}
+halo2_gadgets = {version = "0.1.0-beta.2", features = ["dev-graph", "test-dependencies"], optional = true}
 
 # Smart contract runtime
 drk-sdk = {path = "src/sdk", optional = true}
@@ -98,6 +114,9 @@ wasmer-middlewares = {version = "2.2.1", optional = true}
 # Wallet management
 sqlx = {version = "0.5.11", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
 libsqlite3-sys = {version = "0.23.2", features = ["bundled-sqlcipher"],  optional = true }
+
+# Blockchain store
+sled = {version = "0.34.7", optional = true}
 
 # Node utilities
 signal-hook = {version = "0.3.13", optional = true}
@@ -146,19 +165,22 @@ util = [
     "hex",
     "bincode",
     "serde",
-	"toml",
-	"url",
+    "toml",
+    "url",
     "simplelog",
     "serde_json",
     "dirs",
     "num-bigint",
     "fxhash",
+
+    "darkfi-derive",
+    "darkfi-derive-internal",
 ]
 
 rpc = [
     "rand",
     "url",
-	"fast-socks5",
+    "fast-socks5",
 
     "async-net",
     "async-runtime",
@@ -168,20 +190,30 @@ rpc = [
 
 blockchain = [
     "rocksdb",
+    "sled",
+    "chrono",
+    "rand",
 
     "async-runtime",
     "util",
+    "crypto",
+    "net",
 ]
 
 system = [
-	"fxhash",
+    "fxhash",
     "rand",
 
     "async-runtime",
 ]
 
 net = [
-	"fxhash",
+    "fxhash",
+    "socket2",
+    "futures-rustls",
+    "ed25519-compact",
+    "rcgen",
+    "rustls-pemfile",
 
     "util",
     "system",
@@ -189,6 +221,7 @@ net = [
 
 crypto = [
     "bitvec",
+    "blake3",
     "rand",
     "pasta_curves",
     "blake2b_simd",
@@ -231,7 +264,7 @@ node = [
     "crypto",
     "wallet",
     "util",
-	"net",
+    "net",
 ]
 
 zkas = [
@@ -251,8 +284,3 @@ required-features = ["async-runtime", "net"]
 name = "tx"
 path = "example/tx.rs"
 required-features = ["node"]
-
-[[example]]
-name = "dao-process"
-path = "example/dao_process.rs"
-required-features = ["crypto", "zkas"]

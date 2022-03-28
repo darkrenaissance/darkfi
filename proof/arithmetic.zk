@@ -1,17 +1,23 @@
 constant "Arith" {}
 
 contract "Arith" {
-	Base a,
-	Base b,
+    Base a,
+    Base b,
 }
 
 circuit "Arith" {
-	sum = base_add(a, b);
-	constrain_instance(sum);
+    sum = base_add(a, b);
+    constrain_instance(sum);
 
-	product = base_mul(a, b);
-	constrain_instance(product);
+    product = base_mul(a, b);
+    constrain_instance(product);
 
-	difference = base_sub(a, b);
-	constrain_instance(difference);
+    difference = base_sub(a, b);
+    constrain_instance(difference);
+
+    a_gt_b = greater_than(a, b);
+    constrain_instance(a_gt_b);
+
+    b_gt_a = greater_than(b, a);
+    constrain_instance(b_gt_a);
 }

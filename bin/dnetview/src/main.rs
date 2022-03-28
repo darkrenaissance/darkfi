@@ -254,7 +254,7 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
 }
 
 fn is_empty_outbound(slots: Vec<Slot>) -> bool {
-    return slots.iter().all(|slot| slot.is_empty == true)
+    return slots.iter().all(|slot| slot.is_empty)
 }
 
 async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {

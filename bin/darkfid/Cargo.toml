@@ -10,8 +10,8 @@ features = ["node", "rpc"]
 [dependencies]
 # Async
 smol = "1.2.5"
-async-std = "1.10.0"
-async-trait = "0.1.52"
+async-std = "1.11.0"
+async-trait = "0.1.53"
 async-channel = "1.6.1"
 async-executor = "1.4.1"
 easy-parallel = "3.2.0"
@@ -19,9 +19,9 @@ easy-parallel = "3.2.0"
 # Misc
 clap = {version = "3.1.6", features = ["derive"]}
 url = "2.2.2"
-log = "0.4.14"
+log = "0.4.16"
 num_cpus = "1.13.1"
-simplelog = "0.11.2"
+simplelog = "0.12.0-alpha1"
 fxhash = "0.2.1"
 
 # Encoding and parsing

@@ -22,7 +22,11 @@ use halo2_proofs::{
 use log::debug;
 use pasta_curves::{group::Curve, pallas, Fp};
 
-use super::arith_chip::{ArithmeticChip, ArithmeticChipConfig};
+use super::{
+    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+    even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
+    greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
+};
 
 pub use super::vm_stack::{StackVar, Witness};
 use crate::{
@@ -45,6 +49,8 @@ pub struct VmConfig {
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
     arith_config: ArithmeticChipConfig,
+    evenbits_config: EvenBitsConfig,
+    greaterthan_config: GreaterThanConfig,
 }
 
 impl VmConfig {
@@ -84,6 +90,14 @@ impl VmConfig {
 
     fn arithmetic_chip(&self) -> ArithmeticChip {
         ArithmeticChip::construct(self.arith_config.clone())
+    }
+
+    fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, 24> {
+        EvenBitsChip::construct(self.evenbits_config.clone())
+    }
+
+    fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, 24> {
+        GreaterThanChip::construct(self.greaterthan_config.clone())
     }
 }
 
@@ -186,6 +200,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // Configuration for the Arithmetic chip
         let arith_config = ArithmeticChip::configure(meta);
 
+        // Configuration for the EvenBits chip
+        let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
+
+        // Configuration for the GreaterThan chip
+        let greaterthan_config = GreaterThanChip::<pallas::Base, 24>::configure(meta);
+
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.
         // Since the Sinsemilla config uses only 5 advice columns,
@@ -226,6 +246,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
             _sinsemilla_cfg2,
             poseidon_config,
             arith_config,
+            evenbits_config,
+            greaterthan_config,
         }
     }
 
@@ -250,6 +272,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the Arithmetic chip.
         let arith_chip = config.arithmetic_chip();
+
+        // Construct the EvenBits chip.
+        let eb_chip = config.evenbits_chip();
+        eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
+
+        // Construct the GreaterThan chip.
+        let gt_chip = config.greaterthan_chip();
 
         // This constant one is used for short multiplication
         let one = self.load_private(
@@ -443,12 +472,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     macro_rules! poseidon_hash {
                         ($len:expr, $hasher:ident, $output:ident, $cell:ident) => {
-                            // let $hasher = PoseidonHash::<_, _, P128Pow5T3, _, 3, 2>::init(
-                            // config.poseidon_chip(),
-                            // layouter.namespace(|| "PoseidonHash init"),
-                            // ConstantLength::<$len>,
-                            // )?;
-
                             let $hasher =
                                 PoseidonHash::<_, _, P128Pow5T3, ConstantLength<$len>, 3, 2>::init(
                                     config.poseidon_chip(),
@@ -460,7 +483,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
                                 poseidon_message.try_into().unwrap(),
                             )?;
 
-                            //let $cell: AssignedCell<Fp, Fp> = $output.inner().into();
                             let $cell: AssignedCell<Fp, Fp> = $output.into();
 
                             debug!("Pushing hash to stack index {}", stack.len());
@@ -545,6 +567,28 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     stack.push(StackVar::Base(difference));
                 }
 
+                Opcode::GreaterThan => {
+                    debug!("Executing `GreaterThan{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[1]].clone().into();
+
+                    eb_chip.decompose(layouter.namespace(|| "lhs range check"), lhs.clone())?;
+                    eb_chip.decompose(layouter.namespace(|| "rhs range check"), rhs.clone())?;
+
+                    let (helper, greater_than) = gt_chip.greater_than(
+                        layouter.namespace(|| "lhs > rhs"),
+                        lhs.into(),
+                        rhs.into(),
+                    )?;
+
+                    eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
+
+                    debug!("Pushing comparison result to stack index {}", stack.len());
+                    stack.push(StackVar::Base(greater_than.0));
+                }
+
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
@@ -560,7 +604,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     public_inputs_offset += 1;
                 }
 
-                _ => unimplemented!(),
+                _ => todo!("Handle gracefully"),
             }
         }
 

@@ -1,0 +1,46 @@
+## validatord configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+
+# Configuration file to use
+config = "~/.config/darkfi/validatord_config.toml"
+
+# Accept address
+accept = "0.0.0.0:11000"
+
+# Seed nodes
+#seeds = "127.0.0.1:11000"
+
+# Manual connections
+#connect = "127.0.0.1:11000"
+
+# Connection slots
+slots = 5
+
+# External address
+external = "127.0.0.1:11000"
+
+# Logfile path
+#log = "/tmp/darkfid.log"
+
+# The endpoint where validatord will bind its RPC socket
+rpc = "127.0.0.1:6660"
+
+# Whether to listen with TLS or plain TCP
+tls = false
+
+# Path to DER-formatted PKCS#12 archive. (Unused if serve_tls=false)
+# This can be created using openssl:
+# openssl pkcs12 -export -out validatord_identity.pfx -inkey key.pem -in cert.pem -certfile validator_certs.pem
+identity = "~/.config/darkfi/validatord_identity.pfx"
+
+# Password for the created TLS identity. (Unused if serve_tls=false)
+password = "FOOBAR"
+
+# Path to the state file 
+state = "~/.config/darkfi/validatord_state_0"
+
+# Node ID, used only for testing
+id = 0
+

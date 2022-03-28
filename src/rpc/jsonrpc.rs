@@ -227,3 +227,13 @@ async fn get_reply<T: AsyncRead + AsyncWrite + Unpin>(
     let reply: JsonResult = serde_json::from_slice(&buf[0..bytes_read])?;
     Ok(reply)
 }
+
+// Utils to quickly handle errors
+pub type ValueResult<Value> = std::result::Result<Value, ErrorCode>;
+
+pub fn from_result(res: ValueResult<Value>, id: Value) -> JsonResult {
+    match res {
+        Ok(v) => JsonResult::Resp(response(v, id)),
+        Err(e) => error(e, None, id).into(),
+    }
+}

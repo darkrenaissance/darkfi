@@ -1,0 +1,36 @@
+[package]
+name = "validatord"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.darkfi]
+path = "../../../"
+features = ["blockchain", "crypto", "net", "rpc"]
+
+[dependencies]
+
+# Async
+smol = "1.2.5"
+async-std = "1.11.0"
+async-trait = "0.1.53"
+async-channel = "1.6.1"
+async-executor = "1.4.1"
+easy-parallel = "3.2.0"
+
+# Crypto
+rand = "0.8.5"
+
+# Structopt dependencies for arguments parsing
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.79"
+structopt = "0.3.26"
+structopt-toml = "0.5.0"
+toml = "0.5.8"
+
+# Misc
+log = "0.4.16"
+num_cpus = "1.13.1"
+simplelog = "0.12.0-alpha1"
+
+[workspace]

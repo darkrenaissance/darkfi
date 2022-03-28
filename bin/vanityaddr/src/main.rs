@@ -95,8 +95,9 @@ fn main() {
 
     // Something fancy
     let progress = ProgressBar::new_spinner();
-    progress.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts"));
-    progress.set_draw_rate(10);
+    let template =
+        ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts").unwrap();
+    progress.set_style(template);
 
     // Fire off the threadpool
     rayon_pool.spawn(move || {

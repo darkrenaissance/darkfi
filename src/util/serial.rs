@@ -4,9 +4,13 @@ use std::{
     io::{Cursor, Read, Write},
     mem,
     net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
 };
 
 use num_bigint::BigUint;
+
+pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
 use super::endian;
 use crate::{Error, Result};
@@ -509,6 +513,26 @@ impl Decodable for SocketAddr {
     }
 }
 
+impl Encodable for PathBuf {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        let mut len = 0;
+        match self.to_str() {
+            Some(path_str) => {
+                len += path_str.to_string().encode(s)?;
+            }
+            None => return Err(Error::EncodeError("unable to parse PathBuf to os string")),
+        }
+        Ok(len)
+    }
+}
+
+impl Decodable for PathBuf {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let path_str: String = Decodable::decode(&mut d)?;
+        Ok(PathBuf::from_str(&path_str)?)
+    }
+}
+
 pub fn encode_with_size<S: io::Write>(data: &[u8], mut s: S) -> Result<usize> {
     let vi_len = VarInt(data.len() as u64).encode(&mut s)?;
     s.write_slice(data)?;
@@ -596,7 +620,7 @@ mod tests {
     use super::{
         deserialize, deserialize_partial,
         endian::{u16_to_array_le, u32_to_array_le, u64_to_array_le},
-        serialize, Encodable, Error, Result, VarInt,
+        serialize, Encodable, Error, Result, SerialDecodable, SerialEncodable, VarInt,
     };
     use std::{io, mem::discriminant};
 
@@ -833,5 +857,51 @@ mod tests {
             deserialize(&[6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]).ok(),
             Some(::std::borrow::Cow::Borrowed("Andrew"))
         );
+    }
+
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive0 {
+        foo: String,
+        bar: u64,
+    }
+
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive1 {
+        baz: TestDerive0,
+        meh: bool,
+    }
+
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive2(u64);
+
+    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
+    struct TestDerive3 {
+        foo: u64,
+        #[skip_serialize]
+        bar: u64,
+        meh: u64,
+    }
+
+    #[test]
+    fn serialize_deserialize_struct() {
+        let t0 = TestDerive0 { foo: String::from("Andrew"), bar: 42 };
+        let t1 = TestDerive1 { baz: t0.clone(), meh: false };
+        let t2 = TestDerive2(u64::MAX);
+        let t3 = TestDerive3 { foo: 30, bar: 20, meh: 44 };
+
+        let t0_bytes = serialize(&t0);
+        let t1_bytes = serialize(&t1);
+        let t2_bytes = serialize(&t2);
+        let t3_bytes = serialize(&t3);
+
+        let t0_de: TestDerive0 = deserialize(&t0_bytes).unwrap();
+        let t1_de: TestDerive1 = deserialize(&t1_bytes).unwrap();
+        let t2_de: TestDerive2 = deserialize(&t2_bytes).unwrap();
+        let t3_de: TestDerive3 = deserialize(&t3_bytes).unwrap();
+
+        assert_eq!(t0, t0_de);
+        assert_eq!(t1, t1_de);
+        assert_eq!(t2, t2_de);
+        assert_eq!(t3_de, TestDerive3 { foo: 30, bar: 0, meh: 44 });
     }
 }
