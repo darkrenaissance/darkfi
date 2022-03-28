@@ -64,13 +64,22 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
         identity_pass: Default::default(),
     };
 
-    let (snd, _rcv) = async_channel::unbounded::<TaskInfo>();
+    let (snd, rcv) = async_channel::unbounded::<TaskInfo>();
 
     let rpc_interface = Arc::new(JsonRpcInterface::new(snd, settings));
+
+    let node2 = node.clone();
+    let recv_update_from_rpc: smol::Task<Result<()>> = executor.spawn(async move {
+        loop {
+            let task_info = rcv.recv().await?;
+            node2.clone().send_event(task_info).await?;
+        }
+    });
 
     listen_and_serve(server_config, rpc_interface, executor).await?;
 
     crdt_task.cancel().await;
+    recv_update_from_rpc.cancel().await;
     Ok(())
 }
 

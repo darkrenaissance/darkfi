@@ -142,17 +142,17 @@ impl JsonRpcInterface {
             );
         }
 
-        let result = || -> Result<()> {
+        let result: Result<()> = async move {
             task.save()?;
             task.activate()?;
+            self.notify_queue_sender.send(task).await?;
             Ok(())
-        };
+        }
+        .await;
 
-        match result() {
+        match result {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::ServerError(-32603), Some(e.to_string()), id))
-            }
+            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
         }
     }
 
@@ -163,9 +163,7 @@ impl JsonRpcInterface {
     async fn list(&self, id: Value, _params: Value) -> JsonResult {
         match MonthTasks::load_current_open_tasks(&self.settings) {
             Ok(tks) => JsonResult::Resp(jsonresp(json!(tks), id)),
-            Err(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::ServerError(-32603), Some(e.to_string()), id))
-            }
+            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
         }
     }
 
@@ -184,99 +182,25 @@ impl JsonRpcInterface {
             return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some("invalid id".into()), id))
         }
 
-        if !args[1].is_object() {
-            return JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid update data".into()),
-                id,
-            ))
-        }
-
         let task_id = args[0].as_u64().unwrap();
-        let data = args[1].as_object().unwrap();
 
-        let mut task: TaskInfo = match self.load_task_by_id(task_id) {
+        let task = match self.check_data_for_update(task_id, args[1].clone()) {
             Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e), id)),
+            Err(e) => {
+                return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e.to_string()), id))
+            }
         };
 
-        let mut result = || -> std::result::Result<(), String> {
-            if data.contains_key("title") {
-                let title = data
-                    .get("title")
-                    .ok_or("error parsing title")?
-                    .as_str()
-                    .ok_or("invalid value for title")?;
-                task.set_title(title);
-            }
-
-            if data.contains_key("description") {
-                let description = data
-                    .get("description")
-                    .ok_or("error parsing description")?
-                    .as_str()
-                    .ok_or("invalid value for description")?;
-                task.set_desc(description);
-            }
-
-            if data.contains_key("rank") {
-                let rank = data
-                    .get("rank")
-                    .ok_or("error parsing rank")?
-                    .as_u64()
-                    .ok_or("invalid value for rank")?;
-
-                task.set_rank(rank as u32);
-            }
-
-            if data.contains_key("due") {
-                if let Some(due) = data.get("due").ok_or("error parsing due")?.as_i64() {
-                    task.set_due(Some(Timestamp(due)));
-                } else {
-                    task.set_due(None);
-                }
-            }
-
-            if data.contains_key("assign") {
-                task.set_assign(
-                    &data
-                        .get("assign")
-                        .ok_or("error parsing assign")?
-                        .as_array()
-                        .ok_or("invalid value for assign")?
-                        .iter()
-                        .filter(|a| a.as_str().is_some())
-                        .map(|a| a.as_str().unwrap().to_string())
-                        .collect(),
-                );
-            }
-
-            if data.contains_key("project") {
-                task.set_project(
-                    &data
-                        .get("project")
-                        .ok_or("error parsing project")?
-                        .as_array()
-                        .ok_or("invalid value for project")?
-                        .iter()
-                        .filter(|p| p.as_str().is_some())
-                        .map(|p| p.as_str().unwrap().to_string())
-                        .collect(),
-                );
-            }
-
-            let save = task.save();
-
-            if let Err(e) = save {
-                return Err(format!("Unable to save the task: {}", e))
-            }
-
+        let result: Result<()> = async move {
+            task.save()?;
+            self.notify_queue_sender.send(task).await?;
             Ok(())
-        };
+        }
+        .await;
 
-        match result() {
+        match result {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
-            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
+            Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
         }
     }
 
@@ -295,7 +219,7 @@ impl JsonRpcInterface {
 
         let task: TaskInfo = match self.load_task_by_id(task_id) {
             Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e), id)),
+            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
         };
 
         JsonResult::Resp(jsonresp(json!(task.get_state()), id))
@@ -325,12 +249,19 @@ impl JsonRpcInterface {
 
         let mut task: TaskInfo = match self.load_task_by_id(task_id) {
             Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e), id)),
+            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
         };
 
         task.set_state(state);
 
-        match task.save() {
+        let result: Result<()> = async move {
+            task.save()?;
+            self.notify_queue_sender.send(task).await?;
+            Ok(())
+        }
+        .await;
+
+        match result {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
         }
@@ -369,12 +300,19 @@ impl JsonRpcInterface {
 
         let mut task: TaskInfo = match self.load_task_by_id(task_id) {
             Ok(t) => t,
-            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e), id)),
+            Err(e) => return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id)),
         };
 
         task.set_comment(Comment::new(comment_content, comment_author));
 
-        match task.save() {
+        let result: Result<()> = async move {
+            task.save()?;
+            self.notify_queue_sender.send(task).await?;
+            Ok(())
+        }
+        .await;
+
+        match result {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id)),
         }
@@ -393,5 +331,85 @@ impl JsonRpcInterface {
         }
 
         Ok(task.unwrap())
+    }
+
+    fn check_data_for_update(
+        &self,
+        task_id: u64,
+        data: Value,
+    ) -> std::result::Result<TaskInfo, String> {
+        let mut task: TaskInfo = self.load_task_by_id(task_id)?;
+
+        if !data.is_object() {
+            return Err("invalid data for update".into())
+        }
+
+        let data = data.as_object().unwrap();
+
+        if data.contains_key("title") {
+            let title = data
+                .get("title")
+                .ok_or("error parsing title")?
+                .as_str()
+                .ok_or("invalid value for title")?;
+            task.set_title(title);
+        }
+
+        if data.contains_key("description") {
+            let description = data
+                .get("description")
+                .ok_or("error parsing description")?
+                .as_str()
+                .ok_or("invalid value for description")?;
+            task.set_desc(description);
+        }
+
+        if data.contains_key("rank") {
+            let rank = data
+                .get("rank")
+                .ok_or("error parsing rank")?
+                .as_u64()
+                .ok_or("invalid value for rank")?;
+
+            task.set_rank(rank as u32);
+        }
+
+        if data.contains_key("due") {
+            if let Some(due) = data.get("due").ok_or("error parsing due")?.as_i64() {
+                task.set_due(Some(Timestamp(due)));
+            } else {
+                task.set_due(None);
+            }
+        }
+
+        if data.contains_key("assign") {
+            task.set_assign(
+                &data
+                    .get("assign")
+                    .ok_or("error parsing assign")?
+                    .as_array()
+                    .ok_or("invalid value for assign")?
+                    .iter()
+                    .filter(|a| a.as_str().is_some())
+                    .map(|a| a.as_str().unwrap().to_string())
+                    .collect(),
+            );
+        }
+
+        if data.contains_key("project") {
+            task.set_project(
+                &data
+                    .get("project")
+                    .ok_or("error parsing project")?
+                    .as_array()
+                    .ok_or("invalid value for project")?
+                    .iter()
+                    .filter(|p| p.as_str().is_some())
+                    .map(|p| p.as_str().unwrap().to_string())
+                    .collect(),
+            );
+        }
+
+        Ok(task)
     }
 }
