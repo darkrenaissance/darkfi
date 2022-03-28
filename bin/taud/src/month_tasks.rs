@@ -3,9 +3,8 @@ use std::path::PathBuf;
 use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
-use darkfi::Result;
-
 use crate::{
+    error::{TaudError, TaudResult},
     task_info::TaskInfo,
     util::{get_current_time, Settings, Timestamp},
 };
@@ -30,7 +29,7 @@ impl MonthTasks {
         self.task_tks.push(ref_id.into());
     }
 
-    pub fn objects(&self) -> Result<Vec<TaskInfo>> {
+    pub fn objects(&self) -> TaudResult<Vec<TaskInfo>> {
         let mut tks: Vec<TaskInfo> = vec![];
 
         for ref_id in self.task_tks.iter() {
@@ -65,11 +64,12 @@ impl MonthTasks {
             .join(Utc.timestamp(date.0, 0).format("%m%y").to_string())
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> TaudResult<()> {
         crate::util::save::<Self>(&Self::get_path(&self.created_at, &self.settings), self)
+            .map_err(TaudError::Darkfi)
     }
 
-    pub fn load_or_create(date: &Timestamp, settings: &Settings) -> Result<Self> {
+    pub fn load_or_create(date: &Timestamp, settings: &Settings) -> TaudResult<Self> {
         match crate::util::load::<Self>(&Self::get_path(date, settings)) {
             Ok(mut mt) => {
                 mt.set_settings(settings);
@@ -84,7 +84,7 @@ impl MonthTasks {
         }
     }
 
-    pub fn load_current_open_tasks(settings: &Settings) -> Result<Vec<TaskInfo>> {
+    pub fn load_current_open_tasks(settings: &Settings) -> TaudResult<Vec<TaskInfo>> {
         let mt = Self::load_or_create(&get_current_time(), settings)?;
         Ok(mt.objects()?.into_iter().filter(|t| t.get_state() != "stop").collect())
     }

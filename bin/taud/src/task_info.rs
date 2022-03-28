@@ -2,14 +2,12 @@ use std::{io, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use darkfi::{
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
-    Result,
-};
+use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 use darkfi::util::serial::VarInt;
 
 use crate::{
+    error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
     util::{find_free_id, get_current_time, random_ref_id, Settings, Timestamp},
 };
@@ -72,7 +70,7 @@ impl TaskInfo {
         due: Option<Timestamp>,
         rank: u32,
         settings: &Settings,
-    ) -> Result<Self> {
+    ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = random_ref_id();
 
@@ -80,6 +78,7 @@ impl TaskInfo {
 
         let task_ids: Vec<u32> =
             MonthTasks::load_current_open_tasks(settings)?.into_iter().map(|t| t.id).collect();
+
         let id: u32 = find_free_id(&task_ids);
 
         Ok(Self {
@@ -98,17 +97,18 @@ impl TaskInfo {
         })
     }
 
-    pub fn load(ref_id: &str, settings: &Settings) -> Result<Self> {
+    pub fn load(ref_id: &str, settings: &Settings) -> TaudResult<Self> {
         let mut task = crate::util::load::<Self>(&Self::get_path(ref_id, settings))?;
         task.set_settings(settings);
         Ok(task)
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> TaudResult<()> {
         crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.settings), self)
+            .map_err(TaudError::Darkfi)
     }
 
-    pub fn activate(&self) -> Result<()> {
+    pub fn activate(&self) -> TaudResult<()> {
         let mut mt = MonthTasks::load_or_create(&self.created_at, &self.settings)?;
         mt.add(&self.ref_id);
         mt.save()
@@ -175,52 +175,52 @@ impl TaskInfo {
 }
 
 impl Encodable for TaskEvents {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
         encode_vec(&self.0, s)
     }
 }
 
 impl Decodable for TaskEvents {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }
 }
 impl Encodable for TaskComments {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
         encode_vec(&self.0, s)
     }
 }
 
 impl Decodable for TaskComments {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }
 }
 impl Encodable for TaskProjects {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
         encode_vec(&self.0, s)
     }
 }
 
 impl Decodable for TaskProjects {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }
 }
 
 impl Encodable for TaskAssigns {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
         encode_vec(&self.0, s)
     }
 }
 
 impl Decodable for TaskAssigns {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }
 }
 
-fn encode_vec<T: Encodable, S: io::Write>(vec: &Vec<T>, mut s: S) -> Result<usize> {
+fn encode_vec<T: Encodable, S: io::Write>(vec: &Vec<T>, mut s: S) -> darkfi::Result<usize> {
     let mut len = 0;
     len += VarInt(vec.len() as u64).encode(&mut s)?;
     for c in vec.iter() {
@@ -229,7 +229,7 @@ fn encode_vec<T: Encodable, S: io::Write>(vec: &Vec<T>, mut s: S) -> Result<usiz
     Ok(len)
 }
 
-fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> Result<Vec<T>> {
+fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> darkfi::Result<Vec<T>> {
     let len = VarInt::decode(&mut d)?.0;
     let mut ret = Vec::with_capacity(len as usize);
     for _ in 0..len {

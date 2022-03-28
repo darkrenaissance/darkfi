@@ -10,10 +10,11 @@ use darkfi::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode, JsonRequest, JsonResult},
         rpcserver::RequestHandler,
     },
-    Result,
+    Error,
 };
 
 use crate::{
+    error::TaudResult,
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
     util::{get_current_time, Settings, Timestamp},
@@ -142,10 +143,10 @@ impl JsonRpcInterface {
             );
         }
 
-        let result: Result<()> = async move {
+        let result: TaudResult<()> = async move {
             task.save()?;
             task.activate()?;
-            self.notify_queue_sender.send(task).await?;
+            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
             Ok(())
         }
         .await;
@@ -191,9 +192,9 @@ impl JsonRpcInterface {
             }
         };
 
-        let result: Result<()> = async move {
+        let result: TaudResult<()> = async move {
             task.save()?;
-            self.notify_queue_sender.send(task).await?;
+            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
             Ok(())
         }
         .await;
@@ -254,9 +255,9 @@ impl JsonRpcInterface {
 
         task.set_state(state);
 
-        let result: Result<()> = async move {
+        let result: TaudResult<()> = async move {
             task.save()?;
-            self.notify_queue_sender.send(task).await?;
+            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
             Ok(())
         }
         .await;
@@ -305,9 +306,9 @@ impl JsonRpcInterface {
 
         task.set_comment(Comment::new(comment_content, comment_author));
 
-        let result: Result<()> = async move {
+        let result: TaudResult<()> = async move {
             task.save()?;
-            self.notify_queue_sender.send(task).await?;
+            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
             Ok(())
         }
         .await;

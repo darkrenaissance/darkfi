@@ -16,6 +16,7 @@ use darkfi::{
 };
 
 mod crdt;
+mod error;
 mod jsonrpc;
 mod month_tasks;
 mod task_info;
