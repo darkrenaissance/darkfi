@@ -1,6 +1,5 @@
 use std::{
     fs::File,
-    io,
     io::BufReader,
     path::{Path, PathBuf},
 };
@@ -13,7 +12,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use darkfi::{
     util::{
         cli::UrlConfig,
-        serial::{Decodable, Encodable},
+        serial::{SerialDecodable, SerialEncodable},
     },
     Result,
 };
@@ -51,7 +50,7 @@ pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct Settings {
     pub dataset_path: PathBuf,
 }
@@ -62,22 +61,10 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, PartialOrd,
+)]
 pub struct Timestamp(pub i64);
-
-impl Encodable for Timestamp {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.0.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Timestamp {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self(Decodable::decode(&mut d)?))
-    }
-}
 
 /// taud cli
 #[derive(Parser)]

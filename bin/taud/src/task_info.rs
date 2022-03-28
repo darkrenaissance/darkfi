@@ -3,7 +3,7 @@ use std::{io, path::PathBuf};
 use serde::{Deserialize, Serialize};
 
 use darkfi::{
-    util::serial::{Decodable, Encodable},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
 
@@ -14,7 +14,7 @@ use crate::{
     util::{find_free_id, get_current_time, random_ref_id, Settings, Timestamp},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 struct TaskEvent {
     action: String,
     timestamp: Timestamp,
@@ -26,7 +26,7 @@ impl TaskEvent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialDecodable, SerialEncodable, PartialEq)]
 pub struct Comment {
     content: String,
     author: String,
@@ -48,7 +48,7 @@ struct TaskProjects(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct TaskAssigns(Vec<String>);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
     ref_id: String,
     id: u32,
@@ -171,78 +171,6 @@ impl TaskInfo {
             return
         }
         self.events.0.push(TaskEvent::new(action.into()));
-    }
-}
-
-impl Encodable for TaskEvent {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.action.encode(&mut s)?;
-        len += self.timestamp.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for TaskEvent {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { action: Decodable::decode(&mut d)?, timestamp: Decodable::decode(&mut d)? })
-    }
-}
-
-impl Encodable for Comment {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.content.encode(&mut s)?;
-        len += self.author.encode(&mut s)?;
-        len += self.timestamp.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Comment {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            content: Decodable::decode(&mut d)?,
-            author: Decodable::decode(&mut d)?,
-            timestamp: Decodable::decode(&mut d)?,
-        })
-    }
-}
-
-impl Encodable for TaskInfo {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.ref_id.encode(&mut s)?;
-        len += self.id.encode(&mut s)?;
-        len += self.title.encode(&mut s)?;
-        len += self.desc.encode(&mut s)?;
-        len += self.assign.encode(&mut s)?;
-        len += self.project.encode(&mut s)?;
-        len += self.due.encode(&mut s)?;
-        len += self.rank.encode(&mut s)?;
-        len += self.created_at.encode(&mut s)?;
-        len += self.events.encode(&mut s)?;
-        len += self.comments.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for TaskInfo {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            ref_id: Decodable::decode(&mut d)?,
-            id: Decodable::decode(&mut d)?,
-            title: Decodable::decode(&mut d)?,
-            desc: Decodable::decode(&mut d)?,
-            assign: Decodable::decode(&mut d)?,
-            project: Decodable::decode(&mut d)?,
-            due: Decodable::decode(&mut d)?,
-            rank: Decodable::decode(&mut d)?,
-            created_at: Decodable::decode(&mut d)?,
-            events: Decodable::decode(&mut d)?,
-            comments: Decodable::decode(&mut d)?,
-            settings: Settings::default(),
-        })
     }
 }
 
