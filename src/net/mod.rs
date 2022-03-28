@@ -85,6 +85,9 @@ pub mod session;
 /// Network configuration settings.
 pub mod settings;
 
+/// Network transport implementations.
+pub mod transport;
+
 pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
