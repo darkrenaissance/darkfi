@@ -110,7 +110,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::{month_tasks::MonthTasks, task_info::TaskInfo, util::get_current_time};
+    use crate::{
+        error::TaudResult, month_tasks::MonthTasks, task_info::TaskInfo, util::get_current_time,
+    };
 
     const TEST_DATA_PATH: &str = "/tmp/test_tau_data";
 
@@ -126,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn load_and_save_tasks() -> Result<()> {
+    fn load_and_save_tasks() -> TaudResult<()> {
         let settings = Settings { dataset_path: get_path()? };
 
         // load and save TaskInfo
