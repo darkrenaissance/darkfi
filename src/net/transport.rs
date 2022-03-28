@@ -3,8 +3,11 @@ use std::error::Error;
 use futures::prelude::*;
 use url::Url;
 
-pub mod tcp;
+mod tcp;
+mod tls;
+
 pub use tcp::TcpTransport;
+pub use tls::TlsTransport;
 
 pub trait Transport {
     type Output;

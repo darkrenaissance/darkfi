@@ -1566,6 +1566,7 @@ dependencies = [
  "drk-sdk",
  "fast-socks5",
  "futures",
+ "futures-rustls",
  "fxhash",
  "group",
  "halo2_gadgets",
@@ -2438,6 +2439,17 @@ dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.17",
  "syn 1.0.89",
+]
+
+[[package]]
+name = "futures-rustls"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01fe9932a224b72b45336d96040aa86386d674a31d0af27d800ea7bc8ca97fe"
+dependencies = [
+ "futures-io",
+ "rustls 0.20.4",
+ "webpki 0.22.0",
 ]
 
 [[package]]
