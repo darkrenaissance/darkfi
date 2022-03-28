@@ -186,10 +186,13 @@ rpc = [
 blockchain = [
     "rocksdb",
     "sled",
+    "chrono",
+    "rand",
 
     "async-runtime",
     "util",
-    "chrono",
+    "crypto",
+    "net",
 ]
 
 system = [
