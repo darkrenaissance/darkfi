@@ -4,6 +4,8 @@ use std::{
     io::{Cursor, Read, Write},
     mem,
     net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
 };
 
 use num_bigint::BigUint;
@@ -508,6 +510,26 @@ impl Decodable for SocketAddr {
         let ip = Decodable::decode(&mut d)?;
         let port: u16 = Decodable::decode(d)?;
         Ok(SocketAddr::new(ip, port))
+    }
+}
+
+impl Encodable for PathBuf {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        let mut len = 0;
+        match self.to_str() {
+            Some(path_str) => {
+                len += path_str.to_string().encode(s)?;
+            }
+            None => return Err(Error::EncodeError("unable to parse PathBuf to os string")),
+        }
+        Ok(len)
+    }
+}
+
+impl Decodable for PathBuf {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let path_str: String = Decodable::decode(&mut d)?;
+        Ok(PathBuf::from_str(&path_str)?)
     }
 }
 
