@@ -148,12 +148,12 @@ impl TaskInfo {
         self.desc = desc.into();
     }
 
-    pub fn set_assign(&mut self, assign: &Vec<String>) {
-        self.assign = TaskAssigns(assign.clone());
+    pub fn set_assign(&mut self, assign: &[String]) {
+        self.assign = TaskAssigns(assign.to_owned());
     }
 
-    pub fn set_project(&mut self, project: &Vec<String>) {
-        self.project = TaskProjects(project.clone());
+    pub fn set_project(&mut self, project: &[String]) {
+        self.project = TaskProjects(project.to_owned());
     }
 
     pub fn set_comment(&mut self, c: Comment) {
@@ -226,7 +226,7 @@ impl Decodable for TaskAssigns {
     }
 }
 
-fn encode_vec<T: Encodable, S: io::Write>(vec: &Vec<T>, mut s: S) -> darkfi::Result<usize> {
+fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> darkfi::Result<usize> {
     let mut len = 0;
     len += VarInt(vec.len() as u64).encode(&mut s)?;
     for c in vec.iter() {

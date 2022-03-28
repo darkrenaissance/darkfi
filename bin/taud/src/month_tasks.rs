@@ -17,11 +17,11 @@ pub struct MonthTasks {
 }
 
 impl MonthTasks {
-    pub fn new(task_tks: &Vec<String>, settings: &Settings) -> Self {
+    pub fn new(task_tks: &[String], settings: &Settings) -> Self {
         Self {
             created_at: get_current_time(),
             settings: settings.clone(),
-            task_tks: task_tks.clone(),
+            task_tks: task_tks.to_owned(),
         }
     }
 
@@ -76,7 +76,7 @@ impl MonthTasks {
                 Ok(mt)
             }
             Err(_) => {
-                let mut mt = Self::new(&vec![], settings);
+                let mut mt = Self::new(&[], settings);
                 mt.set_date(date);
                 mt.save()?;
                 Ok(mt)

@@ -192,7 +192,7 @@ impl JsonRpcInterface {
     }
 
     fn check_data_for_update(&self, task_id: &Value, data: &Value) -> TaudResult<TaskInfo> {
-        let mut task: TaskInfo = self.load_task_by_id(&task_id)?;
+        let mut task: TaskInfo = self.load_task_by_id(task_id)?;
 
         if !data.is_object() {
             return Err(TaudError::InvalidData("Invalid task's data".into()))
@@ -226,13 +226,13 @@ impl JsonRpcInterface {
 
         if data.contains_key("assign") {
             let assign = data.get("assign").unwrap().clone();
-            let assign = serde_json::from_value(assign)?;
+            let assign: Vec<String> = serde_json::from_value(assign)?;
             task.set_assign(&assign);
         }
 
         if data.contains_key("project") {
             let project = data.get("project").unwrap().clone();
-            let project = serde_json::from_value(project)?;
+            let project: Vec<String> = serde_json::from_value(project)?;
             task.set_project(&project);
         }
 
@@ -250,7 +250,7 @@ fn from_taud_result(res: TaudResult<Value>, id: Value) -> JsonResult {
                 id,
             )),
             TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e.to_string()), id))
+                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id))
             }
             TaudError::InvalidDueTime => JsonResult::Err(jsonerr(
                 ErrorCode::InvalidParams,
