@@ -1,6 +1,6 @@
 use std::{io, net::SocketAddr, pin::Pin};
 
-use async_std::net::TcpStream;
+use async_std::net::{TcpListener, TcpStream};
 use futures::prelude::*;
 use log::debug;
 use socket2::{Domain, Socket, Type};
@@ -8,14 +8,29 @@ use url::Url;
 
 use super::{Transport, TransportError};
 
+#[derive(Clone)]
 pub struct TcpTransport {
     pub ttl: Option<u32>,
 }
 
 impl Transport for TcpTransport {
-    type Output = TcpStream;
+    type Acceptor = TcpListener;
+    type Connector = TcpStream;
+
     type Error = io::Error;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send>>;
+    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send>>;
+
+    fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
+        if url.scheme() != "tcp" {
+            return Err(TransportError::AddrNotSupported(url))
+        }
+
+        let socket_addr = url.socket_addrs(|| None)?[0];
+        debug!(target: "tcptransport", "listening on {}", socket_addr);
+        Ok(Box::pin(self.do_listen(socket_addr)))
+    }
 
     fn dial(self, url: Url) -> Result<Self::Dial, TransportError<Self::Error>> {
         if url.scheme() != "tcp" {
@@ -42,6 +57,15 @@ impl TcpTransport {
         }
 
         Ok(socket)
+    }
+
+    async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener, io::Error> {
+        let socket = self.create_socket(socket_addr)?;
+        socket.bind(&socket_addr.into())?;
+        // TODO: make backlog configurable
+        socket.listen(1024)?;
+        socket.set_nonblocking(true)?;
+        Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }
 
     async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream, io::Error> {

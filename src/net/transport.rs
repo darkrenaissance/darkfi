@@ -10,9 +10,17 @@ pub use tcp::TcpTransport;
 pub use tls::TlsTransport;
 
 pub trait Transport {
-    type Output;
+    type Acceptor;
+    type Connector;
+
     type Error: Error;
-    type Dial: Future<Output = Result<Self::Output, Self::Error>>;
+
+    type Listener: Future<Output = Result<Self::Acceptor, Self::Error>>;
+    type Dial: Future<Output = Result<Self::Connector, Self::Error>>;
+
+    fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>>
+    where
+        Self: Sized;
 
     fn dial(self, url: Url) -> Result<Self::Dial, TransportError<Self::Error>>
     where
