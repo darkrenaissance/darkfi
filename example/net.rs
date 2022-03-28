@@ -17,7 +17,6 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
 
 struct ProgramOptions {
     network_settings: net::Settings,
-    log_path: Box<std::path::PathBuf>,
 }
 
 #[derive(Parser)]
@@ -35,9 +34,6 @@ pub struct DarkCli {
     ///  connections slots
     #[clap(long)]
     pub connect_slots: Option<u32>,
-    /// Logfile path
-    #[clap(long)]
-    pub log_path: Option<String>,
     /// RPC port
     #[clap(long)]
     pub rpc_port: Option<String>,
@@ -73,12 +69,6 @@ impl ProgramOptions {
             0
         };
 
-        let log_path = Box::new(if let Some(log_path) = programcli.log_path {
-            std::path::PathBuf::from_str(&log_path)?
-        } else {
-            std::path::PathBuf::from_str("hello")?
-        });
-
         Ok(ProgramOptions {
             network_settings: net::Settings {
                 inbound: accept_addr,
@@ -88,7 +78,6 @@ impl ProgramOptions {
                 seeds: seed_addrs,
                 ..Default::default()
             },
-            log_path,
         })
     }
 }

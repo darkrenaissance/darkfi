@@ -34,13 +34,13 @@ impl Blockchain {
     /// A blockchain is considered valid, when every block is valid, based on check_block_validity method.
     pub fn check_chain_validity(&self) {
         for (index, block) in self.blocks[1..].iter().enumerate() {
-            self.check_block_validity(&block, &self.blocks[index])
+            self.check_block_validity(block, &self.blocks[index])
         }
     }
 
     /// Insertion of a valid block.
     pub fn add_block(&mut self, block: &Block) {
-        self.check_block_validity(&block, &self.blocks.last().unwrap());
+        self.check_block_validity(block, self.blocks.last().unwrap());
         self.blocks.push(block.clone());
     }
 

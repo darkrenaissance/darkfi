@@ -1,6 +1,7 @@
+use std::{fs::File, io::BufReader, path::Path};
+
 use chrono::{NaiveDateTime, Utc};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{fs::File, io::BufReader, path::PathBuf};
 
 use crate::{
     util::serial::{SerialDecodable, SerialEncodable},
@@ -8,7 +9,7 @@ use crate::{
 };
 
 /// Util function to load a structure saved as a JSON in the provided path file, using serde crate.
-pub fn load<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
+pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
@@ -17,7 +18,7 @@ pub fn load<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
 }
 
 /// Util function to save a structure as a JSON in the provided path file, using serde crate.
-pub fn save<T: Serialize>(path: &PathBuf, value: &T) -> Result<()> {
+pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let file = File::create(path)?;
     serde_json::to_writer_pretty(file, value)?;
     Ok(())

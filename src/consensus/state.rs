@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    path::PathBuf,
+    path::Path,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -150,10 +150,10 @@ impl State {
         for blockchain in &self.node_blockchains {
             if blockchain.is_notarized() && blockchain.blocks.len() > length {
                 length = blockchain.blocks.len();
-                longest_notarized_chain = &blockchain;
+                longest_notarized_chain = blockchain;
             }
         }
-        &longest_notarized_chain
+        longest_notarized_chain
     }
 
     /// Node receives the proposed block, verifies its sender(epoch leader),
@@ -170,7 +170,7 @@ impl State {
         proposed_block.sl.encode(&mut encoded_block)?;
         proposed_block.txs.encode(&mut encoded_block)?;
         assert!(proposed_block.public_key.verify(&encoded_block[..], &proposed_block.signature));
-        self.vote_block(&proposed_block, leader)
+        self.vote_block(proposed_block, leader)
     }
 
     /// Given a block, node finds which blockchain it extends.
@@ -193,7 +193,7 @@ impl State {
         }
         let blockchain = match index {
             -1 => {
-                let blockchain = Blockchain::new(block.clone());
+                let blockchain = Blockchain::new(block);
                 self.node_blockchains.push(blockchain);
                 self.node_blockchains.last().unwrap()
             }
@@ -254,7 +254,7 @@ impl State {
     /// When a block gets notarized, the transactions it contains are removed from
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the block can finalize parent blocks
-    ///	in its blockchain.
+    /// in its blockchain.
     pub fn receive_vote(&mut self, vote: &Vote, nodes_count: usize) {
         let mut encoded_block = vec![];
         let result = vote.block.encode(&mut encoded_block);
@@ -319,7 +319,7 @@ impl State {
             let mut consecutive_notarized = 0;
             for block in &blockchain.blocks {
                 if block.metadata.sm.notarized {
-                    consecutive_notarized = consecutive_notarized + 1;
+                    consecutive_notarized += 1;
                 } else {
                     break
                 }
@@ -362,27 +362,27 @@ impl State {
     }
 
     /// Util function to save the current node state to provided file path.
-    pub fn save(&self, path: &PathBuf) -> Result<()> {
+    pub fn save(&self, path: &Path) -> Result<()> {
         save::<Self>(path, self)
     }
 
     /// Util function to load current node state by the provided file path.
     //  If file is not found, node state is reset.
-    pub fn load_or_create(id: u64, path: &PathBuf) -> Result<Self> {
+    pub fn load_or_create(id: u64, path: &Path) -> Result<Self> {
         match load::<Self>(path) {
             Ok(state) => Ok(state),
-            Err(_) => return Self::reset(id, path),
+            Err(_) => Self::reset(id, path),
         }
     }
 
     /// Util function to load the current node state by the provided file path.
-    pub fn load_current_state(id: u64, path: &PathBuf) -> Result<StatePtr> {
+    pub fn load_current_state(id: u64, path: &Path) -> Result<StatePtr> {
         let state = Self::load_or_create(id, path)?;
         Ok(Arc::new(RwLock::new(state)))
     }
 
     /// Util function to reset node state.
-    pub fn reset(id: u64, path: &PathBuf) -> Result<State> {
+    pub fn reset(id: u64, path: &Path) -> Result<State> {
         // Genesis block is generated.
         let mut genesis_block = Block::new(
             String::from("⊥"),
@@ -397,8 +397,8 @@ impl State {
 
         let genesis_time = get_current_time();
 
-        let state = Self::new(id, genesis_time, genesis_block.clone());
+        let state = Self::new(id, genesis_time, genesis_block);
         state.save(path)?;
-        return Ok(state)
+        Ok(state)
     }
 }
