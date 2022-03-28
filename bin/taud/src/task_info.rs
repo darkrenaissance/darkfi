@@ -81,6 +81,12 @@ impl TaskInfo {
 
         let id: u32 = find_free_id(&task_ids);
 
+        if let Some(d) = &due {
+            if *d < get_current_time() {
+                return Err(TaudError::InvalidDueTime)
+            }
+        }
+
         Ok(Self {
             ref_id,
             id,
