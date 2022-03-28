@@ -8,7 +8,7 @@ use futures_rustls::{
         client::{ServerCertVerified, ServerCertVerifier},
         kx_group::X25519,
         version::TLS13,
-        Certificate, ClientConfig, RootCertStore, ServerName,
+        Certificate, ClientConfig, ServerName,
     },
     TlsConnector, TlsStream,
 };
@@ -94,7 +94,6 @@ impl TlsTransport {
 
         // TODO: This should be in the struct
         // TODO: Client auth (see upsycle)
-        let root_store = RootCertStore::empty();
         let server_cert_verifier = Arc::new(ServerCertificateVerifier {});
         let config = ClientConfig::builder()
             .with_cipher_suites(&[cipher_suite()])
