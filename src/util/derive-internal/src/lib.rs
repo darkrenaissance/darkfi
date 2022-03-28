@@ -20,7 +20,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
             body.extend(ln);
 
             for field in &fields.named {
-                if let Some(attr) = field.attrs.iter().next() {
+                if let Some(attr) = field.attrs.get(0) {
                     if attr.path.is_ident("skip_serialize") {
                         continue
                     }
@@ -94,38 +94,38 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
 
             for field in &fields.named {
                 let field_name = field.ident.as_ref().unwrap();
-                let delta: TokenStream2;
-                let attr = field.attrs.iter().next();
+                let attr = field.attrs.get(0);
 
-                if attr.is_some() && attr.unwrap().path.is_ident("skip_serialize") {
-                    delta = {
-                        let field_type = &field.ty;
-                        where_clause.predicates.push(
-                            syn::parse2(quote! {
-                                #field_type: core::default::Default
-                            })
-                            .unwrap(),
-                        );
+                let delta: TokenStream2 =
+                    if attr.is_some() && attr.unwrap().path.is_ident("skip_serialize") {
+                        {
+                            let field_type = &field.ty;
+                            where_clause.predicates.push(
+                                syn::parse2(quote! {
+                                    #field_type: core::default::Default
+                                })
+                                .unwrap(),
+                            );
 
-                        quote! {
-                            #field_name: #field_type::default(),
+                            quote! {
+                                #field_name: #field_type::default(),
+                            }
+                        }
+                    } else {
+                        {
+                            let field_type = &field.ty;
+                            where_clause.predicates.push(
+                                syn::parse2(quote! {
+                                    #field_type: #cratename::util::serial::Decodable
+                                })
+                                .unwrap(),
+                            );
+
+                            quote! {
+                                #field_name: #cratename::util::serial::Decodable::decode(&mut d)?,
+                            }
                         }
                     };
-                } else {
-                    delta = {
-                        let field_type = &field.ty;
-                        where_clause.predicates.push(
-                            syn::parse2(quote! {
-                                #field_type: #cratename::util::serial::Decodable
-                            })
-                            .unwrap(),
-                        );
-
-                        quote! {
-                            #field_name: #cratename::util::serial::Decodable::decode(&mut d)?,
-                        }
-                    };
-                }
 
                 body.extend(delta);
             }
