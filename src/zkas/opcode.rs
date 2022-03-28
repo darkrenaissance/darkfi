@@ -25,7 +25,7 @@ pub enum Opcode {
     /// Poseidon hash of N elements
     PoseidonHash = 0x10,
 
-    /// Calculate merkle root given given a position, Merkle path, and an element
+    /// Calculate merkle root  given a position, Merkle path, and an element
     CalculateMerkleRoot = 0x20,
 
     /// Base field element addition
