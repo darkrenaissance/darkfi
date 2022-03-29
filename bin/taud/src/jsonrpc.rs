@@ -45,20 +45,20 @@ impl RequestHandler for JsonRpcInterface {
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
-        match req.method.as_str() {
-            Some("add") => return from_taud_result(self.add(req.params).await, req.id),
-            Some("list") => return from_taud_result(self.list(req.params).await, req.id),
-            Some("update") => return from_taud_result(self.update(req.params).await, req.id),
-            Some("get_state") => return from_taud_result(self.get_state(req.params).await, req.id),
-            Some("set_state") => return from_taud_result(self.set_state(req.params).await, req.id),
-            Some("set_comment") => {
-                return from_taud_result(self.set_comment(req.params).await, req.id)
-            }
-            Some("show") => return from_taud_result(self.show(req.params).await, req.id),
+        let rep = match req.method.as_str() {
+            Some("add") => self.add(req.params).await,
+            Some("list") => self.list(req.params).await,
+            Some("update") => self.update(req.params).await,
+            Some("get_state") => self.get_state(req.params).await,
+            Some("set_state") => self.set_state(req.params).await,
+            Some("set_comment") => self.set_comment(req.params).await,
+            Some("show") => self.show(req.params).await,
             Some(_) | None => {
                 return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
             }
-        }
+        };
+
+        from_taud_result(rep, req.id)
     }
 }
 
