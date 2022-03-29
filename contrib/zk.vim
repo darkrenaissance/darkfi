@@ -1,5 +1,7 @@
 " Syntax highlighting for zkas scripts.
 " Symlink into ~/.vim/syntax/zk.vim
+" Add to your vim init file:
+"   au BufNewFile,BufRead,BufReadPost *.zk set syntax=zk
 
 if exists("b:current_syntax")
     finish
