@@ -54,6 +54,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("set_comment") => {
                 return from_taud_result(self.set_comment(req.params).await, req.id)
             }
+            Some("show") => return from_taud_result(self.show(req.params).await, req.id),
             Some(_) | None => {
                 return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
             }
@@ -72,7 +73,7 @@ impl JsonRpcInterface {
     //      "params":
     //          [{
     //          "title": "..",
-    //          "desc": ".."
+    //          "desc": "..",
     //          assign: [..],
     //          project: [..],
     //          "due": ..,
@@ -180,6 +181,22 @@ impl JsonRpcInterface {
         task.save()?;
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         Ok(json!(true))
+    }
+
+    // RPCAPI:
+    // Show a task by id.
+    // --> {"jsonrpc": "2.0", "method": "show", "params": [task_id], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
+    async fn show(&self, params: Value) -> TaudResult<Value> {
+        let args = params.as_array().unwrap();
+
+        if args.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
+        }
+
+        let task: TaskInfo = self.load_task_by_id(&args[0])?;
+
+        Ok(json!(task))
     }
 
     fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {

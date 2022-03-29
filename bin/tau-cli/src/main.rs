@@ -11,6 +11,7 @@ use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use clap::{CommandFactory, Parser, Subcommand};
 use log::{debug, error};
 use prettytable::{cell, format, row, Cell, Row, Table};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -81,6 +82,26 @@ pub enum CliTauSubCommands {
     },
     /// List open tasks
     List {},
+    /// Show task by ID
+    Show {
+        /// Task ID
+        id: u64,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct TaskInfo {
+    ref_id: String,
+    id: u32,
+    title: String,
+    desc: String,
+    assign: Vec<String>,
+    project: Vec<String>,
+    due: String,
+    rank: u32,
+    created_at: String,
+    events: Vec<Value>,
+    comments: Vec<Value>,
 }
 
 /// Tau cli
@@ -145,8 +166,20 @@ async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
     }
 }
 
+// RPCAPI:
 // Add new task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "add", "params": ["title", "desc", ["assign"], ["project"], "due", "rank"], "id": 1}
+// --> {"jsonrpc": "2.0", "method": "add",
+//      "params":
+//          [{
+//          "title": "..",
+//          "desc": "..",
+//          assign: [..],
+//          project: [..],
+//          "due": ..,
+//          "rank": ..
+//          }],
+//      "id": 1
+//      }
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn add(url: &str, params: Value) -> Result<Value> {
     let req = jsonrpc::request(json!("add"), params);
@@ -190,6 +223,14 @@ async fn get_state(url: &str, id: u64) -> Result<Value> {
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
 async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<Value> {
     let req = jsonrpc::request(json!("set_comment"), json!([id, author, content]));
+    request(req, url.to_string()).await
+}
+
+// Show task by id.
+// --> {"jsonrpc": "2.0", "method": "show", "params": [task_id], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
+async fn show(url: &str, id: u64) -> Result<Value> {
+    let req = jsonrpc::request(json!("show"), json!([id]));
     request(req, url.to_string()).await
 }
 
@@ -260,7 +301,11 @@ async fn start(options: CliTau) -> Result<()> {
 
             let rank = rank.unwrap_or(0);
 
-            add(rpc_addr, json!([title, desc, assign, project, due, rank])).await?;
+            add(
+                rpc_addr,
+                json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
+            )
+            .await?;
         }
 
         Some(CliTauSubCommands::List {}) => {
@@ -368,9 +413,43 @@ async fn start(options: CliTau) -> Result<()> {
                     cmnt.push_str(comment["content"].as_str().unwrap());
                     cmnt.push('\n');
                 }
+                cmnt.pop();
 
                 println!("Comments on Task with id {}:\n{}", id, cmnt);
             }
+        }
+
+        Some(CliTauSubCommands::Show { id }) => {
+            let rep = show(rpc_addr, id).await?;
+            let due = if rep["due"].is_u64() {
+                let timestamp = rep["due"].as_i64().unwrap();
+                NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
+            } else {
+                "".to_string()
+            };
+
+            let created_at = if rep["created_at"].is_u64() {
+                let created = rep["created_at"].as_i64().unwrap();
+                NaiveDateTime::from_timestamp(created, 0).date().format("%A %-d %B").to_string()
+            } else {
+                "".to_string()
+            };
+
+            let t = TaskInfo {
+                ref_id: serde_json::from_value(rep["ref_id"].clone())?,
+                id: serde_json::from_value(rep["id"].clone())?,
+                title: serde_json::from_value(rep["title"].clone())?,
+                desc: serde_json::from_value(rep["desc"].clone())?,
+                assign: serde_json::from_value(rep["assign"].clone())?,
+                project: serde_json::from_value(rep["project"].clone())?,
+                due,
+                rank: serde_json::from_value(rep["rank"].clone())?,
+                created_at,
+                events: serde_json::from_value(rep["events"].clone())?,
+                comments: serde_json::from_value(rep["comments"].clone())?,
+            };
+            // let t: TaskInfo = serde_json::from_value(rep)?;
+            println!("TaskInfo: {}", serde_json::to_string_pretty(&t)?);
         }
 
         _ => {

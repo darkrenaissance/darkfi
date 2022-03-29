@@ -38,13 +38,13 @@ impl Comment {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct TaskEvents(Vec<TaskEvent>);
+pub struct TaskEvents(Vec<TaskEvent>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct TaskComments(Vec<Comment>);
+pub struct TaskComments(Vec<Comment>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct TaskProjects(Vec<String>);
+pub struct TaskProjects(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct TaskAssigns(Vec<String>);
+pub struct TaskAssigns(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
