@@ -12,12 +12,12 @@ SOL = https://github.com/solana-labs/token-list/raw/main/src/tokens/solana.token
 all: $(LISTS)
 
 erc20_token_list.json:
-	$(DLTOOL) $(ERC20) > $@
+	$(DLTOOL) $(ERC20) | jq -r > $@
 
 solana_token_list.json:
 	$(DLTOOL) $(SOL) | sed \
 		-e 's@"symbol": "BTC"@"symbol": "SBTC"@' \
 		-e 's@"symbol": "ETH"@"symbol": "SETH"@' \
-		> $@
+		| jq -r > $@
 
 .PHONY: all $(LISTS)
