@@ -17,10 +17,16 @@ pub struct ProtocolProposal {
     jobsman: ProtocolJobsManagerPtr,
     state: StatePtr,
     p2p: P2pPtr,
+    nodes_count: u64,
 }
 
 impl ProtocolProposal {
-    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: StatePtr,
+        p2p: P2pPtr,
+        nodes_count: u64,
+    ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<BlockProposal>().await;
 
@@ -32,12 +38,11 @@ impl ProtocolProposal {
             jobsman: ProtocolJobsManager::new("ProposalProtocol", channel),
             state,
             p2p,
+            nodes_count,
         })
     }
 
-    // TODO:
-    //      1. Nodes count not hardcoded.
-    //      2. Remove dummy delay.
+    // TODO: 1. Nodes count retrieval.
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolBlock::handle_receive_proposal() [START]");
         loop {
@@ -49,10 +54,9 @@ impl ProtocolProposal {
                 proposal
             );
             let proposal_copy = (*proposal).clone();
-            let nodes_count = 4;
             let vote = self.state.write().unwrap().receive_proposed_block(
                 &proposal_copy,
-                nodes_count,
+                self.nodes_count,
                 false,
             );
             match vote {
@@ -61,7 +65,10 @@ impl ProtocolProposal {
                         debug!("Node did not vote for the proposed block.");
                     } else {
                         let vote = x.unwrap();
-                        self.state.write().unwrap().receive_vote(&vote, nodes_count as usize);
+                        self.state.write().unwrap().receive_vote(&vote, self.nodes_count as usize);
+                        // Broadcasting block to rest nodes
+                        self.p2p.broadcast(proposal_copy).await?;
+                        // Broadcasting vote
                         self.p2p.broadcast(vote).await?;
                     }
                 }

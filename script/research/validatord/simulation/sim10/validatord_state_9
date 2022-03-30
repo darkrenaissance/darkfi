@@ -1,0 +1,31 @@
+{
+  "id": 9,
+  "genesis_time": 1648383795,
+  "secret_key": "22c1a9eae232ec84096c90896e763087a36b3eb55f3de599d5d3f7bba280a11e",
+  "public_key": "ad50d94b531da6864b32bed5001fde813e745841202b45d9f892e05d57593d19",
+  "canonical_blockchain": {
+    "blocks": [
+      {
+        "st": "⊥",
+        "sl": 0,
+        "txs": [],
+        "metadata": {
+          "om": {
+            "proof": "proof",
+            "r": "r",
+            "s": "s"
+          },
+          "sm": {
+            "votes": [],
+            "notarized": true,
+            "finalized": true
+          },
+          "timestamp": 1648383795
+        }
+      }
+    ]
+  },
+  "node_blockchains": [],
+  "unconfirmed_txs": [],
+  "orphan_votes": []
+}

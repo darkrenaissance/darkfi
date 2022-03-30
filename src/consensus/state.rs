@@ -66,8 +66,12 @@ impl State {
 
     /// Node retreives a transaction and append it to the unconfirmed transactions list.
     /// Additional validity rules must be defined by the protocol for transactions.
-    pub fn append_tx(&mut self, tx: Tx) {
+    pub fn append_tx(&mut self, tx: Tx) -> bool {
+        if self.unconfirmed_txs.contains(&tx) {
+            return false
+        }
         self.unconfirmed_txs.push(tx);
+        true
     }
 
     /// Node calculates seconds until next epoch starting time.
@@ -269,14 +273,14 @@ impl State {
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the block can finalize parent blocks
     /// in its blockchain.
-    pub fn receive_vote(&mut self, vote: &Vote, nodes_count: usize) {
+    pub fn receive_vote(&mut self, vote: &Vote, nodes_count: usize) -> bool {
         let mut encoded_block = vec![];
         let result = vote.block.encode(&mut encoded_block);
         match result {
             Ok(_) => (),
             Err(e) => {
                 error!("Block encoding failed. Error: {:?}", e);
-                return
+                return false
             }
         };
         assert!(&vote.node_public_key.verify(&encoded_block[..], &vote.vote));
@@ -286,20 +290,23 @@ impl State {
             if !self.orphan_votes.contains(vote) {
                 self.orphan_votes.push(vote.clone());
             }
-            return
+            return false
         }
 
         let (unwrapped_vote_block, blockchain_index) = vote_block.unwrap();
         if !unwrapped_vote_block.metadata.sm.votes.contains(vote) {
             unwrapped_vote_block.metadata.sm.votes.push(vote.clone());
-        }
 
-        if !unwrapped_vote_block.metadata.sm.notarized &&
-            unwrapped_vote_block.metadata.sm.votes.len() > (2 * nodes_count / 3)
-        {
-            unwrapped_vote_block.metadata.sm.notarized = true;
-            self.check_blockchain_finalization(blockchain_index);
+            if !unwrapped_vote_block.metadata.sm.notarized &&
+                unwrapped_vote_block.metadata.sm.votes.len() > (2 * nodes_count / 3)
+            {
+                unwrapped_vote_block.metadata.sm.notarized = true;
+                self.check_blockchain_finalization(blockchain_index);
+            }
+
+            return true
         }
+        false
     }
 
     /// Node searches it the blockchains it holds for provided block.

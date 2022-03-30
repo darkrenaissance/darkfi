@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use darkfi::{
     consensus::{state::StatePtr, vote::Vote},
     net::{
-        ChannelPtr, MessageSubscription, ProtocolBase, ProtocolBasePtr, ProtocolJobsManager,
-        ProtocolJobsManagerPtr,
+        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     Result,
 };
@@ -16,10 +16,17 @@ pub struct ProtocolVote {
     vote_sub: MessageSubscription<Vote>,
     jobsman: ProtocolJobsManagerPtr,
     state: StatePtr,
+    p2p: P2pPtr,
+    nodes_count: usize,
 }
 
 impl ProtocolVote {
-    pub async fn init(channel: ChannelPtr, state: StatePtr) -> ProtocolBasePtr {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: StatePtr,
+        p2p: P2pPtr,
+        nodes_count: usize,
+    ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Vote>().await;
 
@@ -29,10 +36,12 @@ impl ProtocolVote {
             vote_sub,
             jobsman: ProtocolJobsManager::new("VoteProtocol", channel),
             state,
+            p2p,
+            nodes_count,
         })
     }
 
-    // TODO: 1. Nodes count not hardcoded.
+    // TODO: 1. Nodes count retrieval.
     async fn handle_receive_vote(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolVote::handle_receive_vote() [START]");
         loop {
@@ -44,8 +53,9 @@ impl ProtocolVote {
                 vote
             );
             let vote_copy = (*vote).clone();
-            let nodes_count = 4;
-            self.state.write().unwrap().receive_vote(&vote_copy, nodes_count);
+            if self.state.write().unwrap().receive_vote(&vote_copy, self.nodes_count) {
+                self.p2p.broadcast(vote_copy).await?;
+            };
         }
     }
 }

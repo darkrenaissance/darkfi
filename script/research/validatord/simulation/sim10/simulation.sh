@@ -3,7 +3,7 @@
 # Simulation of the consensus network for n validator nodes.
 # Note: state files should be generated before executing.
 
-nodes=4
+nodes=10
 
 # Copying the node state files with a blockchain containing only the genesis block.
 bound=$(($nodes - 1))

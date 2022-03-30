@@ -81,8 +81,11 @@ struct Opt {
     /// Path to the state file
     state: String,
     #[structopt(long, default_value = "0")]
-    /// How many threads to utilize
+    /// Node ID, used only for testing
     id: u64,
+    #[structopt(long, default_value = "1")]
+    /// Nodes count, used only for testing
+    nodes: u64,
     #[structopt(short, long, default_value = "0")]
     /// How many threads to utilize
     threads: usize,
@@ -91,11 +94,8 @@ struct Opt {
     verbose: u8,
 }
 
-// TODO:
-//      1. Nodes count not hardcoded.
-//      2. Remove dummy delay.
-async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) {
-    let nodes_count = 4;
+// TODO: 1. Nodes count retrieval.
+async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf, nodes_count: u64) {
     // After initialization node should wait for next epoch
     let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
@@ -141,7 +141,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) 
                             }
                         }
                         Err(e) => {
-                            debug!(target: "ircd", "ProtocolBlock::handle_receive_proposal() error prosessing proposal: {:?}", e)
+                            error!("Error prosessing proposal: {:?}", e)
                         }
                     }
                 }
@@ -156,7 +156,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) 
         match result {
             Ok(()) => (),
             Err(e) => {
-                debug!(target: "ircd", "ProtocolVote::handle_receive_proposal() error saving state: {:?}", e)
+                error!("State could not be flushed: {:?}", e)
             }
         };
     }
@@ -182,6 +182,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     // State setup
     let state_path = expand_path(&opts.state).unwrap();
     let id = opts.id.clone();
+    let nodes_count = opts.nodes.clone();
     let state = State::load_current_state(id, &state_path).unwrap();
 
     // P2P registry setup
@@ -191,27 +192,31 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     // Adding ProtocolTx to the registry
     let state2 = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, _p2p| {
+        .register(net::SESSION_ALL, move |channel, p2p| {
             let state = state2.clone();
-            async move { ProtocolTx::init(channel, state).await }
+            async move { ProtocolTx::init(channel, state, p2p).await }
         })
         .await;
 
     // Adding PropotolVote to the registry
     let state2 = state.clone();
+    let nodes_count2 = nodes_count.clone() as usize;
     registry
-        .register(net::SESSION_ALL, move |channel, _p2p| {
+        .register(net::SESSION_ALL, move |channel, p2p| {
             let state = state2.clone();
-            async move { ProtocolVote::init(channel, state).await }
+            let nodes_count = nodes_count2.clone();
+            async move { ProtocolVote::init(channel, state, p2p, nodes_count).await }
         })
         .await;
 
     // Adding ProtocolProposal to the registry
     let state2 = state.clone();
+    let nodes_count2 = nodes_count.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let state = state2.clone();
-            async move { ProtocolProposal::init(channel, state, p2p).await }
+            let nodes_count = nodes_count2.clone();
+            async move { ProtocolProposal::init(channel, state, p2p, nodes_count).await }
         })
         .await;
 
@@ -240,7 +245,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task(p2p, state, &state_path).await;
+    proposal_task(p2p, state, &state_path, nodes_count).await;
 
     Ok(())
 }

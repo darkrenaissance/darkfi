@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use darkfi::{
     consensus::{state::StatePtr, tx::Tx},
     net::{
-        ChannelPtr, MessageSubscription, ProtocolBase, ProtocolBasePtr, ProtocolJobsManager,
-        ProtocolJobsManagerPtr,
+        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     Result,
 };
@@ -16,16 +16,22 @@ pub struct ProtocolTx {
     tx_sub: MessageSubscription<Tx>,
     jobsman: ProtocolJobsManagerPtr,
     state: StatePtr,
+    p2p: P2pPtr,
 }
 
 impl ProtocolTx {
-    pub async fn init(channel: ChannelPtr, state: StatePtr) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Tx>().await;
 
         let tx_sub = channel.subscribe_msg::<Tx>().await.expect("Missing Tx dispatcher!");
 
-        Arc::new(Self { tx_sub, jobsman: ProtocolJobsManager::new("TxProtocol", channel), state })
+        Arc::new(Self {
+            tx_sub,
+            jobsman: ProtocolJobsManager::new("TxProtocol", channel),
+            state,
+            p2p,
+        })
     }
 
     async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
@@ -39,7 +45,9 @@ impl ProtocolTx {
                 tx
             );
             let tx_copy = (*tx).clone();
-            self.state.write().unwrap().append_tx(tx_copy.clone());
+            if self.state.write().unwrap().append_tx(tx_copy.clone()) {
+                self.p2p.broadcast(tx_copy).await?;
+            }
         }
     }
 }
