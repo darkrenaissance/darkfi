@@ -318,7 +318,14 @@ async fn start(options: CliTau) -> Result<()> {
             let mut tasks = rep.as_array().unwrap().to_owned();
             tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
 
-            let max_rank = if !tasks.is_empty() { tasks[0]["rank"].as_f64().unwrap() } else { 0.0 };
+            let (max_rank, min_rank) = if !tasks.is_empty() {
+                (
+                    tasks[0]["rank"].as_f64().unwrap(),
+                    tasks.last().unwrap()["rank"].as_f64().unwrap(),
+                )
+            } else {
+                (0.0, 0.0)
+            };
 
             for task in tasks {
                 let project = task["project"].as_array().unwrap();
@@ -356,8 +363,10 @@ async fn start(options: CliTau) -> Result<()> {
                     Cell::new(&date),
                     if rank == max_rank {
                         Cell::new(&rank.to_string()).style_spec("bFC")
-                    } else {
+                    } else if rank == min_rank {
                         Cell::new(&rank.to_string()).style_spec("Fb")
+                    } else {
+                        Cell::new(&rank.to_string()).style_spec("Fc")
                     },
                 ]));
             }
