@@ -86,17 +86,25 @@ pub fn slice_to_i64_le(slice: &[u8]) -> i64 {
 pub fn i64_to_array_le(val: i64) -> [u8; 8] {
     u64_to_array_le(val as u64)
 }
-
 #[inline]
 pub fn f64_to_array_le(val: f64) -> [u8; 8] {
-    assert_eq!(::std::mem::size_of::<f64>(), 8); // size_of isn't a constfn in 1.22
+    assert_eq!(::std::mem::size_of::<f64>(), 8);
     val.to_le_bytes()
 }
-
 #[inline]
 pub fn slice_to_f64_le(slice: &[u8; 8]) -> f64 {
     assert_eq!(slice.len(), ::std::mem::size_of::<f64>());
     f64::from_le_bytes(*slice)
+}
+#[inline]
+pub fn f32_to_array_le(val: f32) -> [u8; 4] {
+    assert_eq!(::std::mem::size_of::<f32>(), 4);
+    val.to_le_bytes()
+}
+#[inline]
+pub fn slice_to_f32_le(slice: &[u8; 4]) -> f32 {
+    assert_eq!(slice.len(), ::std::mem::size_of::<f32>());
+    f32::from_le_bytes(*slice)
 }
 
 macro_rules! define_chunk_slice_to_int {

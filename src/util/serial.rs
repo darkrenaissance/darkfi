@@ -75,6 +75,8 @@ pub trait WriteExt {
 
     /// Output a 64-bit float
     fn write_f64(&mut self, v: f64) -> Result<()>;
+    /// Output a 32-bit float
+    fn write_f32(&mut self, v: f32) -> Result<()>;
 
     /// Output a boolean
     fn write_bool(&mut self, v: bool) -> Result<()>;
@@ -107,6 +109,8 @@ pub trait ReadExt {
 
     /// Read a 64-bit float
     fn read_f64(&mut self) -> Result<f64>;
+    /// Read a 32-bit float
+    fn read_f32(&mut self) -> Result<f32>;
 
     /// Read a boolean
     fn read_bool(&mut self) -> Result<bool>;
@@ -145,6 +149,7 @@ impl<W: Write> WriteExt for W {
     encoder_fn!(write_i32, i32, i32_to_array_le);
     encoder_fn!(write_i16, i16, i16_to_array_le);
     encoder_fn!(write_f64, f64, f64_to_array_le);
+    encoder_fn!(write_f32, f32, f32_to_array_le);
 
     #[inline]
     fn write_i8(&mut self, v: i8) -> Result<()> {
@@ -173,6 +178,7 @@ impl<R: Read> ReadExt for R {
     decoder_fn!(read_i32, i32, slice_to_i32_le, 4);
     decoder_fn!(read_i16, i16, slice_to_i16_le, 2);
     decoder_fn!(read_f64, f64, slice_to_f64_le, 8);
+    decoder_fn!(read_f32, f32, slice_to_f32_le, 4);
 
     #[inline]
     fn read_u8(&mut self) -> Result<u8> {
@@ -329,6 +335,20 @@ impl Encodable for f64 {
     fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize> {
         s.write_f64(*self)?;
         Ok(mem::size_of::<f64>())
+    }
+}
+
+impl Decodable for f32 {
+    #[inline]
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        ReadExt::read_f32(&mut d)
+    }
+}
+impl Encodable for f32 {
+    #[inline]
+    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize> {
+        s.write_f32(*self)?;
+        Ok(mem::size_of::<f32>())
     }
 }
 
@@ -699,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_float64_test() {
+    fn serialize_float_test() {
         // f64
         assert_eq!(serialize(&1.5f64), vec![0u8, 0, 0, 0, 0, 0, 248, 63]);
         assert_eq!(serialize(&256.7f64), vec![51u8, 51, 51, 51, 51, 11, 112, 64]);
@@ -719,6 +739,19 @@ mod tests {
             serialize(&-723401728380766730.894612f64),
             vec![20u8, 20, 20, 20, 20, 20, 164, 195]
         );
+        // f32
+        assert_eq!(serialize(&1.5f32), vec![0u8, 0, 192, 63]);
+        assert_eq!(serialize(&256.7f32), vec![154u8, 89, 128, 67]);
+        assert_eq!(serialize(&5000.21f32), vec![174u8, 65, 156, 69]);
+        assert_eq!(serialize(&500000.3f32), vec![10u8, 36, 244, 72]);
+        assert_eq!(serialize(&1102021.1f32), vec![41u8, 134, 134, 73]);
+        assert_eq!(serialize(&72340172838076673.9f32), vec![129u8, 128, 128, 91]);
+        assert_eq!(serialize(&-1.5f32), vec![0u8, 0, 192, 191]);
+        assert_eq!(serialize(&-256.7f32), vec![154u8, 89, 128, 195]);
+        assert_eq!(serialize(&-5000.21f32), vec![174u8, 65, 156, 197]);
+        assert_eq!(serialize(&-500000.3f32), vec![10u8, 36, 244, 200]);
+        assert_eq!(serialize(&-1102021.1f32), vec![41u8, 134, 134, 201]);
+        assert_eq!(serialize(&-72340172838076673.9f32), vec![129u8, 128, 128, 219]);
     }
 
     #[test]
