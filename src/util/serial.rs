@@ -73,6 +73,9 @@ pub trait WriteExt {
     /// Output a 8-bit int
     fn write_i8(&mut self, v: i8) -> Result<()>;
 
+    /// Output a 64-bit float
+    fn write_f64(&mut self, v: f64) -> Result<()>;
+
     /// Output a boolean
     fn write_bool(&mut self, v: bool) -> Result<()>;
 
@@ -101,6 +104,9 @@ pub trait ReadExt {
     fn read_i16(&mut self) -> Result<i16>;
     /// Read a 8-bit int
     fn read_i8(&mut self) -> Result<i8>;
+
+    /// Read a 64-bit float
+    fn read_f64(&mut self) -> Result<f64>;
 
     /// Read a boolean
     fn read_bool(&mut self) -> Result<bool>;
@@ -138,6 +144,7 @@ impl<W: Write> WriteExt for W {
     encoder_fn!(write_i64, i64, i64_to_array_le);
     encoder_fn!(write_i32, i32, i32_to_array_le);
     encoder_fn!(write_i16, i16, i16_to_array_le);
+    encoder_fn!(write_f64, f64, f64_to_array_le);
 
     #[inline]
     fn write_i8(&mut self, v: i8) -> Result<()> {
@@ -165,6 +172,7 @@ impl<R: Read> ReadExt for R {
     decoder_fn!(read_i64, i64, slice_to_i64_le, 8);
     decoder_fn!(read_i32, i32, slice_to_i32_le, 4);
     decoder_fn!(read_i16, i16, slice_to_i16_le, 2);
+    decoder_fn!(read_f64, f64, slice_to_f64_le, 8);
 
     #[inline]
     fn read_u8(&mut self) -> Result<u8> {
@@ -307,6 +315,20 @@ impl Decodable for VarInt {
             }
             n => Ok(VarInt(n as u64)),
         }
+    }
+}
+
+impl Decodable for f64 {
+    #[inline]
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        ReadExt::read_f64(&mut d)
+    }
+}
+impl Encodable for f64 {
+    #[inline]
+    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize> {
+        s.write_f64(*self)?;
+        Ok(mem::size_of::<f64>())
     }
 }
 

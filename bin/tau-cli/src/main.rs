@@ -43,7 +43,7 @@ pub enum CliTauSubCommands {
         due: Option<String>,
         /// Project rank
         #[clap(short, long)]
-        rank: Option<u32>,
+        rank: Option<f64>,
     },
     /// Update/Edit an existing task by ID
     Update {
@@ -299,7 +299,7 @@ async fn start(options: CliTau) -> Result<()> {
                 None => None,
             };
 
-            let rank = rank.unwrap_or(0);
+            let rank = rank.unwrap_or(0.0);
 
             add(
                 rpc_addr,
@@ -316,9 +316,9 @@ async fn start(options: CliTau) -> Result<()> {
             table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
             let mut tasks = rep.as_array().unwrap().to_owned();
-            tasks.sort_by(|a, b| b["rank"].as_u64().cmp(&a["rank"].as_u64()));
+            tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
 
-            let max_rank = if !tasks.is_empty() { tasks[0]["rank"].as_u64().unwrap() } else { 0 };
+            let max_rank = if !tasks.is_empty() { tasks[0]["rank"].as_f64().unwrap() } else { 0.0 };
 
             for task in tasks {
                 let project = task["project"].as_array().unwrap();
@@ -346,7 +346,7 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                let rank = task["rank"].as_u64().unwrap_or(0);
+                let rank = task["rank"].as_f64().unwrap_or(0.0);
 
                 table.add_row(Row::new(vec![
                     Cell::new(&task["id"].to_string()),

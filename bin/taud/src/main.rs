@@ -134,7 +134,7 @@ mod tests {
         // load and save TaskInfo
         ///////////////////////
 
-        let mut task = TaskInfo::new("test_title", "test_desc", None, 0, &settings)?;
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0.0, &settings)?;
 
         task.save()?;
 
@@ -174,7 +174,7 @@ mod tests {
         // activate task
         ///////////////////////
 
-        let task = TaskInfo::new("test_title_3", "test_desc", None, 0, &settings)?;
+        let task = TaskInfo::new("test_title_3", "test_desc", None, 0.0, &settings)?;
 
         task.save()?;
 

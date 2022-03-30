@@ -55,7 +55,7 @@ pub struct TaskInfo {
     assign: TaskAssigns,
     project: TaskProjects,
     due: Option<Timestamp>,
-    rank: u32,
+    rank: f64,
     created_at: Timestamp,
     events: TaskEvents,
     comments: TaskComments,
@@ -68,7 +68,7 @@ impl TaskInfo {
         title: &str,
         desc: &str,
         due: Option<Timestamp>,
-        rank: u32,
+        rank: f64,
         settings: &Settings,
     ) -> TaudResult<Self> {
         // generate ref_id
@@ -160,7 +160,7 @@ impl TaskInfo {
         self.comments.0.push(c);
     }
 
-    pub fn set_rank(&mut self, r: u32) {
+    pub fn set_rank(&mut self, r: f64) {
         self.rank = r;
     }
 
