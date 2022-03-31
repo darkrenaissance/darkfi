@@ -29,6 +29,10 @@ impl<T: Ord + Clone + Debug> GSet<T> {
         debug!(target: "crdt", "GSet merge a set of len: {:?}", other.len());
         other.set.iter().for_each(|e| self.insert(e))
     }
+
+    pub fn get_set(&self) -> BTreeSet<T> {
+        self.set.clone()
+    }
 }
 
 impl<T: Ord + Clone + Debug> Default for GSet<T> {

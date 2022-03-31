@@ -6,7 +6,7 @@ use log::debug;
 
 use darkfi::{net, Result};
 
-use super::{Event, GSet};
+use super::{Event, EventCommand, GSet};
 
 pub struct ProtocolCrdt {
     jobsman: net::ProtocolJobsManagerPtr,
@@ -47,6 +47,14 @@ impl ProtocolCrdt {
                 "ProtocolCrdt::handle_receive_event() received {:?}",
                 event
             );
+
+            if event.command == EventCommand::Sync {
+                let gset = self.gset.lock().await;
+                for e in gset.get_set() {
+                    self.p2p.broadcast(e.clone()).await?;
+                }
+                continue
+            }
 
             if self.gset.lock().await.contains(&event) {
                 continue

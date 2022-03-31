@@ -48,7 +48,9 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let p2p_settings = P2pSettings::default();
 
-    let node = Node::new("node", p2p_settings).await;
+    let (node_snd, node_rcv) = async_channel::unbounded::<Vec<u8>>();
+
+    let node = Node::new("node", p2p_settings, node_snd).await;
 
     let ex2 = executor.clone();
     let node2 = node.clone();
@@ -77,10 +79,18 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
         }
     });
 
+    let recv_update_from_node: smol::Task<Result<()>> = executor.spawn(async move {
+        loop {
+            let payload = node_rcv.recv().await?;
+            // XXX
+        }
+    });
+
     listen_and_serve(server_config, rpc_interface, executor).await?;
 
     crdt_task.cancel().await;
     recv_update_from_rpc.cancel().await;
+    recv_update_from_node.cancel().await;
     Ok(())
 }
 

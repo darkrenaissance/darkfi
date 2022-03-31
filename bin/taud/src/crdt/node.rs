@@ -16,10 +16,15 @@ pub struct Node {
     // a counter for the node
     time: Mutex<u64>,
     p2p: net::P2pPtr,
+    notifier: async_channel::Sender<Vec<u8>>,
 }
 
 impl Node {
-    pub async fn new(name: &str, net_settings: net::Settings) -> Arc<Self> {
+    pub async fn new(
+        name: &str,
+        net_settings: net::Settings,
+        notifier: async_channel::Sender<Vec<u8>>,
+    ) -> Arc<Self> {
         debug!(target: "crdt", "Node::new() [BEGIN]");
         let p2p = net::P2p::new(net_settings).await;
         Arc::new(Self {
@@ -27,6 +32,7 @@ impl Node {
             gset: Arc::new(Mutex::new(GSet::new())),
             time: Mutex::new(0),
             p2p,
+            notifier,
         })
     }
 
@@ -55,10 +61,12 @@ impl Node {
         p2p.clone().start(executor.clone()).await?;
         // Actual main p2p session
 
-        let recv_task = executor.spawn(async move {
+        let recv_task: smol::Task<Result<()>> = executor.spawn(async move {
             loop {
                 if let Ok(event) = rcv.recv().await {
                     self.clone().receive_event(&event).await;
+                    let payload = event.get_value()?;
+                    self.notifier.send(payload).await?;
                 }
             }
         });
@@ -92,7 +100,7 @@ impl Node {
             event_time = *time;
         }
 
-        let event = Event::new(value, event_time, self.name.clone());
+        let event = Event::new_update_event(value, event_time, self.name.clone());
         debug!(target: "crdt", "Node create new event: {:?}", event);
 
         {
@@ -100,6 +108,16 @@ impl Node {
         }
 
         debug!(target: "crdt", "Node broadcast the event: {:?}", event);
+        self.p2p.broadcast(event).await?;
+
+        Ok(())
+    }
+
+    pub async fn sync(self: Arc<Self>) -> Result<()> {
+        debug!(target: "crdt", "Node create new sync event");
+        let event = Event::new_sync_event(self.name.clone());
+
+        debug!(target: "crdt", "Node broadcast the sync event");
         self.p2p.broadcast(event).await?;
 
         Ok(())
