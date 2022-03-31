@@ -16,6 +16,9 @@ $$sn_c=PRF_{root_{sk}^{COIN}}^{sn}(\rho_c)$$
 $$\rho=\eta^{sk_{sl}^{COIN}}$$
 $\eta$ is is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. $\emph{ptr}$ is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
 
+## st transactions
+the blockchain view is a chain of blocks, each block $B_j=(tx_{lead},st)$, while st being the merkle tree structure of the validated transactions received through the network, that include transfer, and public transactions.
+
 ## LEAD statement
 for $x=(cm_{c_2},sn_{c_1},\eta,sl,\rho,h,ptr,\mu_{\rho},\mu_{y},root)$, and
 $w=(path,root_{sk^{COIN}},path_{sk^{COIN}},\tau_c,\rho_c,r_{c_1},v,r_{c_2})$
@@ -58,12 +61,12 @@ w = (root_{sk_{c_1}^{COIN}},path_{sk_{c_1}^{COIN}},root_{sk_{c_2}^{COIN}},path_{
 $\pi$ is a proof for the following transfer statement using zerocash pouring mechanism.
 
 $$\forall_i \in \{1,2\}: pk_{c_i}^{COIN} = PRF_{root_{sk_{c_i}}^{COIN}}^{pk}(1)$$
-$$\forall_i \in \{1,\dots,4\} : DeCoom(cm_{c_i},pk_{c_i}^{COIN}||v_i||\rho_{c_i},r_{c_i})=T$$
-$$v_1+v_2+v_3+v_4$$
+$$\forall_i \in \{1,\dots,4\} : DeComm(cm_{c_i},pk_{c_i}^{COIN}||v_i||\rho_{c_i},r_{c_i})=T$$
+$$v_1+v_2=v_3+v_4$$
 
 $$path_1\text{ is a valid path to } cm_{c_1} \text{ in a tree with the root} \emph{ root}$$
 
-$$path_2\text{ is a valid path to } cm_{c_2} \text{ in a tree with the root} \emph{ root}$$
+$$path_2\text{ is a valid path to } cm_{c_2} \text{ in a tree with the root} \emph{ root}, sn_{c_2}=PRF_{root_{sk_{c_1}^{COIN}}}^{zdrv}(\rho_{c_1})$$
 
 $$path_{sk_{c_i}^{COIN}} \text{ is a valid path to a leaf at position } \tau \text{ in }, root_{sk_{c_i}^{COIN}} i \in \{1,2\}$$
 
