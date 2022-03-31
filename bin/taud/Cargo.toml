@@ -29,3 +29,7 @@ thiserror = "1.0.24"
 # Encoding and parsing
 serde_json = "1.0.79"
 serde = {version = "1.0.136", features = ["derive"]}
+
+# Database
+sqlx = { version = "0.5.11", features = [ "runtime-async-std-native-tls" ] }
+

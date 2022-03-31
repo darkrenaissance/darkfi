@@ -6091,6 +6091,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "smol",
+ "sqlx",
  "thiserror",
 ]
 
