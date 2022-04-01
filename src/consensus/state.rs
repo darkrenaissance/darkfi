@@ -2,7 +2,7 @@ use chrono::{NaiveDateTime, Utc};
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, BTreeMap},
     hash::{Hash, Hasher},
     path::Path,
     sync::{Arc, RwLock},
@@ -22,6 +22,7 @@ use rand::rngs::OsRng;
 use super::{
     block::{proposal_eq_block, Block, BlockProposal},
     blockchain::Blockchain,
+    participant::Participant,
     tx::Tx,
     util::{get_current_time, load, save, Timestamp},
     vote::Vote,
@@ -46,6 +47,8 @@ pub struct State {
     pub node_blockchains: Vec<Blockchain>,
     pub unconfirmed_txs: Vec<Tx>,
     pub orphan_votes: Vec<Vote>,
+    pub participants: BTreeMap<u64, Participant>,
+    pub pending_participants: Vec<Participant>,
 }
 
 impl State {
@@ -61,6 +64,8 @@ impl State {
             node_blockchains: Vec::new(),
             unconfirmed_txs: Vec::new(),
             orphan_votes: Vec::new(),
+            participants: BTreeMap::new(),
+            pending_participants: Vec::new(),
         }
     }
 
@@ -96,16 +101,18 @@ impl State {
 
     /// Node finds epochs leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating in the network.
-    pub fn get_epoch_leader(&self, nodes_count: u64) -> u64 {
+    pub fn get_epoch_leader(&mut self) -> u64 {
         let epoch = self.get_current_epoch();
         let mut hasher = DefaultHasher::new();
         epoch.hash(&mut hasher);
-        hasher.finish() % nodes_count
+        self.zero_participants_check();
+        let pos = hasher.finish() % (self.participants.len() as u64);
+        self.participants.iter().nth(pos as usize).unwrap().1.id
     }
 
     /// Node checks if they are the current epoch leader.
-    pub fn check_if_epoch_leader(&self, nodes_count: u64) -> bool {
-        let leader = self.get_epoch_leader(nodes_count);
+    pub fn check_if_epoch_leader(&mut self) -> bool {
+        let leader = self.get_epoch_leader();
         self.id == leader
     }
 
@@ -167,10 +174,9 @@ impl State {
     pub fn receive_proposed_block(
         &mut self,
         proposed_block: &BlockProposal,
-        nodes_count: u64,
         leader: bool,
     ) -> Result<Option<Vote>> {
-        assert!(self.get_epoch_leader(nodes_count) == proposed_block.id);
+        assert!(self.get_epoch_leader() == proposed_block.id);
         let mut encoded_block = vec![];
         proposed_block.st.encode(&mut encoded_block)?;
         proposed_block.sl.encode(&mut encoded_block)?;
@@ -183,6 +189,7 @@ impl State {
     /// If block extends the canonical blockchain, a new fork blockchain is created.
     /// Node votes on the block, only if it extends the longest notarized chain it has seen.
     pub fn vote_block(&mut self, proposal: &BlockProposal, leader: bool) -> Result<Option<Vote>> {
+        self.zero_participants_check();
         let mut block = Block::new(
             proposal.st.clone(),
             proposal.sl,
@@ -190,6 +197,7 @@ impl State {
             String::from("proof"),
             String::from("r"),
             String::from("s"),
+            self.participants.values().cloned().collect(),
         );
 
         // Add orphan votes
@@ -273,7 +281,7 @@ impl State {
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the block can finalize parent blocks
     /// in its blockchain.
-    pub fn receive_vote(&mut self, vote: &Vote, nodes_count: usize) -> bool {
+    pub fn receive_vote(&mut self, vote: &Vote) -> bool {
         let mut encoded_block = vec![];
         let result = vote.block.encode(&mut encoded_block);
         match result {
@@ -284,6 +292,10 @@ impl State {
             }
         };
         assert!(&vote.node_public_key.verify(&encoded_block[..], &vote.vote));
+
+        let nodes_count = self.participants.len();
+        self.zero_participants_check();
+
         let vote_block = self.find_block(&vote.block);
         if vote_block == None {
             debug!("Received vote for unknown block.");
@@ -303,6 +315,11 @@ impl State {
                 unwrapped_vote_block.metadata.sm.notarized = true;
                 self.check_blockchain_finalization(blockchain_index);
             }
+
+            // updating participant vote
+            let mut participant = self.participants.get(&vote.id).unwrap().clone();
+            participant.voted = Some(vote.block.sl);
+            self.participants.insert(participant.id, participant);
 
             return true
         }
@@ -396,6 +413,56 @@ impl State {
         }
     }
 
+    /// Node retreives a new participant and appends it to the pending participants list.
+    pub fn append_participant(&mut self, participant: Participant) -> bool {
+        if self.pending_participants.contains(&participant) {
+            return false
+        }
+        self.pending_participants.push(participant);
+        true
+    }
+
+    /// This prevent the extreme case scenario where network is initialized, but some nodes
+    /// have not pushed the initial participants in the map.
+    pub fn zero_participants_check(&mut self) {
+        if self.participants.len() == 0 {
+            for participant in &self.pending_participants {
+                self.participants.insert(participant.id, participant.clone());
+            }
+            self.pending_participants = Vec::new();
+        }
+    }
+
+    /// Node refreshes participants map, to retain only the active ones.
+    /// Active nodes are considered those who joined or voted on previous epoch.
+    pub fn refresh_participants(&mut self) {
+        // adding pending participants
+        for participant in &self.pending_participants {
+            self.participants.insert(participant.id, participant.clone());
+        }
+        self.pending_participants = Vec::new();
+
+        let mut inactive = Vec::new();
+        let previous_epoch = self.get_current_epoch() - 1;
+        for (index, participant) in self.participants.clone().iter() {
+            match participant.voted {
+                Some(epoch) => {
+                    if epoch < previous_epoch {
+                        inactive.push(index.clone());
+                    }
+                }
+                None => {
+                    if participant.joined < previous_epoch {
+                        inactive.push(index.clone());
+                    }
+                }
+            }
+        }
+        for index in inactive {
+            self.participants.remove(&index);
+        }
+    }
+
     /// Util function to save the current node state to provided file path.
     pub fn save(&self, path: &Path) -> Result<()> {
         save::<Self>(path, self)
@@ -426,6 +493,7 @@ impl State {
             String::from("proof"),
             String::from("r"),
             String::from("s"),
+            vec![],
         );
         genesis_block.metadata.sm.notarized = true;
         genesis_block.metadata.sm.finalized = true;

@@ -17,16 +17,10 @@ pub struct ProtocolVote {
     jobsman: ProtocolJobsManagerPtr,
     state: StatePtr,
     p2p: P2pPtr,
-    nodes_count: usize,
 }
 
 impl ProtocolVote {
-    pub async fn init(
-        channel: ChannelPtr,
-        state: StatePtr,
-        p2p: P2pPtr,
-        nodes_count: usize,
-    ) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Vote>().await;
 
@@ -37,11 +31,9 @@ impl ProtocolVote {
             jobsman: ProtocolJobsManager::new("VoteProtocol", channel),
             state,
             p2p,
-            nodes_count,
         })
     }
 
-    // TODO: 1. Nodes count retrieval.
     async fn handle_receive_vote(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolVote::handle_receive_vote() [START]");
         loop {
@@ -53,7 +45,7 @@ impl ProtocolVote {
                 vote
             );
             let vote_copy = (*vote).clone();
-            if self.state.write().unwrap().receive_vote(&vote_copy, self.nodes_count) {
+            if self.state.write().unwrap().receive_vote(&vote_copy) {
                 self.p2p.broadcast(vote_copy).await?;
             };
         }

@@ -18,7 +18,8 @@
           "sm": {
             "votes": [],
             "notarized": true,
-            "finalized": true
+            "finalized": true,
+            "participants": []
           },
           "timestamp": 1648383795
         }
@@ -27,5 +28,7 @@
   },
   "node_blockchains": [],
   "unconfirmed_txs": [],
-  "orphan_votes": []
+  "orphan_votes": [],
+  "participants": {},
+  "pending_participants": []
 }

@@ -13,6 +13,7 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     consensus::{
+        participant::Participant,
         state::{State, StatePtr},
         tx::Tx,
     },
@@ -35,7 +36,8 @@ use darkfi::{
 };
 
 use validatord::protocols::{
-    protocol_proposal::ProtocolProposal, protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
+    protocol_participant::ProtocolParticipant, protocol_proposal::ProtocolProposal,
+    protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -83,9 +85,6 @@ struct Opt {
     #[structopt(long, default_value = "0")]
     /// Node ID, used only for testing
     id: u64,
-    #[structopt(long, default_value = "1")]
-    /// Nodes count, used only for testing
-    nodes: u64,
     #[structopt(short, long, default_value = "0")]
     /// How many threads to utilize
     threads: usize,
@@ -94,15 +93,26 @@ struct Opt {
     verbose: u8,
 }
 
-// TODO: 1. Nodes count retrieval.
-async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf, nodes_count: u64) {
+async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) {
+    // Node signals the network that it starts participating
+    let participant =
+        Participant::new(state.read().unwrap().id, state.read().unwrap().get_current_epoch());
+    state.write().unwrap().append_participant(participant.clone());
+    let result = p2p.broadcast(participant).await;
+    match result {
+        Ok(()) => info!("Participation message broadcasted successfuly."),
+        Err(e) => error!("Broadcast failed. Error: {:?}", e),
+    }
+
     // After initialization node should wait for next epoch
     let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
 
     loop {
-        let result = if state.read().unwrap().check_if_epoch_leader(nodes_count) {
+        state.write().unwrap().refresh_participants();
+
+        let result = if state.write().unwrap().check_if_epoch_leader() {
             state.read().unwrap().propose_block()
         } else {
             Ok(None)
@@ -114,18 +124,14 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf, 
                 } else {
                     let unwrapped = proposal.unwrap();
                     info!("Node is the epoch leader. Proposed block: {:?}", unwrapped);
-                    let vote = state.write().unwrap().receive_proposed_block(
-                        &unwrapped,
-                        nodes_count,
-                        true,
-                    );
+                    let vote = state.write().unwrap().receive_proposed_block(&unwrapped, true);
                     match vote {
                         Ok(x) => {
                             if x.is_none() {
                                 debug!("Node did not vote for the proposed block.");
                             } else {
                                 let vote = x.unwrap();
-                                state.write().unwrap().receive_vote(&vote, nodes_count as usize);
+                                state.write().unwrap().receive_vote(&vote);
                                 // Broadcasting block
                                 let result = p2p.broadcast(unwrapped).await;
                                 match result {
@@ -149,9 +155,6 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf, 
             Err(e) => error!("Broadcast failed. Error: {:?}", e),
         }
 
-        let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
-        info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
-        thread::sleep(seconds_until_next_epoch);
         let result = state.read().unwrap().save(state_path);
         match result {
             Ok(()) => (),
@@ -159,6 +162,9 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf, 
                 error!("State could not be flushed: {:?}", e)
             }
         };
+        let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
+        info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+        thread::sleep(seconds_until_next_epoch);
     }
 }
 
@@ -182,7 +188,6 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     // State setup
     let state_path = expand_path(&opts.state).unwrap();
     let id = opts.id.clone();
-    let nodes_count = opts.nodes.clone();
     let state = State::load_current_state(id, &state_path).unwrap();
 
     // P2P registry setup
@@ -200,23 +205,28 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
 
     // Adding PropotolVote to the registry
     let state2 = state.clone();
-    let nodes_count2 = nodes_count.clone() as usize;
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let state = state2.clone();
-            let nodes_count = nodes_count2.clone();
-            async move { ProtocolVote::init(channel, state, p2p, nodes_count).await }
+            async move { ProtocolVote::init(channel, state, p2p).await }
         })
         .await;
 
     // Adding ProtocolProposal to the registry
     let state2 = state.clone();
-    let nodes_count2 = nodes_count.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let state = state2.clone();
-            let nodes_count = nodes_count2.clone();
-            async move { ProtocolProposal::init(channel, state, p2p, nodes_count).await }
+            async move { ProtocolProposal::init(channel, state, p2p).await }
+        })
+        .await;
+
+    // Adding ProtocolParticipant to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = state2.clone();
+            async move { ProtocolParticipant::init(channel, state, p2p).await }
         })
         .await;
 
@@ -245,7 +255,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task(p2p, state, &state_path, nodes_count).await;
+    proposal_task(p2p, state, &state_path).await;
 
     Ok(())
 }

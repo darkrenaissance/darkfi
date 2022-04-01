@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
-use super::{metadata::Metadata, tx::Tx};
+use super::{metadata::Metadata, participant::Participant, tx::Tx};
 
 use crate::{
     crypto::{keypair::PublicKey, schnorr::Signature},
@@ -24,8 +24,16 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(st: String, sl: u64, txs: Vec<Tx>, proof: String, r: String, s: String) -> Block {
-        Block { st, sl, txs, metadata: Metadata::new(proof, r, s) }
+    pub fn new(
+        st: String,
+        sl: u64,
+        txs: Vec<Tx>,
+        proof: String,
+        r: String,
+        s: String,
+        participants: Vec<Participant>,
+    ) -> Block {
+        Block { st, sl, txs, metadata: Metadata::new(proof, r, s, participants) }
     }
 }
 

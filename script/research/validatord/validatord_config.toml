@@ -43,7 +43,3 @@ state = "~/.config/darkfi/validatord_state_0"
 
 # Node ID, used only for testing
 id = 0
-
-# Nodes count, used only for testing
-nodes = 1
-

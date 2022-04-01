@@ -17,16 +17,10 @@ pub struct ProtocolProposal {
     jobsman: ProtocolJobsManagerPtr,
     state: StatePtr,
     p2p: P2pPtr,
-    nodes_count: u64,
 }
 
 impl ProtocolProposal {
-    pub async fn init(
-        channel: ChannelPtr,
-        state: StatePtr,
-        p2p: P2pPtr,
-        nodes_count: u64,
-    ) -> ProtocolBasePtr {
+    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<BlockProposal>().await;
 
@@ -38,11 +32,9 @@ impl ProtocolProposal {
             jobsman: ProtocolJobsManager::new("ProposalProtocol", channel),
             state,
             p2p,
-            nodes_count,
         })
     }
 
-    // TODO: 1. Nodes count retrieval.
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolBlock::handle_receive_proposal() [START]");
         loop {
@@ -54,18 +46,14 @@ impl ProtocolProposal {
                 proposal
             );
             let proposal_copy = (*proposal).clone();
-            let vote = self.state.write().unwrap().receive_proposed_block(
-                &proposal_copy,
-                self.nodes_count,
-                false,
-            );
+            let vote = self.state.write().unwrap().receive_proposed_block(&proposal_copy, false);
             match vote {
                 Ok(x) => {
                     if x.is_none() {
                         debug!("Node did not vote for the proposed block.");
                     } else {
                         let vote = x.unwrap();
-                        self.state.write().unwrap().receive_vote(&vote, self.nodes_count as usize);
+                        self.state.write().unwrap().receive_vote(&vote);
                         // Broadcasting block to rest nodes
                         self.p2p.broadcast(proposal_copy).await?;
                         // Broadcasting vote

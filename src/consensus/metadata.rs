@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
+    participant::Participant,
     util::{get_current_time, Timestamp},
     vote::Vote,
 };
@@ -19,10 +20,10 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn new(proof: String, r: String, s: String) -> Metadata {
+    pub fn new(proof: String, r: String, s: String, participants: Vec<Participant>) -> Metadata {
         Metadata {
             om: OuroborosMetadata::new(proof, r, s),
-            sm: StreamletMetadata::new(),
+            sm: StreamletMetadata::new(participants),
             timestamp: get_current_time(),
         }
     }
@@ -54,10 +55,12 @@ pub struct StreamletMetadata {
     pub notarized: bool,
     /// Block finalization flag
     pub finalized: bool,
+    /// Nodes participated in the voting process
+    pub participants: Vec<Participant>,
 }
 
 impl StreamletMetadata {
-    pub fn new() -> StreamletMetadata {
-        StreamletMetadata { votes: Vec::new(), notarized: false, finalized: false }
+    pub fn new(participants: Vec<Participant>) -> StreamletMetadata {
+        StreamletMetadata { votes: Vec::new(), notarized: false, finalized: false, participants }
     }
 }

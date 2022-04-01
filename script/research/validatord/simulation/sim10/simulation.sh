@@ -16,7 +16,7 @@ done
 pids=()
 
 # Starting node 0 (seed) in background
-cargo run -- --nodes $nodes &
+cargo run -- &
 pids[${#pids[@]}]=$!
 
 # Waiting for seed to setup
@@ -26,7 +26,7 @@ sleep 2
 bound=$(($nodes-2))
 for i in $(eval echo "{1..$bound}")
 do
-  cargo run -- --accept 0.0.0.0:1100$i --seeds 127.0.0.1:11000 --rpc 127.0.0.1:666$i --external 127.0.0.1:1100$i --id $i --state ~/.config/darkfi/validatord_state_$i --nodes $nodes &
+  cargo run -- --accept 0.0.0.0:1100$i --seeds 127.0.0.1:11000 --rpc 127.0.0.1:666$i --external 127.0.0.1:1100$i --id $i --state ~/.config/darkfi/validatord_state_$i &
   pids[${#pids[@]}]=$!
   # waiting for node to setup
   sleep 2
@@ -45,7 +45,7 @@ function ctrl_c() {
 
 bound=$(($nodes-1))
 # Starting last node
-cargo run -- --accept 0.0.0.0:1100$bound --seeds 127.0.0.1:11000 --rpc 127.0.0.1:666$bound --external 127.0.0.1:1100$bound --id 3 --state ~/.config/darkfi/validatord_state_$bound --nodes $nodes
+cargo run -- --accept 0.0.0.0:1100$bound --seeds 127.0.0.1:11000 --rpc 127.0.0.1:666$bound --external 127.0.0.1:1100$bound --id $bound --state ~/.config/darkfi/validatord_state_$bound
 
 # Node states are flushed on each node state file at epoch end (every 2 minutes).
 # To sugmit a TX, telnet to a node and push the json as per following example:
