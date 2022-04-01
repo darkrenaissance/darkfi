@@ -43,7 +43,7 @@ pub enum CliTauSubCommands {
         due: Option<String>,
         /// Project rank
         #[clap(short, long)]
-        rank: Option<f64>,
+        rank: Option<f32>,
     },
     /// Update/Edit an existing task by ID
     Update {
@@ -98,7 +98,7 @@ struct TaskInfo {
     assign: Vec<String>,
     project: Vec<String>,
     due: String,
-    rank: u32,
+    rank: f32,
     created_at: String,
     events: Vec<Value>,
     comments: Vec<Value>,
@@ -246,6 +246,10 @@ async fn start(options: CliTau) -> Result<()> {
                 if &t[(t.len() - 1)..] == "\n" {
                     t.pop();
                 }
+                if t.is_empty() {
+                    error!("You can't have a task without a title");
+                    return Err(Error::OperationFailed)
+                }
                 Some(t)
             } else {
                 title
@@ -315,20 +319,20 @@ async fn start(options: CliTau) -> Result<()> {
             table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
             table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
-            let mut tasks = rep.as_array().unwrap().to_owned();
+            let mut tasks: Vec<Value> = serde_json::from_value(rep)?;
             tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
 
             let (max_rank, min_rank) = if !tasks.is_empty() {
                 (
-                    tasks[0]["rank"].as_f64().unwrap(),
-                    tasks.last().unwrap()["rank"].as_f64().unwrap(),
+                    serde_json::from_value(tasks[0]["rank"].clone())?,
+                    serde_json::from_value(tasks[tasks.len() - 1]["rank"].clone())?,
                 )
             } else {
                 (0.0, 0.0)
             };
 
             for task in tasks {
-                let project = task["project"].as_array().unwrap();
+                let project: Vec<Value> = serde_json::from_value(task["project"].clone())?;
                 let mut projects = String::new();
                 for (i, _) in project.iter().enumerate() {
                     if !projects.is_empty() {
@@ -337,7 +341,7 @@ async fn start(options: CliTau) -> Result<()> {
                     projects.push_str(project.index(i).as_str().unwrap());
                 }
 
-                let assign = task["assign"].as_array().unwrap();
+                let assign: Vec<Value> = serde_json::from_value(task["assign"].clone())?;
                 let mut asgn = String::new();
                 for (i, _) in assign.iter().enumerate() {
                     if !asgn.is_empty() {
@@ -353,7 +357,7 @@ async fn start(options: CliTau) -> Result<()> {
                     "".to_string()
                 };
 
-                let rank = task["rank"].as_f64().unwrap_or(0.0);
+                let rank = task["rank"].as_f64().unwrap_or(0.0) as f32;
 
                 table.add_row(Row::new(vec![
                     Cell::new(&task["id"].to_string()),
@@ -381,7 +385,7 @@ async fn start(options: CliTau) -> Result<()> {
                     json!(due_as_timestamp(value))
                 }
                 "rank" => {
-                    json!(value.parse::<u64>()?)
+                    json!(value.parse::<f32>()?)
                 }
                 "project" | "assign" => {
                     json!(value.split(',').collect::<Vec<&str>>())
@@ -400,7 +404,7 @@ async fn start(options: CliTau) -> Result<()> {
 
         Some(CliTauSubCommands::GetState { id }) => {
             let state = get_state(rpc_addr, id).await?;
-            println!("Task with id: {} is {}", id, state);
+            println!("Task with id {} is: {}", id, state);
         }
 
         Some(CliTauSubCommands::SetComment { id, author, content }) => {
@@ -409,17 +413,18 @@ async fn start(options: CliTau) -> Result<()> {
 
         Some(CliTauSubCommands::GetComment { id }) => {
             let rep = list(rpc_addr, json!([])).await?;
-            let tasks = rep.as_array().unwrap();
+            let tasks: Vec<Value> = serde_json::from_value(rep)?;
 
             if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
                 let index: usize = (id - 1).try_into().unwrap();
-                let comments = tasks[index]["comments"].as_array().unwrap();
+                let comments: Vec<Value> =
+                    serde_json::from_value(tasks[index]["comments"].clone())?;
                 let mut cmnt = String::new();
 
                 for comment in comments {
-                    cmnt.push_str(comment["author"].as_str().unwrap());
+                    cmnt.push_str(comment["author"].as_str().ok_or(Error::OperationFailed)?);
                     cmnt.push_str(": ");
-                    cmnt.push_str(comment["content"].as_str().unwrap());
+                    cmnt.push_str(comment["content"].as_str().ok_or(Error::OperationFailed)?);
                     cmnt.push('\n');
                 }
                 cmnt.pop();

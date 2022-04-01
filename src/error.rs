@@ -25,6 +25,9 @@ pub enum Error {
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
 
+    #[error(transparent)]
+    ParseFloatError(#[from] std::num::ParseFloatError),
+
     #[cfg(feature = "util")]
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),

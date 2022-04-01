@@ -33,7 +33,7 @@ pub struct BaseTaskInfo {
     assign: Vec<String>,
     project: Vec<String>,
     due: Option<Timestamp>,
-    rank: f64,
+    rank: f32,
 }
 
 #[async_trait]
@@ -231,7 +231,7 @@ impl JsonRpcInterface {
 
         if data.contains_key("rank") {
             let rank = data.get("rank").unwrap().clone();
-            let rank: f64 = serde_json::from_value(rank)?;
+            let rank: f32 = serde_json::from_value(rank)?;
             task.set_rank(rank);
         }
 
