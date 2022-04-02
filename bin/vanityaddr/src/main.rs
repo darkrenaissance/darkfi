@@ -6,13 +6,16 @@ use rand::rngs::OsRng;
 use rayon::prelude::*;
 use serde_json::json;
 
-use darkfi::crypto::{
-    address::Address,
-    keypair::{Keypair, SecretKey},
+use darkfi::{
+    cli_desc,
+    crypto::{
+        address::Address,
+        keypair::{Keypair, SecretKey},
+    },
 };
 
 #[derive(Parser)]
-#[clap(name = "vanityaddr", about, version)]
+#[clap(name = "vanityaddr", about = cli_desc!(), version)]
 #[clap(arg_required_else_help(true))]
 struct Args {
     /// Prefixes to search (must start with 1)

@@ -6,12 +6,15 @@ use std::{
 
 use clap::Parser as ClapParser;
 
-use darkfi::zkas::{
-    analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
+use darkfi::{
+    cli_desc,
+    zkas::{
+        analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
+    },
 };
 
 #[derive(clap::Parser)]
-#[clap(name = "zkas", about, version)]
+#[clap(name = "zkas", about = cli_desc!(), version)]
 struct Args {
     /// Place the output into <FILE>
     #[clap(short = 'o', value_name = "FILE")]
