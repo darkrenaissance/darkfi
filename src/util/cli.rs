@@ -97,3 +97,14 @@ impl TryFrom<UrlConfig> for url::Url {
         Ok(url)
     }
 }
+
+pub const ANSI_LOGO: &str = include_str!("../../contrib/darkfi.ansi");
+
+#[macro_export]
+macro_rules! cli_desc {
+    () => {{
+        let mut desc = env!("CARGO_PKG_DESCRIPTION").to_string();
+        desc.push_str(darkfi::util::cli::ANSI_LOGO);
+        Box::leak(desc.into_boxed_str()) as &'static str
+    }};
+}
