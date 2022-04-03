@@ -200,6 +200,10 @@ blockchain = [
     "net",
 ]
 
+blockchain2 = [
+    "sled",
+]
+
 system = [
     "fxhash",
     "rand",

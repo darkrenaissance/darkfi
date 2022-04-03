@@ -4,6 +4,9 @@ pub use error::{Error, Result};
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
 
+#[cfg(feature = "blockchain2")]
+pub mod blockchain2;
+
 #[cfg(feature = "blockchain")]
 pub mod consensus;
 

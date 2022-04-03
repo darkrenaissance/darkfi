@@ -218,6 +218,10 @@ pub enum Error {
     #[cfg(feature = "wasm-runtime")]
     #[error("wasm runtime out of memory")]
     WasmerOomError,
+
+    #[cfg(feature = "blockchain2")]
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
 }
 
 #[cfg(feature = "node")]
