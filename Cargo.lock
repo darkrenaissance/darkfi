@@ -849,7 +849,7 @@ dependencies = [
  "async-trait",
  "bdk",
  "bitcoin",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -974,9 +974,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.6"
+version = "3.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
+checksum = "71c47df61d9e16dc010b55dba1952a57d8c215dbb533fd13cdd13369aac73b1c"
 dependencies = [
  "atty",
  "bitflags",
@@ -991,9 +991,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.1.4"
+version = "3.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da95d038ede1a964ce99f49cbe27a7fb538d1da595e4b4f70b8c8f338d17bf16"
+checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -1516,7 +1516,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -1564,7 +1564,7 @@ dependencies = [
  "bs58",
  "bytes",
  "chrono",
- "clap 3.1.6",
+ "clap 3.1.8",
  "crypto_api_chachapoly",
  "darkfi-derive",
  "darkfi-derive-internal",
@@ -1642,7 +1642,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "fxhash",
@@ -1910,7 +1910,7 @@ version = "0.3.0"
 dependencies = [
  "async-channel",
  "async-std",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "fxhash",
@@ -1937,7 +1937,7 @@ name = "drk"
 version = "0.3.0"
 dependencies = [
  "async-std",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "log",
  "prettytable-rs",
@@ -2517,7 +2517,7 @@ dependencies = [
  "async-channel",
  "async-executor",
  "async-std",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "log",
@@ -2995,7 +2995,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -6057,7 +6057,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "chrono",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -6080,7 +6080,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "chrono",
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
  "easy-parallel",
  "futures",
@@ -6574,7 +6574,7 @@ name = "vanityaddr"
 version = "0.3.0"
 dependencies = [
  "bs58",
- "clap 3.1.6",
+ "clap 3.1.8",
  "ctrlc",
  "darkfi",
  "indicatif 0.17.0-rc.9",
@@ -7239,7 +7239,7 @@ dependencies = [
 name = "zkas"
 version = "0.3.0"
 dependencies = [
- "clap 3.1.6",
+ "clap 3.1.8",
  "darkfi",
 ]
 

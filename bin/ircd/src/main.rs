@@ -1,173 +1,184 @@
-use async_std::io::BufReader;
-use std::{
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
-extern crate clap;
+use async_channel::Receiver;
 use async_executor::Executor;
-use async_trait::async_trait;
+use async_std::net::{TcpListener, TcpStream};
+use clap::Parser;
 use easy_parallel::Parallel;
-use futures::{AsyncBufReadExt, AsyncReadExt, FutureExt};
+use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
-use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use smol::Async;
 
 use darkfi::{
-    net,
-    rpc::{
-        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
-        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
-    },
+    cli_desc, net,
+    rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::cli::log_config,
     Error, Result,
 };
 
-mod irc_server;
-mod privmsg;
-mod program_options;
-mod protocol_privmsg;
+pub(crate) mod proto;
+pub(crate) mod rpc;
+pub(crate) mod server;
 
 use crate::{
-    irc_server::IrcServerConnection,
-    privmsg::{PrivMsg, SeenPrivMsgIds, SeenPrivMsgIdsPtr},
-    program_options::ProgramOptions,
-    protocol_privmsg::ProtocolPrivMsg,
+    proto::privmsg::{Privmsg, ProtocolPrivmsg, SeenPrivmsgIds, SeenPrivmsgIdsPtr},
+    rpc::JsonRpcInterface,
+    server::IrcServerConnection,
 };
 
-async fn process(
-    recvr: async_channel::Receiver<Arc<PrivMsg>>,
-    stream: Async<TcpStream>,
-    peer_addr: SocketAddr,
-    p2p: net::P2pPtr,
-    seen_privmsg_ids: SeenPrivMsgIdsPtr,
-    _executor: Arc<Executor<'_>>,
-) -> Result<()> {
-    let (reader, writer) = stream.split();
+#[derive(Parser)]
+#[clap(name = "ircd", about = cli_desc!(), version)]
+struct Args {
+    /// Accept address
+    #[clap(short, long)]
+    accept: Option<SocketAddr>,
 
-    let mut reader = BufReader::new(reader);
-    let mut connection = IrcServerConnection::new(writer, seen_privmsg_ids);
+    /// Seed node (repeatable)
+    #[clap(short, long)]
+    seed: Vec<SocketAddr>,
 
-    loop {
-        let mut line = String::new();
-        futures::select! {
-            privmsg = recvr.recv().fuse() => {
-                let privmsg = privmsg.expect("internal message queue error");
-                debug!("ABOUT TO SEND {:?}", privmsg);
-                let irc_msg = format!(
-                    ":{}!darkfi@127.0.0.1 PRIVMSG {} :{}\n",
-                    privmsg.nickname,
-                    privmsg.channel,
-                    privmsg.message
-                );
+    /// Manual connection (repeatable)
+    #[clap(short, long)]
+    connect: Vec<SocketAddr>,
 
-                connection.reply(&irc_msg).await?;
-            }
-            err = reader.read_line(&mut line).fuse() => {
-                if let Err(err) = err {
-                    warn!("Read line error. Closing stream for {}: {}", peer_addr, err);
-                    return Ok(())
-                }
-                process_user_input(line, peer_addr, &mut connection, p2p.clone()).await?;
-            }
-        };
-    }
+    /// Connection slots
+    #[clap(long, default_value_t = 0)]
+    slots: u32,
+
+    /// External address
+    #[clap(short, long)]
+    external: Option<SocketAddr>,
+
+    /// IRC listen address
+    #[clap(short = 'r', long, default_value = "127.0.0.1:6667")]
+    irc: SocketAddr,
+
+    /// RPC listen address
+    #[clap(long, default_value = "127.0.0.1:8000")]
+    rpc: SocketAddr,
+
+    /// Verbosity level
+    #[clap(short, parse(from_occurrences))]
+    verbose: u8,
 }
 
 async fn process_user_input(
     mut line: String,
     peer_addr: SocketAddr,
-    connection: &mut IrcServerConnection,
+    conn: &mut IrcServerConnection,
     p2p: net::P2pPtr,
 ) -> Result<()> {
     if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
         return Err(Error::ChannelStopped)
     }
-    assert!(&line[(line.len() - 1)..] == "\n");
-    // Remove the \n character
+
+    assert!(&line[(line.len() - 2)..] == "\r\n");
+    // Remove CRLF
+    line.pop();
     line.pop();
 
     debug!("Received '{}' from {}", line, peer_addr);
 
-    if let Err(err) = connection.update(line, p2p.clone()).await {
-        warn!("Connection error: {} for {}", err, peer_addr);
+    if let Err(e) = conn.update(line, p2p.clone()).await {
+        warn!("Connection error: {} for {}", e, peer_addr);
         return Err(Error::ChannelStopped)
     }
 
     Ok(())
 }
 
-async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let listener = match Async::<TcpListener>::bind(options.irc_accept_addr) {
-        Ok(listener) => listener,
-        Err(err) => {
-            error!("Bind listener failed: {}", err);
-            return Err(Error::OperationFailed)
-        }
-    };
-    let local_addr = match listener.get_ref().local_addr() {
-        Ok(addr) => addr,
-        Err(err) => {
-            error!("Failed to get local address: {}", err);
-            return Err(Error::OperationFailed)
-        }
-    };
+async fn process(
+    receiver: Receiver<Arc<Privmsg>>,
+    stream: TcpStream,
+    peer_addr: SocketAddr,
+    p2p: net::P2pPtr,
+    seen_privmsg_ids: SeenPrivmsgIdsPtr,
+) -> Result<()> {
+    let (reader, writer) = stream.split();
+
+    let mut reader = BufReader::new(reader);
+    let mut conn = IrcServerConnection::new(writer, seen_privmsg_ids);
+
+    loop {
+        let mut line = String::new();
+        futures::select! {
+            privmsg = receiver.recv().fuse() => {
+                let msg = privmsg.expect("internal message queue error");
+                debug!("ABOUT TO SEND: {:?}", msg);
+                let irc_msg = format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
+                    msg.nickname,
+                    msg.channel,
+                    msg.message,
+                );
+
+                conn.reply(&irc_msg).await?;
+            }
+
+            err = reader.read_line(&mut line).fuse() => {
+                if let Err(e) = err {
+                    warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
+                    return Ok(())
+                }
+
+                process_user_input(line, peer_addr, &mut conn, p2p.clone()).await?;
+            }
+        };
+    }
+}
+
+async fn start(executor: Arc<Executor<'_>>, args: Args, net_settings: net::Settings) -> Result<()> {
+    let listener = TcpListener::bind(args.irc).await?;
+    let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
-    let server_config = RpcServerConfig {
-        socket_addr: options.rpc_listen_addr,
+    let rpc_config = RpcServerConfig {
+        socket_addr: args.rpc,
+        // TODO: Use net/transport:
         use_tls: false,
-        // this is all random filler that is meaningless bc tls is disabled
         identity_path: Default::default(),
         identity_pass: Default::default(),
     };
 
-    let seen_privmsg_ids = SeenPrivMsgIds::new();
+    //
+    // Privmsg protocol
+    //
+    let seen_privmsg_ids = SeenPrivmsgIds::new();
+    let seen_privmsg_ids_clone = seen_privmsg_ids.clone();
 
-    //
-    // PrivMsg protocol
-    //
-    let p2p = net::P2p::new(options.network_settings).await;
+    let (sender, receiver) = async_channel::unbounded();
+    let sender_clone = sender.clone();
+
+    let p2p = net::P2p::new(net_settings).await;
     let registry = p2p.protocol_registry();
-
-    let (sender, recvr) = async_channel::unbounded();
-    let seen_privmsg_ids2 = seen_privmsg_ids.clone();
-    let sender2 = sender.clone();
     registry
         .register(!net::SESSION_SEED, move |channel, p2p| {
-            let sender = sender2.clone();
-            let seen_privmsg_ids = seen_privmsg_ids2.clone();
-            async move { ProtocolPrivMsg::init(channel, sender, seen_privmsg_ids, p2p).await }
+            let sender = sender_clone.clone();
+            let seen_privmsg_ids = seen_privmsg_ids_clone.clone();
+            async move { ProtocolPrivmsg::init(channel, sender, seen_privmsg_ids, p2p).await }
         })
         .await;
 
     //
-    // p2p network main instance
+    // P2P network main instance
     //
-    // Performs seed session
     p2p.clone().start(executor.clone()).await?;
-    // Actual main p2p session
-    let ex2 = executor.clone();
-    let p2p2 = p2p.clone();
+    let executor_clone = executor.clone();
+    let p2p_clone = p2p.clone();
     executor
         .spawn(async move {
-            if let Err(err) = p2p2.run(ex2).await {
-                error!("Error: p2p run failed {}", err);
+            if let Err(e) = p2p_clone.run(executor_clone).await {
+                error!("P2P run failed: {}", e);
             }
         })
         .detach();
 
     //
     // RPC interface
-    //
-    let ex2 = executor.clone();
-    let ex3 = ex2.clone();
-    let rpc_interface =
-        Arc::new(JsonRpcInterface { p2p: p2p.clone(), rpc_listen_addr: options.rpc_listen_addr });
+    let executor_clone = executor.clone();
+    let rpc_interface = Arc::new(JsonRpcInterface { p2p: p2p.clone(), addr: args.rpc });
     executor
-        .spawn(async move { listen_and_serve(server_config, rpc_interface, ex3).await })
+        .spawn(async move { listen_and_serve(rpc_config, rpc_interface, executor_clone.clone()).await })
         .detach();
 
     //
@@ -176,81 +187,51 @@ async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<(
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),
-            Err(err) => {
-                error!("Error listening for connections: {}", err);
+            Err(e) => {
+                error!("Failed listening for connections: {}", e);
                 return Err(Error::ServiceStopped)
             }
         };
+
         info!("Accepted client: {}", peer_addr);
 
-        let p2p2 = p2p.clone();
-        let ex2 = executor.clone();
+        let p2p_clone = p2p.clone();
         executor
-            .spawn(process(recvr.clone(), stream, peer_addr, p2p2, seen_privmsg_ids.clone(), ex2))
+            .spawn(process(
+                receiver.clone(),
+                stream,
+                peer_addr,
+                p2p_clone,
+                seen_privmsg_ids.clone(),
+            ))
             .detach();
     }
 }
 
-struct JsonRpcInterface {
-    p2p: net::P2pPtr,
-    rpc_listen_addr: SocketAddr,
-}
-
-#[async_trait]
-impl RequestHandler for JsonRpcInterface {
-    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
-        if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
-        }
-
-        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
-
-        match req.method.as_str() {
-            Some("ping") => return self.pong(req.id, req.params).await,
-            Some("get_info") => return self.get_info(req.id, req.params).await,
-            Some(_) | None => return JsonResult::Err(jsonerr(MethodNotFound, None, req.id)),
-        }
-    }
-}
-
-impl JsonRpcInterface {
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResult::Resp(jsonresp(json!("pong"), id))
-    }
-
-    //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
-    async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        let resp = self.p2p.get_info().await;
-        JsonResult::Resp(jsonresp(resp, id))
-    }
-}
-
 fn main() -> Result<()> {
-    let options = ProgramOptions::load()?;
+    let args = Args::parse();
 
-    let verbosity_level = options.app.occurrences_of("verbose");
+    let (lvl, conf) = log_config(args.verbose.into())?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let (lvl, cfg) = log_config(verbosity_level)?;
-
-    TermLogger::init(lvl, cfg, TerminalMode::Mixed, ColorChoice::Auto)?;
+    let net_settings = net::Settings {
+        inbound: args.accept,
+        outbound_connections: args.slots,
+        external_addr: args.external,
+        peers: args.connect.clone(),
+        seeds: args.seed.clone(),
+        ..Default::default()
+    };
 
     let ex = Arc::new(Executor::new());
+    let ex_clone = ex.clone();
     let (signal, shutdown) = async_channel::unbounded::<()>();
-
-    let ex2 = ex.clone();
-
-    // let nthreads = num_cpus::get();
-    // debug!(target: "IRC DAEMON", "Run {} executor threads", nthreads);
-
     let (_, result) = Parallel::new()
         .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex2.clone(), options).await?;
+                start(ex_clone.clone(), args, net_settings).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })

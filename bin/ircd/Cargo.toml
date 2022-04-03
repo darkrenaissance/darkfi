@@ -1,13 +1,15 @@
 [package]
 name = "ircd"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "P2P IRC daemon"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
 
-[dependencies.darkfi]
-path = "../../"
-features = ["net", "rpc"]
-
 [dependencies]
+darkfi = {path = "../../", features = ["net", "rpc"]}
 # Async
 smol = "1.2.5"
 futures = "0.3.21"
@@ -21,7 +23,7 @@ easy-parallel = "3.2.0"
 rand = "0.8.5"
 
 # Misc
-clap = "3.1.6"
+clap = {version = "3.1.8", features = ["derive"]}
 log = "0.4.16"
 simplelog = "0.12.0-alpha1"
 fxhash = "0.2.1"
