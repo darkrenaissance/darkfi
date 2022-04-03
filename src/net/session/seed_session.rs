@@ -62,12 +62,10 @@ impl SeedSession {
                 }
             })
             .await;
-        match result {
-            Ok(_) => {}
-            Err(_) => {
-                error!("Querying seeds timed out");
-                return Err(Error::OperationFailed)
-            }
+
+        if let Err(_) = result {
+            error!("Querying seeds timed out");
+            return Err(Error::OperationFailed)
         }
 
         // Seed process complete
@@ -118,22 +116,22 @@ impl SeedSession {
 
     // Starts keep-alive messages and seed protocol.
     /*async fn attach_protocols(
-        self: Arc<Self>,
-        channel: ChannelPtr,
-        hosts: HostsPtr,
-        settings: SettingsPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
-        protocol_ping.start(executor.clone()).await;
+      self: Arc<Self>,
+      channel: ChannelPtr,
+      hosts: HostsPtr,
+      settings: SettingsPtr,
+      executor: Arc<Executor<'_>>,
+      ) -> Result<()> {
+      let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
+      protocol_ping.start(executor.clone()).await;
 
-        let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());
-        // This will block until seed process is complete
-        protocol_seed.start(executor.clone()).await?;
+      let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());
+    // This will block until seed process is complete
+    protocol_seed.start(executor.clone()).await?;
 
-        channel.stop().await;
+    channel.stop().await;
 
-        Ok(())
+    Ok(())
     }*/
 }
 

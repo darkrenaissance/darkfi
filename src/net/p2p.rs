@@ -20,7 +20,7 @@ use crate::{
 /// List of channels that are awaiting connection.
 pub type PendingChannels = Mutex<FxHashSet<SocketAddr>>;
 /// List of connected channels.
-pub type ConnectedChannels<T> = Mutex<fxhash::FxHashMap<SocketAddr, Arc<T>>>;
+pub type ConnectedChannels = Mutex<fxhash::FxHashMap<SocketAddr, Arc<Channel>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
@@ -53,7 +53,7 @@ impl fmt::Display for P2pState {
 /// Top level peer-to-peer networking interface.
 pub struct P2p {
     pending: PendingChannels,
-    channels: ConnectedChannels<Channel>,
+    channels: ConnectedChannels,
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     // Used both internally and externally
     stop_subscriber: SubscriberPtr<Error>,
