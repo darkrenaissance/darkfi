@@ -201,7 +201,10 @@ blockchain = [
 ]
 
 blockchain2 = [
+    "blake3",
     "sled",
+
+    "util",
 ]
 
 system = [
