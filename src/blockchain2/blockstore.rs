@@ -1,3 +1,5 @@
+use sled::Batch;
+
 use crate::{
     util::serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     Result,
@@ -32,11 +34,14 @@ impl BlockStore {
     /// The blocks are hashed with blake3 and this blockhash is used as
     // the key, where value is the serialized block itself.
     pub fn insert(&self, blocks: Vec<Block>) -> Result<()> {
+        let mut batch = Batch::default();
         for i in &blocks {
             let serialized = serialize(i);
             let blockhash = blake3::hash(&serialized);
-            self.0.insert(blockhash.as_bytes(), serialized)?;
+            batch.insert(blockhash.as_bytes(), serialized);
         }
+
+        self.0.apply_batch(batch)?;
 
         Ok(())
     }
