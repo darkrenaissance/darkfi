@@ -112,4 +112,23 @@ impl BlockStore {
 
         Ok(None)
     }
+
+    /// Retrieve an iterator over a range of blockhashes.
+    /// Usage:
+    /// ```
+    /// let mut r = get_range(foo, bar);
+    /// while let Some((k, v)) = r.next() {
+    ///     let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
+    ///     let block = deserialize(&v)?;
+    /// }
+    /// ```
+    /// When iterating, take care of potential memory limitations if you're
+    /// storing results in memory. For blockchain sync, it should probably
+    /// be done in chunks.
+    pub fn get_range(&self, start: blake3::Hash, end: blake3::Hash) -> sled::Iter {
+        let start: &[u8] = start.as_bytes().as_ref();
+        let end: &[u8] = end.as_bytes().as_ref();
+
+        self.0.range(start..end)
+    }
 }
