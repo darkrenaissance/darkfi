@@ -8,7 +8,7 @@ nodes=4
 bound=$(($nodes - 1))
 for i in $(eval echo "{0..$bound}")
 do
-  rmdir ~/.config/darkfi/validatord_db_$i
+  rm -rf ~/.config/darkfi/validatord_db_$i
 done
 
 # PIDs array
