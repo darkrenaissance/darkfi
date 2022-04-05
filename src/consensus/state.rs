@@ -1,10 +1,8 @@
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error};
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
     hash::{Hash, Hasher},
-    path::Path,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -14,8 +12,8 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
-    util::serial::Encodable,
-    Result,
+    util::serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
+    Error, Result,
 };
 use rand::rngs::OsRng;
 
@@ -24,11 +22,12 @@ use super::{
     blockchain::Blockchain,
     participant::Participant,
     tx::Tx,
-    util::{get_current_time, load, save, Timestamp},
+    util::Timestamp,
     vote::Vote,
 };
 
 const DELTA: u64 = 60;
+const SLED_STATE_TREE: &[u8] = b"_state";
 
 /// Atomic pointer to state.
 pub type StatePtr = Arc<RwLock<State>>;
@@ -37,7 +36,7 @@ pub type StatePtr = Arc<RwLock<State>>;
 /// Each node is numbered and has a secret-public keys pair, to sign messages.
 /// Nodes hold a set of Blockchains(some of which are not notarized)
 /// and a set of unconfirmed pending transactions.
-#[derive(Deserialize, Serialize)]
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct State {
     pub id: u64,
     pub genesis_time: Timestamp,
@@ -464,27 +463,34 @@ impl State {
     }
 
     /// Util function to save the current node state to provided file path.
-    pub fn save(&self, path: &Path) -> Result<()> {
-        save::<Self>(path, self)
+    pub fn save(&self, db: &sled::Db) -> Result<()> {
+        let tree = db.open_tree(SLED_STATE_TREE).unwrap();
+        let serialized = serialize(self);
+        match tree.insert(self.id.to_ne_bytes(), serialized) {
+            Err(_) => Err(Error::OperationFailed),
+            _ => Ok(()),
+        }
     }
 
     /// Util function to load current node state by the provided file path.
     //  If file is not found, node state is reset.
-    pub fn load_or_create(id: u64, path: &Path) -> Result<Self> {
-        match load::<Self>(path) {
-            Ok(state) => Ok(state),
-            Err(_) => Self::reset(id, path),
+    pub fn load_or_create(genesis: i64, id: u64, db: &sled::Db) -> Result<State> {
+        let tree = db.open_tree(SLED_STATE_TREE).unwrap();
+        if let Some(found) = tree.get(id.to_ne_bytes()).unwrap() {
+            Ok(deserialize(&found).unwrap())
+        } else {
+            Self::reset(genesis, id, db)
         }
     }
 
-    /// Util function to load the current node state by the provided file path.
-    pub fn load_current_state(id: u64, path: &Path) -> Result<StatePtr> {
-        let state = Self::load_or_create(id, path)?;
+    /// Util function to load the current node state by the provided folder path.
+    pub fn load_current_state(genesis: i64, id: u64, db: &sled::Db) -> Result<StatePtr> {
+        let state = Self::load_or_create(genesis, id, db)?;
         Ok(Arc::new(RwLock::new(state)))
     }
 
     /// Util function to reset node state.
-    pub fn reset(id: u64, path: &Path) -> Result<State> {
+    pub fn reset(genesis: i64, id: u64, db: &sled::Db) -> Result<State> {
         // Genesis block is generated.
         let mut genesis_block = Block::new(
             String::from("⊥"),
@@ -498,10 +504,10 @@ impl State {
         genesis_block.metadata.sm.notarized = true;
         genesis_block.metadata.sm.finalized = true;
 
-        let genesis_time = get_current_time();
+        let genesis_time = Timestamp(genesis);
 
         let state = Self::new(id, genesis_time, genesis_block);
-        state.save(path)?;
+        state.save(db)?;
         Ok(state)
     }
 }

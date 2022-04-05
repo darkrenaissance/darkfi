@@ -1,17 +1,21 @@
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    io,
+};
 
 use super::{metadata::Metadata, participant::Participant, tx::Tx};
 
 use crate::{
     crypto::{keypair::PublicKey, schnorr::Signature},
-    net,
-    util::serial::{SerialDecodable, SerialEncodable},
+    impl_vec, net,
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Result,
 };
 
 /// This struct represents a tuple of the form (st, sl, txs, metadata).
 /// Each blocks parent hash h may be computed simply as a hash of the parent block.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
 pub struct Block {
     /// Previous block hash
     pub st: String, // Change this to a proper hash type
@@ -87,3 +91,5 @@ impl net::Message for BlockProposal {
 pub fn proposal_eq_block(proposal: &BlockProposal, block: &Block) -> bool {
     proposal.st == block.st && proposal.sl == block.sl && proposal.txs == block.txs
 }
+
+impl_vec!(Block);

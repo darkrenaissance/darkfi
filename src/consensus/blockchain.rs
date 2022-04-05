@@ -1,14 +1,19 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    io,
 };
 
-use serde::{Deserialize, Serialize};
+use crate::{
+    impl_vec,
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Result,
+};
 
 use super::block::Block;
 
 /// This struct represents a sequence of blocks starting with the genesis block.
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Blockchain {
     pub blocks: Vec<Block>,
 }
@@ -54,3 +59,5 @@ impl Blockchain {
         true
     }
 }
+
+impl_vec!(Blockchain);

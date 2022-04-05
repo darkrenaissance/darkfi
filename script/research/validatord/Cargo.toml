@@ -20,6 +20,9 @@ easy-parallel = "3.2.0"
 # Crypto
 rand = "0.8.5"
 
+# Storage
+sled = "0.34.7"
+
 # Structopt dependencies for arguments parsing
 serde = "1.0.136"
 serde_derive = "1.0.136"

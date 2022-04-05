@@ -79,9 +79,12 @@ struct Opt {
     #[structopt(long, default_value = "FOOBAR")]
     /// Password for the created TLS identity
     password: String,
-    #[structopt(long, default_value = "~/.config/darkfi/validatord_state_0")]
-    /// Path to the state file
-    state: String,
+    #[structopt(long, default_value = "1648383795")]
+    /// Timestamp of the genesis block creation
+    genesis: i64,
+    #[structopt(long, default_value = "~/.config/darkfi/validatord_db_0")]
+    /// Path to the sled database folder
+    database: String,
     #[structopt(long, default_value = "0")]
     /// Node ID, used only for testing
     id: u64,
@@ -93,7 +96,7 @@ struct Opt {
     verbose: u8,
 }
 
-async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) {
+async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
     // Node signals the network that it starts participating
     let participant =
         Participant::new(state.read().unwrap().id, state.read().unwrap().get_current_epoch());
@@ -155,7 +158,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, state_path: &PathBuf) 
             Err(e) => error!("Broadcast failed. Error: {:?}", e),
         }
 
-        let result = state.read().unwrap().save(state_path);
+        let result = state.read().unwrap().save(database);
         match result {
             Ok(()) => (),
             Err(e) => {
@@ -186,9 +189,11 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     };
 
     // State setup
-    let state_path = expand_path(&opts.state).unwrap();
+    let genesis = opts.genesis;
+    let database_path = expand_path(&opts.database).unwrap();
+    let database = sled::open(database_path).unwrap();
     let id = opts.id.clone();
-    let state = State::load_current_state(id, &state_path).unwrap();
+    let state = State::load_current_state(genesis, id, &database).unwrap();
 
     // P2P registry setup
     let p2p = net::P2p::new(network_settings).await;
@@ -255,7 +260,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task(p2p, state, &state_path).await;
+    proposal_task(p2p, state, &database).await;
 
     Ok(())
 }
