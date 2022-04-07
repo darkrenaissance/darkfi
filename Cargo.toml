@@ -282,6 +282,15 @@ zkas = [
     "util",
 ]
 
+raft = [
+    "blake3",
+	"sled",
+
+	"util",
+    "net",
+    "rpc",
+]
+
 [[example]]
 name = "net"
 path = "example/net.rs"

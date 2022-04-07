@@ -1,15 +1,17 @@
 use std::{io, net::SocketAddr};
 
-use darkfi::util::serial::{
-    serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt,
+use crate::{
+    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Result,
 };
 
-pub mod datastore;
-pub mod p2p;
-pub mod raft;
+mod datastore;
+mod p2p;
+mod raft;
 
-pub use datastore::DataStore;
-pub use p2p::ProtocolRaft;
+use datastore::DataStore;
+use p2p::ProtocolRaft;
+pub use raft::Raft;
 
 #[derive(PartialEq, Eq)]
 pub enum Role {
@@ -120,7 +122,7 @@ pub enum NetMsgMethod {
 }
 
 impl Encodable for NetMsgMethod {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         let len: usize = match self {
             Self::LogResponse => 0,
             Self::LogRequest => 1,
@@ -132,7 +134,7 @@ impl Encodable for NetMsgMethod {
 }
 
 impl Decodable for NetMsgMethod {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
         let com: u8 = Decodable::decode(d)?;
         Ok(match com {
             0 => Self::LogResponse,
@@ -144,18 +146,18 @@ impl Decodable for NetMsgMethod {
 }
 
 impl Encodable for Logs {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
         encode_vec(&self.0, s)
     }
 }
 
 impl Decodable for Logs {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(d: D) -> Result<Self> {
         Ok(Self(decode_vec(d)?))
     }
 }
 
-fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> darkfi::Result<usize> {
+fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> Result<usize> {
     let mut len = 0;
     len += VarInt(vec.len() as u64).encode(&mut s)?;
     for c in vec.iter() {
@@ -164,7 +166,7 @@ fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> darkfi::Result
     Ok(len)
 }
 
-fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> darkfi::Result<Vec<T>> {
+fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> Result<Vec<T>> {
     let len = VarInt::decode(&mut d)?.0;
     let mut ret = Vec::with_capacity(len as usize);
     for _ in 0..len {

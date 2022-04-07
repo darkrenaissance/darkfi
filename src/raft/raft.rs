@@ -9,13 +9,13 @@ use futures::{select, FutureExt};
 use log::error;
 use rand::Rng;
 
-use darkfi::{
+use crate::{
     net,
     util::serial::{deserialize, serialize, Decodable, Encodable},
-    Result,
+    Error, Result,
 };
 
-use crate::{
+use super::{
     DataStore, Log, LogRequest, LogResponse, Logs, NetMsg, NetMsgMethod, NodeId, ProtocolRaft,
     Role, VoteRequest, VoteResponse,
 };
@@ -25,7 +25,7 @@ const TIMEOUT: u64 = 300;
 const TIMEOUT_NODES: u64 = 300;
 
 pub type BroadcastMsg<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
-pub type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
+type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
 
 pub struct Raft<T> {
     // this will be derived from the ip
@@ -63,7 +63,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub fn new(addr: SocketAddr, db_path: PathBuf) -> Result<Self> {
         if db_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
-            return Err(darkfi::Error::ParseFailed("unable to parse pathbuf to str"))
+            return Err(Error::ParseFailed("unable to parse pathbuf to str"))
         };
 
         let db_path_str = db_path.to_str().unwrap();

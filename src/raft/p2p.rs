@@ -4,9 +4,9 @@ use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
 
-use darkfi::{net, Result};
+use crate::{net, Result};
 
-use crate::{NetMsg, NodeId};
+use super::{NetMsg, NodeId};
 
 pub struct ProtocolRaft {
     id: NodeId,

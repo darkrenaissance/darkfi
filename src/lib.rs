@@ -39,3 +39,6 @@ pub mod rpc;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;
+
+#[cfg(feature = "raft")]
+pub mod raft;

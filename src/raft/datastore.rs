@@ -2,12 +2,12 @@ use std::marker::PhantomData;
 
 use sled::Batch;
 
-use darkfi::{
+use crate::{
     util::serial::{deserialize, serialize, Decodable, Encodable},
     Result,
 };
 
-use crate::{Log, NodeId};
+use super::{Log, NodeId};
 
 const SLED_LOGS_TREE: &[u8] = b"_logs";
 const SLED_COMMITS_TREE: &[u8] = b"_commits";
