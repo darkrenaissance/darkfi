@@ -172,14 +172,14 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             if self.role == Role::Leader {
                 select! {
                     m =  receive_queues.recv().fuse() => self.handle_method(m?).await?,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
-                    _ = task::sleep(heartbeat_timeout).fuse() => self.send_heartbeat().await,
+                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await?,
+                    _ = task::sleep(heartbeat_timeout).fuse() => self.send_heartbeat().await?,
                 }
             } else {
                 select! {
                     m =  receive_queues.recv().fuse() => self.handle_method(m?).await?,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
-                    _ = task::sleep(timeout).fuse() => self.send_vote_request().await,
+                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await?,
+                    _ = task::sleep(timeout).fuse() => self.send_vote_request().await?,
                 }
             }
         }
@@ -193,61 +193,69 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.broadcast_msg.0.clone()
     }
 
-    async fn broadcast_msg(&mut self, msg: &T) {
+    async fn broadcast_msg(&mut self, msg: &T) -> Result<()> {
         if self.role == Role::Leader {
             let msg = serialize(msg);
             let log = Log { msg, term: self.current_term };
-            self.push_log(&log).unwrap();
+            self.push_log(&log)?;
 
             self.acked_length.insert(self.id.clone(), self.logs.len());
 
             let nodes = self.nodes.lock().await.clone();
             for node in nodes.iter() {
-                self.update_logs(node.0).await;
+                self.update_logs(node.0).await?;
             }
         }
+        Ok(())
     }
 
     async fn handle_method(&mut self, msg: NetMsg) -> Result<()> {
         match msg.method {
             NetMsgMethod::LogResponse => {
                 let lr: LogResponse = deserialize(&msg.payload)?;
-                self.receive_log_response(lr).await;
+                self.receive_log_response(lr).await?;
             }
             NetMsgMethod::LogRequest => {
                 let lr: LogRequest = deserialize(&msg.payload)?;
-                self.receive_log_request(lr).await;
+                self.receive_log_request(lr).await?;
             }
             NetMsgMethod::VoteResponse => {
                 let vr: VoteResponse = deserialize(&msg.payload)?;
-                self.receive_vote_response(vr).await;
+                self.receive_vote_response(vr).await?;
             }
             NetMsgMethod::VoteRequest => {
                 let vr: VoteRequest = deserialize(&msg.payload)?;
-                self.receive_vote_request(vr).await;
+                self.receive_vote_request(vr).await?;
             }
         }
         Ok(())
     }
-    async fn send(&self, recipient_id: Option<NodeId>, payload: &[u8], method: NetMsgMethod) {
+    async fn send(
+        &self,
+        recipient_id: Option<NodeId>,
+        payload: &[u8],
+        method: NetMsgMethod,
+    ) -> Result<()> {
         let rnd = rand::random();
         let net_msg = NetMsg { id: rnd, recipient_id, payload: payload.to_vec(), method };
-        self.sender.0.send(net_msg).await.unwrap();
+        self.sender.0.send(net_msg).await?;
+        Ok(())
     }
 
-    async fn send_heartbeat(&self) {
+    async fn send_heartbeat(&self) -> Result<()> {
         if self.role == Role::Leader {
             let nodes = self.nodes.lock().await.clone();
             for node in nodes.iter() {
-                self.update_logs(node.0).await;
+                self.update_logs(node.0).await?;
             }
         }
+        Ok(())
     }
 
-    async fn send_vote_request(&mut self) {
-        self.set_current_term(&(self.current_term + 1)).unwrap();
+    async fn send_vote_request(&mut self) -> Result<()> {
+        self.set_current_term(&(self.current_term + 1))?;
         self.role = Role::Candidate;
-        self.set_voted_for(&Some(self.id.clone())).unwrap();
+        self.set_voted_for(&Some(self.id.clone()))?;
         self.votes_received.push(self.id.clone());
 
         self.reset_last_term();
@@ -260,13 +268,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&request);
-        self.send(None, &payload, NetMsgMethod::VoteRequest).await;
+        self.send(None, &payload, NetMsgMethod::VoteRequest).await
     }
 
-    async fn receive_vote_request(&mut self, vr: VoteRequest) {
+    async fn receive_vote_request(&mut self, vr: VoteRequest) -> Result<()> {
         if vr.current_term > self.current_term {
-            self.set_current_term(&vr.current_term).unwrap();
-            self.set_voted_for(&None).unwrap();
+            self.set_current_term(&vr.current_term)?;
+            self.set_voted_for(&None)?;
             self.role = Role::Follower;
         }
 
@@ -287,15 +295,15 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             VoteResponse { node_id: self.id.clone(), current_term: self.current_term, ok: false };
 
         if vr.current_term == self.current_term && vote_ok && vote {
-            self.set_voted_for(&Some(vr.node_id.clone())).unwrap();
+            self.set_voted_for(&Some(vr.node_id.clone()))?;
             response.set_ok(true);
         }
 
         let payload = serialize(&response);
-        self.send(Some(vr.node_id), &payload, NetMsgMethod::VoteResponse).await;
+        self.send(Some(vr.node_id), &payload, NetMsgMethod::VoteResponse).await
     }
 
-    async fn receive_vote_response(&mut self, vr: VoteResponse) {
+    async fn receive_vote_response(&mut self, vr: VoteResponse) -> Result<()> {
         if self.role == Role::Candidate && vr.current_term == self.current_term && vr.ok {
             self.votes_received.push(vr.node_id);
 
@@ -306,18 +314,20 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 for node in nodes.iter() {
                     self.sent_length.insert(node.0.clone(), self.logs.len());
                     self.acked_length.insert(node.0.clone(), 0);
-                    self.update_logs(node.0).await;
+                    self.update_logs(node.0).await?;
                 }
             }
             drop(nodes);
         } else if vr.current_term > self.current_term {
-            self.set_current_term(&vr.current_term).unwrap();
+            self.set_current_term(&vr.current_term)?;
             self.role = Role::Follower;
-            self.set_voted_for(&None).unwrap();
+            self.set_voted_for(&None)?;
         }
+
+        Ok(())
     }
 
-    async fn update_logs(&self, node_id: &NodeId) {
+    async fn update_logs(&self, node_id: &NodeId) -> Result<()> {
         let prefix_len = self.sent_length[node_id];
         let suffix: Logs = self.logs.slice_from(prefix_len);
 
@@ -336,13 +346,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&request);
-        self.send(Some(node_id.clone()), &payload, NetMsgMethod::LogRequest).await;
+        self.send(Some(node_id.clone()), &payload, NetMsgMethod::LogRequest).await
     }
 
-    async fn receive_log_request(&mut self, lr: LogRequest) {
+    async fn receive_log_request(&mut self, lr: LogRequest) -> Result<()> {
         if lr.current_term > self.current_term {
-            self.set_current_term(&lr.current_term).unwrap();
-            self.set_voted_for(&None).unwrap();
+            self.set_current_term(&lr.current_term)?;
+            self.set_voted_for(&None)?;
         }
 
         if lr.current_term == self.current_term {
@@ -354,7 +364,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             (lr.prefix_len == 0 || self.logs.get(lr.prefix_len - 1).term == lr.prefix_term);
 
         let response: LogResponse = if lr.current_term == self.current_term && ok {
-            self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix).await;
+            self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix).await?;
             let ack = lr.prefix_len + lr.suffix.len();
             LogResponse { node_id: self.id.clone(), current_term: self.current_term, ack, ok }
         } else {
@@ -367,24 +377,26 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&response);
-        self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse).await;
+        self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse).await
     }
 
-    async fn receive_log_response(&mut self, lr: LogResponse) {
+    async fn receive_log_response(&mut self, lr: LogResponse) -> Result<()> {
         if lr.current_term == self.current_term && self.role == Role::Leader {
             if lr.ok && lr.ack >= self.acked_length[&lr.node_id] {
                 self.sent_length.insert(lr.node_id.clone(), lr.ack);
                 self.acked_length.insert(lr.node_id, lr.ack);
-                self.commit_log().await;
+                self.commit_log().await?;
             } else if self.sent_length[&lr.node_id] > 0 {
                 self.sent_length.insert(lr.node_id.clone(), self.sent_length[&lr.node_id] - 1);
-                self.update_logs(&lr.node_id).await;
+                self.update_logs(&lr.node_id).await?;
             }
         } else if lr.current_term > self.current_term {
-            self.set_current_term(&lr.current_term).unwrap();
+            self.set_current_term(&lr.current_term)?;
             self.role = Role::Follower;
-            self.set_voted_for(&None).unwrap();
+            self.set_voted_for(&None)?;
         }
+
+        Ok(())
     }
 
     fn reset_last_term(&mut self) {
@@ -399,7 +411,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         nodes.into_iter().filter(|n| self.acked_length[&n.0] >= length).collect()
     }
 
-    async fn commit_log(&mut self) {
+    async fn commit_log(&mut self) -> Result<()> {
         let nodes_ptr = self.nodes.lock().await;
         let min_acks = ((nodes_ptr.len() + 1) / 2) as usize;
         let nodes = nodes_ptr.clone();
@@ -415,40 +427,49 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             .collect();
 
         if ready.is_empty() {
-            return
+            return Ok(())
         }
 
         let max_ready = *ready.iter().max().unwrap();
         if max_ready > self.commit_length && self.logs.get(max_ready - 1).term == self.current_term
         {
             for i in self.commit_length..(max_ready - 1) {
-                self.push_commit(&self.logs.get(i).msg).await.unwrap();
+                self.push_commit(&self.logs.get(i).msg).await?;
             }
 
-            self.set_commit_length(&max_ready).unwrap();
+            self.set_commit_length(&max_ready)?;
         }
+
+        Ok(())
     }
 
-    async fn append_log(&mut self, prefix_len: u64, leader_commit: u64, suffix: &Logs) {
+    async fn append_log(
+        &mut self,
+        prefix_len: u64,
+        leader_commit: u64,
+        suffix: &Logs,
+    ) -> Result<()> {
         if suffix.len() > 0 && self.logs.len() > prefix_len {
             let index = min(self.logs.len(), prefix_len + suffix.len()) - 1;
             if self.logs.get(index).term != suffix.get(index - prefix_len).term {
-                self.push_logs(&self.logs.slice_to(prefix_len - 1)).unwrap();
+                self.push_logs(&self.logs.slice_to(prefix_len - 1))?;
             }
         }
 
         if prefix_len + suffix.len() > self.logs.len() {
             for i in (self.logs.len() - prefix_len)..(suffix.len() - 1) {
-                self.push_log(&suffix.get(i)).unwrap();
+                self.push_log(&suffix.get(i))?;
             }
         }
 
         if leader_commit > self.commit_length {
             for i in self.commit_length..(leader_commit - 1) {
-                self.push_commit(&self.logs.get(i).msg).await.unwrap();
+                self.push_commit(&self.logs.get(i).msg).await?;
             }
-            self.set_commit_length(&leader_commit).unwrap();
+            self.set_commit_length(&leader_commit)?;
         }
+
+        Ok(())
     }
 
     fn set_commit_length(&mut self, i: &u64) -> Result<()> {

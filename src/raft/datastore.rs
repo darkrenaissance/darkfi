@@ -26,7 +26,7 @@ pub struct DataStore<T> {
 
 impl<T: Encodable + Decodable> DataStore<T> {
     pub fn new(db_path: &str) -> Result<Self> {
-        let _db = sled::open(db_path).unwrap();
+        let _db = sled::open(db_path)?;
         let logs = DataTree::new(&_db, SLED_LOGS_TREE)?;
         let commits = DataTree::new(&_db, SLED_COMMITS_TREE)?;
         let commits_length = DataTree::new(&_db, SLED_COMMITS_LENGTH_TREE)?;
@@ -44,19 +44,19 @@ pub struct DataTree<T> {
 
 impl<T: Decodable + Encodable> DataTree<T> {
     pub fn new(db: &sled::Db, tree_name: &[u8]) -> Result<Self> {
-        let tree = db.open_tree(tree_name).unwrap();
+        let tree = db.open_tree(tree_name)?;
         Ok(Self { tree, phantom: PhantomData })
     }
 
     pub fn insert(&self, data: &T) -> Result<()> {
         let serialized = serialize(data);
         let datahash = blake3::hash(&serialized);
-        self.tree.insert(datahash.as_bytes(), serialized).unwrap();
+        self.tree.insert(datahash.as_bytes(), serialized)?;
         Ok(())
     }
 
     pub fn wipe_insert_all(&self, data: &Vec<T>) -> Result<()> {
-        self.tree.clear().unwrap();
+        self.tree.clear()?;
 
         let mut batch = Batch::default();
 
@@ -66,7 +66,7 @@ impl<T: Decodable + Encodable> DataTree<T> {
             batch.insert(hash.as_bytes(), serialized);
         }
 
-        self.tree.apply_batch(batch).unwrap();
+        self.tree.apply_batch(batch)?;
 
         Ok(())
     }
@@ -75,7 +75,7 @@ impl<T: Decodable + Encodable> DataTree<T> {
         let mut ret: Vec<T> = Vec::new();
 
         for i in self.tree.iter() {
-            let da = deserialize(&i.unwrap().1)?;
+            let da = deserialize(&i?.1)?;
             ret.push(da)
         }
 
@@ -83,8 +83,8 @@ impl<T: Decodable + Encodable> DataTree<T> {
     }
 
     pub fn get_last(&self) -> Result<Option<T>> {
-        if let Some(found) = self.tree.last().unwrap() {
-            let da = deserialize(&found.1).unwrap();
+        if let Some(found) = self.tree.last()? {
+            let da = deserialize(&found.1)?;
             return Ok(Some(da))
         }
         Ok(None)
