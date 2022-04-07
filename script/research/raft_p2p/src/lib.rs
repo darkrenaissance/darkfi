@@ -1,8 +1,8 @@
 use std::{io, net::SocketAddr};
 
-use borsh::{BorshDeserialize, BorshSerialize};
-
-use darkfi::util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi::util::serial::{
+    serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt,
+};
 
 pub mod datastore;
 pub mod p2p;
@@ -18,7 +18,7 @@ pub enum Role {
     Leader,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct VoteRequest {
     node_id: NodeId,
     current_term: u64,
@@ -26,24 +26,24 @@ pub struct VoteRequest {
     last_term: u64,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct VoteResponse {
     node_id: NodeId,
     current_term: u64,
     ok: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct LogRequest {
     leader_id: NodeId,
     current_term: u64,
     prefix_len: u64,
     prefix_term: u64,
     commit_length: u64,
-    suffix: VecR<Log>,
+    suffix: Logs,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct LogResponse {
     node_id: NodeId,
     current_term: u64,
@@ -57,23 +57,13 @@ impl VoteResponse {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, SerialDecodable, SerialEncodable)]
+#[derive(Clone, Debug, SerialDecodable, SerialEncodable)]
 pub struct Log {
     term: u64,
     msg: Vec<u8>,
 }
 
-#[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    Hash,
-    SerialDecodable,
-    SerialEncodable,
-)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, SerialDecodable, SerialEncodable)]
 pub struct NodeId(pub Vec<u8>);
 
 impl From<SocketAddr> for NodeId {
@@ -84,14 +74,14 @@ impl From<SocketAddr> for NodeId {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
-pub struct VecR<T: BorshSerialize + BorshDeserialize>(pub Vec<T>);
+#[derive(Clone, Debug)]
+pub struct Logs(pub Vec<Log>);
 
-impl<T: BorshSerialize + BorshDeserialize + Clone> VecR<T> {
+impl Logs {
     pub fn len(&self) -> u64 {
         self.0.len() as u64
     }
-    pub fn push(&mut self, d: &T) {
+    pub fn push(&mut self, d: &Log) {
         self.0.push(d.clone());
     }
 
@@ -103,18 +93,16 @@ impl<T: BorshSerialize + BorshDeserialize + Clone> VecR<T> {
         Self(self.0[..end as usize].to_vec())
     }
 
-    pub fn get(&self, index: u64) -> T {
+    pub fn get(&self, index: u64) -> Log {
         self.0[index as usize].clone()
     }
 
-    pub fn to_vec(&self) -> Vec<T> {
+    pub fn to_vec(&self) -> Vec<Log> {
         self.0.clone()
     }
 }
 
-#[derive(
-    BorshSerialize, BorshDeserialize, SerialDecodable, SerialEncodable, Clone, Debug, PartialEq, Eq,
-)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct NetMsg {
     id: u64,
     recipient_id: Option<NodeId>,
@@ -122,7 +110,7 @@ pub struct NetMsg {
     payload: Vec<u8>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum NetMsgMethod {
     LogResponse = 0,
@@ -155,10 +143,34 @@ impl Decodable for NetMsgMethod {
     }
 }
 
-pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, io::Error> {
-    let mut data_mut = data;
-    let result = T::deserialize(&mut data_mut)?;
-    Ok(result)
+impl Encodable for Logs {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for Logs {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+
+fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> darkfi::Result<usize> {
+    let mut len = 0;
+    len += VarInt(vec.len() as u64).encode(&mut s)?;
+    for c in vec.iter() {
+        len += c.encode(&mut s)?;
+    }
+    Ok(len)
+}
+
+fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> darkfi::Result<Vec<T>> {
+    let len = VarInt::decode(&mut d)?.0;
+    let mut ret = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        ret.push(Decodable::decode(&mut d)?);
+    }
+    Ok(ret)
 }
 
 #[cfg(test)]

@@ -5,7 +5,6 @@ use async_std::{
 use std::{cmp::min, collections::HashMap, net::SocketAddr, path::PathBuf, time::Duration};
 
 use async_executor::Executor;
-use borsh::BorshSerialize;
 use futures::{select, FutureExt};
 use log::error;
 use rand::Rng;
@@ -17,8 +16,8 @@ use darkfi::{
 };
 
 use crate::{
-    try_from_slice_unchecked, DataStore, Log, LogRequest, LogResponse, NetMsg, NetMsgMethod,
-    NodeId, ProtocolRaft, Role, VecR, VoteRequest, VoteResponse,
+    DataStore, Log, LogRequest, LogResponse, Logs, NetMsg, NetMsgMethod, NodeId, ProtocolRaft,
+    Role, VoteRequest, VoteResponse,
 };
 
 const HEARTBEATTIMEOUT: u64 = 100;
@@ -35,7 +34,7 @@ pub struct Raft<T> {
     // these five vars should be on local storage
     current_term: u64,
     voted_for: Option<NodeId>,
-    logs: VecR<Log>,
+    logs: Logs,
     commit_length: u64,
     // the log will be added to this vector if it's committed by the majority of nodes
     commits: Arc<Mutex<Vec<T>>>,
@@ -44,7 +43,7 @@ pub struct Raft<T> {
 
     current_leader: Option<NodeId>,
 
-    votes_received: VecR<NodeId>,
+    votes_received: Vec<NodeId>,
 
     sent_length: HashMap<NodeId, u64>,
     acked_length: HashMap<NodeId, u64>,
@@ -71,7 +70,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let mut current_term = 0;
         let mut voted_for = None;
-        let mut logs = VecR(vec![]);
+        let mut logs = Logs(vec![]);
         let mut commit_length = 0;
         let mut commits = Arc::new(Mutex::new(vec![]));
 
@@ -79,7 +78,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let datastore = DataStore::new(db_path_str)?;
             current_term = datastore.current_term.get_last()?.unwrap_or(0);
             voted_for = datastore.voted_for.get_last()?.flatten();
-            logs = VecR(datastore.logs.get_all()?);
+            logs = Logs(datastore.logs.get_all()?);
             commit_length = datastore.commits_length.get_last()?.unwrap_or(0);
             commits = Arc::new(Mutex::new(datastore.commits.get_all()?));
             datastore
@@ -99,7 +98,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             commits,
             role: Role::Follower,
             current_leader: None,
-            votes_received: VecR(vec![]),
+            votes_received: vec![],
             sent_length: HashMap::new(),
             acked_length: HashMap::new(),
             nodes: Arc::new(Mutex::new(HashMap::new())),
@@ -212,19 +211,19 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     async fn handle_method(&mut self, msg: NetMsg) -> Result<()> {
         match msg.method {
             NetMsgMethod::LogResponse => {
-                let lr: LogResponse = try_from_slice_unchecked(&msg.payload)?;
+                let lr: LogResponse = deserialize(&msg.payload)?;
                 self.receive_log_response(lr).await;
             }
             NetMsgMethod::LogRequest => {
-                let lr: LogRequest = try_from_slice_unchecked(&msg.payload)?;
+                let lr: LogRequest = deserialize(&msg.payload)?;
                 self.receive_log_request(lr).await;
             }
             NetMsgMethod::VoteResponse => {
-                let vr: VoteResponse = try_from_slice_unchecked(&msg.payload)?;
+                let vr: VoteResponse = deserialize(&msg.payload)?;
                 self.receive_vote_response(vr).await;
             }
             NetMsgMethod::VoteRequest => {
-                let vr: VoteRequest = try_from_slice_unchecked(&msg.payload)?;
+                let vr: VoteRequest = deserialize(&msg.payload)?;
                 self.receive_vote_request(vr).await;
             }
         }
@@ -249,7 +248,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.set_current_term(&(self.current_term + 1)).unwrap();
         self.role = Role::Candidate;
         self.set_voted_for(&Some(self.id.clone())).unwrap();
-        self.votes_received.push(&self.id);
+        self.votes_received.push(self.id.clone());
 
         self.reset_last_term();
 
@@ -260,7 +259,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             last_term: self.last_term,
         };
 
-        let payload = request.try_to_vec().unwrap();
+        let payload = serialize(&request);
         self.send(None, &payload, NetMsgMethod::VoteRequest).await;
     }
 
@@ -292,16 +291,16 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             response.set_ok(true);
         }
 
-        let payload = response.try_to_vec().unwrap();
+        let payload = serialize(&response);
         self.send(Some(vr.node_id), &payload, NetMsgMethod::VoteResponse).await;
     }
 
     async fn receive_vote_response(&mut self, vr: VoteResponse) {
         if self.role == Role::Candidate && vr.current_term == self.current_term && vr.ok {
-            self.votes_received.push(&vr.node_id);
+            self.votes_received.push(vr.node_id);
 
             let nodes = self.nodes.lock().await;
-            if self.votes_received.len() >= (((nodes.len() + 1) / 2) as u64) {
+            if self.votes_received.len() >= ((nodes.len() + 1) / 2) {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone());
                 for node in nodes.iter() {
@@ -320,7 +319,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     async fn update_logs(&self, node_id: &NodeId) {
         let prefix_len = self.sent_length[node_id];
-        let suffix: VecR<Log> = self.logs.slice_from(prefix_len);
+        let suffix: Logs = self.logs.slice_from(prefix_len);
 
         let mut prefix_term = 0;
         if prefix_len > 0 {
@@ -336,7 +335,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             suffix,
         };
 
-        let payload = request.try_to_vec().unwrap();
+        let payload = serialize(&request);
         self.send(Some(node_id.clone()), &payload, NetMsgMethod::LogRequest).await;
     }
 
@@ -367,7 +366,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         };
 
-        let payload = response.try_to_vec().unwrap();
+        let payload = serialize(&response);
         self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse).await;
     }
 
@@ -430,7 +429,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
     }
 
-    async fn append_log(&mut self, prefix_len: u64, leader_commit: u64, suffix: &VecR<Log>) {
+    async fn append_log(&mut self, prefix_len: u64, leader_commit: u64, suffix: &Logs) {
         if suffix.len() > 0 && self.logs.len() > prefix_len {
             let index = min(self.logs.len(), prefix_len + suffix.len()) - 1;
             if self.logs.get(index).term != suffix.get(index - prefix_len).term {
@@ -473,7 +472,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.logs.push(i);
         self.datastore.logs.insert(i)
     }
-    fn push_logs(&mut self, i: &VecR<Log>) -> Result<()> {
+    fn push_logs(&mut self, i: &Logs) -> Result<()> {
         self.logs = i.clone();
         self.datastore.logs.wipe_insert_all(&i.to_vec())
     }

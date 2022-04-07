@@ -19,7 +19,6 @@ async-executor = "1.4.1"
 async-trait = "0.1.53"
 
 # Misc
-borsh = "0.9.3"
 log = "0.4.16"
 rand = "0.8.5"
 
