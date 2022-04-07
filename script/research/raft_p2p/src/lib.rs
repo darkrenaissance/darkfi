@@ -108,7 +108,7 @@ impl<T: BorshSerialize + BorshDeserialize + Clone> VecR<T> {
     }
 
     pub fn to_vec(&self) -> Vec<T> {
-        self.0[..].to_vec()
+        self.0.clone()
     }
 }
 

@@ -15,16 +15,16 @@ const SLED_COMMITS_LENGTH_TREE: &[u8] = b"_commit_length";
 const SLED_VOTED_FOR_TREE: &[u8] = b"_voted_for";
 const SLED_CURRENT_TERM_TREE: &[u8] = b"_current_term";
 
-pub struct DataStore {
+pub struct DataStore<T> {
     _db: sled::Db,
     pub logs: DataTree<Log>,
-    pub commits: DataTree<Vec<u8>>,
+    pub commits: DataTree<T>,
     pub commits_length: DataTree<u64>,
     pub voted_for: DataTree<Option<NodeId>>,
     pub current_term: DataTree<u64>,
 }
 
-impl DataStore {
+impl<T: Encodable + Decodable> DataStore<T> {
     pub fn new(db_path: &str) -> Result<Self> {
         let _db = sled::open(db_path).unwrap();
         let logs = DataTree::new(&_db, SLED_LOGS_TREE)?;
