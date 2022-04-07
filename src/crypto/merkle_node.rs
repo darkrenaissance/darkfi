@@ -40,7 +40,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Copy, Clone, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MerkleNode(pub pallas::Base);
 
 impl MerkleNode {
@@ -73,12 +73,6 @@ impl<'de> Deserialize<'de> for MerkleNode {
         <Option<_>>::from(Self::from_bytes(&parsed)).ok_or_else(|| {
             Error::custom("Attempted to deserialize a non-canonical representation of a Pallas base field element")
         })
-    }
-}
-
-impl std::cmp::PartialEq for MerkleNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.ct_eq(&other.0).into()
     }
 }
 
