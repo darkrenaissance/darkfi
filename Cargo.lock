@@ -2954,9 +2954,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.17.0-rc.9"
+version = "0.17.0-rc.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e540eeecee89ed4391cbbe2c86a9df6c061fc93f7710e2af69cbfccdc6564eae"
+checksum = "088977cb4de4e09ea0232bd51c844490475ad94344fb0c60784f1fb380059b6d"
 dependencies = [
  "console",
  "number_prefix",
@@ -6576,11 +6576,10 @@ dependencies = [
  "clap 3.1.8",
  "ctrlc",
  "darkfi",
- "indicatif 0.17.0-rc.9",
+ "indicatif 0.17.0-rc.10",
  "num_cpus",
  "rand 0.8.5",
  "rayon",
- "serde_json",
 ]
 
 [[package]]

@@ -4,7 +4,6 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
-use serde_json::json;
 
 use darkfi::{
     cli_desc,
@@ -116,13 +115,11 @@ fn main() {
         let attempts = progress.position();
         progress.finish_and_clear();
 
-        let result = json!({
-            "address": addr.address,
-            "secret": format!("{:?}", addr.secret.0),
-            "attempts": attempts,
-        });
+        println!(
+            "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{:?}\"}}",
+            addr.address, attempts, addr.secret.0
+        );
 
-        println!("{}", result);
         exit(0);
     });
 
