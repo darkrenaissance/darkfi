@@ -15,7 +15,6 @@ use darkfi::{
     Error, Result,
 };
 
-mod crdt;
 mod error;
 mod jsonrpc;
 mod month_tasks;
@@ -23,7 +22,6 @@ mod task_info;
 mod util;
 
 use crate::{
-    crdt::Node,
     jsonrpc::JsonRpcInterface,
     task_info::TaskInfo,
     util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
@@ -42,19 +40,7 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let settings = Settings { dataset_path };
 
-    //
-    // Crdt
-    //
-
-    let p2p_settings = P2pSettings::default();
-
-    let (node_snd, node_rcv) = async_channel::unbounded::<Vec<u8>>();
-
-    let node = Node::new("node", p2p_settings, node_snd).await;
-
-    let ex2 = executor.clone();
-    let node2 = node.clone();
-    let crdt_task = executor.spawn(node2.start(ex2.clone()));
+    let _p2p_settings = P2pSettings::default();
 
     //
     // RPC
@@ -71,26 +57,16 @@ async fn start(config: TauConfig, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let rpc_interface = Arc::new(JsonRpcInterface::new(snd, settings));
 
-    let node2 = node.clone();
     let recv_update_from_rpc: smol::Task<Result<()>> = executor.spawn(async move {
         loop {
-            let task_info = rcv.recv().await?;
-            node2.clone().send_event(task_info).await?;
-        }
-    });
-
-    let recv_update_from_node: smol::Task<Result<()>> = executor.spawn(async move {
-        loop {
-            let payload = node_rcv.recv().await?;
+            let _task_info = rcv.recv().await?;
             // XXX
         }
     });
 
     listen_and_serve(server_config, rpc_interface, executor).await?;
 
-    crdt_task.cancel().await;
     recv_update_from_rpc.cancel().await;
-    recv_update_from_node.cancel().await;
     Ok(())
 }
 
