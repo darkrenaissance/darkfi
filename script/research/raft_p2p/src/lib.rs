@@ -1,12 +1,14 @@
-use std::io;
+use std::{io, net::SocketAddr};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi::util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 
+pub mod datastore;
 pub mod p2p;
 pub mod raft;
 
+pub use datastore::DataStore;
 pub use p2p::ProtocolRaft;
 
 #[derive(PartialEq, Eq)]
@@ -16,12 +18,7 @@ pub enum Role {
     Leader,
 }
 
-impl Default for Role {
-    fn default() -> Self {
-        Self::Follower
-    }
-}
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct VoteRequest {
     node_id: NodeId,
     current_term: u64,
@@ -29,14 +26,14 @@ pub struct VoteRequest {
     last_term: u64,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct VoteResponse {
     node_id: NodeId,
     current_term: u64,
     ok: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct LogRequest {
     leader_id: NodeId,
     current_term: u64,
@@ -46,7 +43,7 @@ pub struct LogRequest {
     suffix: VecR<Log>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct LogResponse {
     node_id: NodeId,
     current_term: u64,
@@ -60,7 +57,7 @@ impl VoteResponse {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, SerialDecodable, SerialEncodable)]
 pub struct Log {
     term: u64,
     msg: Vec<u8>,
@@ -71,16 +68,23 @@ pub struct Log {
     BorshDeserialize,
     Clone,
     Debug,
-    Default,
     Eq,
     PartialEq,
     Hash,
     SerialDecodable,
     SerialEncodable,
 )]
-pub struct NodeId(pub u64);
+pub struct NodeId(pub Vec<u8>);
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, Default)]
+impl From<SocketAddr> for NodeId {
+    fn from(addr: SocketAddr) -> Self {
+        let ser = serialize(&addr);
+        let hash = blake3::hash(&ser).as_bytes().to_vec();
+        Self(hash)
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct VecR<T: BorshSerialize + BorshDeserialize>(pub Vec<T>);
 
 impl<T: BorshSerialize + BorshDeserialize + Clone> VecR<T> {
@@ -101,6 +105,10 @@ impl<T: BorshSerialize + BorshDeserialize + Clone> VecR<T> {
 
     pub fn get(&self, index: u64) -> T {
         self.0[index as usize].clone()
+    }
+
+    pub fn to_vec(&self) -> Vec<T> {
+        self.0[..].to_vec()
     }
 }
 

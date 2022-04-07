@@ -1,34 +1,36 @@
-use async_std::{sync::Arc, task};
-use std::{cmp::min, collections::HashMap, time::Duration};
+use async_std::{
+    sync::{Arc, Mutex},
+    task,
+};
+use std::{cmp::min, collections::HashMap, net::SocketAddr, path::PathBuf, time::Duration};
 
 use async_executor::Executor;
 use borsh::BorshSerialize;
 use futures::{select, FutureExt};
+use log::error;
 use rand::Rng;
 
 use darkfi::{net, Result};
 
 use crate::{
-    try_from_slice_unchecked, Log, LogRequest, LogResponse, NetMsg, NetMsgMethod, NodeId,
-    ProtocolRaft, Role, VecR, VoteRequest, VoteResponse,
+    try_from_slice_unchecked, DataStore, Log, LogRequest, LogResponse, NetMsg, NetMsgMethod,
+    NodeId, ProtocolRaft, Role, VecR, VoteRequest, VoteResponse,
 };
 
 const HEARTBEATTIMEOUT: u64 = 100;
 const TIMEOUT: u64 = 300;
 
-#[derive(Default)]
 pub struct Raft {
     // this will be derived from the ip
     id: NodeId,
 
-    // these four vars should be on local storage
+    // these five vars should be on local storage
     current_term: u64,
     voted_for: Option<NodeId>,
     logs: VecR<Log>,
     commit_length: u64,
-
     // the log will be added to this vector if it's committed by the majority of nodes
-    commits: Vec<Vec<u8>>,
+    commits: Arc<Mutex<Vec<Vec<u8>>>>,
 
     role: Role,
 
@@ -44,11 +46,54 @@ pub struct Raft {
     last_term: u64,
 
     send_queues: Option<async_channel::Sender<NetMsg>>,
+
+    datastore: DataStore,
 }
 
 impl Raft {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(addr: SocketAddr, db_path: PathBuf) -> Result<Self> {
+        if db_path.to_str().is_none() {
+            error!(target: "raft", "datastore path is incorrect");
+            return Err(darkfi::Error::ParseFailed("unable to parse pathbuf to str"))
+        };
+
+        let db_path_str = db_path.to_str().unwrap();
+
+        let mut current_term = 0;
+        let mut voted_for = None;
+        let mut logs = VecR(vec![]);
+        let mut commit_length = 0;
+        let mut commits = Arc::new(Mutex::new(vec![]));
+
+        let datastore = if db_path.exists() {
+            let datastore = DataStore::new(db_path_str)?;
+            current_term = datastore.current_term.get_last()?.unwrap_or(0);
+            voted_for = datastore.voted_for.get_last()?.flatten();
+            logs = VecR(datastore.logs.get_all()?);
+            commit_length = datastore.commits_length.get_last()?.unwrap_or(0);
+            commits = Arc::new(Mutex::new(datastore.commits.get_all()?));
+            datastore
+        } else {
+            DataStore::new(db_path_str)?
+        };
+
+        Ok(Self {
+            id: NodeId::from(addr),
+            current_term,
+            voted_for,
+            logs,
+            commit_length,
+            commits,
+            role: Role::Follower,
+            current_leader: None,
+            votes_received: VecR(vec![]),
+            sent_length: HashMap::new(),
+            acked_length: HashMap::new(),
+            nodes: VecR(vec![]),
+            last_term: 0,
+            send_queues: None,
+            datastore,
+        })
     }
 
     pub async fn start(
@@ -112,22 +157,15 @@ impl Raft {
         }
     }
 
-    pub fn recover_from_local_storage(
-        current_term: u64,
-        voted_for: Option<NodeId>,
-        commit_length: u64,
-        logs: VecR<Log>,
-    ) -> Self {
-        Self { current_term, voted_for, commit_length, logs, ..Default::default() }
-    }
-
-    pub fn get_commits(&self) -> Vec<Vec<u8>> {
+    pub fn get_commits(&self) -> Arc<Mutex<Vec<Vec<u8>>>> {
         self.commits.clone()
     }
 
     pub async fn broadcast_msg(&mut self, msg: Vec<u8>) {
         if self.role == Role::Leader {
-            self.logs.push(&Log { msg, term: self.current_term });
+            let log = Log { msg, term: self.current_term };
+            self.push_log(&log).unwrap();
+
             self.acked_length.insert(self.id.clone(), self.logs.len());
 
             let nodes = self.nodes.0.clone();
@@ -176,9 +214,9 @@ impl Raft {
     }
 
     async fn send_vote_request(&mut self) {
-        self.current_term += 1;
+        self.set_current_term(&(self.current_term + 1)).unwrap();
         self.role = Role::Candidate;
-        self.voted_for = Some(self.id.clone());
+        self.set_voted_for(&Some(self.id.clone())).unwrap();
         self.votes_received.push(&self.id);
 
         self.reset_last_term();
@@ -196,8 +234,8 @@ impl Raft {
 
     async fn receive_vote_request(&mut self, vr: VoteRequest) {
         if vr.current_term > self.current_term {
-            self.current_term = vr.current_term;
-            self.voted_for = None;
+            self.set_current_term(&vr.current_term).unwrap();
+            self.set_voted_for(&None).unwrap();
             self.role = Role::Follower;
         }
 
@@ -218,7 +256,7 @@ impl Raft {
             VoteResponse { node_id: self.id.clone(), current_term: self.current_term, ok: false };
 
         if vr.current_term == self.current_term && vote_ok && vote {
-            self.voted_for = Some(vr.node_id.clone());
+            self.set_voted_for(&Some(vr.node_id.clone())).unwrap();
             response.set_ok(true);
         }
 
@@ -240,9 +278,9 @@ impl Raft {
                 }
             }
         } else if vr.current_term > self.current_term {
-            self.current_term = vr.current_term;
+            self.set_current_term(&vr.current_term).unwrap();
             self.role = Role::Follower;
-            self.voted_for = None;
+            self.set_voted_for(&None).unwrap();
         }
     }
 
@@ -270,8 +308,8 @@ impl Raft {
 
     async fn receive_log_request(&mut self, lr: LogRequest) {
         if lr.current_term > self.current_term {
-            self.current_term = lr.current_term;
-            self.voted_for = None;
+            self.set_current_term(&lr.current_term).unwrap();
+            self.set_voted_for(&None).unwrap();
         }
 
         if lr.current_term == self.current_term {
@@ -283,7 +321,7 @@ impl Raft {
             (lr.prefix_len == 0 || self.logs.get(lr.prefix_len - 1).term == lr.prefix_term);
 
         let response: LogResponse = if lr.current_term == self.current_term && ok {
-            self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix);
+            self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix).await;
             let ack = lr.prefix_len + lr.suffix.len();
             LogResponse { node_id: self.id.clone(), current_term: self.current_term, ack, ok }
         } else {
@@ -304,15 +342,15 @@ impl Raft {
             if lr.ok && lr.ack >= self.acked_length[&lr.node_id] {
                 self.sent_length.insert(lr.node_id.clone(), lr.ack);
                 self.acked_length.insert(lr.node_id, lr.ack);
-                self.commit_log();
+                self.commit_log().await;
             } else if self.sent_length[&lr.node_id] > 0 {
                 self.sent_length.insert(lr.node_id.clone(), self.sent_length[&lr.node_id] - 1);
                 self.update_logs(&lr.node_id).await;
             }
         } else if lr.current_term > self.current_term {
-            self.current_term = lr.current_term;
+            self.set_current_term(&lr.current_term).unwrap();
             self.role = Role::Follower;
-            self.voted_for = None;
+            self.set_voted_for(&None).unwrap();
         }
     }
 
@@ -330,7 +368,7 @@ impl Raft {
         )
     }
 
-    fn commit_log(&mut self) {
+    async fn commit_log(&mut self) {
         let min_acks = (self.nodes.len() + 1) / 2;
 
         let ready: Vec<u64> = self
@@ -350,32 +388,57 @@ impl Raft {
         if max_ready > self.commit_length && self.logs.get(max_ready - 1).term == self.current_term
         {
             for i in self.commit_length..(max_ready - 1) {
-                self.commits.push(self.logs.get(i).msg);
+                self.push_commit(&self.logs.get(i).msg).await.unwrap();
             }
 
-            self.commit_length = max_ready;
+            self.set_commit_length(&max_ready).unwrap();
         }
     }
 
-    fn append_log(&mut self, prefix_len: u64, leader_commit: u64, suffix: &VecR<Log>) {
+    async fn append_log(&mut self, prefix_len: u64, leader_commit: u64, suffix: &VecR<Log>) {
         if suffix.len() > 0 && self.logs.len() > prefix_len {
             let index = min(self.logs.len(), prefix_len + suffix.len()) - 1;
             if self.logs.get(index).term != suffix.get(index - prefix_len).term {
-                self.logs = self.logs.slice_to(prefix_len - 1);
+                self.push_logs(&self.logs.slice_to(prefix_len - 1)).unwrap();
             }
         }
 
         if prefix_len + suffix.len() > self.logs.len() {
             for i in (self.logs.len() - prefix_len)..(suffix.len() - 1) {
-                self.logs.push(&suffix.get(i));
+                self.push_log(&suffix.get(i)).unwrap();
             }
         }
 
         if leader_commit > self.commit_length {
             for i in self.commit_length..(leader_commit - 1) {
-                self.commits.push(self.logs.get(i).msg);
+                self.push_commit(&self.logs.get(i).msg).await.unwrap();
             }
-            self.commit_length = leader_commit;
+            self.set_commit_length(&leader_commit).unwrap();
         }
+    }
+
+    fn set_commit_length(&mut self, i: &u64) -> Result<()> {
+        self.commit_length = *i;
+        self.datastore.commits_length.insert(i)
+    }
+    fn set_current_term(&mut self, i: &u64) -> Result<()> {
+        self.current_term = *i;
+        self.datastore.current_term.insert(i)
+    }
+    fn set_voted_for(&mut self, i: &Option<NodeId>) -> Result<()> {
+        self.voted_for = i.clone();
+        self.datastore.voted_for.insert(i)
+    }
+    async fn push_commit(&mut self, i: &Vec<u8>) -> Result<()> {
+        self.commits.lock().await.push(i.clone());
+        self.datastore.commits.insert(i)
+    }
+    fn push_log(&mut self, i: &Log) -> Result<()> {
+        self.logs.push(i);
+        self.datastore.logs.insert(i)
+    }
+    fn push_logs(&mut self, i: &VecR<Log>) -> Result<()> {
+        self.logs = i.clone();
+        self.datastore.logs.wipe_insert_all(&i.to_vec())
     }
 }
