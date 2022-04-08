@@ -1,0 +1,61 @@
+constant "DaoMint" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+}
+
+contract "DaoMint" {
+    Base treasury_value,
+    Base authority_key_x,
+    Base authority_key_y,
+    Base governance_token_id,
+    Base treasury_token_id,
+    Scalar treasury_value_blind,
+    Base authority_key_x_blind,
+    Base authority_key_y_blind,
+    Base governance_token_id_blind,
+    Base treasury_token_id_blind,
+
+    # BullaMint subroutine
+    Base serial,
+    Base coin_blind,
+}
+
+circuit "DaoMint" {
+	# Pedersen commitment for coin's value
+	vcv = ec_mul_short(treasury_value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(treasury_value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(vcv, vcr);
+	# Since the value commit is a curve point, we fetch its coordinates
+	# and constrain them:
+	value_commit_x = ec_get_x(value_commit);
+	value_commit_y = ec_get_y(value_commit);
+	constrain_instance(value_commit_x);
+	constrain_instance(value_commit_y);
+
+    authority_x_commit = poseidon_hash(authority_key_x, authority_key_x_blind);
+    constrain_instance(authority_x_commit);
+
+    authority_y_commit = poseidon_hash(authority_key_y, authority_key_y_blind);
+    constrain_instance(authority_y_commit);
+
+    gov_token_id_commit = poseidon_hash(
+        governance_token_id, governance_token_id_blind);
+    constrain_instance(gov_token_id_commit);
+
+    treasury_token_id_commit = poseidon_hash(
+        treasury_token_id, treasury_token_id_blind);
+    constrain_instance(treasury_token_id_commit);
+
+    # BullaMint subroutine
+	C = poseidon_hash(
+        treasury_value,
+        authority_key_x,
+        authority_key_y,
+        governance_token_id,
+        treasury_token_id,
+        serial,
+        coin_blind
+    );
+    constrain_instance(C);
+}
+

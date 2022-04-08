@@ -1,0 +1,25 @@
+constant "DaoExec" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+}
+
+contract "DaoExec" {
+    Base treasury_value,
+    Base authority_key_x,
+    Base authority_key_y,
+    Base governance_token_id,
+    Base treasury_token_id,
+    Scalar treasury_value_blind,
+    Base authority_key_x_blind,
+    Base authority_key_y_blind,
+    Base governance_token_id_blind,
+    Base treasury_token_id_blind,
+
+    # BullaMint subroutine
+    Base serial,
+    Base coin_blind,
+}
+
+circuit "DaoExec" {
+}
+
