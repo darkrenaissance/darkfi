@@ -13,8 +13,13 @@ use darkfi::{
 use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
+use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+
 #[test]
 fn arithmetic_proof() -> Result<()> {
+    TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto)
+        .unwrap();
+
     /* ANCHOR: main */
     let bincode = include_bytes!("../proof/arithmetic.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
