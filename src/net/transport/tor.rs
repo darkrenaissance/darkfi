@@ -20,7 +20,36 @@ use std::{
 };
 use url::Url;
 
-/// Implements communication through the tor proxy service
+/// Implements communication through the tor proxy service.
+///
+/// ## Dialing
+///
+/// The tor service must be running for dialing to work. Url of it has to be passed to the
+/// constructor.
+///
+/// ## Listening
+///
+/// Two ways of setting up hidden services are allowed: hidden services manually set up by the user
+/// in the torc file or ephemereal hidden services created and deleted on the fly. For the latter,
+/// the user must set up the tor control port[^controlport].
+///
+/// Having manually configured services forces the program to use pre-defined ports, i.e. it has no
+/// way of changing them.
+///
+/// Before calling [listen_on][transportlisten] on a local address, make sure that either a hidden
+/// service pointing to that address was configured or that [create_ehs][torcreateehs] was called
+/// with this address.
+///
+/// [^controlport] [Open control port](https://wiki.archlinux.org/title/tor#Open_Tor_ControlPort)
+///
+/// ### Warning on cloning
+/// Cloning this structure increments the reference count to the already open
+/// socket, which means ephemereal hidden services opened with the cloned instance will live as
+/// long as there are clones. For this reason, I'd clone it only when you are sure you want this
+/// behaviour. Don't be lazy!
+///
+/// [transportlisten]: Transport
+/// [torcreateehs]: TorTransport::create_ehs
 #[derive(Clone)]
 pub struct TorTransport {
     socks_url: Url,
@@ -50,7 +79,9 @@ pub enum TorError {
 }
 
 /// Contains the configuration to communicate with the Tor Controler
-/// As long as none of its clones are dropped, the hidden services created remain open
+///
+/// When cloned, the socket is not reopened since we use reference count.
+/// The hidden services created live as long as clones of the struct.
 impl TorController {
     /// Creates a new TorTransport
     ///
@@ -58,7 +89,12 @@ impl TorController {
     ///
     /// * `url` - url to connect to the tor control. For example tcp://127.0.0.1:9051
     ///
-    /// * `auth` - either authentication cookie bytes (32 byres) as hex in a string: assert_eq!(auth,"886b9177aec471965abd34b6a846dc32cf617dcff0625cba7a414e31dd4b75a0"), or a password as a quoted string: assert_eq!(auth,"\"mypassword\"")
+    /// * `auth` - either authentication cookie bytes (32 bytes) as hex in a string
+    /// or a password as a quoted string.
+    ///
+    /// Cookie string: `assert_eq!(auth,"886b9177aec471965abd34b6a846dc32cf617dcff0625cba7a414e31dd4b75a0")`
+    ///
+    /// Password string: `assert_eq!(auth,"\"mypassword\"")`
     pub fn new(url: Url, auth: String) -> Result<Self, io::Error> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
@@ -75,7 +111,11 @@ impl TorController {
         };
         Ok(Self { socket: Arc::new(socket), auth })
     }
-    /// Creates an ephemeral hidden service listening on port, returns onion address
+    /// Creates an ephemeral hidden service pointing to local address, returns onion address
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - url that the hidden service maps to.
     pub fn create_ehs(&self, url: Url) -> Result<Url, TorError> {
         let local_socket = self.socket.try_clone()?;
         let mut stream = std::net::TcpStream::from(local_socket);
@@ -116,7 +156,10 @@ impl TorTransport {
     ///
     /// * `socks_url` - url to connect to the tor service. For example socks5://127.0.0.1:9050
     ///
-    /// * `control_info` - Possibility to open a control connection to create ephemeral hidden services that live as long as the TorTransport. Is a tuple of control url and authentication cookie as string (represented in hex)
+    /// * `control_info` - Possibility to open a control connection to create ephemeral hidden
+    /// services that live as long as the TorTransport.
+    /// It is a tuple of the control socket url and authentication cookie as string
+    /// represented in hex.
     pub fn new(socks_url: Url, control_info: Option<(Url, String)>) -> Result<Self, TorError> {
         match control_info {
             Some(info) => {
@@ -128,6 +171,12 @@ impl TorTransport {
         }
     }
 
+    /// Creates an ephemeral hidden service pointing to local address, returns onion address
+    /// when successful.
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - url that the hidden service maps to.
     pub fn create_ehs(&self, url: Url) -> Result<Url, TorError> {
         self.tor_controller
             .as_ref()
