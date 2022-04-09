@@ -9,7 +9,7 @@ mod tor;
 
 pub use tcp::TcpTransport;
 pub use tls::TlsTransport;
-pub use tor::{TorController, TorTransport};
+pub use tor::TorTransport;
 
 pub trait Transport {
     type Acceptor;

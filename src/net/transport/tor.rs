@@ -29,7 +29,7 @@ pub struct TorTransport {
 
 /// Represents information needed to communicate with the Tor control socket
 #[derive(Clone)]
-pub struct TorController {
+struct TorController {
     socket: Arc<Socket>, // Need to hold this socket open as long as the tor trasport is alive, so ephemeral services are dropped when TorTransport is dropped
     auth: String,
 }
