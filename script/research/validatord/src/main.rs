@@ -4,7 +4,6 @@ use async_executor::Executor;
 use async_trait::async_trait;
 use easy_parallel::Parallel;
 use log::{debug, error, info};
-use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -314,10 +313,8 @@ impl JsonRpcInterface {
             return Err(InvalidParams)
         }
 
-        // TODO: add proper tx hash here
-        let random_id = OsRng.next_u32();
         let payload = String::from(args[0].as_str().unwrap());
-        let tx = Tx { hash: random_id, payload };
+        let tx = Tx { payload };
 
         self.state.write().unwrap().append_tx(tx.clone());
 

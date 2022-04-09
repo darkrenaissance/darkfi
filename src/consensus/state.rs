@@ -22,7 +22,7 @@ use super::{
     blockchain::Blockchain,
     participant::Participant,
     tx::Tx,
-    util::Timestamp,
+    util::{Timestamp, GENESIS_HASH_BYTES},
     vote::Vote,
 };
 
@@ -36,7 +36,7 @@ pub type StatePtr = Arc<RwLock<State>>;
 /// Each node is numbered and has a secret-public keys pair, to sign messages.
 /// Nodes hold a set of Blockchains(some of which are not notarized)
 /// and a set of unconfirmed pending transactions.
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct State {
     pub id: u64,
     pub genesis_time: Timestamp,
@@ -121,9 +121,8 @@ impl State {
     pub fn propose_block(&self) -> Result<Option<BlockProposal>> {
         let epoch = self.get_current_epoch();
         let longest_notarized_chain = self.find_longest_notarized_chain();
-        let mut hasher = DefaultHasher::new();
-        longest_notarized_chain.blocks.last().unwrap().hash(&mut hasher);
-        let hash = hasher.finish().to_string();
+        let serialized = serialize(longest_notarized_chain.blocks.last().unwrap());
+        let hash = blake3::hash(&serialized);
         let unproposed_txs = self.get_unproposed_txs();
         let mut encoded_block = vec![];
         hash.encode(&mut encoded_block)?;
@@ -249,21 +248,20 @@ impl State {
 
     /// Given a block, node finds the index of the blockchain it extends.
     pub fn find_extended_blockchain_index(&self, block: &Block, leader: bool) -> i64 {
-        let mut hasher = DefaultHasher::new();
         for (index, blockchain) in self.node_blockchains.iter().enumerate() {
             let last_block = blockchain.blocks.last().unwrap();
-            last_block.hash(&mut hasher);
-            if (leader && block.st == hasher.finish().to_string() && block.sl >= last_block.sl) ||
-                (!leader && block.st == hasher.finish().to_string() && block.sl > last_block.sl)
+            let last_block_hash = blake3::hash(&serialize(last_block));
+            if (leader && block.st == last_block_hash && block.sl >= last_block.sl) ||
+                (!leader && block.st == last_block_hash && block.sl > last_block.sl)
             {
                 return index as i64
             }
         }
 
         let last_block = self.canonical_blockchain.blocks.last().unwrap();
-        last_block.hash(&mut hasher);
-        if (leader && block.st != hasher.finish().to_string() || block.sl < last_block.sl) ||
-            (!leader && block.st != hasher.finish().to_string() || block.sl <= last_block.sl)
+        let last_block_hash = blake3::hash(&serialize(last_block));
+        if (leader && block.st != last_block_hash || block.sl < last_block.sl) ||
+            (!leader && block.st != last_block_hash || block.sl <= last_block.sl)
         {
             debug!("Proposed block doesn't extend any known chains.");
             return -2
@@ -381,10 +379,8 @@ impl State {
                     self.canonical_blockchain.blocks.push(block.clone());
                 }
 
-                let mut hasher = DefaultHasher::new();
                 let last_finalized_block = self.canonical_blockchain.blocks.last().unwrap();
-                last_finalized_block.hash(&mut hasher);
-                let last_finalized_block_hash = hasher.finish().to_string();
+                let last_finalized_block_hash = blake3::hash(&serialize(last_finalized_block));
                 let mut dropped_blockchains = Vec::new();
                 for (index, blockchain) in self.node_blockchains.iter().enumerate() {
                     let first_block = blockchain.blocks.first().unwrap();
@@ -493,7 +489,7 @@ impl State {
     pub fn reset(genesis: i64, id: u64, db: &sled::Db) -> Result<State> {
         // Genesis block is generated.
         let mut genesis_block = Block::new(
-            String::from("⊥"),
+            blake3::Hash::from(GENESIS_HASH_BYTES),
             0,
             vec![],
             String::from("proof"),

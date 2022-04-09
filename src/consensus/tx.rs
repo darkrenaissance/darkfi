@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::io;
 
 use crate::{
@@ -7,9 +6,8 @@ use crate::{
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Tx {
-    pub hash: u32, // Change this to a proper hash type
     pub payload: String,
 }
 

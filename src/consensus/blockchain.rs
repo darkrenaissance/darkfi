@@ -1,16 +1,12 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    io,
-};
+use std::io;
 
 use crate::{
     impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
 
-use super::block::Block;
+use super::{block::Block, util::GENESIS_HASH_BYTES};
 
 /// This struct represents a sequence of blocks starting with the genesis block.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
@@ -27,11 +23,11 @@ impl Blockchain {
     /// previous block and their epochs are incremental, exluding genesis.
     /// Additional validity rules can be applied.
     pub fn check_block_validity(&self, block: &Block, previous_block: &Block) {
-        assert!(block.st != "⊥", "Genesis block provided.");
-        let mut hasher = DefaultHasher::new();
-        previous_block.hash(&mut hasher);
+        assert!(block.st.as_bytes() != &GENESIS_HASH_BYTES, "Genesis block provided.");
+        let serialized = serialize(previous_block);
+        let previous_block_hash = blake3::hash(&serialized);
         assert!(
-            block.st == hasher.finish().to_string() && block.sl > previous_block.sl,
+            block.st == previous_block_hash && block.sl > previous_block.sl,
             "Provided block is invalid."
         );
     }

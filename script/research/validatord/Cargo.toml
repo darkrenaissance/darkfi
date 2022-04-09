@@ -17,9 +17,6 @@ async-channel = "1.6.1"
 async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
-# Crypto
-rand = "0.8.5"
-
 # Storage
 sled = "0.34.7"
 

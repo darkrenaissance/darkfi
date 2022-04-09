@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io};
 
 use crate::{
@@ -8,7 +7,7 @@ use crate::{
 };
 
 /// This struct represents a tuple of the form (node_id, epoch_joined, last_epoch_voted).
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Participant {
     /// Node id
     pub id: u64,

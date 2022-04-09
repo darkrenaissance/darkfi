@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use crate::util::serial::{SerialDecodable, SerialEncodable};
 
 use super::{
     participant::Participant,
@@ -6,10 +6,8 @@ use super::{
     vote::Vote,
 };
 
-use crate::util::serial::{SerialDecodable, SerialEncodable};
-
 /// This struct represents additional Block information used by the consensus protocol.
-#[derive(Debug, Clone, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Metadata {
     /// Block information used by Ouroboros consensus
     pub om: OuroborosMetadata,
@@ -30,7 +28,7 @@ impl Metadata {
 }
 
 /// This struct represents Block information used by Ouroboros consensus protocol.
-#[derive(Debug, Clone, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
     /// Proof the stakeholder is the block owner
     pub proof: String,
@@ -47,7 +45,7 @@ impl OuroborosMetadata {
 }
 
 /// This struct represents Block information used by Streamlet consensus protocol.
-#[derive(Debug, Clone, Deserialize, Serialize, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct StreamletMetadata {
     /// Epoch votes
     pub votes: Vec<Vote>,

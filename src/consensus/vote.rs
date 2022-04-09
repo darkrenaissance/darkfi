@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::io;
 
 use super::block::BlockProposal;
@@ -11,13 +10,13 @@ use crate::{
 };
 
 /// This struct represents a tuple of the form (vote, B, id).
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, SerialDecodable, SerialEncodable)]
+#[derive(Debug, Clone, PartialEq, SerialDecodable, SerialEncodable)]
 pub struct Vote {
     /// Node public key
     pub node_public_key: PublicKey,
     /// signed block
     pub vote: Signature,
-    /// block hash to vote on
+    /// block proposal to vote on
     pub block: BlockProposal,
     /// node id
     pub id: u64,
