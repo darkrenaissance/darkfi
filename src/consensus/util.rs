@@ -1,10 +1,6 @@
 use chrono::{NaiveDateTime, Utc};
-use std::io;
 
-use crate::{
-    util::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt},
-    Result,
-};
+use crate::util::serial::{SerialDecodable, SerialEncodable};
 
 // Serialized blake3 hash bytes for character "⊥"
 pub const GENESIS_HASH_BYTES: [u8; 32] = [
@@ -29,19 +25,4 @@ impl Timestamp {
 /// Util function to generate a Timestamp of current time.
 pub fn get_current_time() -> Timestamp {
     Timestamp(Utc::now().timestamp())
-}
-
-impl Encodable for blake3::Hash {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(self.as_bytes())?;
-        Ok(32)
-    }
-}
-
-impl Decodable for blake3::Hash {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 32];
-        d.read_slice(&mut bytes)?;
-        Ok(bytes.into())
-    }
 }

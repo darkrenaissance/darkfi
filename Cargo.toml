@@ -198,6 +198,7 @@ blockchain = [
     "util",
     "crypto",
     "net",
+    "blockchain2",
 ]
 
 blockchain2 = [
