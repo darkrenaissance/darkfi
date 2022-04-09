@@ -5,9 +5,11 @@ use url::Url;
 
 mod tcp;
 mod tls;
+mod tor;
 
 pub use tcp::TcpTransport;
 pub use tls::TlsTransport;
+pub use tor::{TorController, TorTransport};
 
 pub trait Transport {
     type Acceptor;
@@ -34,6 +36,9 @@ pub enum TransportError<TErr> {
 
     #[error("Transport IO Error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Socks5 Error: {0}")]
+    Socks5Error(#[from] fast_socks5::SocksError),
 
     #[error("{0}")]
     Other(TErr),
