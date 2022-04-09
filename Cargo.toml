@@ -22,8 +22,8 @@ members = [
     "bin/dnetview",
     "bin/daod",
     "bin/dao-cli",
-    "bin/taud",
-    "bin/tau-cli",
+    "bin/tau/taud",
+    "bin/tau/tau-cli",
     "bin/vanityaddr",
 
     "src/sdk",

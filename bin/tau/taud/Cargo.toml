@@ -1,13 +1,13 @@
 [package]
-name = "tau-cli"
+name = "taud"
 version = "0.3.0"
 edition = "2021"
 
-[dependencies.darkfi]
-path = "../../"
-features = ["rpc"]
 
 [dependencies]
+
+darkfi = { path = "../../../", features = ["rpc", "raft", "net"]}
+
 # Async
 smol = "1.2.5"
 futures = "0.3.21"
@@ -22,10 +22,12 @@ clap = {version = "3.1.6", features = ["derive"]}
 log = "0.4.16"
 num_cpus = "1.13.1"
 simplelog = "0.12.0-alpha1"
-url = "2.2.2"
+rand = "0.8.5"
 chrono = "0.4.19"
-prettytable-rs = "0.8.0"
+thiserror = "1.0.24"
 
 # Encoding and parsing
 serde_json = "1.0.79"
 serde = {version = "1.0.136", features = ["derive"]}
+
+
