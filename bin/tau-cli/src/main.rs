@@ -3,6 +3,7 @@ use std::{
     fs::{self, File},
     io,
     io::{Read, Write},
+    net::SocketAddr,
     ops::Index,
     process::Command,
 };
@@ -112,6 +113,9 @@ pub struct CliTau {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
+    /// Rpc address  
+    #[clap(long, default_value = "127.0.0.1:8875")]
+    pub listen: SocketAddr,
     #[clap(subcommand)]
     pub command: Option<CliTauSubCommands>,
 }
@@ -235,7 +239,9 @@ async fn show(url: &str, id: u64) -> Result<Value> {
 }
 
 async fn start(options: CliTau) -> Result<()> {
-    let rpc_addr = "tcp://127.0.0.1:8875";
+    // FIXME
+    let rpc_addr = &format!("tcp://{}", options.listen.to_string());
+
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
             let title = if title.is_none() {
