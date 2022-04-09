@@ -55,7 +55,7 @@ contract "DaoBurn" {
 	nullifier = poseidon_hash(serial);
 	constrain_instance(nullifier);
 
-	C = poseidon_hash(
+	B = poseidon_hash(
         treasury_value,
         authority_key_x,
         authority_key_y,
@@ -66,7 +66,7 @@ contract "DaoBurn" {
     );
 
 	# Merkle root
-	root = calculate_merkle_root(leaf_pos, path, C);
+	root = calculate_merkle_root(leaf_pos, path, B);
 	constrain_instance(root);
 
 	# Finally, we derive a public key for the signature and

@@ -47,7 +47,7 @@ circuit "DaoMint" {
     constrain_instance(treasury_token_id_commit);
 
     # BullaMint subroutine
-	C = poseidon_hash(
+	bulla = poseidon_hash(
         treasury_value,
         authority_key_x,
         authority_key_y,
@@ -56,6 +56,6 @@ circuit "DaoMint" {
         serial,
         coin_blind
     );
-    constrain_instance(C);
+    constrain_instance(bulla);
 }
 

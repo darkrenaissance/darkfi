@@ -4,22 +4,108 @@ constant "DaoExec" {
 }
 
 contract "DaoExec" {
+    # Main attributes for DAO
     Base treasury_value,
     Base authority_key_x,
     Base authority_key_y,
     Base governance_token_id,
     Base treasury_token_id,
-    Scalar treasury_value_blind,
-    Base authority_key_x_blind,
-    Base authority_key_y_blind,
-    Base governance_token_id_blind,
-    Base treasury_token_id_blind,
 
-    # BullaMint subroutine
-    Base serial,
+    # Used for proving old bulla is in the set
+	Uint32 leaf_pos,
+	MerklePath path,
+
+    Base old_bulla_serial,
+    Base old_bulla_blind,
+
+    Base coin_serial,
     Base coin_blind,
+
+    Base new_bulla_serial,
+    Base new_bulla_blind,
+
+    ###
+
+    # Instruction data
+    Base instr_value,
+    Base instr_key_x,
+    Base instr_key_y,
+    Base instr_token_id,
+    Base message_blind,
+
+    # Same blinding factor used for governance token ID hash on votes
+    Base governance_token_id_blind,
+
+    # Votes info
+    Base vote_value,
+    Scalar vote_blind,
 }
 
 circuit "DaoExec" {
+    # instr = OPCODE, u, P
+    message = poseidon_hash(instr_value, instr_key_x, instr_key_y,
+                            instr_token_id, message_blind);
+
+	# Vote commitment
+	vote_cv = ec_mul_short(vote_value, VALUE_COMMIT_VALUE);
+	vote_cr = ec_mul(vote_blind, VALUE_COMMIT_RANDOM);
+	vote_commit = ec_add(vote_cv, vote_cr);
+	vote_commit_x = ec_get_x(vote_commit);
+	vote_commit_y = ec_get_y(vote_commit);
+	constrain_instance(vote_commit_x);
+	constrain_instance(vote_commit_y);
+
+    gov_token_id_commit = poseidon_hash(
+        governance_token_id, governance_token_id_blind);
+    constrain_instance(gov_token_id_commit);
+
+    change_value = base_sub(treasury_value, instr_value);
+    # TODO: missing instructions
+    # greater_than_zero(instr_value);
+    # greater_than_or_equal_zero(change_value);
+
+    # bulla_smash
+
+	# Poseidon hash of the nullifier
+	nullifier = poseidon_hash(old_bulla_serial);
+	constrain_instance(nullifier);
+
+	old_bulla = poseidon_hash(
+        treasury_value,
+        authority_key_x,
+        authority_key_y,
+        governance_token_id,
+        treasury_token_id,
+        old_bulla_serial,
+        old_bulla_blind
+    );
+
+	# Merkle root
+	root = calculate_merkle_root(leaf_pos, path, old_bulla);
+	constrain_instance(root);
+
+    # coin_mint
+	# Poseidon hash of the coin
+	coin = poseidon_hash(
+        instr_key_x,
+        instr_key_y,
+        instr_value,
+        instr_token_id,
+        coin_serial,
+        coin_blind
+    );
+	constrain_instance(coin);
+
+    # bulla_mint
+	bulla = poseidon_hash(
+        change_value,
+        authority_key_x,
+        authority_key_y,
+        governance_token_id,
+        treasury_token_id,
+        new_bulla_serial,
+        new_bulla_blind
+    );
+    constrain_instance(bulla);
 }
 
