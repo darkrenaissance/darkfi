@@ -120,6 +120,10 @@ impl TaskInfo {
         mt.save()
     }
 
+    pub fn get_month_task(&self) -> TaudResult<MonthTasks> {
+        MonthTasks::load_or_create(&self.created_at, &self.settings)
+    }
+
     pub fn get_state(&self) -> String {
         if let Some(ev) = self.events.0.last() {
             ev.action.clone()

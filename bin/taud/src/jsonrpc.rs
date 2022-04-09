@@ -91,8 +91,6 @@ impl JsonRpcInterface {
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
-        new_task.save()?;
-        new_task.activate()?;
         self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
 
         Ok(json!(true))
@@ -119,7 +117,7 @@ impl JsonRpcInterface {
         }
 
         let task = self.check_data_for_update(&args[0], &args[1])?;
-        task.save()?;
+
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
@@ -156,7 +154,7 @@ impl JsonRpcInterface {
 
         let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
         task.set_state(&state);
-        task.save()?;
+
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
@@ -178,7 +176,7 @@ impl JsonRpcInterface {
 
         let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
         task.set_comment(Comment::new(&comment_content, &comment_author));
-        task.save()?;
+
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         Ok(json!(true))
     }

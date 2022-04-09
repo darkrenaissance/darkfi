@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::BufReader,
+    net::SocketAddr,
     path::{Path, PathBuf},
 };
 
@@ -71,8 +72,20 @@ pub struct Timestamp(pub i64);
 #[clap(name = "taud")]
 pub struct CliTaud {
     /// Sets a custom config file
-    #[clap(short, long)]
+    #[clap(long)]
     pub config: Option<String>,
+    /// Raft Accept address
+    #[clap(short, long)]
+    pub accept: Option<SocketAddr>,
+    /// Raft Seed node (repeatable)
+    #[clap(short, long)]
+    pub seed: Vec<SocketAddr>,
+    /// Raft Manual connection (repeatable)
+    #[clap(short, long)]
+    pub connect: Vec<SocketAddr>,
+    /// Raft Connection slots
+    #[clap(long, default_value_t = 0)]
+    pub slots: u32,
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
@@ -82,6 +95,8 @@ pub struct CliTaud {
 pub struct TauConfig {
     /// path to dataset
     pub dataset_path: String,
+    /// path to datastore  for raft
+    pub datastore_raft: String,
     /// Path to DER-formatted PKCS#12 archive. (used only with tls listener url)
     pub tls_identity_path: String,
     /// The address where taud should bind its RPC socket
