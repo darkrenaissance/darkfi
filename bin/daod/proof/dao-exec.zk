@@ -45,6 +45,7 @@ circuit "DaoExec" {
     # instr = OPCODE, u, P
     message = poseidon_hash(instr_value, instr_key_x, instr_key_y,
                             instr_token_id, message_blind);
+    constrain_instance(message);
 
 	# Vote commitment
 	vote_cv = ec_mul_short(vote_value, VALUE_COMMIT_VALUE);
