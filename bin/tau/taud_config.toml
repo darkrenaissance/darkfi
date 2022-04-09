@@ -1,0 +1,20 @@
+## taud configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+
+# Path to the dataset 
+dataset_path = "~/.config/tau"
+datastore_raft = "~/.config/tau.db"
+
+# Path to DER-formatted PKCS#12 archive. (used only with tls url)
+# This can be created using openssl:
+# openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
+tls_identity_path = ""
+
+# The address where taud should bind its RPC socket
+[rpc_listener_url]
+url="127.0.0.1:8875"
+# Password for the created TLS identity or tor password
+password = "FOOBAR"
+
