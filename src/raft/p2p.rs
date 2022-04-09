@@ -9,7 +9,7 @@ use crate::{net, Result};
 use super::{NetMsg, NodeId};
 
 pub struct ProtocolRaft {
-    id: NodeId,
+    id: Option<NodeId>,
     jobsman: net::ProtocolJobsManagerPtr,
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
@@ -19,7 +19,7 @@ pub struct ProtocolRaft {
 
 impl ProtocolRaft {
     pub async fn init(
-        id: NodeId,
+        id: Option<NodeId>,
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
@@ -57,8 +57,8 @@ impl ProtocolRaft {
             let msg = (*msg).clone();
             self.p2p.broadcast(msg.clone()).await?;
 
-            if let Some(rec_id) = msg.recipient_id.clone() {
-                if rec_id != self.id {
+            if msg.recipient_id.is_some() && self.id.is_some() {
+                if msg.recipient_id != self.id {
                     continue
                 }
             }

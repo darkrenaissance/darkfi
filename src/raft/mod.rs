@@ -46,6 +46,9 @@ pub struct LogRequest {
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct BroadcastMsgRequest(Vec<u8>);
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct LogResponse {
     node_id: NodeId,
     current_term: u64,
@@ -119,6 +122,7 @@ pub enum NetMsgMethod {
     LogRequest = 1,
     VoteResponse = 2,
     VoteRequest = 3,
+    BroadcastRequest = 4,
 }
 
 impl Encodable for NetMsgMethod {
@@ -128,6 +132,7 @@ impl Encodable for NetMsgMethod {
             Self::LogRequest => 1,
             Self::VoteResponse => 2,
             Self::VoteRequest => 3,
+            Self::BroadcastRequest => 4,
         };
         (len as u8).encode(s)
     }
@@ -140,7 +145,8 @@ impl Decodable for NetMsgMethod {
             0 => Self::LogResponse,
             1 => Self::LogRequest,
             2 => Self::VoteResponse,
-            _ => Self::VoteRequest,
+            3 => Self::VoteRequest,
+            _ => Self::BroadcastRequest,
         })
     }
 }
