@@ -79,6 +79,7 @@ itertools = {version = "0.10.3", optional = true}
 darkfi-derive = {path = "src/util/derive", optional = true}
 darkfi-derive-internal = {path = "src/util/derive-internal", optional = true}
 chrono = {version = "0.4.19", optional = true}
+regex = {version = "1.1.9", optional = true}
 
 # Misc
 termion = {version = "1.5.6", optional = true}
@@ -219,8 +220,10 @@ net = [
     "fxhash",
     "socket2",
     "futures-rustls",
+    "fast-socks5",
     "ed25519-compact",
     "rcgen",
+    "regex",
     "rustls-pemfile",
 
     "util",

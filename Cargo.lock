@@ -1603,6 +1603,7 @@ dependencies = [
  "pasta_curves",
  "rand 0.8.5",
  "rcgen",
+ "regex",
  "rocksdb",
  "rustls-pemfile 0.3.0",
  "serde",
