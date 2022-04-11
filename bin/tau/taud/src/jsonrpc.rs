@@ -8,14 +8,14 @@ use serde_json::{json, Value};
 
 use darkfi::{
     rpc::{
-        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode, JsonRequest, JsonResult},
+        jsonrpc::{error as jsonerr, ErrorCode, JsonRequest, JsonResult},
         rpcserver::RequestHandler,
     },
     Error,
 };
 
 use crate::{
-    error::{TaudError, TaudResult},
+    error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
     util::{Settings, Timestamp},
@@ -23,7 +23,7 @@ use crate::{
 
 pub struct JsonRpcInterface {
     settings: Settings,
-    notify_queue_sender: async_channel::Sender<TaskInfo>,
+    notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,6 +43,10 @@ impl RequestHandler for JsonRpcInterface {
             return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, req.id))
         }
 
+        if let Err(_) = self.notify_queue_sender.send(None).await {
+            return JsonResult::Err(jsonerr(ErrorCode::InternalError, None, req.id))
+        }
+
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         let rep = match req.method.as_str() {
@@ -58,12 +62,15 @@ impl RequestHandler for JsonRpcInterface {
             }
         };
 
-        from_taud_result(rep, req.id)
+        to_json_result(rep, req.id)
     }
 }
 
 impl JsonRpcInterface {
-    pub fn new(notify_queue_sender: async_channel::Sender<TaskInfo>, settings: Settings) -> Self {
+    pub fn new(
+        notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
+        settings: Settings,
+    ) -> Self {
         Self { notify_queue_sender, settings }
     }
 
@@ -91,7 +98,7 @@ impl JsonRpcInterface {
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
-        self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
+        self.notify_queue_sender.send(Some(new_task)).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -118,7 +125,7 @@ impl JsonRpcInterface {
 
         let task = self.check_data_for_update(&args[0], &args[1])?;
 
-        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -155,7 +162,7 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
         task.set_state(&state);
 
-        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -177,7 +184,7 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
         task.set_comment(Comment::new(&comment_content, &comment_author));
 
-        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
         Ok(json!(true))
     }
 
@@ -252,29 +259,5 @@ impl JsonRpcInterface {
         }
 
         Ok(task)
-    }
-}
-
-fn from_taud_result(res: TaudResult<Value>, id: Value) -> JsonResult {
-    match res {
-        Ok(v) => JsonResult::Resp(jsonresp(v, id)),
-        Err(err) => match err {
-            TaudError::InvalidId => JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid task's id".into()),
-                id,
-            )),
-            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id))
-            }
-            TaudError::InvalidDueTime => JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid due time".into()),
-                id,
-            )),
-            TaudError::Darkfi(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id))
-            }
-        },
     }
 }

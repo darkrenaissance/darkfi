@@ -72,22 +72,21 @@ async fn start(config: TauConfig, args: CliTaud, executor: Arc<Executor<'_>>) ->
         identity_pass: Default::default(),
     };
 
-    let (snd, rcv) = async_channel::unbounded::<TaskInfo>();
+    let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
-    let rpc_interface = Arc::new(JsonRpcInterface::new(snd, settings));
-
-    let recv_update_from_rpc: smol::Task<Result<()>> = executor.spawn(async move {
-        loop {
-            let task_info = rcv.recv().await?;
-            raft_sender.send(task_info).await?;
-        }
-    });
+    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, settings));
 
     let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
-            // FIXME TODO
-            // this should update once receive rpc request from the tau-cli
+            let task_info = rpc_rcv.recv().await.map_err(Error::from)?;
+
+            if let Some(tk) = task_info {
+                raft_sender.send(tk).await.map_err(Error::from)?;
+            }
+
+            // XXX THIS FOR DEBUGING
             sleep(1).await;
+
             let recv_commits = commits.lock().await;
 
             for task_info in recv_commits.iter() {
@@ -107,7 +106,6 @@ async fn start(config: TauConfig, args: CliTaud, executor: Arc<Executor<'_>>) ->
 
     raft.start(p2p_settings.clone(), executor.clone()).await?;
 
-    recv_update_from_rpc.cancel().await;
     recv_update_from_raft.cancel().await;
     Ok(())
 }
