@@ -18,3 +18,14 @@ url="127.0.0.1:8875"
 # Password for the created TLS identity or tor password
 password = "FOOBAR"
 
+[accept]
+url="127.0.0.1:8875"
+password = "FOOBAR"
+
+outbound_connections = 5
+
+[[seeds]]
+url="127.0.0.1:8875"
+password = "FOOBAR"
+# one or more seed
+

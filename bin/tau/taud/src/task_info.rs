@@ -1,4 +1,7 @@
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +12,7 @@ use darkfi::util::serial::VarInt;
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::{find_free_id, get_current_time, random_ref_id, Settings, Timestamp},
+    util::{find_free_id, get_current_time, random_ref_id, Timestamp},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
@@ -60,7 +63,7 @@ pub struct TaskInfo {
     events: TaskEvents,
     comments: TaskComments,
     #[serde(skip_serializing, skip_deserializing)]
-    settings: Settings,
+    dataset_path: PathBuf,
 }
 
 impl TaskInfo {
@@ -69,7 +72,7 @@ impl TaskInfo {
         desc: &str,
         due: Option<Timestamp>,
         rank: f32,
-        settings: &Settings,
+        dataset_path: &Path,
     ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = random_ref_id();
@@ -77,7 +80,7 @@ impl TaskInfo {
         let created_at: Timestamp = get_current_time();
 
         let task_ids: Vec<u32> =
-            MonthTasks::load_current_open_tasks(settings)?.into_iter().map(|t| t.id).collect();
+            MonthTasks::load_current_open_tasks(dataset_path)?.into_iter().map(|t| t.id).collect();
 
         let id: u32 = find_free_id(&task_ids);
 
@@ -99,29 +102,29 @@ impl TaskInfo {
             created_at,
             comments: TaskComments(vec![]),
             events: TaskEvents(vec![]),
-            settings: settings.clone(),
+            dataset_path: dataset_path.to_path_buf(),
         })
     }
 
-    pub fn load(ref_id: &str, settings: &Settings) -> TaudResult<Self> {
-        let mut task = crate::util::load::<Self>(&Self::get_path(ref_id, settings))?;
-        task.set_settings(settings);
+    pub fn load(ref_id: &str, dataset_path: &Path) -> TaudResult<Self> {
+        let mut task = crate::util::load::<Self>(&Self::get_path(ref_id, dataset_path))?;
+        task.set_dataset_path(dataset_path);
         Ok(task)
     }
 
     pub fn save(&self) -> TaudResult<()> {
-        crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.settings), self)
+        crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.dataset_path), self)
             .map_err(TaudError::Darkfi)
     }
 
     pub fn activate(&self) -> TaudResult<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.settings)?;
+        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.dataset_path)?;
         mt.add(&self.ref_id);
         mt.save()
     }
 
     pub fn get_month_task(&self) -> TaudResult<MonthTasks> {
-        MonthTasks::load_or_create(&self.created_at, &self.settings)
+        MonthTasks::load_or_create(&self.created_at, &self.dataset_path)
     }
 
     pub fn get_state(&self) -> String {
@@ -132,8 +135,8 @@ impl TaskInfo {
         }
     }
 
-    fn get_path(ref_id: &str, settings: &Settings) -> PathBuf {
-        settings.dataset_path.join("task").join(ref_id)
+    fn get_path(ref_id: &str, dataset_path: &Path) -> PathBuf {
+        dataset_path.join("task").join(ref_id)
     }
 
     pub fn get_id(&self) -> u32 {
@@ -172,8 +175,8 @@ impl TaskInfo {
         self.due = d;
     }
 
-    pub fn set_settings(&mut self, settings: &Settings) {
-        self.settings = settings.clone();
+    pub fn set_dataset_path(&mut self, dataset_path: &Path) {
+        self.dataset_path = dataset_path.to_path_buf();
     }
 
     pub fn set_state(&mut self, action: &str) {

@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{create_dir_all, File},
     io::BufReader,
     net::SocketAddr,
     path::{Path, PathBuf},
@@ -13,9 +13,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use darkfi::{
     util::{
         cli::UrlConfig,
+        expand_path,
         serial::{SerialDecodable, SerialEncodable},
     },
-    Result,
+    Error, Result,
 };
 
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../taud_config.toml");
@@ -51,14 +52,72 @@ pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub dataset_path: PathBuf,
+    pub datastore_raft: PathBuf,
+    pub rpc_listener_url: SocketAddr,
+    pub accept_address: Option<SocketAddr>,
+    pub outbound_connections: u32,
+    pub connect: Vec<SocketAddr>,
+    pub seeds: Vec<SocketAddr>,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self { dataset_path: PathBuf::from("") }
+impl Settings {
+    pub fn load(args: CliTaud, config: TauConfig) -> Result<Self> {
+        if config.dataset_path.is_empty() {
+            return Err(Error::ParseFailed("Failed to parse dataset_path"))
+        }
+
+        let dataset_path = expand_path(&config.dataset_path)?;
+
+        // mkdir dataset_path if not exists
+        create_dir_all(dataset_path.join("month"))?;
+        create_dir_all(dataset_path.join("task"))?;
+
+        if config.datastore_raft.is_empty() {
+            return Err(Error::ParseFailed("Failed to parse datastore_raft path"))
+        }
+
+        let datastore_raft = expand_path(&config.datastore_raft)?;
+
+        let rpc_listener_url = SocketAddr::try_from(config.rpc_listener_url)?;
+
+        let accept_address = if args.accept.is_none() {
+            match config.accept_address {
+                Some(addr) => {
+                    let socket_addr = SocketAddr::try_from(addr)?;
+                    Some(socket_addr)
+                }
+                None => None,
+            }
+        } else {
+            args.accept
+        };
+
+        let outbound_connections =
+            if args.slots == 0 { config.outbound_connections.unwrap_or(0) } else { args.slots };
+
+        let connect = args.connect;
+
+        let config_seeds = config
+            .seeds
+            .map(|addrs| {
+                addrs.iter().filter_map(|addr| SocketAddr::try_from(addr.clone()).ok()).collect()
+            })
+            .unwrap_or_default();
+
+        let seeds = if args.seeds.is_empty() { config_seeds } else { args.seeds };
+
+        Ok(Settings {
+            dataset_path,
+            datastore_raft,
+            rpc_listener_url,
+            accept_address,
+            outbound_connections,
+            connect,
+            seeds,
+        })
     }
 }
 
@@ -77,9 +136,9 @@ pub struct CliTaud {
     /// Raft Accept address
     #[clap(short, long)]
     pub accept: Option<SocketAddr>,
-    /// Raft Seed node (repeatable)
+    /// Raft Seed nodes (repeatable)
     #[clap(short, long)]
-    pub seed: Vec<SocketAddr>,
+    pub seeds: Vec<SocketAddr>,
     /// Raft Manual connection (repeatable)
     #[clap(short, long)]
     pub connect: Vec<SocketAddr>,
@@ -101,6 +160,12 @@ pub struct TauConfig {
     pub tls_identity_path: String,
     /// The address where taud should bind its RPC socket
     pub rpc_listener_url: UrlConfig,
+    /// Accept address for p2p network
+    pub accept_address: Option<UrlConfig>,
+    /// Number of outbound connections for p2p
+    pub outbound_connections: Option<u32>,
+    /// The seeds for receiving ip addresses from the p2p network
+    pub seeds: Option<Vec<UrlConfig>>,
 }
 
 #[cfg(test)]

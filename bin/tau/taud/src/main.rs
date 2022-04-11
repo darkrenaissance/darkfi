@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use async_executor::Executor;
 use clap::Parser;
@@ -10,7 +10,6 @@ use darkfi::{
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config, Config},
-        expand_path,
         path::get_config_path,
         sleep,
     },
@@ -30,42 +29,29 @@ use crate::{
     util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
 };
 
-async fn start(config: TauConfig, args: CliTaud, executor: Arc<Executor<'_>>) -> Result<()> {
-    if config.dataset_path.is_empty() {
-        return Err(Error::ParseFailed("Failed to parse dataset_path"))
-    }
-
-    let dataset_path = expand_path(&config.dataset_path)?;
-
-    // mkdir dataset_path if not exists
-    create_dir_all(dataset_path.join("month"))?;
-    create_dir_all(dataset_path.join("task"))?;
-
-    let settings = Settings { dataset_path };
-
+async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> Result<()> {
     let p2p_settings = P2pSettings {
-        inbound: args.accept,
-        outbound_connections: args.slots,
-        external_addr: args.accept,
-        peers: args.connect.clone(),
-        seeds: args.seed.clone(),
+        inbound: settings.accept_address,
+        outbound_connections: settings.outbound_connections,
+        external_addr: settings.accept_address,
+        peers: settings.connect.clone(),
+        seeds: settings.seeds.clone(),
         ..Default::default()
     };
 
     //
     //Raft
     //
-    let mut raft =
-        Raft::<TaskInfo>::new(p2p_settings.inbound, PathBuf::from(config.datastore_raft))?;
+    let mut raft = Raft::<TaskInfo>::new(settings.accept_address, settings.datastore_raft.clone())?;
 
-    let raft_sender = raft.get_broadcast().clone();
-    let commits = raft.get_commits().clone();
+    let raft_sender = raft.get_broadcast();
+    let commits = raft.get_commits();
 
     //
     // RPC
     //
     let server_config = RpcServerConfig {
-        socket_addr: config.rpc_listener_url.url.parse()?,
+        socket_addr: settings.rpc_listener_url,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
         identity_path: Default::default(),
@@ -74,7 +60,7 @@ async fn start(config: TauConfig, args: CliTaud, executor: Arc<Executor<'_>>) ->
 
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
-    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, settings));
+    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, settings.dataset_path));
 
     let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
@@ -122,8 +108,10 @@ async fn main() -> Result<()> {
 
     let config: TauConfig = Config::<TauConfig>::load(config_path)?;
 
+    let settings = Settings::load(args, config)?;
+
     let ex = Arc::new(Executor::new());
-    smol::block_on(ex.run(start(config, args, ex.clone())))
+    smol::block_on(ex.run(start(settings, ex.clone())))
 }
 
 #[cfg(test)]
@@ -153,16 +141,16 @@ mod tests {
 
     #[test]
     fn load_and_save_tasks() -> TaudResult<()> {
-        let settings = Settings { dataset_path: get_path()? };
+        let dataset_path = get_path()?;
 
         // load and save TaskInfo
         ///////////////////////
 
-        let mut task = TaskInfo::new("test_title", "test_desc", None, 0.0, &settings)?;
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0.0, &dataset_path)?;
 
         task.save()?;
 
-        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+        let t_load = TaskInfo::load(&task.get_ref_id(), &dataset_path)?;
 
         assert_eq!(task, t_load);
 
@@ -170,7 +158,7 @@ mod tests {
 
         task.save()?;
 
-        let t_load = TaskInfo::load(&task.get_ref_id(), &settings)?;
+        let t_load = TaskInfo::load(&task.get_ref_id(), &dataset_path)?;
 
         assert_eq!(task, t_load);
 
@@ -179,11 +167,11 @@ mod tests {
 
         let task_tks = vec![];
 
-        let mut mt = MonthTasks::new(&task_tks, &settings);
+        let mut mt = MonthTasks::new(&task_tks, &dataset_path);
 
         mt.save()?;
 
-        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -191,24 +179,24 @@ mod tests {
 
         mt.save()?;
 
-        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
         // activate task
         ///////////////////////
 
-        let task = TaskInfo::new("test_title_3", "test_desc", None, 0.0, &settings)?;
+        let task = TaskInfo::new("test_title_3", "test_desc", None, 0.0, &dataset_path)?;
 
         task.save()?;
 
-        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert!(!mt_load.get_task_tks().contains(&task.get_ref_id()));
 
         task.activate()?;
 
-        let mt_load = MonthTasks::load_or_create(&get_current_time(), &settings)?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert!(mt_load.get_task_tks().contains(&task.get_ref_id()));
 

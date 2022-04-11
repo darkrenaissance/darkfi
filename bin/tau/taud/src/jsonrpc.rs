@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -18,11 +18,11 @@ use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::{Settings, Timestamp},
+    util::Timestamp,
 };
 
 pub struct JsonRpcInterface {
-    settings: Settings,
+    dataset_path: PathBuf,
     notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
 }
 
@@ -43,7 +43,7 @@ impl RequestHandler for JsonRpcInterface {
             return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, req.id))
         }
 
-        if let Err(_) = self.notify_queue_sender.send(None).await {
+        if self.notify_queue_sender.send(None).await.is_err() {
             return JsonResult::Err(jsonerr(ErrorCode::InternalError, None, req.id))
         }
 
@@ -69,9 +69,9 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
-        settings: Settings,
+        dataset_path: PathBuf,
     ) -> Self {
-        Self { notify_queue_sender, settings }
+        Self { notify_queue_sender, dataset_path }
     }
 
     // RPCAPI:
@@ -94,7 +94,7 @@ impl JsonRpcInterface {
 
         let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;
         let mut new_task: TaskInfo =
-            TaskInfo::new(&task.title, &task.desc, task.due, task.rank, &self.settings)?;
+            TaskInfo::new(&task.title, &task.desc, task.due, task.rank, &self.dataset_path)?;
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
@@ -108,7 +108,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
     async fn list(&self, _params: Value) -> TaudResult<Value> {
-        let tks = MonthTasks::load_current_open_tasks(&self.settings)?;
+        let tks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
         Ok(json!(tks))
     }
 
@@ -207,7 +207,7 @@ impl JsonRpcInterface {
     fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {
         let task_id: u64 = serde_json::from_value(task_id.clone())?;
 
-        let tasks = MonthTasks::load_current_open_tasks(&self.settings)?;
+        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 
         task.ok_or(TaudError::InvalidId)
