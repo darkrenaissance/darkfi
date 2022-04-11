@@ -83,8 +83,8 @@ pub enum CliTauSubCommands {
     },
     /// List open tasks
     List {},
-    /// Show task by ID
-    Show {
+    /// Get task by ID
+    Get {
         /// Task ID
         id: u64,
     },
@@ -113,7 +113,7 @@ pub struct CliTau {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
-    /// Rpc address  
+    /// Rpc address
     #[clap(long, default_value = "127.0.0.1:8875")]
     pub listen: SocketAddr,
     #[clap(subcommand)]
@@ -230,11 +230,11 @@ async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<
     request(req, url.to_string()).await
 }
 
-// Show task by id.
-// --> {"jsonrpc": "2.0", "method": "show", "params": [task_id], "id": 1}
+// Get task by id.
+// --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
 async fn show(url: &str, id: u64) -> Result<Value> {
-    let req = jsonrpc::request(json!("show"), json!([id]));
+    let req = jsonrpc::request(json!("get_by_id"), json!([id]));
     request(req, url.to_string()).await
 }
 
@@ -315,10 +315,99 @@ async fn start(options: CliTau) -> Result<()> {
                 rpc_addr,
                 json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
             )
-            .await?;
+                .await?;
         }
 
-        Some(CliTauSubCommands::List {}) => {
+        Some(CliTauSubCommands::Update { id, key, value }) => {
+            let value = value.as_str().trim();
+
+            let updated_value: Value = match key.as_str() {
+                "due" => {
+                    json!(due_as_timestamp(value))
+                }
+                "rank" => {
+                    json!(value.parse::<f32>()?)
+                }
+                "project" | "assign" => {
+                    json!(value.split(',').collect::<Vec<&str>>())
+                }
+                _ => {
+                    json!(value)
+                }
+            };
+
+            update(rpc_addr, id, json!({ key: updated_value })).await?;
+        }
+
+        Some(CliTauSubCommands::SetState { id, state }) => {
+            set_state(rpc_addr, id, state.trim()).await?;
+        }
+
+        Some(CliTauSubCommands::GetState { id }) => {
+            let state = get_state(rpc_addr, id).await?;
+            println!("Task with id {} is: {}", id, state);
+        }
+
+        Some(CliTauSubCommands::SetComment { id, author, content }) => {
+            set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
+        }
+
+        Some(CliTauSubCommands::GetComment { id }) => {
+            let rep = list(rpc_addr, json!([])).await?;
+            let tasks: Vec<Value> = serde_json::from_value(rep)?;
+
+            if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
+                let index: usize = (id - 1).try_into().unwrap();
+                let comments: Vec<Value> =
+                    serde_json::from_value(tasks[index]["comments"].clone())?;
+                let mut cmnt = String::new();
+
+                for comment in comments {
+                    cmnt.push_str(comment["author"].as_str().ok_or(Error::OperationFailed)?);
+                    cmnt.push_str(": ");
+                    cmnt.push_str(comment["content"].as_str().ok_or(Error::OperationFailed)?);
+                    cmnt.push('\n');
+                }
+                cmnt.pop();
+
+                println!("Comments on Task with id {}:\n{}", id, cmnt);
+            }
+        }
+
+        Some(CliTauSubCommands::Get { id }) => {
+            let rep = show(rpc_addr, id).await?;
+            let due = if rep["due"].is_u64() {
+                let timestamp = rep["due"].as_i64().unwrap();
+                NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
+            } else {
+                "".to_string()
+            };
+
+            let created_at = if rep["created_at"].is_u64() {
+                let created = rep["created_at"].as_i64().unwrap();
+                NaiveDateTime::from_timestamp(created, 0).date().format("%A %-d %B").to_string()
+            } else {
+                "".to_string()
+            };
+
+            let t = TaskInfo {
+                ref_id: serde_json::from_value(rep["ref_id"].clone())?,
+                id: serde_json::from_value(rep["id"].clone())?,
+                title: serde_json::from_value(rep["title"].clone())?,
+                desc: serde_json::from_value(rep["desc"].clone())?,
+                assign: serde_json::from_value(rep["assign"].clone())?,
+                project: serde_json::from_value(rep["project"].clone())?,
+                due,
+                rank: serde_json::from_value(rep["rank"].clone())?,
+                created_at,
+                events: serde_json::from_value(rep["events"].clone())?,
+                comments: serde_json::from_value(rep["comments"].clone())?,
+            };
+            // let t: TaskInfo = serde_json::from_value(rep)?;
+            println!("TaskInfo: {}", serde_json::to_string_pretty(&t)?);
+        }
+
+        Some(CliTauSubCommands::List {}) | None => {
             let rep = list(rpc_addr, json!([])).await?;
 
             let mut table = Table::new();
@@ -381,100 +470,6 @@ async fn start(options: CliTau) -> Result<()> {
                 ]));
             }
             table.printstd();
-        }
-
-        Some(CliTauSubCommands::Update { id, key, value }) => {
-            let value = value.as_str().trim();
-
-            let updated_value: Value = match key.as_str() {
-                "due" => {
-                    json!(due_as_timestamp(value))
-                }
-                "rank" => {
-                    json!(value.parse::<f32>()?)
-                }
-                "project" | "assign" => {
-                    json!(value.split(',').collect::<Vec<&str>>())
-                }
-                _ => {
-                    json!(value)
-                }
-            };
-
-            update(rpc_addr, id, json!({ key: updated_value })).await?;
-        }
-
-        Some(CliTauSubCommands::SetState { id, state }) => {
-            set_state(rpc_addr, id, state.trim()).await?;
-        }
-
-        Some(CliTauSubCommands::GetState { id }) => {
-            let state = get_state(rpc_addr, id).await?;
-            println!("Task with id {} is: {}", id, state);
-        }
-
-        Some(CliTauSubCommands::SetComment { id, author, content }) => {
-            set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
-        }
-
-        Some(CliTauSubCommands::GetComment { id }) => {
-            let rep = list(rpc_addr, json!([])).await?;
-            let tasks: Vec<Value> = serde_json::from_value(rep)?;
-
-            if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
-                let index: usize = (id - 1).try_into().unwrap();
-                let comments: Vec<Value> =
-                    serde_json::from_value(tasks[index]["comments"].clone())?;
-                let mut cmnt = String::new();
-
-                for comment in comments {
-                    cmnt.push_str(comment["author"].as_str().ok_or(Error::OperationFailed)?);
-                    cmnt.push_str(": ");
-                    cmnt.push_str(comment["content"].as_str().ok_or(Error::OperationFailed)?);
-                    cmnt.push('\n');
-                }
-                cmnt.pop();
-
-                println!("Comments on Task with id {}:\n{}", id, cmnt);
-            }
-        }
-
-        Some(CliTauSubCommands::Show { id }) => {
-            let rep = show(rpc_addr, id).await?;
-            let due = if rep["due"].is_u64() {
-                let timestamp = rep["due"].as_i64().unwrap();
-                NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
-            } else {
-                "".to_string()
-            };
-
-            let created_at = if rep["created_at"].is_u64() {
-                let created = rep["created_at"].as_i64().unwrap();
-                NaiveDateTime::from_timestamp(created, 0).date().format("%A %-d %B").to_string()
-            } else {
-                "".to_string()
-            };
-
-            let t = TaskInfo {
-                ref_id: serde_json::from_value(rep["ref_id"].clone())?,
-                id: serde_json::from_value(rep["id"].clone())?,
-                title: serde_json::from_value(rep["title"].clone())?,
-                desc: serde_json::from_value(rep["desc"].clone())?,
-                assign: serde_json::from_value(rep["assign"].clone())?,
-                project: serde_json::from_value(rep["project"].clone())?,
-                due,
-                rank: serde_json::from_value(rep["rank"].clone())?,
-                created_at,
-                events: serde_json::from_value(rep["events"].clone())?,
-                comments: serde_json::from_value(rep["comments"].clone())?,
-            };
-            // let t: TaskInfo = serde_json::from_value(rep)?;
-            println!("TaskInfo: {}", serde_json::to_string_pretty(&t)?);
-        }
-
-        _ => {
-            error!("Please run 'tau help' to see usage.");
-            return Err(Error::MissingParams)
         }
     }
     Ok(())
