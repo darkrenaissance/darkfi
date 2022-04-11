@@ -1,28 +1,30 @@
 use crate::util::serial::{SerialDecodable, SerialEncodable};
 
-use super::{
-    participant::Participant,
-    util::{get_current_time, Timestamp},
-    vote::Vote,
-};
+use super::{participant::Participant, util::Timestamp, vote::Vote};
 
 /// This struct represents additional Block information used by the consensus protocol.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Metadata {
+    /// Block creation timestamp
+    pub timestamp: Timestamp,
     /// Block information used by Ouroboros consensus
     pub om: OuroborosMetadata,
     /// Block information used by Streamlet consensus
     pub sm: StreamletMetadata,
-    /// Block recieval timestamp
-    pub timestamp: Timestamp,
 }
 
 impl Metadata {
-    pub fn new(proof: String, r: String, s: String, participants: Vec<Participant>) -> Metadata {
+    pub fn new(
+        timestamp: Timestamp,
+        proof: String,
+        r: String,
+        s: String,
+        participants: Vec<Participant>,
+    ) -> Metadata {
         Metadata {
+            timestamp,
             om: OuroborosMetadata::new(proof, r, s),
             sm: StreamletMetadata::new(participants),
-            timestamp: get_current_time(),
         }
     }
 }

@@ -2,14 +2,14 @@ use chrono::{NaiveDateTime, Utc};
 
 use crate::util::serial::{SerialDecodable, SerialEncodable};
 
-// Serialized blake3 hash bytes for character "⊥"
+/// Serialized blake3 hash bytes for character "⊥"
 pub const GENESIS_HASH_BYTES: [u8; 32] = [
     254, 233, 82, 102, 23, 208, 153, 87, 96, 165, 163, 194, 238, 7, 1, 88, 14, 1, 249, 118, 197,
     29, 180, 211, 87, 66, 59, 38, 86, 54, 12, 39,
 ];
 
 /// Util structure to represend chrono UTC timestamps.
-#[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
+#[derive(Debug, Clone, PartialEq, SerialDecodable, SerialEncodable)]
 pub struct Timestamp(pub i64);
 
 impl Timestamp {

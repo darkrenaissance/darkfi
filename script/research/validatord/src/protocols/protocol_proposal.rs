@@ -46,7 +46,7 @@ impl ProtocolProposal {
                 proposal
             );
             let proposal_copy = (*proposal).clone();
-            let vote = self.state.write().unwrap().receive_proposed_block(&proposal_copy, false);
+            let vote = self.state.write().unwrap().receive_proposal(&proposal_copy);
             match vote {
                 Ok(x) => {
                     if x.is_none() {

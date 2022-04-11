@@ -6,6 +6,7 @@ use crate::{
     Result,
 };
 
+/// Temporary structure used to represent transactions.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Tx {
     pub payload: String,

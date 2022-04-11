@@ -7,7 +7,7 @@ pub mod tx;
 pub mod util;
 pub mod vote;
 
-pub use block::{proposal_eq_block, Block, BlockProposal};
+pub use block::{Block, BlockProposal};
 pub use blockchain::Blockchain;
 pub use metadata::Metadata;
 pub use participant::Participant;

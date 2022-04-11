@@ -1,5 +1,6 @@
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error};
+use rand::rngs::OsRng;
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
     hash::{Hash, Hasher},
@@ -12,17 +13,17 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
+    encode_payload,
     util::serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
-use rand::rngs::OsRng;
 
 use super::{
-    block::{proposal_eq_block, Block, BlockProposal},
-    blockchain::Blockchain,
+    block::{Block, BlockProposal},
+    blockchain::{Blockchain, ProposalsChain},
     participant::Participant,
     tx::Tx,
-    util::{Timestamp, GENESIS_HASH_BYTES},
+    util::{get_current_time, Timestamp, GENESIS_HASH_BYTES},
     vote::Vote,
 };
 
@@ -34,16 +35,17 @@ pub type StatePtr = Arc<RwLock<State>>;
 
 /// This struct represents the state of a consensus node.
 /// Each node is numbered and has a secret-public keys pair, to sign messages.
-/// Nodes hold a set of Blockchains(some of which are not notarized)
+/// Nodes hold the canonical(finalized) blockchain, a set of fork chains containing proposals
 /// and a set of unconfirmed pending transactions.
+/// Additionally, each node keeps tracks of all participating nodes.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct State {
     pub id: u64,
-    pub genesis_time: Timestamp,
-    pub secret_key: SecretKey,
-    pub public_key: PublicKey,
-    pub canonical_blockchain: Blockchain,
-    pub node_blockchains: Vec<Blockchain>,
+    pub genesis: Timestamp,
+    pub secret: SecretKey,
+    pub public: PublicKey,
+    pub blockchain: Blockchain,
+    pub proposals: Vec<ProposalsChain>,
     pub unconfirmed_txs: Vec<Tx>,
     pub orphan_votes: Vec<Vote>,
     pub participants: BTreeMap<u64, Participant>,
@@ -51,16 +53,16 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(id: u64, genesis_time: Timestamp, init_block: Block) -> State {
+    pub fn new(id: u64, genesis: Timestamp, init_block: Block) -> State {
         // TODO: clock sync
         let secret = SecretKey::random(&mut OsRng);
         State {
             id,
-            genesis_time,
-            secret_key: secret,
-            public_key: PublicKey::from_secret(secret),
-            canonical_blockchain: Blockchain::new(init_block),
-            node_blockchains: Vec::new(),
+            genesis,
+            secret,
+            public: PublicKey::from_secret(secret),
+            blockchain: Blockchain::new(init_block),
+            proposals: Vec::new(),
             unconfirmed_txs: Vec::new(),
             orphan_votes: Vec::new(),
             participants: BTreeMap::new(),
@@ -80,9 +82,9 @@ impl State {
 
     /// Node calculates seconds until next epoch starting time.
     /// Epochs duration is configured using the delta value.
-    pub fn get_seconds_until_next_epoch_start(&self) -> Duration {
-        let start_time = NaiveDateTime::from_timestamp(self.genesis_time.0, 0);
-        let current_epoch = self.get_current_epoch() + 1;
+    pub fn next_epoch_start(&self) -> Duration {
+        let start_time = NaiveDateTime::from_timestamp(self.genesis.0, 0);
+        let current_epoch = self.current_epoch() + 1;
         let next_epoch_start_timestamp =
             (current_epoch * (2 * DELTA)) + (start_time.timestamp() as u64);
         let next_epoch_start =
@@ -94,14 +96,14 @@ impl State {
 
     /// Node calculates current epoch, based on elapsed time from the genesis block.
     /// Epochs duration is configured using the delta value.
-    pub fn get_current_epoch(&self) -> u64 {
-        self.genesis_time.clone().elapsed() / (2 * DELTA)
+    pub fn current_epoch(&self) -> u64 {
+        self.genesis.clone().elapsed() / (2 * DELTA)
     }
 
     /// Node finds epochs leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating in the network.
-    pub fn get_epoch_leader(&mut self) -> u64 {
-        let epoch = self.get_current_epoch();
+    pub fn epoch_leader(&mut self) -> u64 {
+        let epoch = self.current_epoch();
         let mut hasher = DefaultHasher::new();
         epoch.hash(&mut hasher);
         self.zero_participants_check();
@@ -110,41 +112,42 @@ impl State {
     }
 
     /// Node checks if they are the current epoch leader.
-    pub fn check_if_epoch_leader(&mut self) -> bool {
-        let leader = self.get_epoch_leader();
+    pub fn is_epoch_leader(&mut self) -> bool {
+        let leader = self.epoch_leader();
         self.id == leader
     }
 
     /// Node generates a block proposal for the current epoch,
     /// containing all uncorfirmed transactions.
-    /// Block extends the longest notarized blockchain the node holds.
-    pub fn propose_block(&self) -> Result<Option<BlockProposal>> {
-        let epoch = self.get_current_epoch();
-        let longest_notarized_chain = self.find_longest_notarized_chain();
-        let serialized = serialize(longest_notarized_chain.blocks.last().unwrap());
-        let hash = blake3::hash(&serialized);
-        let unproposed_txs = self.get_unproposed_txs();
+    /// Proposal extends the longest notarized fork chain the node holds.
+    pub fn propose(&self) -> Result<Option<BlockProposal>> {
+        let epoch = self.current_epoch();
+        let previous_hash = self.longest_notarized_chain_last_hash().unwrap();
+        let unproposed_txs = self.unproposed_txs();
         let mut encoded_block = vec![];
-        hash.encode(&mut encoded_block)?;
-        epoch.encode(&mut encoded_block)?;
-        unproposed_txs.encode(&mut encoded_block)?;
-        let signed_block = self.secret_key.sign(&encoded_block[..]);
+        encode_payload!(&mut encoded_block, previous_hash, epoch, unproposed_txs);
+        let signed_block = self.secret.sign(&encoded_block[..]);
         Ok(Some(BlockProposal::new(
-            self.public_key,
+            self.public,
             signed_block,
             self.id,
-            hash,
+            previous_hash,
             epoch,
             unproposed_txs,
+            get_current_time(),
+            String::from("proof"),
+            String::from("r"),
+            String::from("s"),
+            self.participants.values().cloned().collect(),
         )))
     }
 
     /// Node retrieves all unconfiremd transactions not proposed in previous blocks.
-    pub fn get_unproposed_txs(&self) -> Vec<Tx> {
+    pub fn unproposed_txs(&self) -> Vec<Tx> {
         let mut unproposed_txs = self.unconfirmed_txs.clone();
-        for blockchain in &self.node_blockchains {
-            for block in &blockchain.blocks {
-                for tx in &block.txs {
+        for chain in &self.proposals {
+            for proposal in &chain.proposals {
+                for tx in &proposal.txs {
                     if let Some(pos) = unproposed_txs.iter().position(|txs| *txs == *tx) {
                         unproposed_txs.remove(pos);
                     }
@@ -154,168 +157,197 @@ impl State {
         unproposed_txs
     }
 
-    /// Finds the longest fully notarized blockchain the node holds.
-    pub fn find_longest_notarized_chain(&self) -> &Blockchain {
-        let mut longest_notarized_chain = &self.canonical_blockchain;
-        let mut length = 0;
-        for blockchain in &self.node_blockchains {
-            if blockchain.is_notarized() && blockchain.blocks.len() > length {
-                length = blockchain.blocks.len();
-                longest_notarized_chain = blockchain;
+    /// Finds the longest fully notarized blockchain the node holds and returns the last block hash.
+    pub fn longest_notarized_chain_last_hash(&self) -> Result<blake3::Hash> {
+        let mut buf = vec![];
+        if !self.proposals.is_empty() {
+            let mut longest_notarized_chain = &self.proposals[0];
+            let mut length = longest_notarized_chain.proposals.len();
+            if self.proposals.len() > 1 {
+                for chain in &self.proposals[1..] {
+                    if chain.notarized() && chain.proposals.len() > length {
+                        length = chain.proposals.len();
+                        longest_notarized_chain = chain;
+                    }
+                }
             }
-        }
-        longest_notarized_chain
+            let last = longest_notarized_chain.proposals.last().unwrap();
+            encode_payload!(&mut buf, last.st, last.sl, last.txs);
+        } else {
+            let last = self.blockchain.blocks.last().unwrap();
+            encode_payload!(&mut buf, last.st, last.sl, last.txs);
+        };
+        Ok(blake3::hash(&serialize(&buf)))
     }
 
     /// Node receives the proposed block, verifies its sender(epoch leader),
     /// and proceeds with voting on it.
-    pub fn receive_proposed_block(
-        &mut self,
-        proposed_block: &BlockProposal,
-        leader: bool,
-    ) -> Result<Option<Vote>> {
-        assert!(self.get_epoch_leader() == proposed_block.id);
+    pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+        let leader = self.epoch_leader();
+        if leader != proposal.id {
+            debug!(
+                "Received proposal not from epoch leader ({:?}). Proposer: {:?}",
+                leader, proposal.id
+            );
+            return Ok(None)
+        }
         let mut encoded_block = vec![];
-        proposed_block.st.encode(&mut encoded_block)?;
-        proposed_block.sl.encode(&mut encoded_block)?;
-        proposed_block.txs.encode(&mut encoded_block)?;
-        assert!(proposed_block.public_key.verify(&encoded_block[..], &proposed_block.signature));
-        self.vote_block(proposed_block, leader)
+        encode_payload!(&mut encoded_block, proposal.st, proposal.sl, proposal.txs);
+        if !proposal.public_key.verify(&encoded_block[..], &proposal.signature) {
+            debug!("Proposer signature couldn't be verified. Proposer: {:?}", proposal.id);
+            return Ok(None)
+        }
+        self.vote(proposal)
     }
 
-    /// Given a block, node finds which blockchain it extends.
-    /// If block extends the canonical blockchain, a new fork blockchain is created.
-    /// Node votes on the block, only if it extends the longest notarized chain it has seen.
-    pub fn vote_block(&mut self, proposal: &BlockProposal, leader: bool) -> Result<Option<Vote>> {
+    /// Given a proposal, node finds which blockchain it extends.
+    /// If proposal extends the canonical blockchain, a new fork chain is created.
+    /// Node votes on the proposal, only if it extends the longest notarized fork chain it has seen.
+    pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         self.zero_participants_check();
-        let mut block = Block::new(
-            proposal.st.clone(),
-            proposal.sl,
-            proposal.txs.clone(),
-            String::from("proof"),
-            String::from("r"),
-            String::from("s"),
-            self.participants.values().cloned().collect(),
-        );
+        let mut proposal = proposal.clone();
+
+        // Generate proposal hash
+        let mut buf = vec![];
+        encode_payload!(&mut buf, proposal.st, proposal.sl, proposal.txs);
+        let proposal_hash = blake3::hash(&serialize(&buf));
 
         // Add orphan votes
         let mut orphans = Vec::new();
-        for (index, vote) in self.orphan_votes.iter().enumerate() {
-            if proposal_eq_block(&vote.block, &block) {
-                block.metadata.sm.votes.push(vote.clone());
-                orphans.push(index);
+        for vote in self.orphan_votes.iter() {
+            if vote.proposal == proposal_hash {
+                proposal.metadata.sm.votes.push(vote.clone());
+                orphans.push(vote.clone());
             }
         }
-        for index in orphans {
-            self.orphan_votes.remove(index);
+        for vote in orphans {
+            self.orphan_votes.retain(|v| *v != vote);
         }
 
-        let index = self.find_extended_blockchain_index(&block, leader);
+        let index = self.find_extended_chain_index(&proposal).unwrap();
 
         if index == -2 {
             return Ok(None)
         }
-        let blockchain = match index {
+        let chain = match index {
             -1 => {
-                let blockchain = Blockchain::new(block);
-                self.node_blockchains.push(blockchain);
-                self.node_blockchains.last().unwrap()
+                let proposalschain = ProposalsChain::new(proposal.clone());
+                self.proposals.push(proposalschain);
+                self.proposals.last().unwrap()
             }
             _ => {
-                self.node_blockchains[index as usize].add_block(&block);
-                &self.node_blockchains[index as usize]
+                self.proposals[index as usize].add(&proposal);
+                &self.proposals[index as usize]
             }
         };
 
-        if self.extends_notarized_blockchain(blockchain) {
-            let mut encoded_proposal = vec![];
-            proposal.encode(&mut encoded_proposal)?;
-            let signed_proposal = self.secret_key.sign(&encoded_proposal[..]);
-            return Ok(Some(Vote::new(self.public_key, signed_proposal, proposal.clone(), self.id)))
+        if self.extends_notarized_chain(chain) {
+            let mut encoded_hash = vec![];
+            encode_payload!(&mut encoded_hash, proposal_hash);
+            let signed_hash = self.secret.sign(&encoded_hash[..]);
+            return Ok(Some(Vote::new(
+                self.public,
+                signed_hash,
+                proposal_hash,
+                proposal.sl,
+                self.id,
+            )))
         }
         Ok(None)
     }
 
-    /// Node verifies if provided blockchain is notarized excluding the last block.
-    pub fn extends_notarized_blockchain(&self, blockchain: &Blockchain) -> bool {
-        for block in &blockchain.blocks[..(blockchain.blocks.len() - 1)] {
-            if !block.metadata.sm.notarized {
+    /// Node verifies if provided chain is notarized excluding the last block.
+    pub fn extends_notarized_chain(&self, chain: &ProposalsChain) -> bool {
+        for proposal in &chain.proposals[..(chain.proposals.len() - 1)] {
+            if !proposal.metadata.sm.notarized {
                 return false
             }
         }
         true
     }
 
-    /// Given a block, node finds the index of the blockchain it extends.
-    pub fn find_extended_blockchain_index(&self, block: &Block, leader: bool) -> i64 {
-        for (index, blockchain) in self.node_blockchains.iter().enumerate() {
-            let last_block = blockchain.blocks.last().unwrap();
-            let last_block_hash = blake3::hash(&serialize(last_block));
-            if (leader && block.st == last_block_hash && block.sl >= last_block.sl) ||
-                (!leader && block.st == last_block_hash && block.sl > last_block.sl)
-            {
-                return index as i64
+    /// Given a proposal, node finds the index of the chain it extends.
+    pub fn find_extended_chain_index(&self, proposal: &BlockProposal) -> Result<i64> {
+        for (index, chain) in self.proposals.iter().enumerate() {
+            let last = chain.proposals.last().unwrap();
+            let mut buf = vec![];
+            encode_payload!(&mut buf, last.st, last.sl, last.txs);
+            let hash = blake3::hash(&serialize(&buf));
+            if proposal.st == hash && proposal.sl > last.sl {
+                return Ok(index as i64)
+            }
+            if proposal.st == last.st && proposal.sl == last.sl {
+                debug!("Proposal already received.");
+                return Ok(-2)
             }
         }
 
-        let last_block = self.canonical_blockchain.blocks.last().unwrap();
-        let last_block_hash = blake3::hash(&serialize(last_block));
-        if (leader && block.st != last_block_hash || block.sl < last_block.sl) ||
-            (!leader && block.st != last_block_hash || block.sl <= last_block.sl)
-        {
-            debug!("Proposed block doesn't extend any known chains.");
-            return -2
+        let last = self.blockchain.blocks.last().unwrap();
+        let mut buf = vec![];
+        encode_payload!(&mut buf, last.st, last.sl, last.txs);
+        let hash = blake3::hash(&serialize(&buf));
+        if proposal.st != hash || proposal.sl <= last.sl {
+            debug!("Proposal doesn't extend any known chains.");
+            return Ok(-2)
         }
-        -1
+        Ok(-1)
     }
 
-    /// Node receives a vote for a block.
+    /// Node receives a vote for a proposal.
     /// First, sender is verified using their public key.
-    /// Block is searched in nodes blockchains.
-    /// If the vote wasn't received before, it is appended to block votes list.
-    /// When a node sees 2n/3 votes for a block it notarizes it.
-    /// When a block gets notarized, the transactions it contains are removed from
+    /// Proposal is searched in nodes fork chains.
+    /// If the vote wasn't received before, it is appended to proposal votes list.
+    /// When a node sees 2n/3 votes for a proposal it notarizes it.
+    /// When a proposal gets notarized, the transactions it contains are removed from
     /// nodes unconfirmed transactions list.
-    /// Finally, we check if the notarization of the block can finalize parent blocks
-    /// in its blockchain.
+    /// Finally, we check if the notarization of the proposal can finalize parent proposals
+    /// in its chain.
     pub fn receive_vote(&mut self, vote: &Vote) -> bool {
-        let mut encoded_block = vec![];
-        let result = vote.block.encode(&mut encoded_block);
+        let mut encoded_proposal = vec![];
+        let result = vote.proposal.encode(&mut encoded_proposal);
         match result {
             Ok(_) => (),
             Err(e) => {
-                error!("Block encoding failed. Error: {:?}", e);
+                error!("Proposal encoding failed. Error: {:?}", e);
                 return false
             }
         };
-        assert!(&vote.node_public_key.verify(&encoded_block[..], &vote.vote));
+
+        if !vote.public_key.verify(&encoded_proposal[..], &vote.vote) {
+            debug!("Voter signature couldn't be verified. Voter: {:?}", vote.id);
+            return false
+        }
 
         let nodes_count = self.participants.len();
         self.zero_participants_check();
 
-        let vote_block = self.find_block(&vote.block);
-        if vote_block == None {
-            debug!("Received vote for unknown block.");
+        let proposal = self.find_proposal(&vote.proposal).unwrap();
+        if proposal == None {
+            debug!("Received vote for unknown proposal.");
             if !self.orphan_votes.contains(vote) {
                 self.orphan_votes.push(vote.clone());
             }
             return false
         }
 
-        let (unwrapped_vote_block, blockchain_index) = vote_block.unwrap();
-        if !unwrapped_vote_block.metadata.sm.votes.contains(vote) {
-            unwrapped_vote_block.metadata.sm.votes.push(vote.clone());
+        let (unwrapped, chain_index) = proposal.unwrap();
+        if !unwrapped.metadata.sm.votes.contains(vote) {
+            unwrapped.metadata.sm.votes.push(vote.clone());
 
-            if !unwrapped_vote_block.metadata.sm.notarized &&
-                unwrapped_vote_block.metadata.sm.votes.len() > (2 * nodes_count / 3)
+            if !unwrapped.metadata.sm.notarized &&
+                unwrapped.metadata.sm.votes.len() > (2 * nodes_count / 3)
             {
-                unwrapped_vote_block.metadata.sm.notarized = true;
-                self.check_blockchain_finalization(blockchain_index);
+                unwrapped.metadata.sm.notarized = true;
+                self.chain_finalization(chain_index);
             }
 
             // updating participant vote
-            let mut participant = self.participants.get(&vote.id).unwrap().clone();
-            participant.voted = Some(vote.block.sl);
+            let exists = self.participants.get(&vote.id);
+            let mut participant = match exists {
+                Some(p) => p.clone(),
+                None => Participant::new(vote.id, vote.sl),
+            };
+            participant.voted = Some(vote.sl);
             self.participants.insert(participant.id, participant);
 
             return true
@@ -323,86 +355,79 @@ impl State {
         false
     }
 
-    /// Node searches it the blockchains it holds for provided block.
-    pub fn find_block(&mut self, vote_block: &BlockProposal) -> Option<(&mut Block, i64)> {
-        for (index, blockchain) in &mut self.node_blockchains.iter_mut().enumerate() {
-            for block in blockchain.blocks.iter_mut().rev() {
-                if proposal_eq_block(vote_block, block) {
-                    return Some((block, index as i64))
+    /// Node searches it the chains it holds for provided proposal.
+    pub fn find_proposal(
+        &mut self,
+        vote_proposal: &blake3::Hash,
+    ) -> Result<Option<(&mut BlockProposal, i64)>> {
+        for (index, chain) in &mut self.proposals.iter_mut().enumerate() {
+            for proposal in chain.proposals.iter_mut().rev() {
+                let mut buf = vec![];
+                encode_payload!(&mut buf, proposal.st, proposal.sl, proposal.txs);
+                let proposal_hash = blake3::hash(&serialize(&buf));
+                if vote_proposal == &proposal_hash {
+                    return Ok(Some((proposal, index as i64)))
                 }
             }
         }
-
-        for block in &mut self.canonical_blockchain.blocks.iter_mut().rev() {
-            if proposal_eq_block(vote_block, block) {
-                return Some((block, -1))
-            }
-        }
-        None
+        Ok(None)
     }
 
-    /// Node checks if the index blockchain can be finalized.
+    /// Provided an index, node checks if chain can be finalized.
     /// Consensus finalization logic: If node has observed the notarization of 3 consecutive
-    /// blocks in a fork chain, it finalizes (appends to canonical blockchain) all blocks up to the middle block.
-    /// When fork chain blocks are finalized, rest fork chains not starting by those blocks are removed.
-    pub fn check_blockchain_finalization(&mut self, blockchain_index: i64) {
-        let blockchain = if blockchain_index == -1 {
-            &mut self.canonical_blockchain
-        } else {
-            &mut self.node_blockchains[blockchain_index as usize]
-        };
-
-        let blockchain_len = blockchain.blocks.len();
-        if blockchain_len > 2 {
-            let mut consecutive_notarized = 0;
-            for block in &blockchain.blocks {
-                if block.metadata.sm.notarized {
-                    consecutive_notarized += 1;
+    /// proposals in a fork chain, it finalizes (appends to canonical blockchain) all proposals up to the middle block.
+    /// When fork chain proposals are finalized, rest fork chains not starting by those proposals are removed.
+    pub fn chain_finalization(&mut self, chain_index: i64) {
+        let chain = &mut self.proposals[chain_index as usize];
+        let len = chain.proposals.len();
+        if len > 2 {
+            let mut consecutive = 0;
+            for proposal in &chain.proposals {
+                if proposal.metadata.sm.notarized {
+                    consecutive += 1;
                 } else {
                     break
                 }
             }
 
-            if consecutive_notarized > 2 {
-                let mut finalized_blocks = Vec::new();
-                for block in &mut blockchain.blocks[..(consecutive_notarized - 1)] {
-                    block.metadata.sm.finalized = true;
-                    finalized_blocks.push(block.clone());
-                    for tx in block.txs.clone() {
+            if consecutive > 2 {
+                let mut finalized = Vec::new();
+                for proposal in &mut chain.proposals[..(consecutive - 1)] {
+                    proposal.metadata.sm.finalized = true;
+                    finalized.push(proposal.clone());
+                    for tx in proposal.txs.clone() {
                         if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {
                             self.unconfirmed_txs.remove(pos);
                         }
                     }
                 }
-                blockchain.blocks.drain(0..(consecutive_notarized - 1));
-                for block in &finalized_blocks {
-                    self.canonical_blockchain.blocks.push(block.clone());
+                chain.proposals.drain(0..(consecutive - 1));
+                for proposal in &finalized {
+                    self.blockchain.blocks.push(Block::from_proposal(proposal.clone()));
                 }
 
-                let last_finalized_block = self.canonical_blockchain.blocks.last().unwrap();
-                let last_finalized_block_hash = blake3::hash(&serialize(last_finalized_block));
-                let mut dropped_blockchains = Vec::new();
-                for (index, blockchain) in self.node_blockchains.iter().enumerate() {
-                    let first_block = blockchain.blocks.first().unwrap();
-                    if first_block.st != last_finalized_block_hash ||
-                        first_block.sl <= last_finalized_block.sl
-                    {
-                        dropped_blockchains.push(index);
+                let last = self.blockchain.blocks.last().unwrap();
+                let hash = blake3::hash(&serialize(last));
+                let mut dropped = Vec::new();
+                for chain in self.proposals.iter() {
+                    let first = chain.proposals.first().unwrap();
+                    if first.st != hash || first.sl <= last.sl {
+                        dropped.push(chain.clone());
                     }
                 }
-                for index in dropped_blockchains {
-                    self.node_blockchains.remove(index);
+                for chain in dropped {
+                    self.proposals.retain(|c| *c != chain);
                 }
 
                 // Remove orphan votes
                 let mut orphans = Vec::new();
-                for (index, vote) in self.orphan_votes.iter().enumerate() {
-                    if vote.block.sl <= last_finalized_block.sl {
-                        orphans.push(index);
+                for vote in self.orphan_votes.iter() {
+                    if vote.sl <= last.sl {
+                        orphans.push(vote.clone());
                     }
                 }
-                for index in orphans {
-                    self.orphan_votes.remove(index);
+                for vote in orphans {
+                    self.orphan_votes.retain(|v| *v != vote);
                 }
             }
         }
@@ -438,7 +463,7 @@ impl State {
         self.pending_participants = Vec::new();
 
         let mut inactive = Vec::new();
-        let previous_epoch = self.get_current_epoch() - 1;
+        let previous_epoch = self.current_epoch() - 1;
         for (index, participant) in self.participants.clone().iter() {
             match participant.voted {
                 Some(epoch) => {
@@ -492,6 +517,7 @@ impl State {
             blake3::Hash::from(GENESIS_HASH_BYTES),
             0,
             vec![],
+            get_current_time(),
             String::from("proof"),
             String::from("r"),
             String::from("s"),

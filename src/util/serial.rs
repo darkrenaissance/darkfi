@@ -657,6 +657,16 @@ tuple_encode!(T0, T1, T2, T3);
 tuple_encode!(T0, T1, T2, T3, T4, T5);
 tuple_encode!(T0, T1, T2, T3, T4, T5, T6, T7);
 
+/// Encode a dynamic set of arguments to a buffer.
+#[macro_export]
+macro_rules! encode_payload {
+    ($buf: expr, $($args: expr), *) => {{
+        $(
+            $args.encode($buf)?;
+        )*
+    }}
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -981,5 +991,26 @@ mod tests {
         assert_eq!(t1, t1_de);
         assert_eq!(t2, t2_de);
         assert_eq!(t3_de, TestDerive3 { foo: 30, bar: 0, meh: 44 });
+    }
+
+    #[test]
+    fn encode_payload_test() -> Result<()> {
+        let mut buf = vec![];
+        encode_payload!(&mut buf, 1_i32, 2_i32, b"Hello World");
+        assert_eq!(
+            buf,
+            [1, 0, 0, 0, 2, 0, 0, 0, 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]
+        );
+
+        let mut buf = vec![];
+        encode_payload!(&mut buf, 1.5f64, -1i64, true, 0x10000, [0xfe, 0xff, 0x00, 0x00, 0x00]);
+        assert_eq!(
+            buf,
+            [
+                0, 0, 0, 0, 0, 0, 248, 63, 255, 255, 255, 255, 255, 255, 255, 255, 1, 0, 0, 1, 0,
+                254, 255, 0, 0, 0
+            ]
+        );
+        Ok(())
     }
 }

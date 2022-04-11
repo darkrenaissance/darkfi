@@ -1,9 +1,4 @@
-use std::{
-    hash::{Hash, Hasher},
-    io,
-};
-
-use super::{metadata::Metadata, participant::Participant, tx::Tx};
+use std::io;
 
 use crate::{
     crypto::{keypair::PublicKey, schnorr::Signature},
@@ -12,8 +7,10 @@ use crate::{
     Result,
 };
 
+use super::{metadata::Metadata, participant::Participant, tx::Tx, util::Timestamp};
+
 /// This struct represents a tuple of the form (st, sl, txs, metadata).
-/// Each blocks parent hash h may be computed simply as a hash of the parent block.
+/// Each blocks parent hash st may be computed simply as a hash of the parent block.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
     /// Previous block hash
@@ -31,12 +28,17 @@ impl Block {
         st: blake3::Hash,
         sl: u64,
         txs: Vec<Tx>,
+        timestamp: Timestamp,
         proof: String,
         r: String,
         s: String,
         participants: Vec<Participant>,
     ) -> Block {
-        Block { st, sl, txs, metadata: Metadata::new(proof, r, s, participants) }
+        Block { st, sl, txs, metadata: Metadata::new(timestamp, proof, r, s, participants) }
+    }
+
+    pub fn from_proposal(proposal: BlockProposal) -> Block {
+        Block { st: proposal.st, sl: proposal.sl, txs: proposal.txs, metadata: proposal.metadata }
     }
 }
 
@@ -46,13 +48,10 @@ impl PartialEq for Block {
     }
 }
 
-impl Hash for Block {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        format!("{:?}{:?}{:?}", self.st, self.sl, self.txs).hash(hasher);
-    }
-}
+impl_vec!(Block);
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+/// This struct represents a Block proposal, used for consensus.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockProposal {
     /// leader public key
     pub public_key: PublicKey,
@@ -66,6 +65,8 @@ pub struct BlockProposal {
     pub sl: u64,
     /// Transactions payload
     pub txs: Vec<Tx>,
+    /// Additional proposal information
+    pub metadata: Metadata,
 }
 
 impl BlockProposal {
@@ -76,8 +77,32 @@ impl BlockProposal {
         st: blake3::Hash,
         sl: u64,
         txs: Vec<Tx>,
+        timestamp: Timestamp,
+        proof: String,
+        r: String,
+        s: String,
+        participants: Vec<Participant>,
     ) -> BlockProposal {
-        BlockProposal { public_key, signature, id, st, sl, txs }
+        BlockProposal {
+            public_key,
+            signature,
+            id,
+            st,
+            sl,
+            txs,
+            metadata: Metadata::new(timestamp, proof, r, s, participants),
+        }
+    }
+}
+
+impl PartialEq for BlockProposal {
+    fn eq(&self, other: &Self) -> bool {
+        self.public_key == other.public_key &&
+            self.signature == other.signature &&
+            self.id == other.id &&
+            self.st == other.st &&
+            self.sl == other.sl &&
+            self.txs == other.txs
     }
 }
 
@@ -87,8 +112,4 @@ impl net::Message for BlockProposal {
     }
 }
 
-pub fn proposal_eq_block(proposal: &BlockProposal, block: &Block) -> bool {
-    proposal.st == block.st && proposal.sl == block.sl && proposal.txs == block.txs
-}
-
-impl_vec!(Block);
+impl_vec!(BlockProposal);

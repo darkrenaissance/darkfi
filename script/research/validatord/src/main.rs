@@ -98,7 +98,7 @@ struct Opt {
 async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
     // Node signals the network that it starts participating
     let participant =
-        Participant::new(state.read().unwrap().id, state.read().unwrap().get_current_epoch());
+        Participant::new(state.read().unwrap().id, state.read().unwrap().current_epoch());
     state.write().unwrap().append_participant(participant.clone());
     let result = p2p.broadcast(participant).await;
     match result {
@@ -107,15 +107,17 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
     }
 
     // After initialization node should wait for next epoch
-    let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
+    let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
 
     loop {
+        // Node refreshes participants records
         state.write().unwrap().refresh_participants();
 
-        let result = if state.write().unwrap().check_if_epoch_leader() {
-            state.read().unwrap().propose_block()
+        // Node checks if its the epoch leader to generate a new proposal for that epoch
+        let result = if state.write().unwrap().is_epoch_leader() {
+            state.read().unwrap().propose()
         } else {
             Ok(None)
         };
@@ -124,9 +126,10 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
                 if proposal.is_none() {
                     info!("Node is not the epoch leader. Sleeping till next epoch...");
                 } else {
+                    // Leader creates a vote for the proposal and broadcasts them both
                     let unwrapped = proposal.unwrap();
                     info!("Node is the epoch leader. Proposed block: {:?}", unwrapped);
-                    let vote = state.write().unwrap().receive_proposed_block(&unwrapped, true);
+                    let vote = state.write().unwrap().receive_proposal(&unwrapped);
                     match vote {
                         Ok(x) => {
                             if x.is_none() {
@@ -154,9 +157,10 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
                     }
                 }
             }
-            Err(e) => error!("Broadcast failed. Error: {:?}", e),
+            Err(e) => error!("Block proposal failed. Error: {:?}", e),
         }
 
+        // Current node state is flushed to sled database
         let result = state.read().unwrap().save(database);
         match result {
             Ok(()) => (),
@@ -164,7 +168,9 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
                 error!("State could not be flushed: {:?}", e)
             }
         };
-        let seconds_until_next_epoch = state.read().unwrap().get_seconds_until_next_epoch_start();
+
+        // Node waits untile next epoch
+        let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
         thread::sleep(seconds_until_next_epoch);
     }
