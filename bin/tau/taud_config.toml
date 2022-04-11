@@ -5,7 +5,7 @@
 
 # Path to the dataset 
 dataset_path = "~/.config/tau"
-datastore_raft = "~/.config/tau.db"
+datastore_raft = "~/.config/tau/tau.db"
 
 # Path to DER-formatted PKCS#12 archive. (used only with tls url)
 # This can be created using openssl:

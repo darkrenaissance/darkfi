@@ -35,13 +35,13 @@ multiple users can collaborate by working on the same tasks, and all users will 
 	
 	SUBCOMMANDS:
 	    add            Add a new task
+	    get            Get task by ID
 	    get-comment    Get task's comments
 	    get-state      Get task state
 	    help           Print this message or the help of the given subcommand(s)
 	    list           List open tasks
 	    set-comment    Set comment for a task
 	    set-state      Set task state
-	    show           Show task by ID
 	    update         Update/Edit an existing task by ID
 
 

@@ -26,7 +26,9 @@ impl MonthTasks {
     }
 
     pub fn add(&mut self, ref_id: &str) {
-        self.task_tks.push(ref_id.into());
+        if !self.task_tks.contains(&ref_id.into()) {
+            self.task_tks.push(ref_id.into());
+        }
     }
 
     pub fn objects(&self) -> TaudResult<Vec<TaskInfo>> {
