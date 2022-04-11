@@ -19,7 +19,7 @@ use darkfi::{
     Error, Result,
 };
 
-pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../taud_config.toml");
+pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml");
 
 pub fn random_ref_id() -> String {
     thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()

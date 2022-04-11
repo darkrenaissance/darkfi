@@ -53,10 +53,6 @@ impl MonthTasks {
         self.created_at = date.clone();
     }
 
-    pub fn get_task_tks(&self) -> Vec<String> {
-        self.task_tks.clone()
-    }
-
     fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
         dataset_path.join("month").join(Utc.timestamp(date.0, 0).format("%m%y").to_string())
     }
@@ -84,5 +80,95 @@ impl MonthTasks {
     pub fn load_current_open_tasks(dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
         let mt = Self::load_or_create(&get_current_time(), dataset_path)?;
         Ok(mt.objects()?.into_iter().filter(|t| t.get_state() != "stop").collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs::{create_dir_all, remove_dir_all},
+        path::PathBuf,
+    };
+
+    use super::*;
+    use darkfi::Result;
+
+    const TEST_DATA_PATH: &str = "/tmp/test_tau_data";
+
+    fn get_path() -> Result<PathBuf> {
+        remove_dir_all(TEST_DATA_PATH).ok();
+
+        let path = PathBuf::from(TEST_DATA_PATH);
+
+        // mkdir dataset_path if not exists
+        create_dir_all(path.join("month"))?;
+        create_dir_all(path.join("task"))?;
+        Ok(path)
+    }
+
+    #[test]
+    fn load_and_save_tasks() -> TaudResult<()> {
+        let dataset_path = get_path()?;
+
+        // load and save TaskInfo
+        ///////////////////////
+
+        let mut task = TaskInfo::new("test_title", "test_desc", None, 0.0, &dataset_path)?;
+
+        task.save()?;
+
+        let t_load = TaskInfo::load(&task.ref_id, &dataset_path)?;
+
+        assert_eq!(task, t_load);
+
+        task.set_title("test_title_2");
+
+        task.save()?;
+
+        let t_load = TaskInfo::load(&task.ref_id, &dataset_path)?;
+
+        assert_eq!(task, t_load);
+
+        // load and save MonthTasks
+        ///////////////////////
+
+        let task_tks = vec![];
+
+        let mut mt = MonthTasks::new(&task_tks, &dataset_path);
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
+
+        assert_eq!(mt, mt_load);
+
+        mt.add(&task.ref_id);
+
+        mt.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
+
+        assert_eq!(mt, mt_load);
+
+        // activate task
+        ///////////////////////
+
+        let task = TaskInfo::new("test_title_3", "test_desc", None, 0.0, &dataset_path)?;
+
+        task.save()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
+
+        assert!(!mt_load.task_tks.contains(&task.ref_id));
+
+        task.activate()?;
+
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
+
+        assert!(mt_load.task_tks.contains(&task.ref_id));
+
+        remove_dir_all(TEST_DATA_PATH).ok();
+
+        Ok(())
     }
 }

@@ -15,6 +15,21 @@ tls_identity_path = ""
 # The address where taud should bind its RPC socket
 [rpc_listener_url]
 url="127.0.0.1:8875"
-# Password for the created TLS identity or tor password
 password = "FOOBAR"
+
+##
+## P2P network
+## 
+### The accept address 
+#[accept]
+#url="127.0.0.1:8822"
+#password = "FOOBAR"
+
+### Number of outbound connections 
+#outbound_connections = 5
+
+### Seed node addresses
+#[[seeds]]
+#url="127.0.0.1:8811"
+#password = "FOOBAR"
 

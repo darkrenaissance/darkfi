@@ -56,7 +56,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("get_state") => self.get_state(req.params).await,
             Some("set_state") => self.set_state(req.params).await,
             Some("set_comment") => self.set_comment(req.params).await,
-            Some("show") => self.show(req.params).await,
+            Some("get_by_id") => self.get_by_id(req.params).await,
             Some(_) | None => {
                 return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
             }
@@ -189,10 +189,10 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Show a task by id.
-    // --> {"jsonrpc": "2.0", "method": "show", "params": [task_id], "id": 1}
+    // Get a task by id.
+    // --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-    async fn show(&self, params: Value) -> TaudResult<Value> {
+    async fn get_by_id(&self, params: Value) -> TaudResult<Value> {
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {

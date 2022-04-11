@@ -51,7 +51,7 @@ pub struct TaskAssigns(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
-    ref_id: String,
+    pub(crate) ref_id: String,
     id: u32,
     title: String,
     desc: String,
@@ -114,7 +114,15 @@ impl TaskInfo {
 
     pub fn save(&self) -> TaudResult<()> {
         crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.dataset_path), self)
-            .map_err(TaudError::Darkfi)
+            .map_err(TaudError::Darkfi)?;
+
+        if self.get_state() != "open" {
+            self.deactivate()?;
+        } else {
+            self.activate()?;
+        }
+
+        Ok(())
     }
 
     pub fn activate(&self) -> TaudResult<()> {
@@ -123,8 +131,10 @@ impl TaskInfo {
         mt.save()
     }
 
-    pub fn get_month_task(&self) -> TaudResult<MonthTasks> {
-        MonthTasks::load_or_create(&self.created_at, &self.dataset_path)
+    pub fn deactivate(&self) -> TaudResult<()> {
+        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.dataset_path)?;
+        mt.remove(&self.ref_id);
+        mt.save()
     }
 
     pub fn get_state(&self) -> String {
@@ -141,10 +151,6 @@ impl TaskInfo {
 
     pub fn get_id(&self) -> u32 {
         self.id
-    }
-
-    pub fn get_ref_id(&self) -> String {
-        self.ref_id.clone()
     }
 
     pub fn set_title(&mut self, title: &str) {
