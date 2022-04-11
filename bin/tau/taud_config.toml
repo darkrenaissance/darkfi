@@ -21,7 +21,7 @@ password = "FOOBAR"
 ## P2P network
 ## 
 ### The accept address 
-#[accept]
+#[accept_address]
 #url="127.0.0.1:8822"
 #password = "FOOBAR"
 

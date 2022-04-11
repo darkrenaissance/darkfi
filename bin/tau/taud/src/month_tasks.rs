@@ -159,12 +159,6 @@ mod tests {
 
         let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
-        assert!(!mt_load.task_tks.contains(&task.ref_id));
-
-        task.activate()?;
-
-        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
-
         assert!(mt_load.task_tks.contains(&task.ref_id));
 
         remove_dir_all(TEST_DATA_PATH).ok();
