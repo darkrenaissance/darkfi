@@ -75,7 +75,7 @@ pub enum TorError {
     #[error("Regex parse error: {0}")]
     RegexError(#[from] regex::Error),
     #[error("Unexpected response from tor: {0}")]
-    TorError(String),
+    GeneralError(String),
 }
 
 /// Contains the configuration to communicate with the Tor Controler
@@ -121,10 +121,13 @@ impl TorController {
         let mut stream = std::net::TcpStream::from(local_socket);
 
         stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-        let host =
-            url.host().ok_or(TorError::TorError("No host on url for listening".to_string()))?;
-        let port =
-            url.port().ok_or(TorError::TorError("No port on url for listening".to_string()))?;
+        let host = url
+            .host()
+            .ok_or_else(|| TorError::GeneralError("No host on url for listening".to_string()))?;
+        let port = url
+            .port()
+            .ok_or_else(|| TorError::GeneralError("No port on url for listening".to_string()))?;
+
         let payload = format!(
             "AUTHENTICATE {a}\r\nADD_ONION NEW:BEST Flags=DiscardPK Port={p},{h}:{p}\r\n",
             a = self.auth,
@@ -142,8 +145,9 @@ impl TorController {
         }
         let re = Regex::new(r"250-ServiceID=(\w+*)")?;
         let cap: Result<regex::Captures<'_>, TorError> =
-            re.captures(&repl).ok_or(TorError::TorError(repl.clone()));
-        let hurl = cap?.get(1).map_or(Err(TorError::TorError(repl.clone())), |m| Ok(m.as_str()))?;
+            re.captures(&repl).ok_or_else(|| TorError::GeneralError(repl.clone()));
+        let hurl =
+            cap?.get(1).map_or(Err(TorError::GeneralError(repl.clone())), |m| Ok(m.as_str()))?;
         let hurl = format!("tcp://{}.onion:{}", &hurl, port);
         Ok(Url::parse(&hurl)?)
     }
@@ -180,14 +184,16 @@ impl TorTransport {
     pub fn create_ehs(&self, url: Url) -> Result<Url, TorError> {
         self.tor_controller
             .as_ref()
-            .ok_or(TorError::TorError("No controller configured for this transport".to_string()))?
+            .ok_or_else(|| {
+                TorError::GeneralError("No controller configured for this transport".to_string())
+            })?
             .create_ehs(url)
     }
 
     pub async fn do_dial(self, url: Url) -> Result<Socks5Stream<TcpStream>, TorError> {
         let socks_url_str = self.socks_url.socket_addrs(|| None)?[0].to_string();
         let host = url.host().unwrap().to_string();
-        let port = url.port().unwrap_or_else(|| 80);
+        let port = url.port().unwrap_or(80);
         let config = Config::default();
         let stream = if !self.socks_url.username().is_empty() && self.socks_url.password().is_some()
         {

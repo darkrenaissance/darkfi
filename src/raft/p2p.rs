@@ -57,10 +57,8 @@ impl ProtocolRaft {
             let msg = (*msg).clone();
             self.p2p.broadcast(msg.clone()).await?;
 
-            if msg.recipient_id.is_some() && self.id.is_some() {
-                if msg.recipient_id != self.id {
-                    continue
-                }
+            if msg.recipient_id.is_some() && self.id.is_some() && msg.recipient_id != self.id {
+                continue
             }
 
             self.notify_queue_sender.send(msg).await?;

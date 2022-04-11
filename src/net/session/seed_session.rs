@@ -63,7 +63,7 @@ impl SeedSession {
             })
             .await;
 
-        if let Err(_) = result {
+        if result.is_err() {
             error!("Querying seeds timed out");
             return Err(Error::OperationFailed)
         }
