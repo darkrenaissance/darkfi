@@ -1,0 +1,14 @@
+[package]
+name = "nodes-tool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.darkfi]
+path = "../../../"
+features = ["blockchain"]
+
+[dependencies]
+
+sled = "0.34.7"
+
+[workspace]

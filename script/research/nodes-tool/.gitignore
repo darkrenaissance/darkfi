@@ -1,0 +1,3 @@
+/target
+Cargo.lock
+validatord_state_*
