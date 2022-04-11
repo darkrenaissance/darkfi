@@ -222,6 +222,9 @@ pub enum Error {
     #[cfg(any(feature = "blockchain2", feature = "raft"))]
     #[error(transparent)]
     SledError(#[from] sled::Error),
+
+    #[error("Unsupported network transport")]
+    UnsupportedTransport,
 }
 
 #[cfg(feature = "node")]

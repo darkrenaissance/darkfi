@@ -1,0 +1,14 @@
+## darkfid configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+
+# Path to the client database
+#database_path = "~/.config/darkfi/darkfid_client.db"
+
+# Path to the wallet database
+#wallet_path = "~/.config/darkfi/darkfid_wallet.db"
+
+# JSON-RPC listening url
+#rpc_listen = "tcp://127.0.0.1:5397"
+#rpc_listen = "tls://127.0.0.1:5397"

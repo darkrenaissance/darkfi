@@ -16,6 +16,7 @@ members = [
     "bin/zkas",
     "bin/cashierd",
     "bin/darkfid",
+    "bin/darkfid2",
     "bin/drk",
     "bin/gatewayd",
     "bin/ircd",

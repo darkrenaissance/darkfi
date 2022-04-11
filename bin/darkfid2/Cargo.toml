@@ -1,0 +1,28 @@
+[package]
+name = "darkfid2"
+version = "0.3.0"
+homepage = "https://dark.fi"
+description = "DarkFi node daemon"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+async-channel = "1.6.1"
+async-executor = "1.4.1"
+async-std = "1.11.0"
+async-trait = "0.1.53"
+darkfi = {path = "../../", features = ["crypto", "rpc", "net"]}
+easy-parallel = "3.2.0"
+futures-lite = "1.12.0"
+log = "0.4.16"
+serde_json = "1.0.79"
+simplelog = "0.12.0-alpha1"
+url = "2.2.2"
+
+# Argument parsing
+serde = "1.0.136"
+serde_derive = "1.0.136"
+structopt = "0.3.26"
+structopt-toml = "0.5.0"

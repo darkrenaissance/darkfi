@@ -12,7 +12,7 @@ use serde::{
     ser::Serializer,
     Deserialize, Serialize,
 };
-use subtle::{ConstantTimeEq, CtOption};
+use subtle::CtOption;
 
 use crate::{
     crypto::{
