@@ -32,7 +32,7 @@ pub enum Error {
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
 
-    #[cfg(any(feature = "rpc", feature = "node"))]
+    #[cfg(any(feature = "rpc", feature = "node", feature = "util"))]
     #[error("Url parse error `{0}`")]
     UrlParseError(String),
 
@@ -272,7 +272,7 @@ impl From<async_native_tls::Error> for Error {
     }
 }
 
-#[cfg(feature = "rpc")]
+#[cfg(any(feature = "rpc", feature = "util"))]
 impl From<url::ParseError> for Error {
     fn from(err: url::ParseError) -> Error {
         Error::UrlParseError(err.to_string())
@@ -316,6 +316,12 @@ impl From<fast_socks5::SocksError> for Error {
 impl From<std::convert::Infallible> for Error {
     fn from(err: std::convert::Infallible) -> Error {
         Error::InfallibleError(err.to_string())
+    }
+}
+
+impl From<()> for Error {
+    fn from(_err: ()) -> Error {
+        Error::InfallibleError("Infallible".into())
     }
 }
 
