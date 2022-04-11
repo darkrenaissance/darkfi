@@ -1,0 +1,23 @@
+[package]
+name = "smart-contract"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+borsh = "0.9.3"
+drk-sdk = { path = "../../src/sdk" }
+
+[dependencies.pasta_curves]
+git = "https://github.com/darkrenaissance/pasta_curves"
+branch = "serialization-support"
+features = ["borsh"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+overflow-checks = true
