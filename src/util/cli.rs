@@ -2,6 +2,7 @@ use std::{
     env, fs,
     io::Write,
     marker::PhantomData,
+    net::SocketAddr,
     path::{Path, PathBuf},
     str,
 };
@@ -82,22 +83,28 @@ pub struct UrlConfig {
 }
 
 impl TryFrom<UrlConfig> for url::Url {
-    type Error = url::ParseError;
+    type Error = Error;
 
-    // TODO remove unwraps
-    fn try_from(urlc: UrlConfig) -> std::result::Result<Self, Self::Error> {
+    fn try_from(urlc: UrlConfig) -> Result<Self> {
         let mut url = url::Url::parse(&urlc.url)?;
 
-        url.set_password(urlc.password.as_deref()).unwrap();
+        url.set_password(urlc.password.as_deref())?;
 
         if urlc.username.is_some() {
-            url.set_username(&urlc.username.unwrap()).unwrap();
+            url.set_username(&urlc.username.unwrap())?;
         }
 
         Ok(url)
     }
 }
 
+impl TryFrom<UrlConfig> for SocketAddr {
+    type Error = Error;
+    fn try_from(urlc: UrlConfig) -> std::result::Result<Self, Self::Error> {
+        let url: SocketAddr = urlc.url.parse()?;
+        Ok(url)
+    }
+}
 pub const ANSI_LOGO: &str = include_str!("../../contrib/darkfi.ansi");
 
 #[macro_export]
