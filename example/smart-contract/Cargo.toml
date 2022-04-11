@@ -17,6 +17,9 @@ git = "https://github.com/darkrenaissance/pasta_curves"
 branch = "serialization-support"
 features = ["borsh"]
 
+[dev-dependencies]
+darkfi = { path = "../../", features = ["wasm-runtime"] }
+
 [profile.release]
 lto = true
 codegen-units = 1
