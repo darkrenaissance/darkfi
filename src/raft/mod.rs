@@ -1,8 +1,8 @@
-use std::{io, net::SocketAddr};
+use std::{collections::HashMap, io, net::SocketAddr};
 
 use crate::{
     util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
+    Error, Result,
 };
 
 mod datastore;
@@ -90,20 +90,47 @@ impl Logs {
         self.0.push(d.clone());
     }
 
-    pub fn slice_from(&self, start: u64) -> Self {
-        Self(self.0[start as usize..].to_vec())
+    pub fn slice_from(&self, start: u64) -> Option<Self> {
+        if self.len() >= start {
+            return Some(Self(self.0[start as usize..].to_vec()))
+        }
+        None
     }
 
     pub fn slice_to(&self, end: u64) -> Self {
-        Self(self.0[..end as usize].to_vec())
+        for i in (0..end).rev() {
+            if self.len() >= i {
+                return Self(self.0[..i as usize].to_vec())
+            }
+        }
+        Self(vec![])
     }
 
-    pub fn get(&self, index: u64) -> Log {
-        self.0[index as usize].clone()
+    pub fn get(&self, index: u64) -> Result<Log> {
+        match self.0.get(index as usize) {
+            Some(l) => Ok(l.clone()),
+            None => Err(Error::RaftError("unable to indexing into vector".into())),
+        }
     }
 
     pub fn to_vec(&self) -> Vec<Log> {
         self.0.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MapLength(pub HashMap<NodeId, u64>);
+
+impl MapLength {
+    pub fn get(&self, key: &NodeId) -> Result<u64> {
+        match self.0.get(key) {
+            Some(v) => Ok(v.clone()),
+            None => Err(Error::RaftError("unable to indexing into HashMap".into())),
+        }
+    }
+
+    pub fn insert(&mut self, key: &NodeId, value: u64) {
+        self.0.insert(key.clone(), value);
     }
 }
 
