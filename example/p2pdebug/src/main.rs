@@ -126,7 +126,7 @@ impl MockP2p {
 
         let registry = p2p.protocol_registry();
         registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, p2p| {
                 let sender = sender_clone.clone();
                 let seen_debugmsg_ids = seen_debugmsg_ids_clone.clone();
                 async move { ProtocolDebugmsg::init(channel, sender, seen_debugmsg_ids, p2p).await }
@@ -138,7 +138,6 @@ impl MockP2p {
             let sleep_time = 10;
             let p2p_clone = p2p.clone();
             let executor_clone = executor.clone();
-            let seen_debugmsg_ids_clone = seen_debugmsg_ids.clone();
             executor_clone
                 .spawn(async move {
                     loop {
@@ -150,7 +149,6 @@ impl MockP2p {
                         );
 
                         let random_id = OsRng.next_u32();
-                        seen_debugmsg_ids_clone.add_seen(random_id).await;
 
                         let msg = Debugmsg { id: random_id, message: "hello".to_string() };
 
