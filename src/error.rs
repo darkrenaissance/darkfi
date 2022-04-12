@@ -223,6 +223,10 @@ pub enum Error {
     #[error(transparent)]
     SledError(#[from] sled::Error),
 
+    #[cfg(feature = "raft")]
+    #[error("Raft Error: {0}")]
+    RaftError(String),
+
     #[error("Unsupported network transport")]
     UnsupportedTransport,
 }
