@@ -188,6 +188,7 @@ rpc = [
     "async-runtime",
     "websockets",
     "util",
+	"net",
 ]
 
 blockchain = [
