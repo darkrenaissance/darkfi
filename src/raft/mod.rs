@@ -13,7 +13,7 @@ use datastore::DataStore;
 use p2p::ProtocolRaft;
 pub use raft::Raft;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum Role {
     Follower,
     Candidate,
@@ -107,9 +107,9 @@ impl Logs {
     }
 }
 
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug, PartialEq, Eq)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct NetMsg {
-    id: u64,
+    id: u32,
     recipient_id: Option<NodeId>,
     method: NetMsgMethod,
     payload: Vec<u8>,

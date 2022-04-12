@@ -6,8 +6,8 @@ use std::{cmp::min, collections::HashMap, net::SocketAddr, path::PathBuf, time::
 
 use async_executor::Executor;
 use futures::{select, FutureExt};
-use log::error;
-use rand::Rng;
+use log::{error, info};
+use rand::{rngs::OsRng, Rng, RngCore};
 
 use crate::{
     net,
@@ -125,7 +125,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let self_id = self.id.clone();
         registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, p2p| {
                 let self_id = self_id.clone();
                 let sender = p2p_snd.clone();
                 async move { ProtocolRaft::init(self_id, channel, sender, p2p).await }
@@ -135,25 +135,29 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         // P2p performs seed session
         p2p.clone().start(executor.clone()).await?;
 
-        executor.spawn(p2p.clone().run(executor.clone())).detach();
+        let executor_cloned = executor.clone();
+        executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
 
         let p2p_cloned = p2p.clone();
         let p2p_recv = self.sender.1.clone();
-        executor
-            .spawn(async move {
-                loop {
-                    let msg: NetMsg = p2p_recv.recv().await.unwrap();
-                    p2p_cloned.broadcast(msg).await.unwrap();
+        executor.spawn(async move {
+            loop {
+                let msg: NetMsg = p2p_recv.recv().await.unwrap();
+                match p2p_cloned.broadcast(msg).await {
+                    Ok(_) => {}
+                    Err(e) => error!(target: "raft", "error occurred during broadcasting a msg: {}", e) 
                 }
-            })
-            .detach();
+            }
+        }).detach();
 
         let self_nodes = self.nodes.clone();
+        let p2p_cloned = p2p.clone();
         executor
             .spawn(async move {
                 loop {
-                    task::sleep(Duration::from_millis(TIMEOUT_NODES)).await;
-                    let hosts = p2p.hosts().clone();
+                    info!(target: "raft", "load node ids from p2p hosts ips");
+                    task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
+                    let hosts = p2p_cloned.hosts().clone();
                     let nodes_ip = hosts.load_all().await.clone();
                     let mut nodes = self_nodes.lock().await;
                     for ip in nodes_ip.iter() {
@@ -216,6 +220,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             )
             .await?;
         }
+
+        info!(target: "raft", "{} {:?}  broadcast a msg", self.id.is_some(), self.role);
         Ok(())
     }
 
@@ -243,6 +249,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.broadcast_msg(&d).await?;
             }
         }
+
+        info!(
+            target: "raft",
+            "{} {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
+            self.id.is_some(), self.role, msg.id, &msg.recipient_id.is_some(), &msg.method
+        );
         Ok(())
     }
     async fn send(
@@ -251,9 +263,17 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         payload: &[u8],
         method: NetMsgMethod,
     ) -> Result<()> {
-        let rnd = rand::random();
-        let net_msg = NetMsg { id: rnd, recipient_id, payload: payload.to_vec(), method };
+        let random_id = OsRng.next_u32();
+
+        info!(
+            target: "raft",
+            "{} {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
+            self.id.is_some(), self.role, random_id, &recipient_id.is_some(), &method
+        );
+
+        let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
         self.sender.0.send(net_msg).await?;
+
         Ok(())
     }
 
@@ -268,7 +288,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn send_vote_request(&mut self) -> Result<()> {
-        // this will prevent the node to become a candidate
+        // this will prevent the listener node to become a candidate
         if self.id.is_none() {
             return Ok(())
         }

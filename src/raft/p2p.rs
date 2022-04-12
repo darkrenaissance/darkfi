@@ -6,7 +6,7 @@ use log::debug;
 
 use crate::{net, Result};
 
-use super::{NetMsg, NodeId};
+use super::{NetMsg, NetMsgMethod, NodeId};
 
 pub struct ProtocolRaft {
     id: Option<NodeId>,
@@ -14,7 +14,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    msgs: Arc<Mutex<Vec<NetMsg>>>,
+    msgs: Arc<Mutex<Vec<u32>>>,
 }
 
 impl ProtocolRaft {
@@ -46,19 +46,42 @@ impl ProtocolRaft {
 
             debug!(
                 target: "raft",
-                "ProtocolRaft::handle_receive_msg() received {:?}",
-                msg
+                "ProtocolRaft::handle_receive_msg() received id: {:?} method {:?}",
+                &msg.id, &msg.method
             );
 
-            if self.msgs.lock().await.contains(&msg) {
+            if self.msgs.lock().await.contains(&msg.id) {
                 continue
             }
+
+            self.msgs.lock().await.push(msg.id);
 
             let msg = (*msg).clone();
             self.p2p.broadcast(msg.clone()).await?;
 
-            if msg.recipient_id.is_some() && self.id.is_some() && msg.recipient_id != self.id {
-                continue
+            match (self.id.clone(), msg.recipient_id.clone()) {
+                // if the local node and the msg recipient have ids
+                // then check if the ids are equal
+                (Some(id), Some(m_id)) => {
+                    if id != m_id {
+                        continue
+                    }
+                }
+                // if the msg doesn't have a recipient id then the msg is a VoteRequest
+                // and if the local node's id is not None then it can receive
+                // and response with a VoteResponse
+                (Some(_), None) => {}
+                // if the local node's id is None but the recipient's id is not None
+                // then the local node will only handle the msg if its method
+                // is LogRequest
+                (None, Some(_)) => {
+                    if msg.method != NetMsgMethod::LogRequest {
+                        continue
+                    }
+                }
+                // if the local node's id and msg recipient's id are both None then reject
+                // the msg becuase the local node doesn't have the right to vote
+                (None, None) => continue,
             }
 
             self.notify_queue_sender.send(msg).await?;
