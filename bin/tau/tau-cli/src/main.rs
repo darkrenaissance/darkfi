@@ -52,7 +52,7 @@ pub enum CliTauSubCommands {
         /// Due date in DDMM format: "2202" for 22 Feb
         #[clap(short, long)]
         due: Option<String>,
-        /// Project rank
+        /// Project rank single precision decimal real value: 4.8761
         #[clap(short, long)]
         rank: Option<f32>,
     },
@@ -249,13 +249,7 @@ async fn show(url: &str, id: u64) -> Result<Value> {
 }
 
 async fn start(options: CliTau, config: TauConfig) -> Result<()> {
-    // FIXME
-    // let rpc_addr = &format!("tcp://{}", options.listen.to_string());
     let rpc_addr = &format!("tcp://{}", &config.rpc_listener_url.url.clone());
-    // println!("{}", &config.rpc_listener_url.url.clone());
-
-    // Url::try_from(config.darkfid_rpc_url.clone())?;
-    // Url::try_from(config.socks_url.clone())?;
 
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
@@ -418,7 +412,6 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
                 events: serde_json::from_value(rep["events"].clone())?,
                 comments: serde_json::from_value(rep["comments"].clone())?,
             };
-            // let t: TaskInfo = serde_json::from_value(rep)?;
             println!("TaskInfo: {}", serde_json::to_string_pretty(&t)?);
         }
 
