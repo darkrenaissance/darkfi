@@ -49,7 +49,7 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
     let initial_sync_commits = raft.get_commits().clone();
-    let initial_sync_raft_sender = raft.get_broadcast().clone();
+    let initial_sync_raft_sender = raft_sender.clone();
 
     //
     // RPC

@@ -95,8 +95,11 @@ impl Settings {
             args.accept
         };
 
-        let outbound_connections =
-            if args.slots == 0 { config.outbound_connections.unwrap_or(0) } else { args.slots };
+        let outbound_connections = if args.slots == 0 {
+            config.outbound_connections.unwrap_or_default()
+        } else {
+            args.slots
+        };
 
         let connect = args.connect;
 
@@ -143,7 +146,7 @@ pub struct CliTaud {
     #[clap(short, long)]
     pub connect: Vec<SocketAddr>,
     /// Raft Connection slots
-    #[clap(long, default_value_t = 0)]
+    #[clap(long, default_value = "0")]
     pub slots: u32,
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
