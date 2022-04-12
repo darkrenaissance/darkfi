@@ -3,7 +3,6 @@ use std::{
     fs::{self, File},
     io,
     io::{Read, Write},
-    net::SocketAddr,
     ops::Index,
     process::Command,
 };
@@ -19,9 +18,20 @@ use url::Url;
 
 use darkfi::{
     rpc::jsonrpc::{self, JsonResult},
-    util::cli::log_config,
+    util::{
+        cli::{log_config, spawn_config, Config, UrlConfig},
+        path::get_config_path,
+    },
     Error, Result,
 };
+
+pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml");
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TauConfig {
+    /// The address where taud should bind its RPC socket
+    pub rpc_listener_url: UrlConfig,
+}
 
 #[derive(Subcommand)]
 pub enum CliTauSubCommands {
@@ -113,9 +123,9 @@ pub struct CliTau {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
-    /// Rpc address
-    #[clap(long, default_value = "127.0.0.1:8875")]
-    pub listen: SocketAddr,
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
     #[clap(subcommand)]
     pub command: Option<CliTauSubCommands>,
 }
@@ -238,9 +248,14 @@ async fn show(url: &str, id: u64) -> Result<Value> {
     request(req, url.to_string()).await
 }
 
-async fn start(options: CliTau) -> Result<()> {
+async fn start(options: CliTau, config: TauConfig) -> Result<()> {
     // FIXME
-    let rpc_addr = &format!("tcp://{}", options.listen.to_string());
+    // let rpc_addr = &format!("tcp://{}", options.listen.to_string());
+    let rpc_addr = &format!("tcp://{}", &config.rpc_listener_url.url.clone());
+    // println!("{}", &config.rpc_listener_url.url.clone());
+
+    // Url::try_from(config.darkfid_rpc_url.clone())?;
+    // Url::try_from(config.socks_url.clone())?;
 
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
@@ -484,5 +499,11 @@ async fn main() -> Result<()> {
     let (lvl, conf) = log_config(verbosity_level)?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    start(args).await
+    let config_path = get_config_path(args.config.clone(), "taud_config.toml")?;
+
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
+
+    let config: TauConfig = Config::<TauConfig>::load(config_path)?;
+
+    start(args, config).await
 }
