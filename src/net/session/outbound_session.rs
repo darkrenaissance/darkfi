@@ -1,4 +1,4 @@
-use async_std::{sync::Mutex, task::yield_now};
+use async_std::sync::Mutex;
 use std::{
     fmt,
     net::SocketAddr,
@@ -8,6 +8,7 @@ use std::{
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::{error, info};
+use rand::seq::SliceRandom;
 use serde_json::json;
 
 use crate::{
@@ -189,24 +190,18 @@ impl OutboundSession {
     /// found that passes all checks.
     async fn load_address(&self, slot_number: u32) -> Result<SocketAddr> {
         let p2p = self.p2p();
-        let hosts = p2p.hosts();
         let self_inbound_addr = p2p.settings().external_addr;
 
-        loop {
-            yield_now().await;
+        let mut addrs;
 
-            let addr = hosts.load_single().await;
+        {
+            let hosts = p2p.hosts().load_all().await;
+            addrs = hosts.clone();
+        }
 
-            if addr.is_none() {
-                error!(target: "net", "Hosts address pool is empty. Closing connect slot #{}", slot_number);
-                return Err(Error::ServiceStopped)
-            }
-            let addr = addr.unwrap();
+        addrs.shuffle(&mut rand::thread_rng());
 
-            if Self::is_self_inbound(&addr, &self_inbound_addr) {
-                continue
-            }
-
+        for addr in addrs {
             if p2p.exists(&addr).await {
                 continue
             }
@@ -216,8 +211,15 @@ impl OutboundSession {
                 continue
             }
 
+            if Self::is_self_inbound(&addr, &self_inbound_addr) {
+                continue
+            }
+
             return Ok(addr)
         }
+
+        error!(target: "net", "Hosts address pool is empty. Closing connect slot #{}", slot_number);
+        Err(Error::ServiceStopped)
     }
 
     /// Checks whether an address is our own inbound address to avoid connecting

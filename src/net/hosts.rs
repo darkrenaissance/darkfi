@@ -2,7 +2,6 @@ use async_std::sync::Mutex;
 use std::{net::SocketAddr, sync::Arc};
 
 use fxhash::FxHashSet;
-use rand::seq::SliceRandom;
 
 /// Pointer to hosts class.
 pub type HostsPtr = Arc<Hosts>;
@@ -29,11 +28,6 @@ impl Hosts {
         if !self.contains(&addrs).await {
             self.addrs.lock().await.extend(addrs)
         }
-    }
-
-    /// Return a single host address.
-    pub async fn load_single(&self) -> Option<SocketAddr> {
-        self.addrs.lock().await.choose(&mut rand::thread_rng()).cloned()
     }
 
     /// Return the list of hosts.
