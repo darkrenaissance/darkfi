@@ -86,6 +86,9 @@ impl Logs {
     pub fn len(&self) -> u64 {
         self.0.len() as u64
     }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
     pub fn push(&mut self, d: &Log) {
         self.0.push(d.clone());
     }
@@ -124,7 +127,7 @@ pub struct MapLength(pub HashMap<NodeId, u64>);
 impl MapLength {
     pub fn get(&self, key: &NodeId) -> Result<u64> {
         match self.0.get(key) {
-            Some(v) => Ok(v.clone()),
+            Some(v) => Ok(*v),
             None => Err(Error::RaftError("unable to indexing into HashMap".into())),
         }
     }

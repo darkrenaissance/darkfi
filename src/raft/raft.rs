@@ -6,7 +6,7 @@ use std::{cmp::min, collections::HashMap, net::SocketAddr, path::PathBuf, time::
 
 use async_executor::Executor;
 use futures::{select, FutureExt};
-use log::{error, info};
+use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, Rng, RngCore};
 
 use crate::{
@@ -142,20 +142,35 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let p2p_recv = self.sender.1.clone();
         executor.spawn(async move {
             loop {
-                let msg: NetMsg = p2p_recv.recv().await.unwrap();
+                let msg: NetMsg = match p2p_recv.recv().await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        error!(target: "raft", "error occurred while receiving a msg: {}", e);
+                        continue
+                    }
+                };
                 match p2p_cloned.broadcast(msg).await {
                     Ok(_) => {}
-                    Err(e) => error!(target: "raft", "error occurred during broadcasting a msg: {}", e)
+                    Err(e) => {
+                        error!(target: "raft", "error occurred during broadcasting a msg: {}", e);
+                        continue
+                    }
                 }
             }
         }).detach();
 
         let self_nodes = self.nodes.clone();
         let p2p_cloned = p2p.clone();
+        let self_id = self.id.clone();
         executor
             .spawn(async move {
+                if self_id.is_none() {
+                    return
+                }
+                // wait the network
+                task::sleep(Duration::from_secs(5)).await;
                 loop {
-                    info!(target: "raft", "load node ids from p2p hosts ips");
+                    debug!(target: "raft", "load node ids from p2p hosts ips");
                     task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
                     let hosts = p2p_cloned.hosts().clone();
                     let nodes_ip = hosts.load_all().await.clone();
@@ -175,18 +190,23 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let timeout = Duration::from_millis(rng.gen_range(0..200) + TIMEOUT);
             let heartbeat_timeout = Duration::from_millis(HEARTBEATTIMEOUT);
 
-            if self.role == Role::Leader {
+            let result = if self.role == Role::Leader {
                 select! {
-                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await?,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await?,
-                    _ = task::sleep(heartbeat_timeout).fuse() => self.send_heartbeat().await?,
+                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await,
+                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
+                    _ = task::sleep(heartbeat_timeout).fuse() => self.send_heartbeat().await,
                 }
             } else {
                 select! {
-                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await?,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await?,
-                    _ = task::sleep(timeout).fuse() => self.send_vote_request().await?,
+                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await,
+                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
+                    _ = task::sleep(timeout).fuse() => self.send_vote_request().await,
                 }
+            };
+
+            match result {
+                Ok(_) => {}
+                Err(e) => warn!(target: "raft", "warn: {}", e),
             }
         }
     }
@@ -250,7 +270,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         }
 
-        info!(
+        debug!(
             target: "raft",
             "{} {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
             self.id.is_some(), self.role, msg.id, &msg.recipient_id.is_some(), &msg.method
@@ -265,7 +285,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let random_id = OsRng.next_u32();
 
-        info!(
+        debug!(
             target: "raft",
             "{} {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
             self.id.is_some(), self.role, random_id, &recipient_id.is_some(), &method
@@ -361,8 +381,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone().unwrap());
                 for node in nodes.iter() {
-                    self.sent_length.insert(&node.0, self.logs.len());
-                    self.acked_length.insert(&node.0, 0);
+                    self.sent_length.insert(node.0, self.logs.len());
+                    self.acked_length.insert(node.0, 0);
                     self.update_logs(node.0).await?;
                 }
             }
@@ -377,7 +397,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn update_logs(&self, node_id: &NodeId) -> Result<()> {
-        let prefix_len = self.sent_length.get(node_id).unwrap().clone();
+        let prefix_len = self.sent_length.get(node_id)?;
 
         let suffix: Logs = if self.logs.slice_from(prefix_len).is_some() {
             self.logs.slice_from(prefix_len).unwrap()
@@ -472,7 +492,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             .into_iter()
             .filter(|n| {
                 let len = self.acked_length.get(&n.0);
-                return len.is_ok() && len.unwrap() >= length
+                len.is_ok() && len.unwrap() >= length
             })
             .collect()
     }
@@ -515,7 +535,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         leader_commit: u64,
         suffix: &Logs,
     ) -> Result<()> {
-        if suffix.len() > 0 && self.logs.len() > prefix_len {
+        if !suffix.is_empty() && self.logs.len() > prefix_len {
             let index = min(self.logs.len(), prefix_len + suffix.len()) - 1;
             if self.logs.get(index)?.term != suffix.get(index - prefix_len)?.term {
                 self.push_logs(&self.logs.slice_to(prefix_len))?;
@@ -550,7 +570,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.voted_for = i.clone();
         self.datastore.voted_for.insert(i)
     }
-    async fn push_commit(&mut self, commit: &Vec<u8>) -> Result<()> {
+    async fn push_commit(&mut self, commit: &[u8]) -> Result<()> {
         let commit: T = deserialize(commit)?;
         self.commits.lock().await.push(commit.clone());
         self.datastore.commits.insert(&commit)
