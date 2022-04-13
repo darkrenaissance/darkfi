@@ -94,11 +94,11 @@ impl WalletDb {
         Ok(())
     }
 
-    pub async fn key_gen(&self) -> Result<()> {
+    pub async fn keygen(&self) -> Result<Keypair> {
         debug!("Attempting to generate keypairs");
         let keypair = Keypair::random(&mut OsRng);
         self.put_keypair(&keypair).await?;
-        Ok(())
+        Ok(keypair)
     }
 
     pub async fn put_keypair(&self, keypair: &Keypair) -> Result<()> {

@@ -1728,6 +1728,7 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures-lite",
+ "lazy-init",
  "log",
  "serde",
  "serde_derive",
@@ -3197,6 +3198,12 @@ checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
 dependencies = [
  "log",
 ]
+
+[[package]]
+name = "lazy-init"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23517540be87a91d06324e6bf6286ba8214171123ee8862ae9a5e7d938d71815"
 
 [[package]]
 name = "lazy_static"
