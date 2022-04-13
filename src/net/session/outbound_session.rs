@@ -196,7 +196,7 @@ impl OutboundSession {
 
         {
             let hosts = p2p.hosts().load_all().await;
-            addrs = hosts.clone();
+            addrs = hosts;
         }
 
         addrs.shuffle(&mut rand::thread_rng());
