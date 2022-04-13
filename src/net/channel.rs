@@ -1,9 +1,4 @@
 use async_std::sync::Mutex;
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncReadExt,
-};
-use serde_json::json;
 use std::{
     net::{SocketAddr, TcpStream},
     sync::{
@@ -12,16 +7,22 @@ use std::{
     },
 };
 
+use futures::{
+    io::{ReadHalf, WriteHalf},
+    AsyncReadExt,
+};
 use log::{debug, error, info};
+use serde_json::json;
 use smol::{Async, Executor};
 
 use crate::{
-    error::{Error, Result},
-    net::{
-        message,
-        message_subscriber::{MessageSubscription, MessageSubsystem},
-    },
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    Error, Result,
+};
+
+use super::{
+    message,
+    message_subscriber::{MessageSubscription, MessageSubsystem},
 };
 
 /// Atomic pointer to async channel.

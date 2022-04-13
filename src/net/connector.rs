@@ -1,14 +1,14 @@
 use async_std::future::timeout;
-use smol::Async;
 use std::{
     net::{SocketAddr, TcpStream},
     time::Duration,
 };
 
-use crate::{
-    error::{Error, Result},
-    net::{Channel, ChannelPtr, SettingsPtr},
-};
+use smol::Async;
+
+use crate::{Error, Result};
+
+use super::{Channel, ChannelPtr, SettingsPtr};
 
 /// Create outbound socket connections.
 pub struct Connector {

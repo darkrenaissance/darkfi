@@ -7,10 +7,11 @@ use log::{debug, error, warn};
 use rand::Rng;
 
 use crate::{
-    net::message::Message,
     util::serial::{Decodable, Encodable},
     Error, Result,
 };
+
+use super::message::Message;
 
 /// 64bit identifier for message subscription.
 pub type MessageSubscriptionId = u64;

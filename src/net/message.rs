@@ -1,6 +1,7 @@
+use std::{io, net::SocketAddr};
+
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::debug;
-use std::{io, net::SocketAddr};
 
 use crate::{
     util::serial::{Decodable, Encodable, VarInt},

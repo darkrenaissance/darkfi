@@ -58,7 +58,7 @@ pub use protocol_version::ProtocolVersion;
 pub use protocol_base::{ProtocolBase, ProtocolBasePtr};
 pub use protocol_registry::ProtocolRegistry;
 
-use crate::net::{
+use super::{
     session::{SESSION_ALL, SESSION_SEED},
     P2pPtr,
 };

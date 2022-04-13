@@ -5,13 +5,13 @@ use log::debug;
 use smol::Executor;
 
 use crate::{
-    error::Result,
     net::{
         message,
         message_subscriber::MessageSubscription,
         protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
         ChannelPtr, HostsPtr, P2pPtr,
     },
+    Result,
 };
 
 /// Defines address and get-address messages.

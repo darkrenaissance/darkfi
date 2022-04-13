@@ -7,14 +7,15 @@ use log::debug;
 use serde_json::json;
 
 use crate::{
-    error::{Error, Result},
-    net::{
-        message::Message,
-        protocol::{register_default_protocols, ProtocolRegistry},
-        session::{InboundSession, ManualSession, OutboundSession, SeedSession, Session},
-        Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
-    },
     system::{Subscriber, SubscriberPtr, Subscription},
+    Error, Result,
+};
+
+use super::{
+    message::Message,
+    protocol::{register_default_protocols, ProtocolRegistry},
+    session::{InboundSession, ManualSession, OutboundSession, SeedSession, Session},
+    Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
 };
 
 /// List of channels that are awaiting connection.

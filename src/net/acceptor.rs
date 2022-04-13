@@ -1,16 +1,17 @@
-use log::*;
-use smol::{Async, Executor};
 use std::{
     net::{SocketAddr, TcpListener},
     sync::Arc,
 };
 
-use crate::error::{Error, Result};
-//use crate::net::error::{, Result};
+use log::*;
+use smol::{Async, Executor};
+
 use crate::{
-    net::{Channel, ChannelPtr},
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    Error, Result,
 };
+
+use super::{Channel, ChannelPtr};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
