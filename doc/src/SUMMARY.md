@@ -6,7 +6,7 @@
 - [Tutorial](tutorial.md)
 - [Architecture](architecture/architecture.md)
   - [Blockchain](architecture/blockchain.md)
-  - [Node design](architecture/nodes.md)
+  - [DNA](architecture/dna.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
   - [cashierd JSON-RPC API](clients/cashierd_jsonrpc.md)
