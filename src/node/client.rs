@@ -5,6 +5,10 @@ use log::{debug, info, warn};
 use smol::Executor;
 use url::Url;
 
+use super::{
+    service::GatewayClient,
+    state::{state_transition, State, StateUpdate},
+};
 use crate::{
     blockchain::{rocks::columns, Rocks, RocksColumn, Slab},
     crypto::{
@@ -18,17 +22,12 @@ use crate::{
     },
     tx,
     util::serial::{Decodable, Encodable},
-    zk::circuit::{MintContract, SpendContract},
-    Result,
-};
-
-use super::{
-    service::GatewayClient,
-    state::{state_transition, State, StateUpdate},
     wallet::{
         cashierdb::CashierDbPtr,
         walletdb::{Balances, WalletPtr},
     },
+    zk::circuit::{MintContract, SpendContract},
+    Result,
 };
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -95,7 +94,7 @@ impl Client {
         if wallet.get_default_keypair().await.is_err() {
             // Generate a new keypair if we don't have any.
             if wallet.get_keypairs().await?.is_empty() {
-                wallet.key_gen().await?;
+                wallet.keygen().await?;
             }
             // set the first keypair as the default one
             wallet.set_default_keypair(&wallet.get_keypairs().await?[0].public).await?;
@@ -397,8 +396,9 @@ impl Client {
         Ok(())
     }
 
-    pub async fn key_gen(&self) -> Result<()> {
-        self.wallet.key_gen().await
+    pub async fn keygen(&self) -> Result<()> {
+        let _ = self.wallet.keygen().await?;
+        Ok(())
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {

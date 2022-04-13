@@ -9,6 +9,7 @@ use sqlx::{
     ConnectOptions, Row, SqlitePool,
 };
 
+use super::WalletError;
 use crate::{
     crypto::{
         coin::Coin,
@@ -19,9 +20,8 @@ use crate::{
         types::DrkTokenId,
         OwnCoin, OwnCoins,
     },
-    node::client::ClientFailed,
     util::serial::serialize,
-    Error, Result,
+    Result,
 };
 
 use super::wallet_api::WalletApi;
@@ -50,7 +50,7 @@ impl WalletDb {
     pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword))
+            return Err(WalletError::EmptyPassword.into())
         }
 
         if path != "sqlite::memory:" {
@@ -77,9 +77,9 @@ impl WalletDb {
 
     pub async fn init_db(&self) -> Result<()> {
         info!("Initializing wallet database");
-        let tree = include_str!("../../../script/sql/tree.sql");
-        let keys = include_str!("../../../script/sql/keys.sql");
-        let coins = include_str!("../../../script/sql/coins.sql");
+        let tree = include_str!("../../script/sql/tree.sql");
+        let keys = include_str!("../../script/sql/keys.sql");
+        let coins = include_str!("../../script/sql/coins.sql");
 
         let mut conn = self.conn.acquire().await?;
 
@@ -175,8 +175,8 @@ impl WalletDb {
 
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
-                error!("Tree already exists");
-                Err(Error::from(ClientFailed::TreeExists))
+                error!("Merkle tree already exists");
+                Err(WalletError::TreeExists.into())
             }
             Err(_) => {
                 let tree = BridgeTree::<MerkleNode, 32>::new(100);

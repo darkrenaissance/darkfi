@@ -45,3 +45,6 @@ pub mod zkas;
 
 #[cfg(feature = "raft")]
 pub mod raft;
+
+#[cfg(feature = "wallet")]
+pub mod wallet;

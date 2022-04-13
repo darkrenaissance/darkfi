@@ -10,15 +10,15 @@ use sqlx::{
 
 use super::wallet_api::WalletApi;
 
+use super::WalletError;
 use crate::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         types::DrkTokenId,
     },
-    node::client::ClientFailed,
     util::NetworkName,
-    Error, Result,
+    Result,
 };
 
 pub type CashierDbPtr = Arc<CashierDb>;
@@ -54,7 +54,7 @@ impl CashierDb {
         debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
-            return Err(Error::from(ClientFailed::EmptyPassword))
+            return Err(WalletError::EmptyPassword.into())
         }
 
         if path != "sqlite::memory:" {
@@ -80,9 +80,9 @@ impl CashierDb {
     }
 
     pub async fn init_db(&self) -> Result<()> {
-        let main_kps = include_str!("../../../script/sql/cashier_main_keypairs.sql");
-        let deposit_kps = include_str!("../../../script/sql/cashier_deposit_keypairs.sql");
-        let withdraw_kps = include_str!("../../../script/sql/cashier_withdraw_keypairs.sql");
+        let main_kps = include_str!("../../script/sql/cashier_main_keypairs.sql");
+        let deposit_kps = include_str!("../../script/sql/cashier_deposit_keypairs.sql");
+        let withdraw_kps = include_str!("../../script/sql/cashier_withdraw_keypairs.sql");
 
         let mut conn = self.conn.acquire().await?;
 
@@ -103,8 +103,8 @@ impl CashierDb {
 
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
-                error!("Tree already exists");
-                Err(Error::from(ClientFailed::TreeExists))
+                error!("Merkle tree already exists");
+                Err(WalletError::TreeExists.into())
             }
             Err(_) => {
                 let tree = BridgeTree::<MerkleNode, 32>::new(100);

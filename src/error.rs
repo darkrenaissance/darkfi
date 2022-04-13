@@ -104,6 +104,9 @@ pub enum Error {
     #[error("Client failed: `{0}`")]
     ClientFailed(String),
 
+    #[error("Wallet error: `{0}`")]
+    WalletError(String),
+
     #[error("Cashier failed: `{0}`")]
     CashierError(String),
 
@@ -114,7 +117,7 @@ pub enum Error {
     #[error("Rocksdb error: `{0}`")]
     RocksdbError(String),
 
-    #[cfg(feature = "node")]
+    #[cfg(feature = "wallet")]
     #[error("sqlx error: `{0}`")]
     SqlxError(String),
 
@@ -252,7 +255,7 @@ impl From<rocksdb::Error> for Error {
     }
 }
 
-#[cfg(feature = "node")]
+#[cfg(feature = "wallet")]
 impl From<sqlx::error::Error> for Error {
     fn from(err: sqlx::error::Error) -> Error {
         Error::SqlxError(err.to_string())
@@ -297,6 +300,13 @@ impl From<url::ParseError> for Error {
 impl From<crate::node::client::ClientFailed> for Error {
     fn from(err: crate::node::client::ClientFailed) -> Error {
         Error::ClientFailed(err.to_string())
+    }
+}
+
+#[cfg(feature = "wallet")]
+impl From<crate::wallet::WalletError> for Error {
+    fn from(err: crate::wallet::WalletError) -> Error {
+        Error::WalletError(err.to_string())
     }
 }
 
