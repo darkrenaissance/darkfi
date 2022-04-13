@@ -62,8 +62,6 @@ pub struct TaskInfo {
     created_at: Timestamp,
     events: TaskEvents,
     comments: TaskComments,
-    #[serde(skip_serializing, skip_deserializing)]
-    dataset_path: PathBuf,
 }
 
 impl TaskInfo {
@@ -102,39 +100,37 @@ impl TaskInfo {
             created_at,
             comments: TaskComments(vec![]),
             events: TaskEvents(vec![]),
-            dataset_path: dataset_path.to_path_buf(),
         })
     }
 
     pub fn load(ref_id: &str, dataset_path: &Path) -> TaudResult<Self> {
-        let mut task = crate::util::load::<Self>(&Self::get_path(ref_id, dataset_path))?;
-        task.set_dataset_path(dataset_path);
+        let task = crate::util::load::<Self>(&Self::get_path(ref_id, dataset_path))?;
         Ok(task)
     }
 
-    pub fn save(&self) -> TaudResult<()> {
-        crate::util::save::<Self>(&Self::get_path(&self.ref_id, &self.dataset_path), self)
+    pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
+        crate::util::save::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
             .map_err(TaudError::Darkfi)?;
 
         if self.get_state() != "open" {
-            self.deactivate()?;
+            self.deactivate(dataset_path)?;
         } else {
-            self.activate()?;
+            self.activate(dataset_path)?;
         }
 
         Ok(())
     }
 
-    pub fn activate(&self) -> TaudResult<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.dataset_path)?;
+    pub fn activate(&self, path: &Path) -> TaudResult<()> {
+        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
         mt.add(&self.ref_id);
-        mt.save()
+        mt.save(path)
     }
 
-    pub fn deactivate(&self) -> TaudResult<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, &self.dataset_path)?;
+    pub fn deactivate(&self, path: &Path) -> TaudResult<()> {
+        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
         mt.remove(&self.ref_id);
-        mt.save()
+        mt.save(path)
     }
 
     pub fn get_state(&self) -> String {
@@ -179,10 +175,6 @@ impl TaskInfo {
 
     pub fn set_due(&mut self, d: Option<Timestamp>) {
         self.due = d;
-    }
-
-    pub fn set_dataset_path(&mut self, dataset_path: &Path) {
-        self.dataset_path = dataset_path.to_path_buf();
     }
 
     pub fn set_state(&mut self, action: &str) {

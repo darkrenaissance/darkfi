@@ -12,21 +12,18 @@ datastore_raft = "~/.config/tau/tau.db"
 # openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
 tls_identity_path = ""
 
+### Number of outbound connections 
+#outbound_connections = 5
+
 # The address where taud should bind its RPC socket
 [rpc_listener_url]
 url="127.0.0.1:8875"
 password = "FOOBAR"
 
-##
-## P2P network
-## 
 ### The accept address 
 #[accept_address]
 #url="127.0.0.1:8822"
 #password = "FOOBAR"
-
-### Number of outbound connections 
-#outbound_connections = 5
 
 ### Seed node addresses
 #[[seeds]]
