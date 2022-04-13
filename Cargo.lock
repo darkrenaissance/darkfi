@@ -1725,6 +1725,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "ctrlc",
  "darkfi",
  "easy-parallel",
  "futures-lite",
