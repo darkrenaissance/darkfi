@@ -80,7 +80,7 @@ impl MetadataStore {
     }
 
     /// Insert metadata into the metadatastore.
-    /// The block hash for the madatad is used as the key, where value is the serialized metadata.
+    /// The block hash for the metadata is used as the key, where value is the serialized metadata.
     pub fn insert(&self, metadata: &Metadata, block: blake3::Hash) -> Result<()> {
         self.0.insert(block.as_bytes(), serialize(metadata))?;
         Ok(())

@@ -356,6 +356,20 @@ impl ValidatorState {
         let nodes_count = self.consensus.participants.len();
         self.zero_participants_check();
 
+        // Checking that the voter can actually vote.
+        match self.consensus.participants.get(&vote.id) {
+            Some(participant) => {
+                if self.current_epoch() <= participant.joined {
+                    debug!("Voter joined after current epoch. Voter: {:?}", vote.id);
+                    return Ok(false)
+                }
+            }
+            None => {
+                debug!("Voter is not a participant. Voter: {:?}", vote.id);
+                return Ok(false)
+            }
+        }
+
         let proposal = self.find_proposal(&vote.proposal).unwrap();
         if proposal == None {
             debug!("Received vote for unknown proposal.");
@@ -382,7 +396,16 @@ impl ValidatorState {
                 Some(p) => p.clone(),
                 None => Participant::new(vote.id, vote.sl),
             };
-            participant.voted = Some(vote.sl);
+
+            match participant.voted {
+                Some(voted) => {
+                    if vote.sl > voted {
+                        participant.voted = Some(vote.sl);
+                    }
+                }
+                None => participant.voted = Some(vote.sl),
+            }
+
             self.consensus.participants.insert(participant.id, participant);
 
             return Ok(true)
