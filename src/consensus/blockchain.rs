@@ -3,73 +3,53 @@ use std::io;
 use log::debug;
 
 use crate::{
-    encode_payload, impl_vec,
-    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    impl_vec,
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
 
 use super::{
-    block::{Block, BlockProposal},
-    util::GENESIS_HASH_BYTES,
+    block::{Block, BlockProposal, BlockStore},
+    metadata::MetadataStore,
+    tx::TxStore,
+    util::{to_block_serial, GENESIS_HASH_BYTES},
 };
 
 /// This struct represents a sequence of blocks starting with the genesis block.
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug)]
 pub struct Blockchain {
-    pub blocks: Vec<Block>,
+    pub blocks: BlockStore,
+    pub transactions: TxStore,
+    pub metadata: MetadataStore,
 }
 
 impl Blockchain {
-    pub fn new(initial_block: Block) -> Blockchain {
-        Blockchain { blocks: vec![initial_block] }
+    pub fn new(db: &sled::Db) -> Result<Blockchain> {
+        let blocks = BlockStore::new(db)?;
+        let transactions = TxStore::new(db)?;
+        let metadata = MetadataStore::new(db)?;
+        Ok(Blockchain { blocks, transactions, metadata })
     }
 
-    /// A block is considered valid when its parent hash is equal to the hash of the
-    /// previous block and their epochs are incremental, exluding genesis.
-    /// Additional validity rules can be applied.
-    pub fn check_block(&self, block: &Block, previous: &Block) -> Result<bool> {
-        if block.st.as_bytes() == &GENESIS_HASH_BYTES {
-            debug!("Genesis block provided.");
-            return Ok(false)
+    /// Insertion of a block proposal.
+    pub fn add(&mut self, proposal: BlockProposal) -> Result<blake3::Hash> {
+        // Storing transactions
+        let mut txs = Vec::new();
+        for tx in proposal.txs {
+            let hash = self.transactions.insert(&tx)?;
+            txs.push(hash);
         }
-        let mut buf = vec![];
-        encode_payload!(&mut buf, previous.st, previous.sl, previous.txs);
-        let previous_hash = blake3::hash(&serialize(&buf));
-        if block.st != previous_hash || block.sl <= previous.sl {
-            debug!("Provided block is invalid.");
-            return Ok(false)
-        }
-        Ok(true)
-    }
 
-    /// A blockchain is considered valid, when every block is valid, based on check_block function.
-    pub fn check_chain(&self) -> bool {
-        for (index, block) in self.blocks[1..].iter().enumerate() {
-            if !self.check_block(block, &self.blocks[index]).unwrap() {
-                return false
-            }
-        }
-        true
-    }
+        // Storing block
+        let block = Block { st: proposal.st, sl: proposal.sl, txs };
+        let hash = self.blocks.insert(&block)?;
 
-    /// Insertion of a valid block.
-    pub fn add(&mut self, block: &Block) {
-        self.check_block(block, self.blocks.last().unwrap()).unwrap();
-        self.blocks.push(block.clone());
-    }
+        // Storing metadata
+        self.metadata.insert(&proposal.metadata, hash)?;
 
-    /// Blockchain notarization check.
-    pub fn notarized(&self) -> bool {
-        for block in &self.blocks {
-            if !block.metadata.sm.notarized {
-                return false
-            }
-        }
-        true
+        Ok(hash)
     }
 }
-
-impl_vec!(Blockchain);
 
 /// This struct represents a sequence of block proposals.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
@@ -94,9 +74,7 @@ impl ProposalsChain {
             debug!("Genesis block proposal provided.");
             return Ok(false)
         }
-        let mut buf = vec![];
-        encode_payload!(&mut buf, previous.st, previous.sl, previous.txs);
-        let previous_hash = blake3::hash(&serialize(&buf));
+        let previous_hash = blake3::hash(&to_block_serial(previous.st, previous.sl, &previous.txs));
         if proposal.st != previous_hash || proposal.sl <= previous.sl {
             debug!("Provided proposal is invalid.");
             return Ok(false)

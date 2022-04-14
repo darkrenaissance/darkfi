@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_trait::async_trait;
 
 use darkfi::{
-    consensus::{state::StatePtr, tx::Tx},
+    consensus::{state::ValidatorStatePtr, tx::Tx},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -15,12 +15,16 @@ use std::sync::Arc;
 pub struct ProtocolTx {
     tx_sub: MessageSubscription<Tx>,
     jobsman: ProtocolJobsManagerPtr,
-    state: StatePtr,
+    state: ValidatorStatePtr,
     p2p: P2pPtr,
 }
 
 impl ProtocolTx {
-    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: ValidatorStatePtr,
+        p2p: P2pPtr,
+    ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Tx>().await;
 

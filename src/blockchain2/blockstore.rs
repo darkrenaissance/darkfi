@@ -69,7 +69,7 @@ impl BlockStore {
         Ok(self.0.contains_key(blockhash.as_bytes())?)
     }
 
-    /// Fetch the first (oldest) block in the tree.
+    /// Fetch the first block in the tree, based on the Ord implementation for Vec<u8>.
     pub fn get_first(&self) -> Result<Option<(blake3::Hash, Block)>> {
         if let Some(found) = self.0.first()? {
             let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();
@@ -80,7 +80,7 @@ impl BlockStore {
         Ok(None)
     }
 
-    /// Fetch the last (newest) block in the tree.
+    /// Fetch the last block in the tree, based on the Ord implementation for Vec<u8>.
     pub fn get_last(&self) -> Result<Option<(blake3::Hash, Block)>> {
         if let Some(found) = self.0.last()? {
             let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();

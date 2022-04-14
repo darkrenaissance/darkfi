@@ -13,7 +13,7 @@ use structopt_toml::StructOptToml;
 use darkfi::{
     consensus::{
         participant::Participant,
-        state::{State, StatePtr},
+        state::{ValidatorState, ValidatorStatePtr},
         tx::Tx,
     },
     net,
@@ -95,7 +95,7 @@ struct Opt {
     verbose: u8,
 }
 
-async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
+async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
     // Node signals the network that it starts participating
     let participant =
         Participant::new(state.read().unwrap().id, state.read().unwrap().current_epoch());
@@ -136,7 +136,11 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
                                 debug!("Node did not vote for the proposed block.");
                             } else {
                                 let vote = x.unwrap();
-                                state.write().unwrap().receive_vote(&vote);
+                                let result = state.write().unwrap().receive_vote(&vote);
+                                match result {
+                                    Ok(_) => info!("Vote saved successfuly."),
+                                    Err(e) => error!("Vote save failed. Error: {:?}", e),
+                                }
                                 // Broadcasting block
                                 let result = p2p.broadcast(unwrapped).await;
                                 match result {
@@ -161,7 +165,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: StatePtr, database: &sled::Db) {
         }
 
         // Current node state is flushed to sled database
-        let result = state.read().unwrap().save(database);
+        let result = state.read().unwrap().save_consensus_state();
         match result {
             Ok(()) => (),
             Err(e) => {
@@ -196,9 +200,8 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     // State setup
     let genesis = opts.genesis;
     let database_path = expand_path(&opts.database).unwrap();
-    let database = sled::open(database_path).unwrap();
     let id = opts.id.clone();
-    let state = State::load_current_state(genesis, id, &database).unwrap();
+    let state = ValidatorState::new(database_path, id, genesis).unwrap();
 
     // P2P registry setup
     let p2p = net::P2p::new(network_settings).await;
@@ -265,13 +268,13 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task(p2p, state, &database).await;
+    proposal_task(p2p, state).await;
 
     Ok(())
 }
 
 struct JsonRpcInterface {
-    state: StatePtr,
+    state: ValidatorStatePtr,
     p2p: net::P2pPtr,
     _rpc_listen_addr: SocketAddr,
 }

@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_trait::async_trait;
 
 use darkfi::{
-    consensus::{state::StatePtr, vote::Vote},
+    consensus::{state::ValidatorStatePtr, vote::Vote},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -15,12 +15,16 @@ use std::sync::Arc;
 pub struct ProtocolVote {
     vote_sub: MessageSubscription<Vote>,
     jobsman: ProtocolJobsManagerPtr,
-    state: StatePtr,
+    state: ValidatorStatePtr,
     p2p: P2pPtr,
 }
 
 impl ProtocolVote {
-    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: ValidatorStatePtr,
+        p2p: P2pPtr,
+    ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Vote>().await;
 
@@ -45,7 +49,7 @@ impl ProtocolVote {
                 vote
             );
             let vote_copy = (*vote).clone();
-            if self.state.write().unwrap().receive_vote(&vote_copy) {
+            if self.state.write().unwrap().receive_vote(&vote_copy)? {
                 self.p2p.broadcast(vote_copy).await?;
             };
         }

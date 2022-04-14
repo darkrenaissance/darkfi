@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_trait::async_trait;
 
 use darkfi::{
-    consensus::{participant::Participant, state::StatePtr},
+    consensus::{participant::Participant, state::ValidatorStatePtr},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -15,12 +15,16 @@ use std::sync::Arc;
 pub struct ProtocolParticipant {
     participant_sub: MessageSubscription<Participant>,
     jobsman: ProtocolJobsManagerPtr,
-    state: StatePtr,
+    state: ValidatorStatePtr,
     p2p: P2pPtr,
 }
 
 impl ProtocolParticipant {
-    pub async fn init(channel: ChannelPtr, state: StatePtr, p2p: P2pPtr) -> ProtocolBasePtr {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: ValidatorStatePtr,
+        p2p: P2pPtr,
+    ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Participant>().await;
 
@@ -46,7 +50,8 @@ impl ProtocolParticipant {
                 participant
             );
             if self.state.write().unwrap().append_participant((*participant).clone()) {
-                let pending_participants = self.state.read().unwrap().pending_participants.clone();
+                let pending_participants =
+                    self.state.read().unwrap().consensus.pending_participants.clone();
                 for pending_participant in pending_participants {
                     self.p2p.broadcast(pending_participant.clone()).await?;
                 }
