@@ -38,7 +38,7 @@ mod client;
 use client::Client;
 
 mod error;
-use error::*;
+use error::{server_error, RpcError};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -117,7 +117,7 @@ impl Darkfid {
             Ok(a) => jsonrpc::response(json!(a.to_string()), id).into(),
             Err(e) => {
                 error!("Failed creating keypair: {}", e);
-                err_keygen(id)
+                server_error(RpcError::Keygen, id)
             }
         }
     }
@@ -135,7 +135,7 @@ impl Darkfid {
         let mut fetch_all = false;
         for i in params {
             if !i.is_i64() {
-                return err_nan(id)
+                return server_error(RpcError::Nan, id)
             }
 
             if i.as_i64() == Some(-1) {
@@ -144,7 +144,7 @@ impl Darkfid {
             }
 
             if i.as_i64() < Some(-1) {
-                return err_lt1(id)
+                return server_error(RpcError::LessThanNegOne, id)
             }
         }
 
@@ -152,7 +152,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed fetching keypairs: {}", e);
-                return err_kp_fetch(id)
+                return server_error(RpcError::KeypairFetch, id)
             }
         };
 
@@ -190,7 +190,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed fetching keypairs: {}", e);
-                return err_kp_fetch(id)
+                return server_error(RpcError::KeypairFetch, id)
             }
         };
 
@@ -198,7 +198,7 @@ impl Darkfid {
             return jsonrpc::response(json!(kp.secret.to_bytes()), id).into()
         }
 
-        err_kp_not_found(id)
+        server_error(RpcError::KeypairNotFound, id)
     }
 
     // RPCAPI:
@@ -215,7 +215,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed parsing secret key from string: {}", e);
-                return err_invalid_kp(id)
+                return server_error(RpcError::InvalidKeypair, id)
             }
         };
 
@@ -223,7 +223,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed parsing secret key from string: {}", e);
-                return err_invalid_kp(id)
+                return server_error(RpcError::InvalidKeypair, id)
             }
         };
 
@@ -258,12 +258,12 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed fetching keypairs: {}", e);
-                return err_kp_fetch(id)
+                return server_error(RpcError::KeypairFetch, id)
             }
         };
 
         if keypairs.len() as u64 != idx - 1 {
-            return err_kp_not_found(id)
+            return server_error(RpcError::KeypairNotFound, id)
         }
 
         let kp = keypairs[idx as usize];
