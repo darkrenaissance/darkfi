@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
@@ -17,6 +19,8 @@ use darkfi::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
     },
+    net,
+    net::P2pPtr,
     rpc::{
         jsonrpc,
         jsonrpc::{
@@ -52,7 +56,7 @@ struct Args {
     config: Option<String>,
 
     #[structopt(long, default_value = "~/.config/darkfi/darkfid_wallet.db")]
-    /// Path to the wallet database
+    /// Path to wallet database
     wallet_path: String,
 
     #[structopt(long, default_value = "changeme")]
@@ -63,6 +67,26 @@ struct Args {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
+    #[structopt(long, default_value = "127.0.0.1:5398")]
+    /// P2P accept address
+    p2p_accept: SocketAddr,
+
+    #[structopt(long, default_value = "127.0.0.1:5398")]
+    /// P2P external address
+    p2p_external: SocketAddr,
+
+    #[structopt(long, default_value = "8")]
+    /// Connection slots
+    slots: u32,
+
+    #[structopt(long)]
+    /// Connect to peer (repeatable flag)
+    connect: Vec<SocketAddr>,
+
+    #[structopt(long)]
+    /// Connect to seed (repeatable flag)
+    seed: Vec<SocketAddr>,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -70,6 +94,7 @@ struct Args {
 
 pub struct Darkfid {
     client: Client,
+    p2p: P2pPtr,
     synced: Mutex<bool>,
 }
 
@@ -95,9 +120,9 @@ impl RequestHandler for Darkfid {
 }
 
 impl Darkfid {
-    pub async fn new(wallet: WalletPtr) -> Result<Self> {
+    pub async fn new(wallet: WalletPtr, p2p: P2pPtr) -> Result<Self> {
         let client = Client::new(wallet).await?;
-        Ok(Self { client, synced: Mutex::new(false) })
+        Ok(Self { client, p2p, synced: Mutex::new(false) })
     }
 
     // RPCAPI:
@@ -286,17 +311,45 @@ async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> 
     Ok(wallet)
 }
 
-async fn realmain(args: Args, darkfid: Arc<Darkfid>, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // We use this synchronous channel to block in this function, and
     // to catch a shutdown signal, where we can clean up and exit gracefully.
     let (signal, shutdown) = std::sync::mpsc::channel();
     ctrlc::set_handler(move || signal.send(()).unwrap()).unwrap();
 
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+    // Initialize or load wallet
+    let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
 
+    // P2P network
+    let network_settings = net::Settings {
+        inbound: Some(args.p2p_accept),
+        outbound_connections: args.slots,
+        external_addr: Some(args.p2p_external),
+        peers: args.connect.clone(),
+        seeds: args.seed.clone(),
+        ..Default::default()
+    };
+
+    let p2p = net::P2p::new(network_settings).await;
+    let registry = p2p.protocol_registry();
+    // TODO: Register protocols
+
+    info!("Starting P2P networking");
+    p2p.clone().start(ex.clone()).await?;
+
+    // Initialize state
+    let darkfid = Darkfid::new(wallet, p2p).await?;
+    let darkfid = Arc::new(darkfid);
+
+    // JSON-RPC server
+    info!("Starting JSON-RPC server");
+    let _jsonrpc_task = ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+
+    // Block here and wait for SIGINT
     shutdown.recv().unwrap();
     print!("\r");
     info!("Caught ^C, cleaning up and exiting...");
+
     // Flush dbs
 
     Ok(())
@@ -311,15 +364,6 @@ fn main() -> Result<()> {
     let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    // Initialize or load wallet
-    let ex = Executor::new();
-    let wallet = future::block_on(ex.run(init_wallet(&args.wallet_path, &args.wallet_pass)))?;
-
-    // Initialize state
-    let darkfid = future::block_on(ex.run(Darkfid::new(wallet)))?;
-    let darkfid = Arc::new(darkfid);
-    drop(ex);
-
     // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -329,7 +373,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             future::block_on(async {
-                realmain(args, darkfid, ex.clone()).await?;
+                realmain(args, ex.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
