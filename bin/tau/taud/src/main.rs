@@ -12,7 +12,6 @@ use darkfi::{
     util::{
         cli::{log_config, spawn_config, Config},
         path::get_config_path,
-        sleep,
     },
     Error,
 };
@@ -48,7 +47,6 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
-    let initial_sync_commits = commits.clone();
     let initial_sync_raft_sender = raft_sender.clone();
 
     //
@@ -67,53 +65,48 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, settings.dataset_path.clone()));
 
     let dataset_path_cloned = settings.dataset_path.clone();
-    let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
+    let recv_update_from_rpc: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
             let task_info = rpc_rcv.recv().await.map_err(Error::from)?;
-
             if let Some(tk) = task_info {
                 info!(target: "tau", "save the received task {:?}", tk);
                 tk.save(&dataset_path_cloned)?;
                 raft_sender.send(tk).await.map_err(Error::from)?;
             }
+        }
+    });
 
-            let recv_commits = commits.lock().await;
-            for task_info in recv_commits.iter() {
-                info!(target: "tau", "update from the commits");
-                task_info.save(&dataset_path_cloned)?;
-            }
+    let dataset_path_cloned = settings.dataset_path.clone();
+    let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
+        loop {
+            let task = commits.recv().await.map_err(Error::from)?;
+            info!(target: "tau", "update from the commits");
+            task.save(&dataset_path_cloned)?;
         }
     });
 
     let dataset_path_cloned = settings.dataset_path.clone();
     let initial_sync: smol::Task<TaudResult<()>> = executor.spawn(async move {
-        info!(target: "tau", "Start initial sync waiting the network for 5 seconds");
-        sleep(5).await;
-
-        let recv_commits = initial_sync_commits.lock().await;
-        for task_info in recv_commits.iter() {
-            info!(target: "tau", "Save received tasks {:?}", task_info);
-            task_info.save(&dataset_path_cloned)?;
-        }
-
+        info!(target: "tau", "Start initial sync");
         info!(target: "tau", "Upload local tasks");
-
         let tasks = MonthTasks::load_current_open_tasks(&dataset_path_cloned)?;
 
         for task in tasks {
             info!(target: "tau", "send local task {:?}", task);
             initial_sync_raft_sender.send(task).await.map_err(Error::from)?;
         }
-
         Ok(())
     });
 
-    let ex2 = executor.clone();
-    ex2.spawn(listen_and_serve(server_config, rpc_interface, executor.clone())).detach();
+    let executor_cloned = executor.clone();
+    executor_cloned
+        .spawn(listen_and_serve(server_config, rpc_interface, executor.clone()))
+        .detach();
 
     // blocking
     raft.start(p2p_settings.clone(), executor.clone()).await?;
 
+    recv_update_from_rpc.cancel().await;
     recv_update_from_raft.cancel().await;
     initial_sync.cancel().await;
     Ok(())

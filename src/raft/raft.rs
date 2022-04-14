@@ -24,7 +24,7 @@ const HEARTBEATTIMEOUT: u64 = 100;
 const TIMEOUT: u64 = 300;
 const TIMEOUT_NODES: u64 = 300;
 
-pub type BroadcastMsg<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
+pub type Broadcast<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
 type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
 
 pub struct Raft<T> {
@@ -38,8 +38,6 @@ pub struct Raft<T> {
     voted_for: Option<NodeId>,
     logs: Logs,
     commit_length: u64,
-    // the log will be added to this vector if it's committed by the majority of nodes
-    commits: Arc<Mutex<Vec<T>>>,
 
     role: Role,
 
@@ -56,7 +54,9 @@ pub struct Raft<T> {
 
     sender: Sender,
 
-    broadcast_msg: BroadcastMsg<T>,
+    broadcast_msg: Broadcast<T>,
+
+    broadcast_commits: Broadcast<T>,
 
     datastore: DataStore<T>,
 }
@@ -74,7 +74,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let mut voted_for = None;
         let mut logs = Logs(vec![]);
         let mut commit_length = 0;
-        let mut commits = Arc::new(Mutex::new(vec![]));
 
         let datastore = if db_path.exists() {
             let datastore = DataStore::new(db_path_str)?;
@@ -82,13 +81,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             voted_for = datastore.voted_for.get_last()?.flatten();
             logs = Logs(datastore.logs.get_all()?);
             commit_length = datastore.commits_length.get_last()?.unwrap_or(0);
-            commits = Arc::new(Mutex::new(datastore.commits.get_all()?));
             datastore
         } else {
             DataStore::new(db_path_str)?
         };
 
         let broadcast_msg = async_channel::unbounded::<T>();
+        let broadcast_commits = async_channel::unbounded::<T>();
         let sender = async_channel::unbounded::<NetMsg>();
 
         Ok(Self {
@@ -97,7 +96,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             voted_for,
             logs,
             commit_length,
-            commits,
             role: Role::Follower,
             current_leader: None,
             votes_received: vec![],
@@ -107,6 +105,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             last_term: 0,
             sender,
             broadcast_msg,
+            broadcast_commits,
             datastore,
         })
     }
@@ -167,8 +166,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 if self_id.is_none() {
                     return
                 }
-                // wait the network
-                task::sleep(Duration::from_secs(5)).await;
                 loop {
                     debug!(target: "raft", "load node ids from p2p hosts ips");
                     task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
@@ -211,8 +208,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
     }
 
-    pub fn get_commits(&self) -> Arc<Mutex<Vec<T>>> {
-        self.commits.clone()
+    pub fn get_commits(&self) -> async_channel::Receiver<T> {
+        self.broadcast_commits.1.clone()
     }
 
     pub fn get_broadcast(&self) -> async_channel::Sender<T> {
@@ -572,7 +569,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
     async fn push_commit(&mut self, commit: &[u8]) -> Result<()> {
         let commit: T = deserialize(commit)?;
-        self.commits.lock().await.push(commit.clone());
+        self.broadcast_commits.0.send(commit.clone()).await?;
         self.datastore.commits.insert(&commit)
     }
     fn push_log(&mut self, i: &Log) -> Result<()> {
