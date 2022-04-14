@@ -55,7 +55,6 @@ pub struct Raft<T> {
     sender: Sender,
 
     broadcast_msg: Broadcast<T>,
-
     broadcast_commits: Broadcast<T>,
 
     datastore: DataStore<T>,
@@ -86,8 +85,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             DataStore::new(db_path_str)?
         };
 
+        // broadcasting channels
         let broadcast_msg = async_channel::unbounded::<T>();
         let broadcast_commits = async_channel::unbounded::<T>();
+
         let sender = async_channel::unbounded::<NetMsg>();
 
         Ok(Self {
@@ -114,6 +115,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         &mut self,
         net_settings: net::Settings,
         executor: Arc<Executor<'_>>,
+        stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
         let (p2p_snd, receive_queues) = async_channel::unbounded::<NetMsg>();
 
@@ -135,11 +137,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         p2p.clone().start(executor.clone()).await?;
 
         let executor_cloned = executor.clone();
-        executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+        let p2p_task = executor_cloned.spawn(p2p.clone().run(executor.clone()));
 
         let p2p_cloned = p2p.clone();
         let p2p_recv = self.sender.1.clone();
-        executor.spawn(async move {
+        let p2p_recv_task = executor.spawn(async move {
             loop {
                 let msg: NetMsg = match p2p_recv.recv().await {
                     Ok(m) => m,
@@ -156,56 +158,65 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                     }
                 }
             }
-        }).detach();
+        });
 
         let self_nodes = self.nodes.clone();
         let p2p_cloned = p2p.clone();
         let self_id = self.id.clone();
-        executor
-            .spawn(async move {
-                if self_id.is_none() {
-                    return
+        let load_ips_task = executor.spawn(async move {
+            if self_id.is_none() {
+                return
+            }
+            loop {
+                debug!(target: "raft", "load node ids from p2p hosts ips");
+                task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
+                let hosts = p2p_cloned.hosts().clone();
+                let nodes_ip = hosts.load_all().await.clone();
+                let mut nodes = self_nodes.lock().await;
+                for ip in nodes_ip.iter() {
+                    nodes.insert(NodeId::from(*ip), *ip);
                 }
-                loop {
-                    debug!(target: "raft", "load node ids from p2p hosts ips");
-                    task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
-                    let hosts = p2p_cloned.hosts().clone();
-                    let nodes_ip = hosts.load_all().await.clone();
-                    let mut nodes = self_nodes.lock().await;
-                    for ip in nodes_ip.iter() {
-                        nodes.insert(NodeId::from(*ip), *ip);
-                    }
-                }
-            })
-            .detach();
+            }
+        });
 
         let mut rng = rand::thread_rng();
 
         let broadcast_msg_rv = self.broadcast_msg.1.clone();
 
         loop {
-            let timeout = Duration::from_millis(rng.gen_range(0..200) + TIMEOUT);
-            let heartbeat_timeout = Duration::from_millis(HEARTBEATTIMEOUT);
-
-            let result = if self.role == Role::Leader {
-                select! {
-                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
-                    _ = task::sleep(heartbeat_timeout).fuse() => self.send_heartbeat().await,
-                }
+            let timeout: Duration;
+            if self.role == Role::Leader {
+                timeout = Duration::from_millis(HEARTBEATTIMEOUT);
             } else {
-                select! {
-                    m =  receive_queues.recv().fuse() => self.handle_method(m?).await,
-                    m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?).await,
-                    _ = task::sleep(timeout).fuse() => self.send_vote_request().await,
-                }
-            };
+                timeout = Duration::from_millis(rng.gen_range(0..200) + TIMEOUT);
+            }
+
+            let result: Result<()>;
+
+            select! {
+                m =  receive_queues.recv().fuse() => result = self.handle_method(m?).await,
+                m =  broadcast_msg_rv.recv().fuse() => result = self.broadcast_msg(&m?).await,
+                _ = task::sleep(timeout).fuse() => {
+                    result = if self.role == Role::Leader {
+                        self.send_heartbeat().await
+                    }else {
+                        self.send_vote_request().await
+                    };
+                },
+                _ = stop_signal.recv().fuse() => break,
+            }
 
             match result {
                 Ok(_) => {}
                 Err(e) => warn!(target: "raft", "warn: {}", e),
             }
         }
+
+        warn!(target: "raft", "Raft start() Exit Signal");
+        load_ips_task.cancel().await;
+        p2p_recv_task.cancel().await;
+        p2p_task.cancel().await;
+        Ok(())
     }
 
     pub fn get_commits(&self) -> async_channel::Receiver<T> {

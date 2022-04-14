@@ -1544,6 +1544,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc-async"
+version = "3.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "598e9d68e769aa1283460a3b0ec0d049ccfb6170277aea37089fa3f58fd721a1"
+dependencies = [
+ "nix",
+ "tokio",
+ "winapi",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6305,6 +6316,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap 3.1.8",
+ "ctrlc-async",
  "darkfi",
  "easy-parallel",
  "futures",

@@ -2,7 +2,7 @@ use async_std::sync::Arc;
 
 use async_executor::Executor;
 use clap::Parser;
-use log::info;
+use log::{info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
@@ -99,16 +99,25 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     });
 
     let executor_cloned = executor.clone();
-    executor_cloned
-        .spawn(listen_and_serve(server_config, rpc_interface, executor.clone()))
-        .detach();
+    let rpc_listener_taks =
+        executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
+
+    let stop_signal = async_channel::bounded::<()>(10);
+
+    ctrlc_async::set_async_handler(async move {
+        warn!(target: "tau", "taud start() Exit Signal");
+        // cleaning up tasks running in the background
+        rpc_listener_taks.cancel().await;
+        stop_signal.0.send(()).await.expect("send exit signal to raft");
+        recv_update_from_rpc.cancel().await;
+        recv_update_from_raft.cancel().await;
+        initial_sync.cancel().await;
+    })
+    .expect("handle exit signal");
 
     // blocking
-    raft.start(p2p_settings.clone(), executor.clone()).await?;
+    raft.start(p2p_settings.clone(), executor.clone(), stop_signal.1.clone()).await?;
 
-    recv_update_from_rpc.cancel().await;
-    recv_update_from_raft.cancel().await;
-    initial_sync.cancel().await;
     Ok(())
 }
 
