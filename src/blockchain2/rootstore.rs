@@ -1,12 +1,26 @@
-use crate::Result;
+use sled::Batch;
+
+use crate::{crypto::merkle_node::MerkleNode, util::serial::serialize, Result};
 
 const SLED_ROOTS_TREE: &[u8] = b"_merkleroots";
 
 pub struct RootStore(sled::Tree);
 
 impl RootStore {
+    /// Opens a new or existing `RootStore` on the given sled database.
     pub fn new(db: &sled::Db) -> Result<Self> {
         let tree = db.open_tree(SLED_ROOTS_TREE)?;
         Ok(Self(tree))
+    }
+
+    /// Insert a slice of [`MerkleNode`] on the given sled database.
+    pub fn insert(&self, roots: &[MerkleNode]) -> Result<()> {
+        let mut batch = Batch::default();
+        for i in roots {
+            batch.insert(serialize(i), vec![] as Vec<u8>);
+        }
+
+        self.0.apply_batch(batch)?;
+        Ok(())
     }
 }

@@ -29,9 +29,10 @@ pub struct Blockchain {
     pub transactions: TxStore,
     /// Streamlet metadata sled tree
     pub streamlet_metadata: StreamletMetadataStore,
-    // TODO:
-    //pub nullifiers: NullifierStore,
-    //pub merkle_roots: RootStore,
+    /// Nullifiers sled tree
+    pub nullifiers: NullifierStore,
+    /// Merkle roots sled tree
+    pub merkle_roots: RootStore,
 }
 
 impl Blockchain {
@@ -39,8 +40,10 @@ impl Blockchain {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let streamlet_metadata = StreamletMetadataStore::new(db)?;
+        let nullifiers = NullifierStore::new(db)?;
+        let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self { blocks, transactions, streamlet_metadata })
+        Ok(Self { blocks, transactions, streamlet_metadata, nullifiers, merkle_roots })
     }
 
     /// Batch insert [`BlockProposal`]s.
