@@ -3,9 +3,11 @@ use std::net::SocketAddr;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
+use chrono::Utc;
 use easy_parallel::Parallel;
 use futures_lite::future;
-use log::{error, info};
+use log::{debug, error, info};
+use rand::Rng;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -15,6 +17,9 @@ use url::Url;
 
 use darkfi::{
     cli_desc,
+    consensus2::{
+        util::Timestamp, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
+    },
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
@@ -35,7 +40,7 @@ use darkfi::{
         path::get_config_path,
     },
     wallet::walletdb::{WalletDb, WalletPtr},
-    Result,
+    Error, Result,
 };
 
 mod client;
@@ -45,11 +50,12 @@ mod error;
 use error::{server_error, RpcError};
 
 mod protocol;
-use protocol::ProtocolProposal;
+use protocol::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
 
+// TODO: Flag to participate in consensus
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "darkfid", about = cli_desc!())]
@@ -58,6 +64,10 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
+    #[structopt(long, default_value = "testnet")]
+    /// Chain to use (testnet, mainnet)
+    chain: String,
+
     #[structopt(long, default_value = "~/.config/darkfi/darkfid_wallet.db")]
     /// Path to wallet database
     wallet_path: String,
@@ -65,6 +75,10 @@ struct Args {
     #[structopt(long, default_value = "changeme")]
     /// Password for the wallet database
     wallet_pass: String,
+
+    #[structopt(long, default_value = "~/.config/darkfi/darkfid_blockchain")]
+    /// Path to blockchain database
+    database: String,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:5397")]
     /// JSON-RPC listen URL
@@ -327,6 +341,26 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Initialize or load wallet
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
 
+    // Initialize or open sled database
+    let db_path = format!("{}/{}", expand_path(&args.database)?.to_str().unwrap(), args.chain);
+    let sled_db = sled::open(&db_path)?;
+
+    // Initialize validator state
+    // TODO: genesis_ts should be some hardcoded constant
+    let genesis_ts = Timestamp(Utc::now().timestamp());
+    let genesis_data = match args.chain.as_str() {
+        "mainnet" => *MAINNET_GENESIS_HASH_BYTES,
+        "testnet" => *TESTNET_GENESIS_HASH_BYTES,
+        x => {
+            error!("Unsupported chain `{}`", x);
+            return Err(Error::UnsupportedChain)
+        }
+    };
+    // TODO: Is this ok?
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
+
     // P2P network
     let network_settings = net::Settings {
         inbound: Some(args.p2p_accept),
@@ -338,14 +372,49 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     };
 
     let p2p = net::P2p::new(network_settings).await;
+
     let registry = p2p.protocol_registry();
-    // TODO: Register protocols
+
+    debug!("Adding ProtocolTx to the protocol registry");
+    let _state = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
+
+    debug!("Adding ProtocolVote to the protocol registry");
+    let _state = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
+
     debug!("Adding ProtocolProposal to the protocol registry");
+    let _state = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
+
+    debug!("Adding ProtocolParticipant to the protocol registry");
+    let _state = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
 
     info!("Starting P2P networking");
     p2p.clone().start(ex.clone()).await?;
 
-    // Initialize state
+    // Initialize program state
     let darkfid = Darkfid::new(wallet, p2p).await?;
     let darkfid = Arc::new(darkfid);
 

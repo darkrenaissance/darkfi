@@ -239,6 +239,9 @@ pub enum Error {
     #[cfg(feature = "net2")]
     #[error("TransportError: {0}")]
     TransportError(String),
+
+    #[error("Unsupported chain")]
+    UnsupportedChain,
 }
 
 #[cfg(feature = "node")]

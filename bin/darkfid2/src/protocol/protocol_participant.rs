@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use log::debug;
 
 use darkfi::{
-    consensus::{participant::Participant, state::ValidatorStatePtr},
+    consensus2::{state::ValidatorStatePtr, Participant},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -44,6 +44,7 @@ impl ProtocolParticipant {
             let participant = self.participant_sub.receive().await?;
 
             debug!("ProtocolParticipant::handle_receive_participant() recv: {:?}", participant);
+
             if self.state.write().unwrap().append_participant((*participant).clone()) {
                 let pending_participants =
                     self.state.read().unwrap().consensus.pending_participants.clone();

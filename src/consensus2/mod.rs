@@ -28,8 +28,8 @@ pub mod util;
 use lazy_static::lazy_static;
 lazy_static! {
     /// Genesis hash for the mainnet chain
-    pub static ref MAINNET_GENESIS_HASH_BYTES: [u8; 32] = *blake3::hash(b"darkfi_mainnet").as_bytes();
+    pub static ref MAINNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_mainnet");
 
     /// Genesis hash for the testnet chain
-    pub static ref TESTNET_GENESIS_HASH_BYTES: [u8; 32] = *blake3::hash(b"darkfi_testnet").as_bytes();
+    pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 }

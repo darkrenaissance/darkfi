@@ -1,4 +1,4 @@
-// TODO: Pending participants can also be a map?
+// TODO: Use sets instead of vectors where possible.
 
 use std::{
     collections::BTreeMap,
