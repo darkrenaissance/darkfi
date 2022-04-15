@@ -13,7 +13,8 @@ async-channel = "1.6.1"
 async-executor = "1.4.1"
 async-std = "1.11.0"
 async-trait = "0.1.53"
-ctrlc-async = {version = "3.2.2", default-features = false, features = ["async-std"]}
+chrono = "0.4.19"
+ctrlc-async = {version = "3.2.2", default-features = false, features = ["async-std", "termination"]}
 darkfi = {path = "../../", features = ["blockchain2", "wallet", "rpc", "net"]}
 easy-parallel = "3.2.0"
 futures-lite = "1.12.0"

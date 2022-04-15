@@ -4,6 +4,6 @@ version = "0.3.0"
 edition = "2021"
 
 [dependencies]
-proc-macro2 = "1.0.36"
-quote = "1.0.17"
-syn = {version = "1.0.89", features = ["full", "fold"]}
+proc-macro2 = "1.0.37"
+quote = "1.0.18"
+syn = {version = "1.0.91", features = ["full", "fold"]}

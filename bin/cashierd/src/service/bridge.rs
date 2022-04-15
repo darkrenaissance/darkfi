@@ -8,8 +8,8 @@ use log::{debug, error};
 
 use darkfi::{
     crypto::{keypair::PublicKey, types::*},
-    node::wallet::cashierdb::TokenKey,
     util::NetworkName,
+    wallet::cashierdb::TokenKey,
     Error, Result,
 };
 

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../"
-features = ["node", "rpc"]
+features = ["wallet", "node", "rpc"]
 
 [dependencies]
 # Async
@@ -17,7 +17,7 @@ async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
 # Misc
-clap = {version = "3.1.6", features = ["derive"]}
+clap = {version = "3.1.8", features = ["derive"]}
 url = "2.2.2"
 log = "0.4.16"
 num_cpus = "1.13.1"

@@ -347,15 +347,16 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    let jsonrpc_task = ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+    ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
 
     // Wait for SIGINT
     shutdown.recv().await?;
     print!("\r");
-    info!("Caught ^C, cleaning up and exiting...");
-    drop(jsonrpc_task);
+    info!("Caught termination signal, cleaning up and exiting...");
 
-    // Flush dbs
+    info!("Flushing database...");
+    let flushed_bytes = sled_db.flush_async().await?;
+    info!("Flushed {} bytes", flushed_bytes);
 
     Ok(())
 }

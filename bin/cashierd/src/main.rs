@@ -20,11 +20,7 @@ use darkfi::{
         token_id::generate_id2,
         types::DrkTokenId,
     },
-    node::{
-        client::Client,
-        state::State,
-        wallet::{cashierdb::CashierDb, walletdb::WalletDb},
-    },
+    node::{client::Client, state::State},
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
         rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
@@ -36,6 +32,7 @@ use darkfi::{
         serial::serialize,
         NetworkName,
     },
+    wallet::{cashierdb::CashierDb, walletdb::WalletDb},
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };

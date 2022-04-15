@@ -16,4 +16,4 @@ darkfi = {path = "../../", features = ["crypto"]}
 indicatif = "0.17.0-rc.10"
 num_cpus = "1.13.1"
 rand = "0.8.5"
-rayon = "1.5.1"
+rayon = "1.5.2"

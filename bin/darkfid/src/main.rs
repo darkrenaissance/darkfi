@@ -25,7 +25,6 @@ use darkfi::{
     node::{
         client::Client,
         state::{ProgramState, State},
-        wallet::walletdb::WalletDb,
     },
     rpc::{
         jsonrpc::{
@@ -38,6 +37,7 @@ use darkfi::{
         cli::{log_config, spawn_config, Config, UrlConfig},
         decode_base10, encode_base10, expand_path, join_config_path, NetworkName,
     },
+    wallet::walletdb::WalletDb,
     zk::circuit::{MintContract, SpendContract},
     Error, Result,
 };
@@ -227,7 +227,7 @@ impl Darkfid {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn key_gen(&self, id: Value, _params: Value) -> JsonResult {
         let client = self.client.lock().await;
-        match client.key_gen().await {
+        match client.keygen().await {
             Ok(()) => JsonResult::Resp(jsonresp(json!(true), id)),
             Err(e) => JsonResult::Err(jsonerr(ServerError(-32002), Some(e.to_string()), id)),
         }

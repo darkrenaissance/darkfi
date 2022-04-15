@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use async_executor::Executor;
 use clap::Parser;
