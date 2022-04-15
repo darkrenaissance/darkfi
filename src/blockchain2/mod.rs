@@ -1,38 +1,51 @@
 use std::io;
 
 use crate::{
+    consensus2::{block::BlockProposal, util::Timestamp},
     impl_vec,
     util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
     Result,
 };
 
 pub mod blockstore;
-pub mod nfstore;
-pub mod rootstore;
-pub mod txstore;
-
 use blockstore::BlockStore;
+
+pub mod metadatastore;
+use metadatastore::StreamletMetadataStore;
+
+pub mod nfstore;
 use nfstore::NullifierStore;
+
+pub mod rootstore;
 use rootstore::RootStore;
+
+pub mod txstore;
 use txstore::TxStore;
 
 pub struct Blockchain {
-    pub db: sled::Db,
+    /// Blocks sled tree
     pub blocks: BlockStore,
+    /// Transactions sled tree
     pub transactions: TxStore,
-    pub nullifiers: NullifierStore,
-    pub merkle_roots: RootStore,
+    /// Streamlet metadata sled tree
+    pub streamlet_metadata: StreamletMetadataStore,
+    // TODO:
+    //pub nullifiers: NullifierStore,
+    //pub merkle_roots: RootStore,
 }
 
 impl Blockchain {
-    pub fn new(db_path: &str) -> Result<Self> {
-        let db = sled::open(db_path)?;
-        let blocks = BlockStore::new(&db)?;
-        let transactions = TxStore::new(&db)?;
-        let nullifiers = NullifierStore::new(&db)?;
-        let merkle_roots = RootStore::new(&db)?;
+    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
+        let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
+        let transactions = TxStore::new(db)?;
+        let streamlet_metadata = StreamletMetadataStore::new(db)?;
 
-        Ok(Self { db, blocks, transactions, nullifiers, merkle_roots })
+        Ok(Self { blocks, transactions, streamlet_metadata })
+    }
+
+    /// Batch insert [`BlockProposal`]s.
+    pub fn add(&mut self, proposals: &[BlockProposal]) -> Result<Vec<blake3::Hash>> {
+        todo!()
     }
 }
 

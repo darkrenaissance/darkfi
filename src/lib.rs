@@ -10,6 +10,9 @@ pub mod blockchain2;
 #[cfg(feature = "blockchain")]
 pub mod consensus;
 
+#[cfg(feature = "blockchain2")]
+pub mod consensus2;
+
 #[cfg(feature = "wasm-runtime")]
 pub mod runtime;
 

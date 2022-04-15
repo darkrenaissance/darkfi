@@ -206,8 +206,11 @@ blockchain = [
 
 blockchain2 = [
     "blake3",
+    "chrono",
     "sled",
 
+    "crypto",
+    "net",
     "util",
 ]
 
