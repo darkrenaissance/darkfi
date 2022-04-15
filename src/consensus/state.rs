@@ -19,11 +19,12 @@ use crate::{
 };
 
 use super::{
-    block::BlockProposal,
+    block::{Block, BlockProposal},
     blockchain::{Blockchain, ProposalsChain},
+    metadata::{Metadata, StreamletMetadata},
     participant::Participant,
     tx::Tx,
-    util::{get_current_time, to_block_serial, Timestamp, GENESIS_HASH_BYTES},
+    util::{get_current_time, Timestamp},
     vote::Vote,
 };
 
@@ -56,11 +57,9 @@ impl ConsensusState {
         let consensus = if let Some(found) = tree.get(id.to_ne_bytes())? {
             deserialize(&found).unwrap()
         } else {
-            let hash = blake3::Hash::from(GENESIS_HASH_BYTES);
-            let genesis_hash = blake3::hash(&to_block_serial(hash, 0, &vec![]));
             let consensus = ConsensusState {
                 genesis: Timestamp(genesis),
-                last_block: genesis_hash,
+                last_block: blake3::hash(&serialize(&Block::genesis_block(genesis))),
                 last_sl: 0,
                 proposals: Vec::new(),
                 orphan_votes: Vec::new(),
@@ -94,6 +93,8 @@ pub struct ValidatorState {
     pub blockchain: Blockchain,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Tx>,
+    /// Genesis block hash, used for validations
+    pub genesis_block: blake3::Hash,
 }
 
 impl ValidatorState {
@@ -103,8 +104,9 @@ impl ValidatorState {
         let db = sled::open(db_path)?;
         let public = PublicKey::from_secret(secret);
         let consensus = ConsensusState::new(&db, id, genesis)?;
-        let blockchain = Blockchain::new(&db)?;
+        let blockchain = Blockchain::new(&db, genesis)?;
         let unconfirmed_txs = Vec::new();
+        let genesis_block = blake3::hash(&serialize(&Block::genesis_block(genesis)));
         Ok(Arc::new(RwLock::new(ValidatorState {
             id,
             secret,
@@ -113,6 +115,7 @@ impl ValidatorState {
             consensus,
             blockchain,
             unconfirmed_txs,
+            genesis_block,
         })))
     }
 
@@ -170,8 +173,17 @@ impl ValidatorState {
         let epoch = self.current_epoch();
         let previous_hash = self.longest_notarized_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs();
-        let signed_block =
-            self.secret.sign(&to_block_serial(previous_hash, epoch, &unproposed_txs)[..]);
+        let metadata = Metadata::new(
+            get_current_time(),
+            String::from("proof"),
+            String::from("r"),
+            String::from("s"),
+        );
+        let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
+        let signed_block = self.secret.sign(
+            BlockProposal::to_proposal_hash(previous_hash, epoch, &unproposed_txs, &metadata)
+                .as_bytes(),
+        );
         Ok(Some(BlockProposal::new(
             self.public,
             signed_block,
@@ -179,11 +191,8 @@ impl ValidatorState {
             previous_hash,
             epoch,
             unproposed_txs,
-            get_current_time(),
-            String::from("proof"),
-            String::from("r"),
-            String::from("s"),
-            self.consensus.participants.values().cloned().collect(),
+            metadata,
+            sm,
         )))
     }
 
@@ -215,8 +224,7 @@ impl ValidatorState {
                     }
                 }
             }
-            let last = longest_notarized_chain.proposals.last().unwrap();
-            blake3::hash(&to_block_serial(last.st, last.sl, &last.txs))
+            longest_notarized_chain.proposals.last().unwrap().hash()
         } else {
             self.consensus.last_block
         };
@@ -235,7 +243,13 @@ impl ValidatorState {
             return Ok(None)
         }
         if !proposal.public_key.verify(
-            &to_block_serial(proposal.st, proposal.sl, &proposal.txs)[..],
+            BlockProposal::to_proposal_hash(
+                proposal.st,
+                proposal.sl,
+                &proposal.txs,
+                &proposal.metadata,
+            )
+            .as_bytes(),
             &proposal.signature,
         ) {
             debug!("Proposer signature couldn't be verified. Proposer: {:?}", proposal.id);
@@ -252,13 +266,13 @@ impl ValidatorState {
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
-        let proposal_hash = blake3::hash(&to_block_serial(proposal.st, proposal.sl, &proposal.txs));
+        let proposal_hash = proposal.hash();
 
         // Add orphan votes
         let mut orphans = Vec::new();
         for vote in self.consensus.orphan_votes.iter() {
             if vote.proposal == proposal_hash {
-                proposal.metadata.sm.votes.push(vote.clone());
+                proposal.sm.votes.push(vote.clone());
                 orphans.push(vote.clone());
             }
         }
@@ -278,7 +292,7 @@ impl ValidatorState {
                 self.consensus.proposals.last().unwrap()
             }
             _ => {
-                self.consensus.proposals[index as usize].add(&proposal);
+                self.consensus.proposals[index as usize].add(&proposal, &self.genesis_block);
                 &self.consensus.proposals[index as usize]
             }
         };
@@ -299,7 +313,7 @@ impl ValidatorState {
     /// Node verifies if provided chain is notarized excluding the last block.
     pub fn extends_notarized_chain(&self, chain: &ProposalsChain) -> bool {
         for proposal in &chain.proposals[..(chain.proposals.len() - 1)] {
-            if !proposal.metadata.sm.notarized {
+            if !proposal.sm.notarized {
                 return false
             }
         }
@@ -310,7 +324,7 @@ impl ValidatorState {
     pub fn find_extended_chain_index(&self, proposal: &BlockProposal) -> Result<i64> {
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
-            let hash = blake3::hash(&to_block_serial(last.st, last.sl, &last.txs));
+            let hash = last.hash();
             if proposal.st == hash && proposal.sl > last.sl {
                 return Ok(index as i64)
             }
@@ -380,13 +394,11 @@ impl ValidatorState {
         }
 
         let (unwrapped, chain_index) = proposal.unwrap();
-        if !unwrapped.metadata.sm.votes.contains(vote) {
-            unwrapped.metadata.sm.votes.push(vote.clone());
+        if !unwrapped.sm.votes.contains(vote) {
+            unwrapped.sm.votes.push(vote.clone());
 
-            if !unwrapped.metadata.sm.notarized &&
-                unwrapped.metadata.sm.votes.len() > (2 * nodes_count / 3)
-            {
-                unwrapped.metadata.sm.notarized = true;
+            if !unwrapped.sm.notarized && unwrapped.sm.votes.len() > (2 * nodes_count / 3) {
+                unwrapped.sm.notarized = true;
                 self.chain_finalization(chain_index)?;
             }
 
@@ -420,8 +432,7 @@ impl ValidatorState {
     ) -> Result<Option<(&mut BlockProposal, i64)>> {
         for (index, chain) in &mut self.consensus.proposals.iter_mut().enumerate() {
             for proposal in chain.proposals.iter_mut().rev() {
-                let proposal_hash =
-                    blake3::hash(&to_block_serial(proposal.st, proposal.sl, &proposal.txs));
+                let proposal_hash = proposal.hash();
                 if vote_proposal == &proposal_hash {
                     return Ok(Some((proposal, index as i64)))
                 }
@@ -440,7 +451,7 @@ impl ValidatorState {
         if len > 2 {
             let mut consecutive = 0;
             for proposal in &chain.proposals {
-                if proposal.metadata.sm.notarized {
+                if proposal.sm.notarized {
                     consecutive += 1;
                 } else {
                     break
@@ -450,7 +461,7 @@ impl ValidatorState {
             if consecutive > 2 {
                 let mut finalized = Vec::new();
                 for proposal in &mut chain.proposals[..(consecutive - 1)] {
-                    proposal.metadata.sm.finalized = true;
+                    proposal.sm.finalized = true;
                     finalized.push(proposal.clone());
                     for tx in proposal.txs.clone() {
                         if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {

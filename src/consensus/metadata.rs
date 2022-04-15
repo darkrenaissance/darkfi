@@ -5,37 +5,25 @@ use crate::{
 
 use super::{participant::Participant, util::Timestamp, vote::Vote};
 
-const SLED_METADATA_TREE: &[u8] = b"_metadata";
+const SLED_STREAMLET_METADATA_TREE: &[u8] = b"_streamlet_metadata";
 
 /// This struct represents additional Block information used by the consensus protocol.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Metadata {
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// Block information used by Ouroboros consensus
     pub om: OuroborosMetadata,
-    /// Block information used by Streamlet consensus
-    pub sm: StreamletMetadata,
 }
 
 impl Metadata {
-    pub fn new(
-        timestamp: Timestamp,
-        proof: String,
-        r: String,
-        s: String,
-        participants: Vec<Participant>,
-    ) -> Metadata {
-        Metadata {
-            timestamp,
-            om: OuroborosMetadata::new(proof, r, s),
-            sm: StreamletMetadata::new(participants),
-        }
+    pub fn new(timestamp: Timestamp, proof: String, r: String, s: String) -> Metadata {
+        Metadata { timestamp, om: OuroborosMetadata::new(proof, r, s) }
     }
 }
 
 /// This struct represents Block information used by Ouroboros consensus protocol.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
     /// Proof the stakeholder is the block owner
     pub proof: String,
@@ -71,24 +59,24 @@ impl StreamletMetadata {
 }
 
 #[derive(Debug)]
-pub struct MetadataStore(sled::Tree);
+pub struct StreamletMetadataStore(sled::Tree);
 
-impl MetadataStore {
+impl StreamletMetadataStore {
     pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_METADATA_TREE)?;
+        let tree = db.open_tree(SLED_STREAMLET_METADATA_TREE)?;
         Ok(Self(tree))
     }
 
-    /// Insert metadata into the metadatastore.
+    /// Insert streamlet metadata into the store.
     /// The block hash for the metadata is used as the key, where value is the serialized metadata.
-    pub fn insert(&self, metadata: &Metadata, block: blake3::Hash) -> Result<()> {
+    pub fn insert(&self, block: blake3::Hash, metadata: &StreamletMetadata) -> Result<()> {
         self.0.insert(block.as_bytes(), serialize(metadata))?;
         Ok(())
     }
 
-    /// Retrieve all metadata.
+    /// Retrieve all streamlet metadata.
     /// Be carefull as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Metadata)>>> {
+    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, StreamletMetadata)>>> {
         let mut metadata = Vec::new();
         let mut iterator = self.0.into_iter().enumerate();
         while let Some((_, r)) = iterator.next() {

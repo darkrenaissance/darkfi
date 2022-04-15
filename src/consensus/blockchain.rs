@@ -10,25 +10,27 @@ use crate::{
 
 use super::{
     block::{Block, BlockProposal, BlockStore},
-    metadata::MetadataStore,
+    metadata::StreamletMetadataStore,
     tx::TxStore,
-    util::{to_block_serial, GENESIS_HASH_BYTES},
 };
 
-/// This struct represents a sequence of blocks starting with the genesis block.
+/// This struct represents the canonical (finalized) blockchain stored in sled database.
 #[derive(Debug)]
 pub struct Blockchain {
+    /// Blocks sled database
     pub blocks: BlockStore,
+    /// Transactions sled database
     pub transactions: TxStore,
-    pub metadata: MetadataStore,
+    /// Streamlet metadata sled database
+    pub streamlet_metadata: StreamletMetadataStore,
 }
 
 impl Blockchain {
-    pub fn new(db: &sled::Db) -> Result<Blockchain> {
-        let blocks = BlockStore::new(db)?;
+    pub fn new(db: &sled::Db, genesis: i64) -> Result<Blockchain> {
+        let blocks = BlockStore::new(db, genesis)?;
         let transactions = TxStore::new(db)?;
-        let metadata = MetadataStore::new(db)?;
-        Ok(Blockchain { blocks, transactions, metadata })
+        let streamlet_metadata = StreamletMetadataStore::new(db)?;
+        Ok(Blockchain { blocks, transactions, streamlet_metadata })
     }
 
     /// Insertion of a block proposal.
@@ -41,11 +43,11 @@ impl Blockchain {
         }
 
         // Storing block
-        let block = Block { st: proposal.st, sl: proposal.sl, txs };
+        let block = Block { st: proposal.st, sl: proposal.sl, txs, metadata: proposal.metadata };
         let hash = self.blocks.insert(&block)?;
 
-        // Storing metadata
-        self.metadata.insert(&proposal.metadata, hash)?;
+        // Storing streamlet metadata
+        self.streamlet_metadata.insert(hash, &proposal.sm)?;
 
         Ok(hash)
     }
@@ -69,23 +71,24 @@ impl ProposalsChain {
         &self,
         proposal: &BlockProposal,
         previous: &BlockProposal,
-    ) -> Result<bool> {
-        if proposal.st.as_bytes() == &GENESIS_HASH_BYTES {
+        genesis: &blake3::Hash,
+    ) -> bool {
+        if &proposal.st == genesis {
             debug!("Genesis block proposal provided.");
-            return Ok(false)
+            return false
         }
-        let previous_hash = blake3::hash(&to_block_serial(previous.st, previous.sl, &previous.txs));
+        let previous_hash = previous.hash();
         if proposal.st != previous_hash || proposal.sl <= previous.sl {
             debug!("Provided proposal is invalid.");
-            return Ok(false)
+            return false
         }
-        Ok(true)
+        true
     }
 
     /// A proposals chain is considered valid, when every proposal is valid, based on check_proposal function.
-    pub fn check_chain(&self) -> bool {
+    pub fn check_chain(&self, genesis: &blake3::Hash) -> bool {
         for (index, proposal) in self.proposals[1..].iter().enumerate() {
-            if !self.check_proposal(proposal, &self.proposals[index]).unwrap() {
+            if !self.check_proposal(proposal, &self.proposals[index], genesis) {
                 return false
             }
         }
@@ -93,15 +96,16 @@ impl ProposalsChain {
     }
 
     /// Insertion of a valid proposal.
-    pub fn add(&mut self, proposal: &BlockProposal) {
-        self.check_proposal(proposal, self.proposals.last().unwrap()).unwrap();
-        self.proposals.push(proposal.clone());
+    pub fn add(&mut self, proposal: &BlockProposal, genesis: &blake3::Hash) {
+        if self.check_proposal(proposal, self.proposals.last().unwrap(), genesis) {
+            self.proposals.push(proposal.clone());
+        }
     }
 
     /// Proposals chain notarization check.
     pub fn notarized(&self) -> bool {
         for proposal in &self.proposals {
-            if !proposal.metadata.sm.notarized {
+            if !proposal.sm.notarized {
                 return false
             }
         }

@@ -10,15 +10,14 @@ use crate::{
 };
 
 use super::{
-    metadata::Metadata,
-    participant::Participant,
+    metadata::{Metadata, StreamletMetadata},
     tx::Tx,
-    util::{Timestamp, GENESIS_HASH_BYTES},
+    util::{Timestamp, EMPTY_HASH_BYTES},
 };
 
 const SLED_BLOCK_TREE: &[u8] = b"_blocks";
 
-/// This struct represents a tuple of the form (st, sl, txs).
+/// This struct represents a tuple of the form (st, sl, txs, metadata).
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
     /// Previous block hash
@@ -28,11 +27,25 @@ pub struct Block {
     /// Transaction hashes
     /// The actual transactions are in [`TxStore`]
     pub txs: Vec<blake3::Hash>,
+    /// Additional block information
+    pub metadata: Metadata,
 }
 
 impl Block {
-    pub fn new(st: blake3::Hash, sl: u64, txs: Vec<blake3::Hash>) -> Block {
-        Block { st, sl, txs }
+    pub fn new(st: blake3::Hash, sl: u64, txs: Vec<blake3::Hash>, metadata: Metadata) -> Block {
+        Block { st, sl, txs, metadata }
+    }
+
+    /// Generates the genesis block.
+    pub fn genesis_block(genesis: i64) -> Block {
+        let hash = blake3::Hash::from(EMPTY_HASH_BYTES);
+        let metadata = Metadata::new(
+            Timestamp(genesis),
+            String::from("proof"),
+            String::from("r"),
+            String::from("s"),
+        );
+        Block::new(hash, 0, vec![], metadata)
     }
 }
 
@@ -41,14 +54,12 @@ pub struct BlockStore(sled::Tree);
 
 impl BlockStore {
     /// Opens a new or existing blockstore tree given a sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis: i64) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_TREE)?;
         let store = Self(tree);
         if store.0.is_empty() {
             // Genesis block is generated.
-            let hash = blake3::Hash::from(GENESIS_HASH_BYTES);
-            let genesis_block = Block::new(hash, 0, vec![]);
-            store.insert(&genesis_block)?;
+            store.insert(&Block::genesis_block(genesis))?;
         }
 
         Ok(store)
@@ -97,6 +108,8 @@ pub struct BlockProposal {
     pub txs: Vec<Tx>,
     /// Additional proposal information
     pub metadata: Metadata,
+    /// Proposal information used by Streamlet consensus
+    pub sm: StreamletMetadata,
 }
 
 impl BlockProposal {
@@ -107,21 +120,31 @@ impl BlockProposal {
         st: blake3::Hash,
         sl: u64,
         txs: Vec<Tx>,
-        timestamp: Timestamp,
-        proof: String,
-        r: String,
-        s: String,
-        participants: Vec<Participant>,
+        metadata: Metadata,
+        sm: StreamletMetadata,
     ) -> BlockProposal {
-        BlockProposal {
-            public_key,
-            signature,
-            id,
-            st,
-            sl,
-            txs,
-            metadata: Metadata::new(timestamp, proof, r, s, participants),
+        BlockProposal { public_key, signature, id, st, sl, txs, metadata, sm }
+    }
+
+    /// Produce proposal hash using st, sl, txs and metadata.
+    pub fn hash(&self) -> blake3::Hash {
+        Self::to_proposal_hash(self.st, self.sl, &self.txs, &self.metadata)
+    }
+
+    /// Util function generate a proposal hash using provided st, sl, txs and metadata.
+    pub fn to_proposal_hash(
+        st: blake3::Hash,
+        sl: u64,
+        transactions: &Vec<Tx>,
+        metadata: &Metadata,
+    ) -> blake3::Hash {
+        let mut txs = Vec::new();
+        for tx in transactions {
+            let hash = blake3::hash(&serialize(tx));
+            txs.push(hash);
         }
+
+        blake3::hash(&serialize(&Block::new(st, sl, txs, metadata.clone())))
     }
 }
 
@@ -132,7 +155,8 @@ impl PartialEq for BlockProposal {
             self.id == other.id &&
             self.st == other.st &&
             self.sl == other.sl &&
-            self.txs == other.txs
+            self.txs == other.txs &&
+            self.metadata == other.metadata
     }
 }
 

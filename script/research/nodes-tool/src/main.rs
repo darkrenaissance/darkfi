@@ -4,7 +4,7 @@ use darkfi::{
     consensus::{
         block::{Block, BlockProposal, BlockStore},
         blockchain::{Blockchain, ProposalsChain},
-        metadata::{Metadata, MetadataStore, OuroborosMetadata, StreamletMetadata},
+        metadata::{Metadata, OuroborosMetadata, StreamletMetadata, StreamletMetadataStore},
         participant::Participant,
         state::{ConsensusState, ValidatorState},
         tx::{Tx, TxStore},
@@ -91,15 +91,13 @@ impl OuroborosMetadataInfo {
 struct MetadataInfo {
     _timestamp: Timestamp,
     _om: OuroborosMetadataInfo,
-    _sm: StreamletMetadataInfo,
 }
 
 impl MetadataInfo {
     pub fn new(metadata: &Metadata) -> MetadataInfo {
         let _timestamp = metadata.timestamp.clone();
         let _om = OuroborosMetadataInfo::new(&metadata.om);
-        let _sm = StreamletMetadataInfo::new(&metadata.sm);
-        MetadataInfo { _timestamp, _om, _sm }
+        MetadataInfo { _timestamp, _om }
     }
 }
 
@@ -110,6 +108,7 @@ struct ProposalInfo {
     _sl: u64,
     _txs: Vec<Tx>,
     _metadata: MetadataInfo,
+    _sm: StreamletMetadataInfo,
 }
 
 impl ProposalInfo {
@@ -119,7 +118,8 @@ impl ProposalInfo {
         let _sl = proposal.sl;
         let _txs = proposal.txs.clone();
         let _metadata = MetadataInfo::new(&proposal.metadata);
-        ProposalInfo { _id, _st, _sl, _txs, _metadata }
+        let _sm = StreamletMetadataInfo::new(&proposal.sm);
+        ProposalInfo { _id, _st, _sl, _txs, _metadata, _sm }
     }
 }
 
@@ -240,12 +240,12 @@ impl TxStoreInfo {
 #[derive(Debug)]
 struct HashedMetadataInfo {
     _block: blake3::Hash,
-    _metadata: MetadataInfo,
+    _metadata: StreamletMetadataInfo,
 }
 
 impl HashedMetadataInfo {
-    pub fn new(_block: blake3::Hash, metadata: &Metadata) -> HashedMetadataInfo {
-        let _metadata = MetadataInfo::new(&metadata);
+    pub fn new(_block: blake3::Hash, metadata: &StreamletMetadata) -> HashedMetadataInfo {
+        let _metadata = StreamletMetadataInfo::new(&metadata);
         HashedMetadataInfo { _block, _metadata }
     }
 }
@@ -256,7 +256,7 @@ struct MetadataStoreInfo {
 }
 
 impl MetadataStoreInfo {
-    pub fn new(metadatastore: &MetadataStore) -> MetadataStoreInfo {
+    pub fn new(metadatastore: &StreamletMetadataStore) -> MetadataStoreInfo {
         let mut _metadata = Vec::new();
         let result = metadatastore.get_all();
         match result {
@@ -287,7 +287,7 @@ impl BlockchainInfo {
     pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
         let _blocks = BlockInfoChain::new(&blockchain.blocks);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        let _metadata = MetadataStoreInfo::new(&blockchain.metadata);
+        let _metadata = MetadataStoreInfo::new(&blockchain.streamlet_metadata);
         BlockchainInfo { _blocks, _transactions, _metadata }
     }
 }
