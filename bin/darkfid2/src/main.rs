@@ -312,10 +312,14 @@ async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> 
 }
 
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
-    // We use this synchronous channel to block in this function, and
-    // to catch a shutdown signal, where we can clean up and exit gracefully.
-    let (signal, shutdown) = std::sync::mpsc::channel();
-    ctrlc::set_handler(move || signal.send(()).unwrap()).unwrap();
+    // We use this handler to block this function after detaching all
+    // tasks, and to catch a shutdown signal, where we can clean up and
+    // exit gracefully.
+    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    ctrlc_async::set_async_handler(async move {
+        signal.send(()).await.unwrap();
+    })
+    .unwrap();
 
     // Initialize or load wallet
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
@@ -343,12 +347,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    let _jsonrpc_task = ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+    let jsonrpc_task = ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
 
-    // Block here and wait for SIGINT
-    shutdown.recv().unwrap();
+    // Wait for SIGINT
+    shutdown.recv().await?;
     print!("\r");
     info!("Caught ^C, cleaning up and exiting...");
+    drop(jsonrpc_task);
 
     // Flush dbs
 
