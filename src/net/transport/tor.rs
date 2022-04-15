@@ -75,7 +75,7 @@ pub enum TorError {
     #[error("Regex parse error: {0}")]
     RegexError(#[from] regex::Error),
     #[error("Unexpected response from tor: {0}")]
-    GeneralError(String),
+    General(String),
 }
 
 /// Contains the configuration to communicate with the Tor Controler
@@ -123,10 +123,10 @@ impl TorController {
         stream.set_write_timeout(Some(Duration::from_secs(2)))?;
         let host = url
             .host()
-            .ok_or_else(|| TorError::GeneralError("No host on url for listening".to_string()))?;
+            .ok_or_else(|| TorError::General("No host on url for listening".to_string()))?;
         let port = url
             .port()
-            .ok_or_else(|| TorError::GeneralError("No port on url for listening".to_string()))?;
+            .ok_or_else(|| TorError::General("No port on url for listening".to_string()))?;
 
         let payload = format!(
             "AUTHENTICATE {a}\r\nADD_ONION NEW:BEST Flags=DiscardPK Port={p},{h}:{p}\r\n",
@@ -145,9 +145,8 @@ impl TorController {
         }
         let re = Regex::new(r"250-ServiceID=(\w+*)")?;
         let cap: Result<regex::Captures<'_>, TorError> =
-            re.captures(&repl).ok_or_else(|| TorError::GeneralError(repl.clone()));
-        let hurl =
-            cap?.get(1).map_or(Err(TorError::GeneralError(repl.clone())), |m| Ok(m.as_str()))?;
+            re.captures(&repl).ok_or_else(|| TorError::General(repl.clone()));
+        let hurl = cap?.get(1).map_or(Err(TorError::General(repl.clone())), |m| Ok(m.as_str()))?;
         let hurl = format!("tcp://{}.onion:{}", &hurl, port);
         Ok(Url::parse(&hurl)?)
     }
@@ -185,7 +184,7 @@ impl TorTransport {
         self.tor_controller
             .as_ref()
             .ok_or_else(|| {
-                TorError::GeneralError("No controller configured for this transport".to_string())
+                TorError::General("No controller configured for this transport".to_string())
             })?
             .create_ehs(url)
     }
