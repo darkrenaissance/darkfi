@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::{
-    consensus2::{block::BlockProposal, util::Timestamp},
+    consensus2::{block::BlockProposal, util::Timestamp, Block},
     impl_vec,
     util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
     Result,
@@ -45,7 +45,24 @@ impl Blockchain {
 
     /// Batch insert [`BlockProposal`]s.
     pub fn add(&mut self, proposals: &[BlockProposal]) -> Result<Vec<blake3::Hash>> {
-        todo!()
+        // TODO: Engineer this function in a better way.
+        let mut ret = Vec::with_capacity(proposals.len());
+
+        for prop in proposals {
+            // Store transactions
+            let tx_hashes = self.transactions.insert(&prop.txs)?;
+
+            // Store block
+            let block =
+                Block { st: prop.st, sl: prop.sl, txs: tx_hashes, metadata: prop.metadata.clone() };
+            let blockhash = self.blocks.insert(&[block])?;
+            ret.push(blockhash[0]);
+
+            // Store streamlet metadata
+            self.streamlet_metadata.insert(&[blockhash[0]], &[prop.sm.clone()])?;
+        }
+
+        Ok(ret)
     }
 }
 

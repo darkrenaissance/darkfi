@@ -12,8 +12,6 @@ pub struct BlockStore(sled::Tree);
 
 impl BlockStore {
     /// Opens a new or existing `BlockStore` on the given sled database.
-    /// The database is typically initialized as a global instance reference
-    /// with e.g. lazy_static.
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_TREE)?;
         let store = Self(tree);
@@ -29,17 +27,19 @@ impl BlockStore {
     /// Insert a slice of [`Block`] into the blockstore. With sled, the
     /// operation is done as a batch.
     /// The blocks are hashed with BLAKE3 and this blockhash is used as
-    /// the key, where value is the serialized block itself.
-    pub fn insert(&self, blocks: &[Block]) -> Result<()> {
+    /// the key, while value is the serialized block itself.
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = Batch::default();
         for i in blocks {
             let serialized = serialize(i);
             let blockhash = blake3::hash(&serialized);
             batch.insert(blockhash.as_bytes(), serialized);
+            ret.push(blockhash);
         }
 
         self.0.apply_batch(batch)?;
-        Ok(())
+        Ok(ret)
     }
 
     /// Fetch given blockhashes from the blockstore.
