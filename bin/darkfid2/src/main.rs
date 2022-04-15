@@ -44,6 +44,9 @@ use client::Client;
 mod error;
 use error::{server_error, RpcError};
 
+mod protocol;
+use protocol::ProtocolProposal;
+
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
 
@@ -337,6 +340,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let p2p = net::P2p::new(network_settings).await;
     let registry = p2p.protocol_registry();
     // TODO: Register protocols
+    debug!("Adding ProtocolProposal to the protocol registry");
 
     info!("Starting P2P networking");
     p2p.clone().start(ex.clone()).await?;
