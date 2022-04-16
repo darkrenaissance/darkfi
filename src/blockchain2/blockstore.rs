@@ -65,68 +65,18 @@ impl BlockStore {
         Ok(self.0.contains_key(blockhash.as_bytes())?)
     }
 
-    /*
-    /// Fetch the first block in the tree, based on the Ord implementation for Vec<u8>.
-    pub fn get_first(&self) -> Result<Option<(blake3::Hash, Block)>> {
-        if let Some(found) = self.0.first()? {
-            let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();
-            let block = deserialize(&found.1)?;
-            return Ok(Some((hash_bytes.into(), block)))
+    /// Retrieve all blocks.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Block)>>> {
+        let mut blocks = vec![];
+        let mut iterator = self.0.into_iter().enumerate();
+        while let Some((_, r)) = iterator.next() {
+            let (k, v) = r.unwrap();
+            let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
+            let block = deserialize(&v)?;
+            blocks.push(Some((hash_bytes.into(), block)));
         }
 
-        Ok(None)
+        Ok(blocks)
     }
-
-    /// Fetch the last block in the tree, based on the Ord implementation for Vec<u8>.
-    pub fn get_last(&self) -> Result<Option<(blake3::Hash, Block)>> {
-        if let Some(found) = self.0.last()? {
-            let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();
-            let block = deserialize(&found.1)?;
-            return Ok(Some((hash_bytes.into(), block)))
-        }
-
-        Ok(None)
-    }
-
-    /// Fetch the block and its hash before the provided blockhash, if one exists.
-    pub fn get_lt(&self, blockhash: blake3::Hash) -> Result<Option<(blake3::Hash, Block)>> {
-        if let Some(found) = self.0.get_lt(blockhash.as_bytes())? {
-            let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();
-            let block = deserialize(&found.1)?;
-            return Ok(Some((hash_bytes.into(), block)))
-        }
-
-        Ok(None)
-    }
-
-    /// Fetch the block and its hash after the provided blockhash, if one exists.
-    pub fn get_gt(&self, blockhash: blake3::Hash) -> Result<Option<(blake3::Hash, Block)>> {
-        if let Some(found) = self.0.get_gt(blockhash.as_bytes())? {
-            let hash_bytes: [u8; 32] = found.0.as_ref().try_into().unwrap();
-            let block = deserialize(&found.1)?;
-            return Ok(Some((hash_bytes.into(), block)))
-        }
-
-        Ok(None)
-    }
-
-    /// Retrieve an iterator over a range of blockhashes.
-    /// When iterating, take care of potential memory limitations if you're
-    /// storing results in memory. For blockchain sync, it should probably
-    /// be done in chunks.
-    // Usage:
-    // ```
-    // let mut r = get_range(foo, bar);
-    // while let Some((k, v)) = r.next() {
-    //     let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
-    //     let block = deserialize(&v)?;
-    // }
-    // ```
-    pub fn get_range(&self, start: blake3::Hash, end: blake3::Hash) -> sled::Iter {
-        let start: &[u8] = start.as_bytes().as_ref();
-        let end: &[u8] = end.as_bytes().as_ref();
-
-        self.0.range(start..end)
-    }
-    */
 }

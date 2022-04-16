@@ -1,6 +1,10 @@
 use sled::Batch;
 
-use crate::{consensus2::Tx, util::serial::serialize, Result};
+use crate::{
+    consensus2::Tx,
+    util::serial::{deserialize, serialize},
+    Result,
+};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
 
@@ -29,5 +33,20 @@ impl TxStore {
 
         self.0.apply_batch(batch)?;
         Ok(ret)
+    }
+
+    /// Retrieve all transactions.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Tx)>>> {
+        let mut txs = vec![];
+        let mut iterator = self.0.into_iter().enumerate();
+        while let Some((_, r)) = iterator.next() {
+            let (k, v) = r.unwrap();
+            let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
+            let tx = deserialize(&v)?;
+            txs.push(Some((hash_bytes.into(), tx)));
+        }
+
+        Ok(txs)
     }
 }

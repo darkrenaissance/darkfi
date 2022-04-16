@@ -1,6 +1,10 @@
 use sled::Batch;
 
-use crate::{crypto::nullifier::Nullifier, util::serial::serialize, Result};
+use crate::{
+    crypto::nullifier::Nullifier,
+    util::serial::{deserialize, serialize},
+    Result,
+};
 
 const SLED_NULLIFIER_TREE: &[u8] = b"_nullifiers";
 
@@ -22,5 +26,19 @@ impl NullifierStore {
 
         self.0.apply_batch(batch)?;
         Ok(())
+    }
+
+    /// Retrieve all nullifiers.
+    /// Be careful as this will try to load everything im memory.
+    pub fn get_all(&self) -> Result<Vec<Option<Nullifier>>> {
+        let mut nfs = vec![];
+        let mut iterator = self.0.into_iter().enumerate();
+        while let Some((_, r)) = iterator.next() {
+            let (k, _) = r.unwrap();
+            let nullifier = deserialize(&k)?;
+            nfs.push(Some(nullifier))
+        }
+
+        Ok(nfs)
     }
 }

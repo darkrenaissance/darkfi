@@ -1,6 +1,10 @@
 use sled::Batch;
 
-use crate::{crypto::merkle_node::MerkleNode, util::serial::serialize, Result};
+use crate::{
+    crypto::merkle_node::MerkleNode,
+    util::serial::{deserialize, serialize},
+    Result,
+};
 
 const SLED_ROOTS_TREE: &[u8] = b"_merkleroots";
 
@@ -22,5 +26,19 @@ impl RootStore {
 
         self.0.apply_batch(batch)?;
         Ok(())
+    }
+
+    /// Retrieve all merkle roots.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<Option<MerkleNode>>> {
+        let mut roots = vec![];
+        let mut iterator = self.0.into_iter().enumerate();
+        while let Some((_, r)) = iterator.next() {
+            let (k, _) = r.unwrap();
+            let root = deserialize(&k)?;
+            roots.push(Some(root));
+        }
+
+        Ok(roots)
     }
 }
