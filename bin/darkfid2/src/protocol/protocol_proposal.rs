@@ -46,14 +46,14 @@ impl ProtocolProposal {
             debug!("ProtocolProposal::handle_receive_proposal() recv: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
-            let vote = self.state.write().unwrap().receive_proposal(&proposal_copy);
+            let vote = self.state.write().await.receive_proposal(&proposal_copy);
             match vote {
                 Ok(v) => {
                     if v.is_none() {
                         debug!("Node did not vote for the proposed block.");
                     } else {
                         let vote = v.unwrap();
-                        self.state.write().unwrap().receive_vote(&vote)?;
+                        self.state.write().await.receive_vote(&vote)?;
                         // Broadcast block to rest of nodes
                         self.p2p.broadcast(proposal_copy).await?;
                         // Broadcast vote

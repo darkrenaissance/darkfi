@@ -18,7 +18,8 @@ use url::Url;
 use darkfi::{
     cli_desc,
     consensus2::{
-        util::Timestamp, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
+        state::ValidatorStatePtr, util::Timestamp, Tx, ValidatorState, MAINNET_GENESIS_HASH_BYTES,
+        TESTNET_GENESIS_HASH_BYTES,
     },
     crypto::{
         address::Address,
@@ -51,6 +52,9 @@ use error::{server_error, RpcError};
 
 mod protocol;
 use protocol::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote};
+
+mod consensus;
+use consensus::proposal_task;
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -111,6 +115,7 @@ struct Args {
 
 pub struct Darkfid {
     client: Client,
+    state: ValidatorStatePtr,
     p2p: P2pPtr,
     synced: Mutex<bool>,
 }
@@ -131,15 +136,16 @@ impl RequestHandler for Darkfid {
             Some("export_keypair") => return self.export_keypair(req.id, params).await,
             Some("import_keypair") => return self.import_keypair(req.id, params).await,
             Some("set_default_address") => return self.set_default_address(req.id, params).await,
+            Some("tx") => return self.receive_tx(req.id, params).await,
             Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
         }
     }
 }
 
 impl Darkfid {
-    pub async fn new(wallet: WalletPtr, p2p: P2pPtr) -> Result<Self> {
+    pub async fn new(wallet: WalletPtr, state: ValidatorStatePtr, p2p: P2pPtr) -> Result<Self> {
         let client = Client::new(wallet).await?;
-        Ok(Self { client, p2p, synced: Mutex::new(false) })
+        Ok(Self { client, state, p2p, synced: Mutex::new(false) })
     }
 
     // RPCAPI:
@@ -319,6 +325,23 @@ impl Darkfid {
 
         jsonrpc::response(json!(true), id).into()
     }
+
+    async fn receive_tx(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return jsonrpc::error(InvalidParams, None, id).into()
+        }
+
+        let payload = String::from(params[0].as_str().unwrap());
+        let tx = Tx { payload };
+
+        self.state.write().await.append_tx(tx.clone());
+
+        let result = self.p2p.broadcast(tx).await;
+        match result {
+            Ok(()) => return jsonrpc::response(json!(true), id).into(),
+            Err(_) => return jsonrpc::error(InternalError, None, id).into(),
+        }
+    }
 }
 
 async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
@@ -378,7 +401,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     debug!("Adding ProtocolTx to the protocol registry");
     let _state = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(!net::SESSION_SEED, move |channel, p2p| {
             let state = _state.clone();
             async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
         })
@@ -387,7 +410,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     debug!("Adding ProtocolVote to the protocol registry");
     let _state = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(!net::SESSION_SEED, move |channel, p2p| {
             let state = _state.clone();
             async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
         })
@@ -396,7 +419,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     debug!("Adding ProtocolProposal to the protocol registry");
     let _state = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(!net::SESSION_SEED, move |channel, p2p| {
             let state = _state.clone();
             async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
         })
@@ -405,7 +428,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     debug!("Adding ProtocolParticipant to the protocol registry");
     let _state = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(!net::SESSION_SEED, move |channel, p2p| {
             let state = _state.clone();
             async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
         })
@@ -413,14 +436,26 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     info!("Starting P2P networking");
     p2p.clone().start(ex.clone()).await?;
+    let _ex = ex.clone();
+    let _p2p = p2p.clone();
+    ex.spawn(async move {
+        if let Err(e) = _p2p.run(_ex).await {
+            error!("P2P run failed: {}", e);
+        }
+    })
+    .detach();
 
     // Initialize program state
-    let darkfid = Darkfid::new(wallet, p2p).await?;
+    let darkfid = Darkfid::new(wallet, state.clone(), p2p.clone()).await?;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+
+    // Consensus protocol
+    info!("Starting consensus protocol task");
+    ex.spawn(proposal_task(p2p, state)).detach();
 
     // Wait for SIGINT
     shutdown.recv().await?;

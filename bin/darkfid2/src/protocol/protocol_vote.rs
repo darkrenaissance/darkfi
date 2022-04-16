@@ -46,7 +46,7 @@ impl ProtocolVote {
             debug!("ProtocolVote::handle_receive_vote() recv: {:?}", vote);
 
             let vote_copy = (*vote).clone();
-            if self.state.write().unwrap().receive_vote(&vote_copy)? {
+            if self.state.write().await.receive_vote(&vote_copy)? {
                 self.p2p.broadcast(vote_copy).await?;
             };
         }

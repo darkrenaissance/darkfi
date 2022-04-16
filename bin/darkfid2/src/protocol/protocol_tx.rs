@@ -46,7 +46,7 @@ impl ProtocolTx {
             debug!("ProtocolTx::handle_receive_tx() recv: {:?}", tx);
 
             let tx_copy = (*tx).clone();
-            if self.state.write().unwrap().append_tx(tx_copy.clone()) {
+            if self.state.write().await.append_tx(tx_copy.clone()) {
                 self.p2p.broadcast(tx_copy).await?;
             }
         }

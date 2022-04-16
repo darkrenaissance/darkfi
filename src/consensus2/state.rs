@@ -3,13 +3,13 @@
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock},
     time::Duration,
 };
 
+use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
 use fxhash::FxHasher;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
@@ -27,7 +27,7 @@ use crate::{
     Result,
 };
 
-const DELTA: u64 = 60;
+const DELTA: u64 = 5;
 
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug)]
@@ -125,6 +125,7 @@ impl ValidatorState {
             return false
         }
 
+        info!("consensus::state::append_tx(): Appended tx to mempool");
         self.unconfirmed_txs.push(tx);
         true
     }
@@ -156,6 +157,7 @@ impl ValidatorState {
         let mut hasher = FxHasher::default();
         epoch.hash(&mut hasher);
         self.zero_participants_check();
+        // TODO: Division by zero possible
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.id
     }
@@ -496,6 +498,7 @@ impl ValidatorState {
         chain.proposals.drain(0..(consecutive - 1));
 
         // Append to canonical chain
+        debug!("Adding finalized block to chain");
         let blockhashes = self.blockchain.add(&finalized)?;
         self.consensus.last_block = *blockhashes.last().unwrap();
         self.consensus.last_sl = finalized.last().unwrap().sl;
