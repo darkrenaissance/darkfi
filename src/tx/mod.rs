@@ -1,7 +1,7 @@
 use std::io;
 
-use group::Group;
 use log::error;
+use pasta_curves::group::Group;
 
 use crate::{
     crypto::{
@@ -17,9 +17,8 @@ use crate::{
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     impl_vec,
-    node::state::{VerifyFailed, VerifyResult},
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
+    Result, VerifyFailed, VerifyResult,
 };
 
 pub mod builder;
