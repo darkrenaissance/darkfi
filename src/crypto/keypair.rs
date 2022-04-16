@@ -12,7 +12,7 @@ use rand::RngCore;
 
 use crate::{
     crypto::{address::Address, constants::NullifierK, util::mod_r_p},
-    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
+    util::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt},
     Error, Result,
 };
 
@@ -36,7 +36,7 @@ impl Keypair {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
 pub struct SecretKey(pub pallas::Base);
 
 impl SecretKey {
@@ -57,7 +57,7 @@ impl SecretKey {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
 pub struct PublicKey(pub pallas::Point);
 
 impl PublicKey {
@@ -147,46 +147,6 @@ impl Decodable for pallas::Point {
         let result = Self::from_bytes(&bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
-        } else {
-            Err(Error::BadOperationType)
-        }
-    }
-}
-
-impl Encodable for SecretKey {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.0.to_repr()[..])?;
-        Ok(32)
-    }
-}
-
-impl Decodable for SecretKey {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 32];
-        d.read_slice(&mut bytes)?;
-        let result = pallas::Base::from_repr(bytes);
-        if result.is_some().into() {
-            Ok(SecretKey(result.unwrap()))
-        } else {
-            Err(Error::BadOperationType)
-        }
-    }
-}
-
-impl Encodable for PublicKey {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.0.to_bytes()[..])?;
-        Ok(32)
-    }
-}
-
-impl Decodable for PublicKey {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 32];
-        d.read_slice(&mut bytes)?;
-        let result = pallas::Point::from_bytes(&bytes);
-        if result.is_some().into() {
-            Ok(PublicKey(result.unwrap()))
         } else {
             Err(Error::BadOperationType)
         }
