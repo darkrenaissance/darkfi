@@ -396,19 +396,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     };
 
     let p2p = net::P2p::new(network_settings).await;
+    let registry = p2p.protocol_registry();
+
+    let _state = state.clone();
+    registry
+        .register(!net::SESSION_SEED, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
 
     // Activate these protocols only if we're participating in consensus.
     if args.consensus {
         info!("Registering consensus P2P protocols...");
-        let registry = p2p.protocol_registry();
-
-        let _state = state.clone();
-        registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
 
         let _state = state.clone();
         registry
