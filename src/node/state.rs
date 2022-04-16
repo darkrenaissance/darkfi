@@ -1,4 +1,5 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use lazy_init::Lazy;
 use log::{debug, error};
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,
+    zk::circuit::{BurnContract, MintContract},
     Result,
 };
 
@@ -154,9 +156,9 @@ pub struct State {
     /// List of Faucet public keys
     pub faucet_pubkeys: Vec<PublicKey>,
     /// Verifying key for the Mint ZK proof
-    pub mint_vk: VerifyingKey,
+    pub mint_vk: Lazy<VerifyingKey>,
     /// Verifying key for the Burn ZK proof
-    pub burn_vk: VerifyingKey,
+    pub burn_vk: Lazy<VerifyingKey>,
 }
 
 impl State {
@@ -244,10 +246,18 @@ impl ProgramState for State {
     }
 
     fn mint_vk(&self) -> &VerifyingKey {
-        &self.mint_vk
+        self.mint_vk.get_or_create(build_mint_vk)
     }
 
     fn burn_vk(&self) -> &VerifyingKey {
-        &self.burn_vk
+        self.burn_vk.get_or_create(build_burn_vk)
     }
+}
+
+fn build_mint_vk() -> VerifyingKey {
+    VerifyingKey::build(11, &MintContract::default())
+}
+
+fn build_burn_vk() -> VerifyingKey {
+    VerifyingKey::build(11, &BurnContract::default())
 }

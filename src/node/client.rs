@@ -109,7 +109,7 @@ impl Client {
         token_id: DrkTokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
-    ) -> ClientResult<Vec<Coin>> {
+    ) -> ClientResult<(Transaction, Vec<Coin>)> {
         debug!("build_slab_from_tx(): Begin building slab from tx");
         let mut clear_inputs = vec![];
         let mut inputs = vec![];
@@ -180,7 +180,7 @@ impl Client {
         debug!("build_slab_from_tx(): Checking if state transition is valid");
         let state = &*state.lock().await;
         debug!("build_slab_from_tx(): Got state lock");
-        state_transition(state, tx)?;
+        state_transition(state, tx.clone())?;
         debug!("build_slab_from_tx(): Successful state transition");
 
         debug!("build_slab_from_tx(): Broadcasting transaction");
@@ -188,7 +188,7 @@ impl Client {
         //self.p2p.broadcast(Tx(Transaction)).await?;
         debug!("build_slab_from_tx(): Broadcasted successfully");
 
-        Ok(coins)
+        Ok((tx, coins))
     }
 
     pub async fn send(
@@ -198,7 +198,7 @@ impl Client {
         token_id: DrkTokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
+    ) -> ClientResult<Transaction> {
         // TODO: Token id debug
         debug!("send(): Sending {}", amount);
 
@@ -206,7 +206,8 @@ impl Client {
             return Err(ClientFailed::InvalidAmount(0))
         }
 
-        let coins = self.build_slab_from_tx(pubkey, amount, token_id, clear_input, state).await?;
+        let (tx, coins) =
+            self.build_slab_from_tx(pubkey, amount, token_id, clear_input, state).await?;
         for coin in coins.iter() {
             // TODO: This should be more robust. In case our transaction is denied,
             // we want to revert to be able to send again.
@@ -214,7 +215,7 @@ impl Client {
         }
 
         debug!("send(): Sent {}", amount);
-        Ok(())
+        Ok(tx)
     }
 
     pub async fn transfer(
