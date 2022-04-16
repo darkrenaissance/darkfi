@@ -4,7 +4,6 @@ use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use tui::widgets::ListState;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SelectableObject {
     // top level selectable object
     Node(NodeInfo),
@@ -39,7 +38,7 @@ impl IdList {
 
 pub struct InfoList {
     pub index: Mutex<usize>,
-    pub infos: Mutex<FxHashMap<String, Vec<SelectableObject>>>,
+    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
 }
 
 impl InfoList {

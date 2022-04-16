@@ -258,10 +258,10 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             node_info.insert(&node_name, infos.clone());
 
             // insert into model
-            for (key, _value) in node_info.clone() {
+            for (key, value) in node_info.clone() {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
                 // value
-                model.info_list.infos.lock().await.insert(key.to_string(), model_vec.clone());
+                model.info_list.infos.lock().await.insert(key.to_string(), value);
             }
         } else {
             // TODO: error handling

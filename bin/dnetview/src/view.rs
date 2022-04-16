@@ -2,7 +2,7 @@ use fxhash::{FxHashMap, FxHashSet};
 //use log::debug;
 use tui::widgets::ListState;
 
-use crate::model::{NodeInfo, SelectableObject};
+use crate::model::NodeInfo;
 
 #[derive(Clone)]
 pub struct View {
@@ -15,7 +15,7 @@ impl View {
         View { id_list, info_list }
     }
 
-    pub fn update(&mut self, infos: FxHashMap<String, Vec<SelectableObject>>) {
+    pub fn update(&mut self, infos: FxHashMap<String, NodeInfo>) {
         for (id, info) in infos {
             self.id_list.node_id.insert(id.clone());
             self.info_list.infos.insert(id, info);
@@ -69,11 +69,11 @@ impl IdListView {
 #[derive(Clone)]
 pub struct InfoListView {
     pub index: usize,
-    pub infos: FxHashMap<String, Vec<SelectableObject>>,
+    pub infos: FxHashMap<String, NodeInfo>,
 }
 
 impl InfoListView {
-    pub fn new(infos: FxHashMap<String, Vec<SelectableObject>>) -> InfoListView {
+    pub fn new(infos: FxHashMap<String, NodeInfo>) -> InfoListView {
         let index = 0;
 
         InfoListView { index, infos }
