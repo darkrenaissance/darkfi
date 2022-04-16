@@ -2,7 +2,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use log::{debug, error};
 
 use crate::{
-    blockchain::{rocks::columns, RocksColumn},
+    blockchain2::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
         coin::Coin,
         keypair::{PublicKey, SecretKey},
@@ -12,103 +12,125 @@ use crate::{
         proof::VerifyingKey,
         OwnCoin,
     },
-    error,
     tx::Transaction,
     wallet::walletdb::WalletPtr,
     Result,
 };
 
-pub trait ProgramState {
-    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool;
-    fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
-    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
-    fn mint_vk(&self) -> &VerifyingKey;
-    fn spend_vk(&self) -> &VerifyingKey;
-}
-
-pub struct StateUpdate {
-    pub nullifiers: Vec<Nullifier>,
-    pub coins: Vec<Coin>,
-    pub enc_notes: Vec<EncryptedNote>,
-}
-
 pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum VerifyFailed {
-    #[error("Invalid cashier public key for clear input {0}")]
-    InvalidCashierKey(usize),
+    #[error("Invalid cashier/faucet public key for clear input {0}")]
+    InvalidCashierOrFaucetKey(usize),
+
     #[error("Invalid merkle root for input {0}")]
     InvalidMerkle(usize),
-    #[error("Duplicate nullifier for input {0}")]
-    DuplicateNullifier(usize),
-    #[error("Spend proof for input {0}")]
-    SpendProof(usize),
-    #[error("Mint proof for input {0}")]
-    MintProof(usize),
-    #[error("Invalid signature for clear input {0}")]
-    ClearInputSignature(usize),
+
     #[error("Invalid signature for input {0}")]
     InputSignature(usize),
-    #[error("Money in does not match money out (value commits)")]
-    MissingFunds,
-    #[error("Assets don't match some inputs or outputs (token commits)")]
+
+    #[error("Invalid signature for clear input {0}")]
+    ClearInputSignature(usize),
+
+    #[error("Token commitments in inputs or outputs do not match")]
     AssetMismatch,
-    #[error("Inetrnal error: {0}")]
+
+    #[error("Money in does not match money out (value commitments")]
+    MissingFunds,
+
+    #[error("Mint proof verification failure for input {0}")]
+    MintProof(usize),
+
+    #[error("Burn proof verification failure for input {0}")]
+    BurnProof(usize),
+
+    #[error("Internal error: {0}")]
     InternalError(String),
 }
 
-impl From<error::Error> for VerifyFailed {
-    fn from(err: error::Error) -> Self {
-        VerifyFailed::InternalError(err.to_string())
+impl From<crate::error::Error> for VerifyFailed {
+    fn from(err: crate::error::Error) -> Self {
+        Self::InternalError(err.to_string())
     }
 }
 
-pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
-    // Check deposits are legit
-    debug!(target: "STATE TRANSITION", "iterate clear_inputs");
+/// Trait implementing the state functions used by the state transition.
+pub trait ProgramState {
+    /// Check if the public key is coming from a trusted cashier
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool;
+    /// Check if the public key is coming from a trusted faucet
+    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool;
+    /// Check if a merkle root is valid in this context
+    fn is_valid_merkle(&self, merkle: &MerkleNode) -> bool;
+    /// Check if the nullifier has been seen already
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool;
+    /// Mint proof verification key
+    fn mint_vk(&self) -> &VerifyingKey;
+    /// Burn proof verification key
+    fn burn_vk(&self) -> &VerifyingKey;
+}
 
+/// A struct representing a state update.
+/// This gets applied on top of an existing state.
+pub struct StateUpdate {
+    /// All nullifiers in a transaction
+    pub nullifiers: Vec<Nullifier>,
+    /// All coins in a transaction
+    pub coins: Vec<Coin>,
+    /// All encrypted notes in a transaction
+    pub enc_notes: Vec<EncryptedNote>,
+}
+
+/// State transition function
+pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyResult<StateUpdate> {
+    // Check the public keys in the clear inputs to see if they're coming
+    // from a valid cashier or faucet.
+    debug!(target: "state_transition", "Iterate clear_inputs");
     for (i, input) in tx.clear_inputs.iter().enumerate() {
-        // Check the public key in the clear inputs
-        // It should be a valid public key for the cashier
-        if !state.is_valid_cashier_public_key(&input.signature_public) {
-            error!(target: "STATE TRANSITION", "Invalid cashier public key");
-            return Err(VerifyFailed::InvalidCashierKey(i))
+        let pk = &input.signature_public;
+        if !state.is_valid_cashier_public_key(pk) || !state.is_valid_faucet_public_key(pk) {
+            error!(target: "state_transition", "Invalid pubkey for clear input: {:?}", pk);
+            return Err(VerifyFailed::InvalidCashierOrFaucetKey(i))
         }
     }
 
-    debug!(target: "STATE TRANSITION", "iterate inputs");
-
+    debug!(target: "state_transition", "Iterate inputs");
     for (i, input) in tx.inputs.iter().enumerate() {
         let merkle = &input.revealed.merkle_root;
 
-        // Merkle is used to know whether this is a coin that existed
-        // in a previous state.
+        // The Merkle root is used to know whether this is a coin that
+        // existed in a previous state.
         if !state.is_valid_merkle(merkle) {
+            error!(target: "state_transition", "Invalid Merkle root (input {})", i);
+            debug!(target: "state_transition", "root: {:?}", merkle);
             return Err(VerifyFailed::InvalidMerkle(i))
         }
 
-        // The nullifiers should not already exist
-        // It is double spend protection.
+        // The nullifiers should not already exist.
+        // It is the double-spend protection.
         let nullifier = &input.revealed.nullifier;
-
         if state.nullifier_exists(nullifier) {
-            return Err(VerifyFailed::DuplicateNullifier(i))
+            error!(target: "state_transition", "Duplicate nullifier found (input {})", i);
+            debug!(target: "state_transition", "nullifier: {:?}", nullifier);
         }
     }
 
-    debug!(target: "STATE TRANSITION", "Check the tx verifies correctly");
-    tx.verify(state.mint_vk(), state.spend_vk())?;
-    debug!(target: "STATE TRANSITION", "Verified successfully");
+    debug!(target: "state_transition", "Verifying zk proofs");
+    match tx.verify(state.mint_vk(), state.burn_vk()) {
+        Ok(()) => debug!(target: "state_transition", "Verified successfully"),
+        Err(e) => error!(target: "state_transition", "Failed verifying zk proofs: {}", e),
+    }
 
-    let mut nullifiers = vec![];
+    // Gather all the nullifiers
+    let mut nullifiers = Vec::with_capacity(tx.inputs.len());
     for input in tx.inputs {
         nullifiers.push(input.revealed.nullifier);
     }
 
-    // Newly created coins for this tx
-    let mut coins = vec![];
-    let mut enc_notes = vec![];
+    // Newly created coins for this transaction
+    let mut coins = Vec::with_capacity(tx.outputs.len());
+    let mut enc_notes = Vec::with_capacity(tx.outputs.len());
     for output in tx.outputs {
         // Gather all the coins
         coins.push(output.revealed.coin);
@@ -118,23 +140,27 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     Ok(StateUpdate { nullifiers, coins, enc_notes })
 }
 
+/// Struct holding the state which we can apply a [`StateUpdate`] onto.
 pub struct State {
     /// The entire Merkle tree state
     pub tree: BridgeTree<MerkleNode, 32>,
     /// List of all previous and the current merkle roots.
     /// This is the hashed value of all the children.
-    pub merkle_roots: RocksColumn<columns::MerkleRoots>,
+    pub merkle_roots: RootStore,
     /// Nullifiers prevent double-spending
-    pub nullifiers: RocksColumn<columns::Nullifiers>,
+    pub nullifiers: NullifierStore,
     /// List of Cashier public keys
-    pub public_keys: Vec<PublicKey>,
-    /// Verifying key for the Mint contract
+    pub cashier_pubkeys: Vec<PublicKey>,
+    /// List of Faucet public keys
+    pub faucet_pubkeys: Vec<PublicKey>,
+    /// Verifying key for the Mint ZK proof
     pub mint_vk: VerifyingKey,
-    /// Verifying key for the Spend contract
-    pub spend_vk: VerifyingKey,
+    /// Verifying key for the Burn ZK proof
+    pub burn_vk: VerifyingKey,
 }
 
 impl State {
+    /// Apply a [`StateUpdate`] to some state.
     pub async fn apply(
         &mut self,
         update: StateUpdate,
@@ -142,44 +168,41 @@ impl State {
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
     ) -> Result<()> {
-        // Extend our list of nullifiers with the ones from the update.
-        debug!("Extend nullifiers");
-        for nullifier in update.nullifiers {
-            self.nullifiers.put(nullifier, vec![] as Vec<u8>)?;
-        }
+        debug!(target: "state_apply", "Extend nullifier set");
+        self.nullifiers.insert(&update.nullifiers)?;
 
-        debug!("Update Merkle tree and witness");
+        debug!(target: "state_apply", "Update Merkle tree and witnesses");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
             let node = MerkleNode(coin.0);
             self.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed
-            self.merkle_roots.put(self.tree.root(), vec![] as Vec<u8>)?;
+            self.merkle_roots.insert(&[self.tree.root()])?;
 
             for secret in secret_keys.iter() {
                 if let Some(note) = State::try_decrypt_note(enc_note, *secret) {
-                    self.tree.witness();
+                    debug!(target: "state_apply", "Received a coin: amount {}", note.value);
+                    let leaf_position = self.tree.witness().unwrap();
                     let nullifier = Nullifier::new(*secret, note.serial);
+                    let own_coin =
+                        OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
 
-                    let own_coin = OwnCoin { coin, note, secret: *secret, nullifier };
-
-                    wallet.put_own_coins(own_coin).await?;
+                    wallet.put_own_coin(own_coin).await?;
 
                     let pubkey = PublicKey::from_secret(*secret);
-
-                    debug!("Received a coin: amount {}", note.value);
-                    debug!("Send a notification");
+                    debug!(target: "state_apply", "Send a notification");
                     if let Some(ch) = notify.clone() {
                         ch.send((pubkey, note.value)).await?;
                     }
                 }
             }
-            // Save updated merkle tree into wallet.
+
+            // Save updated merkle tree into the wallet.
             wallet.put_tree(&self.tree).await?;
         }
 
-        debug!("apply() exiting successfully");
+        debug!(target: "state_apply", "Finished apply() successfully.");
         Ok(())
     }
 
@@ -193,23 +216,30 @@ impl State {
 
 impl ProgramState for State {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
-        debug!("Check if it is a valid cashier public key");
-        self.public_keys.contains(public)
+        debug!(target: "state_transition", "Checking if pubkey is a valid cashier");
+        self.cashier_pubkeys.contains(public)
+    }
+
+    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
+        debug!(target: "state_transition", "Checking if pubkey is a valid faucet");
+        self.faucet_pubkeys.contains(public)
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        debug!("Check if it is valid merkle");
-        if let Ok(mr) = self.merkle_roots.key_exist(*merkle_root) {
+        debug!(target: "state_transition", "Checking if Merkle root is valid");
+        if let Ok(mr) = self.merkle_roots.contains(merkle_root) {
             return mr
         }
+        // FIXME: An error here means a db issue
         false
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        debug!("Check if nullifier exists");
-        if let Ok(nl) = self.nullifiers.key_exist(nullifier.to_bytes()) {
-            return nl
+        debug!(target: "state_transition", "Checking if Nullifier exists");
+        if let Ok(nf) = self.nullifiers.contains(nullifier) {
+            return nf
         }
+        // FIXME: An error here means a db issue
         false
     }
 
@@ -217,7 +247,7 @@ impl ProgramState for State {
         &self.mint_vk
     }
 
-    fn spend_vk(&self) -> &VerifyingKey {
-        &self.spend_vk
+    fn burn_vk(&self) -> &VerifyingKey {
+        &self.burn_vk
     }
 }
