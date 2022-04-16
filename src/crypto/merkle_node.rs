@@ -12,7 +12,7 @@ use serde::{
     ser::Serializer,
     Deserialize, Serialize,
 };
-use subtle::CtOption;
+use subtle::{Choice, ConditionallySelectable, CtOption};
 
 use crate::{
     crypto::{
@@ -40,7 +40,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MerkleNode(pub pallas::Base);
 
 impl MerkleNode {
@@ -76,9 +76,9 @@ impl<'de> Deserialize<'de> for MerkleNode {
     }
 }
 
-impl std::hash::Hash for MerkleNode {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        <Option<pallas::Base>>::from(self.0).map(|b| b.to_repr()).hash(state)
+impl ConditionallySelectable for MerkleNode {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        MerkleNode(pallas::Base::conditional_select(&a.0, &b.0, choice))
     }
 }
 
@@ -127,5 +127,18 @@ impl Encodable for MerkleNode {
 impl Decodable for MerkleNode {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         Ok(Self(Decodable::decode(&mut d)?))
+    }
+}
+
+impl Encodable for incrementalmerkletree::Position {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        u64::from(*self).encode(&mut s)
+    }
+}
+
+impl Decodable for incrementalmerkletree::Position {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let dec: u64 = Decodable::decode(&mut d)?;
+        Ok(Self::try_from(dec).unwrap())
     }
 }
