@@ -239,8 +239,9 @@ impl WalletDb {
 
             let secret = self.get_value_deserialized(row.get("secret"))?;
             let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
+            let leaf_position = self.get_value_deserialized(row.get("leaf_position"))?;
 
-            let oc = OwnCoin { coin, note, secret, nullifier };
+            let oc = OwnCoin { coin, note, secret, nullifier, leaf_position };
 
             own_coins.push(oc);
         }
@@ -248,7 +249,7 @@ impl WalletDb {
         Ok(own_coins)
     }
 
-    pub async fn put_own_coins(&self, own_coin: OwnCoin) -> Result<()> {
+    pub async fn put_own_coin(&self, own_coin: OwnCoin) -> Result<()> {
         debug!("Putting own coin into wallet database");
         let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
         let serial = self.get_value_serialized(&own_coin.note.serial)?;
@@ -259,14 +260,16 @@ impl WalletDb {
         let secret = self.get_value_serialized(&own_coin.secret)?;
         let is_spent = 0;
         let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
+        let leaf_position = self.get_value_serialized(&own_coin.leaf_position)?;
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
             "INSERT OR REPLACE INTO coins
             (coin, serial, value, token_id, coin_blind,
-             valcom_blind, secret, is_spent, nullifier)
+             valcom_blind, secret, is_spent, nullifier,
+             leaf_position)
             VALUES
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
         )
         .bind(coin)
         .bind(serial)
@@ -277,6 +280,7 @@ impl WalletDb {
         .bind(secret)
         .bind(is_spent)
         .bind(nullifier)
+        .bind(leaf_position)
         .execute(&mut conn)
         .await?;
 
@@ -400,8 +404,9 @@ mod tests {
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
         let nullifier = Nullifier::new(*s, serial);
+        let leaf_position = 0;
 
-        OwnCoin { coin, note, secret: *s, nullifier }
+        OwnCoin { coin, note, secret: *s, nullifier, leaf_position }
     }
 
     #[async_std::test]
@@ -425,20 +430,20 @@ mod tests {
         let c2 = dummy_coin(&keypair.secret, 42, &token_id);
         let c3 = dummy_coin(&keypair.secret, 11, &token_id);
 
-        // put_own_coins()
-        wallet.put_own_coins(c0).await?;
+        // put_own_coin()
+        wallet.put_own_coin(c0).await?;
         tree1.append(&MerkleNode::from_coin(&c0.coin));
         tree1.witness();
 
-        wallet.put_own_coins(c1).await?;
+        wallet.put_own_coin(c1).await?;
         tree1.append(&MerkleNode::from_coin(&c1.coin));
         tree1.witness();
 
-        wallet.put_own_coins(c2).await?;
+        wallet.put_own_coin(c2).await?;
         tree1.append(&MerkleNode::from_coin(&c2.coin));
         tree1.witness();
 
-        wallet.put_own_coins(c3).await?;
+        wallet.put_own_coin(c3).await?;
         tree1.append(&MerkleNode::from_coin(&c3.coin));
         tree1.witness();
 

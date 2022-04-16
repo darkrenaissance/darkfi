@@ -7,5 +7,6 @@ CREATE TABLE IF NOT EXISTS coins(
 	token_id BLOB NOT NULL,
 	secret BLOB NOT NULL,
 	is_spent BOOLEAN NOT NULL,
-	nullifier BLOB NOT NULL
+	nullifier BLOB NOT NULL,
+	leaf_position BLOB NOT NULL
 );
