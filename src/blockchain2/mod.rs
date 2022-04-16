@@ -8,19 +8,19 @@ use crate::{
 };
 
 pub mod blockstore;
-use blockstore::BlockStore;
+pub use blockstore::BlockStore;
 
 pub mod metadatastore;
-use metadatastore::StreamletMetadataStore;
+pub use metadatastore::StreamletMetadataStore;
 
 pub mod nfstore;
-use nfstore::NullifierStore;
+pub use nfstore::NullifierStore;
 
 pub mod rootstore;
-use rootstore::RootStore;
+pub use rootstore::RootStore;
 
 pub mod txstore;
-use txstore::TxStore;
+pub use txstore::TxStore;
 
 pub struct Blockchain {
     /// Blocks sled tree
