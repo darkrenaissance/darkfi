@@ -498,7 +498,7 @@ impl ValidatorState {
         chain.proposals.drain(0..(consecutive - 1));
 
         // Append to canonical chain
-        debug!("Adding finalized block to chain");
+        debug!(target: "consensus", "Adding finalized block to chain");
         let blockhashes = self.blockchain.add(&finalized)?;
         self.consensus.last_block = *blockhashes.last().unwrap();
         self.consensus.last_sl = finalized.last().unwrap().sl;

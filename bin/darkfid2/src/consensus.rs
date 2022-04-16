@@ -24,6 +24,7 @@ pub async fn proposal_task(p2p: P2pPtr, state: ValidatorStatePtr) {
     loop {
         // Node refreshes participants records
         state.write().await.refresh_participants();
+        log::warn!("Participants: {:#?}", state.read().await.consensus.participants);
 
         // Node checks if it's the epoch leader to generate a new proposal
         // for that epoch.

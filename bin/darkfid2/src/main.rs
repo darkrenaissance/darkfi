@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use chrono::Utc;
 use easy_parallel::Parallel;
 use futures_lite::future;
 use log::{debug, error, info};
@@ -72,6 +71,10 @@ struct Args {
     /// Chain to use (testnet, mainnet)
     chain: String,
 
+    #[structopt(long)]
+    /// Participate in consensus
+    consensus: bool,
+
     #[structopt(long, default_value = "~/.config/darkfi/darkfid_wallet.db")]
     /// Path to wallet database
     wallet_path: String,
@@ -88,13 +91,13 @@ struct Args {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "127.0.0.1:5398")]
+    #[structopt(long)]
     /// P2P accept address
-    p2p_accept: SocketAddr,
+    p2p_accept: Option<SocketAddr>,
 
-    #[structopt(long, default_value = "127.0.0.1:5398")]
+    #[structopt(long)]
     /// P2P external address
-    p2p_external: SocketAddr,
+    p2p_external: Option<SocketAddr>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots
@@ -370,7 +373,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Initialize validator state
     // TODO: genesis_ts should be some hardcoded constant
-    let genesis_ts = Timestamp(Utc::now().timestamp());
+    let genesis_ts = Timestamp(1650103269);
     let genesis_data = match args.chain.as_str() {
         "mainnet" => *MAINNET_GENESIS_HASH_BYTES,
         "testnet" => *TESTNET_GENESIS_HASH_BYTES,
@@ -386,9 +389,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // P2P network
     let network_settings = net::Settings {
-        inbound: Some(args.p2p_accept),
+        inbound: args.p2p_accept,
         outbound_connections: args.slots,
-        external_addr: Some(args.p2p_external),
+        external_addr: args.p2p_external,
         peers: args.connect.clone(),
         seeds: args.seed.clone(),
         ..Default::default()
@@ -396,43 +399,42 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     let p2p = net::P2p::new(network_settings).await;
 
-    let registry = p2p.protocol_registry();
+    // Activate these protocols only if we're participating in consensus.
+    if args.consensus {
+        let registry = p2p.protocol_registry();
 
-    debug!("Adding ProtocolTx to the protocol registry");
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let _state = state.clone();
+        registry
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
 
-    debug!("Adding ProtocolVote to the protocol registry");
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let _state = state.clone();
+        registry
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
 
-    debug!("Adding ProtocolProposal to the protocol registry");
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let _state = state.clone();
+        registry
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
 
-    debug!("Adding ProtocolParticipant to the protocol registry");
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let _state = state.clone();
+        registry
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
+    }
 
     info!("Starting P2P networking");
     p2p.clone().start(ex.clone()).await?;
@@ -454,8 +456,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
 
     // Consensus protocol
-    info!("Starting consensus protocol task");
-    ex.spawn(proposal_task(p2p, state)).detach();
+    if args.consensus {
+        info!("Starting consensus protocol task");
+        ex.spawn(proposal_task(p2p, state)).detach();
+    }
 
     // Wait for SIGINT
     shutdown.recv().await?;

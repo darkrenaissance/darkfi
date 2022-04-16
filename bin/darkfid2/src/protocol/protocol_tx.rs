@@ -25,6 +25,7 @@ impl ProtocolTx {
         state: ValidatorStatePtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
+        debug!("Adding ProtocolTx to the protocol registry");
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<Tx>().await;
 
