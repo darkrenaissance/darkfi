@@ -31,7 +31,7 @@ use crate::crypto::{
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
-pub struct SpendConfig {
+pub struct BurnConfig {
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig<OrchardFixedBases>,
@@ -44,7 +44,7 @@ pub struct SpendConfig {
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
 }
 
-impl SpendConfig {
+impl BurnConfig {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
         EccChip::construct(self.ecc_config.clone())
     }
@@ -91,7 +91,7 @@ const BURN_SIGKEYX_OFFSET: usize = 6;
 const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
-pub struct SpendContract {
+pub struct BurnContract {
     pub secret_key: Option<pallas::Base>,
     pub serial: Option<pallas::Base>,
     pub value: Option<pallas::Base>,
@@ -105,12 +105,12 @@ pub struct SpendContract {
     pub sig_secret: Option<pallas::Base>,
 }
 
-impl UtilitiesInstructions<pallas::Base> for SpendContract {
+impl UtilitiesInstructions<pallas::Base> for BurnContract {
     type Var = AssignedCell<Fp, Fp>;
 }
 
-impl Circuit<pallas::Base> for SpendContract {
-    type Config = SpendConfig;
+impl Circuit<pallas::Base> for BurnContract {
+    type Config = BurnConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -218,7 +218,7 @@ impl Circuit<pallas::Base> for SpendContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-        SpendConfig {
+        BurnConfig {
             primary,
             advices,
             ecc_config,

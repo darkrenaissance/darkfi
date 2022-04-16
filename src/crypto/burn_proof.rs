@@ -1,4 +1,4 @@
-use std::{io, time::Instant};
+use std::time::Instant;
 
 use halo2_gadgets::primitives::{
     poseidon,
@@ -20,13 +20,13 @@ use crate::{
         merkle_node::MerkleNode,
         types::*,
     },
-    util::serial::{Decodable, Encodable},
-    zk::circuit::spend_contract::SpendContract,
+    util::serial::{SerialDecodable, SerialEncodable},
+    zk::circuit::burn_contract::BurnContract,
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SpendRevealedValues {
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct BurnRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
@@ -34,7 +34,7 @@ pub struct SpendRevealedValues {
     pub signature_public: PublicKey,
 }
 
-impl SpendRevealedValues {
+impl BurnRevealedValues {
     #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
@@ -77,7 +77,7 @@ impl SpendRevealedValues {
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
 
-        SpendRevealedValues {
+        BurnRevealedValues {
             value_commit,
             token_commit,
             nullifier: Nullifier(nullifier),
@@ -107,32 +107,8 @@ impl SpendRevealedValues {
     }
 }
 
-impl Encodable for SpendRevealedValues {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.value_commit.encode(&mut s)?;
-        len += self.token_commit.encode(&mut s)?;
-        len += self.nullifier.encode(&mut s)?;
-        len += self.merkle_root.encode(&mut s)?;
-        len += self.signature_public.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for SpendRevealedValues {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            value_commit: Decodable::decode(&mut d)?,
-            token_commit: Decodable::decode(&mut d)?,
-            nullifier: Decodable::decode(&mut d)?,
-            merkle_root: Decodable::decode(&mut d)?,
-            signature_public: Decodable::decode(d)?,
-        })
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
-pub fn create_spend_proof(
+pub fn create_burn_proof(
     pk: &ProvingKey,
     value: u64,
     token_id: DrkTokenId,
@@ -144,8 +120,8 @@ pub fn create_spend_proof(
     leaf_position: incrementalmerkletree::Position,
     merkle_path: Vec<MerkleNode>,
     signature_secret: SecretKey,
-) -> Result<(Proof, SpendRevealedValues)> {
-    let revealed = SpendRevealedValues::compute(
+) -> Result<(Proof, BurnRevealedValues)> {
+    let revealed = BurnRevealedValues::compute(
         value,
         token_id,
         value_blind,
@@ -160,7 +136,7 @@ pub fn create_spend_proof(
 
     let leaf_position: u64 = leaf_position.into();
 
-    let c = SpendContract {
+    let c = BurnContract {
         secret_key: Some(secret.0),
         serial: Some(serial),
         value: Some(DrkValue::from(value)),
@@ -181,10 +157,10 @@ pub fn create_spend_proof(
     Ok((proof, revealed))
 }
 
-pub fn verify_spend_proof(
+pub fn verify_burn_proof(
     vk: &VerifyingKey,
-    proof: Proof,
-    revealed: &SpendRevealedValues,
+    proof: &Proof,
+    revealed: &BurnRevealedValues,
 ) -> Result<()> {
     let public_inputs = revealed.make_outputs();
     Ok(proof.verify(vk, &public_inputs)?)

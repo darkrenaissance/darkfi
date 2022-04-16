@@ -1,4 +1,4 @@
-use std::{io, time::Instant};
+use std::time::Instant;
 
 use halo2_gadgets::primitives::{
     poseidon,
@@ -16,12 +16,12 @@ use crate::{
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
-    util::serial::{Decodable, Encodable},
+    util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
@@ -63,26 +63,6 @@ impl MintRevealedValues {
         ]
         .try_into()
         .unwrap()
-    }
-}
-
-impl Encodable for MintRevealedValues {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.value_commit.encode(&mut s)?;
-        len += self.token_commit.encode(&mut s)?;
-        len += self.coin.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for MintRevealedValues {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            value_commit: Decodable::decode(&mut d)?,
-            token_commit: Decodable::decode(&mut d)?,
-            coin: Decodable::decode(d)?,
-        })
     }
 }
 
