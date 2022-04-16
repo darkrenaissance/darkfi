@@ -27,48 +27,48 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
         // render as a sub node
         match &view.info_list.infos.get(id) {
             Some(node) => {
-                if !node.outbound.iter().all(|node| node.is_empty) {
-                    lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
-                }
-                for outbound in &node.outbound.clone() {
-                    for slot in outbound.slots.clone() {
-                        let addr = Span::styled(format!("       {}", slot.addr), style);
-                        let msg: Span = match slot.channel.last_status.as_str() {
-                            "recv" => Span::styled(
-                                format!("               [R: {}]", slot.channel.last_msg),
-                                style,
-                            ),
-                            "sent" => Span::styled(
-                                format!("               [S: {}]", slot.channel.last_msg),
-                                style,
-                            ),
-                            a => Span::styled(a.to_string(), style),
-                        };
-                        lines.push(Spans::from(vec![addr, msg]));
-                    }
-                }
-                if !node.inbound.iter().all(|node| node.is_empty) {
-                    lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
-                }
-                for inbound in &node.inbound {
-                    let addr = Span::styled(format!("       {}", inbound.connected), style);
-                    let msg: Span = match inbound.channel.last_status.as_str() {
-                        "recv" => Span::styled(
-                            format!("               [R: {}]", inbound.channel.last_msg),
-                            style,
-                        ),
-                        "sent" => Span::styled(
-                            format!("               [R: {}]", inbound.channel.last_msg),
-                            style,
-                        ),
-                        a => Span::styled(a.to_string(), style),
-                    };
-                    lines.push(Spans::from(vec![addr, msg]));
-                }
-                lines.push(Spans::from(Span::styled("   Manual", Style::default())));
-                for connect in &node.manual {
-                    lines.push(Spans::from(Span::styled(format!("       {}", connect.key), style)));
-                }
+                //if !node.[0].outbound.iter().all(|node| node.is_empty) {
+                //    lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
+                //}
+                //for outbound in &node.outbound.clone() {
+                //    for slot in outbound.slots.clone() {
+                //        let addr = Span::styled(format!("       {}", slot.addr), style);
+                //        let msg: Span = match slot.channel.last_status.as_str() {
+                //            "recv" => Span::styled(
+                //                format!("               [R: {}]", slot.channel.last_msg),
+                //                style,
+                //            ),
+                //            "sent" => Span::styled(
+                //                format!("               [S: {}]", slot.channel.last_msg),
+                //                style,
+                //            ),
+                //            a => Span::styled(a.to_string(), style),
+                //        };
+                //        lines.push(Spans::from(vec![addr, msg]));
+                //    }
+                //}
+                //if !node.inbound.iter().all(|node| node.is_empty) {
+                //    lines.push(Spans::from(Span::styled("   Incoming", Style::default())));
+                //}
+                //for inbound in &node.inbound {
+                //    let addr = Span::styled(format!("       {}", inbound.connected), style);
+                //    let msg: Span = match inbound.channel.last_status.as_str() {
+                //        "recv" => Span::styled(
+                //            format!("               [R: {}]", inbound.channel.last_msg),
+                //            style,
+                //        ),
+                //        "sent" => Span::styled(
+                //            format!("               [R: {}]", inbound.channel.last_msg),
+                //            style,
+                //        ),
+                //        a => Span::styled(a.to_string(), style),
+                //    };
+                //    lines.push(Spans::from(vec![addr, msg]));
+                //}
+                //lines.push(Spans::from(Span::styled("   Manual", Style::default())));
+                //for connect in &node.manual {
+                //    lines.push(Spans::from(Span::styled(format!("       {}", connect.key), style)));
+                //}
             }
             None => {
                 // TODO

@@ -4,6 +4,16 @@ use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use tui::widgets::ListState;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SelectableObject {
+    // top level selectable object
+    Node(NodeInfo),
+    // outgoing or incoming sessions
+    Session(SessionInfo),
+    // connections: outgoing, incoming or manual
+    Connect(ConnectInfo),
+}
+
 pub struct Model {
     pub id_list: IdList,
     pub info_list: InfoList,
@@ -29,7 +39,7 @@ impl IdList {
 
 pub struct InfoList {
     pub index: Mutex<usize>,
-    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
+    pub infos: Mutex<FxHashMap<String, Vec<SelectableObject>>>,
 }
 
 impl InfoList {
@@ -126,5 +136,29 @@ pub struct InboundInfo {
 impl InboundInfo {
     pub fn new(is_empty: bool, connected: String, channel: Channel) -> InboundInfo {
         InboundInfo { is_empty, connected, channel }
+    }
+}
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct ConnectInfo {
+    pub message: String,
+}
+
+impl ConnectInfo {
+    pub fn new() -> ConnectInfo {
+        let message = "This is the connect screen".to_string();
+        ConnectInfo { message }
+    }
+}
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct SessionInfo {
+    pub message: String,
+}
+
+impl SessionInfo {
+    pub fn new() -> SessionInfo {
+        let message = "This is the connect screen".to_string();
+        SessionInfo { message }
     }
 }

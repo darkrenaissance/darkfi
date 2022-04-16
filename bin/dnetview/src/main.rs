@@ -27,7 +27,10 @@ use darkfi::{
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{Channel, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo, Slot},
+    model::{
+        Channel, ConnectInfo, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo,
+        SelectableObject, SessionInfo, Slot,
+    },
     options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView},
@@ -156,6 +159,8 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             let manual_obj = &reply.as_object().unwrap()["session_manual"];
             let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
 
+            let mut model_vec: Vec<SelectableObject> = Vec::new();
+
             let mut iconnects = Vec::new();
             let mut mconnects = Vec::new();
             let mut oconnects = Vec::new();
@@ -235,15 +240,28 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             let is_empty = is_empty_outbound(slots.clone());
             let oinfo = OutboundInfo::new(is_empty, slots.clone());
             oconnects.push(oinfo);
+
             let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
+            let node = SelectableObject::Node(infos.clone());
+            model_vec.push(node);
+
+            let session_infos = SessionInfo::new();
+            let session = SelectableObject::Session(session_infos);
+            model_vec.push(session);
+
+            let connect_infos = ConnectInfo::new();
+            let connect = SelectableObject::Connect(connect_infos);
+            model_vec.push(connect);
+
             let mut node_info = FxHashMap::default();
             let node_name = &client.name.as_str();
             node_info.insert(&node_name, infos.clone());
 
             // insert into model
-            for (key, value) in node_info.clone() {
+            for (key, _value) in node_info.clone() {
                 model.id_list.node_id.lock().await.insert(key.to_string().clone());
-                model.info_list.infos.lock().await.insert(key.to_string(), value);
+                // value
+                model.info_list.infos.lock().await.insert(key.to_string(), model_vec.clone());
             }
         } else {
             // TODO: error handling
