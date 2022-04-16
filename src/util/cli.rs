@@ -61,10 +61,15 @@ pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simpl
 
     let log_config = match env::var("LOG_TARGETS") {
         Ok(x) => {
-            let targets: Vec<&str> = x.split(',').collect();
+            let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
             let mut cfgbuilder = ConfigBuilder::new();
+
             for i in targets {
-                cfgbuilder.add_filter_allow(i.to_string());
+                if i.starts_with('!') {
+                    cfgbuilder.add_filter_ignore(i.trim_start_matches('!').to_string());
+                } else {
+                    cfgbuilder.add_filter_allow(i);
+                }
             }
 
             cfgbuilder.build()
