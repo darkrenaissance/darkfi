@@ -2316,6 +2316,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "faucetd"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "chrono",
+ "ctrlc-async",
+ "darkfi",
+ "easy-parallel",
+ "futures-lite",
+ "lazy-init",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "simplelog",
+ "sled",
+ "structopt",
+ "structopt-toml",
+ "url",
+]
+
+[[package]]
 name = "feature-probe"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
