@@ -17,8 +17,10 @@ use url::Url;
 use darkfi::{
     cli_desc,
     consensus2::{
-        state::ValidatorStatePtr, util::Timestamp, Tx, ValidatorState, MAINNET_GENESIS_HASH_BYTES,
-        TESTNET_GENESIS_HASH_BYTES,
+        proto::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote},
+        state::ValidatorStatePtr,
+        util::Timestamp,
+        Tx, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
     crypto::{
         address::Address,
@@ -49,16 +51,12 @@ use client::Client;
 mod error;
 use error::{server_error, RpcError};
 
-mod protocol;
-use protocol::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote};
-
 mod consensus;
 use consensus::proposal_task;
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
 
-// TODO: Flag to participate in consensus
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "darkfid", about = cli_desc!())]

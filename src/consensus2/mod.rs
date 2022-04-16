@@ -26,6 +26,9 @@ pub use state::{ValidatorState, ValidatorStatePtr};
 pub mod util;
 pub use util::Timestamp;
 
+/// P2P net protocols
+pub mod proto;
+
 use lazy_static::lazy_static;
 lazy_static! {
     /// Genesis hash for the mainnet chain

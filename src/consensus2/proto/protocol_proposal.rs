@@ -3,8 +3,8 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 
-use darkfi::{
-    consensus2::{block::BlockProposal, state::ValidatorStatePtr},
+use crate::{
+    consensus2::{BlockProposal, ValidatorStatePtr},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
