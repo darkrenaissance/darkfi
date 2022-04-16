@@ -1,8 +1,8 @@
 use std::io;
 
-use log::warn;
+use log::debug;
 
-use super::{util::Timestamp, Metadata, StreamletMetadata, Tx};
+use super::{Metadata, StreamletMetadata, Timestamp, Tx};
 use crate::{
     crypto::{keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
@@ -117,13 +117,13 @@ impl_vec!(BlockProposal);
 /// This struct represents a sequence of block proposals.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ProposalChain {
-    pub genesis: blake3::Hash,
+    pub genesis_block: blake3::Hash,
     pub proposals: Vec<BlockProposal>,
 }
 
 impl ProposalChain {
-    pub fn new(genesis: blake3::Hash, initial_proposal: BlockProposal) -> Self {
-        Self { genesis, proposals: vec![initial_proposal] }
+    pub fn new(genesis_block: blake3::Hash, initial_proposal: BlockProposal) -> Self {
+        Self { genesis_block, proposals: vec![initial_proposal] }
     }
 
     /// A proposal is considered valid when its parent hash is equal to the
@@ -131,14 +131,14 @@ impl ProposalChain {
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.st == self.genesis {
-            warn!("Genesis block proposal provided.");
+        if proposal.st == self.genesis_block {
+            debug!("check_proposal(): Genesis block proposal provided.");
             return false
         }
 
         let prev_hash = previous.hash();
         if proposal.st != prev_hash || proposal.sl <= previous.sl {
-            warn!("Provided proposal is invalid.");
+            debug!("check_proposal(): Provided proposal is invalid.");
             return false
         }
 

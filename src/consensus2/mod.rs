@@ -1,6 +1,6 @@
 /// Block definition
 pub mod block;
-pub use block::{Block, ProposalChain};
+pub use block::{Block, BlockProposal, ProposalChain};
 
 /// Transactions
 pub mod tx;
@@ -20,10 +20,11 @@ pub use vote::Vote;
 
 /// Consensus state
 pub mod state;
-pub use state::ValidatorState;
+pub use state::{ValidatorState, ValidatorStatePtr};
 
-/// Utility functions
+/// Utility functions and types
 pub mod util;
+pub use util::Timestamp;
 
 use lazy_static::lazy_static;
 lazy_static! {

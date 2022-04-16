@@ -1,4 +1,4 @@
-use super::{util::Timestamp, Participant, Vote};
+use super::{Participant, Timestamp, Vote};
 use crate::util::serial::{SerialDecodable, SerialEncodable};
 
 /// This struct represents additional [`Block`] information used by

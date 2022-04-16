@@ -207,6 +207,7 @@ blockchain = [
 blockchain2 = [
     "blake3",
     "chrono",
+    "indexmap",
     "sled",
 
     "crypto",
