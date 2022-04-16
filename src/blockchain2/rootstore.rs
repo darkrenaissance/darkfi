@@ -28,12 +28,17 @@ impl RootStore {
         Ok(())
     }
 
+    /// Check whether given root is in the database
+    pub fn contains(&self, root: &MerkleNode) -> Result<bool> {
+        Ok(self.0.contains_key(serialize(root))?)
+    }
+
     /// Retrieve all merkle roots.
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<Option<MerkleNode>>> {
         let mut roots = vec![];
-        let mut iterator = self.0.into_iter().enumerate();
-        while let Some((_, r)) = iterator.next() {
+        let iterator = self.0.into_iter().enumerate();
+        for (_, r) in iterator {
             let (k, _) = r.unwrap();
             let root = deserialize(&k)?;
             roots.push(Some(root));

@@ -39,8 +39,8 @@ impl TxStore {
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Tx)>>> {
         let mut txs = vec![];
-        let mut iterator = self.0.into_iter().enumerate();
-        while let Some((_, r)) = iterator.next() {
+        let iterator = self.0.into_iter().enumerate();
+        for (_, r) in iterator {
             let (k, v) = r.unwrap();
             let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
             let tx = deserialize(&v)?;

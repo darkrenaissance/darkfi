@@ -28,12 +28,17 @@ impl NullifierStore {
         Ok(())
     }
 
+    /// Check whether given nullifier is in the database
+    pub fn contains(&self, nullifier: &Nullifier) -> Result<bool> {
+        Ok(self.0.contains_key(serialize(nullifier))?)
+    }
+
     /// Retrieve all nullifiers.
-    /// Be careful as this will try to load everything im memory.
+    /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<Option<Nullifier>>> {
         let mut nfs = vec![];
-        let mut iterator = self.0.into_iter().enumerate();
-        while let Some((_, r)) = iterator.next() {
+        let iterator = self.0.into_iter().enumerate();
+        for (_, r) in iterator {
             let (k, _) = r.unwrap();
             let nullifier = deserialize(&k)?;
             nfs.push(Some(nullifier))
