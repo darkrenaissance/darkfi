@@ -31,18 +31,23 @@ pub type ChannelPtr = Arc<Channel>;
 struct ChannelInfo {
     last_msg: String,
     last_status: String,
+    // Message log which is cleared on querying get_info
+    log: Mutex<Vec<(String, String)>>,
 }
 
 impl ChannelInfo {
     fn new() -> Self {
-        Self { last_msg: String::new(), last_status: String::new() }
+        Self { last_msg: String::new(), last_status: String::new(), log: Mutex::new(Vec::new()) }
     }
 
     async fn get_info(&self) -> serde_json::Value {
-        json!({
+        let result = json!({
             "last_msg": self.last_msg,
             "last_status": self.last_status,
-        })
+            "log": self.log.lock().await.clone(),
+        });
+        self.log.lock().await.clear();
+        result
     }
 }
 
@@ -177,6 +182,11 @@ impl Channel {
         message.encode(&mut payload)?;
         let packet = message::Packet { command: String::from(M::name()), payload };
 
+        {
+            let info = &mut *self.info.lock().await;
+            info.log.lock().await.push(("send".to_string(), packet.command.clone()));
+        }
+
         let stream = &mut *self.writer.lock().await;
         message::send_packet(stream, packet).await
     }
@@ -256,6 +266,7 @@ impl Channel {
                 let info = &mut *self.info.lock().await;
                 info.last_msg = packet.command.clone();
                 info.last_status = "recv".to_string();
+                info.log.lock().await.push(("recv".to_string(), packet.command.clone()));
             }
 
             // Send result to our subscribers
