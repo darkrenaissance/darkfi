@@ -1,67 +1,145 @@
-pub mod builder;
-pub mod partial;
-
 use std::io;
 
-use log::debug;
-use pasta_curves::group::Group;
+use group::Group;
+use log::error;
 
 use crate::{
     crypto::{
+        burn_proof::verify_burn_proof,
         keypair::PublicKey,
         mint_proof::verify_mint_proof,
         note::EncryptedNote,
-        proof::{Proof, VerifyingKey},
+        proof::VerifyingKey,
         schnorr,
         schnorr::SchnorrPublic,
-        spend_proof::verify_spend_proof,
         types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
-        MintRevealedValues, SpendRevealedValues,
+        BurnRevealedValues, MintRevealedValues, Proof,
     },
-    error::Result,
     impl_vec,
-    node::state,
-    util::serial::{Decodable, Encodable, VarInt},
+    node::state::{VerifyFailed, VerifyResult},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Result,
 };
 
-pub use self::builder::{
-    TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
-    TransactionBuilderOutputInfo,
-};
+pub mod builder;
+mod partial;
 
-#[derive(Debug, Clone, PartialEq)]
+/// A DarkFi transaction
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
+    /// Clear inputs
     pub clear_inputs: Vec<TransactionClearInput>,
+    /// Anonymous inputs
     pub inputs: Vec<TransactionInput>,
+    /// Anonymous outputs
     pub outputs: Vec<TransactionOutput>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A transaction's clear input
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct TransactionClearInput {
+    /// Input's value (amount)
     pub value: u64,
+    /// Input's token ID
     pub token_id: DrkTokenId,
+    /// Blinding factor for `value`
     pub value_blind: DrkValueBlind,
+    /// Blinding factor for `token_id`
     pub token_blind: DrkValueBlind,
+    /// Public key for the signature
     pub signature_public: PublicKey,
+    /// Input's signature
     pub signature: schnorr::Signature,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A transaction's anonymous input
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct TransactionInput {
-    pub spend_proof: Proof,
-    pub revealed: SpendRevealedValues,
+    /// Zero-knowledge proof for the input
+    pub burn_proof: Proof,
+    /// Public inputs for the zero-knowledge proof
+    pub revealed: BurnRevealedValues,
+    /// Input's signature
     pub signature: schnorr::Signature,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A transaction's anonymous output
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct TransactionOutput {
+    /// Zero-knowledge proof for the output
     pub mint_proof: Proof,
+    /// Public inputs for the zero-knowledge proof
     pub revealed: MintRevealedValues,
+    /// The encrypted note
     pub enc_note: EncryptedNote,
 }
 
 impl Transaction {
+    /// Verify the transaction
+    pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+        // Accumulator for the value commitments
+        let mut valcom_total = DrkValueCommit::identity();
+
+        // Add values from the clear inputs
+        for input in &self.clear_inputs {
+            valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
+        }
+
+        // Add values from the inputs
+        for (i, input) in self.inputs.iter().enumerate() {
+            if verify_burn_proof(burn_vk, &input.burn_proof, &input.revealed).is_err() {
+                error!("tx::verify(): Failed to verify burn proof {}", i);
+                return Err(VerifyFailed::BurnProof(i))
+            }
+            valcom_total += &input.revealed.value_commit;
+        }
+
+        // Subtract values from the outputs
+        for (i, output) in self.outputs.iter().enumerate() {
+            if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err() {
+                error!("tx::verify(): Failed to verify mint proof {}", i);
+                return Err(VerifyFailed::MintProof(i))
+            }
+            valcom_total -= &output.revealed.value_commit;
+        }
+
+        // If the accumulator is not back in its initial state,
+        // there's a value mismatch.
+        if valcom_total != DrkValueCommit::identity() {
+            error!("tx::verify(): Missing funds");
+            return Err(VerifyFailed::MissingFunds)
+        }
+
+        // Verify that the token commitments match
+        if !self.verify_token_commitments() {
+            error!("tx::verify(): Token ID mismatch");
+            return Err(VerifyFailed::AssetMismatch)
+        }
+
+        // Verify the available signatures
+        let mut unsigned_tx_data = vec![];
+        self.encode_without_signature(&mut unsigned_tx_data)?;
+
+        for (i, input) in self.clear_inputs.iter().enumerate() {
+            let public = &input.signature_public;
+            if !public.verify(&unsigned_tx_data[..], &input.signature) {
+                error!("tx::verify(): Failed to verify Clear Input signature {}", i);
+                return Err(VerifyFailed::ClearInputSignature(i))
+            }
+        }
+
+        for (i, input) in self.inputs.iter().enumerate() {
+            let public = &input.revealed.signature_public;
+            if !public.verify(&unsigned_tx_data[..], &input.signature) {
+                error!("tx::verify(): Failed to verify Input signature {}", i);
+                return Err(VerifyFailed::InputSignature(i))
+            }
+        }
+
+        Ok(())
+    }
+
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
@@ -76,73 +154,16 @@ impl Transaction {
 
         let mut failed =
             self.inputs.iter().any(|input| input.revealed.token_commit != token_commit_value);
+
         failed = failed ||
             self.outputs.iter().any(|output| output.revealed.token_commit != token_commit_value);
+
         failed = failed ||
             self.clear_inputs.iter().any(|input| {
                 pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind) !=
                     token_commit_value
             });
         !failed
-    }
-
-    pub fn verify(
-        &self,
-        mint_pvk: &VerifyingKey,
-        spend_pvk: &VerifyingKey,
-    ) -> state::VerifyResult<()> {
-        let mut valcom_total = DrkValueCommit::identity();
-
-        for input in &self.clear_inputs {
-            valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
-        }
-
-        for (i, input) in self.inputs.iter().enumerate() {
-            if verify_spend_proof(spend_pvk, input.spend_proof.clone(), &input.revealed).is_err() {
-                debug!(target: "TX VERIFY", "Failed to verify Spend proof {}", i);
-                return Err(state::VerifyFailed::SpendProof(i))
-            }
-            valcom_total += &input.revealed.value_commit;
-        }
-
-        for (i, output) in self.outputs.iter().enumerate() {
-            if verify_mint_proof(mint_pvk, &output.mint_proof, &output.revealed).is_err() {
-                debug!(target: "TX VERIFY", "Failed to verify Mint proof {}", i);
-                return Err(state::VerifyFailed::MintProof(i))
-            }
-            valcom_total -= &output.revealed.value_commit;
-        }
-
-        if valcom_total != DrkValueCommit::identity() {
-            debug!(target: "TX VERIFY", "Missing funds");
-            return Err(state::VerifyFailed::MissingFunds)
-        }
-
-        // Verify token commitments match
-        if !self.verify_token_commitments() {
-            debug!(target: "TX VERIFY", "Asset mismatch");
-            return Err(state::VerifyFailed::AssetMismatch)
-        }
-
-        // Verify signatures
-        let mut unsigned_tx_data = vec![];
-        self.encode_without_signature(&mut unsigned_tx_data)?;
-        for (i, input) in self.clear_inputs.iter().enumerate() {
-            let public = &input.signature_public;
-            if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                debug!(target: "TX VERIFY", "Failed to verify Clear Input signature {}", i);
-                return Err(state::VerifyFailed::ClearInputSignature(i))
-            }
-        }
-        for (i, input) in self.inputs.iter().enumerate() {
-            let public = &input.revealed.signature_public;
-            if !public.verify(&unsigned_tx_data[..], &input.signature) {
-                debug!(target: "TX VERIFY", "Failed to verify Input signature {}", i);
-                return Err(state::VerifyFailed::InputSignature(i))
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -177,100 +198,14 @@ impl TransactionInput {
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {
-        Self { spend_proof: partial.spend_proof, revealed: partial.revealed, signature }
+        Self { burn_proof: partial.burn_proof, revealed: partial.revealed, signature }
     }
 
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        len += self.spend_proof.encode(&mut s)?;
+        len += self.burn_proof.encode(&mut s)?;
         len += self.revealed.encode(&mut s)?;
         Ok(len)
-    }
-}
-
-impl Encodable for Transaction {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.clear_inputs.encode(&mut s)?;
-        len += self.inputs.encode(&mut s)?;
-        len += self.outputs.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Transaction {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            clear_inputs: Decodable::decode(&mut d)?,
-            inputs: Decodable::decode(&mut d)?,
-            outputs: Decodable::decode(d)?,
-        })
-    }
-}
-
-impl Encodable for TransactionClearInput {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.value.encode(&mut s)?;
-        len += self.token_id.encode(&mut s)?;
-        len += self.value_blind.encode(&mut s)?;
-        len += self.token_blind.encode(&mut s)?;
-        len += self.signature_public.encode(&mut s)?;
-        len += self.signature.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for TransactionClearInput {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            value: Decodable::decode(&mut d)?,
-            token_id: Decodable::decode(&mut d)?,
-            value_blind: Decodable::decode(&mut d)?,
-            token_blind: Decodable::decode(&mut d)?,
-            signature_public: Decodable::decode(&mut d)?,
-            signature: Decodable::decode(d)?,
-        })
-    }
-}
-
-impl Encodable for TransactionInput {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.spend_proof.encode(&mut s)?;
-        len += self.revealed.encode(&mut s)?;
-        len += self.signature.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for TransactionInput {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            spend_proof: Decodable::decode(&mut d)?,
-            revealed: Decodable::decode(&mut d)?,
-            signature: Decodable::decode(d)?,
-        })
-    }
-}
-
-impl Encodable for TransactionOutput {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.mint_proof.encode(&mut s)?;
-        len += self.revealed.encode(&mut s)?;
-        len += self.enc_note.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for TransactionOutput {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            mint_proof: Decodable::decode(&mut d)?,
-            revealed: Decodable::decode(&mut d)?,
-            enc_note: Decodable::decode(&mut d)?,
-        })
     }
 }
 

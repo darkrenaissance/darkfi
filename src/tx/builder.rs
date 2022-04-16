@@ -7,13 +7,13 @@ use super::{
 };
 use crate::{
     crypto::{
+        burn_proof::create_burn_proof,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
         note::Note,
         proof::ProvingKey,
         schnorr::SchnorrSecret,
-        spend_proof::create_spend_proof,
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
     util::serial::Encodable,
@@ -68,7 +68,7 @@ impl TransactionBuilder {
         total
     }
 
-    pub fn build(self, mint_pk: &ProvingKey, spend_pk: &ProvingKey) -> Result<Transaction> {
+    pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<Transaction> {
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
@@ -93,8 +93,8 @@ impl TransactionBuilder {
 
             let signature_secret = SecretKey::random(&mut OsRng);
 
-            let (proof, revealed) = create_spend_proof(
-                spend_pk,
+            let (proof, revealed) = create_burn_proof(
+                burn_pk,
                 input.note.value,
                 input.note.token_id,
                 input.note.value_blind,
@@ -110,7 +110,7 @@ impl TransactionBuilder {
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialTransactionInput { spend_proof: proof, revealed };
+            let input = PartialTransactionInput { burn_proof: proof, revealed };
             inputs.push(input);
         }
 
