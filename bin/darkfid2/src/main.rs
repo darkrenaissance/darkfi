@@ -5,7 +5,7 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use easy_parallel::Parallel;
 use futures_lite::future;
-use log::{debug, error, info};
+use log::{error, info};
 use rand::Rng;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
@@ -341,8 +341,8 @@ impl Darkfid {
 
         let result = self.p2p.broadcast(tx).await;
         match result {
-            Ok(()) => return jsonrpc::response(json!(true), id).into(),
-            Err(_) => return jsonrpc::error(InternalError, None, id).into(),
+            Ok(()) => jsonrpc::response(json!(true), id).into(),
+            Err(_) => jsonrpc::error(InternalError, None, id).into(),
         }
     }
 }
@@ -401,6 +401,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Activate these protocols only if we're participating in consensus.
     if args.consensus {
+        info!("Registering consensus P2P protocols...");
         let registry = p2p.protocol_registry();
 
         let _state = state.clone();

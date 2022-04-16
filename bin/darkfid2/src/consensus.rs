@@ -16,15 +16,13 @@ pub async fn proposal_task(p2p: P2pPtr, state: ValidatorStatePtr) {
         Err(e) => error!("Failed broadcasting consensus participation: {}", e),
     }
 
-    // After initialization, node should wait for next epoch
-    let seconds_until_next_epoch = state.read().await.next_epoch_start().as_secs();
-    info!("Waiting for next epoch({} sec)...", seconds_until_next_epoch);
-    sleep(seconds_until_next_epoch).await;
-
     loop {
+        let seconds_until_next_epoch = state.read().await.next_epoch_start().as_secs();
+        info!(target: "consensus", "Waiting for next epoch ({}) sec)...", seconds_until_next_epoch);
+        sleep(seconds_until_next_epoch).await;
+
         // Node refreshes participants records
         state.write().await.refresh_participants();
-        log::warn!("Participants: {:#?}", state.read().await.consensus.participants);
 
         // Node checks if it's the epoch leader to generate a new proposal
         // for that epoch.
@@ -37,49 +35,52 @@ pub async fn proposal_task(p2p: P2pPtr, state: ValidatorStatePtr) {
         match result {
             Ok(proposal) => {
                 if proposal.is_none() {
-                    info!("Node is not the epoch leader. Sleeping till next epoch...");
-                } else {
-                    // Leader creates a vote for the proposal and broadcasts them both
-                    let proposal = proposal.unwrap();
-                    info!("Node is the epoch leader: Proposed block: {:?}", proposal);
-                    let vote = state.write().await.receive_proposal(&proposal);
-                    match vote {
-                        Ok(v) => {
-                            if v.is_none() {
-                                debug!("Node did not vote for the proposed block");
-                            } else {
-                                let vote = v.unwrap();
-                                let result = state.write().await.receive_vote(&vote);
-                                match result {
-                                    Ok(_) => info!("Vote saved successfully."),
-                                    Err(e) => error!("Vote save failed: {}", e),
-                                }
+                    info!(target: "consensus", "Node is not the epoch leader. Sleeping till next epoch...");
+                    continue
+                }
+                // Leader creates a vote for the proposal and broadcasts them both
+                let proposal = proposal.unwrap();
+                info!(target: "consensus", "Node is the epoch leader: Proposed block: {:?}", proposal);
+                let vote = state.write().await.receive_proposal(&proposal);
+                match vote {
+                    Ok(v) => {
+                        if v.is_none() {
+                            debug!("proposal_task(): Node did not vote for the proposed block");
+                        } else {
+                            let vote = v.unwrap();
+                            let result = state.write().await.receive_vote(&vote);
+                            match result {
+                                Ok(_) => info!(target: "consensus", "Vote saved successfully."),
+                                Err(e) => error!(target: "consensus", "Vote save failed: {}", e),
+                            }
 
-                                // Broadcast block
-                                let result = p2p.broadcast(proposal).await;
-                                match result {
-                                    Ok(()) => info!("Proposal broadcasted successfully."),
-                                    Err(e) => error!("Failed broadcasting proposal: {}", e),
+                            // Broadcast block
+                            let result = p2p.broadcast(proposal).await;
+                            match result {
+                                Ok(()) => {
+                                    info!(target: "consensus", "Proposal broadcasted successfully.")
                                 }
+                                Err(e) => {
+                                    error!(target: "consensus", "Failed broadcasting proposal: {}", e)
+                                }
+                            }
 
-                                // Broadcast leader vote
-                                let result = p2p.broadcast(vote).await;
-                                match result {
-                                    Ok(()) => info!("Leader vote broadcasted successfully."),
-                                    Err(e) => error!("Failed broadcasting leader vote: {}", e),
+                            // Broadcast leader vote
+                            let result = p2p.broadcast(vote).await;
+                            match result {
+                                Ok(()) => {
+                                    info!(target: "consensus", "Leader vote broadcasted successfully.")
+                                }
+                                Err(e) => {
+                                    error!(target: "consensus", "Failed broadcasting leader vote: {}", e)
                                 }
                             }
                         }
-                        Err(e) => error!("Failed processing proposal: {}", e),
                     }
+                    Err(e) => error!(target: "consensus", "Failed processing proposal: {}", e),
                 }
             }
             Err(e) => error!("Block proposal failed: {}", e),
         }
-
-        // Node waits until next epoch
-        let seconds_until_next_epoch = state.read().await.next_epoch_start().as_secs();
-        info!("Waiting for next epoch ({} sec)...", seconds_until_next_epoch);
-        sleep(seconds_until_next_epoch).await;
     }
 }
