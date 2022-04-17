@@ -52,15 +52,14 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(db: &sled::Db, id: u64) -> Result<ConsensusState> {
+    pub fn new(db: &sled::Db, id: u64, genesis: i64) -> Result<ConsensusState> {
         let tree = db.open_tree(SLED_CONSESUS_STATE_TREE)?;
         let consensus = if let Some(found) = tree.get(id.to_ne_bytes())? {
             deserialize(&found).unwrap()
         } else {
-            let genesis = get_current_time();
             let consensus = ConsensusState {
-                genesis: genesis.clone(),
-                last_block: blake3::hash(&serialize(&Block::genesis_block(&genesis))),
+                genesis: Timestamp(genesis),
+                last_block: blake3::hash(&serialize(&Block::genesis_block(genesis))),
                 last_sl: 0,
                 proposals: Vec::new(),
                 orphan_votes: Vec::new(),
@@ -99,15 +98,15 @@ pub struct ValidatorState {
 }
 
 impl ValidatorState {
-    pub fn new(db_path: PathBuf, id: u64) -> Result<ValidatorStatePtr> {
+    pub fn new(db_path: PathBuf, id: u64, genesis: i64) -> Result<ValidatorStatePtr> {
         // TODO: clock sync
         let secret = SecretKey::random(&mut OsRng);
         let db = sled::open(db_path)?;
         let public = PublicKey::from_secret(secret);
-        let consensus = ConsensusState::new(&db, id)?;
-        let blockchain = Blockchain::new(&db, &consensus.genesis)?;
+        let consensus = ConsensusState::new(&db, id, genesis)?;
+        let blockchain = Blockchain::new(&db, genesis)?;
         let unconfirmed_txs = Vec::new();
-        let genesis_block = blake3::hash(&serialize(&Block::genesis_block(&consensus.genesis)));
+        let genesis_block = blake3::hash(&serialize(&Block::genesis_block(genesis)));
         Ok(Arc::new(RwLock::new(ValidatorState {
             id,
             secret,

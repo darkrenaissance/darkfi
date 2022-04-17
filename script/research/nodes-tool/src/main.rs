@@ -311,12 +311,13 @@ impl StateInfo {
 }
 
 fn main() -> Result<()> {
-    let nodes = 1;
+    let nodes = 4;
+    let genesis = 1648383795;
     for i in 0..nodes {
         let path = format!("~/.config/darkfi/validatord_db_{:?}", i);
         let database_path = expand_path(&path).unwrap();
         println!("Export data from sled database: {:?}", database_path);
-        let state = ValidatorState::new(database_path, i).unwrap();
+        let state = ValidatorState::new(database_path, i, genesis).unwrap();
         let info = StateInfo::new(&*state.read().unwrap());
         let info_string = format!("{:#?}", info);
         let path = format!("validatord_state_{:?}", i);

@@ -12,7 +12,6 @@ use super::{
     block::{Block, BlockProposal, BlockStore},
     metadata::StreamletMetadataStore,
     tx::TxStore,
-    util::Timestamp,
 };
 
 /// This struct represents the canonical (finalized) blockchain stored in sled database.
@@ -27,7 +26,7 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
-    pub fn new(db: &sled::Db, genesis: &Timestamp) -> Result<Blockchain> {
+    pub fn new(db: &sled::Db, genesis: i64) -> Result<Blockchain> {
         let blocks = BlockStore::new(db, genesis)?;
         let transactions = TxStore::new(db)?;
         let streamlet_metadata = StreamletMetadataStore::new(db)?;

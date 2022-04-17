@@ -78,6 +78,9 @@ struct Opt {
     #[structopt(long, default_value = "FOOBAR")]
     /// Password for the created TLS identity
     password: String,
+    #[structopt(long, default_value = "1648383795")]
+    /// Timestamp of the genesis block creation
+    genesis: i64,
     #[structopt(long, default_value = "~/.config/darkfi/validatord_db_0")]
     /// Path to the sled database folder
     database: String,
@@ -195,9 +198,10 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     };
 
     // State setup
+    let genesis = opts.genesis;
     let database_path = expand_path(&opts.database).unwrap();
     let id = opts.id.clone();
-    let state = ValidatorState::new(database_path, id).unwrap();
+    let state = ValidatorState::new(database_path, id, genesis).unwrap();
 
     // P2P registry setup
     let p2p = net::P2p::new(network_settings).await;
