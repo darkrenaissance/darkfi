@@ -38,9 +38,6 @@ identity = "~/.config/darkfi/validatord_identity.pfx"
 # Password for the created TLS identity. (Unused if serve_tls=false)
 password = "FOOBAR"
 
-# Timestamp of the genesis block creation
-genesis = 1648383795
-
 # Path to the sled database folder 
 database = "~/.config/darkfi/validatord_db_0"
 

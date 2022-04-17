@@ -37,10 +37,10 @@ impl Block {
     }
 
     /// Generates the genesis block.
-    pub fn genesis_block(genesis: i64) -> Block {
+    pub fn genesis_block(genesis: &Timestamp) -> Block {
         let hash = blake3::Hash::from(EMPTY_HASH_BYTES);
         let metadata = Metadata::new(
-            Timestamp(genesis),
+            genesis.clone(),
             String::from("proof"),
             String::from("r"),
             String::from("s"),
@@ -54,7 +54,7 @@ pub struct BlockStore(sled::Tree);
 
 impl BlockStore {
     /// Opens a new or existing blockstore tree given a sled database.
-    pub fn new(db: &sled::Db, genesis: i64) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis: &Timestamp) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_TREE)?;
         let store = Self(tree);
         if store.0.is_empty() {
