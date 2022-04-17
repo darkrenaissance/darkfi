@@ -72,19 +72,37 @@ an enum:
 
 ```
 enum SelectableObject {
-    Node(NodeInfo)
-    Session(SessionInfo)
-    Connect(ConnectInfo)
+    Node(NodeId)
+    Session(SessionId)
+    Connect(ConnectId)
 }
 ```
+Id is a randomly generated number to correspond to the received info.
 
-We copy these values into a Vec<SelectableObject> to use them around the program.
+Each SelectableObject corresponds to an info HashMap.
+
+```
+NodeInfo = Hashmap<NodeId, NodeInfo>
+SessionInfo = Hashmap<SessionId, SessionInfo>
+ConnectInfo = Hashmap<ConnectId, ConnectInfo>
+```
+
+We use mutexes to protect the data because we are updating it
+asynchronously.
 
 ### View
 
 View is a copy of model without mutex's and with an index that allows the
-objects to be scrollable lists. We also create a function called render()
-that draws each window.
+objects to be scrollable lists.
+
+We create a IdsList which is a hashset of all the IDs and a ListState.
+This allows us to transform SelectableObject's into a scrollable list.
+
+```
+IdsList = HashSet<Id, ListState>
+```
+
+We also create a function called render() that draws each window.
 
 ```
 NodeInfo.render()
