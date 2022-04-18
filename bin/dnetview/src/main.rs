@@ -144,131 +144,140 @@ async fn run_rpc(config: &DnvConfig, ex: Arc<Executor<'_>>, model: Arc<Model>) -
     Ok(())
 }
 
-// TODO: clean up into seperate functions.
-// TODO: replace if/else with match where possible
-// TODO: test unwraps will never ever crash
 async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
     loop {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            // TODO: we are ignoring this value for now
-            let _ext_addr = reply.as_object().unwrap().get("external_addr");
-
-            let inbound_obj = &reply.as_object().unwrap()["session_inbound"];
-            let manual_obj = &reply.as_object().unwrap()["session_manual"];
-            let outbound_obj = &reply.as_object().unwrap()["session_outbound"];
-
-            let mut model_vec: Vec<SelectableObject> = Vec::new();
-
-            let mut iconnects = Vec::new();
-            let mut mconnects = Vec::new();
-            let mut oconnects = Vec::new();
-            let mut slots = Vec::new();
-            let mut addrs = Vec::new();
-            let mut msgs = Vec::new();
-
-            // parse inbound connection data
-            let i_connected = &inbound_obj["connected"];
-            if i_connected.as_object().unwrap().is_empty() {
-                // channel is empty. initialize with empty values
-                let connected = "Empty".to_string();
-                let msg = "Null".to_string();
-                let status = "Null".to_string();
-                let channel = Channel::new(msg, status);
-                let is_empty = true;
-                let iinfo = InboundInfo::new(is_empty, connected, channel);
-                iconnects.push(iinfo);
-            } else {
-                // channel is not empty. initialize with whole values
-                let ic = i_connected.as_object().unwrap();
-                for k in ic.keys() {
-                    let node = ic.get(k);
-                    let addr = k.to_string();
-                    let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
-                    let status =
-                        node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
-                    let channel = Channel::new(msg.clone(), status);
-                    let is_empty = false;
-                    let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
-                    iconnects.push(iinfo);
-                    addrs.push(addr);
-                    msgs.push(msg.clone());
-                }
-            }
-
-            // parse manual connection data
-            let minfo: ManualInfo = serde_json::from_value(manual_obj.clone())?;
-            mconnects.push(minfo);
-
-            // parse outbound connection data
-            let outbound_slots = &outbound_obj["slots"];
-            for slot in outbound_slots.as_array().unwrap() {
-                if slot["channel"].is_null() {
-                    // channel is empty. initialize with empty values
-                    let is_empty = true;
-                    let state = &slot["state"];
-                    let msg = "Null".to_string();
-                    let status = "Null".to_string();
-                    let channel = Channel::new(msg, status);
-                    let new_slot = Slot::new(
-                        is_empty,
-                        String::new(),
-                        channel,
-                        state.as_str().unwrap().to_string(),
-                    );
-                    slots.push(new_slot.clone())
-                } else {
-                    // channel is not empty. initialize with whole values
-                    let is_empty = false;
-                    let addr = &slot["addr"];
-                    let state = &slot["state"];
-                    let channel: Channel = serde_json::from_value(slot["channel"].clone())?;
-                    let new_slot = Slot::new(
-                        is_empty,
-                        addr.as_str().unwrap().to_string(),
-                        channel.clone(),
-                        state.as_str().unwrap().to_string(),
-                    );
-                    slots.push(new_slot);
-                    addrs.push(addr.as_str().unwrap().to_string());
-                    msgs.push(channel.last_msg.clone());
-                }
-            }
-
-            // create node_info
-            let is_empty = is_empty_outbound(slots.clone());
-            let oinfo = OutboundInfo::new(is_empty, slots.clone());
-            oconnects.push(oinfo);
-
-            let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
-            let node = SelectableObject::Node(infos.clone());
-            model_vec.push(node);
-
-            let session_infos = SessionInfo::new();
-            let session = SelectableObject::Session(session_infos);
-            model_vec.push(session);
-
-            let connect_infos = ConnectInfo::new();
-            let connect = SelectableObject::Connect(connect_infos);
-            model_vec.push(connect);
-
-            let mut node_info = FxHashMap::default();
-            let node_name = &client.name.as_str();
-            node_info.insert(&node_name, infos.clone());
-
-            // insert into model
-            for (key, value) in node_info.clone() {
-                model.id_list.node_id.lock().await.insert(key.to_string().clone());
-                // value
-                model.info_list.infos.lock().await.insert(key.to_string(), value);
-            }
+            parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
         } else {
             // TODO: error handling
             //debug!("Reply is empty");
         }
         async_util::sleep(2).await;
     }
+}
+
+async fn parse_data(
+    reply: &serde_json::Map<String, Value>,
+    client: &DNetView,
+    model: Arc<Model>,
+) -> io::Result<()> {
+    // TODO: we are ignoring this value for now
+    let _ext_addr = reply.get("external_addr");
+
+    let inbound_obj = &reply["session_inbound"];
+    let manual_obj = &reply["session_manual"];
+    let outbound_obj = &reply["session_outbound"];
+
+    // vectors we will copy the data to
+    let mut model_vec: Vec<SelectableObject> = Vec::new();
+    let mut iconnects = Vec::new();
+    let mut mconnects = Vec::new();
+    let mut oconnects = Vec::new();
+    let mut slots = Vec::new();
+    let mut addrs = Vec::new();
+    let mut msgs = Vec::new();
+
+    // parse inbound connection data
+    let i_connected = &inbound_obj["connected"];
+    if i_connected.as_object().unwrap().is_empty() {
+        // channel is empty. initialize with empty values
+        let connected = "Empty".to_string();
+        let msg = "Null".to_string();
+        let status = "Null".to_string();
+        let channel = Channel::new(msg, status);
+        let is_empty = true;
+        let iinfo = InboundInfo::new(is_empty, connected, channel);
+        iconnects.push(iinfo);
+    } else {
+        // channel is not empty. initialize with whole values
+        let ic = i_connected.as_object().unwrap();
+        for k in ic.keys() {
+            let node = ic.get(k);
+            let addr = k.to_string();
+            let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
+            let status = node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
+            let channel = Channel::new(msg.clone(), status);
+            let is_empty = false;
+            let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
+            iconnects.push(iinfo);
+            addrs.push(addr);
+            msgs.push(msg.clone());
+        }
+    }
+
+    // parse manual connection data
+    let minfo: ManualInfo = serde_json::from_value(manual_obj.clone())?;
+    mconnects.push(minfo);
+
+    // parse outbound connection data
+    let outbound_slots = &outbound_obj["slots"];
+    for slot in outbound_slots.as_array().unwrap() {
+        if slot["channel"].is_null() {
+            // channel is empty. initialize with empty values
+            let is_empty = true;
+            let state = &slot["state"];
+            let msg = "Null".to_string();
+            let status = "Null".to_string();
+            let channel = Channel::new(msg, status);
+            let new_slot =
+                Slot::new(is_empty, String::new(), channel, state.as_str().unwrap().to_string());
+            slots.push(new_slot.clone())
+        } else {
+            // channel is not empty. initialize with whole values
+            let is_empty = false;
+            let addr = &slot["addr"];
+            let state = &slot["state"];
+            let channel: Channel = serde_json::from_value(slot["channel"].clone())?;
+            let new_slot = Slot::new(
+                is_empty,
+                addr.as_str().unwrap().to_string(),
+                channel.clone(),
+                state.as_str().unwrap().to_string(),
+            );
+            slots.push(new_slot);
+            addrs.push(addr.as_str().unwrap().to_string());
+            msgs.push(channel.last_msg.clone());
+        }
+    }
+
+    // assign each selectable a random ID
+    // push data to Info<Hashmap<ID, Info>>
+
+    // create node_info
+    let is_empty = is_empty_outbound(slots.clone());
+    let oinfo = OutboundInfo::new(is_empty, slots.clone());
+    oconnects.push(oinfo);
+
+    let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
+    let node = SelectableObject::Node(infos.clone());
+    model_vec.push(node);
+
+    // NodeInfo = Hashmap<NodeId, NodeInfo>
+    let session_infos = SessionInfo::new();
+    // SessionInfo = Hashmap<SessionId, SessionInfo>
+    let session = SelectableObject::Session(session_infos);
+    model_vec.push(session);
+
+    // ConnectInfo = Hashmap<ConnectId, ConnectInfo>
+    let connect_infos = ConnectInfo::new();
+    let connect = SelectableObject::Connect(connect_infos);
+    model_vec.push(connect);
+
+    let mut node_info = FxHashMap::default();
+    let node_name = &client.name.as_str();
+    node_info.insert(&node_name, infos.clone());
+
+    debug!("INDEX OF MODEL VEC {}", model_vec.len());
+
+    // insert into model
+    for (key, value) in node_info.clone() {
+        model.id_list.node_id.lock().await.insert(key.to_string().clone());
+        // value
+        model.info_list.infos.lock().await.insert(key.to_string(), value);
+    }
+    Ok(())
 }
 
 fn is_empty_outbound(slots: Vec<Slot>) -> bool {

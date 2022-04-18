@@ -4,6 +4,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use tui::widgets::ListState;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SelectableObject {
     // top level selectable object
     Node(NodeInfo),
