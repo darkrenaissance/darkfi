@@ -1,9 +1,10 @@
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use std::{fs::File, io, io::Read, path::PathBuf};
 
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, info};
+use rand::{thread_rng, Rng};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -27,14 +28,10 @@ use darkfi::{
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{
-        Channel, ConnectInfo, IdList, InboundInfo, InfoList, ManualInfo, NodeInfo, OutboundInfo,
-        SelectableObject, SessionInfo, Slot,
-    },
+    model::{ConnectInfo, Model, NodeInfo, SelectableObject, SessionInfo},
     options::ProgramOptions,
     ui,
-    view::{IdListView, InfoListView},
-    Model, View,
+    view::{IdListView, InfoListView, View},
 };
 
 struct DNetView {
@@ -110,11 +107,12 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let info_list = InfoList::new();
-    let ids = FxHashSet::default();
-    let id_list = IdList::new(ids);
+    let id_set = Mutex::new(FxHashSet::default());
+    let node_info = Mutex::new(FxHashMap::default());
+    let session_info = Mutex::new(FxHashMap::default());
+    let connect_info = Mutex::new(FxHashMap::default());
 
-    let model = Arc::new(Model::new(id_list, info_list));
+    let model = Arc::new(Model::new(id_set, node_info, session_info, connect_info));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -158,131 +156,193 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
     }
 }
 
+// TODO: split into parse maunal/ inbound/ outbound functions
+// make if/else into switch statements for clarity
 async fn parse_data(
     reply: &serde_json::Map<String, Value>,
     client: &DNetView,
     model: Arc<Model>,
 ) -> io::Result<()> {
-    // TODO: we are ignoring this value for now
+    // TODO
     let _ext_addr = reply.get("external_addr");
 
     let inbound_obj = &reply["session_inbound"];
+    // TODO
     let manual_obj = &reply["session_manual"];
     let outbound_obj = &reply["session_outbound"];
 
-    // vectors we will copy the data to
     let mut model_vec: Vec<SelectableObject> = Vec::new();
-    let mut iconnects = Vec::new();
-    let mut mconnects = Vec::new();
-    let mut oconnects = Vec::new();
-    let mut slots = Vec::new();
-    let mut addrs = Vec::new();
-    let mut msgs = Vec::new();
+    let connections: Vec<ConnectInfo> = Vec::new();
+    let sessions: Vec<SessionInfo> = Vec::new();
 
-    // parse inbound connection data
+    let node_id = generate_id();
+    let node_name = &client.name;
+
+    parse_inbound(inbound_obj, connections.clone(), sessions.clone(), model_vec.clone(), node_id);
+    parse_outbound(outbound_obj, connections.clone(), sessions.clone(), model_vec.clone(), node_id);
+    parse_manual(manual_obj, connections.clone(), sessions.clone(), model_vec.clone(), node_id);
+
+    let node_info = NodeInfo::new(node_id, node_name.to_string(), sessions);
+    let node = SelectableObject::Node(node_info.clone());
+    model_vec.push(node);
+
+    // TODO: write data to HashMaps and HashSets
+    Ok(())
+}
+
+fn parse_inbound(
+    inbound_obj: &Value,
+    mut connections: Vec<ConnectInfo>,
+    mut sessions: Vec<SessionInfo>,
+    mut model_vec: Vec<SelectableObject>,
+    node_id: u32,
+) {
     let i_connected = &inbound_obj["connected"];
+    let i_session_id = generate_id();
     if i_connected.as_object().unwrap().is_empty() {
         // channel is empty. initialize with empty values
-        let connected = "Empty".to_string();
+        let i_connect_id = generate_id();
+        let addr = "Null".to_string();
         let msg = "Null".to_string();
         let status = "Null".to_string();
-        let channel = Channel::new(msg, status);
         let is_empty = true;
-        let iinfo = InboundInfo::new(is_empty, connected, channel);
-        iconnects.push(iinfo);
+        let parent = i_session_id;
+        // TODO
+        let state = "Null".to_string();
+        // TODO
+        let msg_log = Vec::new();
+        let connect_info =
+            ConnectInfo::new(i_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
+        connections.push(connect_info.clone());
+        let connect = SelectableObject::Connect(connect_info.clone());
+        model_vec.push(connect);
     } else {
         // channel is not empty. initialize with whole values
+        let i_connect_id = generate_id();
         let ic = i_connected.as_object().unwrap();
         for k in ic.keys() {
             let node = ic.get(k);
             let addr = k.to_string();
             let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
             let status = node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
-            let channel = Channel::new(msg.clone(), status);
+            let state = node.unwrap().get("state").unwrap().as_str().unwrap().to_string();
             let is_empty = false;
-            let iinfo = InboundInfo::new(is_empty, addr.clone(), channel);
-            iconnects.push(iinfo);
-            addrs.push(addr);
-            msgs.push(msg.clone());
+            let parent = i_session_id;
+            // TODO
+            let msg_log = Vec::new();
+            let connect_info =
+                ConnectInfo::new(i_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
+            connections.push(connect_info.clone());
+            let connect = SelectableObject::Connect(connect_info.clone());
+            model_vec.push(connect);
         }
     }
+    let i_session_info = SessionInfo::new(i_session_id, node_id, connections.clone());
+    sessions.push(i_session_info.clone());
+    let session = SelectableObject::Session(i_session_info.clone());
+    model_vec.push(session);
+}
 
-    // parse manual connection data
-    let minfo: ManualInfo = serde_json::from_value(manual_obj.clone())?;
-    mconnects.push(minfo);
+fn parse_manual(
+    manual_obj: &Value,
+    mut connections: Vec<ConnectInfo>,
+    mut sessions: Vec<SessionInfo>,
+    mut model_vec: Vec<SelectableObject>,
+    node_id: u32,
+) {
+    let m_session_id = generate_id();
+    let m_connect_id = generate_id();
+    let addr = "Null".to_string();
+    let msg = "Null".to_string();
+    let status = "Null".to_string();
+    let is_empty = true;
+    let parent = m_session_id;
+    // TODO
+    let state = "Null".to_string();
+    // TODO
+    let msg_log = Vec::new();
+    let m_connect_info =
+        ConnectInfo::new(m_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
+    connections.push(m_connect_info.clone());
+    let connect = SelectableObject::Connect(m_connect_info.clone());
+    model_vec.push(connect);
+}
 
+fn parse_outbound(
+    outbound_obj: &Value,
+    mut connections: Vec<ConnectInfo>,
+    mut sessions: Vec<SessionInfo>,
+    mut model_vec: Vec<SelectableObject>,
+    node_id: u32,
+) {
     // parse outbound connection data
     let outbound_slots = &outbound_obj["slots"];
+    let o_session_id = generate_id();
     for slot in outbound_slots.as_array().unwrap() {
+        let o_connect_id = generate_id();
         if slot["channel"].is_null() {
             // channel is empty. initialize with empty values
             let is_empty = true;
+            let addr = "Null".to_string();
             let state = &slot["state"];
             let msg = "Null".to_string();
             let status = "Null".to_string();
-            let channel = Channel::new(msg, status);
-            let new_slot =
-                Slot::new(is_empty, String::new(), channel, state.as_str().unwrap().to_string());
-            slots.push(new_slot.clone())
+            // placeholder for now
+            let msg_log = Vec::new();
+            let parent = o_session_id;
+            let connect_info = ConnectInfo::new(
+                o_connect_id,
+                addr,
+                is_empty,
+                msg,
+                status,
+                state.as_str().unwrap().to_string(),
+                msg_log,
+                parent,
+            );
+            connections.push(connect_info.clone());
+            let connect = SelectableObject::Connect(connect_info.clone());
+            model_vec.push(connect);
         } else {
+            // TODO: cleanup/ make style consistent
             // channel is not empty. initialize with whole values
             let is_empty = false;
             let addr = &slot["addr"];
             let state = &slot["state"];
-            let channel: Channel = serde_json::from_value(slot["channel"].clone())?;
-            let new_slot = Slot::new(
-                is_empty,
+            let msg = &slot["last_msg"];
+            let status = &slot["last_status"];
+            let parent = o_session_id;
+            // TODO
+            let msg_log = Vec::new();
+            let connect_info = ConnectInfo::new(
+                o_connect_id,
                 addr.as_str().unwrap().to_string(),
-                channel.clone(),
+                is_empty,
+                msg.as_str().unwrap().to_string(),
+                status.as_str().unwrap().to_string(),
                 state.as_str().unwrap().to_string(),
+                msg_log,
+                parent,
             );
-            slots.push(new_slot);
-            addrs.push(addr.as_str().unwrap().to_string());
-            msgs.push(channel.last_msg.clone());
+            connections.push(connect_info.clone());
+            let connect = SelectableObject::Connect(connect_info.clone());
+            model_vec.push(connect);
         }
     }
-
-    // assign each selectable a random ID
-    // push data to Info<Hashmap<ID, Info>>
-
-    // create node_info
-    let is_empty = is_empty_outbound(slots.clone());
-    let oinfo = OutboundInfo::new(is_empty, slots.clone());
-    oconnects.push(oinfo);
-
-    let infos = NodeInfo { outbound: oconnects, manual: mconnects, inbound: iconnects };
-    let node = SelectableObject::Node(infos.clone());
-    model_vec.push(node);
-
-    // NodeInfo = Hashmap<NodeId, NodeInfo>
-    let session_infos = SessionInfo::new();
-    // SessionInfo = Hashmap<SessionId, SessionInfo>
-    let session = SelectableObject::Session(session_infos);
+    let o_session_info = SessionInfo::new(o_session_id, node_id, connections.clone());
+    sessions.push(o_session_info.clone());
+    let session = SelectableObject::Session(o_session_info.clone());
     model_vec.push(session);
-
-    // ConnectInfo = Hashmap<ConnectId, ConnectInfo>
-    let connect_infos = ConnectInfo::new();
-    let connect = SelectableObject::Connect(connect_infos);
-    model_vec.push(connect);
-
-    let mut node_info = FxHashMap::default();
-    let node_name = &client.name.as_str();
-    node_info.insert(&node_name, infos.clone());
-
-    debug!("INDEX OF MODEL VEC {}", model_vec.len());
-
-    // insert into model
-    for (key, value) in node_info.clone() {
-        model.id_list.node_id.lock().await.insert(key.to_string().clone());
-        // value
-        model.info_list.infos.lock().await.insert(key.to_string(), value);
-    }
-    Ok(())
 }
 
-fn is_empty_outbound(slots: Vec<Slot>) -> bool {
-    return slots.iter().all(|slot| slot.is_empty)
+fn generate_id() -> u32 {
+    let mut rng = thread_rng();
+    let id: u32 = rng.gen();
+    id
 }
+//fn is_empty_outbound(slots: Vec<Slot>) -> bool {
+//    return slots.iter().all(|slot| slot.is_empty);
+//}
 
 async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
     let mut asi = async_stdin();
@@ -297,7 +357,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io
     view.info_list.index = 0;
 
     loop {
-        view.update(model.info_list.infos.lock().await.clone());
+        //view.update(model.info_list.infos.lock().await.clone());
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;

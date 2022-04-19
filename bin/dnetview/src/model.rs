@@ -6,36 +6,40 @@ use tui::widgets::ListState;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SelectableObject {
-    // top level selectable object
     Node(NodeInfo),
-    // outgoing or incoming sessions
     Session(SessionInfo),
-    // connections: outgoing, incoming or manual
     Connect(ConnectInfo),
 }
 
 pub struct Model {
-    pub id_list: IdList,
-    pub info_list: InfoList,
+    pub id_set: Mutex<FxHashSet<u32>>,
+    pub node_info: Mutex<FxHashMap<u32, SelectableObject>>,
+    pub session_info: Mutex<FxHashMap<u32, SelectableObject>>,
+    pub connect_info: Mutex<FxHashMap<u32, SelectableObject>>,
 }
 
 impl Model {
-    pub fn new(id_list: IdList, info_list: InfoList) -> Model {
-        Model { id_list, info_list }
+    pub fn new(
+        id_set: Mutex<FxHashSet<u32>>,
+        node_info: Mutex<FxHashMap<u32, SelectableObject>>,
+        session_info: Mutex<FxHashMap<u32, SelectableObject>>,
+        connect_info: Mutex<FxHashMap<u32, SelectableObject>>,
+    ) -> Model {
+        Model { id_set, node_info, session_info, connect_info }
     }
 }
 
-pub struct IdList {
-    pub state: Mutex<ListState>,
-    pub node_id: Mutex<FxHashSet<String>>,
-}
-
-impl IdList {
-    pub fn new(node_id: FxHashSet<String>) -> IdList {
-        let node_id = Mutex::new(node_id);
-        IdList { state: Mutex::new(ListState::default()), node_id }
-    }
-}
+//pub struct IdList {
+//    pub state: Mutex<ListState>,
+//    pub node_id: Mutex<FxHashSet<String>>,
+//}
+//
+//impl IdList {
+//    pub fn new(node_id: FxHashSet<String>) -> IdList {
+//        let node_id = Mutex::new(node_id);
+//        IdList { state: Mutex::new(ListState::default()), node_id }
+//    }
+//}
 
 pub struct InfoList {
     pub index: Mutex<usize>,
@@ -58,107 +62,59 @@ impl Default for InfoList {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+type NodeId = u32;
+type SessionId = u32;
+type ConnectId = u32;
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
-    pub outbound: Vec<OutboundInfo>,
-    pub manual: Vec<ManualInfo>,
-    pub inbound: Vec<InboundInfo>,
+    pub node_id: NodeId,
+    pub node_name: String,
+    pub children: Vec<SessionInfo>,
 }
 
 impl NodeInfo {
-    pub fn new() -> NodeInfo {
-        NodeInfo { outbound: Vec::new(), manual: Vec::new(), inbound: Vec::new() }
-    }
-}
-
-impl Default for NodeInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
-pub struct ManualInfo {
-    pub key: u64,
-}
-
-impl ManualInfo {
-    pub fn new(key: u64) -> ManualInfo {
-        ManualInfo { key }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
-pub struct OutboundInfo {
-    pub is_empty: bool,
-    pub slots: Vec<Slot>,
-}
-
-impl OutboundInfo {
-    pub fn new(is_empty: bool, slots: Vec<Slot>) -> OutboundInfo {
-        OutboundInfo { is_empty, slots }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Eq, Hash)]
-pub struct Slot {
-    pub is_empty: bool,
-    pub addr: String,
-    pub channel: Channel,
-    pub state: String,
-}
-
-impl Slot {
-    pub fn new(is_empty: bool, addr: String, channel: Channel, state: String) -> Slot {
-        Slot { is_empty, addr, channel, state }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
-pub struct Channel {
-    pub last_msg: String,
-    pub last_status: String,
-}
-
-impl Channel {
-    pub fn new(last_msg: String, last_status: String) -> Channel {
-        Channel { last_msg, last_status }
-    }
-}
-
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct InboundInfo {
-    pub is_empty: bool,
-    pub connected: String,
-    pub channel: Channel,
-}
-
-impl InboundInfo {
-    pub fn new(is_empty: bool, connected: String, channel: Channel) -> InboundInfo {
-        InboundInfo { is_empty, connected, channel }
-    }
-}
-
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct ConnectInfo {
-    pub message: String,
-}
-
-impl ConnectInfo {
-    pub fn new() -> ConnectInfo {
-        let message = "This is the connect screen".to_string();
-        ConnectInfo { message }
+    pub fn new(node_id: NodeId, node_name: String, children: Vec<SessionInfo>) -> NodeInfo {
+        NodeInfo { node_id, node_name, children }
     }
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct SessionInfo {
-    pub message: String,
+    pub session_id: SessionId,
+    pub parent: NodeId,
+    pub children: Vec<ConnectInfo>,
 }
 
 impl SessionInfo {
-    pub fn new() -> SessionInfo {
-        let message = "This is the connect screen".to_string();
-        SessionInfo { message }
+    pub fn new(session_id: SessionId, parent: NodeId, children: Vec<ConnectInfo>) -> SessionInfo {
+        SessionInfo { session_id, parent, children }
+    }
+}
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct ConnectInfo {
+    pub connect_id: ConnectId,
+    pub addr: String,
+    pub is_empty: bool,
+    pub last_msg: String,
+    pub last_status: String,
+    pub state: String,
+    pub msg_log: Vec<String>,
+    pub parent: SessionId,
+}
+
+impl ConnectInfo {
+    pub fn new(
+        connect_id: ConnectId,
+        addr: String,
+        is_empty: bool,
+        last_msg: String,
+        last_status: String,
+        state: String,
+        msg_log: Vec<String>,
+        parent: SessionId,
+    ) -> ConnectInfo {
+        ConnectInfo { connect_id, addr, is_empty, last_msg, last_status, state, msg_log, parent }
     }
 }
