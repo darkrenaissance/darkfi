@@ -68,6 +68,44 @@ the probability that a party holding all the stake will be selected to
 be a leader. Stakeholder is selected as leader for slot j with
 probability $\phi_f(\alpha_i)$, $\alpha_i$ is $U_i$ stake.
 
+
+### linear aggregation dependent leader selection
+in the previous leader selection function, it has the unique property of
+independent aggregation of the stakes, meaning the property of a leader winning leadership with stakes $\sigma$ is independent of whether the stakeholder would act as a pool of stakes, or distributed stakes on competing coins.
+"one minus the probability" of winning leadership with aggregated stakes is
+$1-\phi(\sum_{i}\sigma_i)=1-(1+(1-f)^{\sigma_i})=-(1-f)^{\sum_{i}\sigma_i}$,
+the joint "one minus probability" of all the stakes (each with probability $\phi(\sigma_i))$
+winning aggregated winning the leadership
+$\prod_{i}^{n}(1-\phi(\sigma_i))=-(1-f)^{\sum_{\sigma_i}}$
+thus:
+$$ 1-\phi(\sum_{i}\sigma_i) =\prod_{i}^{n}(1-\phi(\sigma_i)) $$
+
+#### linear leader selection
+$$y < T $$
+$$y = 2^lk \mid 0 \le k \le 1$$
+$$T = 2^l\phi(v)$$
+$$ \phi(v)=\frac{1}{v_{max}}v $$
+
+#### dependent aggregation
+linear leader selection has the dependent aggregation property, meaning it's favorable to compete in pools with sum of the stakes over aggregated stakes of distributed stakes:
+
+$$\phi(\sum_{i}{\sigma_i})>\prod_{i}^{n}{\sigma_i}$$
+$$\sum_{i}{\sigma_i}>(\frac{1}{v_{max}})^{n-1}v_1v_2 \dots v_n$$
+let's assume the stakes are divided to stakes of value $\sigma_i=1$ for $\Sigma>1 \in \mathbb{Z}$, $\sum_{i}{\sigma_i}=V$
+$$V>(\frac{1}{v_{max}})^{n-1}$$
+note that $(\frac{1}{v_{max}})^{n-1} < 1, V>1$, thus competing with single coin of the sum of stakes held by the stakeholder is favourable.
+
+### scalar linear aggregation dependent leader selection
+  a target function T with scalar coefficients can be formalized as
+ $$T=2^lk\phi(\Sigma)=2^l(\frac{1}{v_{max}})\Sigma$$
+ let's assume $v_{max}=2^v$, then:
+ $$T=2^lk\phi(\Sigma)=2^{\frac{l}{v}}\Sigma$$
+ then the lead statement is
+ $$y<2^{\frac{l}{v}}\Sigma$$ for example for a group order or l=24 bits, and maximum value of $v_{max}=2^{10}$, then lead statement:
+ $$y<2^{14}\Sigma$$
+
+
+
 ## Leaky non-resettable beacon
 
 Built on top of globally synchronized clock, that leaks the nonce
