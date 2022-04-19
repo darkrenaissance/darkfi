@@ -9,8 +9,14 @@ config = "~/.config/darkfi/validatord_config.toml"
 # Accept address
 accept = "0.0.0.0:11000"
 
+# Consensus accept address
+caccept = "0.0.0.0:12000"
+
 # Seed nodes
 #seeds = "127.0.0.1:11000"
+
+# Consensus seed nodes
+#cseeds = "127.0.0.1:12000"
 
 # Manual connections
 #connect = "127.0.0.1:11000"
@@ -20,6 +26,9 @@ slots = 5
 
 # External address
 external = "127.0.0.1:11000"
+
+# Consensus external address
+cexternal = "127.0.0.1:12000"
 
 # Logfile path
 #log = "/tmp/darkfid.log"

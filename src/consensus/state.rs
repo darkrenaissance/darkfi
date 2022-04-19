@@ -32,15 +32,10 @@ const DELTA: u64 = 60;
 const SLED_CONSESUS_STATE_TREE: &[u8] = b"_consensus_state";
 
 /// This struct represents the information required by the consensus algorithm.
-/// Last finalized block hash and slot are used because SLED order follows the Ord implementation for Vec<u8>.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusState {
     /// Genesis block creation timestamp
     pub genesis: Timestamp,
-    /// Last finalized block hash,
-    pub last_block: blake3::Hash,
-    /// Last finalized block slot,
-    pub last_sl: u64,
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalsChain>,
     /// Orphan votes pool, in case a vote reaches a node before the corresponding block
@@ -59,8 +54,6 @@ impl ConsensusState {
         } else {
             let consensus = ConsensusState {
                 genesis: Timestamp(genesis),
-                last_block: blake3::hash(&serialize(&Block::genesis_block(genesis))),
-                last_sl: 0,
                 proposals: Vec::new(),
                 orphan_votes: Vec::new(),
                 participants: BTreeMap::new(),
@@ -226,7 +219,7 @@ impl ValidatorState {
             }
             longest_notarized_chain.proposals.last().unwrap().hash()
         } else {
-            self.consensus.last_block
+            self.blockchain.last()?.unwrap().1
         };
         Ok(hash)
     }
@@ -334,7 +327,8 @@ impl ValidatorState {
             }
         }
 
-        if proposal.st != self.consensus.last_block || proposal.sl <= self.consensus.last_sl {
+        let (last_sl, last_block) = self.blockchain.last()?.unwrap();
+        if proposal.st != last_block || proposal.sl <= last_sl {
             debug!("Proposal doesn't extend any known chains.");
             return Ok(-2)
         }
@@ -471,15 +465,14 @@ impl ValidatorState {
                 }
                 chain.proposals.drain(0..(consecutive - 1));
                 for proposal in &finalized {
-                    let hash = self.blockchain.add(proposal.clone())?;
-                    self.consensus.last_block = hash;
-                    self.consensus.last_sl = proposal.sl;
+                    self.blockchain.add(proposal.clone())?;
                 }
 
+                let (last_sl, last_block) = self.blockchain.last()?.unwrap();
                 let mut dropped = Vec::new();
                 for chain in self.consensus.proposals.iter() {
                     let first = chain.proposals.first().unwrap();
-                    if first.st != self.consensus.last_block || first.sl <= self.consensus.last_sl {
+                    if first.st != last_block || first.sl <= last_sl {
                         dropped.push(chain.clone());
                     }
                 }
@@ -490,7 +483,7 @@ impl ValidatorState {
                 // Remove orphan votes
                 let mut orphans = Vec::new();
                 for vote in self.consensus.orphan_votes.iter() {
-                    if vote.sl <= self.consensus.last_sl {
+                    if vote.sl <= last_sl {
                         orphans.push(vote.clone());
                     }
                 }

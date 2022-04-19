@@ -51,9 +51,15 @@ struct Opt {
     #[structopt(long, default_value = "0.0.0.0:11000")]
     /// Accept address
     accept: SocketAddr,
+    #[structopt(long, default_value = "0.0.0.0:12000")]
+    /// Consensus accept address
+    caccept: SocketAddr,
     #[structopt(long)]
     /// Seed nodes
     seeds: Vec<SocketAddr>,
+    #[structopt(long)]
+    /// Consensus seed nodes
+    cseeds: Vec<SocketAddr>,
     #[structopt(long)]
     /// Manual connections
     connect: Vec<SocketAddr>,
@@ -63,6 +69,9 @@ struct Opt {
     #[structopt(long, default_value = "127.0.0.1:11000")]
     /// External address
     external: SocketAddr,
+    #[structopt(long, default_value = "127.0.0.1:12000")]
+    /// Consensus accept address
+    cexternal: SocketAddr,
     #[structopt(long, default_value = "/tmp/darkfid.log")]
     /// Logfile path
     log: String,
@@ -188,12 +197,23 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         identity_pass: opts.password.clone(),
     };
 
-    let network_settings = net::Settings {
+    // Main subnet settings
+    let subnet_settings = net::Settings {
         inbound: Some(opts.accept),
         outbound_connections: opts.slots,
         external_addr: Some(opts.external),
         peers: opts.connect.clone(),
         seeds: opts.seeds.clone(),
+        ..Default::default()
+    };
+
+    // Consensus subnet settings
+    let consensus_subnet_settings = net::Settings {
+        inbound: Some(opts.caccept),
+        outbound_connections: opts.slots,
+        external_addr: Some(opts.cexternal),
+        peers: opts.connect.clone(),
+        seeds: opts.cseeds.clone(),
         ..Default::default()
     };
 
@@ -203,8 +223,12 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let id = opts.id.clone();
     let state = ValidatorState::new(database_path, id, genesis).unwrap();
 
-    // P2P registry setup
-    let p2p = net::P2p::new(network_settings).await;
+    // Main P2P registry setup
+    let p2p = net::P2p::new(subnet_settings).await;
+    let _registry = p2p.protocol_registry();
+
+    // Consensus P2P registry setup
+    let p2p = net::P2p::new(consensus_subnet_settings).await;
     let registry = p2p.protocol_registry();
 
     // Adding ProtocolTx to the registry
@@ -245,7 +269,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
 
     // Performs seed session
     p2p.clone().start(executor.clone()).await?;
-    // Actual main p2p session
+    // Actual consensus p2p session
     let ex2 = executor.clone();
     let p2p2 = p2p.clone();
     executor

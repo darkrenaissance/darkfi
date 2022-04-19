@@ -16,6 +16,7 @@ use super::{
 };
 
 const SLED_BLOCK_TREE: &[u8] = b"_blocks";
+const SLED_BLOCK_ORDER_TREE: &[u8] = b"_blocks_order";
 
 /// This struct represents a tuple of the form (st, sl, txs, metadata).
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -88,6 +89,59 @@ impl BlockStore {
             blocks.push(Some((hash_bytes.into(), block)));
         }
         Ok(blocks)
+    }
+}
+
+#[derive(Debug)]
+pub struct BlockOrderStore(sled::Tree);
+
+impl BlockOrderStore {
+    /// Opens a new or existing blockorderstore tree given a sled database.
+    pub fn new(db: &sled::Db, genesis: i64) -> Result<Self> {
+        let tree = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
+        let store = Self(tree);
+        if store.0.is_empty() {
+            // Genesis block record is generated.
+            let block = Block::genesis_block(genesis);
+            let blockhash = blake3::hash(&serialize(&block));
+            store.insert(block.sl, blockhash)?;
+        }
+
+        Ok(store)
+    }
+
+    /// Insert a block hash into the blockorderstore.
+    /// The block slot is used as the key, where value is the block hash.
+    pub fn insert(&self, slot: u64, block: blake3::Hash) -> Result<()> {
+        self.0.insert(slot.to_be_bytes(), serialize(&block))?;
+        Ok(())
+    }
+
+    /// Retrieve the last block hash in the tree, based on the Ord implementation for Vec<u8>.
+    pub fn get_last(&self) -> Result<Option<(u64, blake3::Hash)>> {
+        if let Some(found) = self.0.last()? {
+            let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+            let slot = u64::from_be_bytes(slot_bytes);
+            let block_hash = deserialize(&found.1)?;
+            return Ok(Some((slot, block_hash)))
+        }
+
+        Ok(None)
+    }
+
+    /// Retrieve all blocks hashes.
+    /// Be carefull as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<Option<(u64, blake3::Hash)>>> {
+        let mut block_hashes = Vec::new();
+        let mut iterator = self.0.into_iter().enumerate();
+        while let Some((_, r)) = iterator.next() {
+            let (k, v) = r.unwrap();
+            let slot_bytes: [u8; 8] = k.as_ref().try_into().unwrap();
+            let slot = u64::from_be_bytes(slot_bytes);
+            let block_hash = deserialize(&v)?;
+            block_hashes.push(Some((slot, block_hash)));
+        }
+        Ok(block_hashes)
     }
 }
 

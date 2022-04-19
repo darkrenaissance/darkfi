@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    block::{Block, BlockProposal, BlockStore},
+    block::{Block, BlockOrderStore, BlockProposal, BlockStore},
     metadata::StreamletMetadataStore,
     tx::TxStore,
 };
@@ -19,6 +19,8 @@ use super::{
 pub struct Blockchain {
     /// Blocks sled database
     pub blocks: BlockStore,
+    /// Blocks order sled database
+    pub order: BlockOrderStore,
     /// Transactions sled database
     pub transactions: TxStore,
     /// Streamlet metadata sled database
@@ -28,9 +30,10 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new(db: &sled::Db, genesis: i64) -> Result<Blockchain> {
         let blocks = BlockStore::new(db, genesis)?;
+        let order = BlockOrderStore::new(db, genesis)?;
         let transactions = TxStore::new(db)?;
         let streamlet_metadata = StreamletMetadataStore::new(db)?;
-        Ok(Blockchain { blocks, transactions, streamlet_metadata })
+        Ok(Blockchain { blocks, order, transactions, streamlet_metadata })
     }
 
     /// Insertion of a block proposal.
@@ -46,10 +49,18 @@ impl Blockchain {
         let block = Block { st: proposal.st, sl: proposal.sl, txs, metadata: proposal.metadata };
         let hash = self.blocks.insert(&block)?;
 
+        // Storing block order
+        self.order.insert(block.sl, hash)?;
+
         // Storing streamlet metadata
         self.streamlet_metadata.insert(hash, &proposal.sm)?;
 
         Ok(hash)
+    }
+
+    /// Retrieve the last block slot and hash.
+    pub fn last(&self) -> Result<Option<(u64, blake3::Hash)>> {
+        self.order.get_last()
     }
 }
 

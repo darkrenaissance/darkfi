@@ -2,7 +2,7 @@ use std::{fs::File, io::Write};
 
 use darkfi::{
     consensus::{
-        block::{Block, BlockProposal, BlockStore},
+        block::{Block, BlockOrderStore, BlockProposal, BlockStore},
         blockchain::{Blockchain, ProposalsChain},
         metadata::{Metadata, OuroborosMetadata, StreamletMetadata, StreamletMetadataStore},
         participant::Participant,
@@ -141,21 +141,17 @@ impl ProposalsInfoChain {
 #[derive(Debug)]
 struct ConsensusInfo {
     _genesis: Timestamp,
-    _last_block: blake3::Hash,
-    _last_sl: u64,
     _proposals: Vec<ProposalsInfoChain>,
 }
 
 impl ConsensusInfo {
     pub fn new(consensus: &ConsensusState) -> ConsensusInfo {
         let _genesis = consensus.genesis.clone();
-        let _last_block = consensus.last_block.clone();
-        let _last_sl = consensus.last_sl.clone();
         let mut _proposals = Vec::new();
         for proposal in &consensus.proposals {
             _proposals.push(ProposalsInfoChain::new(&proposal));
         }
-        ConsensusInfo { _genesis, _last_block, _last_sl, _proposals }
+        ConsensusInfo { _genesis, _proposals }
     }
 }
 
@@ -197,6 +193,44 @@ impl BlockInfoChain {
             Err(e) => println!("Error: {:?}", e),
         }
         BlockInfoChain { _blocks }
+    }
+}
+
+#[derive(Debug)]
+struct OrderInfo {
+    _sl: u64,
+    _hash: blake3::Hash,
+}
+
+impl OrderInfo {
+    pub fn new(_sl: u64, _hash: blake3::Hash) -> OrderInfo {
+        OrderInfo { _sl, _hash }
+    }
+}
+
+#[derive(Debug)]
+struct BlockOrderStoreInfo {
+    _order: Vec<OrderInfo>,
+}
+
+impl BlockOrderStoreInfo {
+    pub fn new(orderstore: &BlockOrderStore) -> BlockOrderStoreInfo {
+        let mut _order = Vec::new();
+        let result = orderstore.get_all();
+        match result {
+            Ok(iter) => {
+                for item in iter.iter() {
+                    match item {
+                        Some((slot, hash)) => {
+                            _order.push(OrderInfo::new(slot.clone(), hash.clone()))
+                        }
+                        None => (),
+                    };
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        BlockOrderStoreInfo { _order }
     }
 }
 
@@ -279,6 +313,7 @@ impl MetadataStoreInfo {
 #[derive(Debug)]
 struct BlockchainInfo {
     _blocks: BlockInfoChain,
+    _order: BlockOrderStoreInfo,
     _transactions: TxStoreInfo,
     _metadata: MetadataStoreInfo,
 }
@@ -286,9 +321,10 @@ struct BlockchainInfo {
 impl BlockchainInfo {
     pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
         let _blocks = BlockInfoChain::new(&blockchain.blocks);
+        let _order = BlockOrderStoreInfo::new(&blockchain.order);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
         let _metadata = MetadataStoreInfo::new(&blockchain.streamlet_metadata);
-        BlockchainInfo { _blocks, _transactions, _metadata }
+        BlockchainInfo { _blocks, _order, _transactions, _metadata }
     }
 }
 
