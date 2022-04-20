@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub mod blockstore;
-pub use blockstore::BlockStore;
+pub use blockstore::{BlockOrderStore, BlockStore};
 
 pub mod metadatastore;
 pub use metadatastore::StreamletMetadataStore;
@@ -25,6 +25,8 @@ pub use txstore::TxStore;
 pub struct Blockchain {
     /// Blocks sled tree
     pub blocks: BlockStore,
+    /// Block order sled tree
+    pub order: BlockOrderStore,
     /// Transactions sled tree
     pub transactions: TxStore,
     /// Streamlet metadata sled tree
@@ -38,12 +40,13 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
+        let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let streamlet_metadata = StreamletMetadataStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self { blocks, transactions, streamlet_metadata, nullifiers, merkle_roots })
+        Ok(Self { blocks, order, transactions, streamlet_metadata, nullifiers, merkle_roots })
     }
 
     /// Batch insert [`BlockProposal`]s.
@@ -58,14 +61,22 @@ impl Blockchain {
             // Store block
             let block =
                 Block { st: prop.st, sl: prop.sl, txs: tx_hashes, metadata: prop.metadata.clone() };
-            let blockhash = self.blocks.insert(&[block])?;
+            let blockhash = self.blocks.insert(&[block.clone()])?;
             ret.push(blockhash[0]);
+
+            // Store block order
+            self.order.insert(&[block.sl], &[blockhash[0]])?;
 
             // Store streamlet metadata
             self.streamlet_metadata.insert(&[blockhash[0]], &[prop.sm.clone()])?;
         }
 
         Ok(ret)
+    }
+
+    /// Retrieve the last block slot and hash
+    pub fn last(&self) -> Result<Option<(u64, blake3::Hash)>> {
+        self.order.get_last()
     }
 }
 

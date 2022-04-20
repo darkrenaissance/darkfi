@@ -34,10 +34,6 @@ pub struct ConsensusState {
     pub genesis_ts: Timestamp,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
-    /// Last finalized block hash,
-    pub last_block: blake3::Hash,
-    /// Last finalized block slot,
-    pub last_sl: u64,
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalChain>,
     /// Orphan votes pool, in case a vote reaches a node before the
@@ -57,8 +53,6 @@ impl ConsensusState {
         Ok(Self {
             genesis_ts,
             genesis_block,
-            last_block: genesis_block,
-            last_sl: 0,
             proposals: vec![],
             orphan_votes: vec![],
             participants: FxIndexMap::with_hasher(FxBuildHasher::default()),
@@ -225,7 +219,7 @@ impl ValidatorState {
 
             longest_notarized_chain.proposals.last().unwrap().hash()
         } else {
-            self.consensus.last_block
+            self.blockchain.last()?.unwrap().1
         };
 
         Ok(hash)
@@ -337,7 +331,8 @@ impl ValidatorState {
             }
         }
 
-        if proposal.st != self.consensus.last_block || proposal.sl <= self.consensus.last_sl {
+        let (last_sl, last_block) = self.blockchain.last()?.unwrap();
+        if proposal.st != last_block || proposal.sl <= last_sl {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)
         }
@@ -518,13 +513,14 @@ impl ValidatorState {
                 return Err(e)
             }
         };
-        self.consensus.last_block = *blockhashes.last().unwrap();
-        self.consensus.last_sl = finalized.last().unwrap().sl;
+
+        let last_block = *blockhashes.last().unwrap();
+        let last_sl = finalized.last().unwrap().sl;
 
         let mut dropped = vec![];
         for chain in self.consensus.proposals.iter() {
             let first = chain.proposals.first().unwrap();
-            if first.st != self.consensus.last_block || first.sl <= self.consensus.last_sl {
+            if first.st != last_block || first.sl <= last_sl {
                 dropped.push(chain.clone());
             }
         }
@@ -536,7 +532,7 @@ impl ValidatorState {
         // Remove orphan votes
         let mut orphans = vec![];
         for vote in self.consensus.orphan_votes.iter() {
-            if vote.sl <= self.consensus.last_sl {
+            if vote.sl <= last_sl {
                 orphans.push(vote.clone());
             }
         }

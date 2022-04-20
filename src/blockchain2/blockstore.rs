@@ -7,6 +7,7 @@ use crate::{
 };
 
 const SLED_BLOCK_TREE: &[u8] = b"_blocks";
+const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 
 pub struct BlockStore(sled::Tree);
 
@@ -78,5 +79,68 @@ impl BlockStore {
         }
 
         Ok(blocks)
+    }
+}
+
+pub struct BlockOrderStore(sled::Tree);
+
+impl BlockOrderStore {
+    /// Opens a new or existing `BlockOderStore` on the given sled database.
+    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
+        let tree = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
+        let store = Self(tree);
+
+        // In case the store is empty, create the genesis block.
+        if store.0.is_empty() {
+            let block = Block::genesis_block(genesis_ts, genesis_data);
+            let blockhash = blake3::hash(&serialize(&block));
+            store.insert(&[block.sl], &[blockhash])?;
+        }
+
+        Ok(store)
+    }
+
+    /// Insert a slice of slots and blockhashes into the store.
+    /// The block slot is used as the key, and the hash as value.
+    pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+        assert_eq!(slots.len(), hashes.len());
+        let mut batch = Batch::default();
+        for (i, sl) in slots.iter().enumerate() {
+            batch.insert(&sl.to_be_bytes(), hashes[i].as_bytes());
+        }
+
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Retrieve the last block hash in the tree, based on the Ord
+    /// implementation for Vec<u8>.
+    pub fn get_last(&self) -> Result<Option<(u64, blake3::Hash)>> {
+        if let Some(found) = self.0.last()? {
+            let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+            let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
+            let slot = u64::from_be_bytes(slot_bytes);
+            let hash = blake3::Hash::from(hash_bytes);
+            return Ok(Some((slot, hash)))
+        }
+
+        Ok(None)
+    }
+
+    /// Retrieve all block hashes.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<Option<(u64, blake3::Hash)>>> {
+        let mut ret = vec![];
+        let iterator = self.0.into_iter().enumerate();
+        for (_, r) in iterator {
+            let (k, v) = r.unwrap();
+            let slot_bytes: [u8; 8] = k.as_ref().try_into().unwrap();
+            let hash_bytes: [u8; 32] = v.as_ref().try_into().unwrap();
+            let slot = u64::from_be_bytes(slot_bytes);
+            let hash = blake3::Hash::from(hash_bytes);
+            ret.push(Some((slot, hash)));
+        }
+
+        Ok(ret)
     }
 }
