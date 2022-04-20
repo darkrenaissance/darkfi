@@ -9,6 +9,10 @@ all:
 	./build_jsonrpc.py ../bin/cashierd/src/main.rs \
 		>> src/clients/cashierd_jsonrpc.md
 
+	echo "# faucetd JSON-RPC API" > src/clients/faucetd_jsonrpc.md
+	./build_jsonrpc.py ../bin/faucetd/src/main.rs \
+		>> src/clients/faucetd_jsonrpc.md
+
 	mdbook build
 	cp -f theme/logo* book/html/
 
