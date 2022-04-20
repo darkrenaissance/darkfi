@@ -76,7 +76,7 @@ independent aggregation of the stakes, meaning the property of a leader winning 
 $1-\phi(\sum_{i}\sigma_i)=1-(1+(1-f)^{\sigma_i})=-(1-f)^{\sum_{i}\sigma_i}$,
 the joint "one minus probability" of all the stakes (each with probability $\phi(\sigma_i))$
 winning aggregated winning the leadership
-$\prod_{i}^{n}(1-\phi(\sigma_i))=-(1-f)^{\sum_{\sigma_i}}$
+$\prod_{i}^{n}(1-\phi(\sigma_i))=-(1-f)^{\sum_i(\sigma_i)}$
 thus:
 $$ 1-\phi(\sum_{i}\sigma_i) =\prod_{i}^{n}(1-\phi(\sigma_i)) $$
 
@@ -104,7 +104,8 @@ note that $(\frac{1}{v_{max}})^{n-1} < 1, V>1$, thus competing with single coin 
  $$y<2^{\frac{l}{v}}\Sigma$$ for example for a group order or l=24 bits, and maximum value of $v_{max}=2^{10}$, then lead statement:
  $$y<2^{14}\Sigma$$
 
-
+### pairing leader selection independent aggregation function
+TODO
 
 ## Leaky non-resettable beacon
 
