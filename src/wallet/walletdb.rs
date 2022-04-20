@@ -9,7 +9,6 @@ use sqlx::{
     ConnectOptions, Row, SqlitePool,
 };
 
-use super::WalletError;
 use crate::{
     crypto::{
         coin::Coin,
@@ -21,6 +20,7 @@ use crate::{
         OwnCoin, OwnCoins,
     },
     util::serial::serialize,
+    Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
 
@@ -50,7 +50,7 @@ impl WalletDb {
     pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
-            return Err(WalletError::EmptyPassword.into())
+            return Err(WalletEmptyPassword)
         }
 
         if path != "sqlite::memory:" {
@@ -176,7 +176,7 @@ impl WalletDb {
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
                 error!("Merkle tree already exists");
-                Err(WalletError::TreeExists.into())
+                Err(WalletTreeExists)
             }
             Err(_) => {
                 let tree = BridgeTree::<MerkleNode, 32>::new(100);

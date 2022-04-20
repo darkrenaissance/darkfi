@@ -16,46 +16,8 @@ use crate::{
     tx::Transaction,
     wallet::walletdb::WalletPtr,
     zk::circuit::{BurnContract, MintContract},
-    Result,
+    Result, VerifyFailed, VerifyResult,
 };
-
-pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum VerifyFailed {
-    #[error("Invalid cashier/faucet public key for clear input {0}")]
-    InvalidCashierOrFaucetKey(usize),
-
-    #[error("Invalid merkle root for input {0}")]
-    InvalidMerkle(usize),
-
-    #[error("Invalid signature for input {0}")]
-    InputSignature(usize),
-
-    #[error("Invalid signature for clear input {0}")]
-    ClearInputSignature(usize),
-
-    #[error("Token commitments in inputs or outputs do not match")]
-    AssetMismatch,
-
-    #[error("Money in does not match money out (value commitments")]
-    MissingFunds,
-
-    #[error("Mint proof verification failure for input {0}")]
-    MintProof(usize),
-
-    #[error("Burn proof verification failure for input {0}")]
-    BurnProof(usize),
-
-    #[error("Internal error: {0}")]
-    InternalError(String),
-}
-
-impl From<crate::error::Error> for VerifyFailed {
-    fn from(err: crate::error::Error) -> Self {
-        Self::InternalError(err.to_string())
-    }
-}
 
 /// Trait implementing the state functions used by the state transition.
 pub trait ProgramState {
@@ -91,7 +53,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     debug!(target: "state_transition", "Iterate clear_inputs");
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         let pk = &input.signature_public;
-        if !state.is_valid_cashier_public_key(pk) || !state.is_valid_faucet_public_key(pk) {
+        if !state.is_valid_cashier_public_key(pk) && !state.is_valid_faucet_public_key(pk) {
             error!(target: "state_transition", "Invalid pubkey for clear input: {:?}", pk);
             return Err(VerifyFailed::InvalidCashierOrFaucetKey(i))
         }

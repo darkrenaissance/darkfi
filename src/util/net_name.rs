@@ -42,7 +42,7 @@ impl FromStr for NetworkName {
             "sol" | "solana" => Ok(NetworkName::Solana),
             "btc" | "bitcoin" => Ok(NetworkName::Bitcoin),
             "eth" | "ethereum" => Ok(NetworkName::Ethereum),
-            _ => Err(crate::Error::NotSupportedNetwork),
+            _ => Err(crate::Error::UnsupportedCoinNetwork),
         }
     }
 }

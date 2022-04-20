@@ -113,7 +113,7 @@ impl Transaction {
         // Verify that the token commitments match
         if !self.verify_token_commitments() {
             error!("tx::verify(): Token ID mismatch");
-            return Err(VerifyFailed::AssetMismatch)
+            return Err(VerifyFailed::TokenMismatch)
         }
 
         // Verify the available signatures

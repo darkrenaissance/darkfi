@@ -1,26 +1,23 @@
+// Hello developer. Please add your error to the according subsection
+// that is commented, or make a new subsection. Keep it clean.
+
+/// Main result type used throughout the codebase.
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Debug, thiserror::Error)]
+/// Result type used in transaction verifications
+pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
+
+/// Result type used in the Client module
+pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
+
+/// General library errors used throughout the codebase.
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
-    #[error("io error: `{0:?}`")]
-    Io(std::io::ErrorKind),
-
-    #[error("Infallible Error: `{0}`")]
-    InfallibleError(String),
-
-    #[cfg(feature = "util")]
-    #[error("VarInt was encoded in a non-minimal way")]
-    NonMinimalVarInt,
-
-    #[cfg(feature = "util")]
-    #[error("parse failed: `{0}`")]
+    // ==============
+    // Parsing errors
+    // ==============
+    #[error("Parse failed: {0}")]
     ParseFailed(&'static str),
-
-    #[error("decode failed: `{0}`")]
-    DecodeError(&'static str),
-
-    #[error("encode failed: `{0}`")]
-    EncodeError(&'static str),
 
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
@@ -28,26 +25,38 @@ pub enum Error {
     #[error(transparent)]
     ParseFloatError(#[from] std::num::ParseFloatError),
 
-    #[cfg(feature = "util")]
+    #[cfg(feature = "num-bigint")]
     #[error(transparent)]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
 
-    #[cfg(any(feature = "rpc", feature = "node", feature = "util"))]
-    #[error("Url parse error `{0}`")]
-    UrlParseError(String),
+    #[cfg(feature = "num-bigint")]
+    #[error(transparent)]
+    TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
 
-    #[cfg(any(feature = "rpc"))]
-    #[error("Socks error `{0}`")]
-    SocksError(String),
+    #[cfg(feature = "url")]
+    #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
 
-    #[error("No url found")]
-    NoUrlFound,
-
-    #[error("No socks5 url found")]
-    NoSocks5UrlFound,
+    #[error("URL parse error: {0}")]
+    UrlParse(String),
 
     #[error(transparent)]
     AddrParseError(#[from] std::net::AddrParseError),
+
+    #[error("Could not parse token parameter")]
+    TokenParseError,
+
+    // ===============
+    // Encoding errors
+    // ===============
+    #[error("decode failed: {0}")]
+    DecodeError(&'static str),
+
+    #[error("encode failed: {0}")]
+    EncodeError(&'static str),
+
+    #[error("VarInt was encoded in a non-minimal way")]
+    NonMinimalVarInt,
 
     #[error(transparent)]
     Utf8Error(#[from] std::string::FromUtf8Error),
@@ -55,95 +64,33 @@ pub enum Error {
     #[error(transparent)]
     StrUtf8Error(#[from] std::str::Utf8Error),
 
-    #[error("TryFrom error")]
-    TryFromError,
-
-    #[cfg(feature = "util")]
-    #[error(transparent)]
-    TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
-
-    #[cfg(feature = "util")]
-    #[error("Json serialization error: `{0}`")]
+    #[cfg(feature = "serde_json")]
+    #[error("serde_json error: {0}")]
     SerdeJsonError(String),
 
-    #[cfg(feature = "util")]
+    #[cfg(feature = "toml")]
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
 
-    #[cfg(feature = "util")]
-    #[error("Bincode serialization error: `{0}`")]
+    #[cfg(feature = "bincode")]
+    #[error("bincode error: {0}")]
     BincodeError(String),
+
+    #[cfg(feature = "bs58")]
+    #[error(transparent)]
+    Bs58DecodeError(#[from] bs58::decode::Error),
 
     #[error("Bad operation type byte")]
     BadOperationType,
 
-    #[error("Invalid param name")]
-    InvalidParamName,
+    // ======================
+    // Network-related errors
+    // ======================
+    #[error("Unsupported network transport: {0}")]
+    UnsupportedTransport(String),
 
-    #[error("Invalid param type")]
-    InvalidParamType,
-
-    #[error("Missing params")]
-    MissingParams,
-
-    #[cfg(feature = "crypto")]
-    #[error("Plonk error: `{0}`")]
-    PlonkError(String),
-
-    #[cfg(feature = "crypto")]
-    #[error("Unable to decrypt mint note")]
-    NoteDecryptionFailed,
-
-    #[cfg(feature = "node")]
-    #[error(transparent)]
-    VerifyFailed(#[from] crate::node::state::VerifyFailed),
-
-    #[error("Services Error: `{0}`")]
-    ServicesError(&'static str),
-
-    #[error("Client failed: `{0}`")]
-    ClientFailed(String),
-
-    #[error("Wallet error: `{0}`")]
-    WalletError(String),
-
-    #[error("Cashier failed: `{0}`")]
-    CashierError(String),
-
-    #[error("ZmqError: `{0}`")]
-    ZmqError(String),
-
-    #[cfg(feature = "blockchain")]
-    #[error("Rocksdb error: `{0}`")]
-    RocksdbError(String),
-
-    #[cfg(feature = "wallet")]
-    #[error("sqlx error: `{0}`")]
-    SqlxError(String),
-
-    #[cfg(feature = "node")]
-    #[error("SlabsStore Error: `{0}`")]
-    SlabsStore(String),
-
-    #[error("JsonRpc Error: `{0}`")]
-    JsonRpcError(String),
-
-    #[error("Not supported network")]
-    NotSupportedNetwork,
-
-    #[error("Not supported token")]
-    NotSupportedToken,
-
-    #[error("Could not parse token parameter")]
-    TokenParseError,
-
-    #[cfg(feature = "async-net")]
-    #[error("Async_Native_TLS error: `{0}`")]
-    AsyncNativeTlsError(String),
-
-    #[cfg(feature = "websockets")]
-    #[error("TungsteniteError: `{0}`")]
-    TungsteniteError(String),
+    #[error("Transport error: {0}")]
+    TransportError(String),
 
     #[error("Connection failed")]
     ConnectFailed,
@@ -166,230 +113,334 @@ pub enum Error {
     #[error("Malformed packet")]
     MalformedPacket,
 
-    #[error("No config file detected. Please create one.")]
-    ConfigNotFound,
+    #[error("Socks proxy error: {0}")]
+    SocksError(String),
 
-    #[cfg(feature = "util")]
-    #[error("No keypair file detected.")]
+    #[error("No Socks5 URL found")]
+    NoSocks5UrlFound,
+
+    #[error("No URL found")]
+    NoUrlFound,
+
+    #[cfg(feature = "tungstenite")]
+    #[error("tungstenite error: {0}")]
+    TungsteniteError(String),
+
+    #[cfg(feature = "async-native-tls")]
+    #[error("async_native_tls error: {0}")]
+    AsyncNativeTlsError(String),
+
+    // =============
+    // Crypto errors
+    // =============
+    #[cfg(feature = "halo2_proofs")]
+    #[error("halo2 plonk error: {0}")]
+    PlonkError(String),
+
+    #[error("Unable to decrypt mint note")]
+    NoteDecryptionFailed,
+
+    #[error("No keypair file detected")]
     KeypairPathNotFound,
 
-    #[error("No cashier public keys detected.")]
-    CashierKeysNotFound,
-
-    #[error("SetLoggerError")]
-    SetLoggerError,
-
-    #[error("ValueIsNotObject")]
-    ValueIsNotObject,
-
-    #[cfg(feature = "async-runtime")]
-    #[error("Async_channel sender error")]
-    AsyncChannelSenderError,
-
-    #[cfg(feature = "async-runtime")]
-    #[error(transparent)]
-    AsyncChannelReceiverError(#[from] async_channel::RecvError),
-
-    #[cfg(feature = "crypto")]
-    #[error("Error converting bytes to PublicKey")]
+    #[error("Failed converting bytes to PublicKey")]
     PublicKeyFromBytes,
 
-    #[cfg(feature = "crypto")]
-    #[error("Error converting bytes to SecretKey")]
+    #[error("Failed converting bytes to SecretKey")]
     SecretKeyFromBytes,
 
-    #[cfg(feature = "crypto")]
-    #[error("Invalid Address")]
+    #[error("Failed converting b58 string to PublicKey")]
+    PublicKeyFromStr,
+
+    #[error("Failed converting bs58 string to SecretKey")]
+    SecretKeyFromStr,
+
+    #[error("Invalid DarkFi address")]
     InvalidAddress,
 
-    #[error("Invalid bincode: {0}")]
-    ZkasDecoderError(&'static str),
+    // =======================
+    // Protocol-related errors
+    // =======================
+    #[error("Unsupported chain")]
+    UnsupportedChain,
+
+    #[error("Unsupported token")]
+    UnsupportedToken,
+
+    #[error("Unsupported coin network")]
+    UnsupportedCoinNetwork,
+
+    #[error("Raft error: {0}")]
+    RaftError(String),
+
+    // ===============
+    // Database errors
+    // ===============
+    #[cfg(feature = "sqlx")]
+    #[error("Sqlx error: {0}")]
+    SqlxError(String),
+
+    #[cfg(feature = "sled")]
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
+
+    // =============
+    // Wallet errors
+    // =============
+    #[error("Wallet password is empty")]
+    WalletEmptyPassword,
+
+    #[error("Merkle tree already exists in wallet")]
+    WalletTreeExists,
+
+    // ===================
+    // wasm runtime errors
+    // ===================
+    #[cfg(feature = "wasm-runtime")]
+    #[error("Wasmer compile error: {0}")]
+    WasmerCompileError(String),
 
     #[cfg(feature = "wasm-runtime")]
-    #[error("wasm export error: {0}")]
+    #[error("Wasmer export error: {0}")]
     WasmerExportError(String),
 
     #[cfg(feature = "wasm-runtime")]
-    #[error("wasm runtime error: {0}")]
+    #[error("Wasmer runtime error: {0}")]
     WasmerRuntimeError(String),
 
     #[cfg(feature = "wasm-runtime")]
-    #[error("wasm instantiation error: {0}")]
+    #[error("Wasmer instantiation error: {0}")]
     WasmerInstantiationError(String),
-
-    #[cfg(feature = "wasm-runtime")]
-    #[error("wasm compile error: {0}")]
-    WasmerCompileError(String),
 
     #[cfg(feature = "wasm-runtime")]
     #[error("wasm runtime out of memory")]
     WasmerOomError,
 
-    #[cfg(any(feature = "blockchain2", feature = "raft"))]
+    // ====================
+    // Miscellaneous errors
+    // ====================
+    #[error("IO error: {0}")]
+    Io(std::io::ErrorKind),
+
+    #[error("Infallible error: {0}")]
+    InfallibleError(String),
+
+    #[cfg(feature = "async-channel")]
+    #[error("async_channel sender error: {0}")]
+    AsyncChannelSendError(String),
+
+    #[cfg(feature = "async-channel")]
+    #[error("async_channel receiver error: {0}")]
+    AsyncChannelRecvError(String),
+
+    #[error("SetLogger (log crate) failed: {0}")]
+    SetLoggerError(String),
+
+    #[error("ValueIsNotObject")]
+    ValueIsNotObject,
+
+    #[error("No config file detected")]
+    ConfigNotFound,
+
+    #[error("Failed decoding bincode: {0}")]
+    ZkasDecoderError(&'static str),
+
+    // ==============================================
+    // Wrappers for other error types in this library
+    // ==============================================
     #[error(transparent)]
-    SledError(#[from] sled::Error),
+    VerifyFailed(#[from] VerifyFailed),
 
-    #[cfg(feature = "raft")]
-    #[error("Raft Error: {0}")]
-    RaftError(String),
-
-    #[error("Unsupported network transport")]
-    UnsupportedTransport,
-
-    #[cfg(feature = "net2")]
-    #[error("TransportError: {0}")]
-    TransportError(String),
-
-    #[error("Unsupported chain")]
-    UnsupportedChain,
+    #[error(transparent)]
+    ClientFailed(#[from] ClientFailed),
 }
 
-#[cfg(feature = "node")]
-impl From<zeromq::ZmqError> for Error {
-    fn from(err: zeromq::ZmqError) -> Error {
-        Error::ZmqError(err.to_string())
+/// Transaction verification errors
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum VerifyFailed {
+    #[error("Invalid cashier/faucet public key for clear input {0}")]
+    InvalidCashierOrFaucetKey(usize),
+
+    #[error("Invalid Merkle root for input {0}")]
+    InvalidMerkle(usize),
+
+    #[error("Invalid signature for input {0}")]
+    InputSignature(usize),
+
+    #[error("Invalid signature for clear input {0}")]
+    ClearInputSignature(usize),
+
+    #[error("Token commitments in inputs or outputs to not match")]
+    TokenMismatch,
+
+    #[error("Money in does not match money out (value commitments)")]
+    MissingFunds,
+
+    #[error("Mint proof verification failure for input {0}")]
+    MintProof(usize),
+
+    #[error("Burn proof verification failure for input {0}")]
+    BurnProof(usize),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
+}
+
+/// Client module errors
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ClientFailed {
+    #[error("Not enough value: {0}")]
+    NotEnoughValue(u64),
+
+    #[error("Invalid address: {0}")]
+    InvalidAddress(String),
+
+    #[error("Invalid amount: {0}")]
+    InvalidAmount(u64),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
+
+    #[error("Verify error: {0}")]
+    VerifyError(String),
+}
+
+impl From<Error> for VerifyFailed {
+    fn from(err: Error) -> Self {
+        Self::InternalError(err.to_string())
     }
 }
 
-#[cfg(feature = "blockchain")]
-impl From<rocksdb::Error> for Error {
-    fn from(err: rocksdb::Error) -> Error {
-        Error::RocksdbError(err.to_string())
+impl From<Error> for ClientFailed {
+    fn from(err: Error) -> Self {
+        Self::InternalError(err.to_string())
     }
 }
 
-#[cfg(feature = "wallet")]
-impl From<sqlx::error::Error> for Error {
-    fn from(err: sqlx::error::Error) -> Error {
-        Error::SqlxError(err.to_string())
-    }
-}
-
-#[cfg(feature = "util")]
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Error {
-        Error::SerdeJsonError(err.to_string())
+impl From<VerifyFailed> for ClientFailed {
+    fn from(err: VerifyFailed) -> Self {
+        Self::VerifyError(err.to_string())
     }
 }
 
 impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::Io(err.kind())
-    }
-}
-
-#[cfg(feature = "async-runtime")]
-impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(_err: async_channel::SendError<T>) -> Error {
-        Error::AsyncChannelSenderError
-    }
-}
-
-#[cfg(feature = "async-net")]
-impl From<async_native_tls::Error> for Error {
-    fn from(err: async_native_tls::Error) -> Error {
-        Error::AsyncNativeTlsError(err.to_string())
-    }
-}
-
-#[cfg(any(feature = "rpc", feature = "util"))]
-impl From<url::ParseError> for Error {
-    fn from(err: url::ParseError) -> Error {
-        Error::UrlParseError(err.to_string())
-    }
-}
-
-#[cfg(feature = "node")]
-impl From<crate::node::client::ClientFailed> for Error {
-    fn from(err: crate::node::client::ClientFailed) -> Error {
-        Error::ClientFailed(err.to_string())
-    }
-}
-
-#[cfg(feature = "wallet")]
-impl From<crate::wallet::WalletError> for Error {
-    fn from(err: crate::wallet::WalletError) -> Error {
-        Error::WalletError(err.to_string())
-    }
-}
-
-impl From<log::SetLoggerError> for Error {
-    fn from(_err: log::SetLoggerError) -> Error {
-        Error::SetLoggerError
-    }
-}
-
-#[cfg(feature = "websockets")]
-impl From<tungstenite::Error> for Error {
-    fn from(err: tungstenite::Error) -> Error {
-        Error::TungsteniteError(err.to_string())
-    }
-}
-
-#[cfg(feature = "util")]
-impl From<Box<bincode::ErrorKind>> for Error {
-    fn from(err: Box<bincode::ErrorKind>) -> Error {
-        Error::BincodeError(err.to_string())
-    }
-}
-
-#[cfg(feature = "rpc")]
-impl From<fast_socks5::SocksError> for Error {
-    fn from(err: fast_socks5::SocksError) -> Error {
-        Error::SocksError(err.to_string())
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err.kind())
     }
 }
 
 impl From<std::convert::Infallible> for Error {
-    fn from(err: std::convert::Infallible) -> Error {
-        Error::InfallibleError(err.to_string())
+    fn from(err: std::convert::Infallible) -> Self {
+        Self::InfallibleError(err.to_string())
     }
 }
 
 impl From<()> for Error {
-    fn from(_err: ()) -> Error {
-        Error::InfallibleError("Infallible".into())
+    fn from(_err: ()) -> Self {
+        Self::InfallibleError("Infallible".into())
     }
 }
 
-#[cfg(feature = "crypto")]
+#[cfg(feature = "async-channel")]
+impl<T> From<async_channel::SendError<T>> for Error {
+    fn from(err: async_channel::SendError<T>) -> Self {
+        Self::AsyncChannelSendError(err.to_string())
+    }
+}
+
+#[cfg(feature = "async-channel")]
+impl From<async_channel::RecvError> for Error {
+    fn from(err: async_channel::RecvError) -> Self {
+        Self::AsyncChannelRecvError(err.to_string())
+    }
+}
+
+#[cfg(feature = "async-native-tls")]
+impl From<async_native_tls::Error> for Error {
+    fn from(err: async_native_tls::Error) -> Self {
+        Self::AsyncNativeTlsError(err.to_string())
+    }
+}
+
+impl From<log::SetLoggerError> for Error {
+    fn from(err: log::SetLoggerError) -> Self {
+        Self::SetLoggerError(err.to_string())
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl From<sqlx::error::Error> for Error {
+    fn from(err: sqlx::error::Error) -> Self {
+        Self::SqlxError(err.to_string())
+    }
+}
+
+#[cfg(feature = "halo2_proofs")]
 impl From<halo2_proofs::plonk::Error> for Error {
-    fn from(err: halo2_proofs::plonk::Error) -> Error {
-        Error::PlonkError(err.to_string())
+    fn from(err: halo2_proofs::plonk::Error) -> Self {
+        Self::PlonkError(err.to_string())
+    }
+}
+
+#[cfg(feature = "tungstenite")]
+impl From<tungstenite::Error> for Error {
+    fn from(err: tungstenite::Error) -> Self {
+        Self::TungsteniteError(err.to_string())
+    }
+}
+
+#[cfg(feature = "bincode")]
+impl From<bincode::ErrorKind> for Error {
+    fn from(err: bincode::ErrorKind) -> Self {
+        Self::BincodeError(err.to_string())
+    }
+}
+
+#[cfg(feature = "bincode")]
+impl From<Box<bincode::ErrorKind>> for Error {
+    fn from(err: Box<bincode::ErrorKind>) -> Self {
+        Self::BincodeError(err.to_string())
+    }
+}
+
+#[cfg(feature = "serde_json")]
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Self::SerdeJsonError(err.to_string())
+    }
+}
+
+#[cfg(feature = "fast-socks5")]
+impl From<fast_socks5::SocksError> for Error {
+    fn from(err: fast_socks5::SocksError) -> Self {
+        Self::SocksError(err.to_string())
     }
 }
 
 #[cfg(feature = "wasm-runtime")]
 impl From<wasmer::CompileError> for Error {
-    fn from(err: wasmer::CompileError) -> Error {
-        Error::WasmerCompileError(err.to_string())
+    fn from(err: wasmer::CompileError) -> Self {
+        Self::WasmerCompileError(err.to_string())
     }
 }
 
 #[cfg(feature = "wasm-runtime")]
 impl From<wasmer::ExportError> for Error {
-    fn from(err: wasmer::ExportError) -> Error {
-        Error::WasmerExportError(err.to_string())
-    }
-}
-
-#[cfg(feature = "net2")]
-impl<T: std::fmt::Display> From<crate::net2::transport::TransportError<T>> for Error {
-    fn from(err: crate::net2::transport::TransportError<T>) -> Error {
-        Error::TransportError(err.to_string())
+    fn from(err: wasmer::ExportError) -> Self {
+        Self::WasmerExportError(err.to_string())
     }
 }
 
 #[cfg(feature = "wasm-runtime")]
 impl From<wasmer::RuntimeError> for Error {
-    fn from(err: wasmer::RuntimeError) -> Error {
-        Error::WasmerRuntimeError(err.to_string())
+    fn from(err: wasmer::RuntimeError) -> Self {
+        Self::WasmerRuntimeError(err.to_string())
     }
 }
 
 #[cfg(feature = "wasm-runtime")]
 impl From<wasmer::InstantiationError> for Error {
-    fn from(err: wasmer::InstantiationError) -> Error {
-        Error::WasmerInstantiationError(err.to_string())
+    fn from(err: wasmer::InstantiationError) -> Self {
+        Self::WasmerInstantiationError(err.to_string())
     }
 }

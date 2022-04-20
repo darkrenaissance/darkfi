@@ -96,7 +96,7 @@ pub async fn listen_and_serve(url: Url, rh: Arc<impl RequestHandler + 'static>) 
 
         x => {
             error!(target: "JSON-RPC SERVER", "Transport protocol '{}' isn't implemented", x);
-            Err(Error::UnsupportedTransport)
+            Err(Error::UnsupportedTransport(x.to_string()))
         }
     }
 }

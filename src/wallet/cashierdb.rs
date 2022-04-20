@@ -10,7 +10,6 @@ use sqlx::{
 
 use super::wallet_api::WalletApi;
 
-use super::WalletError;
 use crate::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
@@ -18,6 +17,7 @@ use crate::{
         types::DrkTokenId,
     },
     util::NetworkName,
+    Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
 
@@ -54,7 +54,7 @@ impl CashierDb {
         debug!("new() Constructor called");
         if password.trim().is_empty() {
             error!("Password is empty. You must set a password to use the wallet.");
-            return Err(WalletError::EmptyPassword.into())
+            return Err(WalletEmptyPassword)
         }
 
         if path != "sqlite::memory:" {
@@ -104,7 +104,7 @@ impl CashierDb {
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
                 error!("Merkle tree already exists");
-                Err(WalletError::TreeExists.into())
+                Err(WalletTreeExists)
             }
             Err(_) => {
                 let tree = BridgeTree::<MerkleNode, 32>::new(100);

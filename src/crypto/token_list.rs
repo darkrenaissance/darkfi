@@ -105,7 +105,7 @@ impl DrkTokenList {
             return Ok((symbol.to_string(), generate_id2(token_id, network_name)?))
         };
 
-        Err(Error::NotSupportedToken)
+        Err(Error::UnsupportedToken)
     }
 
     pub fn symbol_from_id(&self, id: &DrkTokenId) -> Result<Option<(NetworkName, String)>> {
@@ -157,7 +157,7 @@ pub fn assign_id(
                 symbol_to_id(&tok_lower, eth_tokenlist)
             }
         }
-        _ => Err(Error::NotSupportedNetwork),
+        _ => Err(Error::UnsupportedCoinNetwork),
     }
 }
 

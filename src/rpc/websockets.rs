@@ -66,11 +66,11 @@ pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Resp
     let url = Url::parse(addr)?;
     let host = url
         .host_str()
-        .ok_or_else(|| Error::UrlParseError(format!("Missing host in {}", url)))?
+        .ok_or_else(|| Error::UrlParse(format!("Missing host in {}", url)))?
         .to_string();
     let port = url
         .port_or_known_default()
-        .ok_or_else(|| Error::UrlParseError(format!("Missing port in {}", url)))?;
+        .ok_or_else(|| Error::UrlParse(format!("Missing port in {}", url)))?;
 
     let socket_addr = {
         let host = host.clone();
@@ -92,8 +92,6 @@ pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Resp
             let (stream, resp) = async_tungstenite::client_async(addr, stream).await?;
             Ok((WsStream::Tls(stream), resp))
         }
-        scheme => {
-            Err(Error::UrlParseError(format!("Invalid url scheme `{}`, in `{}`", scheme, url)))
-        }
+        scheme => Err(Error::UrlParse(format!("Invalid url scheme `{}`, in `{}`", scheme, url))),
     }
 }

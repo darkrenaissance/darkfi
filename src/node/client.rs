@@ -24,45 +24,13 @@ use crate::{
     util::serial::Encodable,
     wallet::walletdb::{Balances, WalletPtr},
     zk::circuit::MintContract,
-    Result,
+    ClientFailed, ClientResult, Result,
 };
-
-pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum ClientFailed {
-    #[error("Not enough value: {0}")]
-    NotEnoughValue(u64),
-
-    #[error("Invalid address: {0}")]
-    InvalidAddress(String),
-
-    #[error("Invalid amount: {0}")]
-    InvalidAmount(u64),
-
-    #[error("Client error: {0}")]
-    ClientError(String),
-
-    #[error("Verify error: {0}")]
-    VerifyError(String),
-}
-
-impl From<crate::error::Error> for ClientFailed {
-    fn from(err: crate::error::Error) -> Self {
-        Self::ClientError(err.to_string())
-    }
-}
-
-impl From<super::state::VerifyFailed> for ClientFailed {
-    fn from(err: super::state::VerifyFailed) -> Self {
-        Self::VerifyError(err.to_string())
-    }
-}
 
 /// The Client structure, used for transaction operations.
 /// This includes, receiving, broadcasting, and building.
 pub struct Client {
-    pub main_keypair: Keypair,
+    pub main_keypair: Mutex<Keypair>,
     wallet: WalletPtr,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
@@ -94,8 +62,7 @@ impl Client {
         info!(target: "client", "Main keypair: {}", Address::from(main_keypair.public));
 
         Ok(Self {
-            //main_keypair: Mutex::new(main_keypair),
-            main_keypair,
+            main_keypair: Mutex::new(main_keypair),
             wallet,
             mint_pk: Lazy::new(),
             burn_pk: Lazy::new(),
@@ -118,7 +85,7 @@ impl Client {
 
         if clear_input {
             debug!("build_slab_from_tx(): Building clear input");
-            let signature_secret = self.main_keypair.secret;
+            let signature_secret = self.main_keypair.lock().await.secret;
             let input = TransactionBuilderClearInputInfo { value, token_id, signature_secret };
             clear_inputs.push(input);
         } else {
@@ -160,7 +127,7 @@ impl Client {
                 outputs.push(TransactionBuilderOutputInfo {
                     value: return_value,
                     token_id,
-                    public: self.main_keypair.public,
+                    public: self.main_keypair.lock().await.public,
                 });
             }
 
@@ -280,15 +247,18 @@ impl Client {
         self.wallet.put_keypair(keypair).await
     }
 
-    pub async fn set_default_keypair(&mut self, public: &PublicKey) -> Result<()> {
+    pub async fn set_default_keypair(&self, public: &PublicKey) -> Result<()> {
         self.wallet.set_default_keypair(public).await?;
-        self.main_keypair = self.wallet.get_default_keypair().await?;
+        let kp = self.wallet.get_default_keypair().await?;
+        let mut mk = self.main_keypair.lock().await;
+        *mk = kp;
+        drop(mk);
         Ok(())
     }
 
-    pub async fn keygen(&self) -> Result<()> {
-        let _ = self.wallet.keygen().await?;
-        Ok(())
+    pub async fn keygen(&self) -> Result<Address> {
+        let kp = self.wallet.keygen().await?;
+        Ok(Address::from(kp.public))
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {
