@@ -8,6 +8,7 @@ pub type HostsPtr = Arc<Hosts>;
 
 /// Manages a store of network addresses.
 pub struct Hosts {
+    // TODO: This should be a rwlock
     addrs: Mutex<Vec<SocketAddr>>,
 }
 
