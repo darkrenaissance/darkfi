@@ -69,6 +69,7 @@ impl Client {
         })
     }
 
+    // TODO: Better function name
     async fn build_slab_from_tx(
         &self,
         pubkey: PublicKey,
@@ -158,6 +159,9 @@ impl Client {
         Ok((tx, coins))
     }
 
+    // TODO: This was changed so it does not broadcast transactions anymore.
+    // Instead, it returns the transaction itself, which is then able to be
+    // arbitrarily broadcasted. Rename the function from send() to a better name.
     pub async fn send(
         &self,
         pubkey: PublicKey,
