@@ -14,7 +14,7 @@ use super::{
     Vote,
 };
 use crate::{
-    blockchain2::Blockchain,
+    blockchain::Blockchain,
     crypto::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
@@ -84,7 +84,7 @@ impl ValidatorState {
     // TODO: Clock sync
     // TODO: ID shouldn't be done like this
     pub fn new(
-        db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain2
+        db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
         id: u64,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,

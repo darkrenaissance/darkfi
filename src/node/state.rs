@@ -3,7 +3,7 @@ use lazy_init::Lazy;
 use log::{debug, error};
 
 use crate::{
-    blockchain2::{nfstore::NullifierStore, rootstore::RootStore},
+    blockchain::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
         coin::Coin,
         keypair::{PublicKey, SecretKey},

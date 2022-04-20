@@ -19,7 +19,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize,
-    blockchain2::{NullifierStore, RootStore},
+    blockchain::{NullifierStore, RootStore},
     cli_desc,
     consensus2::{
         Timestamp, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
