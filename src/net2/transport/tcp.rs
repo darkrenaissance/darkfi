@@ -27,9 +27,14 @@ impl Transport for TcpTransport {
 
     type Error = io::Error;
 
-    type Listener =
-        Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send + Sync>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send + Sync>>;
+    type Listener = Pin<
+        Box<dyn Future<Output = Result<Self::Acceptor, TransportError<Self::Error>>> + Send + Sync>,
+    >;
+    type Dial = Pin<
+        Box<
+            dyn Future<Output = Result<Self::Connector, TransportError<Self::Error>>> + Send + Sync,
+        >,
+    >;
 
     fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
         if url.scheme() != "tcp" {
@@ -55,8 +60,10 @@ impl Transport for TcpTransport {
         Self { ttl, backlog }
     }
 
-    async fn accept(listener: Arc<Self::Acceptor>) -> Self::Connector {
-        listener.accept().await.unwrap().0
+    async fn accept(
+        listener: Arc<Self::Acceptor>,
+    ) -> Result<Self::Connector, TransportError<Self::Error>> {
+        Ok(listener.accept().await?.0)
     }
 }
 
@@ -76,7 +83,10 @@ impl TcpTransport {
         Ok(socket)
     }
 
-    async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener, io::Error> {
+    async fn do_listen(
+        self,
+        socket_addr: SocketAddr,
+    ) -> Result<TcpListener, TransportError<io::Error>> {
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
         socket.listen(self.backlog)?;
@@ -84,7 +94,10 @@ impl TcpTransport {
         Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }
 
-    async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream, io::Error> {
+    async fn do_dial(
+        self,
+        socket_addr: SocketAddr,
+    ) -> Result<TcpStream, TransportError<io::Error>> {
         let socket = self.create_socket(socket_addr)?;
         socket.set_nonblocking(true)?;
 
@@ -92,7 +105,7 @@ impl TcpTransport {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
+            Err(err) => return Err(TransportError::Other(err)),
         };
 
         let stream = TcpStream::from(std::net::TcpStream::from(socket));

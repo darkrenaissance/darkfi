@@ -194,7 +194,10 @@ impl TorTransport {
             .create_ehs(url)
     }
 
-    pub async fn do_dial(self, url: Url) -> Result<Socks5Stream<TcpStream>, TorError> {
+    pub async fn do_dial(
+        self,
+        url: Url,
+    ) -> Result<Socks5Stream<TcpStream>, TransportError<TorError>> {
         let socks_url_str = self.socks_url.socket_addrs(|| None)?[0].to_string();
         let host = url.host().unwrap().to_string();
         let port = url.port().unwrap_or(80);
@@ -209,11 +212,12 @@ impl TorTransport {
                 self.socks_url.password().unwrap().to_string(),
                 config,
             )
-            .await?
+            .await
         } else {
-            Socks5Stream::connect(socks_url_str, host, port, config).await?
+            Socks5Stream::connect(socks_url_str, host, port, config).await
         };
-        Ok(stream)
+        // FIXME
+        Ok(stream.unwrap())
     }
 
     fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
@@ -226,7 +230,7 @@ impl TorTransport {
         Ok(socket)
     }
 
-    pub async fn do_listen(self, url: Url) -> Result<TcpListener, TorError> {
+    pub async fn do_listen(self, url: Url) -> Result<TcpListener, TransportError<TorError>> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
@@ -243,9 +247,14 @@ impl Transport for TorTransport {
 
     type Error = TorError;
 
-    type Listener =
-        Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send + Sync>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send + Sync>>;
+    type Listener = Pin<
+        Box<dyn Future<Output = Result<Self::Acceptor, TransportError<Self::Error>>> + Send + Sync>,
+    >;
+    type Dial = Pin<
+        Box<
+            dyn Future<Output = Result<Self::Connector, TransportError<Self::Error>>> + Send + Sync,
+        >,
+    >;
 
     fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
         if url.scheme() != "tcp" {
@@ -261,7 +270,9 @@ impl Transport for TorTransport {
         unimplemented!()
     }
 
-    async fn accept(_listener: Arc<Self::Acceptor>) -> Self::Connector {
+    async fn accept(
+        _listener: Arc<Self::Acceptor>,
+    ) -> Result<Self::Connector, TransportError<Self::Error>> {
         unimplemented!()
     }
 }

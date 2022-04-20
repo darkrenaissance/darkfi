@@ -23,7 +23,7 @@ impl Connector {
         let stream_result =
             timeout(Duration::from_secs(self.settings.connect_timeout_seconds.into()), async {
                 let transport = T::new(None, 1024);
-                let connect_stream = transport.dial(hostaddr.clone()).unwrap().await.unwrap();
+                let connect_stream = transport.dial(hostaddr.clone())?.await?;
                 let channel = Channel::<T>::new(connect_stream, hostaddr).await;
                 Ok(channel)
             })

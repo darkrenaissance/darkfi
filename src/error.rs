@@ -229,6 +229,10 @@ pub enum Error {
 
     #[error("Unsupported network transport")]
     UnsupportedTransport,
+
+    #[cfg(feature = "net2")]
+    #[error("TransportError: {0}")]
+    TransportError(String),
 }
 
 #[cfg(feature = "node")]
@@ -350,6 +354,13 @@ impl From<wasmer::CompileError> for Error {
 impl From<wasmer::ExportError> for Error {
     fn from(err: wasmer::ExportError) -> Error {
         Error::WasmerExportError(err.to_string())
+    }
+}
+
+#[cfg(feature = "net2")]
+impl<T: std::fmt::Display> From<crate::net2::transport::TransportError<T>> for Error {
+    fn from(err: crate::net2::transport::TransportError<T>) -> Error {
+        Error::TransportError(err.to_string())
     }
 }
 

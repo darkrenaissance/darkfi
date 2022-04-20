@@ -20,8 +20,10 @@ pub trait Transport: Sync + Send + 'static + Clone {
 
     type Error: Error;
 
-    type Listener: Future<Output = Result<Self::Acceptor, Self::Error>> + Sync + Send;
-    type Dial: Future<Output = Result<Self::Connector, Self::Error>> + Sync + Send;
+    type Listener: Future<Output = Result<Self::Acceptor, TransportError<Self::Error>>>
+        + Sync
+        + Send;
+    type Dial: Future<Output = Result<Self::Connector, TransportError<Self::Error>>> + Sync + Send;
 
     fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>>
     where
@@ -33,7 +35,9 @@ pub trait Transport: Sync + Send + 'static + Clone {
 
     fn new(ttl: Option<u32>, backlog: i32) -> Self;
 
-    async fn accept(listener: Arc<Self::Acceptor>) -> Self::Connector;
+    async fn accept(
+        listener: Arc<Self::Acceptor>,
+    ) -> Result<Self::Connector, TransportError<Self::Error>>;
 }
 
 #[derive(Debug, thiserror::Error)]
