@@ -28,6 +28,9 @@ pub mod tx;
 #[cfg(feature = "net")]
 pub mod net;
 
+#[cfg(feature = "net2")]
+pub mod net2;
+
 #[cfg(feature = "system")]
 pub mod system;
 
