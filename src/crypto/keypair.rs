@@ -76,6 +76,16 @@ impl PublicKey {
         self.0.to_bytes()
     }
 
+    /// Tries to create a `PublicKey` instance from a base58 encoded string.
+    pub fn from_str(encoded: &str) -> Result<Self> {
+        let decoded = bs58::decode(encoded).into_vec()?;
+        if decoded.len() != 32 {
+            return Err(Error::PublicKeyFromStr)
+        }
+
+        Self::from_bytes(&decoded.try_into().unwrap())
+    }
+
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
         match pallas::Point::from_bytes(bytes).into() {
             Some(k) => Ok(Self(k)),
