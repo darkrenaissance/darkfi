@@ -21,10 +21,10 @@ easy-parallel = "3.2.0"
 rand = "0.8.5"
 
 # Misc
-clap = {version = "3.1.8", features = ["derive"]}
+clap = {version = "3.1.10", features = ["derive"]}
 log = "0.4.16"
 num_cpus = "1.13.1"
-simplelog = "0.12.0-alpha1"
+simplelog = "0.12.0"
 thiserror = "1.0.30"
 url = "2.2.2"
 fxhash = "0.2.1"
@@ -49,8 +49,8 @@ num-bigint = {version = "0.4.3", features = ["rand", "serde"], optional = true}
 # Solana bridge dependencies
 native-tls = {version = "0.2.10", optional = true}
 async-native-tls = {version = "0.4.0", optional = true}
-solana-client = {version = "1.10.3", optional = true}
-solana-sdk = {version = "1.10.3", optional = true}
+solana-client = {version = "1.10.9", optional = true}
+solana-sdk = {version = "1.10.9", optional = true}
 spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
 tungstenite = {version = "0.17.2", optional = true}

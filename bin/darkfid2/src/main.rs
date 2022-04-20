@@ -5,6 +5,7 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use easy_parallel::Parallel;
 use futures_lite::future;
+use lazy_init::Lazy;
 use log::{error, info};
 use rand::Rng;
 use serde_derive::Deserialize;
@@ -15,6 +16,8 @@ use structopt_toml::StructOptToml;
 use url::Url;
 
 use darkfi::{
+    async_daemonize,
+    blockchain2::{NullifierStore, RootStore},
     cli_desc,
     consensus2::{
         proto::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote},
@@ -28,6 +31,7 @@ use darkfi::{
     },
     net,
     net::P2pPtr,
+    node::{Client, State},
     rpc::{
         jsonrpc,
         jsonrpc::{
@@ -44,9 +48,6 @@ use darkfi::{
     wallet::walletdb::{WalletDb, WalletPtr},
     Error, Result,
 };
-
-mod client;
-use client::Client;
 
 mod error;
 use error::{server_error, RpcError};
@@ -116,9 +117,9 @@ struct Args {
 
 pub struct Darkfid {
     client: Client,
-    state: ValidatorStatePtr,
     p2p: P2pPtr,
-    synced: Mutex<bool>,
+    validator_state: ValidatorStatePtr,
+    state: Arc<Mutex<State>>,
 }
 
 #[async_trait]
@@ -137,16 +138,36 @@ impl RequestHandler for Darkfid {
             Some("export_keypair") => return self.export_keypair(req.id, params).await,
             Some("import_keypair") => return self.import_keypair(req.id, params).await,
             Some("set_default_address") => return self.set_default_address(req.id, params).await,
-            Some("tx") => return self.receive_tx(req.id, params).await,
             Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
         }
     }
 }
 
 impl Darkfid {
-    pub async fn new(wallet: WalletPtr, state: ValidatorStatePtr, p2p: P2pPtr) -> Result<Self> {
+    pub async fn new(
+        db: &sled::Db,
+        wallet: WalletPtr,
+        validator_state: ValidatorStatePtr,
+        p2p: P2pPtr,
+    ) -> Result<Self> {
+        // Initialize Client
         let client = Client::new(wallet).await?;
-        Ok(Self { client, state, p2p, synced: Mutex::new(false) })
+        let tree = client.get_tree().await?;
+        let merkle_roots = RootStore::new(db)?;
+        let nullifiers = NullifierStore::new(db)?;
+
+        // Initialize State
+        let state = Arc::new(Mutex::new(State {
+            tree,
+            merkle_roots,
+            nullifiers,
+            cashier_pubkeys: vec![],
+            faucet_pubkeys: vec![],
+            mint_vk: Lazy::new(),
+            burn_vk: Lazy::new(),
+        }));
+
+        Ok(Self { client, p2p, validator_state, state })
     }
 
     // RPCAPI:
@@ -326,23 +347,6 @@ impl Darkfid {
 
         jsonrpc::response(json!(true), id).into()
     }
-
-    async fn receive_tx(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || !params[0].is_string() {
-            return jsonrpc::error(InvalidParams, None, id).into()
-        }
-
-        let payload = String::from(params[0].as_str().unwrap());
-        let tx = Tx { payload };
-
-        self.state.write().await.append_tx(tx.clone());
-
-        let result = self.p2p.broadcast(tx).await;
-        match result {
-            Ok(()) => jsonrpc::response(json!(true), id).into(),
-            Err(_) => jsonrpc::error(InternalError, None, id).into(),
-        }
-    }
 }
 
 async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
@@ -352,6 +356,7 @@ async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> 
     Ok(wallet)
 }
 
+async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
@@ -383,6 +388,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // TODO: Is this ok?
     let mut rng = rand::thread_rng();
     let id: u64 = rng.gen();
+
+    // Initialize validator state
     let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
 
     // P2P network
@@ -398,6 +405,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let p2p = net::P2p::new(network_settings).await;
     let registry = p2p.protocol_registry();
 
+    info!("Registering P2P protocols...");
     let _state = state.clone();
     registry
         .register(!net::SESSION_SEED, move |channel, p2p| {
@@ -407,33 +415,33 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         .await;
 
     // Activate these protocols only if we're participating in consensus.
-    if args.consensus {
-        info!("Registering consensus P2P protocols...");
+    //if args.consensus {
+    info!("Registering consensus P2P protocols...");
 
-        let _state = state.clone();
-        registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
+    let _state = state.clone();
+    registry
+        .register(!net::SESSION_SEED, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
 
-        let _state = state.clone();
-        registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
+    let _state = state.clone();
+    registry
+        .register(!net::SESSION_SEED, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
 
-        let _state = state.clone();
-        registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
-    }
+    let _state = state.clone();
+    registry
+        .register(!net::SESSION_SEED, move |channel, p2p| {
+            let state = _state.clone();
+            async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
+        })
+        .await;
+    //}
 
     info!("Starting P2P networking");
     p2p.clone().start(ex.clone()).await?;
@@ -447,7 +455,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     .detach();
 
     // Initialize program state
-    let darkfid = Darkfid::new(wallet, state.clone(), p2p.clone()).await?;
+    let darkfid = Darkfid::new(&sled_db, wallet, state.clone(), p2p.clone()).await?;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server
@@ -455,10 +463,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
 
     // Consensus protocol
-    if args.consensus {
-        info!("Starting consensus protocol task");
-        ex.spawn(proposal_task(p2p, state)).detach();
-    }
+    //if args.consensus {
+    info!("Starting consensus protocol task");
+    ex.spawn(proposal_task(p2p, state)).detach();
+    //}
 
     // Wait for SIGINT
     shutdown.recv().await?;
@@ -470,31 +478,4 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     info!("Flushed {} bytes", flushed_bytes);
 
     Ok(())
-}
-
-fn main() -> Result<()> {
-    let args = Args::from_args_with_toml("").unwrap();
-    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-    spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
-    let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
-
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
-
-    // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
-    let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-    let (_, result) = Parallel::new()
-        // Run four executor threads
-        .each(0..4, |_| future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            future::block_on(async {
-                realmain(args, ex.clone()).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
 }
