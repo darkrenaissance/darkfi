@@ -453,6 +453,41 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Initialize validator state
     let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
 
+    let sync_p2p = {
+        info!("Registering sync P2P protocols...");
+        let sync_network_settings = net::Settings {
+            inbound: args.sync_p2p_accept,
+            outbound_connections: args.sync_slots,
+            external_addr: args.sync_p2p_external,
+            peers: args.sync_peer.clone(),
+            seeds: args.sync_seed.clone(),
+            ..Default::default()
+        };
+
+        let p2p = net::P2p::new(sync_network_settings).await;
+        let registry = p2p.protocol_registry();
+
+        let _state = state.clone();
+        registry
+            //.register(net::SESSION_ALL, move |channel, p2p| {
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolSync::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
+
+        let _state = state.clone();
+        registry
+            //.register(net::SESSION_ALL, move |channel, p2p| {
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
+
+        Some(p2p)
+    };
+
     // P2P network settings for the consensus protocol
     let consensus_p2p = {
         if !args.consensus {
@@ -489,11 +524,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                 .await;
 
             let _state = state.clone();
+            let _sync_p2p = sync_p2p.clone().unwrap();
             registry
                 //.register(net::SESSION_ALL, move |channel, p2p| {
                 .register(!net::SESSION_SEED, move |channel, p2p| {
                     let state = _state.clone();
-                    async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
+                    let __sync_p2p = _sync_p2p.clone();
+                    async move {
+                        ProtocolVote::init(channel, state, __sync_p2p, p2p)
+                            .await
+                            .unwrap()
+                    }
                 })
                 .await;
 
@@ -508,41 +549,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
             Some(p2p)
         }
-    };
-
-    let sync_p2p = {
-        info!("Registering sync P2P protocols...");
-        let sync_network_settings = net::Settings {
-            inbound: args.sync_p2p_accept,
-            outbound_connections: args.sync_slots,
-            external_addr: args.sync_p2p_external,
-            peers: args.sync_peer.clone(),
-            seeds: args.sync_seed.clone(),
-            ..Default::default()
-        };
-
-        let p2p = net::P2p::new(sync_network_settings).await;
-        let registry = p2p.protocol_registry();
-
-        let _state = state.clone();
-        registry
-            //.register(net::SESSION_ALL, move |channel, p2p| {
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolSync::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
-
-        let _state = state.clone();
-        registry
-            //.register(net::SESSION_ALL, move |channel, p2p| {
-            .register(!net::SESSION_SEED, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
-
-        Some(p2p)
     };
 
     // Initialize program state
