@@ -10,8 +10,8 @@ use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, Rng};
 
 use super::{
-    Block, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Timestamp, Tx,
-    Vote,
+    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata,
+    Timestamp, Tx, Vote,
 };
 use crate::{
     blockchain::Blockchain,
@@ -350,20 +350,20 @@ impl ValidatorState {
     /// removed from the node's unconfirmed tx list.
     /// Finally, we check if the notarization of the proposal can finalize
     /// parent proposals in its chain.
-    pub fn receive_vote(&mut self, vote: &Vote) -> Result<bool> {
+    pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
         let mut encoded_proposal = vec![];
 
         match vote.proposal.encode(&mut encoded_proposal) {
             Ok(_) => (),
             Err(e) => {
                 error!(target: "consensus", "Proposal encoding failed: {:?}", e);
-                return Ok(false)
+                return Ok((false, None))
             }
         };
 
         if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
             warn!(target: "consensus", "Voter ({}), signature couldn't be verified", vote.id);
-            return Ok(false)
+            return Ok((false, None))
         }
 
         let node_count = self.consensus.participants.len();
@@ -374,12 +374,12 @@ impl ValidatorState {
             Some(participant) => {
                 if self.current_epoch() <= participant.joined {
                     warn!(target: "consensus", "Voter ({}) joined after current epoch.", vote.id);
-                    return Ok(false)
+                    return Ok((false, None))
                 }
             }
             None => {
                 warn!(target: "consensus", "Voter ({}) is not a participant!", vote.id);
-                return Ok(false)
+                return Ok((false, None))
             }
         }
 
@@ -397,22 +397,25 @@ impl ValidatorState {
                 self.consensus.orphan_votes.push(vote.clone());
             }
 
-            return Ok(false)
+            return Ok((false, None))
         }
 
         let (proposal, chain_idx) = proposal.unwrap();
         if proposal.block.sm.votes.contains(vote) {
             debug!("receive_vote(): Already seen this proposal");
-            return Ok(false)
+            return Ok((false, None))
         }
 
         proposal.block.sm.votes.push(vote.clone());
 
+        let mut to_broadcast = vec![];
         if !proposal.block.sm.notarized && proposal.block.sm.votes.len() > (2 * node_count / 3) {
             debug!("receive_vote(): Notarized a block");
             proposal.block.sm.notarized = true;
             match self.chain_finalization(chain_idx) {
-                Ok(()) => {}
+                Ok(v) => {
+                    to_broadcast = v;
+                }
                 Err(e) => {
                     error!(target: "consensus", "Block finalization failed: {}", e);
                     return Err(e)
@@ -436,7 +439,7 @@ impl ValidatorState {
         }
 
         self.consensus.participants.insert(participant.id, participant);
-        Ok(true)
+        Ok((true, Some(to_broadcast)))
     }
 
     /// Search the chains we're holding for the given proposal.
@@ -474,7 +477,7 @@ impl ValidatorState {
     ///   blockchain) all proposals up to the middle block.
     /// When fork chain proposals are finalized, the rest of fork chains not
     /// starting by those proposals are removed.
-    pub fn chain_finalization(&mut self, chain_index: i64) -> Result<()> {
+    pub fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
         let chain = &mut self.consensus.proposals[chain_index as usize];
 
         if chain.proposals.len() < 3 {
@@ -482,7 +485,7 @@ impl ValidatorState {
                 "chain_finalization(): Less than 3 proposals in chain {}, nothing to finalize",
                 chain_index
             );
-            return Ok(())
+            return Ok(vec![])
         }
 
         let mut consecutive = 0;
@@ -500,7 +503,7 @@ impl ValidatorState {
                 "chain_finalization(): Less than 3 notarized blocks in chain {}, nothing to finalize",
                 chain_index
             );
-            return Ok(())
+            return Ok(vec![])
         }
 
         let mut finalized = vec![];
@@ -551,7 +554,7 @@ impl ValidatorState {
             self.consensus.orphan_votes.retain(|v| *v != vote);
         }
 
-        Ok(())
+        Ok(finalized)
     }
 
     /// Append a new participant to the pending participants list.

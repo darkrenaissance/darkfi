@@ -1,6 +1,6 @@
 /// Block definition
 pub mod block;
-pub use block::{Block, BlockProposal, ProposalChain};
+pub use block::{Block, BlockInfo, BlockProposal, ProposalChain};
 
 /// Transactions
 pub mod tx;
