@@ -76,11 +76,13 @@ impl ProtocolSync {
             // TODO: The following code should be executed only by replicators, not
             // consensus nodes.
 
-            // Node stores finalized flock, if it doesn't exist (checking by slot).
+            // Node stores finalized flock, if it doesn't exist (checking by slot),
+            // and removes its transactions from the unconfirmed_txs vector.
             // Extra validations can be added here.
             let info_copy = (*info).clone();
             if !self.state.read().await.blockchain.has_block(&info_copy)? {
                 self.state.write().await.blockchain.add(&[info_copy.clone()])?;
+                self.state.write().await.remove_txs(info_copy.txs.clone())?;
                 self.p2p.broadcast(info_copy).await?;
             }
         }
