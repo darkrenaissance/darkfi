@@ -35,7 +35,7 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
 
             let desc = match desc {
                 Some(d) => Some(d),
-                None => desc_in_editor(),
+                None => desc_in_editor()?,
             };
 
             let assign: Vec<String> = match assign {

@@ -163,24 +163,29 @@ pub fn set_title() -> Result<String> {
     Ok(t)
 }
 
-pub fn desc_in_editor() -> Option<String> {
+pub fn desc_in_editor() -> Result<Option<String>> {
     // Create a temporary file with some comments inside
     let mut file_path = temp_dir();
     file_path.push("temp_file");
-    File::create(&file_path).ok()?;
+    File::create(&file_path)?;
     fs::write(
         &file_path,
         "\n# Write task description above this line\n# These lines will be removed\n",
-    )
-    .ok()?;
+    )?;
 
     // Calling env var {EDITOR} on temp file
-    let editor = var("EDITOR").ok()?;
-    Command::new(editor).arg(&file_path).status().ok()?;
+    let editor = match var("EDITOR") {
+        Ok(t) => t,
+        Err(e) => {
+            error!("EDITOR {}", e);
+            return Err(Error::OperationFailed)
+        }
+    };
+    Command::new(editor).arg(&file_path).status()?;
 
     // Whatever has been written in temp file, will be read here
     let mut lines = String::new();
-    File::open(file_path).ok()?.read_to_string(&mut lines).ok()?;
+    File::open(file_path)?.read_to_string(&mut lines)?;
 
     // Store only non-comment lines
     let mut description = String::new();
@@ -192,7 +197,7 @@ pub fn desc_in_editor() -> Option<String> {
     }
     description.pop();
 
-    Some(description)
+    Ok(Some(description))
 }
 
 pub fn get_comments(rep: Value) -> Result<String> {
