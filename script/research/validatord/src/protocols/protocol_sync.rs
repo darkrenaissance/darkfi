@@ -86,11 +86,13 @@ impl ProtocolSync {
             // Commented for now, as to not mess consensus testing.
             // (Don't forget to remove _ from _p2p)
             /*
-            // Node stores finalized block, if it doesn't exists (checking by slot).
+            // Node stores finalized block, if it doesn't exists (checking by slot),
+            // and removes its transactions from the unconfirmed_txs vector.
             // Extra validations can be added here.
             let info_copy = (*info).clone();
             if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
                 self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
+                self.state.write().unwrap().remove_txs(info_copy.txs.clone())?;
                 self.p2p.broadcast(info_copy).await?;
             }
             */

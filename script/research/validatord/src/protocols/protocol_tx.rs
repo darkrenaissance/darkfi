@@ -49,6 +49,8 @@ impl ProtocolTx {
                 tx
             );
             let tx_copy = (*tx).clone();
+
+            // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().unwrap().append_tx(tx_copy.clone()) {
                 self.p2p.broadcast(tx_copy).await?;
             }

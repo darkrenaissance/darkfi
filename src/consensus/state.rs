@@ -440,6 +440,17 @@ impl ValidatorState {
         Ok(None)
     }
 
+    /// Note removes provided transactions vector, from unconfirmed_txs, if they exist.
+    pub fn remove_txs(&mut self, transactions: Vec<Tx>) -> Result<()> {
+        for tx in transactions {
+            if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {
+                self.unconfirmed_txs.remove(pos);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Provided an index, node checks if chain can be finalized.
     /// Consensus finalization logic: If node has observed the notarization of 3 consecutive
     /// proposals in a fork chain, it finalizes (appends to canonical blockchain) all proposals up to the middle block.
@@ -463,15 +474,11 @@ impl ValidatorState {
                 for proposal in &mut chain.proposals[..(consecutive - 1)] {
                     proposal.sm.finalized = true;
                     finalized.push(proposal.clone());
-                    for tx in proposal.txs.clone() {
-                        if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {
-                            self.unconfirmed_txs.remove(pos);
-                        }
-                    }
                 }
                 chain.proposals.drain(0..(consecutive - 1));
                 for proposal in &finalized {
                     self.blockchain.add_by_proposal(proposal.clone())?;
+                    self.remove_txs(proposal.txs.clone())?;
                     to_broadcast.push(BlockInfo::new(
                         proposal.st,
                         proposal.sl,

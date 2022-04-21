@@ -333,7 +333,6 @@ struct StateInfo {
     _id: u64,
     _consensus: ConsensusInfo,
     _blockchain: BlockchainInfo,
-    _unconfirmed_txs: Vec<Tx>,
 }
 
 impl StateInfo {
@@ -341,8 +340,7 @@ impl StateInfo {
         let _id = state.id;
         let _consensus = ConsensusInfo::new(&state.consensus);
         let _blockchain = BlockchainInfo::new(&state.blockchain);
-        let _unconfirmed_txs = state.unconfirmed_txs.clone();
-        StateInfo { _id, _consensus, _blockchain, _unconfirmed_txs }
+        StateInfo { _id, _consensus, _blockchain }
     }
 }
 

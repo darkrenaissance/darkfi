@@ -268,6 +268,8 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
             }
         };
 
+        info!("tt: {:?}", state.read().unwrap().unconfirmed_txs);
+
         // Node waits untile next epoch
         let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
@@ -322,6 +324,15 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         })
         .await;
 
+    // Adding ProtocolTx to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, main_p2p| {
+            let state = state2.clone();
+            async move { ProtocolTx::init(channel, state, main_p2p).await }
+        })
+        .await;
+
     // Performs seed session
     main_p2p.clone().start(executor.clone()).await?;
     // Actual main p2p session
@@ -335,6 +346,18 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
         })
         .detach();
 
+    // RPC interface
+    let ex2 = executor.clone();
+    let ex3 = ex2.clone();
+    let rpc_interface = Arc::new(JsonRpcInterface {
+        state: state.clone(),
+        p2p: main_p2p.clone(),
+        _rpc_listen_addr: opts.rpc,
+    });
+    executor
+        .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
+        .detach();
+
     // Node starts syncing
     let state2 = state.clone();
     syncing_task(main_p2p.clone(), state2).await?;
@@ -342,15 +365,6 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     // Consensus P2P registry setup
     let consensus_p2p = net::P2p::new(consensus_subnet_settings).await;
     let registry = consensus_p2p.protocol_registry();
-
-    // Adding ProtocolTx to the registry
-    let state2 = state.clone();
-    registry
-        .register(net::SESSION_ALL, move |channel, consensus_p2p| {
-            let state = state2.clone();
-            async move { ProtocolTx::init(channel, state, consensus_p2p).await }
-        })
-        .await;
 
     // Adding PropotolVote to the registry
     let p2p = main_p2p.clone();
@@ -401,18 +415,6 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
                 error!("Error: p2p run failed {}", err);
             }
         })
-        .detach();
-
-    // RPC interface
-    let ex2 = executor.clone();
-    let ex3 = ex2.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface {
-        state: state.clone(),
-        p2p: consensus_p2p.clone(),
-        _rpc_listen_addr: opts.rpc,
-    });
-    executor
-        .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
     proposal_task(consensus_p2p, state).await;
