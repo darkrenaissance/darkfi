@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, thread};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, thread, time::Duration};
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -13,9 +13,8 @@ use structopt_toml::StructOptToml;
 use darkfi::{
     consensus::{
         block::{BlockOrder, BlockResponse},
-        blockchain::{ForkOrder, ForkResponse},
         participant::Participant,
-        state::{ValidatorState, ValidatorStatePtr},
+        state::{ConsensusRequest, ConsensusResponse, ValidatorState, ValidatorStatePtr},
         tx::Tx,
     },
     net,
@@ -38,8 +37,8 @@ use darkfi::{
 
 use validatord::protocols::{
     protocol_participant::ProtocolParticipant, protocol_proposal::ProtocolProposal,
-    protocol_sync::ProtocolSync, protocol_sync_forks::ProtocolSyncForks, protocol_tx::ProtocolTx,
-    protocol_vote::ProtocolVote,
+    protocol_sync::ProtocolSync, protocol_sync_consensus::ProtocolSyncConsensus,
+    protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -152,28 +151,28 @@ async fn syncing_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> 
     Ok(())
 }
 
-async fn syncing_forks_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
-    info!("Node starts syncing forks...");
+async fn syncing_consensus_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
+    info!("Node starts syncing consensus state...");
     // Using len here because is_empty() uses unstable library feature 'exact_size_is_empty'
     if p2p.channels().lock().await.values().len() != 0 {
-        // Nodes ask for the fork chains of the last channel peer
+        // Nodes ask for the consensus state of the last channel peer
         let channel = p2p.channels().lock().await.values().last().unwrap().clone();
 
         // Communication setup
         let message_subsytem = channel.get_message_subsystem();
-        message_subsytem.add_dispatch::<ForkResponse>().await;
+        message_subsytem.add_dispatch::<ConsensusResponse>().await;
         let response_sub = channel
-            .subscribe_msg::<ForkResponse>()
+            .subscribe_msg::<ConsensusResponse>()
             .await
-            .expect("Missing ForkResponse dispatcher!");
+            .expect("Missing ConsensusResponse dispatcher!");
 
-        // Node creates a BlockOrder and sends it
-        let order = ForkOrder { id: state.read().unwrap().id };
-        channel.send(order).await?;
+        // Node creates a ConsensusRequest and sends it
+        let request = ConsensusRequest { id: state.read().unwrap().id };
+        channel.send(request).await?;
 
         // Node stores responce data. Extra validations can be added here.
         let response = response_sub.receive().await?;
-        state.write().unwrap().consensus.proposals = response.proposals.clone();
+        state.write().unwrap().consensus = response.consensus.clone();
     } else {
         info!("Node is not connected to other nodes, resetting consensus state.");
         state.write().unwrap().reset_consensus_state()?;
@@ -184,27 +183,46 @@ async fn syncing_forks_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resul
 }
 
 async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
-    // Node syncs its fork chains
-    let result = syncing_forks_task(p2p.clone(), state.clone()).await;
+    // Node waits just before the current or next epoch end,
+    // so it can start syncing latest state.
+    let mut seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+    let one_sec = Duration::new(1, 0);
+    loop {
+        if seconds_until_next_epoch > one_sec {
+            seconds_until_next_epoch = seconds_until_next_epoch - one_sec;
+            break
+        }
+        info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+        thread::sleep(seconds_until_next_epoch);
+        seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+    }
+    info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
+    thread::sleep(seconds_until_next_epoch);
+
+    // Node syncs its consensus state
+    let result = syncing_consensus_task(p2p.clone(), state.clone()).await;
     match result {
         Ok(()) => (),
-        Err(e) => error!("Sync forks failed. Error: {:?}", e),
+        Err(e) => error!("Sync consensus state failed. Error: {:?}", e),
     }
 
-    // Node signals the network that it starts participating
+    // Node signals the network that it will start participating
     let participant =
         Participant::new(state.read().unwrap().id, state.read().unwrap().current_epoch());
     state.write().unwrap().append_participant(participant.clone());
-    let result = p2p.broadcast(participant).await;
+    let result = p2p.broadcast(participant.clone()).await;
     match result {
         Ok(()) => info!("Participation message broadcasted successfuly."),
         Err(e) => error!("Broadcast failed. Error: {:?}", e),
     }
 
-    // After initialization node should wait for next epoch
+    // After initialization node waits for next epoch to start participating
     let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
+
+    // Node modifies its participating flag to true
+    state.write().unwrap().participating = true;
 
     loop {
         // Node refreshes participants records
@@ -268,7 +286,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
             }
         };
 
-        // Node waits untile next epoch
+        // Node waits until next epoch
         let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
         thread::sleep(seconds_until_next_epoch);
@@ -399,7 +417,7 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     registry
         .register(net::SESSION_ALL, move |channel, _consensus_p2p| {
             let state = state2.clone();
-            async move { ProtocolSyncForks::init(channel, state).await }
+            async move { ProtocolSyncConsensus::init(channel, state).await }
         })
         .await;
 

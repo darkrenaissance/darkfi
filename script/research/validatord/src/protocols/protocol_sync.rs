@@ -20,7 +20,7 @@ const BATCH: u64 = 10;
 
 pub struct ProtocolSync {
     channel: ChannelPtr,
-    order_sub: MessageSubscription<BlockOrder>,
+    request_sub: MessageSubscription<BlockOrder>,
     block_sub: MessageSubscription<BlockInfo>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
@@ -39,14 +39,14 @@ impl ProtocolSync {
         message_subsytem.add_dispatch::<BlockOrder>().await;
         message_subsytem.add_dispatch::<BlockInfo>().await;
 
-        let order_sub =
+        let request_sub =
             channel.subscribe_msg::<BlockOrder>().await.expect("Missing BlockOrder dispatcher!");
         let block_sub =
             channel.subscribe_msg::<BlockInfo>().await.expect("Missing BlockInfo dispatcher!");
 
         Arc::new(Self {
             channel: channel.clone(),
-            order_sub,
+            request_sub,
             block_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
@@ -55,14 +55,14 @@ impl ProtocolSync {
         })
     }
 
-    async fn handle_receive_order(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolSync::handle_receive_tx() [START]");
+    async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolSync::handle_receive_request() [START]");
         loop {
-            let order = self.order_sub.receive().await?;
+            let order = self.request_sub.receive().await?;
 
             debug!(
                 target: "ircd",
-                "ProtocolSync::handle_receive_order() received {:?}",
+                "ProtocolSync::handle_receive_request() received {:?}",
                 order
             );
 
@@ -107,7 +107,7 @@ impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "ircd", "ProtocolSync::start() [START]");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_order(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_block(), executor.clone()).await;
         debug!(target: "ircd", "ProtocolSync::start() [END]");
         Ok(())

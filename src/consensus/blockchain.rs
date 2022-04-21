@@ -3,7 +3,7 @@ use std::io;
 use log::debug;
 
 use crate::{
-    impl_vec, net,
+    impl_vec,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
@@ -201,29 +201,3 @@ impl ProposalsChain {
 }
 
 impl_vec!(ProposalsChain);
-
-/// Auxilary structure used for forks syncing.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct ForkOrder {
-    /// Validator id
-    pub id: u64,
-}
-
-impl net::Message for ForkOrder {
-    fn name() -> &'static str {
-        "forkorder"
-    }
-}
-
-/// Auxilary structure used for forks syncing.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct ForkResponse {
-    /// Fork chains containing block proposals
-    pub proposals: Vec<ProposalsChain>,
-}
-
-impl net::Message for ForkResponse {
-    fn name() -> &'static str {
-        "forkresponse"
-    }
-}

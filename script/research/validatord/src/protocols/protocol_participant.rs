@@ -49,12 +49,10 @@ impl ProtocolParticipant {
                 "ProtocolParticipant::handle_receive_participant() received {:?}",
                 participant
             );
-            if self.state.write().unwrap().append_participant((*participant).clone()) {
-                let pending_participants =
-                    self.state.read().unwrap().consensus.pending_participants.clone();
-                for pending_participant in pending_participants {
-                    self.p2p.broadcast(pending_participant.clone()).await?;
-                }
+
+            let participant_copy = (*participant).clone();
+            if self.state.write().unwrap().append_participant(participant_copy.clone()) {
+                self.p2p.broadcast(participant_copy).await?;
             }
         }
     }

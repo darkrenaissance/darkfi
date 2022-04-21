@@ -14,6 +14,7 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
+    net,
     util::serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
@@ -28,11 +29,11 @@ use super::{
     vote::Vote,
 };
 
-const DELTA: u64 = 60;
+pub const DELTA: u64 = 10;
 const SLED_CONSESUS_STATE_TREE: &[u8] = b"_consensus_state";
 
 /// This struct represents the information required by the consensus algorithm.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusState {
     /// Genesis block creation timestamp
     pub genesis: Timestamp,
@@ -67,6 +68,32 @@ impl ConsensusState {
     }
 }
 
+/// Auxilary structure used for consensus syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusRequest {
+    /// Validator id
+    pub id: u64,
+}
+
+impl net::Message for ConsensusRequest {
+    fn name() -> &'static str {
+        "consensusrequest"
+    }
+}
+
+/// Auxilary structure used for consensus syncing.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ConsensusResponse {
+    /// Hot/live data used by the consensus algorithm
+    pub consensus: ConsensusState,
+}
+
+impl net::Message for ConsensusResponse {
+    fn name() -> &'static str {
+        "consensusresponse"
+    }
+}
+
 /// Atomic pointer to validator state.
 pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
@@ -88,6 +115,8 @@ pub struct ValidatorState {
     pub unconfirmed_txs: Vec<Tx>,
     /// Genesis block hash, used for validations
     pub genesis_block: blake3::Hash,
+    /// Participation flag
+    pub participating: bool,
 }
 
 impl ValidatorState {
@@ -100,6 +129,7 @@ impl ValidatorState {
         let blockchain = Blockchain::new(&db, genesis)?;
         let unconfirmed_txs = Vec::new();
         let genesis_block = blake3::hash(&serialize(&Block::genesis_block(genesis)));
+        let participating = false;
         Ok(Arc::new(RwLock::new(ValidatorState {
             id,
             secret,
@@ -109,6 +139,7 @@ impl ValidatorState {
             blockchain,
             unconfirmed_txs,
             genesis_block,
+            participating,
         })))
     }
 
@@ -148,7 +179,6 @@ impl ValidatorState {
         let epoch = self.current_epoch();
         let mut hasher = DefaultHasher::new();
         epoch.hash(&mut hasher);
-        self.zero_participants_check();
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.id
     }
@@ -241,6 +271,11 @@ impl ValidatorState {
     /// Node receives the proposed block, verifies its sender(epoch leader),
     /// and proceeds with voting on it.
     pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+        // Node hasn't started participating
+        if !self.participating {
+            return Ok(None)
+        }
+
         let leader = self.epoch_leader();
         if leader != proposal.id {
             debug!(
@@ -269,7 +304,6 @@ impl ValidatorState {
     /// If proposal extends the canonical blockchain, a new fork chain is created.
     /// Node votes on the proposal, only if it extends the longest notarized fork chain it has seen.
     pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
-        self.zero_participants_check();
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
@@ -331,7 +365,7 @@ impl ValidatorState {
     }
 
     /// Given a proposal, node finds the index of the chain it extends.
-    pub fn find_extended_chain_index(&self, proposal: &BlockProposal) -> Result<i64> {
+    pub fn find_extended_chain_index(&mut self, proposal: &BlockProposal) -> Result<i64> {
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
             let hash = last.hash();
@@ -363,6 +397,11 @@ impl ValidatorState {
     /// Finally, we check if the notarization of the proposal can finalize parent proposals
     /// in its chain.
     pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
+        // Node hasn't started participating
+        if !self.participating {
+            return Ok((false, None))
+        }
+
         let mut encoded_proposal = vec![];
         let result = vote.proposal.encode(&mut encoded_proposal);
         match result {
@@ -379,8 +418,6 @@ impl ValidatorState {
         }
 
         let nodes_count = self.consensus.participants.len();
-        self.zero_participants_check();
-
         // Checking that the voter can actually vote.
         match self.consensus.participants.get(&vote.id) {
             Some(participant) => {
@@ -538,17 +575,6 @@ impl ValidatorState {
         true
     }
 
-    /// This prevent the extreme case scenario where network is initialized, but some nodes
-    /// have not pushed the initial participants in the map.
-    pub fn zero_participants_check(&mut self) {
-        if self.consensus.participants.len() == 0 {
-            for participant in &self.consensus.pending_participants {
-                self.consensus.participants.insert(participant.id, participant.clone());
-            }
-            self.consensus.pending_participants = Vec::new();
-        }
-    }
-
     /// Node refreshes participants map, to retain only the active ones.
     /// Active nodes are considered those who joined or voted on previous epoch.
     pub fn refresh_participants(&mut self) {
@@ -576,6 +602,12 @@ impl ValidatorState {
         }
         for index in inactive {
             self.consensus.participants.remove(&index);
+        }
+
+        if self.consensus.participants.is_empty() {
+            // If no nodes are active, node becomes a single node network.
+            let participant = Participant::new(self.id, self.current_epoch());
+            self.consensus.pending_participants.push(participant);
         }
     }
 
