@@ -412,7 +412,7 @@ mod tests {
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
         let nullifier = Nullifier::new(*s, serial);
-        let leaf_position = 0;
+        let leaf_position: incrementalmerkletree::Position = 0.into();
 
         OwnCoin { coin, note, secret: *s, nullifier, leaf_position }
     }

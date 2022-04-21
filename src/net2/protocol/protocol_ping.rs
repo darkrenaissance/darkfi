@@ -62,7 +62,7 @@ impl<T: Transport> ProtocolPing<T> {
         debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
         loop {
             // Wait channel_heartbeat amount of time.
-            sleep(self.settings.channel_heartbeat_seconds).await;
+            sleep(self.settings.channel_heartbeat_seconds.into()).await;
 
             // Create a random nonce.
             let nonce = Self::random_nonce();

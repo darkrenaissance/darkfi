@@ -98,7 +98,7 @@ impl<T: Transport> ManualSession<T> {
                 Err(err) => {
                     info!(target: "net", "Unable to connect to manual outbound [{}]: {}", addr, err);
 
-                    sleep(settings.connect_timeout_seconds).await;
+                    sleep(settings.connect_timeout_seconds.into()).await;
                 }
             }
         }

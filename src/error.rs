@@ -335,6 +335,13 @@ impl From<VerifyFailed> for ClientFailed {
     }
 }
 
+#[cfg(feature = "net2")]
+impl<T: std::fmt::Display> From<crate::net2::transport::TransportError<T>> for Error {
+    fn from(err: crate::net2::transport::TransportError<T>) -> Self {
+        Self::TransportError(err.to_string())
+    }
+}
+
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err.kind())
