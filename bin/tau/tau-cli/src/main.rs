@@ -15,7 +15,13 @@ use darkfi::{
 mod jsonrpc;
 mod util;
 
-use crate::{jsonrpc::*, util::*};
+use crate::{
+    jsonrpc::{add, get_by_id, get_state, list, set_comment, set_state, update},
+    util::{
+        desc_in_editor, due_as_timestamp, get_comments, get_events, get_from_task, set_title,
+        timestamp_to_date, CliTau, CliTauSubCommands, TaskInfo, TauConfig, CONFIG_FILE_CONTENTS,
+    },
+};
 
 async fn start(options: CliTau, config: TauConfig) -> Result<()> {
     let rpc_addr = &format!("tcp://{}", &config.rpc_listener_url.url.clone());
