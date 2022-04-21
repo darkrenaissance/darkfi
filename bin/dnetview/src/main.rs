@@ -159,11 +159,8 @@ async fn parse_data(
     client: &DNetView,
     model: Arc<Model>,
 ) -> io::Result<()> {
-    // TODO
     let _ext_addr = reply.get("external_addr");
-
     let inbound = &reply["session_inbound"];
-    // TODO
     let manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
 
@@ -190,58 +187,69 @@ async fn parse_data(
 }
 
 async fn parse_inbound(
-    inbound_obj: &Value,
-    mut connections: Vec<ConnectInfo>,
+    inbound: &Value,
+    mut connects: Vec<ConnectInfo>,
     mut sessions: Vec<SessionInfo>,
     node_id: u32,
     model: Arc<Model>,
 ) {
-    let i_connected = &inbound_obj["connected"];
-    let i_session_id = generate_id();
-    if i_connected.as_object().unwrap().is_empty() {
-        // channel is empty. initialize with empty values
-        let i_connect_id = generate_id();
-        let addr = "Null".to_string();
-        let msg = "Null".to_string();
-        let status = "Null".to_string();
-        let is_empty = true;
-        let parent = i_session_id;
-        // TODO
-        let state = "Null".to_string();
-        // TODO
-        let msg_log = Vec::new();
-        let connect_info =
-            ConnectInfo::new(i_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
-        connections.push(connect_info.clone());
-    } else {
-        // channel is not empty. initialize with whole values
-        let i_connect_id = generate_id();
-        let ic = i_connected.as_object().unwrap();
-        for k in ic.keys() {
-            let node = ic.get(k);
-            let addr = k.to_string();
-            let msg = node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
-            let status = node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
+    let connections = &inbound["connected"];
+    let session_id = generate_id();
+
+    match connections.as_object() {
+        Some(connect) => {
+            match connect.is_empty() {
+                true => {
+                    // channel is empty. initialize with empty values
+                    let connect_id = generate_id();
+                    let addr = "Null".to_string();
+                    let msg = "Null".to_string();
+                    let status = "Null".to_string();
+                    let is_empty = true;
+                    let parent = session_id;
+                    let state = "Null".to_string();
+                    let msg_log = Vec::new();
+                    let connect_info = ConnectInfo::new(
+                        connect_id, addr, is_empty, msg, status, state, msg_log, parent,
+                    );
+                    connects.push(connect_info.clone());
+                }
+                false => {
+                    // channel is not empty. initialize with whole values
+                    let connect_id = generate_id();
+                    for k in connect.keys() {
+                        let node = connect.get(k);
+                        let addr = k.to_string();
+                        let msg =
+                            node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
+                        let status =
+                            node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
+                        // TODO: state, msg log
+                        let state = "state".to_string();
+                        let is_empty = false;
+                        let parent = session_id;
+                        let msg_log = Vec::new();
+                        let connect_info = ConnectInfo::new(
+                            connect_id, addr, is_empty, msg, status, state, msg_log, parent,
+                        );
+                        connects.push(connect_info.clone());
+                    }
+                }
+            }
+            let session_info = SessionInfo::new(session_id, node_id, connects.clone());
+            sessions.push(session_info.clone());
+            let session = SelectableObject::Session(session_info.clone());
+
+            model.ids.lock().await.insert(session_id);
+            model.infos.lock().await.insert(session_id, session);
+        }
+        None => {
             // TODO
-            let state = "state".to_string();
-            //let state = node.unwrap().get("state").unwrap().as_str().unwrap().to_string();
-            let is_empty = false;
-            let parent = i_session_id;
-            // TODO
-            let msg_log = Vec::new();
-            let connect_info =
-                ConnectInfo::new(i_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
-            connections.push(connect_info.clone());
         }
     }
-    let i_session_info = SessionInfo::new(i_session_id, node_id, connections.clone());
-    sessions.push(i_session_info.clone());
-    let session = SelectableObject::Session(i_session_info.clone());
-
-    model.ids.lock().await.insert(i_session_id);
-    model.infos.lock().await.insert(i_session_id, session);
 }
 
+// TODO: placeholder for now
 async fn parse_manual(
     _manual_obj: &Value,
     mut connections: Vec<ConnectInfo>,
@@ -255,9 +263,7 @@ async fn parse_manual(
     let status = "Null".to_string();
     let is_empty = true;
     let parent = m_session_id;
-    // TODO
     let state = "Null".to_string();
-    // TODO
     let msg_log = Vec::new();
     let m_connect_info =
         ConnectInfo::new(m_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
@@ -269,73 +275,79 @@ async fn parse_manual(
 }
 
 async fn parse_outbound(
-    outbound_obj: &Value,
-    mut connections: Vec<ConnectInfo>,
+    outbound: &Value,
+    mut connects: Vec<ConnectInfo>,
     mut sessions: Vec<SessionInfo>,
     node_id: u32,
     model: Arc<Model>,
 ) {
     // parse outbound connection data
-    let outbound_slots = &outbound_obj["slots"];
-    let o_session_id = generate_id();
-    for slot in outbound_slots.as_array().unwrap() {
-        let o_connect_id = generate_id();
-        if slot["channel"].is_null() {
-            // channel is empty. initialize with empty values
-            let is_empty = true;
-            let addr = "Null".to_string();
-            let state = &slot["state"];
-            let msg = "Null".to_string();
-            let status = "Null".to_string();
-            // placeholder for now
-            let msg_log = Vec::new();
-            let parent = o_session_id;
-            let connect_info = ConnectInfo::new(
-                o_connect_id,
-                addr,
-                is_empty,
-                msg,
-                status,
-                state.as_str().unwrap().to_string(),
-                msg_log,
-                parent,
-            );
-            connections.push(connect_info.clone());
-        } else {
-            // TODO: cleanup/ make style consistent
-            // channel is not empty. initialize with whole values
-            let is_empty = false;
-            let addr = &slot["addr"];
-            let state = &slot["state"];
+    let slots = &outbound["slots"];
+    let session_id = generate_id();
+    match slots.as_array() {
+        Some(slots) => {
+            for slot in slots {
+                match slot["channel"].is_null() {
+                    true => {
+                        // channel is empty. initialize with empty values
+                        let connect_id = generate_id();
+                        let is_empty = true;
+                        let addr = "Null".to_string();
+                        let state = &slot["state"];
+                        let msg = "Null".to_string();
+                        let status = "Null".to_string();
+                        // TODO: msg log
+                        let msg_log = Vec::new();
+                        let parent = session_id;
+                        let connect_info = ConnectInfo::new(
+                            connect_id,
+                            addr,
+                            is_empty,
+                            msg,
+                            status,
+                            state.as_str().unwrap().to_string(),
+                            msg_log,
+                            parent,
+                        );
+                        connects.push(connect_info.clone());
+                    }
+                    false => {
+                        // channel is not empty. initialize with whole values
+                        let connect_id = generate_id();
+                        let is_empty = false;
+                        let addr = &slot["addr"];
+                        let state = &slot["state"];
+                        // TODO: msg and status
+                        let msg = "msg";
+                        let status = &slot["last_status"];
+                        let parent = session_id;
+                        // TODO
+                        let msg_log = Vec::new();
+                        let connect_info = ConnectInfo::new(
+                            connect_id,
+                            addr.as_str().unwrap().to_string(),
+                            is_empty,
+                            msg.to_string(),
+                            status.as_str().unwrap().to_string(),
+                            state.as_str().unwrap().to_string(),
+                            msg_log,
+                            parent,
+                        );
+                        connects.push(connect_info.clone());
+                    }
+                }
+            }
+            let session_info = SessionInfo::new(session_id, node_id, connects.clone());
+            sessions.push(session_info.clone());
+            let session = SelectableObject::Session(session_info.clone());
+
+            model.ids.lock().await.insert(session_id);
+            model.infos.lock().await.insert(session_id, session);
+        }
+        None => {
             // TODO
-            let msg = "msg";
-            //let msg = &slot["last_msg"];
-            // TODO
-            let status = "status";
-            let status = &slot["last_status"];
-            let parent = o_session_id;
-            // TODO
-            let msg_log = Vec::new();
-            let connect_info = ConnectInfo::new(
-                o_connect_id,
-                addr.as_str().unwrap().to_string(),
-                is_empty,
-                msg.to_string(),
-                status.to_string(),
-                //status.as_str().unwrap().to_string(),
-                state.as_str().unwrap().to_string(),
-                msg_log,
-                parent,
-            );
-            connections.push(connect_info.clone());
         }
     }
-    let o_session_info = SessionInfo::new(o_session_id, node_id, connections.clone());
-    sessions.push(o_session_info.clone());
-    let session = SelectableObject::Session(o_session_info.clone());
-
-    model.ids.lock().await.insert(o_session_id);
-    model.infos.lock().await.insert(o_session_id, session);
 }
 
 fn generate_id() -> u32 {
@@ -343,6 +355,7 @@ fn generate_id() -> u32 {
     let id: u32 = rng.gen();
     id
 }
+
 //fn is_empty_outbound(slots: Vec<Slot>) -> bool {
 //    return slots.iter().all(|slot| slot.is_empty);
 //}
