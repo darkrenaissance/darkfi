@@ -19,7 +19,7 @@ use crate::{
         types::DrkTokenId,
         OwnCoin, OwnCoins,
     },
-    util::serial::serialize,
+    util::{expand_path, serial::serialize},
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
@@ -45,6 +45,14 @@ pub struct WalletDb {
 }
 
 impl WalletApi for WalletDb {}
+
+/// Helper function to initialize `WalletPtr`
+pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
+    let expanded = expand_path(wallet_path)?;
+    let wallet_path = format!("sqlite://{}", expanded.to_str().unwrap());
+    let wallet = WalletDb::new(&wallet_path, wallet_pass).await?;
+    Ok(wallet)
+}
 
 impl WalletDb {
     pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
