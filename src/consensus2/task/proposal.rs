@@ -1,12 +1,13 @@
 use log::{debug, error, info};
 
-use darkfi::{
+use crate::{
     consensus2::{state::ValidatorStatePtr, Participant},
-    net::P2pPtr,
+    net,
     util::async_util::sleep,
 };
 
-pub async fn proposal_task(p2p: P2pPtr, state: ValidatorStatePtr) {
+/// async task used for participating in the consensus protocol
+pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
     // Node signals the network that it starts participating
     let participant = Participant::new(state.read().await.id, state.read().await.current_epoch());
     state.write().await.append_participant(participant.clone());
