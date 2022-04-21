@@ -1,306 +1,35 @@
-use std::{
-    env::{temp_dir, var},
-    fs::{self, File},
-    io,
-    io::{Read, Write},
-    ops::Index,
-    process::Command,
-};
-
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-use clap::{CommandFactory, Parser, Subcommand};
-use log::{debug, error};
-use prettytable::{cell, format, row, Cell, Row, Table};
-use serde::{Deserialize, Serialize};
+use clap::{CommandFactory, Parser};
+use log::error;
+use prettytable::{cell, format, row, table, Cell, Row, Table};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use url::Url;
 
 use darkfi::{
-    rpc::jsonrpc::{self, JsonResult},
     util::{
-        cli::{log_config, spawn_config, Config, UrlConfig},
+        cli::{log_config, spawn_config, Config},
         path::get_config_path,
     },
-    Error, Result,
+    Result,
 };
 
-pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml");
+mod jsonrpc;
+mod util;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TauConfig {
-    /// The address where taud should bind its RPC socket
-    pub rpc_listener_url: UrlConfig,
-}
-
-#[derive(Subcommand)]
-pub enum CliTauSubCommands {
-    /// Add a new task
-    Add {
-        /// Specify task title
-        #[clap(short, long)]
-        title: Option<String>,
-        /// Specify task description
-        #[clap(long)]
-        desc: Option<String>,
-        /// Assign task to user
-        #[clap(short, long)]
-        assign: Option<String>,
-        /// Task project (can be hierarchical: crypto.zk)
-        #[clap(short, long)]
-        project: Option<String>,
-        /// Due date in DDMM format: "2202" for 22 Feb
-        #[clap(short, long)]
-        due: Option<String>,
-        /// Project rank single precision decimal real value: 4.8761
-        #[clap(short, long)]
-        rank: Option<f32>,
-    },
-    /// Update/Edit an existing task by ID
-    Update {
-        /// Task ID
-        id: u64,
-        /// Field's name (ex title)
-        key: String,
-        /// New value
-        value: String,
-    },
-    /// Set task state
-    SetState {
-        /// Task ID
-        id: u64,
-        /// Set task state
-        state: String,
-    },
-    /// Get task state
-    GetState {
-        /// Task ID
-        id: u64,
-    },
-    /// Set comment for a task
-    SetComment {
-        /// Task ID
-        id: u64,
-        /// Comment author
-        author: String,
-        /// Comment content
-        content: String,
-    },
-    /// Get task's comments
-    GetComment {
-        /// Task ID
-        id: u64,
-    },
-    /// List open tasks
-    List {},
-    /// Get task by ID
-    Get {
-        /// Task ID
-        id: u64,
-    },
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct TaskInfo {
-    ref_id: String,
-    id: u32,
-    title: String,
-    desc: String,
-    assign: Vec<String>,
-    project: Vec<String>,
-    due: String,
-    rank: f32,
-    created_at: String,
-    events: Vec<Value>,
-    comments: Vec<Value>,
-}
-
-/// Tau cli
-#[derive(Parser)]
-#[clap(name = "tau")]
-#[clap(author, version, about)]
-pub struct CliTau {
-    /// Increase verbosity
-    #[clap(short, parse(from_occurrences))]
-    pub verbose: u8,
-    /// Sets a custom config file
-    #[clap(short, long)]
-    pub config: Option<String>,
-    #[clap(subcommand)]
-    pub command: Option<CliTauSubCommands>,
-}
-
-fn due_as_timestamp(due: &str) -> Option<i64> {
-    if due.len() == 4 {
-        let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());
-
-        let mut year = Local::today().year();
-
-        if month < Local::today().month() {
-            year += 1;
-        }
-
-        if month == Local::today().month() && day < Local::today().day() {
-            year += 1;
-        }
-
-        let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
-
-        return Some(dt.timestamp())
-    }
-
-    if due.len() > 4 {
-        error!("due date must be of length 4 (e.g \"1503\" for 15 March)");
-    }
-
-    None
-}
-
-async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
-    let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&url)?, json!(r), None).await {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-
-    match reply {
-        JsonResult::Resp(r) => {
-            debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
-            Ok(r.result)
-        }
-
-        JsonResult::Err(e) => {
-            debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-            Err(Error::JsonRpcError(e.error.message.to_string()))
-        }
-
-        JsonResult::Notif(n) => {
-            debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-            Err(Error::JsonRpcError("Unexpected reply".to_string()))
-        }
-    }
-}
-
-// RPCAPI:
-// Add new task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "add",
-//      "params":
-//          [{
-//          "title": "..",
-//          "desc": "..",
-//          assign: [..],
-//          project: [..],
-//          "due": ..,
-//          "rank": ..
-//          }],
-//      "id": 1
-//      }
-// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn add(url: &str, params: Value) -> Result<Value> {
-    let req = jsonrpc::request(json!("add"), params);
-    request(req, url.to_string()).await
-}
-
-// List tasks
-// --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-async fn list(url: &str, params: Value) -> Result<Value> {
-    let req = jsonrpc::request(json!("list"), json!(params));
-    request(req, url.to_string()).await
-}
-
-// Update task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn update(url: &str, id: u64, data: Value) -> Result<Value> {
-    let req = jsonrpc::request(json!("update"), json!([id, data]));
-    request(req, url.to_string()).await
-}
-
-// Set state for a task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn set_state(url: &str, id: u64, state: &str) -> Result<Value> {
-    let req = jsonrpc::request(json!("set_state"), json!([id, state]));
-    request(req, url.to_string()).await
-}
-
-// Get task's state.
-// --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
-async fn get_state(url: &str, id: u64) -> Result<Value> {
-    let req = jsonrpc::request(json!("get_state"), json!([id]));
-    request(req, url.to_string()).await
-}
-
-// Set comment for a task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<Value> {
-    let req = jsonrpc::request(json!("set_comment"), json!([id, author, content]));
-    request(req, url.to_string()).await
-}
-
-// Get task by id.
-// --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-async fn show(url: &str, id: u64) -> Result<Value> {
-    let req = jsonrpc::request(json!("get_by_id"), json!([id]));
-    request(req, url.to_string()).await
-}
+use crate::{jsonrpc::*, util::*};
 
 async fn start(options: CliTau, config: TauConfig) -> Result<()> {
     let rpc_addr = &format!("tcp://{}", &config.rpc_listener_url.url.clone());
 
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
-            let title = if title.is_none() {
-                print!("Title: ");
-                io::stdout().flush()?;
-                let mut t = String::new();
-                io::stdin().read_line(&mut t)?;
-                if &t[(t.len() - 1)..] == "\n" {
-                    t.pop();
-                }
-                if t.is_empty() {
-                    error!("You can't have a task without a title");
-                    return Err(Error::OperationFailed)
-                }
-                Some(t)
-            } else {
-                title
+            let title = match title {
+                Some(t) => t,
+                None => set_title()?,
             };
 
-            let desc = if desc.is_none() {
-                let editor = match var("EDITOR") {
-                    Ok(t) => t,
-                    Err(e) => {
-                        error!("EDITOR {}", e);
-                        return Err(Error::BadOperationType)
-                    }
-                };
-                let mut file_path = temp_dir();
-                file_path.push("temp_file");
-                File::create(&file_path)?;
-                fs::write(
-                    &file_path,
-                    "\n# Write task description above this line\n# These lines will be removed\n",
-                )?;
-
-                Command::new(editor).arg(&file_path).status()?;
-
-                let mut lines = String::new();
-                File::open(file_path)?.read_to_string(&mut lines)?;
-
-                let mut description = String::new();
-                for line in lines.split('\n') {
-                    if !line.starts_with('#') {
-                        description.push_str(line)
-                    }
-                }
-
-                Some(description)
-            } else {
-                desc
+            let desc = match desc {
+                Some(d) => Some(d),
+                None => desc_in_editor(),
             };
 
             let assign: Vec<String> = match assign {
@@ -349,7 +78,15 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
         }
 
         Some(CliTauSubCommands::SetState { id, state }) => {
-            set_state(rpc_addr, id, state.trim()).await?;
+            if state.as_str() == "open" {
+                set_state(rpc_addr, id, state.trim()).await?;
+            } else if state.as_str() == "pause" {
+                set_state(rpc_addr, id, state.trim()).await?;
+            } else if state.as_str() == "stop" {
+                set_state(rpc_addr, id, state.trim()).await?;
+            } else {
+                error!("Task state could only be one of three states: open, pause or stop");
+            }
         }
 
         Some(CliTauSubCommands::GetState { id }) => {
@@ -362,57 +99,39 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
         }
 
         Some(CliTauSubCommands::GetComment { id }) => {
-            let rep = list(rpc_addr, json!([])).await?;
-            let tasks: Vec<Value> = serde_json::from_value(rep)?;
+            let rep = get_by_id(rpc_addr, id).await?;
+            let comments = get_comments(rep)?;
 
-            if tasks.iter().any(|x| x["id"].as_u64().unwrap() == id) {
-                let index: usize = (id - 1).try_into().unwrap();
-                let comments: Vec<Value> =
-                    serde_json::from_value(tasks[index]["comments"].clone())?;
-                let mut cmnt = String::new();
-
-                for comment in comments {
-                    cmnt.push_str(comment["author"].as_str().ok_or(Error::OperationFailed)?);
-                    cmnt.push_str(": ");
-                    cmnt.push_str(comment["content"].as_str().ok_or(Error::OperationFailed)?);
-                    cmnt.push('\n');
-                }
-                cmnt.pop();
-
-                println!("Comments on Task with id {}:\n{}", id, cmnt);
-            }
+            println!("Comments on Task with id {}:\n{}", id, comments);
         }
 
         Some(CliTauSubCommands::Get { id }) => {
-            let rep = show(rpc_addr, id).await?;
-            let due = if rep["due"].is_u64() {
-                let timestamp = rep["due"].as_i64().unwrap();
-                NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
-            } else {
-                "".to_string()
-            };
+            let task = get_by_id(rpc_addr, id).await?;
 
-            let created_at = if rep["created_at"].is_u64() {
-                let created = rep["created_at"].as_i64().unwrap();
-                NaiveDateTime::from_timestamp(created, 0).date().format("%A %-d %B").to_string()
-            } else {
-                "".to_string()
-            };
+            let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
+            let current_state: String = serde_json::from_value(get_state(rpc_addr, id).await?)?;
 
-            let t = TaskInfo {
-                ref_id: serde_json::from_value(rep["ref_id"].clone())?,
-                id: serde_json::from_value(rep["id"].clone())?,
-                title: serde_json::from_value(rep["title"].clone())?,
-                desc: serde_json::from_value(rep["desc"].clone())?,
-                assign: serde_json::from_value(rep["assign"].clone())?,
-                project: serde_json::from_value(rep["project"].clone())?,
-                due,
-                rank: serde_json::from_value(rep["rank"].clone())?,
-                created_at,
-                events: serde_json::from_value(rep["events"].clone())?,
-                comments: serde_json::from_value(rep["comments"].clone())?,
-            };
-            println!("TaskInfo: {}", serde_json::to_string_pretty(&t)?);
+            let mut table = table!([Bd => "ref_id", &taskinfo.ref_id],
+                                    ["id", &taskinfo.id.to_string()],
+                                    [Bd =>"title", &taskinfo.title],
+                                    ["desc", &taskinfo.desc],
+                                    [Bd =>"assign", get_from_task(task.clone(), "assign")?],
+                                    ["project", get_from_task(task.clone(), "project")?],
+                                    [Bd =>"due", timestamp_to_date(task["due"].clone(),"date")],
+                                    ["rank", &taskinfo.rank.to_string()],
+                                    [Bd =>"created_at", timestamp_to_date(task["created_at"].clone(), "datetime")],
+                                    ["current_state", &current_state],
+                                    [Bd => "comments", get_comments(task.clone())?]);
+
+            table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+            table.set_titles(row!["Name", "Value"]);
+
+            table.printstd();
+
+            let mut event_table = table!(["events", get_events(task.clone())?]);
+            event_table.set_format(*format::consts::FORMAT_NO_COLSEP);
+
+            event_table.printstd();
         }
 
         Some(CliTauSubCommands::List {}) | None => {
@@ -435,45 +154,33 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
             };
 
             for task in tasks {
-                let project: Vec<Value> = serde_json::from_value(task["project"].clone())?;
-                let mut projects = String::new();
-                for (i, _) in project.iter().enumerate() {
-                    if !projects.is_empty() {
-                        projects.push(',');
-                    }
-                    projects.push_str(project.index(i).as_str().unwrap());
-                }
-
-                let assign: Vec<Value> = serde_json::from_value(task["assign"].clone())?;
-                let mut asgn = String::new();
-                for (i, _) in assign.iter().enumerate() {
-                    if !asgn.is_empty() {
-                        asgn.push(',');
-                    }
-                    asgn.push_str(assign.index(i).as_str().unwrap());
-                }
-
-                let date = if task["due"].is_u64() {
-                    let due = task["due"].as_i64().unwrap();
-                    NaiveDateTime::from_timestamp(due, 0).date().format("%A %-d %B").to_string()
-                } else {
-                    "".to_string()
+                let events: Vec<Value> = serde_json::from_value(task["events"].clone())?;
+                let state = match events.last() {
+                    Some(s) => s["action"].as_str().unwrap(),
+                    None => "open",
                 };
 
                 let rank = task["rank"].as_f64().unwrap_or(0.0) as f32;
 
+                let (max_style, min_style, mid_style, gen_style) = if state == "open" {
+                    ("bFC", "Fb", "Fc", "")
+                } else {
+                    ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
+                };
+
                 table.add_row(Row::new(vec![
-                    Cell::new(&task["id"].to_string()),
-                    Cell::new(task["title"].as_str().unwrap()),
-                    Cell::new(&projects),
-                    Cell::new(&asgn),
-                    Cell::new(&date),
+                    Cell::new(&task["id"].to_string()).style_spec(gen_style),
+                    Cell::new(task["title"].as_str().unwrap()).style_spec(gen_style),
+                    Cell::new(&get_from_task(task.clone(), "project")?).style_spec(gen_style),
+                    Cell::new(&get_from_task(task.clone(), "assign")?).style_spec(gen_style),
+                    Cell::new(&timestamp_to_date(task["due"].clone(), "date"))
+                        .style_spec(gen_style),
                     if rank == max_rank {
-                        Cell::new(&rank.to_string()).style_spec("bFC")
+                        Cell::new(&rank.to_string()).style_spec(max_style)
                     } else if rank == min_rank {
-                        Cell::new(&rank.to_string()).style_spec("Fb")
+                        Cell::new(&rank.to_string()).style_spec(min_style)
                     } else {
-                        Cell::new(&rank.to_string()).style_spec("Fc")
+                        Cell::new(&rank.to_string()).style_spec(mid_style)
                     },
                 ]));
             }

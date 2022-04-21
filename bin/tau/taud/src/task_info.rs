@@ -112,7 +112,7 @@ impl TaskInfo {
         crate::util::save::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
             .map_err(TaudError::Darkfi)?;
 
-        if self.get_state() != "open" {
+        if self.get_state() == "stop" {
             self.deactivate(dataset_path)?;
         } else {
             self.activate(dataset_path)?;
