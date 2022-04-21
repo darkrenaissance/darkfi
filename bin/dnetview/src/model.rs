@@ -2,7 +2,10 @@ use async_std::sync::Mutex;
 
 use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
-use tui::widgets::ListState;
+
+type NodeId = u32;
+type SessionId = u32;
+type ConnectId = u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SelectableObject {
@@ -11,10 +14,6 @@ pub enum SelectableObject {
     Connect(ConnectInfo),
 }
 
-// how do you know which type of thing the hashmap belongs to
-// we don't need to ??
-// given an id, return the type of Selectable
-//
 pub struct Model {
     pub ids: Mutex<FxHashSet<u32>>,
     pub infos: Mutex<FxHashMap<u32, SelectableObject>>,
@@ -28,43 +27,6 @@ impl Model {
         Model { ids, infos }
     }
 }
-
-//pub struct IdList {
-//    pub state: Mutex<ListState>,
-//    pub node_id: Mutex<FxHashSet<String>>,
-//}
-//
-//impl IdList {
-//    pub fn new(node_id: FxHashSet<String>) -> IdList {
-//        let node_id = Mutex::new(node_id);
-//        IdList { state: Mutex::new(ListState::default()), node_id }
-//    }
-//}
-
-//pub struct InfoList {
-//    pub index: Mutex<usize>,
-//    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
-//}
-//
-//impl InfoList {
-//    pub fn new() -> InfoList {
-//        let index = 0;
-//        let index = Mutex::new(index);
-//        let infos = Mutex::new(FxHashMap::default());
-//
-//        InfoList { index, infos }
-//    }
-//}
-//
-//impl Default for InfoList {
-//    fn default() -> Self {
-//        Self::new()
-//    }
-//}
-
-type NodeId = u32;
-type SessionId = u32;
-type ConnectId = u32;
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct NodeInfo {
