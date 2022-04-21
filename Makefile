@@ -20,7 +20,10 @@ BINDEPS = \
 
 all: $(BINS)
 
-$(BINS): $(BINDEPS)
+token_lists:
+	$(MAKE) -C contrib/token all
+
+$(BINS): token_lists $(BINDEPS)
 	$(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
