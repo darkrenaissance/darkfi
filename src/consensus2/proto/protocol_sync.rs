@@ -25,6 +25,7 @@ pub struct ProtocolSync {
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
+    consensus_mode: bool,
 }
 
 impl ProtocolSync {
@@ -32,6 +33,7 @@ impl ProtocolSync {
         channel: ChannelPtr,
         state: ValidatorStatePtr,
         p2p: P2pPtr,
+        consensus_mode: bool,
     ) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<BlockOrder>().await;
@@ -47,6 +49,7 @@ impl ProtocolSync {
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
             p2p,
+            consensus_mode,
         }))
     }
 
@@ -75,17 +78,18 @@ impl ProtocolSync {
 
             debug!("ProtocolSync::handle_receive_block() received block");
 
-            // TODO: The following code should be executed only by replicators, not
-            // consensus nodes.
-
             // Node stores finalized flock, if it doesn't exist (checking by slot),
             // and removes its transactions from the unconfirmed_txs vector.
+            // Consensus-mode enabled nodes have already performed these steps,
+            // during proposal finalization.
             // Extra validations can be added here.
-            let info_copy = (*info).clone();
-            if !self.state.read().await.blockchain.has_block(&info_copy)? {
-                self.state.write().await.blockchain.add(&[info_copy.clone()])?;
-                self.state.write().await.remove_txs(info_copy.txs.clone())?;
-                self.p2p.broadcast(info_copy).await?;
+            if !self.consensus_mode {
+                let info_copy = (*info).clone();
+                if !self.state.read().await.blockchain.has_block(&info_copy)? {
+                    self.state.write().await.blockchain.add(&[info_copy.clone()])?;
+                    self.state.write().await.remove_txs(info_copy.txs.clone())?;
+                    self.p2p.broadcast(info_copy).await?;
+                }
             }
         }
     }
