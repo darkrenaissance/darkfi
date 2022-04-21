@@ -11,21 +11,21 @@ pub enum SelectableObject {
     Connect(ConnectInfo),
 }
 
+// how do you know which type of thing the hashmap belongs to
+// we don't need to ??
+// given an id, return the type of Selectable
+//
 pub struct Model {
-    pub id_set: Mutex<FxHashSet<u32>>,
-    pub node_info: Mutex<FxHashMap<u32, SelectableObject>>,
-    pub session_info: Mutex<FxHashMap<u32, SelectableObject>>,
-    pub connect_info: Mutex<FxHashMap<u32, SelectableObject>>,
+    pub ids: Mutex<FxHashSet<u32>>,
+    pub infos: Mutex<FxHashMap<u32, SelectableObject>>,
 }
 
 impl Model {
     pub fn new(
-        id_set: Mutex<FxHashSet<u32>>,
-        node_info: Mutex<FxHashMap<u32, SelectableObject>>,
-        session_info: Mutex<FxHashMap<u32, SelectableObject>>,
-        connect_info: Mutex<FxHashMap<u32, SelectableObject>>,
+        ids: Mutex<FxHashSet<u32>>,
+        infos: Mutex<FxHashMap<u32, SelectableObject>>,
     ) -> Model {
-        Model { id_set, node_info, session_info, connect_info }
+        Model { ids, infos }
     }
 }
 
@@ -41,26 +41,26 @@ impl Model {
 //    }
 //}
 
-pub struct InfoList {
-    pub index: Mutex<usize>,
-    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
-}
-
-impl InfoList {
-    pub fn new() -> InfoList {
-        let index = 0;
-        let index = Mutex::new(index);
-        let infos = Mutex::new(FxHashMap::default());
-
-        InfoList { index, infos }
-    }
-}
-
-impl Default for InfoList {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+//pub struct InfoList {
+//    pub index: Mutex<usize>,
+//    pub infos: Mutex<FxHashMap<String, NodeInfo>>,
+//}
+//
+//impl InfoList {
+//    pub fn new() -> InfoList {
+//        let index = 0;
+//        let index = Mutex::new(index);
+//        let infos = Mutex::new(FxHashMap::default());
+//
+//        InfoList { index, infos }
+//    }
+//}
+//
+//impl Default for InfoList {
+//    fn default() -> Self {
+//        Self::new()
+//    }
+//}
 
 type NodeId = u32;
 type SessionId = u32;

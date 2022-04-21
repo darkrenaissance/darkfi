@@ -79,12 +79,10 @@ enum SelectableObject {
 ```
 Id is a randomly generated number to correspond to the received info.
 
-Each SelectableObject corresponds to an info HashMap.
+We copy all of these values into a info hashmap.
 
 ```
-NodeInfo = Hashmap<NodeId, NodeInfo>
-SessionInfo = Hashmap<SessionId, SessionInfo>
-ConnectInfo = Hashmap<ConnectId, ConnectInfo>
+infos = Mutex<Hashmap<u32, SelectableObject>>
 ```
 
 We use mutexes to protect the data because we are updating it

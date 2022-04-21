@@ -107,12 +107,10 @@ async fn main() -> Result<()> {
 
     terminal.clear()?;
 
-    let id_set = Mutex::new(FxHashSet::default());
-    let node_info = Mutex::new(FxHashMap::default());
-    let session_info = Mutex::new(FxHashMap::default());
-    let connect_info = Mutex::new(FxHashMap::default());
+    let ids = Mutex::new(FxHashSet::default());
+    let infos = Mutex::new(FxHashMap::default());
 
-    let model = Arc::new(Model::new(id_set, node_info, session_info, connect_info));
+    let model = Arc::new(Model::new(ids, infos));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
