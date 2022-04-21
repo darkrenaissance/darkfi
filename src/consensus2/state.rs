@@ -609,4 +609,21 @@ impl ValidatorState {
             self.consensus.participants.remove(&index);
         }
     }
+
+    /// Utility function to reset the current consensus state.
+    pub fn reset_consensus_state(&mut self) -> Result<()> {
+        let genesis_ts = self.consensus.genesis_ts.clone();
+        let genesis_block = self.consensus.genesis_block.clone();
+        let consensus = ConsensusState {
+            genesis_ts,
+            genesis_block,
+            proposals: vec![],
+            orphan_votes: vec![],
+            participants: FxIndexMap::with_hasher(FxBuildHasher::default()),
+            pending_participants: vec![],
+        };
+
+        self.consensus = consensus;
+        Ok(())
+    }
 }
