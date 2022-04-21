@@ -16,14 +16,16 @@ pub struct ProtocolVote {
     vote_sub: MessageSubscription<Vote>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
-    p2p: P2pPtr,
+    main_p2p: P2pPtr,
+    consensus_p2p: P2pPtr,
 }
 
 impl ProtocolVote {
     pub async fn init(
         channel: ChannelPtr,
         state: ValidatorStatePtr,
-        p2p: P2pPtr,
+        main_p2p: P2pPtr,
+        consensus_p2p: P2pPtr,
     ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Vote>().await;
@@ -34,7 +36,8 @@ impl ProtocolVote {
             vote_sub,
             jobsman: ProtocolJobsManager::new("VoteProtocol", channel),
             state,
-            p2p,
+            main_p2p,
+            consensus_p2p,
         })
     }
 
@@ -49,8 +52,18 @@ impl ProtocolVote {
                 vote
             );
             let vote_copy = (*vote).clone();
-            if self.state.write().unwrap().receive_vote(&vote_copy)? {
-                self.p2p.broadcast(vote_copy).await?;
+            let (voted, to_broadcast) = self.state.write().unwrap().receive_vote(&vote_copy)?;
+            if voted {
+                self.consensus_p2p.broadcast(vote_copy).await?;
+                // Broadcasting finalized blocks info, if any
+                match to_broadcast {
+                    Some(blocks) => {
+                        for info in blocks {
+                            self.main_p2p.broadcast(info).await?;
+                        }
+                    }
+                    None => continue,
+                }
             };
         }
     }

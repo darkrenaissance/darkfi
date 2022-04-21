@@ -3,7 +3,7 @@ use crate::{
     Result,
 };
 
-use super::{participant::Participant, util::Timestamp, vote::Vote};
+use super::{block::Block, participant::Participant, util::Timestamp, vote::Vote};
 
 const SLED_STREAMLET_METADATA_TREE: &[u8] = b"_streamlet_metadata";
 
@@ -62,9 +62,22 @@ impl StreamletMetadata {
 pub struct StreamletMetadataStore(sled::Tree);
 
 impl StreamletMetadataStore {
-    pub fn new(db: &sled::Db) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis: i64) -> Result<Self> {
         let tree = db.open_tree(SLED_STREAMLET_METADATA_TREE)?;
-        Ok(Self(tree))
+        let store = Self(tree);
+        if store.0.is_empty() {
+            // Genesis block record is generated.
+            let block = blake3::hash(&serialize(&Block::genesis_block(genesis)));
+            let metadata = StreamletMetadata {
+                votes: vec![],
+                notarized: true,
+                finalized: true,
+                participants: vec![],
+            };
+            store.insert(block, &metadata)?;
+        }
+
+        Ok(store)
     }
 
     /// Insert streamlet metadata into the store.
@@ -72,6 +85,24 @@ impl StreamletMetadataStore {
     pub fn insert(&self, block: blake3::Hash, metadata: &StreamletMetadata) -> Result<()> {
         self.0.insert(block.as_bytes(), serialize(metadata))?;
         Ok(())
+    }
+
+    /// Fetch given streamlet metadata from the store.
+    /// The resulting vector contains `Option` which is `Some` if the metadata
+    /// was found in the store, and `None`, if it has not.
+    pub fn get(&self, hashes: &[blake3::Hash]) -> Result<Vec<Option<StreamletMetadata>>> {
+        let mut ret: Vec<Option<StreamletMetadata>> = Vec::with_capacity(hashes.len());
+
+        for i in hashes {
+            if let Some(found) = self.0.get(i.as_bytes())? {
+                let metadata = deserialize(&found)?;
+                ret.push(Some(metadata));
+            } else {
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 
     /// Retrieve all streamlet metadata.

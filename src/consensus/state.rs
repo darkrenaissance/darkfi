@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    block::{Block, BlockProposal},
+    block::{Block, BlockInfo, BlockProposal},
     blockchain::{Blockchain, ProposalsChain},
     metadata::{Metadata, StreamletMetadata},
     participant::Participant,
@@ -206,21 +206,22 @@ impl ValidatorState {
 
     /// Finds the longest fully notarized blockchain the node holds and returns the last block hash.
     pub fn longest_notarized_chain_last_hash(&self) -> Result<blake3::Hash> {
-        let hash = if !self.consensus.proposals.is_empty() {
-            let mut longest_notarized_chain = &self.consensus.proposals[0];
-            let mut length = longest_notarized_chain.proposals.len();
-            if self.consensus.proposals.len() > 1 {
-                for chain in &self.consensus.proposals[1..] {
-                    if chain.notarized() && chain.proposals.len() > length {
-                        length = chain.proposals.len();
-                        longest_notarized_chain = chain;
-                    }
+        let mut longest_notarized_chain: Option<ProposalsChain> = None;
+        let mut length = 0;
+        if !self.consensus.proposals.is_empty() {
+            for chain in &self.consensus.proposals[1..] {
+                if chain.notarized() && chain.proposals.len() > length {
+                    longest_notarized_chain = Some(chain.clone());
+                    length = chain.proposals.len();
                 }
             }
-            longest_notarized_chain.proposals.last().unwrap().hash()
-        } else {
-            self.blockchain.last()?.unwrap().1
+        }
+
+        let hash = match longest_notarized_chain {
+            Some(chain) => chain.proposals.last().unwrap().hash(),
+            None => self.blockchain.last()?.unwrap().1,
         };
+
         Ok(hash)
     }
 
@@ -305,11 +306,14 @@ impl ValidatorState {
 
     /// Node verifies if provided chain is notarized excluding the last block.
     pub fn extends_notarized_chain(&self, chain: &ProposalsChain) -> bool {
-        for proposal in &chain.proposals[..(chain.proposals.len() - 1)] {
-            if !proposal.sm.notarized {
-                return false
+        if chain.proposals.len() > 1 {
+            for proposal in &chain.proposals[..(chain.proposals.len() - 1)] {
+                if !proposal.sm.notarized {
+                    return false
+                }
             }
         }
+
         true
     }
 
@@ -329,7 +333,7 @@ impl ValidatorState {
 
         let (last_sl, last_block) = self.blockchain.last()?.unwrap();
         if proposal.st != last_block || proposal.sl <= last_sl {
-            debug!("Proposal doesn't extend any known chains.");
+            error!("Proposal doesn't extend any known chains.");
             return Ok(-2)
         }
 
@@ -345,20 +349,20 @@ impl ValidatorState {
     /// nodes unconfirmed transactions list.
     /// Finally, we check if the notarization of the proposal can finalize parent proposals
     /// in its chain.
-    pub fn receive_vote(&mut self, vote: &Vote) -> Result<bool> {
+    pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
         let mut encoded_proposal = vec![];
         let result = vote.proposal.encode(&mut encoded_proposal);
         match result {
             Ok(_) => (),
             Err(e) => {
                 error!("Proposal encoding failed. Error: {:?}", e);
-                return Ok(false)
+                return Ok((false, None))
             }
         };
 
         if !vote.public_key.verify(&encoded_proposal[..], &vote.vote) {
             debug!("Voter signature couldn't be verified. Voter: {:?}", vote.id);
-            return Ok(false)
+            return Ok((false, None))
         }
 
         let nodes_count = self.consensus.participants.len();
@@ -369,12 +373,12 @@ impl ValidatorState {
             Some(participant) => {
                 if self.current_epoch() <= participant.joined {
                     debug!("Voter joined after current epoch. Voter: {:?}", vote.id);
-                    return Ok(false)
+                    return Ok((false, None))
                 }
             }
             None => {
                 debug!("Voter is not a participant. Voter: {:?}", vote.id);
-                return Ok(false)
+                return Ok((false, None))
             }
         }
 
@@ -384,16 +388,17 @@ impl ValidatorState {
             if !self.consensus.orphan_votes.contains(vote) {
                 self.consensus.orphan_votes.push(vote.clone());
             }
-            return Ok(false)
+            return Ok((false, None))
         }
 
         let (unwrapped, chain_index) = proposal.unwrap();
         if !unwrapped.sm.votes.contains(vote) {
             unwrapped.sm.votes.push(vote.clone());
 
+            let mut to_broadcast = Vec::new();
             if !unwrapped.sm.notarized && unwrapped.sm.votes.len() > (2 * nodes_count / 3) {
                 unwrapped.sm.notarized = true;
-                self.chain_finalization(chain_index)?;
+                to_broadcast = self.chain_finalization(chain_index)?;
             }
 
             // updating participant vote
@@ -414,9 +419,9 @@ impl ValidatorState {
 
             self.consensus.participants.insert(participant.id, participant);
 
-            return Ok(true)
+            return Ok((true, Some(to_broadcast)))
         }
-        Ok(false)
+        return Ok((false, None))
     }
 
     /// Node searches it the chains it holds for provided proposal.
@@ -439,7 +444,8 @@ impl ValidatorState {
     /// Consensus finalization logic: If node has observed the notarization of 3 consecutive
     /// proposals in a fork chain, it finalizes (appends to canonical blockchain) all proposals up to the middle block.
     /// When fork chain proposals are finalized, rest fork chains not starting by those proposals are removed.
-    pub fn chain_finalization(&mut self, chain_index: i64) -> Result<()> {
+    pub fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
+        let mut to_broadcast = Vec::new();
         let chain = &mut self.consensus.proposals[chain_index as usize];
         let len = chain.proposals.len();
         if len > 2 {
@@ -465,7 +471,14 @@ impl ValidatorState {
                 }
                 chain.proposals.drain(0..(consecutive - 1));
                 for proposal in &finalized {
-                    self.blockchain.add(proposal.clone())?;
+                    self.blockchain.add_by_proposal(proposal.clone())?;
+                    to_broadcast.push(BlockInfo::new(
+                        proposal.st,
+                        proposal.sl,
+                        proposal.txs.clone(),
+                        proposal.metadata.clone(),
+                        proposal.sm.clone(),
+                    ));
                 }
 
                 let (last_sl, last_block) = self.blockchain.last()?.unwrap();
@@ -493,7 +506,7 @@ impl ValidatorState {
             }
         }
 
-        Ok(())
+        Ok(to_broadcast)
     }
 
     /// Node retreives a new participant and appends it to the pending participants list.
@@ -554,5 +567,20 @@ impl ValidatorState {
             Err(_) => Err(Error::OperationFailed),
             _ => Ok(()),
         }
+    }
+
+    /// Util function to reset the current consensus state.
+    pub fn reset_consensus_state(&mut self) -> Result<()> {
+        let genesis = self.consensus.genesis.clone();
+        let consensus = ConsensusState {
+            genesis,
+            proposals: Vec::new(),
+            orphan_votes: Vec::new(),
+            participants: BTreeMap::new(),
+            pending_participants: Vec::new(),
+        };
+
+        self.consensus = consensus;
+        Ok(())
     }
 }

@@ -4,12 +4,12 @@
 
 nodes=4
 
-# Copying the node state files with a blockchain containing only the genesis block.
-bound=$(($nodes - 1))
-for i in $(eval echo "{0..$bound}")
-do
-  rm -rf ~/.config/darkfi/validatord_db_$i
-done
+# Copying the node state files with a blockchain containing only the genesis block. Uncomment for fresh runs.
+#bound=$(($nodes - 1))
+#for i in $(eval echo "{0..$bound}")
+#do
+#  rm -rf ~/.config/darkfi/validatord_db_$i
+#done
 
 # PIDs array
 pids=()
@@ -28,6 +28,7 @@ do
   cargo run -- \
     --accept 0.0.0.0:1100$i \
     --caccept 0.0.0.0:1200$i \
+    --seeds 127.0.0.1:11000 \
     --cseeds 127.0.0.1:12000 \
     --rpc 127.0.0.1:666$i \
     --external 127.0.0.1:1100$i \
@@ -55,6 +56,7 @@ bound=$(($nodes-1))
 cargo run -- \
     --accept 0.0.0.0:1100$bound \
     --caccept 0.0.0.0:1200$bound \
+    --seeds 127.0.0.1:11000 \
     --cseeds 127.0.0.1:12000 \
     --rpc 127.0.0.1:666$bound \
     --external 127.0.0.1:1100$bound \

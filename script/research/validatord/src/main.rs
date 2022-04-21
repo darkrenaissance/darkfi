@@ -12,6 +12,8 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     consensus::{
+        block::{BlockOrder, BlockResponse},
+        blockchain::{ForkOrder, ForkResponse},
         participant::Participant,
         state::{ValidatorState, ValidatorStatePtr},
         tx::Tx,
@@ -36,7 +38,8 @@ use darkfi::{
 
 use validatord::protocols::{
     protocol_participant::ProtocolParticipant, protocol_proposal::ProtocolProposal,
-    protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
+    protocol_sync::ProtocolSync, protocol_sync_forks::ProtocolSyncForks, protocol_tx::ProtocolTx,
+    protocol_vote::ProtocolVote,
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -104,7 +107,90 @@ struct Opt {
     verbose: u8,
 }
 
+async fn syncing_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
+    info!("Node starts syncing blockchain...");
+    // We retrieve p2p network connected channels, so we can use it to parallelize downloads
+    // Using len here because is_empty() uses unstable library feature 'exact_size_is_empty'
+    if p2p.channels().lock().await.values().len() != 0 {
+        // Currently we will use just the last channel
+        let channel = p2p.channels().lock().await.values().last().unwrap().clone();
+
+        // Communication setup
+        let message_subsytem = channel.get_message_subsystem();
+        message_subsytem.add_dispatch::<BlockResponse>().await;
+        let response_sub = channel
+            .subscribe_msg::<BlockResponse>()
+            .await
+            .expect("Missing BlockResponse dispatcher!");
+
+        // Nodes sends the last known block hash of the canonical blockchain
+        // and loops until the respond is the same block (used to utilize batch requests)
+        let mut last = state.read().unwrap().blockchain.last()?.unwrap();
+        info!("Last known block: {:?} - {:?}", last.0, last.1);
+        loop {
+            // Node creates a BlockOrder and sends it
+            let order = BlockOrder { sl: last.0, block: last.1 };
+            channel.send(order).await?;
+
+            // Node stores responce data. Extra validations can be added here.
+            let response = response_sub.receive().await?;
+            for info in &response.blocks {
+                state.write().unwrap().blockchain.add_by_info(info.clone())?;
+            }
+            let last_received = state.read().unwrap().blockchain.last()?.unwrap();
+            info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);
+            if last == last_received {
+                break
+            }
+            last = last_received;
+        }
+    } else {
+        info!("Node is not connected to other nodes.");
+    }
+
+    info!("Node synced!");
+    Ok(())
+}
+
+async fn syncing_forks_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
+    info!("Node starts syncing forks...");
+    // Using len here because is_empty() uses unstable library feature 'exact_size_is_empty'
+    if p2p.channels().lock().await.values().len() != 0 {
+        // Nodes ask for the fork chains of the last channel peer
+        let channel = p2p.channels().lock().await.values().last().unwrap().clone();
+
+        // Communication setup
+        let message_subsytem = channel.get_message_subsystem();
+        message_subsytem.add_dispatch::<ForkResponse>().await;
+        let response_sub = channel
+            .subscribe_msg::<ForkResponse>()
+            .await
+            .expect("Missing ForkResponse dispatcher!");
+
+        // Node creates a BlockOrder and sends it
+        let order = ForkOrder { id: state.read().unwrap().id };
+        channel.send(order).await?;
+
+        // Node stores responce data. Extra validations can be added here.
+        let response = response_sub.receive().await?;
+        state.write().unwrap().consensus.proposals = response.proposals.clone();
+    } else {
+        info!("Node is not connected to other nodes, resetting consensus state.");
+        state.write().unwrap().reset_consensus_state()?;
+    }
+
+    info!("Node synced!");
+    Ok(())
+}
+
 async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
+    // Node syncs its fork chains
+    let result = syncing_forks_task(p2p.clone(), state.clone()).await;
+    match result {
+        Ok(()) => (),
+        Err(e) => error!("Sync forks failed. Error: {:?}", e),
+    }
+
     // Node signals the network that it starts participating
     let participant =
         Participant::new(state.read().unwrap().id, state.read().unwrap().current_epoch());
@@ -142,7 +228,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
                     match vote {
                         Ok(x) => {
                             if x.is_none() {
-                                debug!("Node did not vote for the proposed block.");
+                                error!("Node did not vote for the proposed block.");
                             } else {
                                 let vote = x.unwrap();
                                 let result = state.write().unwrap().receive_vote(&vote);
@@ -224,57 +310,94 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let state = ValidatorState::new(database_path, id, genesis).unwrap();
 
     // Main P2P registry setup
-    let p2p = net::P2p::new(subnet_settings).await;
-    let _registry = p2p.protocol_registry();
+    let main_p2p = net::P2p::new(subnet_settings).await;
+    let registry = main_p2p.protocol_registry();
+
+    // Adding ProtocolSync to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, main_p2p| {
+            let state = state2.clone();
+            async move { ProtocolSync::init(channel, state, main_p2p).await }
+        })
+        .await;
+
+    // Performs seed session
+    main_p2p.clone().start(executor.clone()).await?;
+    // Actual main p2p session
+    let ex2 = executor.clone();
+    let p2p = main_p2p.clone();
+    executor
+        .spawn(async move {
+            if let Err(err) = p2p.run(ex2).await {
+                error!("Error: p2p run failed {}", err);
+            }
+        })
+        .detach();
+
+    // Node starts syncing
+    let state2 = state.clone();
+    syncing_task(main_p2p.clone(), state2).await?;
 
     // Consensus P2P registry setup
-    let p2p = net::P2p::new(consensus_subnet_settings).await;
-    let registry = p2p.protocol_registry();
+    let consensus_p2p = net::P2p::new(consensus_subnet_settings).await;
+    let registry = consensus_p2p.protocol_registry();
 
     // Adding ProtocolTx to the registry
     let state2 = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(net::SESSION_ALL, move |channel, consensus_p2p| {
             let state = state2.clone();
-            async move { ProtocolTx::init(channel, state, p2p).await }
+            async move { ProtocolTx::init(channel, state, consensus_p2p).await }
         })
         .await;
 
     // Adding PropotolVote to the registry
+    let p2p = main_p2p.clone();
     let state2 = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(net::SESSION_ALL, move |channel, consensus_p2p| {
             let state = state2.clone();
-            async move { ProtocolVote::init(channel, state, p2p).await }
+            let main_p2p = p2p.clone();
+            async move { ProtocolVote::init(channel, state, main_p2p, consensus_p2p).await }
         })
         .await;
 
     // Adding ProtocolProposal to the registry
     let state2 = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(net::SESSION_ALL, move |channel, consensus_p2p| {
             let state = state2.clone();
-            async move { ProtocolProposal::init(channel, state, p2p).await }
+            async move { ProtocolProposal::init(channel, state, consensus_p2p).await }
         })
         .await;
 
     // Adding ProtocolParticipant to the registry
     let state2 = state.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(net::SESSION_ALL, move |channel, consensus_p2p| {
             let state = state2.clone();
-            async move { ProtocolParticipant::init(channel, state, p2p).await }
+            async move { ProtocolParticipant::init(channel, state, consensus_p2p).await }
+        })
+        .await;
+
+    // Adding ProtocolSyncForks to the registry
+    let state2 = state.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, _consensus_p2p| {
+            let state = state2.clone();
+            async move { ProtocolSyncForks::init(channel, state).await }
         })
         .await;
 
     // Performs seed session
-    p2p.clone().start(executor.clone()).await?;
+    consensus_p2p.clone().start(executor.clone()).await?;
     // Actual consensus p2p session
     let ex2 = executor.clone();
-    let p2p2 = p2p.clone();
+    let p2p = consensus_p2p.clone();
     executor
         .spawn(async move {
-            if let Err(err) = p2p2.run(ex2).await {
+            if let Err(err) = p2p.run(ex2).await {
                 error!("Error: p2p run failed {}", err);
             }
         })
@@ -285,14 +408,14 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
     let ex3 = ex2.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {
         state: state.clone(),
-        p2p: p2p.clone(),
+        p2p: consensus_p2p.clone(),
         _rpc_listen_addr: opts.rpc,
     });
     executor
         .spawn(async move { listen_and_serve(rpc_server_config, rpc_interface, ex3).await })
         .detach();
 
-    proposal_task(p2p, state).await;
+    proposal_task(consensus_p2p, state).await;
 
     Ok(())
 }

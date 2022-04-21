@@ -44,6 +44,24 @@ impl TxStore {
         Ok(txhash)
     }
 
+    /// Fetch given transactions from the txstore.
+    /// The resulting vector contains `Option` which is `Some` if the tx
+    /// was found in the txstore, and `None`, if it has not.
+    pub fn get(&self, txhashes: &[blake3::Hash]) -> Result<Vec<Option<Tx>>> {
+        let mut ret: Vec<Option<Tx>> = Vec::with_capacity(txhashes.len());
+
+        for i in txhashes {
+            if let Some(found) = self.0.get(i.as_bytes())? {
+                let tx = deserialize(&found)?;
+                ret.push(Some(tx));
+            } else {
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
     /// Retrieve all transactions.
     /// Be carefull as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Tx)>>> {

@@ -3,13 +3,13 @@ use std::io;
 use log::debug;
 
 use crate::{
-    impl_vec,
+    impl_vec, net,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
 
 use super::{
-    block::{Block, BlockOrderStore, BlockProposal, BlockStore},
+    block::{Block, BlockInfo, BlockOrderStore, BlockProposal, BlockStore},
     metadata::StreamletMetadataStore,
     tx::TxStore,
 };
@@ -32,12 +32,12 @@ impl Blockchain {
         let blocks = BlockStore::new(db, genesis)?;
         let order = BlockOrderStore::new(db, genesis)?;
         let transactions = TxStore::new(db)?;
-        let streamlet_metadata = StreamletMetadataStore::new(db)?;
+        let streamlet_metadata = StreamletMetadataStore::new(db, genesis)?;
         Ok(Blockchain { blocks, order, transactions, streamlet_metadata })
     }
 
     /// Insertion of a block proposal.
-    pub fn add(&mut self, proposal: BlockProposal) -> Result<blake3::Hash> {
+    pub fn add_by_proposal(&mut self, proposal: BlockProposal) -> Result<blake3::Hash> {
         // Storing transactions
         let mut txs = Vec::new();
         for tx in proposal.txs {
@@ -58,9 +58,85 @@ impl Blockchain {
         Ok(hash)
     }
 
+    /// Insertion of a block info.
+    pub fn add_by_info(&mut self, info: BlockInfo) -> Result<blake3::Hash> {
+        if self.has_block(&info)? {
+            let blockhash =
+                BlockProposal::to_proposal_hash(info.st, info.sl, &info.txs, &info.metadata);
+            return Ok(blockhash)
+        }
+
+        // Storing transactions
+        let mut txs = Vec::new();
+        for tx in info.txs {
+            let hash = self.transactions.insert(&tx)?;
+            txs.push(hash);
+        }
+
+        // Storing block
+        let block = Block { st: info.st, sl: info.sl, txs, metadata: info.metadata };
+        let hash = self.blocks.insert(&block)?;
+
+        // Storing block order
+        self.order.insert(block.sl, hash)?;
+
+        // Storing streamlet metadata
+        self.streamlet_metadata.insert(hash, &info.sm)?;
+
+        Ok(hash)
+    }
+
     /// Retrieve the last block slot and hash.
     pub fn last(&self) -> Result<Option<(u64, blake3::Hash)>> {
         self.order.get_last()
+    }
+
+    /// Retrieve the last block slot and hash.
+    pub fn has_block(&self, info: &BlockInfo) -> Result<bool> {
+        let hashes = self.order.get(&vec![info.sl])?;
+        if hashes.is_empty() {
+            return Ok(false)
+        }
+        if let Some(found) = &hashes[0] {
+            // Checking provided info produces same hash
+            let blockhash =
+                BlockProposal::to_proposal_hash(info.st, info.sl, &info.txs, &info.metadata);
+
+            return Ok(blockhash == found.block)
+        }
+        Ok(false)
+    }
+
+    /// Retrieve n blocks with all their info, after start key.
+    pub fn get_with_info(&self, key: u64, n: u64) -> Result<Vec<BlockInfo>> {
+        let mut blocks_info = Vec::new();
+
+        // Retrieve requested hashes from order store
+        let hashes = self.order.get_after(key, n)?;
+
+        // Retrieve blocks for found hashes
+        let blocks = self.blocks.get(&hashes)?;
+
+        // For each found block, retrieve its txs and metadata and convert to BlockProposal
+        for option in blocks {
+            match option {
+                None => continue,
+                Some((hash, block)) => {
+                    let mut txs = Vec::new();
+                    let found = self.transactions.get(&block.txs)?;
+                    for option in found {
+                        match option {
+                            Some(tx) => txs.push(tx),
+                            None => continue,
+                        }
+                    }
+                    let sm = self.streamlet_metadata.get(&vec![hash])?[0].as_ref().unwrap().clone();
+                    blocks_info.push(BlockInfo::new(block.st, block.sl, txs, block.metadata, sm));
+                }
+            }
+        }
+
+        Ok(blocks_info)
     }
 }
 
@@ -125,3 +201,29 @@ impl ProposalsChain {
 }
 
 impl_vec!(ProposalsChain);
+
+/// Auxilary structure used for forks syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkOrder {
+    /// Validator id
+    pub id: u64,
+}
+
+impl net::Message for ForkOrder {
+    fn name() -> &'static str {
+        "forkorder"
+    }
+}
+
+/// Auxilary structure used for forks syncing.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ForkResponse {
+    /// Fork chains containing block proposals
+    pub proposals: Vec<ProposalsChain>,
+}
+
+impl net::Message for ForkResponse {
+    fn name() -> &'static str {
+        "forkresponse"
+    }
+}

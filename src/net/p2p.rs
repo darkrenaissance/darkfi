@@ -237,4 +237,8 @@ impl P2p {
     pub async fn subscribe_stop(&self) -> Subscription<Error> {
         self.stop_subscriber.clone().subscribe().await
     }
+
+    pub fn channels(&self) -> &ConnectedChannels {
+        &self.channels
+    }
 }
