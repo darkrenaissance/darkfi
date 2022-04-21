@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use easy_parallel::Parallel;
 use futures_lite::future;
 use lazy_init::Lazy;
-use log::{error, info};
+use log::{debug, error, info};
 use rand::Rng;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
@@ -17,13 +17,17 @@ use url::Url;
 
 use darkfi::{
     async_daemonize,
-    blockchain2::{NullifierStore, RootStore},
+    blockchain::{NullifierStore, RootStore},
     cli_desc,
     consensus2::{
-        proto::{ProtocolParticipant, ProtocolProposal, ProtocolTx, ProtocolVote},
+        proto::{
+            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncForks, ProtocolTx,
+            ProtocolVote,
+        },
         state::ValidatorStatePtr,
+        task::{block_sync_task, fork_sync_task, proposal_task},
         util::Timestamp,
-        Tx, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
+        ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
     crypto::{
         address::Address,
@@ -45,15 +49,12 @@ use darkfi::{
         expand_path,
         path::get_config_path,
     },
-    wallet::walletdb::{WalletDb, WalletPtr},
+    wallet::walletdb::{init_wallet, WalletPtr},
     Error, Result,
 };
 
 mod error;
 use error::{server_error, RpcError};
-
-mod consensus;
-use consensus::proposal_task;
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -91,33 +92,59 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address
-    p2p_accept: Option<SocketAddr>,
+    /// P2P accept address for the consensus protocol
+    consensus_p2p_accept: Option<SocketAddr>,
 
     #[structopt(long)]
-    /// P2P external address
-    p2p_external: Option<SocketAddr>,
+    /// P2P external address for the consensus protocol
+    consensus_p2p_external: Option<SocketAddr>,
 
     #[structopt(long, default_value = "8")]
-    /// Connection slots
-    slots: u32,
+    /// Connection slots for the consensus protocol
+    consensus_slots: u32,
 
     #[structopt(long)]
-    /// Connect to peer (repeatable flag)
-    connect: Vec<SocketAddr>,
+    /// Connect to peer for the consensus protocol (repeatable flag)
+    consensus_peer: Vec<SocketAddr>,
 
     #[structopt(long)]
-    /// Connect to seed (repeatable flag)
-    seed: Vec<SocketAddr>,
+    /// Connect to seed for the consensus protocol (repeatable flag)
+    consensus_seed: Vec<SocketAddr>,
+
+    #[structopt(long)]
+    /// P2P accept address for the syncing protocol
+    sync_p2p_accept: Option<SocketAddr>,
+
+    #[structopt(long)]
+    /// P2P external address for the syncing protocol
+    sync_p2p_external: Option<SocketAddr>,
+
+    #[structopt(long, default_value = "8")]
+    /// Connection slots for the syncing protocol
+    sync_slots: u32,
+
+    #[structopt(long)]
+    /// Connect to peer for the syncing protocol (repeatable flag)
+    sync_peer: Vec<SocketAddr>,
+
+    #[structopt(long)]
+    /// Connect to seed for the syncing protocol (repeatable flag)
+    sync_seed: Vec<SocketAddr>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
+
+    #[structopt(short)]
+    /// Genesis time
+    genesis_time: i64,
 }
 
 pub struct Darkfid {
+    synced: Mutex<bool>, // AtomicBool is weird in Arc
     client: Client,
-    p2p: P2pPtr,
+    consensus_p2p: Option<P2pPtr>,
+    sync_p2p: Option<P2pPtr>,
     validator_state: ValidatorStatePtr,
     state: Arc<Mutex<State>>,
 }
@@ -138,6 +165,7 @@ impl RequestHandler for Darkfid {
             Some("export_keypair") => return self.export_keypair(req.id, params).await,
             Some("import_keypair") => return self.import_keypair(req.id, params).await,
             Some("set_default_address") => return self.set_default_address(req.id, params).await,
+            Some("get_slot") => return self.get_slot(req.id, params).await,
             Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
         }
     }
@@ -148,7 +176,8 @@ impl Darkfid {
         db: &sled::Db,
         wallet: WalletPtr,
         validator_state: ValidatorStatePtr,
-        p2p: P2pPtr,
+        consensus_p2p: Option<P2pPtr>,
+        sync_p2p: Option<P2pPtr>,
     ) -> Result<Self> {
         // Initialize Client
         let client = Client::new(wallet).await?;
@@ -167,7 +196,14 @@ impl Darkfid {
             burn_vk: Lazy::new(),
         }));
 
-        Ok(Self { client, p2p, validator_state, state })
+        Ok(Self {
+            synced: Mutex::new(false),
+            client,
+            consensus_p2p,
+            sync_p2p,
+            validator_state,
+            state,
+        })
     }
 
     // RPCAPI:
@@ -347,13 +383,38 @@ impl Darkfid {
 
         jsonrpc::response(json!(true), id).into()
     }
-}
 
-async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
-    let expanded = expand_path(wallet_path)?;
-    let wallet_path = format!("sqlite://{}", expanded.to_str().unwrap());
-    let wallet = WalletDb::new(&wallet_path, wallet_pass).await?;
-    Ok(wallet)
+    // RPCAPI:
+    // Queries the blockchain database for a block in the given slot.
+    // Returns a readable block upon success.
+    // --> {"jsonrpc": "2.0", "method": "get_slot", "params": [0], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    async fn get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_u64() {
+            return jsonrpc::error(InvalidParams, None, id).into()
+        }
+
+        let blocks = match self
+            .validator_state
+            .read()
+            .await
+            .blockchain
+            .get_blocks_by_slot(&[params[0].as_u64().unwrap()])
+        {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed fetching block by slot: {}", e);
+                return jsonrpc::error(InternalError, None, id).into()
+            }
+        };
+
+        if blocks.is_empty() {
+            return server_error(RpcError::UnknownSlot, id)
+        }
+
+        debug!("{:#?}", blocks[0]);
+        jsonrpc::response(json!(true), id).into()
+    }
 }
 
 async_daemonize!(realmain);
@@ -376,7 +437,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Initialize validator state
     // TODO: genesis_ts should be some hardcoded constant
-    let genesis_ts = Timestamp(1650103269);
+    let genesis_ts = Timestamp(args.genesis_time);
     let genesis_data = match args.chain.as_str() {
         "mainnet" => *MAINNET_GENESIS_HASH_BYTES,
         "testnet" => *TESTNET_GENESIS_HASH_BYTES,
@@ -392,81 +453,147 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Initialize validator state
     let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
 
-    // P2P network
-    let network_settings = net::Settings {
-        inbound: args.p2p_accept,
-        outbound_connections: args.slots,
-        external_addr: args.p2p_external,
-        peers: args.connect.clone(),
-        seeds: args.seed.clone(),
-        ..Default::default()
+    // P2P network settings for the consensus protocol
+    let consensus_p2p = {
+        if !args.consensus {
+            None
+        } else {
+            info!("Registering consensus P2P protocols...");
+            let consensus_network_settings = net::Settings {
+                inbound: args.consensus_p2p_accept,
+                outbound_connections: args.consensus_slots,
+                external_addr: args.consensus_p2p_external,
+                peers: args.consensus_peer.clone(),
+                seeds: args.consensus_seed.clone(),
+                ..Default::default()
+            };
+            let p2p = net::P2p::new(consensus_network_settings).await;
+            let registry = p2p.protocol_registry();
+
+            let _state = state.clone();
+            registry
+                //.register(net::SESSION_ALL, move |channel, p2p| {
+                .register(!net::SESSION_SEED, move |channel, p2p| {
+                    let state = _state.clone();
+                    async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
+                })
+                .await;
+
+            let _state = state.clone();
+            registry
+                //.register(net::SESSION_ALL, move |channel, p2p| {
+                .register(!net::SESSION_SEED, move |channel, p2p| {
+                    let state = _state.clone();
+                    async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
+                })
+                .await;
+
+            let _state = state.clone();
+            registry
+                //.register(net::SESSION_ALL, move |channel, p2p| {
+                .register(!net::SESSION_SEED, move |channel, p2p| {
+                    let state = _state.clone();
+                    async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
+                })
+                .await;
+
+            let _state = state.clone();
+            registry
+                //.register(net::SESSION_ALL, move |channel, p2p| {
+                .register(!net::SESSION_SEED, move |channel, p2p| {
+                    let state = _state.clone();
+                    async move { ProtocolSyncForks::init(channel, state, p2p).await.unwrap() }
+                })
+                .await;
+
+            Some(p2p)
+        }
     };
 
-    let p2p = net::P2p::new(network_settings).await;
-    let registry = p2p.protocol_registry();
+    let sync_p2p = {
+        info!("Registering sync P2P protocols...");
+        let sync_network_settings = net::Settings {
+            inbound: args.sync_p2p_accept,
+            outbound_connections: args.sync_slots,
+            external_addr: args.sync_p2p_external,
+            peers: args.sync_peer.clone(),
+            seeds: args.sync_seed.clone(),
+            ..Default::default()
+        };
 
-    info!("Registering P2P protocols...");
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let p2p = net::P2p::new(sync_network_settings).await;
+        let registry = p2p.protocol_registry();
 
-    // Activate these protocols only if we're participating in consensus.
-    //if args.consensus {
-    info!("Registering consensus P2P protocols...");
+        let _state = state.clone();
+        registry
+            //.register(net::SESSION_ALL, move |channel, p2p| {
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolSync::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
 
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolVote::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
+        let _state = state.clone();
+        registry
+            //.register(net::SESSION_ALL, move |channel, p2p| {
+            .register(!net::SESSION_SEED, move |channel, p2p| {
+                let state = _state.clone();
+                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
+            })
+            .await;
 
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
-
-    let _state = state.clone();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let state = _state.clone();
-            async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
-        })
-        .await;
-    //}
-
-    info!("Starting P2P networking");
-    p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _p2p = p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _p2p.run(_ex).await {
-            error!("P2P run failed: {}", e);
-        }
-    })
-    .detach();
+        Some(p2p)
+    };
 
     // Initialize program state
-    let darkfid = Darkfid::new(&sled_db, wallet, state.clone(), p2p.clone()).await?;
+    let darkfid =
+        Darkfid::new(&sled_db, wallet, state.clone(), consensus_p2p.clone(), sync_p2p.clone())
+            .await?;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid)).detach();
+    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone())).detach();
+
+    info!("Starting sync P2P network");
+    sync_p2p.clone().unwrap().start(ex.clone()).await?;
+    let _ex = ex.clone();
+    let _sync_p2p = sync_p2p.clone();
+    ex.spawn(async move {
+        if let Err(e) = _sync_p2p.unwrap().run(_ex).await {
+            error!("Failed starting sync P2P network: {}", e);
+        }
+    })
+    .detach();
+
+    match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
+        Ok(()) => *darkfid.synced.lock().await = true,
+        Err(e) => error!("Failed syncing blockchain: {}", e),
+    }
 
     // Consensus protocol
-    //if args.consensus {
-    info!("Starting consensus protocol task");
-    ex.spawn(proposal_task(p2p, state)).detach();
-    //}
+    if args.consensus {
+        info!("Starting consensus P2P network");
+        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
+        let _ex = ex.clone();
+        let _consensus_p2p = consensus_p2p.clone();
+        ex.spawn(async move {
+            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
+                error!("Failed starting consensus P2P network: {}", e);
+            }
+        })
+        .detach();
+
+        info!("Starting consensus protocol task");
+        match fork_sync_task(consensus_p2p.clone().unwrap(), state.clone()).await {
+            Ok(()) => {
+                ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
+            }
+            Err(e) => {
+                error!("Failed to sync consensus forks. Not starting consensus: {}", e);
+            }
+        }
+    }
 
     // Wait for SIGINT
     shutdown.recv().await?;

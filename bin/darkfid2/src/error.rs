@@ -12,6 +12,7 @@ pub enum RpcError {
     KeypairFetch = -32104,
     KeypairNotFound = -32105,
     InvalidKeypair = -32106,
+    UnknownSlot = -32107,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -22,6 +23,7 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::KeypairFetch => "Failed fetching keypairs from wallet",
         RpcError::KeypairNotFound => "Keypair not found",
         RpcError::InvalidKeypair => "Invalid keypair",
+        RpcError::UnknownSlot => "Did not find slot",
     };
 
     (e as i64, msg.to_string())
