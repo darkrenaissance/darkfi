@@ -268,8 +268,6 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
             }
         };
 
-        info!("tt: {:?}", state.read().unwrap().unconfirmed_txs);
-
         // Node waits untile next epoch
         let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
