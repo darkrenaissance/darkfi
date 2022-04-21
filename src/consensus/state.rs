@@ -164,8 +164,8 @@ impl ValidatorState {
     /// Proposal extends the longest notarized fork chain the node holds.
     pub fn propose(&self) -> Result<Option<BlockProposal>> {
         let epoch = self.current_epoch();
-        let previous_hash = self.longest_notarized_chain_last_hash().unwrap();
-        let unproposed_txs = self.unproposed_txs();
+        let (previous_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
+        let unproposed_txs = self.unproposed_txs(index);
         let metadata = Metadata::new(
             get_current_time(),
             String::from("proof"),
@@ -189,30 +189,43 @@ impl ValidatorState {
         )))
     }
 
-    /// Node retrieves all unconfiremd transactions not proposed in previous blocks.
-    pub fn unproposed_txs(&self) -> Vec<Tx> {
+    /// Node retrieves all unconfirmed transactions not proposed
+    /// in previous blocks of provided index chain.
+    pub fn unproposed_txs(&self, index: i64) -> Vec<Tx> {
         let mut unproposed_txs = self.unconfirmed_txs.clone();
-        for chain in &self.consensus.proposals {
-            for proposal in &chain.proposals {
-                for tx in &proposal.txs {
-                    if let Some(pos) = unproposed_txs.iter().position(|txs| *txs == *tx) {
-                        unproposed_txs.remove(pos);
-                    }
+
+        // If index is -1(canonical blockchain) a new fork chain will be generated,
+        // therefore all unproposed transactions can be included in the proposal.
+        if index == -1 {
+            return unproposed_txs
+        }
+
+        // We iterate the fork chain proposals to find already proposed transactions
+        // and remove them from the local unproposed_txs vector.
+        let chain = &self.consensus.proposals[index as usize];
+        for proposal in &chain.proposals {
+            for tx in &proposal.txs {
+                if let Some(pos) = unproposed_txs.iter().position(|txs| *txs == *tx) {
+                    unproposed_txs.remove(pos);
                 }
             }
         }
+
         unproposed_txs
     }
 
-    /// Finds the longest fully notarized blockchain the node holds and returns the last block hash.
-    pub fn longest_notarized_chain_last_hash(&self) -> Result<blake3::Hash> {
+    /// Finds the longest fully notarized blockchain the node holds and returns the last block hash
+    /// and the chain index.
+    pub fn longest_notarized_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
         let mut longest_notarized_chain: Option<ProposalsChain> = None;
         let mut length = 0;
+        let mut index = -1;
         if !self.consensus.proposals.is_empty() {
-            for chain in &self.consensus.proposals[1..] {
+            for (i, chain) in self.consensus.proposals.iter().enumerate() {
                 if chain.notarized() && chain.proposals.len() > length {
                     longest_notarized_chain = Some(chain.clone());
                     length = chain.proposals.len();
+                    index = i as i64;
                 }
             }
         }
@@ -222,7 +235,7 @@ impl ValidatorState {
             None => self.blockchain.last()?.unwrap().1,
         };
 
-        Ok(hash)
+        Ok((hash, index))
     }
 
     /// Node receives the proposed block, verifies its sender(epoch leader),
