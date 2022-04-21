@@ -99,9 +99,9 @@ note that $(\frac{1}{v_{max}})^{n-1} < 1, V>1$, thus competing with single coin 
   a target function T with scalar coefficients can be formalized as
  $$T=2^lk\phi(\Sigma)=2^l(\frac{1}{v_{max}})\Sigma$$
  let's assume $v_{max}=2^v$, then:
- $$T=2^lk\phi(\Sigma)=2^{\frac{l}{v}}\Sigma$$
+ $$T=2^lk\phi(\Sigma)=2^{l-v}\Sigma$$
  then the lead statement is
- $$y<2^{\frac{l}{v}}\Sigma$$ for example for a group order or l=24 bits, and maximum value of $v_{max}=2^{10}$, then lead statement:
+ $$y<2^{l-v}\Sigma$$ for example for a group order or l=24 bits, and maximum value of $v_{max}=2^{10}$, then lead statement:
  $$y<2^{14}\Sigma$$
 
 ### pairing leader selection independent aggregation function
