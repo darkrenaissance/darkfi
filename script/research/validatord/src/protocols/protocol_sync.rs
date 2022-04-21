@@ -24,14 +24,16 @@ pub struct ProtocolSync {
     block_sub: MessageSubscription<BlockInfo>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
-    _p2p: P2pPtr,
+    p2p: P2pPtr,
+    consensus_mode: bool,
 }
 
 impl ProtocolSync {
     pub async fn init(
         channel: ChannelPtr,
         state: ValidatorStatePtr,
-        _p2p: P2pPtr,
+        p2p: P2pPtr,
+        consensus_mode: bool,
     ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<BlockOrder>().await;
@@ -48,7 +50,8 @@ impl ProtocolSync {
             block_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
-            _p2p,
+            p2p,
+            consensus_mode,
         })
     }
 
@@ -82,20 +85,19 @@ impl ProtocolSync {
                 info
             );
 
-            // TODO: Following code should be executed only by replicators, not consensus nodes.
-            // Commented for now, as to not mess consensus testing.
-            // (Don't forget to remove _ from _p2p)
-            /*
             // Node stores finalized block, if it doesn't exists (checking by slot),
             // and removes its transactions from the unconfirmed_txs vector.
+            // Consensus mode enabled nodes have already performed this steps,
+            // during proposal finalization.
             // Extra validations can be added here.
-            let info_copy = (*info).clone();
-            if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
-                self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
-                self.state.write().unwrap().remove_txs(info_copy.txs.clone())?;
-                self.p2p.broadcast(info_copy).await?;
+            if self.consensus_mode {
+                let info_copy = (*info).clone();
+                if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
+                    self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
+                    self.state.write().unwrap().remove_txs(info_copy.txs.clone())?;
+                    self.p2p.broadcast(info_copy).await?;
+                }
             }
-            */
         }
     }
 }

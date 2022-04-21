@@ -315,10 +315,11 @@ async fn start(executor: Arc<Executor<'_>>, opts: &Opt) -> Result<()> {
 
     // Adding ProtocolSync to the registry
     let state2 = state.clone();
+    let consensus_mode = false; // This flag should be based on staking
     registry
         .register(net::SESSION_ALL, move |channel, main_p2p| {
             let state = state2.clone();
-            async move { ProtocolSync::init(channel, state, main_p2p).await }
+            async move { ProtocolSync::init(channel, state, main_p2p, consensus_mode).await }
         })
         .await;
 
