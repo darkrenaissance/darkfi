@@ -1,5 +1,7 @@
 use std::io;
 
+use log::debug;
+
 use crate::{
     consensus2::{block::BlockInfo, util::Timestamp, Block, BlockProposal},
     impl_vec,
@@ -42,7 +44,7 @@ impl Blockchain {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
-        let streamlet_metadata = StreamletMetadataStore::new(db)?;
+        let streamlet_metadata = StreamletMetadataStore::new(db, genesis_ts, genesis_data)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
@@ -93,11 +95,19 @@ impl Blockchain {
         Ok(ret)
     }
 
-    /// Retrieve blocks by given slots. Fails if any of them are not found.
+    /// Retrieve blocks by given slots.
     pub fn get_blocks_by_slot(&self, slots: &[u64]) -> Result<Vec<BlockInfo>> {
-        let blockhashes = self.order.get(slots, true)?;
-        let blockhashes: Vec<blake3::Hash> = blockhashes.iter().map(|x| x.unwrap()).collect();
-        self.get_blocks_by_hash(&blockhashes)
+        debug!("get_blocks_by_slot(): {:?}", slots);
+        let blockhashes = self.order.get(slots, false)?;
+
+        let mut hashes = vec![];
+        for i in blockhashes {
+            if i.is_some() {
+                hashes.push(i.unwrap());
+            }
+        }
+
+        self.get_blocks_by_hash(&hashes)
     }
 
     /// Check if the given [`BlockInfo`] is in the database

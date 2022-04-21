@@ -9,8 +9,8 @@ use crate::{
         state::ValidatorStatePtr,
     },
     net::{
-        ChannelPtr, MessageSubscription, ProtocolBase, ProtocolBasePtr, ProtocolJobsManager,
-        ProtocolJobsManagerPtr,
+        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     Result,
 };
@@ -23,7 +23,11 @@ pub struct ProtocolSyncForks {
 }
 
 impl ProtocolSyncForks {
-    pub async fn init(channel: ChannelPtr, state: ValidatorStatePtr) -> Result<ProtocolBasePtr> {
+    pub async fn init(
+        channel: ChannelPtr,
+        state: ValidatorStatePtr,
+        _p2p: P2pPtr,
+    ) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<ForkOrder>().await;
 

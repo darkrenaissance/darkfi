@@ -60,7 +60,9 @@ impl ProtocolSync {
             // Extra validations can be added here
             let key = order.sl;
             let slot_range: Vec<u64> = (key..=(key + BATCH)).collect();
+            debug!("ProtocolSync::handle_receive_order(): Querying block range: {:?}", slot_range);
             let blocks = self.state.read().await.blockchain.get_blocks_by_slot(&slot_range)?;
+            debug!("ProtocolSync::handle_receive_order(): Found {} blocks", blocks.len());
             let response = BlockResponse { blocks };
             self.channel.send(response).await?;
         }

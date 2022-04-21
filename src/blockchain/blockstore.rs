@@ -1,3 +1,4 @@
+use log::warn;
 use sled::Batch;
 
 use crate::{
@@ -119,7 +120,8 @@ impl BlockOrderStore {
 
     /// Retrieve all hashes given slots.
     pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
-        let mut ret = Vec::with_capacity(slots.len());
+        //let mut ret = Vec::with_capacity(slots.len());
+        let mut ret = vec![];
 
         for i in slots {
             if let Some(found) = self.0.get(i.to_be_bytes())? {
@@ -128,6 +130,7 @@ impl BlockOrderStore {
                 ret.push(Some(hash));
             } else {
                 if strict {
+                    warn!("BlockOrderStore::get() Slot {} not found", i);
                     return Err(Error::SlotNotFound(*i))
                 }
                 ret.push(None);

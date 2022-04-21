@@ -1,7 +1,7 @@
 use sled::Batch;
 
 use crate::{
-    consensus2::StreamletMetadata,
+    consensus2::{Block, StreamletMetadata, Timestamp},
     util::serial::{deserialize, serialize},
     Error, Result,
 };
@@ -11,9 +11,26 @@ const SLED_STREAMLET_METADATA_TREE: &[u8] = b"_streamlet_metadata";
 pub struct StreamletMetadataStore(sled::Tree);
 
 impl StreamletMetadataStore {
-    pub fn new(db: &sled::Db) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let tree = db.open_tree(SLED_STREAMLET_METADATA_TREE)?;
-        Ok(Self(tree))
+        let store = Self(tree);
+
+        // In case the store is empty, add genesis metadata.
+        if store.0.is_empty() {
+            let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
+            let genesis_hash = blake3::hash(&serialize(&genesis_block));
+
+            let metadata = StreamletMetadata {
+                votes: vec![],
+                notarized: true,
+                finalized: true,
+                participants: vec![],
+            };
+
+            store.insert(&[genesis_hash], &[metadata])?;
+        }
+
+        Ok(store)
     }
 
     /// Insert [`StreamletMetadata`] into the `MetadataStore`.
