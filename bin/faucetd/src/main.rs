@@ -327,7 +327,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     registry
         .register(!net::SESSION_SEED, move |channel, p2p| {
             let state = _state.clone();
-            async move { ProtocolSync::init(channel, state, p2p).await.unwrap() }
+            async move { ProtocolSync::init(channel, state, p2p, false).await.unwrap() }
         })
         .await;
 

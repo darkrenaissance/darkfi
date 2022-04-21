@@ -57,11 +57,15 @@ impl ProtocolVote {
                 // Broadcast finalized blocks info, if any
                 match to_broadcast {
                     Some(blocks) => {
+                        debug!("handle_receive_vote(): Broadcasting finalized blocks");
                         for info in blocks {
                             self.sync_p2p.broadcast(info).await?;
                         }
                     }
-                    None => continue,
+                    None => {
+                        debug!("handle_receive_vote(): No finalized blocks to broadcast");
+                        continue
+                    }
                 }
             }
         }

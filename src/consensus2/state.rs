@@ -214,24 +214,23 @@ impl ValidatorState {
     /// Finds the longest fully notarized blockchain the node holds and
     /// returns the last block hash and the chain index.
     pub fn longest_notarized_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
-        let mut longest_notarized_chain = &self.consensus.proposals[0];
-        let mut length = longest_notarized_chain.proposals.len();
+        let mut longest_notarized_chain: Option<ProposalChain> = None;
+        let mut length = 0;
         let mut index = -1;
 
-        let hash = if !self.consensus.proposals.is_empty() {
-            if self.consensus.proposals.len() > 1 {
-                for (i, chain) in self.consensus.proposals.iter().enumerate() {
-                    if chain.notarized() && chain.proposals.len() > length {
-                        length = chain.proposals.len();
-                        longest_notarized_chain = chain;
-                        index = i as i64;
-                    }
+        if !self.consensus.proposals.is_empty() {
+            for (i, chain) in self.consensus.proposals.iter().enumerate() {
+                if chain.notarized() && chain.proposals.len() > length {
+                    longest_notarized_chain = Some(chain.clone());
+                    length = chain.proposals.len();
+                    index = i as i64;
                 }
             }
+        }
 
-            longest_notarized_chain.proposals.last().unwrap().hash()
-        } else {
-            self.blockchain.last()?.unwrap().1
+        let hash = match longest_notarized_chain {
+            Some(chain) => chain.proposals.last().unwrap().hash(),
+            None => self.blockchain.last()?.unwrap().1,
         };
 
         Ok((hash, index))
