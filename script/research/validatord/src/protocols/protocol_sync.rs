@@ -90,7 +90,7 @@ impl ProtocolSync {
             // Consensus mode enabled nodes have already performed this steps,
             // during proposal finalization.
             // Extra validations can be added here.
-            if self.consensus_mode {
+            if !self.consensus_mode {
                 let info_copy = (*info).clone();
                 if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
                     self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
