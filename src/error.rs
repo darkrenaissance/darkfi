@@ -184,6 +184,18 @@ pub enum Error {
     #[error(transparent)]
     SledError(#[from] sled::Error),
 
+    #[error("Transaction {0} not found in database")]
+    TransactionNotFound(String),
+
+    #[error("Block {0} not found in database")]
+    BlockNotFound(String),
+
+    #[error("Block in slot {0} not found in database")]
+    SlotNotFound(u64),
+
+    #[error("Block {0} metadata not found in database")]
+    BlockMetadataNotFound(String),
+
     // =============
     // Wallet errors
     // =============

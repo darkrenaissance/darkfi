@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::{
-    consensus2::{block::BlockProposal, util::Timestamp, Block},
+    consensus2::{block::BlockInfo, util::Timestamp, Block, BlockProposal},
     impl_vec,
     util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
     Result,
@@ -49,29 +49,74 @@ impl Blockchain {
         Ok(Self { blocks, order, transactions, streamlet_metadata, nullifiers, merkle_roots })
     }
 
-    /// Batch insert [`BlockProposal`]s.
-    pub fn add(&mut self, proposals: &[BlockProposal]) -> Result<Vec<blake3::Hash>> {
-        // TODO: Engineer this function in a better way.
-        let mut ret = Vec::with_capacity(proposals.len());
+    /// Batch insert [`BlockInfo`]s.
+    pub fn add(&mut self, blocks: &[BlockInfo]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(blocks.len());
 
-        for prop in proposals {
+        for block in blocks {
             // Store transactions
-            let tx_hashes = self.transactions.insert(&prop.txs)?;
+            let tx_hashes = self.transactions.insert(&block.txs)?;
 
             // Store block
-            let block =
-                Block { st: prop.st, sl: prop.sl, txs: tx_hashes, metadata: prop.metadata.clone() };
-            let blockhash = self.blocks.insert(&[block.clone()])?;
+            let _block = Block::new(block.st, block.sl, tx_hashes, block.metadata.clone());
+            let blockhash = self.blocks.insert(&[_block])?;
             ret.push(blockhash[0]);
 
             // Store block order
             self.order.insert(&[block.sl], &[blockhash[0]])?;
 
-            // Store streamlet metadata
-            self.streamlet_metadata.insert(&[blockhash[0]], &[prop.sm.clone()])?;
+            // Store Streamlet metadata
+            self.streamlet_metadata.insert(&[blockhash[0]], &[block.sm.clone()])?;
         }
 
         Ok(ret)
+    }
+
+    /// Retrieve blocks by given hashes. Fails if any of them are not found.
+    pub fn get_blocks_by_hash(&self, blockhashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+        let mut ret = Vec::with_capacity(blockhashes.len());
+
+        let blocks = self.blocks.get(blockhashes, true)?;
+        let metadata = self.streamlet_metadata.get(blockhashes, true)?;
+
+        for (i, block) in blocks.iter().enumerate() {
+            let block = block.clone().unwrap();
+            let sm = metadata[i].clone().unwrap();
+
+            let txs = self.transactions.get(&block.txs, true)?;
+            let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
+
+            let info = BlockInfo::new(block.st, block.sl, txs, block.metadata.clone(), sm);
+            ret.push(info);
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve blocks by given slots. Fails if any of them are not found.
+    pub fn get_blocks_by_slot(&self, slots: &[u64]) -> Result<Vec<BlockInfo>> {
+        let blockhashes = self.order.get(slots, true)?;
+        let blockhashes: Vec<blake3::Hash> = blockhashes.iter().map(|x| x.unwrap()).collect();
+        self.get_blocks_by_hash(&blockhashes)
+    }
+
+    /// Check if the given [`BlockInfo`] is in the database
+    pub fn has_block(&self, info: &BlockInfo) -> Result<bool> {
+        let hashes = self.order.get(&[info.sl], true)?;
+        if hashes.is_empty() {
+            return Ok(false)
+        }
+
+        if let Some(found) = &hashes[0] {
+            // Check provided info produces the same hash
+            // TODO: This BlockProposal::to_proposal_hash function should be in a better place.
+            let blockhash =
+                BlockProposal::to_proposal_hash(info.st, info.sl, &info.txs, &info.metadata);
+
+            return Ok(&blockhash == found)
+        }
+
+        Ok(false)
     }
 
     /// Retrieve the last block slot and hash

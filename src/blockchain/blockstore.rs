@@ -3,7 +3,7 @@ use sled::Batch;
 use crate::{
     consensus2::{util::Timestamp, Block},
     util::serial::{deserialize, serialize},
-    Result,
+    Error, Result,
 };
 
 const SLED_BLOCK_TREE: &[u8] = b"_blocks";
@@ -46,14 +46,18 @@ impl BlockStore {
     /// Fetch given blockhashes from the blockstore.
     /// The resulting vector contains `Option` which is `Some` if the block
     /// was found in the blockstore, and `None`, if it has not.
-    pub fn get(&self, blockhashes: &[blake3::Hash]) -> Result<Vec<Option<Block>>> {
-        let mut ret: Vec<Option<Block>> = Vec::with_capacity(blockhashes.len());
+    pub fn get(&self, blockhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+        let mut ret = Vec::with_capacity(blockhashes.len());
 
         for i in blockhashes {
             if let Some(found) = self.0.get(i.as_bytes())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
             } else {
+                if strict {
+                    let s = i.to_hex().as_str().to_string();
+                    return Err(Error::BlockNotFound(s))
+                }
                 ret.push(None);
             }
         }
@@ -111,6 +115,26 @@ impl BlockOrderStore {
 
         self.0.apply_batch(batch)?;
         Ok(())
+    }
+
+    /// Retrieve all hashes given slots.
+    pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+        let mut ret = Vec::with_capacity(slots.len());
+
+        for i in slots {
+            if let Some(found) = self.0.get(i.to_be_bytes())? {
+                let hash_bytes: [u8; 32] = found.as_ref().try_into().unwrap();
+                let hash = blake3::Hash::from(hash_bytes);
+                ret.push(Some(hash));
+            } else {
+                if strict {
+                    return Err(Error::SlotNotFound(*i))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 
     /// Retrieve the last block hash in the tree, based on the Ord

@@ -3,7 +3,7 @@ use sled::Batch;
 use crate::{
     consensus2::Tx,
     util::serial::{deserialize, serialize},
-    Result,
+    Error, Result,
 };
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
@@ -32,6 +32,27 @@ impl TxStore {
         }
 
         self.0.apply_batch(batch)?;
+        Ok(ret)
+    }
+
+    /// Fetch requested transactions from the txstore. The `strict` param
+    /// will make the function fail if a transaction has not been found.
+    pub fn get(&self, tx_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Tx>>> {
+        let mut ret: Vec<Option<Tx>> = Vec::with_capacity(tx_hashes.len());
+
+        for i in tx_hashes {
+            if let Some(found) = self.0.get(i.as_bytes())? {
+                let tx = deserialize(&found)?;
+                ret.push(Some(tx));
+            } else {
+                if strict {
+                    let s = i.to_hex().as_str().to_string();
+                    return Err(Error::TransactionNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
         Ok(ret)
     }
 

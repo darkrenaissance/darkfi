@@ -3,7 +3,7 @@ use sled::Batch;
 use crate::{
     consensus2::StreamletMetadata,
     util::serial::{deserialize, serialize},
-    Result,
+    Error, Result,
 };
 
 const SLED_STREAMLET_METADATA_TREE: &[u8] = b"_streamlet_metadata";
@@ -29,6 +29,30 @@ impl StreamletMetadataStore {
 
         self.0.apply_batch(batch)?;
         Ok(())
+    }
+
+    /// Retrieve `StreamletMetadata` by given blockhashes.
+    pub fn get(
+        &self,
+        blockhashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<StreamletMetadata>>> {
+        let mut ret = Vec::with_capacity(blockhashes.len());
+
+        for i in blockhashes {
+            if let Some(found) = self.0.get(i.as_bytes())? {
+                let sm = deserialize(&found)?;
+                ret.push(Some(sm));
+            } else {
+                if strict {
+                    let s = i.to_hex().as_str().to_string();
+                    return Err(Error::BlockMetadataNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 
     /// Retrieve all `StreamletMetadata`.
