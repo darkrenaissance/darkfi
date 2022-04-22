@@ -320,3 +320,8 @@ required-features = ["async-runtime", "net"]
 name = "tx"
 path = "example/tx.rs"
 required-features = ["node"]
+
+[[example]]
+name = "zk"
+path = "example/zk.rs"
+required-features = ["crypto"]
