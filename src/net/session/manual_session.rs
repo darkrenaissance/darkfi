@@ -1,22 +1,23 @@
 use async_std::sync::Mutex;
-use async_trait::async_trait;
-use serde_json::json;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
 use async_executor::Executor;
+use async_trait::async_trait;
 use log::*;
+use serde_json::json;
 
 use crate::{
-    error::{Error, Result},
-    net::{
-        session::{Session, SessionBitflag, SESSION_MANUAL},
-        Connector, P2p,
-    },
     system::{StoppableTask, StoppableTaskPtr},
     util::sleep,
+    Error, Result,
+};
+
+use super::{
+    super::{Connector, P2p},
+    Session, SessionBitflag, SESSION_MANUAL,
 };
 
 pub struct ManualSession {
@@ -105,10 +106,10 @@ impl ManualSession {
         }
 
         warn!(
-            target: "net",
-            "Suspending manual connection to [{}] after {} failed attempts.",
-            addr,
-            attempts
+        target: "net",
+        "Suspending manual connection to [{}] after {} failed attempts.",
+        addr,
+        attempts
         );
 
         Ok(())
@@ -116,19 +117,19 @@ impl ManualSession {
 
     // Starts sending keep-alive and address messages across the channels.
     /*async fn attach_protocols(
-        self: Arc<Self>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
+    self: Arc<Self>,
+    channel: ChannelPtr,
+    executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let hosts = self.p2p().hosts();
+    let hosts = self.p2p().hosts();
 
-        let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
-        let protocol_addr = ProtocolAddress::new(channel, hosts).await;
+    let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
+    let protocol_addr = ProtocolAddress::new(channel, hosts).await;
 
-        protocol_ping.start(executor.clone()).await;
-        protocol_addr.start(executor).await;
+    protocol_ping.start(executor.clone()).await;
+    protocol_addr.start(executor).await;
 
-        Ok(())
+    Ok(())
     }*/
 }
 

@@ -1,9 +1,13 @@
 use async_std::sync::Mutex;
-use futures::future::BoxFuture;
-use log::debug;
 use std::future::Future;
 
-use crate::net::{protocol::ProtocolBasePtr, session::SessionBitflag, ChannelPtr, P2pPtr};
+use futures::future::BoxFuture;
+use log::debug;
+
+use super::{
+    super::{session::SessionBitflag, ChannelPtr, P2pPtr},
+    ProtocolBasePtr,
+};
 
 type Constructor =
     Box<dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, ProtocolBasePtr> + Send + Sync>;

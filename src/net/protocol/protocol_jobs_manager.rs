@@ -1,10 +1,13 @@
 use async_std::sync::Mutex;
+use std::sync::Arc;
+
 use futures::Future;
 use log::*;
 use smol::Task;
-use std::sync::Arc;
 
-use crate::{error::Result, net::ChannelPtr, system::ExecutorPtr};
+use crate::{system::ExecutorPtr, Result};
+
+use super::super::ChannelPtr;
 
 /// Pointer to protocol jobs manager.
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;

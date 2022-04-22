@@ -1,8 +1,9 @@
-use async_trait::async_trait;
-use smol::Executor;
 use std::sync::Arc;
 
-use crate::error::Result;
+use async_trait::async_trait;
+use smol::Executor;
+
+use crate::Result;
 
 pub type ProtocolBasePtr = Arc<dyn ProtocolBase + Send + Sync>;
 

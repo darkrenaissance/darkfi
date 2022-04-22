@@ -1,6 +1,4 @@
 use async_std::future::timeout;
-use async_trait::async_trait;
-use serde_json::json;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
@@ -8,14 +6,15 @@ use std::{
 };
 
 use async_executor::Executor;
+use async_trait::async_trait;
 use log::*;
+use serde_json::json;
 
-use crate::{
-    error::{Error, Result},
-    net::{
-        session::{Session, SessionBitflag, SESSION_SEED},
-        Connector, P2p,
-    },
+use crate::{Error, Result};
+
+use super::{
+    super::{Connector, P2p},
+    Session, SessionBitflag, SESSION_SEED,
 };
 
 /// Defines seed connections session.

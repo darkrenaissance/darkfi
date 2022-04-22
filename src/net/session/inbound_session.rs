@@ -1,22 +1,23 @@
 use async_std::sync::Mutex;
-use async_trait::async_trait;
-use serde_json::json;
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
 };
 
 use async_executor::Executor;
+use async_trait::async_trait;
 use fxhash::FxHashMap;
 use log::{error, info};
+use serde_json::json;
 
 use crate::{
-    error::{Error, Result},
-    net::{
-        session::{Session, SessionBitflag, SESSION_INBOUND},
-        Acceptor, AcceptorPtr, ChannelPtr, P2p,
-    },
     system::{StoppableTask, StoppableTaskPtr},
+    Error, Result,
+};
+
+use super::{
+    super::{Acceptor, AcceptorPtr, ChannelPtr, P2p},
+    Session, SessionBitflag, SESSION_INBOUND,
 };
 
 struct InboundInfo {

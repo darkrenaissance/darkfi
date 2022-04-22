@@ -1,12 +1,12 @@
 use async_std::future::timeout;
-use log::*;
-use smol::Executor;
 use std::{sync::Arc, time::Duration};
 
-use crate::{
-    error::{Error, Result},
-    net::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr},
-};
+use log::*;
+use smol::Executor;
+
+use crate::{Error, Result};
+
+use super::super::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr};
 
 /// Implements the protocol version handshake sent out by nodes at the beginning
 /// of a connection.

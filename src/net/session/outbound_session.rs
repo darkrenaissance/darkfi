@@ -12,12 +12,13 @@ use rand::seq::SliceRandom;
 use serde_json::json;
 
 use crate::{
-    error::{Error, Result},
-    net::{
-        session::{Session, SessionBitflag, SESSION_OUTBOUND},
-        ChannelPtr, Connector, P2p,
-    },
     system::{StoppableTask, StoppableTaskPtr},
+    Error, Result,
+};
+
+use super::{
+    super::{ChannelPtr, Connector, P2p},
+    Session, SessionBitflag, SESSION_OUTBOUND,
 };
 
 #[derive(Clone)]

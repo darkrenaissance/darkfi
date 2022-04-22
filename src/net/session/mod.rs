@@ -1,12 +1,12 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
-use std::sync::Arc;
 
-use crate::{
-    error::Result,
-    net::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr},
-};
+use crate::Result;
+
+use super::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr};
 
 /// Seed connections session. Manages the creation of seed sessions. Used on
 /// first time connecting to the network. The seed node stores a list of other

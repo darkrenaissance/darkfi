@@ -1,18 +1,15 @@
+use std::{sync::Arc, time::Instant};
+
 use async_trait::async_trait;
 use log::{debug, error};
 use rand::Rng;
 use smol::Executor;
-use std::{sync::Arc, time::Instant};
 
-use crate::{
-    error::{Error, Result},
-    net::{
-        message,
-        message_subscriber::MessageSubscription,
-        protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr},
-        ChannelPtr, P2pPtr, SettingsPtr,
-    },
-    util::sleep,
+use crate::{util::sleep, Error, Result};
+
+use super::{
+    super::{message, message_subscriber::MessageSubscription, ChannelPtr, P2pPtr, SettingsPtr},
+    ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr,
 };
 
 /// Defines ping and pong messages.

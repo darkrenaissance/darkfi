@@ -1,15 +1,14 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
-use std::sync::Arc;
 
-use crate::{
-    error::Result,
-    net::{
-        message,
-        protocol::{ProtocolBase, ProtocolBasePtr},
-        ChannelPtr, HostsPtr, P2pPtr, SettingsPtr,
-    },
+use crate::Result;
+
+use super::{
+    super::{message, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr},
+    ProtocolBase, ProtocolBasePtr,
 };
 
 /// Implements the seed protocol.
