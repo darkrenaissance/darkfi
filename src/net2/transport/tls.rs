@@ -87,9 +87,14 @@ impl Transport for TlsTransport {
 
     type Error = io::Error;
 
-    type Listener =
-        Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send + Sync>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send + Sync>>;
+    type Listener = Pin<
+        Box<dyn Future<Output = Result<Self::Acceptor, TransportError<Self::Error>>> + Send + Sync>,
+    >;
+    type Dial = Pin<
+        Box<
+            dyn Future<Output = Result<Self::Connector, TransportError<Self::Error>>> + Send + Sync,
+        >,
+    >;
 
     fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
         if url.scheme() != "tls" {
@@ -151,9 +156,11 @@ impl Transport for TlsTransport {
         Self { ttl, backlog, server_config, client_config }
     }
 
-    async fn accept(listener: Arc<Self::Acceptor>) -> Self::Connector {
-        let stream = listener.1.accept().await.unwrap().0;
-        listener.0.accept(stream).await.unwrap().into()
+    async fn accept(
+        listener: Arc<Self::Acceptor>,
+    ) -> Result<Self::Connector, TransportError<Self::Error>> {
+        let stream = listener.1.accept().await?.0;
+        Ok(listener.0.accept(stream).await?.into())
     }
 }
 
@@ -173,7 +180,10 @@ impl TlsTransport {
         Ok(socket)
     }
 
-    async fn do_listen(self, url: Url) -> Result<(TlsAcceptor, TcpListener), io::Error> {
+    async fn do_listen(
+        self,
+        url: Url,
+    ) -> Result<(TlsAcceptor, TcpListener), TransportError<io::Error>> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
@@ -185,7 +195,7 @@ impl TlsTransport {
         Ok((acceptor, listener))
     }
 
-    async fn do_dial(self, url: Url) -> Result<TlsStream<TcpStream>, io::Error> {
+    async fn do_dial(self, url: Url) -> Result<TlsStream<TcpStream>, TransportError<io::Error>> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let server_name = ServerName::try_from("dark.fi").unwrap();
         let socket = self.create_socket(socket_addr)?;
@@ -197,7 +207,7 @@ impl TlsTransport {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
+            Err(err) => return Err(TransportError::Other(err)),
         };
 
         let stream = TcpStream::from(std::net::TcpStream::from(socket));

@@ -20,46 +20,49 @@ const BATCH: u64 = 10;
 
 pub struct ProtocolSync {
     channel: ChannelPtr,
-    order_sub: MessageSubscription<BlockOrder>,
+    request_sub: MessageSubscription<BlockOrder>,
     block_sub: MessageSubscription<BlockInfo>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
-    _p2p: P2pPtr,
+    p2p: P2pPtr,
+    consensus_mode: bool,
 }
 
 impl ProtocolSync {
     pub async fn init(
         channel: ChannelPtr,
         state: ValidatorStatePtr,
-        _p2p: P2pPtr,
+        p2p: P2pPtr,
+        consensus_mode: bool,
     ) -> ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<BlockOrder>().await;
         message_subsytem.add_dispatch::<BlockInfo>().await;
 
-        let order_sub =
+        let request_sub =
             channel.subscribe_msg::<BlockOrder>().await.expect("Missing BlockOrder dispatcher!");
         let block_sub =
             channel.subscribe_msg::<BlockInfo>().await.expect("Missing BlockInfo dispatcher!");
 
         Arc::new(Self {
             channel: channel.clone(),
-            order_sub,
+            request_sub,
             block_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
-            _p2p,
+            p2p,
+            consensus_mode,
         })
     }
 
-    async fn handle_receive_order(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolSync::handle_receive_tx() [START]");
+    async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolSync::handle_receive_request() [START]");
         loop {
-            let order = self.order_sub.receive().await?;
+            let order = self.request_sub.receive().await?;
 
             debug!(
                 target: "ircd",
-                "ProtocolSync::handle_receive_order() received {:?}",
+                "ProtocolSync::handle_receive_request() received {:?}",
                 order
             );
 
@@ -82,18 +85,19 @@ impl ProtocolSync {
                 info
             );
 
-            // TODO: Following code should be executed only by replicators, not consensus nodes.
-            // Commented for now, as to not mess consensus testing.
-            // (Don't forget to remove _ from _p2p)
-            /*
-            // Node stores finalized block, if it doesn't exists (checking by slot).
+            // Node stores finalized block, if it doesn't exists (checking by slot),
+            // and removes its transactions from the unconfirmed_txs vector.
+            // Consensus mode enabled nodes have already performed this steps,
+            // during proposal finalization.
             // Extra validations can be added here.
-            let info_copy = (*info).clone();
-            if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
-                self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
-                self.p2p.broadcast(info_copy).await?;
+            if !self.consensus_mode {
+                let info_copy = (*info).clone();
+                if !self.state.read().unwrap().blockchain.has_block(&info_copy)? {
+                    self.state.write().unwrap().blockchain.add_by_info(info_copy.clone())?;
+                    self.state.write().unwrap().remove_txs(info_copy.txs.clone())?;
+                    self.p2p.broadcast(info_copy).await?;
+                }
             }
-            */
         }
     }
 }
@@ -103,7 +107,7 @@ impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "ircd", "ProtocolSync::start() [START]");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_order(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_block(), executor.clone()).await;
         debug!(target: "ircd", "ProtocolSync::start() [END]");
         Ok(())

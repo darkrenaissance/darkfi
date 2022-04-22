@@ -61,9 +61,9 @@ impl<T: Transport> Acceptor<T> {
     /// Run the accept loop.
     async fn run_accept_loop(self: Arc<Self>, url: url::Url) -> Result<()> {
         let transport = T::new(None, 1024);
-        let listener = Arc::new(transport.listen_on(url.clone()).unwrap().await.unwrap());
+        let listener = Arc::new(transport.listen_on(url.clone())?.await?);
         loop {
-            let stream = T::accept(listener.clone()).await;
+            let stream = T::accept(listener.clone()).await?;
             let channel = Channel::<T>::new(stream, url.clone()).await;
             self.channel_subscriber.notify(Ok(channel)).await;
         }
