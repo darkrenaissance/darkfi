@@ -1,13 +1,14 @@
 // TODO: Use sets instead of vectors where possible.
-
-use std::{io, time::Duration};
+use std::{
+    collections::{hash_map::DefaultHasher, BTreeMap},
+    hash::{Hash, Hasher},
+    time::Duration,
+};
 
 use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
-use fxhash::{FxBuildHasher, FxHasher};
-use indexmap::IndexMap;
 use log::{debug, error, info, warn};
-use rand::{rngs::OsRng, Rng};
+use rand::rngs::OsRng;
 
 use super::{
     Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata,
@@ -20,11 +21,9 @@ use crate::{
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
-    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
-
-type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
 /// `2 * DELTA` represents epoch time
 pub const DELTA: u64 = 10;
@@ -41,10 +40,14 @@ pub struct ConsensusState {
     /// Orphan votes pool, in case a vote reaches a node before the
     /// corresponding block
     pub orphan_votes: Vec<Vote>,
+    /// Node participation identity
+    pub participant: Option<Participant>,
     /// Validators currently participating in the consensus
-    pub participants: FxIndexMap<u64, Participant>,
+    pub participants: BTreeMap<u64, Participant>,
     /// Validators to be added on the next epoch as participants
     pub pending_participants: Vec<Participant>,
+    /// Last slot participants where refreshed
+    pub refreshed: u64,
 }
 
 impl ConsensusState {
@@ -57,8 +60,10 @@ impl ConsensusState {
             genesis_block,
             proposals: vec![],
             orphan_votes: vec![],
-            participants: FxIndexMap::with_hasher(FxBuildHasher::default()),
+            participant: None,
+            participants: BTreeMap::new(),
             pending_participants: vec![],
+            refreshed: 0,
         })
     }
 }
@@ -159,6 +164,27 @@ impl ValidatorState {
         self.consensus.genesis_ts.elapsed() / (2 * DELTA)
     }
 
+    /// Finds the last epoch a proposal or block was generated.
+    pub fn last_epoch(&self) -> Result<u64> {
+        let mut epoch = 0;
+        for chain in &self.consensus.proposals {
+            for proposal in &chain.proposals {
+                if proposal.block.sl > epoch {
+                    epoch = proposal.block.sl;
+                }
+            }
+        }
+
+        // We return here in case proposals exist,
+        // so we don't query the sled database.
+        if epoch > 0 {
+            return Ok(epoch)
+        }
+
+        let (last_sl, _) = self.blockchain.last()?.unwrap();
+        Ok(last_sl)
+    }
+
     /// Calculates seconds until next epoch starting time.
     /// Epochs durationis configured using the delta value.
     pub fn next_epoch_start(&self) -> Duration {
@@ -176,10 +202,16 @@ impl ValidatorState {
     /// Leader calculation is based on how many nodes are participating
     /// in the network.
     pub fn epoch_leader(&mut self) -> u64 {
-        let len = self.consensus.participants.len();
-        assert!(len > 0);
-        let idx = rand::thread_rng().gen_range(0..len);
-        self.consensus.participants.get_index(idx).unwrap().1.id
+        let epoch = self.current_epoch();
+        // DefaultHasher is used to hash the epoch number
+        // because it produces a number string which then can be modulated by the len.
+        // blake3 produces alphanumeric
+        let mut hasher = DefaultHasher::new();
+        epoch.hash(&mut hasher);
+        let pos = hasher.finish() % (self.consensus.participants.len() as u64);
+        // Since BTreeMap orders by key in asceding order, each node will have
+        // the same key in calculated position.
+        self.consensus.participants.iter().nth(pos as usize).unwrap().1.id
     }
 
     /// Check if we're the current epoch leader
@@ -275,6 +307,9 @@ impl ValidatorState {
         if !self.participating {
             return Ok(None)
         }
+
+        // Node refreshes participants records
+        self.refresh_participants()?;
 
         let leader = self.epoch_leader();
         if leader != proposal.id {
@@ -418,6 +453,11 @@ impl ValidatorState {
             return Ok((false, None))
         }
 
+        error!("vote: {:?}", vote.id);
+
+        // Node refreshes participants records
+        self.refresh_participants()?;
+
         let node_count = self.consensus.participants.len();
 
         // Checking that the voter can actually vote.
@@ -453,7 +493,7 @@ impl ValidatorState {
 
         let (proposal, chain_idx) = proposal.unwrap();
         if proposal.block.sm.votes.contains(vote) {
-            debug!("receive_vote(): Already seen this proposal");
+            debug!("receive_vote(): Already seen this vote");
             return Ok((false, None))
         }
 
@@ -608,6 +648,12 @@ impl ValidatorState {
         Ok(finalized)
     }
 
+    /// Append node participant identity to the pending participants list.
+    pub fn append_self_participant(&mut self, participant: Participant) {
+        self.consensus.participant = Some(participant.clone());
+        self.append_participant(participant);
+    }
+
     /// Append a new participant to the pending participants list.
     pub fn append_participant(&mut self, participant: Participant) -> bool {
         if self.consensus.pending_participants.contains(&participant) {
@@ -619,8 +665,17 @@ impl ValidatorState {
     }
 
     /// Refresh the participants map, to retain only the active ones.
-    /// Active nodes are considered those who joined or voted on a previous epoch.
-    pub fn refresh_participants(&mut self) {
+    /// Active nodes are considered those that on the epoch the last proposal
+    /// was generated, either voted or joined the previous epoch.
+    /// That ensures we cover the case of chosen leader beign inactive.
+    pub fn refresh_participants(&mut self) -> Result<()> {
+        // Node checks if it should refresh its participants list
+        let epoch = self.current_epoch();
+        if epoch <= self.consensus.refreshed {
+            debug!("refresh_participants(): Participants have been refreshed this epoch.");
+            return Ok(())
+        }
+
         debug!("refresh_participants(): Adding pending participants");
         for participant in &self.consensus.pending_participants {
             self.consensus.participants.insert(participant.id, participant.clone());
@@ -628,24 +683,41 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             debug!(
-                "refresh_participants(): Didn't manage to add any participant, pending were empty"
+                "refresh_participants(): Didn't manage to add any participant, pending were empty."
             );
         }
 
         self.consensus.pending_participants = vec![];
 
         let mut inactive = Vec::new();
-        let previous_epoch = self.current_epoch() - 1;
+        let mut last_epoch = self.last_epoch()?;
+
+        // This check ensures that we don't chech the current epoch,
+        // as a node might receive the proposal of current epoch before
+        // starting refreshing participants, so the last_epoch will be
+        // the current one.
+        if last_epoch >= epoch {
+            last_epoch = epoch - 1;
+        }
+
+        let previous_epoch = last_epoch - 1;
+
+        error!(
+            "refresh_participants(): Checking epochs: previous - {:?}, last - {:?}",
+            previous_epoch, last_epoch
+        );
+
         for (index, participant) in self.consensus.participants.clone().iter() {
             match participant.voted {
                 Some(epoch) => {
-                    if epoch < previous_epoch {
+                    if epoch < last_epoch {
+                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
                         inactive.push(*index);
                     }
                 }
-
                 None => {
                     if participant.joined < previous_epoch {
+                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
                         inactive.push(*index);
                     }
                 }
@@ -658,9 +730,15 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.id, self.current_epoch());
-            self.consensus.pending_participants.push(participant);
+            let mut participant = self.consensus.participant.clone().unwrap();
+            participant.joined = epoch;
+            self.consensus.participant = Some(participant.clone());
+            self.consensus.participants.insert(participant.id, participant.clone());
         }
+
+        self.consensus.refreshed = epoch;
+
+        Ok(())
     }
 
     /// Utility function to reset the current consensus state.
@@ -673,34 +751,13 @@ impl ValidatorState {
             genesis_block,
             proposals: vec![],
             orphan_votes: vec![],
-            participants: FxIndexMap::with_hasher(FxBuildHasher::default()),
+            participant: None,
+            participants: BTreeMap::new(),
             pending_participants: vec![],
+            refreshed: 0,
         };
 
         self.consensus = consensus;
         Ok(())
-    }
-}
-
-impl Encodable for indexmap::IndexMap<u64, Participant, std::hash::BuildHasherDefault<FxHasher>> {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += VarInt(self.len() as u64).encode(&mut s)?;
-        for c in self.iter() {
-            len += c.1.encode(&mut s)?;
-        }
-        Ok(len)
-    }
-}
-
-impl Decodable for indexmap::IndexMap<u64, Participant, std::hash::BuildHasherDefault<FxHasher>> {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let len = VarInt::decode(&mut d)?.0;
-        let mut ret = FxIndexMap::with_hasher(FxBuildHasher::default());
-        for _ in 0..len {
-            let participant: Participant = Decodable::decode(&mut d)?;
-            ret.insert(participant.id, participant);
-        }
-        Ok(ret)
     }
 }
