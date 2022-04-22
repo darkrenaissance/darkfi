@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use log::{debug, error, info};
 
+use super::consensus_sync_task;
 use crate::{
     consensus2::{state::ValidatorStatePtr, Participant},
     net,
@@ -8,7 +11,32 @@ use crate::{
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
-    // Node signals the network that it starts participating
+    // Node waits just before the current or next epoch end,
+    // so it can start syncing latest state.
+    let mut seconds_until_next_epoch = state.read().await.next_epoch_start();
+    let one_sec = Duration::new(1, 0);
+    loop {
+        if seconds_until_next_epoch > one_sec {
+            seconds_until_next_epoch -= one_sec;
+            break
+        }
+        info!("Waiting for next epoch ({:?} sec)...", seconds_until_next_epoch);
+        sleep(seconds_until_next_epoch.as_secs()).await;
+        seconds_until_next_epoch = state.read().await.next_epoch_start();
+    }
+    info!("Waiting for next epoch ({:?} sec)...", seconds_until_next_epoch);
+    sleep(seconds_until_next_epoch.as_secs()).await;
+
+    // Node syncs its consensus state
+    match consensus_sync_task(p2p.clone(), state.clone()).await {
+        Ok(()) => {}
+        Err(e) => {
+            error!("Failed syncing consensus state: {}. Quitting consensus.", e);
+            return
+        }
+    }
+
+    // Node signals the network that it will start participating
     let participant = Participant::new(state.read().await.id, state.read().await.current_epoch());
     state.write().await.append_participant(participant.clone());
 
@@ -16,6 +44,9 @@ pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
         Ok(()) => info!("Consensus participation message broadcasted successfully."),
         Err(e) => error!("Failed broadcasting consensus participation: {}", e),
     }
+
+    // Note modifies its participating flag to true.
+    state.write().await.participating = true;
 
     loop {
         let seconds_until_next_epoch = state.read().await.next_epoch_start().as_secs();

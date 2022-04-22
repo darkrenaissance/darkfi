@@ -22,6 +22,6 @@ pub use protocol_vote::ProtocolVote;
 mod protocol_sync;
 pub use protocol_sync::ProtocolSync;
 
-/// Validator forks sync protocol
-mod protocol_sync_forks;
-pub use protocol_sync_forks::ProtocolSyncForks;
+/// Validator consensus sync protocol
+mod protocol_sync_consensus;
+pub use protocol_sync_consensus::ProtocolSyncConsensus;

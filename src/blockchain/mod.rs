@@ -101,10 +101,8 @@ impl Blockchain {
         let blockhashes = self.order.get(slots, false)?;
 
         let mut hashes = vec![];
-        for i in blockhashes {
-            if i.is_some() {
-                hashes.push(i.unwrap());
-            }
+        for i in blockhashes.into_iter().flatten() {
+            hashes.push(i);
         }
 
         self.get_blocks_by_hash(&hashes)

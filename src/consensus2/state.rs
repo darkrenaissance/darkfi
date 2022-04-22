@@ -1,10 +1,10 @@
 // TODO: Use sets instead of vectors where possible.
 
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
-use fxhash::FxBuildHasher;
+use fxhash::{FxBuildHasher, FxHasher};
 use indexmap::IndexMap;
 use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, Rng};
@@ -19,16 +19,18 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
-    util::serial::{serialize, Encodable},
+    net,
+    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
 };
 
 type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
-const DELTA: u64 = 10;
+/// `2 * DELTA` represents epoch time
+pub const DELTA: u64 = 10;
 
 /// This struct represents the information required by the consensus algorithm
-#[derive(Debug)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusState {
     /// Genesis block creation timestamp
     pub genesis_ts: Timestamp,
@@ -61,6 +63,32 @@ impl ConsensusState {
     }
 }
 
+/// Auxiliary structure used for consensus syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusRequest {
+    /// Validator ID
+    pub id: u64,
+}
+
+impl net::Message for ConsensusRequest {
+    fn name() -> &'static str {
+        "consensusrequest"
+    }
+}
+
+/// Auxiliary structure used for consensus syncing.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ConsensusResponse {
+    /// Hot/live data used by the consensus algorithm
+    pub consensus: ConsensusState,
+}
+
+impl net::Message for ConsensusResponse {
+    fn name() -> &'static str {
+        "consensusresponse"
+    }
+}
+
 /// Atomic pointer to validator state.
 pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
@@ -78,6 +106,8 @@ pub struct ValidatorState {
     pub blockchain: Blockchain,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Tx>,
+    /// Participation flag
+    pub participating: bool,
 }
 
 impl ValidatorState {
@@ -94,6 +124,7 @@ impl ValidatorState {
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let unconfirmed_txs = vec![];
+        let participating = false;
 
         let state = Arc::new(RwLock::new(ValidatorState {
             id,
@@ -102,6 +133,7 @@ impl ValidatorState {
             consensus,
             blockchain,
             unconfirmed_txs,
+            participating,
         }));
 
         Ok(state)
@@ -239,6 +271,11 @@ impl ValidatorState {
     /// Receive the proposed block, verify its sender (epoch leader),
     /// and proceed with voting on it.
     pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+        // Node hasn't started participating
+        if !self.participating {
+            return Ok(None)
+        }
+
         let leader = self.epoch_leader();
         if leader != proposal.id {
             warn!(
@@ -270,7 +307,6 @@ impl ValidatorState {
     /// is created. The node votes on the proposal only if it extends the
     /// longest notarized fork chain it has seen.
     pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
-        self.zero_participants_check();
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
@@ -328,7 +364,7 @@ impl ValidatorState {
     }
 
     /// Given a proposal, find the index of the chain it extends.
-    pub fn find_extended_chain_index(&self, proposal: &BlockProposal) -> Result<i64> {
+    pub fn find_extended_chain_index(&mut self, proposal: &BlockProposal) -> Result<i64> {
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
             let hash = last.hash();
@@ -362,6 +398,11 @@ impl ValidatorState {
     /// Finally, we check if the notarization of the proposal can finalize
     /// parent proposals in its chain.
     pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
+        // Node hasn't started participating
+        if !self.participating {
+            return Ok((false, None))
+        }
+
         let mut encoded_proposal = vec![];
 
         match vote.proposal.encode(&mut encoded_proposal) {
@@ -378,7 +419,6 @@ impl ValidatorState {
         }
 
         let node_count = self.consensus.participants.len();
-        self.zero_participants_check();
 
         // Checking that the voter can actually vote.
         match self.consensus.participants.get(&vote.id) {
@@ -578,23 +618,6 @@ impl ValidatorState {
         true
     }
 
-    /// Prevent the extreme case scenario where network is initialized, but
-    /// some nodes have not pushed the initial participants in the map.
-    pub fn zero_participants_check(&mut self) {
-        if self.consensus.participants.is_empty() {
-            debug!("zero_participants_check(): Participants are empty, trying to add pending ones");
-            for participant in &self.consensus.pending_participants {
-                self.consensus.participants.insert(participant.id, participant.clone());
-            }
-
-            if self.consensus.participants.is_empty() {
-                debug!("zero_participants_check(): Didn't manage to add any participant, pending were empty");
-            }
-
-            self.consensus.pending_participants = Vec::new();
-        }
-    }
-
     /// Refresh the participants map, to retain only the active ones.
     /// Active nodes are considered those who joined or voted on a previous epoch.
     pub fn refresh_participants(&mut self) {
@@ -632,12 +655,19 @@ impl ValidatorState {
         for index in inactive {
             self.consensus.participants.remove(&index);
         }
+
+        if self.consensus.participants.is_empty() {
+            // If no nodes are active, node becomes a single node network.
+            let participant = Participant::new(self.id, self.current_epoch());
+            self.consensus.pending_participants.push(participant);
+        }
     }
 
     /// Utility function to reset the current consensus state.
     pub fn reset_consensus_state(&mut self) -> Result<()> {
-        let genesis_ts = self.consensus.genesis_ts.clone();
-        let genesis_block = self.consensus.genesis_block.clone();
+        let genesis_ts = self.consensus.genesis_ts;
+        let genesis_block = self.consensus.genesis_block;
+
         let consensus = ConsensusState {
             genesis_ts,
             genesis_block,
@@ -649,5 +679,28 @@ impl ValidatorState {
 
         self.consensus = consensus;
         Ok(())
+    }
+}
+
+impl Encodable for indexmap::IndexMap<u64, Participant, std::hash::BuildHasherDefault<FxHasher>> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.1.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl Decodable for indexmap::IndexMap<u64, Participant, std::hash::BuildHasherDefault<FxHasher>> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = FxIndexMap::with_hasher(FxBuildHasher::default());
+        for _ in 0..len {
+            let participant: Participant = Decodable::decode(&mut d)?;
+            ret.insert(participant.id, participant);
+        }
+        Ok(ret)
     }
 }

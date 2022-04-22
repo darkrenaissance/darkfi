@@ -241,29 +241,3 @@ impl ProposalChain {
 }
 
 impl_vec!(ProposalChain);
-
-/// Auxiliary structure used for forks syncing.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct ForkOrder {
-    /// Validator ID
-    pub id: u64,
-}
-
-impl net::Message for ForkOrder {
-    fn name() -> &'static str {
-        "forkorder"
-    }
-}
-
-/// Auxiliary structure used for forks syncing.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct ForkResponse {
-    /// Fork chains containing block proposals
-    pub proposals: Vec<ProposalChain>,
-}
-
-impl net::Message for ForkResponse {
-    fn name() -> &'static str {
-        "forkresponse"
-    }
-}
