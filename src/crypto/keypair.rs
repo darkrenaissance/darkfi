@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, io};
+use std::{convert::TryFrom, io, str::FromStr};
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
@@ -76,21 +76,25 @@ impl PublicKey {
         self.0.to_bytes()
     }
 
+    pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
+        match pallas::Point::from_bytes(bytes).into() {
+            Some(k) => Ok(Self(k)),
+            None => Err(Error::PublicKeyFromBytes),
+        }
+    }
+}
+
+impl FromStr for PublicKey {
+    type Err = crate::Error;
+
     /// Tries to create a `PublicKey` instance from a base58 encoded string.
-    pub fn from_str(encoded: &str) -> Result<Self> {
+    fn from_str(encoded: &str) -> std::result::Result<Self, crate::Error> {
         let decoded = bs58::decode(encoded).into_vec()?;
         if decoded.len() != 32 {
             return Err(Error::PublicKeyFromStr)
         }
 
         Self::from_bytes(&decoded.try_into().unwrap())
-    }
-
-    pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
-        match pallas::Point::from_bytes(bytes).into() {
-            Some(k) => Ok(Self(k)),
-            None => Err(Error::PublicKeyFromBytes),
-        }
     }
 }
 
