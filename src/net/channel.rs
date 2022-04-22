@@ -1,4 +1,12 @@
 use async_std::sync::Mutex;
+use futures::{
+    io::{ReadHalf, WriteHalf},
+    AsyncReadExt,
+};
+use log::{debug, error, info};
+use rand::Rng;
+use serde_json::json;
+use smol::{Async, Executor};
 use std::{
     net::{SocketAddr, TcpStream},
     sync::{
@@ -6,14 +14,6 @@ use std::{
         Arc,
     },
 };
-
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncReadExt,
-};
-use log::{debug, error, info};
-use serde_json::json;
-use smol::{Async, Executor};
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
@@ -29,6 +29,7 @@ use super::{
 pub type ChannelPtr = Arc<Channel>;
 
 struct ChannelInfo {
+    random_id: u32,
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
@@ -37,11 +38,17 @@ struct ChannelInfo {
 
 impl ChannelInfo {
     fn new() -> Self {
-        Self { last_msg: String::new(), last_status: String::new(), log: Mutex::new(Vec::new()) }
+        Self {
+            random_id: rand::thread_rng().gen(),
+            last_msg: String::new(),
+            last_status: String::new(),
+            log: Mutex::new(Vec::new()),
+        }
     }
 
     async fn get_info(&self) -> serde_json::Value {
         let result = json!({
+            "random_id": self.random_id,
             "last_msg": self.last_msg,
             "last_status": self.last_status,
             "log": self.log.lock().await.clone(),
