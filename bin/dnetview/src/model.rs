@@ -3,9 +3,9 @@ use async_std::sync::Mutex;
 use fxhash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 
-type NodeId = u32;
-type SessionId = u32;
-type ConnectId = u32;
+type NodeId = u64;
+type SessionId = u64;
+type ConnectId = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SelectableObject {
@@ -15,14 +15,14 @@ pub enum SelectableObject {
 }
 
 pub struct Model {
-    pub ids: Mutex<FxHashSet<u32>>,
-    pub infos: Mutex<FxHashMap<u32, SelectableObject>>,
+    pub ids: Mutex<FxHashSet<u64>>,
+    pub infos: Mutex<FxHashMap<u64, SelectableObject>>,
 }
 
 impl Model {
     pub fn new(
-        ids: Mutex<FxHashSet<u32>>,
-        infos: Mutex<FxHashMap<u32, SelectableObject>>,
+        ids: Mutex<FxHashSet<u64>>,
+        infos: Mutex<FxHashMap<u64, SelectableObject>>,
     ) -> Model {
         Model { ids, infos }
     }
