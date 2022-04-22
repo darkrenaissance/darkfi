@@ -150,7 +150,7 @@ async fn poll(client: DNetView, model: Arc<Model>) -> Result<()> {
             // TODO: error handling
             //debug!("Reply is empty");
         }
-        async_util::sleep(2).await;
+        async_util::sleep(10).await;
     }
 }
 
@@ -158,25 +158,29 @@ async fn parse_data(
     reply: &serde_json::Map<String, Value>,
     client: &DNetView,
     model: Arc<Model>,
-) -> io::Result<()> {
+) -> Result<()> {
     let _ext_addr = reply.get("external_addr");
     let inbound = &reply["session_inbound"];
     let manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
 
-    let connects: Vec<ConnectInfo> = Vec::new();
-    let sessions: Vec<SessionInfo> = Vec::new();
+    let mut sessions: Vec<SessionInfo> = Vec::new();
 
     let node_id = generate_id();
     let node_name = &client.name;
 
-    parse_inbound(inbound, connects.clone(), sessions.clone(), node_id, model.clone()).await;
-    parse_outbound(outbound, connects.clone(), sessions.clone(), node_id, model.clone()).await;
-    parse_manual(manual, connects.clone(), node_id, model.clone()).await;
+    let in_session = parse_inbound(inbound, node_id).await?;
+    let out_session = parse_outbound(outbound, node_id).await?;
+    let man_session = parse_manual(manual, node_id).await?;
+
+    sessions.push(in_session);
+    sessions.push(out_session);
+    sessions.push(man_session);
 
     let node_info = NodeInfo::new(node_id, node_name.to_string(), sessions);
     let node = SelectableObject::Node(node_info.clone());
 
+    // TODO: model keeps expanding-- should stop
     model.ids.lock().await.insert(node_id);
     model.infos.lock().await.insert(node_id, node);
 
@@ -186,13 +190,8 @@ async fn parse_data(
     Ok(())
 }
 
-async fn parse_inbound(
-    inbound: &Value,
-    mut connects: Vec<ConnectInfo>,
-    mut sessions: Vec<SessionInfo>,
-    node_id: u32,
-    model: Arc<Model>,
-) {
+async fn parse_inbound(inbound: &Value, node_id: u32) -> Result<SessionInfo> {
+    let mut connects: Vec<ConnectInfo> = Vec::new();
     let connections = &inbound["connected"];
     let session_id = generate_id();
 
@@ -216,6 +215,7 @@ async fn parse_inbound(
                 }
                 false => {
                     // channel is not empty. initialize with whole values
+                    // TODO: we are not saving the connect id
                     let connect_id = generate_id();
                     for k in connect.keys() {
                         let node = connect.get(k);
@@ -237,53 +237,41 @@ async fn parse_inbound(
                 }
             }
             let session_info = SessionInfo::new(session_id, node_id, connects.clone());
-            sessions.push(session_info.clone());
-            let session = SelectableObject::Session(session_info.clone());
-
-            model.ids.lock().await.insert(session_id);
-            model.infos.lock().await.insert(session_id, session);
+            Ok(session_info)
         }
         None => {
             // TODO
+            Err(Error::ConnectTimeout)
         }
     }
 }
 
 // TODO: placeholder for now
-async fn parse_manual(
-    _manual_obj: &Value,
-    mut connections: Vec<ConnectInfo>,
-    _node_id: u32,
-    model: Arc<Model>,
-) {
-    let m_session_id = generate_id();
-    let m_connect_id = generate_id();
+async fn parse_manual(_manual: &Value, node_id: u32) -> Result<SessionInfo> {
+    let mut connects: Vec<ConnectInfo> = Vec::new();
+
+    let session_id = generate_id();
+    let connect_id = generate_id();
     let addr = "Null".to_string();
     let msg = "Null".to_string();
     let status = "Null".to_string();
     let is_empty = true;
-    let parent = m_session_id;
+    let parent = session_id;
     let state = "Null".to_string();
     let msg_log = Vec::new();
-    let m_connect_info =
-        ConnectInfo::new(m_connect_id, addr, is_empty, msg, status, state, msg_log, parent);
-    connections.push(m_connect_info.clone());
-    let connect = SelectableObject::Connect(m_connect_info.clone());
+    let connect_info =
+        ConnectInfo::new(connect_id, addr, is_empty, msg, status, state, msg_log, parent);
+    connects.push(connect_info.clone());
+    let session_info = SessionInfo::new(session_id, node_id, connects.clone());
 
-    model.ids.lock().await.insert(m_session_id);
-    model.infos.lock().await.insert(m_session_id, connect);
+    Ok(session_info)
 }
 
-async fn parse_outbound(
-    outbound: &Value,
-    mut connects: Vec<ConnectInfo>,
-    mut sessions: Vec<SessionInfo>,
-    node_id: u32,
-    model: Arc<Model>,
-) {
-    // parse outbound connection data
+async fn parse_outbound(outbound: &Value, node_id: u32) -> Result<SessionInfo> {
+    let mut connects: Vec<ConnectInfo> = Vec::new();
     let slots = &outbound["slots"];
     let session_id = generate_id();
+
     match slots.as_array() {
         Some(slots) => {
             for slot in slots {
@@ -319,7 +307,8 @@ async fn parse_outbound(
                         let state = &slot["state"];
                         // TODO: msg and status
                         let msg = "msg";
-                        let status = &slot["last_status"];
+                        let status = "status";
+                        //let status = &slot["last_status"];
                         let parent = session_id;
                         // TODO
                         let msg_log = Vec::new();
@@ -328,7 +317,8 @@ async fn parse_outbound(
                             addr.as_str().unwrap().to_string(),
                             is_empty,
                             msg.to_string(),
-                            status.as_str().unwrap().to_string(),
+                            status.to_string(),
+                            //status.as_str().unwrap().to_string(),
                             state.as_str().unwrap().to_string(),
                             msg_log,
                             parent,
@@ -338,18 +328,16 @@ async fn parse_outbound(
                 }
             }
             let session_info = SessionInfo::new(session_id, node_id, connects.clone());
-            sessions.push(session_info.clone());
-            let session = SelectableObject::Session(session_info.clone());
-
-            model.ids.lock().await.insert(session_id);
-            model.infos.lock().await.insert(session_id, session);
+            Ok(session_info)
         }
         None => {
             // TODO
+            Err(Error::NotSupportedToken)
         }
     }
 }
 
+// create id if not exists
 fn generate_id() -> u32 {
     let mut rng = thread_rng();
     let id: u32 = rng.gen();
@@ -360,7 +348,7 @@ fn generate_id() -> u32 {
 //    return slots.iter().all(|slot| slot.is_empty);
 //}
 
-async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> io::Result<()> {
+async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Result<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
