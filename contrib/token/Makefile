@@ -15,7 +15,7 @@ SOL   = https://github.com/solana-labs/token-list/raw/main/src/tokens/solana.tok
 
 all: $(LISTS_MIN)
 
-$(LISTS_MIN): $(LISTS_JSON)
+.json.min.json:
 	jq -r -c < $< > $@
 
 bitcoin_token_list.json:
@@ -33,4 +33,5 @@ solana_token_list.json:
 clean:
 	rm -f $(LISTS_JSON) $(LISTS_MIN)
 
+.SUFFIXES: .json .min.json
 .PHONY: all
