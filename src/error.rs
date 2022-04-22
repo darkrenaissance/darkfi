@@ -176,6 +176,9 @@ pub enum Error {
     #[error("SetLoggerError")]
     SetLoggerError,
 
+    #[error("ValueIsNotObject")]
+    ValueIsNotObject,
+
     #[cfg(feature = "async-runtime")]
     #[error("Async_channel sender error")]
     AsyncChannelSenderError,

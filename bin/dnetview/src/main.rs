@@ -239,10 +239,7 @@ async fn parse_inbound(inbound: &Value, node_id: u32) -> Result<SessionInfo> {
             let session_info = SessionInfo::new(session_id, node_id, connects.clone());
             Ok(session_info)
         }
-        None => {
-            // TODO
-            Err(Error::ConnectTimeout)
-        }
+        None => Err(Error::ValueIsNotObject),
     }
 }
 
@@ -330,10 +327,7 @@ async fn parse_outbound(outbound: &Value, node_id: u32) -> Result<SessionInfo> {
             let session_info = SessionInfo::new(session_id, node_id, connects.clone());
             Ok(session_info)
         }
-        None => {
-            // TODO
-            Err(Error::NotSupportedToken)
-        }
+        None => Err(Error::ValueIsNotObject),
     }
 }
 
