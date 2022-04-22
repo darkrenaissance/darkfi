@@ -61,8 +61,6 @@ pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
             Err(e) => error!("Failed refreshing participants: {}", e),
         }
 
-        error!("participants: {:?}", state.read().await.consensus.participants);
-
         // Node checks if it's the epoch leader to generate a new proposal
         // for that epoch.
         let result = if state.write().await.is_epoch_leader() {

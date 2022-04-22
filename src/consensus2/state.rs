@@ -453,8 +453,6 @@ impl ValidatorState {
             return Ok((false, None))
         }
 
-        error!("vote: {:?}", vote.id);
-
         // Node refreshes participants records
         self.refresh_participants()?;
 
@@ -702,7 +700,7 @@ impl ValidatorState {
 
         let previous_epoch = last_epoch - 1;
 
-        error!(
+        debug!(
             "refresh_participants(): Checking epochs: previous - {:?}, last - {:?}",
             previous_epoch, last_epoch
         );
