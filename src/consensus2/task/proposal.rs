@@ -50,7 +50,7 @@ pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
 
     loop {
         let seconds_until_next_epoch = state.read().await.next_epoch_start().as_secs();
-        info!(target: "consensus", "Waiting for next epoch ({}) sec)...", seconds_until_next_epoch);
+        info!(target: "consensus", "Waiting for next epoch ({:?} sec)...", seconds_until_next_epoch);
         sleep(seconds_until_next_epoch).await;
 
         // Node refreshes participants records

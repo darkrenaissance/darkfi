@@ -21,11 +21,11 @@ use darkfi::{
     cli_desc,
     consensus2::{
         proto::{
-            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncForks, ProtocolTx,
+            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
             ProtocolVote,
         },
         state::ValidatorStatePtr,
-        task::{block_sync_task, fork_sync_task, proposal_task},
+        task::{block_sync_task, proposal_task},
         util::Timestamp,
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
@@ -469,8 +469,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
         let _state = state.clone();
         registry
-            //.register(net::SESSION_ALL, move |channel, p2p| {
-            .register(!net::SESSION_SEED, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, p2p| {
                 let state = _state.clone();
                 async move { ProtocolSync::init(channel, state, p2p, args.consensus).await.unwrap() }
             })
@@ -478,8 +477,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
         let _state = state.clone();
         registry
-            //.register(net::SESSION_ALL, move |channel, p2p| {
-            .register(!net::SESSION_SEED, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, p2p| {
                 let state = _state.clone();
                 async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
             })
@@ -507,8 +505,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
             let _state = state.clone();
             registry
-                //.register(net::SESSION_ALL, move |channel, p2p| {
-                .register(!net::SESSION_SEED, move |channel, p2p| {
+                .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
                     async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
                 })
@@ -516,8 +513,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
             let _state = state.clone();
             registry
-                //.register(net::SESSION_ALL, move |channel, p2p| {
-                .register(!net::SESSION_SEED, move |channel, p2p| {
+                .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
                     async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
                 })
@@ -526,8 +522,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             let _state = state.clone();
             let _sync_p2p = sync_p2p.clone().unwrap();
             registry
-                //.register(net::SESSION_ALL, move |channel, p2p| {
-                .register(!net::SESSION_SEED, move |channel, p2p| {
+                .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
                     let __sync_p2p = _sync_p2p.clone();
                     async move {
@@ -540,10 +535,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
             let _state = state.clone();
             registry
-                //.register(net::SESSION_ALL, move |channel, p2p| {
-                .register(!net::SESSION_SEED, move |channel, p2p| {
+                .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
-                    async move { ProtocolSyncForks::init(channel, state, p2p).await.unwrap() }
+                    async move { ProtocolSyncConsensus::init(channel, state, p2p).await.unwrap() }
                 })
                 .await;
 
@@ -591,14 +585,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         .detach();
 
         info!("Starting consensus protocol task");
-        match fork_sync_task(consensus_p2p.clone().unwrap(), state.clone()).await {
-            Ok(()) => {
-                ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
-            }
-            Err(e) => {
-                error!("Failed to sync consensus forks. Not starting consensus: {}", e);
-            }
-        }
+        ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
     }
 
     // Wait for SIGINT
