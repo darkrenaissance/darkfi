@@ -17,6 +17,7 @@ The following dependencies are also required:
 |------------------------------|------------------|
 | gcc, gcc-c++, kernel headers | build-essential  | 
 | cmake                        | cmake            |
+| jq                           | jq               |
 | wget                         | wget             | 
 | pkg-config                   | pkg-config       | 
 | clang                        | clang            | 
@@ -30,9 +31,10 @@ Users of Debian-based systems (e.g. Ubuntu) can simply run the following
 to install the required dependencies:
 
 ```shell
-% sudo apt-get update
-% sudo apt-get install -y build-essential cmake wget pkg-config clang \
-    libclang-dev llvm-dev libudev-dev libfreetype6-dev libexpat1-dev
+# apt-get update
+# apt-get install -y build-essential cmake jq wget pkg-config \
+    clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
+    libexpat1-dev
 ```
 
 To build the necessary binaries, we can just clone the repo, and use the 
@@ -60,7 +62,7 @@ binaries and contain sane defaults. You'll have to run each daemon once
 in order for them to spawn a config file, which you can then review.
 
 ```shell
-% sudo make install
+# make install
 ```
 
 ## Bash Completion
