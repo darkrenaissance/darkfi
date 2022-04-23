@@ -68,9 +68,9 @@ the probability that a party holding all the stake will be selected to
 be a leader. Stakeholder is selected as leader for slot j with
 probability $\phi_f(\alpha_i)$, $\alpha_i$ is $U_i$ stake.
 
-### absolute stake aggregation dependent leader selection functions
+the following are  absolute stake aggregation dependent leader selection family of functions
 
-#### linear functions
+### linear family functions
 
 in the previous leader selection function, it has the unique property of
 independent aggregation of the stakes, meaning the property of a leader winning leadership with stakes $\sigma$ is independent of whether the stakeholder would act as a pool of stakes, or distributed stakes on competing coins.
@@ -82,65 +82,66 @@ $\prod_{i}^{n}(1-\phi(\sigma_i))=-(1-f)^{\sum_i(\sigma_i)}$
 thus:
 $$ 1-\phi(\sum_{i}\sigma_i) =\prod_{i}^{n}(1-\phi(\sigma_i)) $$
 
-##### linear leader selection
+a non-exponential  linear leader selection can be:
 
 $$y < T $$
 $$y = 2^lk \mid 0 \le k \le 1$$
 $$T = 2^l\phi(v)$$
-$$ \phi(v)=\frac{1}{v_{max}}v $$
+$$ \phi(v)=\frac{1}{v_{max+}+c}v  \mid c \in \mathbb{Z}$$
 
-##### dependent aggregation
+#### dependent aggregation
 
 linear leader selection has the dependent aggregation property, meaning it's favorable to compete in pools with sum of the stakes over aggregated stakes of distributed stakes:
 
 $$\phi(\sum_{i}{\sigma_i})>\prod_{i}^{n}{\sigma_i}$$
-$$\sum_{i}{\sigma_i}>(\frac{1}{v_{max}})^{n-1}v_1v_2 \dots v_n$$
+$$\sum_{i}{\sigma_i}>(\frac{1}{v_{max}+c})^{n-1}v_1v_2 \dots v_n$$
 let's assume the stakes are divided to stakes of value $\sigma_i=1$ for $\Sigma>1 \in \mathbb{Z}$, $\sum_{i}{\sigma_i}=V$
-$$V>(\frac{1}{v_{max}})^{n-1}$$
-note that $(\frac{1}{v_{max}})^{n-1} < 1, V>1$, thus competing with single coin of the sum of stakes held by the stakeholder is favourable.
+$$V>(\frac{1}{v_{max}+c})^{n-1}$$
+note that $(\frac{1}{v_{max}+c})^{n-1} < 1, V>1$, thus competing with single coin of the sum of stakes held by the stakeholder is favourable.
 
-##### scalar linear aggregation dependent leader selection
+#### scalar linear aggregation dependent leader selection
 
   a target function T with scalar coefficients can be formalized as
- $$T=2^lk\phi(\Sigma)=2^l(\frac{1}{v_{max}})\Sigma$$
- let's assume $v_{max}=2^v$, then:
+ $$T=2^lk\phi(\Sigma)=2^l(\frac{1}{v_{max}+c})\Sigma$$
+ let's assume $v_{max}=2^v$, and $c=0$ then:
  $$T=2^lk\phi(\Sigma)=2^{l-v}\Sigma$$
  then the lead statement is
  $$y<2^{l-v}\Sigma$$ for example for a group order or l=    24 bits, and maximum value of $v_{max}=2^{10}$, then lead statement:
  $$y<2^{14}\Sigma$$
 
-##### competing max value coins
+#### competing max value coins
 
 for a stakeholder with $nv_{max}$ absolute stake, $\mid n \in \mathbb{Z}$ it's advantageous for the stakeholder to
 distribute stakes on $n$ competing coins.
 
 
-#### inverse functions
+### inverse functions
 
 inverse lead selection functions doesn't require maximum stake, most suitable for absolute stake,
 it has the disadvantage that it's inflating with increasing rate as time goes on , but it can be function of the inverse of the slot
 to control the increasing frequency of winning leadership.
 
-##### leader selection without maximum stake upper limit
+#### leader selection without maximum stake upper limit
 
-the inverse leader selection without maximum stake value can be $\phi(v)=\frac{v}{v+c}$  where c is $ > 1$
+the inverse leader selection without maximum stake value can be $\phi(v)=\frac{v}{v+c} \mid c  > 1$
 and inversely proportional with probability of winning leadership, let it be called leadership coefficient.
 
 
-##### decaying linear leader selection
+#### decaying linear leader selection
 
 as the time goes one, and stakes increase, this means the combined stakes of all stakeholders increases the probability
 of winning leadership in next slots leading to more leaders at a single slot, to maintain, or to be more general to control this frequency of leaders per slot,
 c (the leadership coefficient) need to be function of the slot $sl$, i.e $c(sl) = \frac{sl}{R}$ where $R$ is epoch size (number of slots in epoch).
 
-##### pairing leader selection independent aggregation function
+#### pairing leader selection independent aggregation function
 
-the only family of functions that are isomorphic to summation on multiplication (having the independent aggregation property) is the exponential function,
-and since it's impossible to implement in plonk,
+the only family of functions $\phi(\alpha)$ that are isomorphic to summation on multiplication $\phi(\alpha_1+\alpha_2) = \phi(\alpha_1)\phi(\alpha_2)$(having the independent aggregation property) is the exponential function,
+and since it's impossible to implement in plonk,  a re-formalization of the lead statement using pairing that is isomorphic to summation on multiplication is an option.
 
-###### TODO (proof)
-
-a re-formalization of the lead statement using pairing that is isomorphic to summation on multiplication is also an options.
+let's assume $\phi$ is isomorphic function between multiplication and addition, $\phi(\alpha) = \phi(\frac{\alpha}{2})\phi(\frac{\alpha}{2})=\phi(\frac{\alpha}{2})^2$, thus:
+$$\phi(\alpha)=\underbrace{\phi(1)\dots\phi(1)}_\text{$\alpha$}=\phi(1)^\alpha$$
+then the only family of functions $\phi : \mathbb{R} \rightarrow \mathbb{R}$ satisfying this is the exponential function
+$$\phi(\alpha)=c^{\alpha} \mid c  \in \mathbb{R}$$
 
 
 ## Leaky non-resettable beacon
