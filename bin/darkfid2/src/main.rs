@@ -28,6 +28,7 @@ use darkfi::{
         util::Timestamp,
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
+    crypto::token_list::{DrkTokenList, TokenList},
     net,
     net::P2pPtr,
     node::{Client, State},
@@ -142,6 +143,10 @@ pub struct Darkfid {
     sync_p2p: Option<P2pPtr>,
     validator_state: ValidatorStatePtr,
     state: Arc<Mutex<State>>,
+    drk_tokenlist: DrkTokenList,
+    btc_tokenlist: TokenList,
+    eth_tokenlist: TokenList,
+    sol_tokenlist: TokenList,
 }
 
 // JSON-RPC methods
@@ -168,6 +173,7 @@ impl RequestHandler for Darkfid {
             Some("wallet.set_default_address") => {
                 return self.set_default_address(req.id, params).await
             }
+            Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
             Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
         }
     }
@@ -181,6 +187,15 @@ impl Darkfid {
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
     ) -> Result<Self> {
+        // Parse token lists
+        let btc_tokenlist =
+            TokenList::new(include_bytes!("../../../contrib/token/bitcoin_token_list.min.json"))?;
+        let eth_tokenlist =
+            TokenList::new(include_bytes!("../../../contrib/token/erc20_token_list.min.json"))?;
+        let sol_tokenlist =
+            TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.min.json"))?;
+        let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
+
         // Initialize Client
         let client = Client::new(wallet).await?;
         let tree = client.get_tree().await?;
@@ -205,6 +220,10 @@ impl Darkfid {
             sync_p2p,
             validator_state,
             state,
+            drk_tokenlist,
+            btc_tokenlist,
+            eth_tokenlist,
+            sol_tokenlist,
         })
     }
 }

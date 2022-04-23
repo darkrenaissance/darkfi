@@ -1,4 +1,6 @@
+use fxhash::FxHashMap;
 use log::error;
+use num_bigint::BigUint;
 use serde_json::{json, Value};
 
 use darkfi::{
@@ -13,6 +15,8 @@ use darkfi::{
             JsonResult,
         },
     },
+    util::{decode_base10, encode_base10},
+    Result,
 };
 
 use super::Darkfid;
@@ -187,5 +191,53 @@ impl Darkfid {
         };
 
         jsonrpc::response(json!(true), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the wallet for known balances.
+    // Returns a map of balances, indexed by `network`, and token ID.
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
+    pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let result: Result<FxHashMap<String, (String, String)>> = async {
+            let balances = self.client.get_balances().await?;
+            let mut symbols: FxHashMap<String, (String, String)> = FxHashMap::default();
+
+            for b in balances.list.iter() {
+                let network: String;
+                let symbol: String;
+
+                let mut amount = BigUint::from(b.value);
+
+                if let Some((net, sym)) = self.drk_tokenlist.symbol_from_id(&b.token_id)? {
+                    network = net.to_string();
+                    symbol = sym;
+                } else {
+                    // TODO: SQL needs to have the mint address for show, not the internal hash.
+                    // TODO: SQL needs to have the network name
+                    network = String::from("UNKNOWN");
+                    symbol = format!("{:?}", b.token_id);
+                }
+
+                if let Some(prev) = symbols.get(&symbol) {
+                    let prev_amnt = decode_base10(&prev.0, 8, true)?;
+                    amount += prev_amnt;
+                }
+
+                let amount = encode_base10(amount, 8);
+                symbols.insert(symbol, (amount, network));
+            }
+
+            Ok(symbols)
+        }
+        .await;
+
+        match result {
+            Ok(res) => jsonrpc::response(json!(res), id).into(),
+            Err(e) => {
+                error!("Failed fetching balances from wallet: {}", e);
+                return jsonrpc::error(InternalError, None, id).into()
+            }
+        }
     }
 }
