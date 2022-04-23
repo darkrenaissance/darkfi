@@ -1,9 +1,6 @@
 use serde_json::{json, Value};
 
-use darkfi::{
-    rpc::{jsonrpc, jsonrpc::JsonResult},
-    Result,
-};
+use darkfi::rpc::{jsonrpc, jsonrpc::JsonResult};
 
 use super::Darkfid;
 

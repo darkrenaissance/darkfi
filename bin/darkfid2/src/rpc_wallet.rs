@@ -236,7 +236,7 @@ impl Darkfid {
             Ok(res) => jsonrpc::response(json!(res), id).into(),
             Err(e) => {
                 error!("Failed fetching balances from wallet: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                jsonrpc::error(InternalError, None, id).into()
             }
         }
     }
