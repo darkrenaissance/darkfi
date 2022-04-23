@@ -10,7 +10,7 @@ CARGO = cargo
 RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-BINS = zkas drk darkfid gatewayd
+BINS = zkas drk darkfid
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
