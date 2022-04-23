@@ -80,7 +80,7 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
             let task = commits.recv().await.map_err(Error::from)?;
-            info!(target: "tau", "update from the commits");
+            info!(target: "tau", "receive update from the commits {:?}", task);
             task.save(&dataset_path_cloned)?;
         }
     });

@@ -1,12 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{TimeZone, Utc};
+use log::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{TaudError, TaudResult},
-    task_info::TaskInfo,
-    util::{get_current_time, Timestamp},
+    task_debug::TaskInfo,
+    util::{get_current_time, load, save, Timestamp},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -21,12 +22,14 @@ impl MonthTasks {
     }
 
     pub fn add(&mut self, ref_id: &str) {
+        debug!(target: "tau", "MonthTasks::add()");
         if !self.task_tks.contains(&ref_id.into()) {
             self.task_tks.push(ref_id.into());
         }
     }
 
     pub fn objects(&self, dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
+        debug!(target: "tau", "MonthTasks::objects()");
         let mut tks: Vec<TaskInfo> = vec![];
 
         for ref_id in self.task_tks.iter() {
@@ -37,26 +40,31 @@ impl MonthTasks {
     }
 
     pub fn remove(&mut self, ref_id: &str) {
+        debug!(target: "tau", "MonthTasks::remove()");
         if let Some(index) = self.task_tks.iter().position(|t| *t == ref_id) {
             self.task_tks.remove(index);
         }
     }
 
     pub fn set_date(&mut self, date: &Timestamp) {
+        debug!(target: "tau", "MonthTasks::set_date()");
         self.created_at = date.clone();
     }
 
     fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
+        debug!(target: "tau", "MonthTasks::get_path()");
         dataset_path.join("month").join(Utc.timestamp(date.0, 0).format("%m%y").to_string())
     }
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
-        crate::util::save::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
+        debug!(target: "tau", "MonthTasks::save()");
+        save::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
             .map_err(TaudError::Darkfi)
     }
 
     pub fn load_or_create(date: &Timestamp, dataset_path: &Path) -> TaudResult<Self> {
-        match crate::util::load::<Self>(&Self::get_path(date, dataset_path)) {
+        debug!(target: "tau", "MonthTasks::load_or_create()");
+        match load::<Self>(&Self::get_path(date, dataset_path)) {
             Ok(mt) => Ok(mt),
             Err(_) => {
                 let mut mt = Self::new(&[]);
@@ -68,6 +76,7 @@ impl MonthTasks {
     }
 
     pub fn load_current_open_tasks(dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
+        debug!(target: "tau", "MonthTasks::load_current_open_tasks()");
         let mt = Self::load_or_create(&get_current_time(), dataset_path)?;
         Ok(mt.objects(dataset_path)?.into_iter().filter(|t| t.get_state() != "stop").collect())
     }

@@ -90,6 +90,7 @@ impl JsonRpcInterface {
     //      }
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn add(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::add() params {}", params);
         let args = params.as_array().unwrap();
 
         let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;
@@ -107,7 +108,8 @@ impl JsonRpcInterface {
     // List tasks
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-    async fn list(&self, _params: Value) -> TaudResult<Value> {
+    async fn list(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::list() params {}", params);
         let tks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
         Ok(json!(tks))
     }
@@ -117,13 +119,14 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn update(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::update() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        let task = self.check_data_for_update(&args[0], &args[1])?;
+        let task = self.check_params_for_update(&args[0], &args[1])?;
 
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
@@ -135,6 +138,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
     async fn get_state(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_state() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {
@@ -151,6 +155,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_state(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::set_state() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
@@ -172,6 +177,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_comment(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::set_comment() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 3 {
@@ -193,6 +199,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     async fn get_by_id(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_by_id() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {
@@ -213,7 +220,7 @@ impl JsonRpcInterface {
         task.ok_or(TaudError::InvalidId)
     }
 
-    fn check_data_for_update(&self, task_id: &Value, data: &Value) -> TaudResult<TaskInfo> {
+    fn check_params_for_update(&self, task_id: &Value, data: &Value) -> TaudResult<TaskInfo> {
         let mut task: TaskInfo = self.load_task_by_id(task_id)?;
 
         if !data.is_object() {

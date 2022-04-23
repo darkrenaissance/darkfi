@@ -3,17 +3,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use log::debug;
 use serde::{Deserialize, Serialize};
-
-use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-
-use darkfi::util::serial::VarInt;
 
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::{find_free_id, get_current_time, random_ref_id, Timestamp},
+    util::{find_free_id, get_current_time, load, random_ref_id, save, Timestamp},
 };
+use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 struct TaskEvent {
@@ -104,12 +102,14 @@ impl TaskInfo {
     }
 
     pub fn load(ref_id: &str, dataset_path: &Path) -> TaudResult<Self> {
-        let task = crate::util::load::<Self>(&Self::get_path(ref_id, dataset_path))?;
+        debug!(target: "tau", "TaskInfo::load()");
+        let task = load::<Self>(&Self::get_path(ref_id, dataset_path))?;
         Ok(task)
     }
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
-        crate::util::save::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
+        debug!(target: "tau", "TaskInfo::save()");
+        save::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
             .map_err(TaudError::Darkfi)?;
 
         if self.get_state() == "stop" {
@@ -122,18 +122,21 @@ impl TaskInfo {
     }
 
     pub fn activate(&self, path: &Path) -> TaudResult<()> {
+        debug!(target: "tau", "TaskInfo::activate()");
         let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
         mt.add(&self.ref_id);
         mt.save(path)
     }
 
     pub fn deactivate(&self, path: &Path) -> TaudResult<()> {
+        debug!(target: "tau", "TaskInfo::deactivate()");
         let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
         mt.remove(&self.ref_id);
         mt.save(path)
     }
 
     pub fn get_state(&self) -> String {
+        debug!(target: "tau", "TaskInfo::get_state()");
         if let Some(ev) = self.events.0.last() {
             ev.action.clone()
         } else {
@@ -142,42 +145,52 @@ impl TaskInfo {
     }
 
     fn get_path(ref_id: &str, dataset_path: &Path) -> PathBuf {
+        debug!(target: "tau", "TaskInfo::get_path()");
         dataset_path.join("task").join(ref_id)
     }
 
     pub fn get_id(&self) -> u32 {
+        debug!(target: "tau", "TaskInfo::get_id()");
         self.id
     }
 
     pub fn set_title(&mut self, title: &str) {
+        debug!(target: "tau", "TaskInfo::set_title()");
         self.title = title.into();
     }
 
     pub fn set_desc(&mut self, desc: &str) {
+        debug!(target: "tau", "TaskInfo::set_desc()");
         self.desc = desc.into();
     }
 
     pub fn set_assign(&mut self, assign: &[String]) {
+        debug!(target: "tau", "TaskInfo::set_assign()");
         self.assign = TaskAssigns(assign.to_owned());
     }
 
     pub fn set_project(&mut self, project: &[String]) {
+        debug!(target: "tau", "TaskInfo::set_project()");
         self.project = TaskProjects(project.to_owned());
     }
 
     pub fn set_comment(&mut self, c: Comment) {
+        debug!(target: "tau", "TaskInfo::set_comment()");
         self.comments.0.push(c);
     }
 
     pub fn set_rank(&mut self, r: f32) {
+        debug!(target: "tau", "TaskInfo::set_rank()");
         self.rank = r;
     }
 
     pub fn set_due(&mut self, d: Option<Timestamp>) {
+        debug!(target: "tau", "TaskInfo::set_due()");
         self.due = d;
     }
 
     pub fn set_state(&mut self, action: &str) {
+        debug!(target: "tau", "TaskInfo::set_state()");
         if self.get_state() == action {
             return
         }
