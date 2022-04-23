@@ -110,10 +110,10 @@ impl Blockchain {
 
     /// Check if the given [`BlockInfo`] is in the database
     pub fn has_block(&self, info: &BlockInfo) -> Result<bool> {
-        let hashes = self.order.get(&[info.sl], true)?;
-        if hashes.is_empty() {
-            return Ok(false)
-        }
+        let hashes = match self.order.get(&[info.sl], true) {
+            Ok(v) => v,
+            Err(_) => return Ok(false),
+        };
 
         if let Some(found) = &hashes[0] {
             // Check provided info produces the same hash
