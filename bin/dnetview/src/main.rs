@@ -4,7 +4,6 @@ use std::{fs::File, io, io::Read, path::PathBuf};
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, info};
-use rand::{thread_rng, Rng};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -22,13 +21,13 @@ use darkfi::{
     util::{
         async_util,
         cli::{log_config, spawn_config, Config},
-        join_config_path,
+        join_config_path, serial,
     },
 };
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
-    model::{ConnectInfo, Model, NodeInfo, SelectableObject, SessionInfo},
+    model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     ui,
     view::{IdListView, InfoListView, View},
@@ -168,21 +167,21 @@ async fn parse_data(
 
     // first check if we have this node
     let node_name = &client.name;
-    let node_id = make_node_id(node_name.to_string());
+    let node_id = make_node_id(node_name)?;
 
-    let in_session = parse_inbound(inbound, node_id).await?;
-    let out_session = parse_outbound(outbound, node_id).await?;
-    let man_session = parse_manual(manual, node_id).await?;
+    let in_session = parse_inbound(inbound, node_id.clone()).await?;
+    let out_session = parse_outbound(outbound, node_id.clone()).await?;
+    let man_session = parse_manual(manual, node_id.clone()).await?;
 
     sessions.push(in_session);
     sessions.push(out_session);
     sessions.push(man_session);
 
-    let node_info = NodeInfo::new(node_id, node_name.to_string(), sessions);
+    let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions);
     let node = SelectableObject::Node(node_info.clone());
 
-    model.ids.lock().await.insert(node_id);
-    model.infos.lock().await.insert(node_id, node);
+    model.ids.lock().await.insert(node_id.clone());
+    model.infos.lock().await.insert(node_id.clone(), node);
 
     debug!("IDS: {:?}", model.ids.lock().await);
     debug!("INFOS: {:?}", model.infos.lock().await);
@@ -190,8 +189,9 @@ async fn parse_data(
     Ok(())
 }
 
-async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
-    let session_id = generate_id();
+async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_type = Session::Inbound;
+    let session_id = make_session_id(node_id.clone(), &session_type)?;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let connections = &inbound["connected"];
 
@@ -201,12 +201,13 @@ async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
                 true => {
                     // channel is empty. initialize with empty values
                     // TODO: fix this
-                    let connect_id = generate_id();
+                    let id: u64 = 0;
+                    let connect_id = make_connect_id(id)?;
                     let addr = "Null".to_string();
                     let msg = "Null".to_string();
                     let status = "Null".to_string();
                     let is_empty = true;
-                    let parent = session_id;
+                    let parent = session_id.clone();
                     let state = "Null".to_string();
                     let msg_log = Vec::new();
                     let connect_info = ConnectInfo::new(
@@ -216,8 +217,6 @@ async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
                 }
                 false => {
                     // channel is not empty. initialize with whole values
-                    // TODO: we are not saving the connect id
-                    //let connect_id = generate_id();
                     for k in connect.keys() {
                         let node = connect.get(k);
                         let addr = k.to_string();
@@ -226,10 +225,11 @@ async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
                         let status =
                             node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
                         // TODO: state, msg log
-                        let connect_id = node.unwrap().get("random_id").unwrap().as_u64().unwrap();
+                        let id = node.unwrap().get("random_id").unwrap().as_u64().unwrap();
+                        let connect_id = make_connect_id(id)?;
                         let state = "state".to_string();
                         let is_empty = false;
-                        let parent = session_id;
+                        let parent = session_id.clone();
                         let msg_log = Vec::new();
                         let connect_info = ConnectInfo::new(
                             connect_id, addr, is_empty, msg, status, state, msg_log, parent,
@@ -238,7 +238,8 @@ async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
                     }
                 }
             }
-            let session_info = SessionInfo::new(session_id, node_id, connects.clone());
+            let session_info =
+                SessionInfo::new(session_id.clone(), node_id.clone(), connects.clone());
             Ok(session_info)
         }
         None => Err(Error::ValueIsNotObject),
@@ -246,16 +247,18 @@ async fn parse_inbound(inbound: &Value, node_id: u64) -> Result<SessionInfo> {
 }
 
 // TODO: placeholder for now
-async fn parse_manual(_manual: &Value, node_id: u64) -> Result<SessionInfo> {
+async fn parse_manual(_manual: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_type = Session::Manual;
     let mut connects: Vec<ConnectInfo> = Vec::new();
 
-    let session_id = generate_id();
-    let connect_id = generate_id();
+    let session_id = make_session_id(node_id.clone(), &session_type)?;
+    let id: u64 = 0;
+    let connect_id = make_connect_id(id)?;
     let addr = "Null".to_string();
     let msg = "Null".to_string();
     let status = "Null".to_string();
     let is_empty = true;
-    let parent = session_id;
+    let parent = session_id.clone();
     let state = "Null".to_string();
     let msg_log = Vec::new();
     let connect_info =
@@ -266,10 +269,11 @@ async fn parse_manual(_manual: &Value, node_id: u64) -> Result<SessionInfo> {
     Ok(session_info)
 }
 
-async fn parse_outbound(outbound: &Value, node_id: u64) -> Result<SessionInfo> {
+async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_type = Session::Outbound;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let slots = &outbound["slots"];
-    let session_id = generate_id();
+    let session_id = make_session_id(node_id.clone(), &session_type)?;
 
     match slots.as_array() {
         Some(slots) => {
@@ -278,7 +282,8 @@ async fn parse_outbound(outbound: &Value, node_id: u64) -> Result<SessionInfo> {
                     true => {
                         // channel is empty. initialize with empty values
                         // TODO: fix this
-                        let connect_id = generate_id();
+                        let id: u64 = 0;
+                        let connect_id = make_connect_id(id)?;
                         let is_empty = true;
                         let addr = "Null".to_string();
                         let state = &slot["state"];
@@ -286,7 +291,7 @@ async fn parse_outbound(outbound: &Value, node_id: u64) -> Result<SessionInfo> {
                         let status = "Null".to_string();
                         // TODO: msg log
                         let msg_log = Vec::new();
-                        let parent = session_id;
+                        let parent = session_id.clone();
                         let connect_info = ConnectInfo::new(
                             connect_id,
                             addr,
@@ -304,11 +309,12 @@ async fn parse_outbound(outbound: &Value, node_id: u64) -> Result<SessionInfo> {
                         let channel = &slot["channel"];
                         let last_msg = channel["last_msg"].as_str().unwrap().to_string();
                         let last_status = channel["last_status"].as_str().unwrap().to_string();
-                        let connect_id = channel["random_id"].as_u64().unwrap();
+                        let id = channel["random_id"].as_u64().unwrap();
+                        let connect_id = make_connect_id(id)?;
                         let is_empty = false;
                         let addr = &slot["addr"];
                         let state = &slot["state"];
-                        let parent = session_id;
+                        let parent = session_id.clone();
                         // TODO: deserialize msg_log
                         let _msg_log = channel["log"].as_array().unwrap();
                         let msg_log = Vec::new();
@@ -333,29 +339,41 @@ async fn parse_outbound(outbound: &Value, node_id: u64) -> Result<SessionInfo> {
     }
 }
 
-// create id if not exists
-fn generate_id() -> u64 {
-    let mut rng = thread_rng();
-    let id: u64 = rng.gen();
-    id
+fn make_node_id(node_name: &String) -> Result<String> {
+    Ok(serial::serialize_hex(node_name))
 }
 
-// create id if not exists
-fn make_session_id(connect_id: u64) -> u64 {
-    let id = connect_id * 2;
-    id
+pub fn make_session_id(node_id: String, session: &Session) -> Result<String> {
+    let mut num = 0_u64;
+
+    match session {
+        Session::Inbound => {
+            for i in ['i', 'n'] {
+                num += i as u64;
+            }
+        }
+        Session::Outbound => {
+            for i in ['o', 'u', 't'] {
+                num += i as u64;
+            }
+        }
+        Session::Manual => {
+            for i in ['m', 'a', 'n'] {
+                num += i as u64;
+            }
+        }
+    }
+
+    for i in node_id.chars() {
+        num += i as u64
+    }
+
+    Ok(serial::serialize_hex(&num))
 }
 
-// TODO: this is a pretty weird thing to do lol
-// should probably make id a hash
-fn make_node_id(node_name: String) -> u64 {
-    let mut buf = [0u8; 8];
-    let len = 8.min(node_name.len());
-    buf[..len].copy_from_slice(&node_name.as_bytes()[..len]);
-    let id = u64::from_be_bytes(buf);
-    id
+pub fn make_connect_id(id: u64) -> Result<String> {
+    Ok(serial::serialize_hex(&id))
 }
-
 //fn is_empty_outbound(slots: Vec<Slot>) -> bool {
 //    return slots.iter().all(|slot| slot.is_empty);
 //}
