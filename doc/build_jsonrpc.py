@@ -41,9 +41,8 @@ def main(path):
 
             comment += i[3:] + "\n"
 
-    print("\n## Methods")
     for i in methods:
-        print(f"* [`{i[0]}`](#{i[0]})")
+        print(f"* [`{i[0]}`](#{i[0].replace('.', '')})")
 
     print("\n")
     for i in methods:
