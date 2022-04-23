@@ -173,6 +173,9 @@ pub enum Error {
     #[error("Raft error: {0}")]
     RaftError(String),
 
+    #[error("JSON-RPC error: {0}")]
+    JsonRpcError(String),
+
     // ===============
     // Database errors
     // ===============
