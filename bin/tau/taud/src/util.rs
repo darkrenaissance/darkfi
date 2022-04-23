@@ -72,7 +72,7 @@ impl Settings {
         let dataset_path = expand_path(&config.dataset_path)?;
 
         // mkdir dataset_path if not exists
-        create_dir_all(dataset_path.join("log"))?;
+        create_dir_all(dataset_path.join("month"))?;
         create_dir_all(dataset_path.join("task"))?;
 
         if config.datastore_raft.is_empty() {

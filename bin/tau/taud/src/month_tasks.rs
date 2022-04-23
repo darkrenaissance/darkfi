@@ -1,20 +1,23 @@
 use std::path::{Path, PathBuf};
 
+use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{TaudError, TaudResult},
     task_info::TaskInfo,
+    util::{get_current_time, Timestamp},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Tasks {
+pub struct MonthTasks {
+    created_at: Timestamp,
     task_tks: Vec<String>,
 }
 
-impl Tasks {
+impl MonthTasks {
     pub fn new(task_tks: &[String]) -> Self {
-        Self { task_tks: task_tks.to_owned() }
+        Self { created_at: get_current_time(), task_tks: task_tks.to_owned() }
     }
 
     pub fn add(&mut self, ref_id: &str) {
@@ -39,28 +42,33 @@ impl Tasks {
         }
     }
 
-    fn get_path(dataset_path: &Path, state: &str) -> PathBuf {
-        dataset_path.join("log").join(state)
+    pub fn set_date(&mut self, date: &Timestamp) {
+        self.created_at = date.clone();
     }
 
-    pub fn save(&self, dataset_path: &Path, state: &str) -> TaudResult<()> {
-        crate::util::save::<Self>(&Self::get_path(dataset_path, state), self)
+    fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
+        dataset_path.join("month").join(Utc.timestamp(date.0, 0).format("%m%y").to_string())
+    }
+
+    pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
+        crate::util::save::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
             .map_err(TaudError::Darkfi)
     }
 
-    pub fn load_or_create(dataset_path: &Path, state: &str) -> TaudResult<Self> {
-        match crate::util::load::<Self>(&Self::get_path(dataset_path, state)) {
+    pub fn load_or_create(date: &Timestamp, dataset_path: &Path) -> TaudResult<Self> {
+        match crate::util::load::<Self>(&Self::get_path(date, dataset_path)) {
             Ok(mt) => Ok(mt),
             Err(_) => {
-                let mt = Self::new(&[]);
-                mt.save(dataset_path, state)?;
+                let mut mt = Self::new(&[]);
+                mt.set_date(date);
+                mt.save(dataset_path)?;
                 Ok(mt)
             }
         }
     }
 
     pub fn load_current_open_tasks(dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
-        let mt = Self::load_or_create(dataset_path, "pending")?;
+        let mt = Self::load_or_create(&get_current_time(), dataset_path)?;
         Ok(mt.objects(dataset_path)?.into_iter().filter(|t| t.get_state() != "stop").collect())
     }
 }
@@ -83,7 +91,7 @@ mod tests {
         let path = PathBuf::from(TEST_DATA_PATH);
 
         // mkdir dataset_path if not exists
-        create_dir_all(path.join("log"))?;
+        create_dir_all(path.join("month"))?;
         create_dir_all(path.join("task"))?;
         Ok(path)
     }
@@ -111,24 +119,24 @@ mod tests {
 
         assert_eq!(task, t_load);
 
-        // load and save Tasks
+        // load and save MonthTasks
         ///////////////////////
 
         let task_tks = vec![];
 
-        let mut mt = Tasks::new(&task_tks);
+        let mut mt = MonthTasks::new(&task_tks);
 
-        mt.save(&dataset_path, "pending")?;
+        mt.save(&dataset_path)?;
 
-        let mt_load = Tasks::load_or_create(&dataset_path, "pending")?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
         mt.add(&task.ref_id);
 
-        mt.save(&dataset_path, "pending")?;
+        mt.save(&dataset_path)?;
 
-        let mt_load = Tasks::load_or_create(&dataset_path, "pending")?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -139,7 +147,7 @@ mod tests {
 
         task.save(&dataset_path)?;
 
-        let mt_load = Tasks::load_or_create(&dataset_path, "pending")?;
+        let mt_load = MonthTasks::load_or_create(&get_current_time(), &dataset_path)?;
 
         assert!(mt_load.task_tks.contains(&task.ref_id));
 
