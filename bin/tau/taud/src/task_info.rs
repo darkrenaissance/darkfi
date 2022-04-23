@@ -11,7 +11,7 @@ use darkfi::util::serial::VarInt;
 
 use crate::{
     error::{TaudError, TaudResult},
-    month_tasks::MonthTasks,
+    tasks::Tasks,
     util::{find_free_id, get_current_time, random_ref_id, Timestamp},
 };
 
@@ -78,7 +78,7 @@ impl TaskInfo {
         let created_at: Timestamp = get_current_time();
 
         let task_ids: Vec<u32> =
-            MonthTasks::load_current_open_tasks(dataset_path)?.into_iter().map(|t| t.id).collect();
+            Tasks::load_current_open_tasks(dataset_path)?.into_iter().map(|t| t.id).collect();
 
         let id: u32 = find_free_id(&task_ids);
 
@@ -122,15 +122,18 @@ impl TaskInfo {
     }
 
     pub fn activate(&self, path: &Path) -> TaudResult<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
+        let mut mt = Tasks::load_or_create(path, "pending")?;
         mt.add(&self.ref_id);
-        mt.save(path)
+        mt.save(path, "pending")
     }
 
     pub fn deactivate(&self, path: &Path) -> TaudResult<()> {
-        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
+        let mut mt = Tasks::load_or_create(path, "pending")?;
+        let mut temp_mt = Tasks::load_or_create(path, "completed")?;
         mt.remove(&self.ref_id);
-        mt.save(path)
+        mt.save(path, "pending")?;
+        temp_mt.add(&self.ref_id);
+        temp_mt.save(path, "completed")
     }
 
     pub fn get_state(&self) -> String {

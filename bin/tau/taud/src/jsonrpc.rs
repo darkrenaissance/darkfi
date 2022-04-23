@@ -16,8 +16,8 @@ use darkfi::{
 
 use crate::{
     error::{to_json_result, TaudError, TaudResult},
-    month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
+    tasks::Tasks,
     util::Timestamp,
 };
 
@@ -108,7 +108,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
     async fn list(&self, _params: Value) -> TaudResult<Value> {
-        let tks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        let tks = Tasks::load_current_open_tasks(&self.dataset_path)?;
         Ok(json!(tks))
     }
 
@@ -207,7 +207,7 @@ impl JsonRpcInterface {
     fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {
         let task_id: u64 = serde_json::from_value(task_id.clone())?;
 
-        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        let tasks = Tasks::load_current_open_tasks(&self.dataset_path)?;
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 
         task.ok_or(TaudError::InvalidId)

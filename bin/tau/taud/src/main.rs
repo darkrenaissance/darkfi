@@ -18,15 +18,15 @@ use darkfi::{
 
 mod error;
 mod jsonrpc;
-mod month_tasks;
 mod task_info;
+mod tasks;
 mod util;
 
 use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
-    month_tasks::MonthTasks,
     task_info::TaskInfo,
+    tasks::Tasks,
     util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
 };
 
@@ -89,7 +89,7 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     let initial_sync: smol::Task<TaudResult<()>> = executor.spawn(async move {
         info!(target: "tau", "Start initial sync");
         info!(target: "tau", "Upload local tasks");
-        let tasks = MonthTasks::load_current_open_tasks(&dataset_path_cloned)?;
+        let tasks = Tasks::load_current_open_tasks(&dataset_path_cloned)?;
 
         for task in tasks {
             info!(target: "tau", "send local task {:?}", task);
