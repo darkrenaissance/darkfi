@@ -9,7 +9,7 @@ from os.path import exists, join
 from subprocess import PIPE
 
 import semver
-import toml
+import tomlkit
 from colorama import Fore, Style
 from prettytable import PrettyTable
 
@@ -32,11 +32,11 @@ if exists(PICKLE_CACHE):
         METADATA_PATHS = json.loads(json_data)
 
 
-def parse_toml(file):
-    with open(file) as f:
+def parse_toml(filename):
+    with open(filename) as f:
         content = f.read()
 
-    p = toml.loads(content)
+    p = tomlkit.parse(content)
     deps = p.get("dependencies")
     devdeps = p.get("dev-dependencies")
 
@@ -49,7 +49,7 @@ def parse_toml(file):
     else:
         dependencies = None
 
-    return (p["package"]["name"], dependencies)
+    return (p, dependencies)
 
 
 def get_metadata_path(name):
@@ -108,6 +108,10 @@ def main():
     parser = ArgumentParser(
         description="Prettyprint outdated dependencies in a cargo project")
 
+    parser.add_argument("-u",
+                        "--update",
+                        action="store_true",
+                        help="Prompt to update dependencies")
     parser.add_argument("-i",
                         "--ignore",
                         type=str,
@@ -145,9 +149,9 @@ def main():
     x = PrettyTable()
     x.field_names = ["package", "crate", "current", "latest", "path"]
 
-    for file in files:
-        package, deps = parse_toml(file)
-        parse_toml(file)
+    for filename in files:
+        ps, deps = parse_toml(filename)
+        package = ps["package"]["name"]
         print(f"Checking deps for {Fore.GREEN}{package}{Style.RESET_ALL}")
         for dep in deps:
             ret = check_dep(dep, deps[dep])
@@ -157,8 +161,22 @@ def main():
                     dep,
                     f"{Fore.YELLOW}{ret[0]}{Style.RESET_ALL}",
                     f"{Fore.GREEN}{ret[1]}{Style.RESET_ALL}",
-                    file,
+                    filename,
                 ])
+
+            if args.update and ret:
+                print(f"Update {dep} from {ret[0]} to {ret[1]}? (y/N)")
+                choice = input()
+                if choice and (choice == "y" or choice == "Y"):
+                    if "dependencies" in ps and dep in ps["dependencies"]:
+                        if ps["dependencies"][dep] == ret[0]:
+                            ps["dependencies"][dep] = ret[1]
+                        else:
+                            ps["dependencies"][dep]["version"] = ret[1]
+
+        if args.update:
+            with open(filename, "w") as f:
+                f.write(tomlkit.dumps(ps))
 
     print(x)
 
