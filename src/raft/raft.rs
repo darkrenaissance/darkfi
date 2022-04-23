@@ -216,6 +216,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         load_ips_task.cancel().await;
         p2p_recv_task.cancel().await;
         p2p_task.cancel().await;
+        self.datastore.cancel().await?;
         Ok(())
     }
 

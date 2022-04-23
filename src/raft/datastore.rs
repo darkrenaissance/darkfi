@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use log::debug;
 use sled::Batch;
 
 use crate::{
@@ -34,6 +35,11 @@ impl<T: Encodable + Decodable> DataStore<T> {
         let current_term = DataTree::new(&_db, SLED_CURRENT_TERM_TREE)?;
 
         Ok(Self { _db, logs, commits, commits_length, voted_for, current_term })
+    }
+    pub async fn cancel(&self) -> Result<()> {
+        debug!(target: "raft", "DataStore flush");
+        self._db.flush_async().await?;
+        Ok(())
     }
 }
 
