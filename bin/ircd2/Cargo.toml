@@ -1,0 +1,33 @@
+[package]
+name = "ircd2"
+version = "0.3.0"
+homepage = "https://dark.fi"
+description = "P2P IRC daemon"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+darkfi = {path = "../../", features = ["net", "rpc", "raft"]}
+# Async
+smol = "1.2.5"
+futures = "0.3.21"
+async-std = "1.11.0"
+async-trait = "0.1.53"
+async-channel = "1.6.1"
+async-executor = "1.4.1"
+easy-parallel = "3.2.0"
+
+# Crypto
+rand = "0.8.5"
+
+# Misc
+clap = {version = "3.1.8", features = ["derive"]}
+log = "0.4.16"
+simplelog = "0.12.0-alpha1"
+fxhash = "0.2.1"
+ctrlc-async = {version= "3.2.2", features = ["termination"]}
+
+# Encoding and parsing
+serde_json = "1.0.79"
