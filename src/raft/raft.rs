@@ -183,6 +183,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let broadcast_msg_rv = self.broadcast_msg.1.clone();
 
+        // send data form datastore through broadcast_commits channel
+        let commits = self.datastore.commits.get_all()?;
+        for commit in commits {
+            self.broadcast_commits.0.send(commit).await?;
+        }
+
         loop {
             let timeout: Duration;
             if self.role == Role::Leader {
@@ -250,7 +256,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             .await?;
         }
 
-        info!(target: "raft", "{} {:?}  broadcast a msg", self.id.is_some(), self.role);
+        info!(target: "raft", "has id: {} {:?}  broadcast a msg", self.id.is_some(), self.role);
         Ok(())
     }
 
@@ -406,7 +412,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn update_logs(&self, node_id: &NodeId) -> Result<()> {
-        let prefix_len = self.sent_length.get(node_id)?;
+        let prefix_len = match self.sent_length.get(node_id) {
+            Ok(len) => len,
+            Err(_) => {
+                // return if failed to index
+                return Ok(())
+            }
+        };
 
         let suffix: Logs = if self.logs.slice_from(prefix_len).is_some() {
             self.logs.slice_from(prefix_len).unwrap()
@@ -528,7 +540,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let max_ready = *ready.iter().max().unwrap();
         if max_ready > self.commit_length && self.logs.get(max_ready - 1)?.term == self.current_term
         {
-            for i in self.commit_length..(max_ready - 1) {
+            for i in self.commit_length..max_ready {
                 self.push_commit(&self.logs.get(i)?.msg).await?;
             }
 
@@ -558,7 +570,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         if leader_commit > self.commit_length {
-            for i in self.commit_length..(leader_commit - 1) {
+            for i in self.commit_length..leader_commit {
                 self.push_commit(&self.logs.get(i)?.msg).await?;
             }
             self.set_commit_length(&leader_commit)?;
