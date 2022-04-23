@@ -11,6 +11,11 @@ edition = "2021"
 [lib]
 name = "darkfi"
 
+[profile.release]
+debug = true
+lto = "fat"
+codegen-units = 1
+
 [workspace]
 members = [
     "bin/zkas",

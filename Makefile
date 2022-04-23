@@ -6,6 +6,9 @@ PREFIX = /usr/local
 # Cargo binary
 CARGO = cargo
 
+# Flags passed to cargo/rustc
+RUSTFLAGS = -C target-cpu=native
+
 # Binaries to be built
 BINS = zkas drk darkfid gatewayd
 
@@ -24,17 +27,17 @@ token_lists:
 	$(MAKE) -C contrib/token all
 
 $(BINS): token_lists $(BINDEPS)
-	$(CARGO) build --all-features --release --package $@
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
 check:
-	$(CARGO) hack check --release --feature-powerset --all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
 fix:
-	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
 clippy:
-	$(CARGO) clippy --release --all-features --all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
 # zkas source files which we want to compile for tests
 VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk
@@ -44,10 +47,10 @@ $(VM_BIN): zkas $(VM_SRC)
 	./zkas $(basename $@) -o $@
 
 test: $(VM_BIN) test-tx
-	$(CARGO) test --release --all-features --all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
 
 test-tx:
-	$(CARGO) run --release --features=node,zkas --example tx
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
 clean:
 	rm -f $(BINS)
