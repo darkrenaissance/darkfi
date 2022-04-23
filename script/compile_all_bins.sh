@@ -1,4 +1,10 @@
 #!/bin/sh
-bins="$(find bin -maxdepth 1 | tail -n+2 | sed 's,bin/,,' | tr '\n' ' ' |  sed 's,\<tau\>,, ')"
-bins_tau="$(find bin/tau -maxdepth 1 | sed 's,bin/tau/,,' | grep -w 'taud\|tau-cli' | tr '\n' ' ')"
-make BINS="$bins_tau $bins"
+set -e
+
+find_packages() {
+	find bin -type f -name Cargo.toml | while read line; do
+		echo "$(basename "$(dirname "$line")")"
+	done
+}
+
+make BINS="$(find_packages | xargs)"
