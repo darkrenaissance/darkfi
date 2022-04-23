@@ -176,6 +176,9 @@ pub enum Error {
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
+    #[error("Cashier error: {0}")]
+    CashierError(String),
+
     // ===============
     // Database errors
     // ===============

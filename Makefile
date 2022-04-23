@@ -40,7 +40,7 @@ clippy:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
 # zkas source files which we want to compile for tests
-VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk
+VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk example/simple.zk
 VM_BIN = $(VM_SRC:=.bin)
 
 $(VM_BIN): zkas $(VM_SRC)

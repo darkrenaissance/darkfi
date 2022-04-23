@@ -65,13 +65,12 @@ fn burn_proof() -> Result<()> {
     tree.witness();
     tree.append(&MerkleNode(coin1));
     tree.append(&MerkleNode(coin2));
-    tree.witness();
+    let leaf_pos = tree.witness().unwrap();
     tree.append(&MerkleNode(coin3));
     tree.witness();
 
-    let (leaf_pos, merkle_path) = tree.authentication_path(&MerkleNode(coin2)).unwrap();
+    let merkle_path = tree.authentication_path(leaf_pos).unwrap();
     let leaf_pos: u64 = leaf_pos.into();
-    let leaf_pos = leaf_pos as u32;
 
     let prover_witnesses = vec![
         Witness::Base(Some(secret.0)),
@@ -81,7 +80,7 @@ fn burn_proof() -> Result<()> {
         Witness::Base(Some(coin_blind)),
         Witness::Scalar(Some(value_blind)),
         Witness::Scalar(Some(token_blind)),
-        Witness::Uint32(Some(leaf_pos)),
+        Witness::Uint32(Some(leaf_pos.try_into().unwrap())),
         Witness::MerklePath(Some(merkle_path.try_into().unwrap())),
         Witness::Base(Some(sig_secret.0)),
     ];

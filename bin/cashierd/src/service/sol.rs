@@ -102,7 +102,7 @@ impl SolClient {
             "devnet" => ("https://api.devnet.solana.com", "wss://api.devnet.solana.com"),
             "testnet" => ("https://api.testnet.solana.com", "wss://api.testnet.solana.com"),
             "localhost" => ("http://localhost:8899", "ws://localhost:8900"),
-            _ => return Err(Error::NotSupportedNetwork),
+            _ => return Err(Error::UnsupportedCoinNetwork),
         };
 
         Ok(Arc::new(Self {

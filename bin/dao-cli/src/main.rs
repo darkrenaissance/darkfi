@@ -1,5 +1,5 @@
 use clap::{IntoApp, Parser, Subcommand};
-use log::{debug, error};
+use log::debug;
 use serde_json::{json, Value};
 use url::Url;
 
@@ -17,6 +17,7 @@ pub enum CliDaoSubCommands {
 /// DAO cli
 #[derive(Parser)]
 #[clap(name = "dao")]
+#[clap(arg_required_else_help(true))]
 pub struct CliDao {
     /// Increase verbosity
     #[clap(short, parse(from_occurrences))]
@@ -77,9 +78,8 @@ async fn start(options: CliDao) -> Result<()> {
         }
         None => {}
     }
-    error!("Please run 'dao help' to see usage.");
 
-    Err(Error::MissingParams)
+    Ok(())
 }
 
 #[async_std::main]

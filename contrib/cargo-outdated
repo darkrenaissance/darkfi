@@ -173,6 +173,12 @@ def main():
                             ps["dependencies"][dep] = ret[1]
                         else:
                             ps["dependencies"][dep]["version"] = ret[1]
+                    elif "dev-dependencies" in ps and dep in ps[
+                            "dev-dependencies"]:
+                        if ps["dev-dependencies"][dep] == ret[0]:
+                            ps["dev-dependencies"][dep] = ret[1]
+                        else:
+                            ps["dev-dependencies"][dep]["version"] = ret[1]
 
         if args.update:
             with open(filename, "w") as f:

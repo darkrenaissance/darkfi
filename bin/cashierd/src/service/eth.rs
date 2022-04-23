@@ -291,7 +291,7 @@ impl EthClient {
             if sub_iter > 60 * 10 {
                 // 10 minutes
                 self.unsubscribe(&addr).await;
-                return Err(darkfi::Error::ClientFailed("Deposit for expired".into()))
+                return Err(EthFailed::Custom("Deposit for expired".to_string()).into())
             }
 
             sub_iter += iter_interval;
@@ -309,9 +309,9 @@ impl EthClient {
         self.unsubscribe(&addr).await;
 
         if current_balance < prev_balance {
-            return Err(darkfi::Error::ClientFailed(
-                "New balance is less than previous balance".into(),
-            ))
+            return Err(
+                EthFailed::Custom("New balance is less than previous balance".to_string()).into()
+            )
         }
 
         let received_balance = current_balance - prev_balance;
@@ -532,6 +532,8 @@ pub enum EthFailed {
     ParseError(String),
     #[error("Unable to derive address from private key")]
     ImportPrivateError,
+    #[error("{0}")]
+    Custom(String),
 }
 
 impl From<darkfi::Error> for EthFailed {

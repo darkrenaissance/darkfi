@@ -115,6 +115,7 @@ pub enum CliDrkSubCommands {
 #[derive(Parser)]
 #[clap(name = "drk")]
 #[clap(author, version, about)]
+#[clap(arg_required_else_help(true))]
 pub struct CliDrk {
     /// Sets a custom config file
     #[clap(short, long)]
@@ -147,7 +148,7 @@ impl Drk {
             features.as_object().unwrap()["networks"].as_array().is_none() &&
             features.as_object().unwrap()["networks"].as_array().unwrap().is_empty()
         {
-            return Err(Error::NotSupportedNetwork)
+            return Err(Error::UnsupportedCoinNetwork)
         }
 
         for nets in features.as_object().unwrap()["networks"].as_array().unwrap() {
@@ -158,7 +159,7 @@ impl Drk {
             }
         }
 
-        Err(Error::NotSupportedNetwork)
+        Err(Error::UnsupportedCoinNetwork)
     }
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
@@ -461,8 +462,7 @@ async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
         None => {}
     }
 
-    error!("Please run 'drk help' to see usage.");
-    Err(Error::MissingParams)
+    Ok(())
 }
 
 #[async_std::main]

@@ -242,8 +242,7 @@ impl Client {
         Ok(Self {
             electrum,
             subscriptions: Vec::new(),
-            latest_block_height: BlockHeight::try_from(latest_block)
-                .map_err(|_| darkfi::Error::TryFromError)?,
+            latest_block_height: BlockHeight::try_from(latest_block)?,
             last_sync: Instant::now(),
             sync_interval: interval,
             script_history: Default::default(),
@@ -310,7 +309,7 @@ impl Client {
                     Ok(ScriptStatus::InMempool)
                 } else {
                     Ok(ScriptStatus::Confirmed(Confirmed::from_inclusion_and_latest_block(
-                        u32::try_from(last.height).map_err(|_| darkfi::Error::TryFromError)?,
+                        last.height as u32,
                         u32::from(self.latest_block_height),
                     )))
                 }
@@ -362,7 +361,7 @@ impl BtcClient {
         let (network, url) = match network {
             "mainnet" => (Network::Bitcoin, "ssl://electrum.blockstream.info:50002"),
             "testnet" => (Network::Testnet, "ssl://electrum.blockstream.info:60002"),
-            _ => return Err(Error::NotSupportedNetwork),
+            _ => return Err(Error::UnsupportedCoinNetwork),
         };
 
         let main_account = Account::new(&main_keypair, network);

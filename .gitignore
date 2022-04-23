@@ -1,9 +1,9 @@
 *.pyc
 *.sage.py
+*.zk.bin
 .vscode/
 
 /target/*
-/proof/*.bin
 
 /cashierd
 /dao-cli
