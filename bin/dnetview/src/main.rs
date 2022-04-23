@@ -4,6 +4,7 @@ use std::{fs::File, io, io::Read, path::PathBuf};
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, info};
+use rand::{thread_rng, Rng};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -201,8 +202,7 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
                 true => {
                     // channel is empty. initialize with empty values
                     // TODO: fix this
-                    let id: u64 = 0;
-                    let connect_id = make_connect_id(id)?;
+                    let connect_id = generate_id()?;
                     let addr = "Null".to_string();
                     let msg = "Null".to_string();
                     let status = "Null".to_string();
@@ -282,8 +282,7 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                     true => {
                         // channel is empty. initialize with empty values
                         // TODO: fix this
-                        let id: u64 = 0;
-                        let connect_id = make_connect_id(id)?;
+                        let connect_id = generate_id()?;
                         let is_empty = true;
                         let addr = "Null".to_string();
                         let state = &slot["state"];
@@ -374,6 +373,14 @@ pub fn make_session_id(node_id: String, session: &Session) -> Result<String> {
 pub fn make_connect_id(id: u64) -> Result<String> {
     Ok(serial::serialize_hex(&id))
 }
+
+// we use a random id for empty connections
+fn generate_id() -> Result<String> {
+    let mut rng = thread_rng();
+    let id: u32 = rng.gen();
+    Ok(serial::serialize_hex(&id))
+}
+
 //fn is_empty_outbound(slots: Vec<Slot>) -> bool {
 //    return slots.iter().all(|slot| slot.is_empty);
 //}
