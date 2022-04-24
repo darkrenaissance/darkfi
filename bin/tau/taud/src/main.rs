@@ -19,6 +19,7 @@ use darkfi::{
 mod error;
 mod jsonrpc;
 mod month_tasks;
+mod settings;
 mod task_info;
 mod util;
 
@@ -26,8 +27,8 @@ use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
     month_tasks::MonthTasks,
+    settings::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
-    util::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
 };
 
 async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()> {
