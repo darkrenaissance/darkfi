@@ -190,12 +190,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         loop {
-            let timeout: Duration;
-            if self.role == Role::Leader {
-                timeout = Duration::from_millis(HEARTBEATTIMEOUT);
+            let timeout: Duration = if self.role == Role::Leader {
+                Duration::from_millis(HEARTBEATTIMEOUT)
             } else {
-                timeout = Duration::from_millis(rng.gen_range(0..200) + TIMEOUT);
-            }
+                Duration::from_millis(rng.gen_range(0..200) + TIMEOUT)
+            };
 
             let result: Result<()>;
 
@@ -286,9 +285,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         debug!(
-            target: "raft",
-            "{} {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
-            self.id.is_some(), self.role, msg.id, &msg.recipient_id.is_some(), &msg.method
+        target: "raft",
+        "{} {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
+        self.id.is_some(), self.role, msg.id, &msg.recipient_id.is_some(), &msg.method
         );
         Ok(())
     }
@@ -301,9 +300,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let random_id = OsRng.next_u32();
 
         debug!(
-            target: "raft",
-            "{} {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
-            self.id.is_some(), self.role, random_id, &recipient_id.is_some(), &method
+        target: "raft",
+        "{} {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
+        self.id.is_some(), self.role, random_id, &recipient_id.is_some(), &method
         );
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
