@@ -1,19 +1,23 @@
 use async_std::sync::Arc;
+use std::path::PathBuf;
 
 use async_executor::Executor;
-use clap::Parser;
+use easy_parallel::Parallel;
+use futures_lite::future;
 use log::{info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use structopt_toml::StructOptToml;
 
 use darkfi::{
+    async_daemonize,
     net::Settings as P2pSettings,
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
-        cli::{log_config, spawn_config, Config},
+        cli::{log_config, spawn_config},
         path::get_config_path,
     },
-    Error,
+    Error, Result,
 };
 
 mod error;
@@ -27,24 +31,28 @@ use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
     month_tasks::MonthTasks,
-    settings::{CliTaud, Settings, TauConfig, CONFIG_FILE_CONTENTS},
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
 };
 
-async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()> {
+async_daemonize!(realmain);
+async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let p2p_settings = P2pSettings {
-        inbound: settings.accept_address,
-        outbound_connections: settings.outbound_connections,
-        external_addr: settings.accept_address,
+        inbound: settings.accept,
+        outbound_connections: settings.slots,
+        external_addr: settings.accept,
         peers: settings.connect.clone(),
         seeds: settings.seeds.clone(),
         ..Default::default()
     };
 
+    let datastore_path = PathBuf::from(&settings.datastore);
+
     //
     //Raft
     //
-    let mut raft = Raft::<TaskInfo>::new(settings.accept_address, settings.datastore_raft.clone())?;
+    let datastore_raft = datastore_path.join("tau.db");
+    let mut raft = Raft::<TaskInfo>::new(settings.accept, datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
@@ -54,7 +62,7 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     // RPC
     //
     let server_config = RpcServerConfig {
-        socket_addr: settings.rpc_listener_url,
+        socket_addr: settings.rpc_listen,
         use_tls: false,
         // this is all random filler that is meaningless bc tls is disabled
         identity_path: Default::default(),
@@ -63,34 +71,33 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
 
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
-    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, settings.dataset_path.clone()));
+    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone()));
 
-    let dataset_path_cloned = settings.dataset_path.clone();
+    let datastore_path_cloned = datastore_path.clone();
     let recv_update_from_rpc: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
             let task_info = rpc_rcv.recv().await.map_err(Error::from)?;
             if let Some(tk) = task_info {
                 info!(target: "tau", "save the received task {:?}", tk);
-                tk.save(&dataset_path_cloned)?;
+                tk.save(&datastore_path_cloned)?;
                 raft_sender.send(tk).await.map_err(Error::from)?;
             }
         }
     });
 
-    let dataset_path_cloned = settings.dataset_path.clone();
+    let datastore_path_cloned = datastore_path.clone();
     let recv_update_from_raft: smol::Task<TaudResult<()>> = executor.spawn(async move {
         loop {
             let task = commits.recv().await.map_err(Error::from)?;
             info!(target: "tau", "receive update from the commits {:?}", task);
-            task.save(&dataset_path_cloned)?;
+            task.save(&datastore_path_cloned)?;
         }
     });
 
-    let dataset_path_cloned = settings.dataset_path.clone();
     let initial_sync: smol::Task<TaudResult<()>> = executor.spawn(async move {
         info!(target: "tau", "Start initial sync");
         info!(target: "tau", "Upload local tasks");
-        let tasks = MonthTasks::load_current_open_tasks(&dataset_path_cloned)?;
+        let tasks = MonthTasks::load_current_open_tasks(&datastore_path)?;
 
         for task in tasks {
             info!(target: "tau", "send local task {:?}", task);
@@ -103,39 +110,20 @@ async fn start(settings: Settings, executor: Arc<Executor<'_>>) -> TaudResult<()
     let rpc_listener_taks =
         executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
 
-    let stop_signal = async_channel::bounded::<()>(10);
-
+    let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
         warn!(target: "tau", "taud start() Exit Signal");
         // cleaning up tasks running in the background
+        signal.send(()).await.unwrap();
         rpc_listener_taks.cancel().await;
-        stop_signal.0.send(()).await.expect("send exit signal to raft");
         recv_update_from_rpc.cancel().await;
         recv_update_from_raft.cancel().await;
         initial_sync.cancel().await;
     })
-    .expect("handle exit signal");
+    .unwrap();
 
     // blocking
-    raft.start(p2p_settings.clone(), executor.clone(), stop_signal.1.clone()).await?;
+    raft.start(p2p_settings.clone(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
-}
-
-#[async_std::main]
-async fn main() -> TaudResult<()> {
-    let args = CliTaud::parse();
-
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto).map_err(Error::from)?;
-
-    let config_path = get_config_path(args.config.clone(), "taud_config.toml")?;
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
-
-    let config: TauConfig = Config::<TauConfig>::load(config_path)?;
-
-    let settings = Settings::load(args, config)?;
-
-    let ex = Arc::new(Executor::new());
-    smol::block_on(ex.run(start(settings, ex.clone())))
 }

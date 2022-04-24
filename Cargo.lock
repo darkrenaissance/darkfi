@@ -3838,7 +3838,7 @@ dependencies = [
  "ctrlc-async",
  "darkfi",
  "easy-parallel",
- "futures",
+ "futures-lite",
  "log",
  "num_cpus",
  "rand",
@@ -3846,6 +3846,8 @@ dependencies = [
  "serde_json",
  "simplelog",
  "smol",
+ "structopt",
+ "structopt-toml",
  "thiserror",
 ]
 
