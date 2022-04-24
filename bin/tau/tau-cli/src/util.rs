@@ -19,7 +19,7 @@ pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml")
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TauConfig {
     /// The address where taud should bind its RPC socket
-    pub rpc_listener_url: UrlConfig,
+    pub rpc_listen: UrlConfig,
 }
 
 #[derive(Subcommand)]

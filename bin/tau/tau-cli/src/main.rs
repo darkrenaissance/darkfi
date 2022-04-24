@@ -24,7 +24,7 @@ use crate::{
 };
 
 async fn start(options: CliTau, config: TauConfig) -> Result<()> {
-    let rpc_addr = &format!("tcp://{}", &config.rpc_listener_url.url.clone());
+    let rpc_addr = &format!("tcp://{}", &config.rpc_listen.url.clone());
 
     match options.command {
         Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
