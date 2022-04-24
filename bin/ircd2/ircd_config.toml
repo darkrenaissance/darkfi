@@ -1,0 +1,36 @@
+## taud configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+
+# Path to the datastore
+datastore_raft = "~/.config/tau/tau.db"
+
+# Path to DER-formatted PKCS#12 archive. (used only with tls url)
+# This can be created using openssl:
+# openssl pkcs12 -export -out identity.pfx -inkey key.pem -in cert.pem -certfile chain_certs.pem
+tls_identity_path = ""
+
+### Number of outbound connections 
+#outbound_connections = 5
+
+# The address where taud should bind its RPC socket
+[rpc_listener_url]
+url="127.0.0.1:6667"
+password = "FOOBAR"
+
+# The address where taud should bind its RPC socket
+[irc_listener_url]
+url="127.0.0.1:8000"
+password = "FOOBAR"
+
+### The accept address 
+#[accept_address]
+#url="127.0.0.1:8822"
+#password = "FOOBAR"
+
+### Seed node addresses
+#[[seeds]]
+#url="127.0.0.1:8811"
+#password = "FOOBAR"
+

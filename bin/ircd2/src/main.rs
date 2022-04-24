@@ -10,54 +10,27 @@ use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
-    cli_desc, net,
+    net,
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
-    util::cli::log_config,
+    util::{
+        cli::{log_config, spawn_config, Config},
+        path::get_config_path,
+    },
     Error, Result,
 };
 
-pub(crate) mod privmsg;
-pub(crate) mod rpc;
-pub(crate) mod server;
+pub mod privmsg;
+pub mod rpc;
+pub mod server;
+pub mod settings;
 
-use crate::{privmsg::Privmsg, rpc::JsonRpcInterface, server::IrcServerConnection};
-
-#[derive(Parser)]
-#[clap(name = "ircd", about = cli_desc!(), version)]
-struct Args {
-    /// Accept address
-    #[clap(short, long)]
-    accept: Option<SocketAddr>,
-
-    /// Seed node (repeatable)
-    #[clap(short, long)]
-    seed: Vec<SocketAddr>,
-
-    /// Manual connection (repeatable)
-    #[clap(short, long)]
-    connect: Vec<SocketAddr>,
-
-    /// Connection slots
-    #[clap(long, default_value_t = 0)]
-    slots: u32,
-
-    /// External address
-    #[clap(short, long)]
-    external: Option<SocketAddr>,
-
-    /// IRC listen address
-    #[clap(short = 'r', long, default_value = "127.0.0.1:6667")]
-    irc: SocketAddr,
-
-    /// RPC listen address
-    #[clap(long, default_value = "127.0.0.1:8000")]
-    rpc: SocketAddr,
-
-    /// Verbosity level
-    #[clap(short, parse(from_occurrences))]
-    verbose: u8,
-}
+use crate::{
+    privmsg::Privmsg,
+    rpc::JsonRpcInterface,
+    server::IrcServerConnection,
+    settings::{CliArgs, IrcdConfig, Settings, CONFIG_FILE_CONTENTS},
+};
 
 async fn process_user_input(
     mut line: String,
@@ -100,7 +73,7 @@ async fn process(
         let mut line = String::new();
         futures::select! {
             privmsg = receiver.recv().fuse() => {
-                let msg = privmsg.expect("internal message queue error");
+                let msg = privmsg?;
                 debug!("ABOUT TO SEND: {:?}", msg);
                 let irc_msg = format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
                                       msg.nickname,
@@ -123,31 +96,32 @@ async fn process(
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, args: Args, net_settings: net::Settings) -> Result<()> {
-    let listener = TcpListener::bind(args.irc).await?;
+async fn start(executor: Arc<Executor<'_>>, settings: Settings) -> Result<()> {
+    let listener = TcpListener::bind(settings.irc_listener_url).await?;
     let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
     //
     // Raft
     //
-    let mut raft = Raft::<Privmsg>::new(net_settings.inbound, std::path::PathBuf::from("msgs.db"))?;
+    let mut raft =
+        Raft::<Privmsg>::new(settings.accept_address, std::path::PathBuf::from("msgs.db"))?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
 
     //
     // RPC interface
-
+    //
     let rpc_config = RpcServerConfig {
-        socket_addr: args.rpc,
+        socket_addr: settings.rpc_listener_url,
         // TODO: Use net/transport:
         use_tls: false,
         identity_path: Default::default(),
         identity_pass: Default::default(),
     };
     let executor_cloned = executor.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface { addr: args.rpc });
+    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listener_url });
     let rpc_task = executor.spawn(async move {
         listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
     });
@@ -176,6 +150,15 @@ async fn start(executor: Arc<Executor<'_>>, args: Args, net_settings: net::Setti
 
     let stop_signal = async_channel::bounded::<()>(10);
 
+    let net_settings = net::Settings {
+        inbound: settings.accept_address,
+        outbound_connections: settings.outbound_connections,
+        external_addr: settings.accept_address,
+        peers: settings.connect.clone(),
+        seeds: settings.seeds.clone(),
+        ..Default::default()
+    };
+
     ctrlc_async::set_async_handler(async move {
         warn!(target: "ircd", "ircd start() Exit Signal");
         // cleaning up tasks running in the background
@@ -192,19 +175,17 @@ async fn start(executor: Arc<Executor<'_>>, args: Args, net_settings: net::Setti
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = CliArgs::parse();
 
     let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let net_settings = net::Settings {
-        inbound: args.accept,
-        outbound_connections: args.slots,
-        external_addr: args.external,
-        peers: args.connect.clone(),
-        seeds: args.seed.clone(),
-        ..Default::default()
-    };
+    let config_path = get_config_path(args.config.clone(), "ircd_config.toml")?;
+    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
+
+    let config: IrcdConfig = Config::<IrcdConfig>::load(config_path)?;
+
+    let settings = Settings::load(args, config)?;
 
     let ex = Arc::new(Executor::new());
     let ex_clone = ex.clone();
@@ -214,7 +195,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async move {
-                start(ex_clone.clone(), args, net_settings).await?;
+                start(ex_clone.clone(), settings).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
