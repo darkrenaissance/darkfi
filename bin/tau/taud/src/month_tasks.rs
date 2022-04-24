@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{TaudError, TaudResult},
-    task_debug::TaskInfo,
+    task_info::TaskInfo,
     util::{get_current_time, load, save, Timestamp},
 };
 
