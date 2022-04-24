@@ -189,11 +189,11 @@ impl Darkfid {
     ) -> Result<Self> {
         // Parse token lists
         let btc_tokenlist =
-            TokenList::new(include_bytes!("../../../contrib/token/bitcoin_token_list.min.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/bitcoin_token_list.json"))?;
         let eth_tokenlist =
-            TokenList::new(include_bytes!("../../../contrib/token/erc20_token_list.min.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/erc20_token_list.json"))?;
         let sol_tokenlist =
-            TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.min.json"))?;
+            TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.json"))?;
         let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
         // Initialize Client
