@@ -3838,7 +3838,7 @@ dependencies = [
  "ctrlc-async",
  "darkfi",
  "easy-parallel",
- "futures-lite",
+ "futures",
  "log",
  "num_cpus",
  "rand",
