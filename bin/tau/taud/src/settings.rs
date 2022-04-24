@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use darkfi::net;
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -21,19 +22,17 @@ pub struct Args {
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/tau")]
     pub datastore: String,
-    /// Raft Accept address
-    #[structopt(short, long)]
-    pub accept: Option<SocketAddr>,
-    /// Raft Seed nodes (repeatable)
-    #[structopt(short, long)]
-    pub seeds: Vec<SocketAddr>,
-    /// Raft Manual connection (repeatable)
-    #[structopt(short, long)]
-    pub connect: Vec<SocketAddr>,
-    /// Raft Connection slots
-    #[structopt(long, default_value = "0")]
-    pub slots: u32,
+    #[structopt(subcommand)]
+    pub command: Option<Command>,
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+#[serde(tag = "type", content = "args")]
+pub enum Command {
+    /// Raft net settings
+    /// Note: Wihtout passing this flag, tau will work locally  
+    Net(net::Settings),
 }

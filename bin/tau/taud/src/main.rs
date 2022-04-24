@@ -11,7 +11,6 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize,
-    net::Settings as P2pSettings,
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
@@ -32,32 +31,13 @@ use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
     month_tasks::MonthTasks,
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{Args, Command, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
 };
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let p2p_settings = P2pSettings {
-        inbound: settings.accept,
-        outbound_connections: settings.slots,
-        external_addr: settings.accept,
-        peers: settings.connect.clone(),
-        seeds: settings.seeds.clone(),
-        ..Default::default()
-    };
-
     let datastore_path = PathBuf::from(&settings.datastore);
-
-    //
-    //Raft
-    //
-    let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<TaskInfo>::new(settings.accept, datastore_raft)?;
-
-    let raft_sender = raft.get_broadcast();
-    let commits = raft.get_commits();
-    let initial_sync_raft_sender = raft_sender.clone();
 
     //
     // RPC
@@ -73,6 +53,29 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
     let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone()));
+
+    let executor_cloned = executor.clone();
+    let rpc_listener_taks =
+        executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
+
+    let net_settings = match settings.command {
+        Some(Command::Net(s)) => s,
+        None => {
+            warn!("run without connecting to raft and p2p network");
+            rpc_listener_taks.await?;
+            return Ok(())
+        }
+    };
+
+    //
+    //Raft
+    //
+    let datastore_raft = datastore_path.join("tau.db");
+    let mut raft = Raft::<TaskInfo>::new(net_settings.inbound, datastore_raft)?;
+
+    let raft_sender = raft.get_broadcast();
+    let commits = raft.get_commits();
+    let initial_sync_raft_sender = raft_sender.clone();
 
     let datastore_path_cloned = datastore_path.clone();
     let recv_update: smol::Task<TaudResult<()>> = executor.spawn(async move {
@@ -105,10 +108,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         }
     });
 
-    let executor_cloned = executor.clone();
-    let rpc_listener_taks =
-        executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
-
     let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
         warn!(target: "tau", "taud start() Exit Signal");
@@ -120,7 +119,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     // blocking
-    raft.start(p2p_settings.clone(), executor.clone(), shutdown.clone()).await?;
+    raft.start(net_settings, executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }
