@@ -4,6 +4,8 @@ use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+use darkfi::net;
+
 pub const CONFIG_FILE: &str = "ircd_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
 
@@ -24,19 +26,16 @@ pub struct Args {
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/tau")]
     pub datastore: String,
-    /// Raft Accept address
-    #[structopt(short, long)]
-    pub accept: Option<SocketAddr>,
-    /// Raft Seed nodes (repeatable)
-    #[structopt(short, long)]
-    pub seeds: Vec<SocketAddr>,
-    /// Raft Manual connection (repeatable)
-    #[structopt(short, long)]
-    pub connect: Vec<SocketAddr>,
-    /// Raft Connection slots
-    #[structopt(long, default_value = "0")]
-    pub slots: u32,
+    #[structopt(subcommand)]
+    pub command: Command,
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+#[serde(tag = "type", content = "args")]
+pub enum Command {
+    /// Raft net settings
+    Net(net::Settings),
 }

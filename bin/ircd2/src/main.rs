@@ -11,7 +11,7 @@ use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    async_daemonize, net,
+    async_daemonize,
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
@@ -30,7 +30,7 @@ use crate::{
     privmsg::Privmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{Args, Command, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
 async fn process_user_input(
@@ -103,23 +103,18 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
-    let p2p_settings = net::Settings {
-        inbound: settings.accept,
-        outbound_connections: settings.slots,
-        external_addr: settings.accept,
-        peers: settings.connect.clone(),
-        seeds: settings.seeds.clone(),
-        ..Default::default()
-    };
-
     let datastore_path = PathBuf::from(&settings.datastore);
+
+    let net_settings = match settings.command {
+        Command::Net(s) => s,
+    };
 
     //
     //Raft
     //
     let datastore_raft = datastore_path.join("ircd.db");
 
-    let mut raft = Raft::<Privmsg>::new(settings.accept, datastore_raft)?;
+    let mut raft = Raft::<Privmsg>::new(net_settings.inbound, datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
@@ -173,7 +168,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     // blocking
-    raft.start(p2p_settings.clone(), executor.clone(), shutdown.clone()).await?;
+    raft.start(net_settings, executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }
