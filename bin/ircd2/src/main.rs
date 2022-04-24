@@ -1,20 +1,21 @@
 use async_std::net::{TcpListener, TcpStream};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use async_channel::Receiver;
 use async_executor::Executor;
-use clap::Parser;
 use easy_parallel::Parallel;
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::future;
+use structopt_toml::StructOptToml;
 
 use darkfi::{
-    net,
+    async_daemonize, net,
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
-        cli::{log_config, spawn_config, Config},
+        cli::{log_config, spawn_config},
         path::get_config_path,
     },
     Error, Result,
@@ -29,7 +30,7 @@ use crate::{
     privmsg::Privmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
-    settings::{CliArgs, IrcdConfig, Settings, CONFIG_FILE_CONTENTS},
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
 async fn process_user_input(
@@ -96,16 +97,29 @@ async fn process(
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, settings: Settings) -> Result<()> {
-    let listener = TcpListener::bind(settings.irc_listener_url).await?;
+async_daemonize!(realmain);
+async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+    let listener = TcpListener::bind(settings.irc_listen).await?;
     let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
+    let p2p_settings = net::Settings {
+        inbound: settings.accept,
+        outbound_connections: settings.slots,
+        external_addr: settings.accept,
+        peers: settings.connect.clone(),
+        seeds: settings.seeds.clone(),
+        ..Default::default()
+    };
+
+    let datastore_path = PathBuf::from(&settings.datastore);
+
     //
-    // Raft
+    //Raft
     //
-    let mut raft =
-        Raft::<Privmsg>::new(settings.accept_address, std::path::PathBuf::from("msgs.db"))?;
+    let datastore_raft = datastore_path.join("ircd.db");
+
+    let mut raft = Raft::<Privmsg>::new(settings.accept, datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
@@ -114,14 +128,14 @@ async fn start(executor: Arc<Executor<'_>>, settings: Settings) -> Result<()> {
     // RPC interface
     //
     let rpc_config = RpcServerConfig {
-        socket_addr: settings.rpc_listener_url,
+        socket_addr: settings.rpc_listen,
         // TODO: Use net/transport:
         use_tls: false,
         identity_path: Default::default(),
         identity_pass: Default::default(),
     };
     let executor_cloned = executor.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listener_url });
+    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listen });
     let rpc_task = executor.spawn(async move {
         listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
     });
@@ -148,58 +162,18 @@ async fn start(executor: Arc<Executor<'_>>, settings: Settings) -> Result<()> {
         }
     });
 
-    let stop_signal = async_channel::bounded::<()>(10);
-
-    let net_settings = net::Settings {
-        inbound: settings.accept_address,
-        outbound_connections: settings.outbound_connections,
-        external_addr: settings.accept_address,
-        peers: settings.connect.clone(),
-        seeds: settings.seeds.clone(),
-        ..Default::default()
-    };
-
+    let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
-        warn!(target: "ircd", "ircd start() Exit Signal");
+        warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background
-        stop_signal.0.send(()).await.expect("send exit signal to raft");
+        signal.send(()).await.unwrap();
         rpc_task.cancel().await;
         irc_task.cancel().await;
     })
-    .expect("handle exit signal");
+    .unwrap();
 
     // blocking
-    raft.start(net_settings.clone(), executor.clone(), stop_signal.1.clone()).await?;
+    raft.start(p2p_settings.clone(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
-}
-
-fn main() -> Result<()> {
-    let args = CliArgs::parse();
-
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
-
-    let config_path = get_config_path(args.config.clone(), "ircd_config.toml")?;
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
-
-    let config: IrcdConfig = Config::<IrcdConfig>::load(config_path)?;
-
-    let settings = Settings::load(args, config)?;
-
-    let ex = Arc::new(Executor::new());
-    let ex_clone = ex.clone();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-    let (_, result) = Parallel::new()
-        .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex_clone.clone(), settings).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
 }
