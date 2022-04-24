@@ -43,9 +43,6 @@ pub struct LeadConfig
     arith_config: ArithmeticChipConfig,
 }
 
-//TODO what is the pederson commitment pallas order number of bits?
-const COMMIT_GROUP_ORDER_BITS : usize = 264;
-
 impl LeadConfig
 {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBass>
@@ -243,6 +240,7 @@ impl circuit<pallas::Base> for LeadContract {
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
         let ecc_chip = config.ecc_chip();
         let ar_chip = config.arith_chip();
+        let ps_chip = config.poseidon_chip();
 
         // ===============
         // load witnesses
@@ -458,14 +456,25 @@ impl circuit<pallas::Base> for LeadContract {
         // this is the proof for the second commitment only
         //TODO does both coins have the same value?!! doesn't make sense
         //but only single value is in witness.
-        //let coin_tup = [coin_pk_commit, coin_value, coin2_nonce];
-        //TODO this should be the concat of coin_tup
-        let coin_ = ar_chip.add(layouter.namespace(|| ""), (coin_pk_commit, coin_value))?;
-        let coin = ar_chip.add(layouter.namespace(|| ""), (coin_, coin_nonce))?;
+;
+        let coin_hash = {
+            let poseidon_message = [coin_pk_commit.clone(), coin_value.clone(), coin_nonce.clone()];
+
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+            )?;
+
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         let (com, _ )  = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
-            sn_commit_v.mul(layouter.namespace(|| "coin commit v"), (coin, one))?
+            sn_commit_v.mul(layouter.namespace(|| "coin commit v"), (coin_hash, one))?
         };
         // r*G_2
         let (blind, _) = {
@@ -487,12 +496,25 @@ impl circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_X_OFFSET,
         )?;
-        //=========================
-        let coin = ar_chip.add(layouter.namespace(|| ""), (coin_, coin2_nonce))?;
+
+        let coin2_hash = {
+            let poseidon_message = [coin_pk_commit.clone(), coin_value.clone(), coin2_nonce.clone()];
+
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+            )?;
+
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         let (com, _ )  = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
-            sn_commit_v.mul(layouter.namespace(|| "coin commit v"), (coin, one))?
+            sn_commit_v.mul(layouter.namespace(|| "coin commit v"), (coin2_hash, one))?
         };
         // r*G_2
         let (blind, _) = {
@@ -562,7 +584,21 @@ impl circuit<pallas::Base> for LeadContract {
         // ============================
         // constrain y
         //
-        let message = ar_chip.add(layouter.namespace(|| ""), root_sk, coin_nonce)?;
+        let message = {
+            let poseidon_message = [root_sk.clone(), coin_nonce.clone()];
+
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+            )?;
+
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
+
         let (com, _ )  = {
             //TODO concatenate message
             //TODO message need to be eccchip::var
@@ -599,9 +635,9 @@ impl circuit<pallas::Base> for LeadContract {
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
-        // ===========================
-        // lead statment
-        // ===========================
+        //TODO in case of the v_max lead statement you need to provide a proof
+        // that the coin value never get past it.
+
         let scalar = pallas::Scalar::from(1024);
         let c = pallas::Scalar::from(3); // leadership coefficient
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), scalar, value)?;
