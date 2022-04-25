@@ -95,6 +95,9 @@ pub enum Error {
     #[error("Connection failed")]
     ConnectFailed,
 
+    #[error("Timeout Error")]
+    TimeoutError,
+
     #[error("Connection timed out")]
     ConnectTimeout,
 
@@ -341,10 +344,25 @@ impl From<VerifyFailed> for ClientFailed {
     }
 }
 
+// TEMP
 #[cfg(feature = "net2")]
 impl<T: std::fmt::Display> From<crate::net2::transport::TransportError<T>> for Error {
     fn from(err: crate::net2::transport::TransportError<T>) -> Self {
         Self::TransportError(err.to_string())
+    }
+}
+
+// TEMP
+#[cfg(feature = "net3")]
+impl<T: std::fmt::Display> From<crate::net3::transport::TransportError<T>> for Error {
+    fn from(err: crate::net3::transport::TransportError<T>) -> Self {
+        Self::TransportError(err.to_string())
+    }
+}
+
+impl From<async_std::future::TimeoutError> for Error {
+    fn from(_err: async_std::future::TimeoutError) -> Self {
+        Self::TimeoutError
     }
 }
 
