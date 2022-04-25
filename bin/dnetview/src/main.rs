@@ -166,7 +166,6 @@ async fn parse_data(
 
     let mut sessions: Vec<SessionInfo> = Vec::new();
 
-    // first check if we have this node
     let node_name = &client.name;
     let node_id = make_node_id(node_name)?;
 
@@ -178,14 +177,31 @@ async fn parse_data(
     sessions.push(out_session);
     sessions.push(man_session);
 
-    let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions);
+    let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
     let node = SelectableObject::Node(node_info.clone());
 
-    model.ids.lock().await.insert(node_id.clone());
-    model.infos.lock().await.insert(node_id.clone(), node);
+    update_model(model.clone(), sessions.clone(), node_info, node).await?;
 
     debug!("IDS: {:?}", model.ids.lock().await);
     debug!("INFOS: {:?}", model.infos.lock().await);
+
+    Ok(())
+}
+
+async fn update_model(
+    model: Arc<Model>,
+    sessions: Vec<SessionInfo>,
+    node_info: NodeInfo,
+    node: SelectableObject,
+) -> Result<()> {
+    for session in sessions.clone() {
+        model.ids.lock().await.insert(session.session_id);
+        for connect in session.children {
+            model.ids.lock().await.insert(connect.connect_id);
+        }
+    }
+    model.ids.lock().await.insert(node_info.node_id.clone());
+    model.infos.lock().await.insert(node_info.node_id.clone(), node);
 
     Ok(())
 }
