@@ -4,6 +4,7 @@
 .vscode/
 
 /target/*
+/tmp/*
 
 /cashierd
 /dao-cli
