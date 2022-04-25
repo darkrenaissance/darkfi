@@ -211,7 +211,6 @@ net = [
 	"regex",
 	"rustls-pemfile",
 	"structopt",
-	"structopt-toml",
 
 	"util",
 	"system",

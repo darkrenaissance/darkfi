@@ -2,13 +2,12 @@ use std::{net::SocketAddr, sync::Arc};
 
 use serde::Deserialize;
 use structopt::StructOpt;
-use structopt_toml::StructOptToml;
 
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
 /// Defines the network settings.
-#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 #[structopt()]
 pub struct Settings {
     #[structopt(short, long)]
@@ -31,4 +30,21 @@ pub struct Settings {
     pub peers: Vec<SocketAddr>,
     #[structopt(short, long)]
     pub seeds: Vec<SocketAddr>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            inbound: None,
+            outbound_connections: 0,
+            manual_attempt_limit: 0,
+            seed_query_timeout_seconds: 8,
+            connect_timeout_seconds: 10,
+            channel_handshake_seconds: 4,
+            channel_heartbeat_seconds: 10,
+            external_addr: None,
+            peers: Vec::new(),
+            seeds: Vec::new(),
+        }
+    }
 }
