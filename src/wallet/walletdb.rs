@@ -20,12 +20,13 @@ use crate::{
         types::DrkTokenId,
         OwnCoin, OwnCoins,
     },
-    util::{expand_path, serial::serialize},
+    util::{
+        expand_path,
+        serial::{deserialize, serialize},
+    },
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
-
-use super::wallet_api::WalletApi;
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -44,8 +45,6 @@ pub struct Balances {
 pub struct WalletDb {
     pub conn: SqlitePool,
 }
-
-impl WalletApi for WalletDb {}
 
 /// Helper function to initialize `WalletPtr`
 pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
@@ -158,8 +157,8 @@ impl WalletDb {
             .fetch_one(&mut conn)
             .await?;
 
-        let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
-        let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
+        let public: PublicKey = deserialize(row.get("public"))?;
+        let secret: SecretKey = deserialize(row.get("secret"))?;
 
         Ok(Keypair { secret, public })
     }
@@ -195,8 +194,8 @@ impl WalletDb {
         let mut keypairs = vec![];
 
         for row in sqlx::query("SELECT * FROM keys").fetch_all(&mut conn).await? {
-            let public: PublicKey = self.get_value_deserialized(row.get("public"))?;
-            let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
+            let public: PublicKey = deserialize(row.get("public"))?;
+            let secret: SecretKey = deserialize(row.get("secret"))?;
             keypairs.push(Keypair { public, secret });
         }
 
@@ -259,21 +258,21 @@ impl WalletDb {
 
         let mut own_coins = vec![];
         for row in rows {
-            let coin = self.get_value_deserialized(row.get("coin"))?;
+            let coin = deserialize(row.get("coin"))?;
 
             // Note
-            let serial = self.get_value_deserialized(row.get("serial"))?;
-            let coin_blind = self.get_value_deserialized(row.get("coin_blind"))?;
-            let value_blind = self.get_value_deserialized(row.get("valcom_blind"))?;
+            let serial = deserialize(row.get("serial"))?;
+            let coin_blind = deserialize(row.get("coin_blind"))?;
+            let value_blind = deserialize(row.get("valcom_blind"))?;
             // TODO: FIXME:
             let value_bytes: Vec<u8> = row.get("value");
             let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
-            let token_id = self.get_value_deserialized(row.get("token_id"))?;
+            let token_id = deserialize(row.get("token_id"))?;
             let note = Note { serial, value, token_id, coin_blind, value_blind };
 
-            let secret = self.get_value_deserialized(row.get("secret"))?;
-            let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
-            let leaf_position = self.get_value_deserialized(row.get("leaf_position"))?;
+            let secret = deserialize(row.get("secret"))?;
+            let nullifier = deserialize(row.get("nullifier"))?;
+            let leaf_position = deserialize(row.get("leaf_position"))?;
 
             let oc = OwnCoin { coin, note, secret, nullifier, leaf_position };
 
@@ -285,16 +284,17 @@ impl WalletDb {
 
     pub async fn put_own_coin(&self, own_coin: OwnCoin) -> Result<()> {
         debug!("Putting own coin into wallet database");
-        let coin = self.get_value_serialized(&own_coin.coin.to_bytes())?;
-        let serial = self.get_value_serialized(&own_coin.note.serial)?;
-        let coin_blind = self.get_value_serialized(&own_coin.note.coin_blind)?;
-        let value_blind = self.get_value_serialized(&own_coin.note.value_blind)?;
+
+        let coin = serialize(&own_coin.coin.to_bytes());
+        let serial = serialize(&own_coin.note.serial);
+        let coin_blind = serialize(&own_coin.note.coin_blind);
+        let value_blind = serialize(&own_coin.note.value_blind);
         let value = own_coin.note.value.to_le_bytes();
-        let token_id = self.get_value_serialized(&own_coin.note.token_id)?;
-        let secret = self.get_value_serialized(&own_coin.secret)?;
-        let is_spent = 0;
-        let nullifier = self.get_value_serialized(&own_coin.nullifier)?;
-        let leaf_position = self.get_value_serialized(&own_coin.leaf_position)?;
+        let token_id = serialize(&own_coin.note.token_id);
+        let secret = serialize(&own_coin.secret);
+        let is_spent: u32 = 0;
+        let nullifier = serialize(&own_coin.nullifier);
+        let leaf_position = serialize(&own_coin.leaf_position);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -330,8 +330,8 @@ impl WalletDb {
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!("Confirm spend coin");
-        let is_spent = 1;
-        let coin = self.get_value_serialized(coin)?;
+        let is_spent: u32 = 1;
+        let coin = serialize(coin);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query("UPDATE coins SET is_spent = ?1 WHERE coin = ?2;")
@@ -360,8 +360,8 @@ impl WalletDb {
             // TODO: FIXME:
             let value_bytes: Vec<u8> = row.get("value");
             let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
-            let token_id = self.get_value_deserialized(row.get("token_id"))?;
-            let nullifier = self.get_value_deserialized(row.get("nullifier"))?;
+            let token_id = deserialize(row.get("token_id"))?;
+            let nullifier = deserialize(row.get("nullifier"))?;
             list.push(Balance { token_id, value, nullifier });
         }
 
@@ -380,7 +380,7 @@ impl WalletDb {
 
         let mut token_ids = vec![];
         for row in rows {
-            let token_id = self.get_value_deserialized(row.get("token_id"))?;
+            let token_id = deserialize(row.get("token_id"))?;
             token_ids.push(token_id);
         }
 
@@ -390,8 +390,8 @@ impl WalletDb {
     pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
         debug!("Checking if token ID exists");
 
-        let is_spent = 0;
-        let id = self.get_value_serialized(&token_id)?;
+        let is_spent: u32 = 0;
+        let id = serialize(&token_id);
 
         let mut conn = self.conn.acquire().await?;
 

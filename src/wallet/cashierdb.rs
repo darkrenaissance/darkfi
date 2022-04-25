@@ -8,15 +8,16 @@ use sqlx::{
     ConnectOptions, Row, SqlitePool,
 };
 
-use super::wallet_api::WalletApi;
-
 use crate::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         types::DrkTokenId,
     },
-    util::NetworkName,
+    util::{
+        serial::{deserialize, serialize},
+        NetworkName,
+    },
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
@@ -46,8 +47,6 @@ pub struct DepositToken {
 pub struct CashierDb {
     pub conn: SqlitePool,
 }
-
-impl WalletApi for CashierDb {}
 
 impl CashierDb {
     pub async fn new(path: &str, password: &str) -> Result<CashierDbPtr> {
@@ -138,7 +137,7 @@ impl CashierDb {
 
     pub async fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
         debug!("Writing main keys into the database");
-        let network = self.get_value_serialized(network)?;
+        let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -158,7 +157,7 @@ impl CashierDb {
 
     pub async fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
         debug!("Returning main keypairs");
-        let network = self.get_value_serialized(network)?;
+        let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -199,12 +198,12 @@ impl CashierDb {
         mint_address: String,
     ) -> Result<()> {
         debug!("Writing withdraw keys to database");
-        let public = self.get_value_serialized(d_key_public)?;
-        let secret = self.get_value_serialized(d_key_secret)?;
-        let network = self.get_value_serialized(network)?;
-        let token_id = self.get_value_serialized(token_id)?;
-        let confirm = self.get_value_serialized(&false)?;
-        let mint_address = self.get_value_serialized(&mint_address)?;
+        let public = serialize(d_key_public);
+        let secret = serialize(d_key_secret);
+        let network = serialize(network);
+        let token_id = serialize(token_id);
+        let confirm = serialize(&false);
+        let mint_address = serialize(&mint_address);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -237,11 +236,11 @@ impl CashierDb {
         mint_address: String,
     ) -> Result<()> {
         debug!("Writing deposit keys to database");
-        let d_key_public = self.get_value_serialized(d_key_public)?;
-        let token_id = self.get_value_serialized(token_id)?;
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&false)?;
-        let mint_address = self.get_value_serialized(&mint_address)?;
+        let d_key_public = serialize(d_key_public);
+        let token_id = serialize(token_id);
+        let network = serialize(network);
+        let confirm = serialize(&false);
+        let mint_address = serialize(&mint_address);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -266,7 +265,7 @@ impl CashierDb {
 
     pub async fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
         debug!("Getting withdraw private keys");
-        let confirm = self.get_value_serialized(&false)?;
+        let confirm = serialize(&false);
 
         let mut conn = self.conn.acquire().await?;
         let rows = sqlx::query(
@@ -279,7 +278,7 @@ impl CashierDb {
 
         let mut secret_keys = vec![];
         for row in rows {
-            let key: SecretKey = self.get_value_deserialized(row.get("d_key_secret"))?;
+            let key: SecretKey = deserialize(row.get("d_key_secret"))?;
             secret_keys.push(key);
         }
 
@@ -291,8 +290,8 @@ impl CashierDb {
         pubkey: &PublicKey,
     ) -> Result<Option<WithdrawToken>> {
         debug!("Get token address by pubkey");
-        let d_key_public = self.get_value_serialized(pubkey)?;
-        let confirm = self.get_value_serialized(&false)?;
+        let d_key_public = serialize(pubkey);
+        let confirm = serialize(&false);
 
         let mut conn = self.conn.acquire().await?;
         let rows = sqlx::query(
@@ -309,9 +308,9 @@ impl CashierDb {
         let mut token_addrs = vec![];
         for row in rows {
             let token_public_key = row.get("token_key_public");
-            let network = self.get_value_deserialized(row.get("network"))?;
-            let token_id = self.get_value_deserialized(row.get("token_id"))?;
-            let mint_address = self.get_value_deserialized(row.get("mint_address"))?;
+            let network = deserialize(row.get("network"))?;
+            let token_id = deserialize(row.get("token_id"))?;
+            let mint_address = deserialize(row.get("mint_address"))?;
 
             token_addrs.push(WithdrawToken { token_public_key, network, token_id, mint_address });
         }
@@ -325,9 +324,9 @@ impl CashierDb {
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
         debug!("Checking for existing dkey");
-        let d_key_public = self.get_value_serialized(d_key_public)?;
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&false)?;
+        let d_key_public = serialize(d_key_public);
+        let network = serialize(network);
+        let confirm = serialize(&false);
 
         let mut conn = self.conn.acquire().await?;
         let rows = sqlx::query(
@@ -359,8 +358,8 @@ impl CashierDb {
         network: &NetworkName,
     ) -> Result<Option<Keypair>> {
         debug!("Checking for existing token address");
-        let confirm = self.get_value_serialized(&false)?;
-        let network = self.get_value_serialized(network)?;
+        let confirm = serialize(&false);
+        let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
         let rows = sqlx::query(
@@ -377,8 +376,8 @@ impl CashierDb {
 
         let mut keypairs = vec![];
         for row in rows {
-            let public = self.get_value_deserialized(row.get("d_key_public"))?;
-            let secret = self.get_value_deserialized(row.get("d_key_secret"))?;
+            let public = deserialize(row.get("d_key_public"))?;
+            let secret = deserialize(row.get("d_key_secret"))?;
             keypairs.push(Keypair { public, secret });
         }
 
@@ -391,8 +390,8 @@ impl CashierDb {
         network: &NetworkName,
     ) -> Result<()> {
         debug!("Confirm withdraw keys");
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&true)?;
+        let network = serialize(network);
+        let confirm = serialize(&true);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -416,9 +415,9 @@ impl CashierDb {
         network: &NetworkName,
     ) -> Result<()> {
         debug!("Confirm deposit keys");
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&true)?;
-        let d_key_public = self.get_value_serialized(d_key_public)?;
+        let network = serialize(network);
+        let confirm = serialize(&true);
+        let d_key_public = serialize(d_key_public);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -441,8 +440,8 @@ impl CashierDb {
         network: &NetworkName,
     ) -> Result<Vec<DepositToken>> {
         debug!("Checking for existing dkey");
-        let network = self.get_value_serialized(network)?;
-        let confirm = self.get_value_serialized(&false)?;
+        let network = serialize(network);
+        let confirm = serialize(&false);
 
         let mut conn = self.conn.acquire().await?;
         let rows = sqlx::query(
@@ -459,11 +458,11 @@ impl CashierDb {
         let mut keys = vec![];
 
         for row in rows {
-            let drk_public_key = self.get_value_deserialized(row.get("d_key_public"))?;
+            let drk_public_key = deserialize(row.get("d_key_public"))?;
             let secret_key = row.get("token_key_secret");
             let public_key = row.get("token_key_public");
-            let token_id = self.get_value_deserialized(row.get("token_id"))?;
-            let mint_address = self.get_value_deserialized(row.get("mint_address"))?;
+            let token_id = deserialize(row.get("token_id"))?;
+            let mint_address = deserialize(row.get("mint_address"))?;
             keys.push(DepositToken {
                 drk_public_key,
                 token_key: TokenKey { secret_key, public_key },
