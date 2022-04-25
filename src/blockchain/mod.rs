@@ -3,7 +3,7 @@ use std::io;
 use log::debug;
 
 use crate::{
-    consensus2::{block::BlockInfo, util::Timestamp, Block, BlockProposal},
+    consensus::{block::BlockInfo, util::Timestamp, Block, BlockProposal},
     impl_vec,
     util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
     Result,

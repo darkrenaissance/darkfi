@@ -1,7 +1,7 @@
 use sled::Batch;
 
 use crate::{
-    consensus2::{Block, StreamletMetadata, Timestamp},
+    consensus::{Block, StreamletMetadata, Timestamp},
     util::serial::{deserialize, serialize},
     Error, Result,
 };

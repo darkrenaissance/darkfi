@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use log::debug;
 
 use crate::{
-    consensus2::{
+    consensus::{
         block::{BlockInfo, BlockOrder, BlockResponse},
         ValidatorStatePtr,
     },

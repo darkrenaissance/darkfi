@@ -2,7 +2,7 @@ use log::warn;
 use sled::Batch;
 
 use crate::{
-    consensus2::{util::Timestamp, Block},
+    consensus::{util::Timestamp, Block},
     util::serial::{deserialize, serialize},
     Error, Result,
 };

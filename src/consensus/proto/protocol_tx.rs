@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use log::debug;
 
 use crate::{
-    consensus2::{Tx, ValidatorStatePtr},
+    consensus::{Tx, ValidatorStatePtr},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,

@@ -1,5 +1,5 @@
 use crate::{
-    consensus2::{
+    consensus::{
         block::{BlockOrder, BlockResponse},
         ValidatorStatePtr,
     },

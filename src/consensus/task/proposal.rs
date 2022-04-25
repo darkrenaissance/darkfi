@@ -4,7 +4,7 @@ use log::{debug, error, info};
 
 use super::consensus_sync_task;
 use crate::{
-    consensus2::{state::ValidatorStatePtr, Participant},
+    consensus::{state::ValidatorStatePtr, Participant},
     net,
     util::async_util::sleep,
 };

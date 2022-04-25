@@ -21,7 +21,7 @@ use darkfi::{
     async_daemonize,
     blockchain::{NullifierStore, RootStore},
     cli_desc,
-    consensus2::{
+    consensus::{
         proto::{ProtocolSync, ProtocolTx},
         task::block_sync_task,
         Timestamp, Tx, ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,

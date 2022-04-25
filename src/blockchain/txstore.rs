@@ -1,7 +1,7 @@
 use sled::Batch;
 
 use crate::{
-    consensus2::Tx,
+    consensus::Tx,
     util::serial::{deserialize, serialize},
     Error, Result,
 };

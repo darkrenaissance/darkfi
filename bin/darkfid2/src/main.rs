@@ -18,7 +18,7 @@ use darkfi::{
     async_daemonize,
     blockchain::{NullifierStore, RootStore},
     cli_desc,
-    consensus2::{
+    consensus::{
         proto::{
             ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
             ProtocolVote,

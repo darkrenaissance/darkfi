@@ -1,7 +1,7 @@
 use log::{info, warn};
 
 use crate::{
-    consensus2::{
+    consensus::{
         state::{ConsensusRequest, ConsensusResponse},
         ValidatorStatePtr,
     },
