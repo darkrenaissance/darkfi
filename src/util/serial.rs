@@ -9,6 +9,7 @@ use std::{
 };
 
 use num_bigint::BigUint;
+use url::Url;
 
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
@@ -500,6 +501,7 @@ macro_rules! impl_vec {
 }
 
 impl_vec!(SocketAddr);
+impl_vec!(Url);
 impl_vec!([u8; 32]);
 
 impl Encodable for IpAddr {
@@ -535,6 +537,22 @@ impl Decodable for IpAddr {
             }
             _ => Err(Error::ParseFailed("couldn't decode IpAddr")),
         }
+    }
+}
+
+impl Encodable for Url {
+    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.as_str().to_string().encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for Url {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let url_str: String = Decodable::decode(&mut d)?;
+        let url = Url::parse(&url_str)?;
+        Ok(url)
     }
 }
 
