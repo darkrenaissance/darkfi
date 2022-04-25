@@ -1,5 +1,5 @@
 use async_std::sync::Arc;
-use std::path::PathBuf;
+use std::fs::create_dir_all;
 
 use async_executor::Executor;
 use easy_parallel::Parallel;
@@ -15,6 +15,7 @@ use darkfi::{
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config},
+        expand_path,
         path::get_config_path,
     },
     Error, Result,
@@ -37,7 +38,11 @@ use crate::{
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let datastore_path = PathBuf::from(&settings.datastore);
+    let datastore_path = expand_path(&settings.datastore)?;
+
+    // mkdir datastore_path if not exists
+    create_dir_all(datastore_path.join("month"))?;
+    create_dir_all(datastore_path.join("task"))?;
 
     //
     // RPC
