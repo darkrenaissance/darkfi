@@ -1,11 +1,8 @@
-use async_std::{net::TcpStream, sync::Mutex};
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+use async_std::{
+    net::TcpStream,
+    sync::{Arc, Mutex},
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -16,6 +13,7 @@ use log::{debug, error, info};
 use rand::Rng;
 use serde_json::json;
 use smol::Executor;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
@@ -69,7 +67,7 @@ impl<T: Stream> Stream for TlsStream<T> {}
 pub struct Channel {
     reader: Mutex<ReadHalf<Box<dyn Stream>>>,
     writer: Mutex<WriteHalf<Box<dyn Stream>>>,
-    address: SocketAddr,
+    address: Url,
     message_subsystem: MessageSubsystem,
     stop_subscriber: SubscriberPtr<Error>,
     receive_task: StoppableTaskPtr,
@@ -81,7 +79,7 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Box<dyn Stream>, address: SocketAddr) -> Arc<Self> {
+    pub async fn new(stream: Box<dyn Stream>, address: Url) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -222,8 +220,8 @@ impl Channel {
     }
 
     /// Return the local socket address.
-    pub fn address(&self) -> SocketAddr {
-        self.address
+    pub fn address(&self) -> Url {
+        self.address.clone()
     }
 
     /// End of file error. Triggered when unexpected end of file occurs.

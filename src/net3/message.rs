@@ -1,7 +1,8 @@
-use std::{io, net::SocketAddr};
+use std::io;
 
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::debug;
+use url::Url;
 
 use crate::{
     util::serial::{Decodable, Encodable, VarInt},
@@ -31,7 +32,7 @@ pub struct GetAddrsMessage {}
 /// Sends address information to inbound connection. Response to GetAddrs
 /// message.
 pub struct AddrsMessage {
-    pub addrs: Vec<SocketAddr>,
+    pub addrs: Vec<Url>,
 }
 
 /// Requests version information of outbound connection.

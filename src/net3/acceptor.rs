@@ -1,5 +1,4 @@
-use async_std::stream::StreamExt;
-use std::{net::SocketAddr, sync::Arc};
+use async_std::{stream::StreamExt, sync::Arc};
 
 use futures_rustls::TlsStream;
 use smol::Executor;
@@ -10,10 +9,7 @@ use crate::{
     Error, Result,
 };
 
-use super::{
-    TcpTransport, TlsTransport,
-    Channel, ChannelPtr, Transport,
-};
+use super::{Channel, ChannelPtr, TcpTransport, TlsTransport, Transport};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -34,7 +30,7 @@ impl Acceptor {
     /// thread, erroring if a connection problem occurs.
     pub async fn start(
         self: Arc<Self>,
-        accept_addr: SocketAddr,
+        accept_addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         self.accept(accept_addr, executor);
@@ -54,7 +50,7 @@ impl Acceptor {
 
     /// Run the accept loop in a new thread and error if a connection problem
     /// occurs.
-    fn accept(self: Arc<Self>, accept_addr: SocketAddr, executor: Arc<Executor<'_>>) {
+    fn accept(self: Arc<Self>, accept_addr: Url, executor: Arc<Executor<'_>>) {
         self.task.clone().start(
             self.clone().run_accept_loop(accept_addr),
             |result| self.handle_stop(result),
@@ -64,31 +60,31 @@ impl Acceptor {
     }
 
     /// Run the accept loop.
-    async fn run_accept_loop(self: Arc<Self>, accept_addr: SocketAddr) -> Result<()> {
-        let mut url = Url::parse(&accept_addr.to_string())?;
-        url.set_host(Some("tcp"))?;
-
-       match url.scheme() {
+    async fn run_accept_loop(self: Arc<Self>, accept_url: Url) -> Result<()> {
+        match accept_url.scheme() {
             "tcp" => {
                 let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(url)?.await?;
+                let listener = transport.listen_on(accept_url)?.await?;
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
                     let stream = stream?;
-                    let peer_addr = stream.peer_addr()?;
+                    let mut peer_addr = Url::parse(&stream.peer_addr()?.to_string())?;
+                    peer_addr.set_scheme("tcp")?;
                     let channel = Channel::new(Box::new(stream), peer_addr).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
             }
             "tls" => {
                 let transport = TlsTransport::new(None, 1024);
-                let (acceptor, listener) = transport.listen_on(url)?.await?;
+                let (acceptor, listener) = transport.listen_on(accept_url)?.await?;
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
                     let stream = stream?;
-                    let peer_addr = stream.peer_addr()?;
+                    let mut peer_addr = Url::parse(&stream.peer_addr()?.to_string())?;
+                    peer_addr.set_scheme("tls")?;
                     let stream = acceptor.accept(stream).await?;
-                    let channel = Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
+                    let channel =
+                        Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
             }

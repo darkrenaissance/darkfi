@@ -1,5 +1,5 @@
 use async_std::future::timeout;
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 use url::Url;
 
 use crate::Result;
@@ -18,21 +18,19 @@ impl Connector {
     }
 
     /// Establish an outbound connection.
-    pub async fn connect(&self, hosturl: SocketAddr) -> Result<ChannelPtr> {
-        let mut url = Url::parse(&hosturl.to_string())?;
-        url.set_host(Some("tcp"))?;
+    pub async fn connect(&self, connect_url: Url) -> Result<ChannelPtr> {
         let result =
             timeout(Duration::from_secs(self.settings.connect_timeout_seconds.into()), async {
-                match url.scheme() {
+                match connect_url.scheme() {
                     "tcp" => {
                         let transport = TcpTransport::new(None, 1024);
-                        let stream = transport.dial(url)?.await?;
-                        Ok(Channel::new(Box::new(stream), hosturl).await)
+                        let stream = transport.dial(connect_url.clone())?.await?;
+                        Ok(Channel::new(Box::new(stream), connect_url).await)
                     }
                     "tls" => {
                         let transport = TlsTransport::new(None, 1024);
-                        let stream = transport.dial(url)?.await?;
-                        Ok(Channel::new(Box::new(stream), hosturl).await)
+                        let stream = transport.dial(connect_url.clone())?.await?;
+                        Ok(Channel::new(Box::new(stream), connect_url).await)
                     }
                     "tor" => todo!(),
                     _ => unimplemented!(),

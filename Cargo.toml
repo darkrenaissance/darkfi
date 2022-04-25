@@ -239,6 +239,7 @@ net3 = [
 	"rcgen",
 	"regex",
 	"rustls-pemfile",
+	"structopt",
 
 	"util",
 	"system",

@@ -1,14 +1,11 @@
-use async_std::sync::Mutex;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Weak},
-};
+use async_std::sync::{Arc, Mutex, Weak};
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use fxhash::FxHashMap;
 use log::{error, info};
 use serde_json::json;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr},
@@ -35,7 +32,7 @@ pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptor: AcceptorPtr,
     accept_task: StoppableTaskPtr,
-    connect_infos: Mutex<FxHashMap<SocketAddr, InboundInfo>>,
+    connect_infos: Mutex<FxHashMap<Url, InboundInfo>>,
 }
 
 impl InboundSession {
@@ -55,9 +52,9 @@ impl InboundSession {
     /// the address is not configured. Then runs the channel subscription
     /// loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        match self.p2p().settings().inbound {
+        match self.p2p().settings().inbound.as_ref() {
             Some(accept_addr) => {
-                self.clone().start_accept_session(accept_addr, executor.clone()).await?;
+                self.clone().start_accept_session(accept_addr.clone(), executor.clone()).await?;
             }
             None => {
                 info!(target: "net", "Not configured for accepting incoming connections.");
@@ -83,7 +80,7 @@ impl InboundSession {
     /// Start accepting connections for inbound session.
     async fn start_accept_session(
         self: Arc<Self>,
-        accept_addr: SocketAddr,
+        accept_addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         info!(target: "net", "Starting inbound session on {}", accept_addr);
@@ -125,7 +122,10 @@ impl InboundSession {
 
     async fn manage_channel_for_get_info(&self, channel: ChannelPtr) {
         let key = channel.address();
-        self.connect_infos.lock().await.insert(key, InboundInfo { channel: channel.clone() });
+        self.connect_infos
+            .lock()
+            .await
+            .insert(key.clone(), InboundInfo { channel: channel.clone() });
 
         let stop_sub = channel.subscribe_stop().await;
         stop_sub.receive().await;

@@ -1,23 +1,36 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
+
+use serde::Deserialize;
+use structopt::StructOpt;
+use url::Url;
 
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
 /// Defines the network settings.
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+#[structopt()]
 pub struct Settings {
-    pub inbound: Option<SocketAddr>,
+    #[structopt(short, long)]
+    pub inbound: Option<Url>,
+    #[structopt(long, default_value = "0")]
     pub outbound_connections: u32,
+    #[structopt(long, default_value = "0")]
     pub manual_attempt_limit: u32,
-
+    #[structopt(long, default_value = "8")]
     pub seed_query_timeout_seconds: u32,
+    #[structopt(long, default_value = "10")]
     pub connect_timeout_seconds: u32,
+    #[structopt(long, default_value = "4")]
     pub channel_handshake_seconds: u32,
+    #[structopt(long, default_value = "10")]
     pub channel_heartbeat_seconds: u32,
-
-    pub external_addr: Option<SocketAddr>,
-    pub peers: Vec<SocketAddr>,
-    pub seeds: Vec<SocketAddr>,
+    #[structopt(short, long)]
+    pub external_addr: Option<Url>,
+    #[structopt(short, long)]
+    pub peers: Vec<Url>,
+    #[structopt(short, long)]
+    pub seeds: Vec<Url>,
 }
 
 impl Default for Settings {

@@ -1,15 +1,12 @@
-use async_std::sync::Mutex;
-use std::{
-    fmt,
-    net::SocketAddr,
-    sync::{Arc, Weak},
-};
+use async_std::sync::{Arc, Mutex, Weak};
+use std::fmt;
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::{error, info};
 use rand::seq::SliceRandom;
 use serde_json::json;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr},
@@ -44,14 +41,14 @@ impl fmt::Display for OutboundState {
 
 #[derive(Clone)]
 struct OutboundInfo {
-    addr: Option<SocketAddr>,
+    addr: Option<Url>,
     channel: Option<ChannelPtr>,
     state: OutboundState,
 }
 
 impl OutboundInfo {
     async fn get_info(&self) -> serde_json::Value {
-        let addr = match self.addr {
+        let addr = match self.addr.as_ref() {
             Some(addr) => serde_json::Value::String(addr.to_string()),
             None => serde_json::Value::Null,
         };
@@ -144,11 +141,11 @@ impl OutboundSession {
             info!(target: "net", "#{} connecting to outbound [{}]", slot_number, addr);
             {
                 let info = &mut self.slot_info.lock().await[slot_number as usize];
-                info.addr = Some(addr);
+                info.addr = Some(addr.clone());
                 info.state = OutboundState::Pending;
             }
 
-            match connector.connect(addr).await {
+            match connector.connect(addr.clone()).await {
                 Ok(channel) => {
                     // Blacklist goes here
 
@@ -172,7 +169,7 @@ impl OutboundSession {
                     stop_sub.receive().await;
                 }
                 Err(err) => {
-                    info!(target: "net", "Unable to connect to outbound [{}]: {}", addr, err);
+                    info!(target: "net", "Unable to connect to outbound [{}]: {}", &addr, err);
                     {
                         let info = &mut self.slot_info.lock().await[slot_number as usize];
                         info.addr = None;
@@ -189,9 +186,9 @@ impl OutboundSession {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending). Keeps looping until address is
     /// found that passes all checks.
-    async fn load_address(&self, slot_number: u32) -> Result<SocketAddr> {
+    async fn load_address(&self, slot_number: u32) -> Result<Url> {
         let p2p = self.p2p();
-        let self_inbound_addr = p2p.settings().external_addr;
+        let self_inbound_addr = p2p.settings().external_addr.clone();
 
         let mut addrs;
 
@@ -208,7 +205,7 @@ impl OutboundSession {
             }
 
             // Obtain a lock on this address to prevent duplicate connections
-            if !p2p.add_pending(addr).await {
+            if !p2p.add_pending(addr.clone()).await {
                 continue
             }
 
@@ -225,7 +222,7 @@ impl OutboundSession {
 
     /// Checks whether an address is our own inbound address to avoid connecting
     /// to ourselves.
-    fn is_self_inbound(addr: &SocketAddr, inbound_addr: &Option<SocketAddr>) -> bool {
+    fn is_self_inbound(addr: &Url, inbound_addr: &Option<Url>) -> bool {
         match inbound_addr {
             Some(inbound_addr) => inbound_addr == addr,
             // No inbound listening address configured

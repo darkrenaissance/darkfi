@@ -1,13 +1,10 @@
-use async_std::sync::Mutex;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Weak},
-};
+use async_std::sync::{Arc, Mutex, Weak};
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::*;
 use serde_json::json;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr},
@@ -40,11 +37,11 @@ impl ManualSession {
         }
     }
 
-    pub async fn connect(self: Arc<Self>, addr: &SocketAddr, executor: Arc<Executor<'_>>) {
+    pub async fn connect(self: Arc<Self>, addr: &Url, executor: Arc<Executor<'_>>) {
         let task = StoppableTask::new();
 
         task.clone().start(
-            self.clone().channel_connect_loop(*addr, executor.clone()),
+            self.clone().channel_connect_loop(addr.clone(), executor.clone()),
             // Ignore stop handler
             |_| async {},
             Error::ServiceStopped,
@@ -56,7 +53,7 @@ impl ManualSession {
 
     pub async fn channel_connect_loop(
         self: Arc<Self>,
-        addr: SocketAddr,
+        addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let connector = Connector::new(self.p2p().settings());
@@ -73,11 +70,11 @@ impl ManualSession {
                 break
             }
 
-            self.p2p().add_pending(addr).await;
+            self.p2p().add_pending(addr.clone()).await;
 
             info!(target: "net", "Connecting to manual outbound [{}]", addr);
 
-            match connector.connect(addr).await {
+            match connector.connect(addr.clone()).await {
                 Ok(channel) => {
                     // Blacklist goes here
 
@@ -108,7 +105,7 @@ impl ManualSession {
         warn!(
         target: "net",
         "Suspending manual connection to [{}] after {} failed attempts.",
-        addr,
+        &addr,
         attempts
         );
 

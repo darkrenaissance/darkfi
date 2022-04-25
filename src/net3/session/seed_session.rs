@@ -1,14 +1,14 @@
-use async_std::future::timeout;
-use std::{
-    net::SocketAddr,
+use async_std::{
+    future::timeout,
     sync::{Arc, Weak},
-    time::Duration,
 };
+use std::time::Duration;
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::*;
 use serde_json::json;
+use url::Url;
 
 use crate::{Error, Result};
 
@@ -44,7 +44,7 @@ impl SeedSession {
         let mut tasks = Vec::new();
 
         for (i, seed) in settings.seeds.iter().enumerate() {
-            tasks.push(executor.spawn(self.clone().start_seed(i, *seed, executor.clone())));
+            tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
         }
 
         // This line loops through all the tasks and waits for them to finish.
@@ -83,7 +83,7 @@ impl SeedSession {
     async fn start_seed(
         self: Arc<Self>,
         seed_index: usize,
-        seed: SocketAddr,
+        seed: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         debug!(target: "net", "SeedSession::start_seed(i={}) [START]", seed_index);
@@ -93,7 +93,7 @@ impl SeedSession {
         };
 
         let connector = Connector::new(settings.clone());
-        match connector.connect(seed).await {
+        match connector.connect(seed.clone()).await {
             Ok(channel) => {
                 // Blacklist goes here
 

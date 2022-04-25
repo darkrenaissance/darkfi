@@ -31,7 +31,7 @@ impl ProtocolSeed {
     /// from settings, then adds that address to an address message and
     /// sends it out over the channel.
     pub async fn send_self_address(&self) -> Result<()> {
-        match self.settings.external_addr {
+        match self.settings.external_addr.clone() {
             Some(addr) => {
                 debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
                 let addr = message::AddrsMessage { addrs: vec![addr] };
