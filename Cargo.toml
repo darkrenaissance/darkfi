@@ -216,20 +216,6 @@ net = [
 	"system",
 ]
 
-net2 = [
-	"fxhash",
-	"socket2",
-	"futures-rustls",
-	"fast-socks5",
-	"ed25519-compact",
-	"rcgen",
-	"regex",
-	"rustls-pemfile",
-
-	"util",
-	"system",
-]
-
 net3 = [
 	"fxhash",
 	"socket2",
