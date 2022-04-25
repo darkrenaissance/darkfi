@@ -1,5 +1,5 @@
 use chrono::{NaiveDateTime, Utc};
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::rngs::OsRng;
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{
+use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
@@ -41,10 +41,14 @@ pub struct ConsensusState {
     pub proposals: Vec<ProposalsChain>,
     /// Orphan votes pool, in case a vote reaches a node before the corresponding block
     pub orphan_votes: Vec<Vote>,
-    /// Validators currently participating in the concensus
+    /// Node participation identity
+    pub participant: Option<Participant>,
+    /// Validators currently participating in the consensus
     pub participants: BTreeMap<u64, Participant>,
-    /// Validators to be added on next epoch as participants
+    /// Validators to be added on the next epoch as participants
     pub pending_participants: Vec<Participant>,
+    /// Last slot participants where refreshed
+    pub refreshed: u64,
 }
 
 impl ConsensusState {
@@ -57,8 +61,10 @@ impl ConsensusState {
                 genesis: Timestamp(genesis),
                 proposals: Vec::new(),
                 orphan_votes: Vec::new(),
+                participant: None,
                 participants: BTreeMap::new(),
-                pending_participants: Vec::new(),
+                pending_participants: vec![],
+                refreshed: 0,
             };
             let serialized = serialize(&consensus);
             tree.insert(id.to_ne_bytes(), serialized)?;
@@ -172,14 +178,40 @@ impl ValidatorState {
     pub fn current_epoch(&self) -> u64 {
         self.consensus.genesis.clone().elapsed() / (2 * DELTA)
     }
+    
+    /// Finds the last epoch a proposal or block was generated.
+    pub fn last_epoch(&self) -> Result<u64> {
+        let mut epoch = 0;
+        for chain in &self.consensus.proposals {
+            for proposal in &chain.proposals {
+                if proposal.block.sl > epoch {
+                    epoch = proposal.block.sl;
+                }
+            }
+        }
+
+        // We return here in case proposals exist,
+        // so we don't query the sled database.
+        if epoch > 0 {
+            return Ok(epoch)
+        }
+
+        let (last_sl, _) = self.blockchain.last()?.unwrap();
+        Ok(last_sl)
+    }
 
     /// Node finds epochs leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating in the network.
     pub fn epoch_leader(&mut self) -> u64 {
         let epoch = self.current_epoch();
+        // DefaultHasher is used to hash the epoch number
+        // because it produces a number string which then can be modulated by the len.
+        // blake3 produces alphanumeric
         let mut hasher = DefaultHasher::new();
         epoch.hash(&mut hasher);
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
+        // Since BTreeMap orders by key in asceding order, each node will have
+        // the same key in calculated position.
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.id
     }
 
@@ -275,6 +307,9 @@ impl ValidatorState {
         if !self.participating {
             return Ok(None)
         }
+        
+        // Node refreshes participants records
+        self.refresh_participants()?;
 
         let leader = self.epoch_leader();
         if leader != proposal.id {
@@ -416,6 +451,9 @@ impl ValidatorState {
             debug!("Voter signature couldn't be verified. Voter: {:?}", vote.id);
             return Ok((false, None))
         }
+        
+        // Node refreshes participants records
+        self.refresh_participants()?;
 
         let nodes_count = self.consensus.participants.len();
         // Checking that the voter can actually vote.
@@ -565,6 +603,12 @@ impl ValidatorState {
 
         Ok(to_broadcast)
     }
+    
+    /// Append node participant identity to the pending participants list.
+    pub fn append_self_participant(&mut self, participant: Participant) {
+        self.consensus.participant = Some(participant.clone());
+        self.append_participant(participant);
+    }
 
     /// Node retreives a new participant and appends it to the pending participants list.
     pub fn append_participant(&mut self, participant: Participant) -> bool {
@@ -575,40 +619,81 @@ impl ValidatorState {
         true
     }
 
-    /// Node refreshes participants map, to retain only the active ones.
-    /// Active nodes are considered those who joined or voted on previous epoch.
-    pub fn refresh_participants(&mut self) {
-        // adding pending participants
+    /// Refresh the participants map, to retain only the active ones.
+    /// Active nodes are considered those that on the epoch the last proposal
+    /// was generated, either voted or joined the previous epoch.
+    /// That ensures we cover the case of chosen leader beign inactive.
+    pub fn refresh_participants(&mut self) -> Result<()> {
+        // Node checks if it should refresh its participants list
+        let epoch = self.current_epoch();
+        if epoch <= self.consensus.refreshed {
+            debug!("refresh_participants(): Participants have been refreshed this epoch.");
+            return Ok(())
+        }
+
+        debug!("refresh_participants(): Adding pending participants");
         for participant in &self.consensus.pending_participants {
             self.consensus.participants.insert(participant.id, participant.clone());
         }
-        self.consensus.pending_participants = Vec::new();
+
+        if self.consensus.participants.is_empty() {
+            debug!(
+                "refresh_participants(): Didn't manage to add any participant, pending were empty."
+            );
+        }
+
+        self.consensus.pending_participants = vec![];
 
         let mut inactive = Vec::new();
-        let previous_epoch = self.current_epoch() - 1;
+        let mut last_epoch = self.last_epoch()?;
+
+        // This check ensures that we don't chech the current epoch,
+        // as a node might receive the proposal of current epoch before
+        // starting refreshing participants, so the last_epoch will be
+        // the current one.
+        if last_epoch >= epoch {
+            last_epoch = epoch - 1;
+        }
+
+        let previous_epoch = last_epoch - 1;
+
+        error!(
+            "refresh_participants(): Checking epochs: previous - {:?}, last - {:?}",
+            previous_epoch, last_epoch
+        );
+
         for (index, participant) in self.consensus.participants.clone().iter() {
             match participant.voted {
                 Some(epoch) => {
-                    if epoch < previous_epoch {
-                        inactive.push(index.clone());
+                    if epoch < last_epoch {
+                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
+                        inactive.push(*index);
                     }
                 }
                 None => {
                     if participant.joined < previous_epoch {
-                        inactive.push(index.clone());
+                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
+                        inactive.push(*index);
                     }
                 }
             }
         }
+
         for index in inactive {
             self.consensus.participants.remove(&index);
         }
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.id, self.current_epoch());
+            let mut participant = self.consensus.participant.clone().unwrap();
+            participant.joined = epoch;
+            self.consensus.participant = Some(participant.clone());
             self.consensus.participants.insert(participant.id, participant.clone());
         }
+
+        self.consensus.refreshed = epoch;
+
+        Ok(())
     }
 
     /// Util function to save the current consensus state to provided file path.
@@ -628,8 +713,10 @@ impl ValidatorState {
             genesis,
             proposals: Vec::new(),
             orphan_votes: Vec::new(),
+            participant: None,
             participants: BTreeMap::new(),
-            pending_participants: Vec::new(),
+            pending_participants: vec![],
+            refreshed: 0,
         };
 
         self.consensus = consensus;

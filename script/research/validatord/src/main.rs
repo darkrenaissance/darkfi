@@ -11,11 +11,12 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    consensus::{
+    consensus2::{
         block::{BlockOrder, BlockResponse},
         participant::Participant,
         state::{ConsensusRequest, ConsensusResponse, ValidatorState, ValidatorStatePtr},
         tx::Tx,
+        proto::{ProtocolSync, ProtocolTx, ProtocolVote, ProtocolProposal, ProtocolParticipant, ProtocolSyncConsensus}
     },
     net,
     rpc::{
@@ -33,12 +34,6 @@ use darkfi::{
         path::get_config_path,
     },
     Result,
-};
-
-use validatord::protocols::{
-    protocol_participant::ProtocolParticipant, protocol_proposal::ProtocolProposal,
-    protocol_sync::ProtocolSync, protocol_sync_consensus::ProtocolSyncConsensus,
-    protocol_tx::ProtocolTx, protocol_vote::ProtocolVote,
 };
 
 const CONFIG_FILE: &str = r"validatord_config.toml";
@@ -124,7 +119,7 @@ async fn syncing_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> 
 
         // Nodes sends the last known block hash of the canonical blockchain
         // and loops until the respond is the same block (used to utilize batch requests)
-        let mut last = state.read().unwrap().blockchain.last()?.unwrap();
+        let mut last = state.read().await.blockchain.last()?.unwrap();
         info!("Last known block: {:?} - {:?}", last.0, last.1);
         loop {
             // Node creates a BlockOrder and sends it
@@ -134,9 +129,9 @@ async fn syncing_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> 
             // Node stores responce data. Extra validations can be added here.
             let response = response_sub.receive().await?;
             for info in &response.blocks {
-                state.write().unwrap().blockchain.add_by_info(info.clone())?;
+                state.write().await.blockchain.add_by_info(info.clone())?;
             }
-            let last_received = state.read().unwrap().blockchain.last()?.unwrap();
+            let last_received = state.read().await.blockchain.last()?.unwrap();
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);
             if last == last_received {
                 break
@@ -167,15 +162,15 @@ async fn syncing_consensus_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> R
             .expect("Missing ConsensusResponse dispatcher!");
 
         // Node creates a ConsensusRequest and sends it
-        let request = ConsensusRequest { id: state.read().unwrap().id };
+        let request = ConsensusRequest { id: state.read().await.id };
         channel.send(request).await?;
 
         // Node stores responce data. Extra validations can be added here.
         let response = response_sub.receive().await?;
-        state.write().unwrap().consensus = response.consensus.clone();
+        state.write().await.consensus = response.consensus.clone();
     } else {
         info!("Node is not connected to other nodes, resetting consensus state.");
-        state.write().unwrap().reset_consensus_state()?;
+        state.write().await.reset_consensus_state()?;
     }
 
     info!("Node synced!");
@@ -185,7 +180,7 @@ async fn syncing_consensus_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> R
 async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next epoch end,
     // so it can start syncing latest state.
-    let mut seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+    let mut seconds_until_next_epoch = state.read().await.next_epoch_start();
     let one_sec = Duration::new(1, 0);
     loop {
         if seconds_until_next_epoch > one_sec {
@@ -194,7 +189,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
         }
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
         thread::sleep(seconds_until_next_epoch);
-        seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+        seconds_until_next_epoch = state.read().await.next_epoch_start();
     }
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
@@ -208,8 +203,8 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
 
     // Node signals the network that it will start participating
     let participant =
-        Participant::new(state.read().unwrap().id, state.read().unwrap().current_epoch());
-    state.write().unwrap().append_participant(participant.clone());
+        Participant::new(state.read().await.id, state.read().await.current_epoch());
+    state.write().await.append_self_participant(participant.clone());
     let result = p2p.broadcast(participant.clone()).await;
     match result {
         Ok(()) => info!("Participation message broadcasted successfuly."),
@@ -217,20 +212,20 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
     }
 
     // After initialization node waits for next epoch to start participating
-    let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+    let seconds_until_next_epoch = state.read().await.next_epoch_start();
     info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
     thread::sleep(seconds_until_next_epoch);
 
     // Node modifies its participating flag to true
-    state.write().unwrap().participating = true;
+    state.write().await.participating = true;
 
     loop {
         // Node refreshes participants records
-        state.write().unwrap().refresh_participants();
+        state.write().await.refresh_participants();
 
         // Node checks if its the epoch leader to generate a new proposal for that epoch
-        let result = if state.write().unwrap().is_epoch_leader() {
-            state.read().unwrap().propose()
+        let result = if state.write().await.is_epoch_leader() {
+            state.read().await.propose()
         } else {
             Ok(None)
         };
@@ -242,14 +237,14 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
                     // Leader creates a vote for the proposal and broadcasts them both
                     let unwrapped = proposal.unwrap();
                     info!("Node is the epoch leader. Proposed block: {:?}", unwrapped);
-                    let vote = state.write().unwrap().receive_proposal(&unwrapped);
+                    let vote = state.write().await.receive_proposal(&unwrapped);
                     match vote {
                         Ok(x) => {
                             if x.is_none() {
                                 error!("Node did not vote for the proposed block.");
                             } else {
                                 let vote = x.unwrap();
-                                let result = state.write().unwrap().receive_vote(&vote);
+                                let result = state.write().await.receive_vote(&vote);
                                 match result {
                                     Ok(_) => info!("Vote saved successfuly."),
                                     Err(e) => error!("Vote save failed. Error: {:?}", e),
@@ -278,7 +273,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
         }
 
         // Current node state is flushed to sled database
-        let result = state.read().unwrap().save_consensus_state();
+        let result = state.read().await.save_consensus_state();
         match result {
             Ok(()) => (),
             Err(e) => {
@@ -287,7 +282,7 @@ async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
         };
 
         // Node waits until next epoch
-        let seconds_until_next_epoch = state.read().unwrap().next_epoch_start();
+        let seconds_until_next_epoch = state.read().await.next_epoch_start();
         info!("Waiting for next epoch({:?} sec)...", seconds_until_next_epoch);
         thread::sleep(seconds_until_next_epoch);
     }
@@ -491,7 +486,7 @@ impl JsonRpcInterface {
         let payload = String::from(args[0].as_str().unwrap());
         let tx = Tx { payload };
 
-        self.state.write().unwrap().append_tx(tx.clone());
+        self.state.write().await.append_tx(tx.clone());
 
         let result = self.p2p.broadcast(tx).await;
         match result {

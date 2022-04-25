@@ -1,6 +1,6 @@
 use chrono::{NaiveDateTime, Utc};
 
-use crate::util::serial::{SerialDecodable, SerialEncodable};
+use darkfi::util::serial::{SerialDecodable, SerialEncodable};
 
 /// Serialized blake3 hash bytes for character "⊥"
 pub const EMPTY_HASH_BYTES: [u8; 32] = [

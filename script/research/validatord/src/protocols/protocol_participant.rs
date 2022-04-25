@@ -1,8 +1,8 @@
 use async_executor::Executor;
 use async_trait::async_trait;
 
-use darkfi::{
-    consensus::{participant::Participant, state::ValidatorStatePtr},
+use darkfi::{   
+    consensus::{participant::Participant, state::ValidatorStatePtr}, 
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,

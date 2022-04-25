@@ -1,4 +1,4 @@
-use crate::{
+use darkfi::{
     util::serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     Result,
 };

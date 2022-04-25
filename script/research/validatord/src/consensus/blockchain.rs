@@ -2,7 +2,7 @@ use std::io;
 
 use log::debug;
 
-use crate::{
+use darkfi::{
     impl_vec,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,

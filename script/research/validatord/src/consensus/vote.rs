@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::{
+use darkfi::{
     crypto::{keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},

@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::{
+use darkfi::{
     impl_vec, net,
     util::serial::{
         deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt,

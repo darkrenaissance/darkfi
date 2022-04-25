@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, io};
 
-use crate::{
+use darkfi::{
     impl_vec, net,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
