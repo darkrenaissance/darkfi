@@ -108,13 +108,14 @@ pub struct LeadContract
     pub value: Option<u32>,
     pub coin_opening_2 :Option<pallas::Base>,
     // public advices
+    pub cm_c1 : Option<NonIdentityPoint>,
     pub cm_c2 : Option<NonIdentityPoint>,
     pub sn_c1 : Option<u32>,
-    pub eta : Option<u32>, //TODO name, type
+    //pub eta : Option<u32>, //TODO name, type
     pub slot : Option<u32>,
-    pub rho : Option<u32>, //TODO name, type
-    pub h : Option<u32>, // hash of this data
-    pub ptr: Option<u32>, //hash of the previous block
+    //pub rho : Option<u32>, //TODO name, type
+    //pub h : Option<u32>, // hash of this data
+    //pub ptr: Option<u32>, //hash of the previous block
     pub mau_rho: Option<u32>, //TODO name, type
     pub mau_y: Option<u32>, //TODO name, type
     pub root : Option<u32>, //TODO name, type
@@ -285,6 +286,12 @@ impl circuit<pallas::Base> for LeadContract {
             self.coin_opening_2,
         )?;
 
+        let cm_c1 = self.load_private(
+            layouter.namespace(|| ""),
+            config.advices[0],
+            self.cm_c1,
+        )?;
+
         let cm_c2 = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
@@ -297,11 +304,13 @@ impl circuit<pallas::Base> for LeadContract {
             self.sn_c1,
         )?;
 
+        /*
         let eta = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
             self.eta,
         )?;
+         */
 
         let slot = self.load_private(
             layouter.namespace(|| ""),
@@ -309,6 +318,7 @@ impl circuit<pallas::Base> for LeadContract {
             self.slot,
         )?;
 
+        /*
         let rho = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
@@ -326,6 +336,7 @@ impl circuit<pallas::Base> for LeadContract {
             config.advices[0],
             self.ptr,
         )?;
+         */
 
         let mau_rho = self.load_private(
             layouter.namespace(|| ""),
@@ -456,7 +467,7 @@ impl circuit<pallas::Base> for LeadContract {
         // this is the proof for the second commitment only
         //TODO does both coins have the same value?!! doesn't make sense
         //but only single value is in witness.
-;
+
         let coin_hash = {
             let poseidon_message = [coin_pk_commit.clone(), coin_value.clone(), coin_nonce.clone()];
 
@@ -478,21 +489,22 @@ impl circuit<pallas::Base> for LeadContract {
         };
         // r*G_2
         let (blind, _) = {
-            let sn_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let sn_commit_r = FixedPoint::from_inner(ecc_chip.clone(), coin_opening_1);
-            sn_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), (coin_root, one))?
+            let coin_commit_r = OrchardFixedBasesFull::ValueCommitR;
+            let coin_commit_r = FixedPoint::from_inner(ecc_chip.clone(), coin_commit_r);
+            coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), (coin_opening_1, one))?
         };
         let coin_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        //TODO it would be better if you coin1_commit +  -1*cm_c2 and constraint 0 (output)
+        let cm1_zero_out = ar_chip.sub(layouter.namespace(|| "sub to zero"), (coin2_commit, cm_c1));
+
         // constrain coin's pub key x value
         layouter.constrain_instance(
-            coin_commit.inner().x().cell(),
+            cm1_zero_out.inner().x().cell(),
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_X_OFFSET,
         )?;
         // constrain coin's pub key y value
         layouter.constrain_instance(
-            coin_commit.inner().y().cell(),
+            cm1_zero_out.inner().y().cell(),
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_X_OFFSET,
         )?;
@@ -524,14 +536,15 @@ impl circuit<pallas::Base> for LeadContract {
             sn_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), r)?
         };
         let coin2_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
+        let cm2_zero_out = ar_chip.sub(layouter.namespace(|| "sub to zero"), (coin2_commit, cm_c2));
         layouter.constrain_instance(
-            coin2_commit.inner().x().cell(),
+            cm2_zero_out.inner().x().cell(),
             config.primary,
             LEAD_COIN2_SERIAL_NUMBER_X_OFFSET,
         )?;
         // constrain coin's pub key y value
         layouter.constrain_instance(
-            coin2_commit.inner().y().cell(),
+            cm2_zero_out.inner().y().cell(),
             config.primary,
             LEAD_COIN2_SERIAL_NUMBER_X_OFFSET,
         )?;
@@ -617,11 +630,8 @@ impl circuit<pallas::Base> for LeadContract {
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         // ============================
         // constraint rho
-        //
+        // ============================
         let (com, _ )  = {
-            //TODO concatenate message
-            //TODO message need to be eccchip::var
-            //let message = [root_sk, coin_nonce];
             let y_commit_v = ValueCommitV;
             let y_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), y_commit_v);
             y_commit_v.mul(layouter.namespace(|| "coin commit v"), (message.clone(), one))?
