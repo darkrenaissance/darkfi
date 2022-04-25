@@ -4,7 +4,6 @@ rpc_listen="127.0.0.1:8857"
 datastore="~/.config/tau"
 
 # Raft net settings
-[command]
 type="Net"
 [args]
 inbound="127.0.0.1:11002"
