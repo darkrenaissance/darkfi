@@ -1,15 +1,21 @@
 use std::{fs::File, io::Write};
 
 use darkfi::{
+    blockchain::{
+        Blockchain,
+        blockstore::{BlockOrderStore, BlockStore},
+        metadatastore::StreamletMetadataStore,
+        txstore::TxStore,
+    },
     consensus::{
-        block::{Block, BlockOrderStore, BlockProposal, BlockStore},
-        blockchain::{Blockchain, ProposalsChain},
-        metadata::{Metadata, OuroborosMetadata, StreamletMetadata, StreamletMetadataStore},
+        block::{Block, BlockProposal, ProposalChain},
+        metadata::{Metadata, OuroborosMetadata, StreamletMetadata},
         participant::Participant,
         state::{ConsensusState, ValidatorState},
-        tx::{Tx, TxStore},
+        tx::Tx,
         util::Timestamp,
         vote::Vote,
+        TESTNET_GENESIS_HASH_BYTES,
     },
     util::expand_path,
     Result,
@@ -114,44 +120,44 @@ struct ProposalInfo {
 impl ProposalInfo {
     pub fn new(proposal: &BlockProposal) -> ProposalInfo {
         let _id = proposal.id;
-        let _st = proposal.st;
-        let _sl = proposal.sl;
-        let _txs = proposal.txs.clone();
-        let _metadata = MetadataInfo::new(&proposal.metadata);
-        let _sm = StreamletMetadataInfo::new(&proposal.sm);
+        let _st = proposal.block.st;
+        let _sl = proposal.block.sl;
+        let _txs = proposal.block.txs.clone();
+        let _metadata = MetadataInfo::new(&proposal.block.metadata);
+        let _sm = StreamletMetadataInfo::new(&proposal.block.sm);
         ProposalInfo { _id, _st, _sl, _txs, _metadata, _sm }
     }
 }
 
 #[derive(Debug)]
-struct ProposalsInfoChain {
+struct ProposalInfoChain {
     _proposals: Vec<ProposalInfo>,
 }
 
-impl ProposalsInfoChain {
-    pub fn new(proposals: &ProposalsChain) -> ProposalsInfoChain {
+impl ProposalInfoChain {
+    pub fn new(proposals: &ProposalChain) -> ProposalInfoChain {
         let mut _proposals = Vec::new();
         for proposal in &proposals.proposals {
             _proposals.push(ProposalInfo::new(&proposal));
         }
-        ProposalsInfoChain { _proposals }
+        ProposalInfoChain { _proposals }
     }
 }
 
 #[derive(Debug)]
 struct ConsensusInfo {
-    _genesis: Timestamp,
-    _proposals: Vec<ProposalsInfoChain>,
+    _genesis_ts: Timestamp,
+    _proposals: Vec<ProposalInfoChain>,
 }
 
 impl ConsensusInfo {
     pub fn new(consensus: &ConsensusState) -> ConsensusInfo {
-        let _genesis = consensus.genesis.clone();
+        let _genesis_ts = consensus.genesis_ts.clone();
         let mut _proposals = Vec::new();
         for proposal in &consensus.proposals {
-            _proposals.push(ProposalsInfoChain::new(&proposal));
+            _proposals.push(ProposalInfoChain::new(&proposal));
         }
-        ConsensusInfo { _genesis, _proposals }
+        ConsensusInfo { _genesis_ts, _proposals }
     }
 }
 
@@ -237,12 +243,12 @@ impl BlockOrderStoreInfo {
 #[derive(Debug)]
 struct TxInfo {
     _hash: blake3::Hash,
-    _payload: String,
+    _payload: Tx,
 }
 
 impl TxInfo {
     pub fn new(_hash: blake3::Hash, tx: &Tx) -> TxInfo {
-        let _payload = tx.payload.clone();
+        let _payload = tx.clone();
         TxInfo { _hash, _payload }
     }
 }
@@ -344,15 +350,18 @@ impl StateInfo {
     }
 }
 
-fn main() -> Result<()> {
+#[async_std::main]
+async fn main() -> Result<()> {
     let nodes = 4;
-    let genesis = 1648383795;
+    let genesis_ts = Timestamp(1648383795);
+    let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
     for i in 0..nodes {
         let path = format!("~/.config/darkfi/validatord_db_{:?}", i);
-        let database_path = expand_path(&path).unwrap();
-        println!("Export data from sled database: {:?}", database_path);
-        let state = ValidatorState::new(database_path, i, genesis).unwrap();
-        let info = StateInfo::new(&*state.read().unwrap());
+        let db_path = expand_path(&path).unwrap();
+        let sled_db = sled::open(&db_path)?;
+        println!("Export data from sled database: {:?}", db_path);
+        let state = ValidatorState::new(&sled_db, i, genesis_ts, genesis_data)?;
+        let info = StateInfo::new(&*state.read().await);
         let info_string = format!("{:#?}", info);
         let path = format!("validatord_state_{:?}", i);
         let mut file = File::create(path)?;
