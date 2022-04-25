@@ -11,6 +11,7 @@ use sqlx::{
 
 use crate::{
     crypto::{
+        address::Address,
         coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
@@ -160,6 +161,13 @@ impl WalletDb {
         let secret: SecretKey = self.get_value_deserialized(row.get("secret"))?;
 
         Ok(Keypair { secret, public })
+    }
+    
+    pub async fn get_default_address(&self) -> Result<Address> {
+        debug!("Returning default address");
+        let keypair = self.get_default_keypair().await?;
+        
+        Ok(Address::from(keypair.public))
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
