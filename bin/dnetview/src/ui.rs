@@ -18,16 +18,13 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
     let mut nodes = Vec::new();
     let style = Style::default();
 
-    // lines.push(sublist)
-    // either have one hashmap w value as enum or have type info in hashset
     for id in &view.id_list.ids {
         let id_span = Span::raw(id.to_string());
         let mut lines = vec![Spans::from(id_span)];
 
-        // create a new vector of addresses
-        // render as a sub node
         match &view.info_list.infos.get(id) {
             Some(node) => {
+                //debug!("NODE: {:?}", node);
                 //if !node.outbound.iter().all(|node| node.is_empty) {
                 //    lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
                 //}

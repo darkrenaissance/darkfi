@@ -4,7 +4,6 @@ use std::{fs::File, io, io::Read, path::PathBuf};
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, info};
-use rand::{thread_rng, Rng};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -22,7 +21,7 @@ use darkfi::{
     util::{
         async_util,
         cli::{log_config, spawn_config, Config},
-        join_config_path, serial,
+        join_config_path,
     },
 };
 
@@ -31,6 +30,7 @@ use dnetview::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     ui,
+    util::{generate_id, make_connect_id, make_node_id, make_session_id},
     view::{IdListView, InfoListView, View},
 };
 
@@ -353,53 +353,6 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
         None => Err(Error::ValueIsNotObject),
     }
 }
-
-fn make_node_id(node_name: &String) -> Result<String> {
-    Ok(serial::serialize_hex(node_name))
-}
-
-pub fn make_session_id(node_id: String, session: &Session) -> Result<String> {
-    let mut num = 0_u64;
-
-    match session {
-        Session::Inbound => {
-            for i in ['i', 'n'] {
-                num += i as u64;
-            }
-        }
-        Session::Outbound => {
-            for i in ['o', 'u', 't'] {
-                num += i as u64;
-            }
-        }
-        Session::Manual => {
-            for i in ['m', 'a', 'n'] {
-                num += i as u64;
-            }
-        }
-    }
-
-    for i in node_id.chars() {
-        num += i as u64
-    }
-
-    Ok(serial::serialize_hex(&num))
-}
-
-pub fn make_connect_id(id: u64) -> Result<String> {
-    Ok(serial::serialize_hex(&id))
-}
-
-// we use a random id for empty connections
-fn generate_id() -> Result<String> {
-    let mut rng = thread_rng();
-    let id: u32 = rng.gen();
-    Ok(serial::serialize_hex(&id))
-}
-
-//fn is_empty_outbound(slots: Vec<Slot>) -> bool {
-//    return slots.iter().all(|slot| slot.is_empty);
-//}
 
 async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Result<()> {
     let mut asi = async_stdin();
