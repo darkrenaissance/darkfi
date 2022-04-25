@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    transport::{TcpTransport, TlsTransport},
+    TcpTransport, TlsTransport,
     Channel, ChannelPtr, Transport,
 };
 
@@ -68,29 +68,31 @@ impl Acceptor {
         let mut url = Url::parse(&accept_addr.to_string())?;
         url.set_host(Some("tcp"))?;
 
-        match url.scheme() {
+       match url.scheme() {
             "tcp" => {
                 let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(url).unwrap().await.unwrap();
+                let listener = transport.listen_on(url)?.await?;
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
-                    let stream = stream.unwrap();
-                    let peer_addr = stream.peer_addr().unwrap();
+                    let stream = stream?;
+                    let peer_addr = stream.peer_addr()?;
                     let channel = Channel::new(Box::new(stream), peer_addr).await;
+                    self.channel_subscriber.notify(Ok(channel)).await;
                 }
             }
             "tls" => {
                 let transport = TlsTransport::new(None, 1024);
-                let (acceptor, listener) = transport.listen_on(url).unwrap().await.unwrap();
+                let (acceptor, listener) = transport.listen_on(url)?.await?;
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
-                    let stream = stream.unwrap();
-                    let peer_addr = stream.peer_addr().unwrap();
-                    let mut stream = acceptor.accept(stream).await.unwrap();
-                    let channel =
-                        Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
+                    let stream = stream?;
+                    let peer_addr = stream.peer_addr()?;
+                    let stream = acceptor.accept(stream).await?;
+                    let channel = Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
+                    self.channel_subscriber.notify(Ok(channel)).await;
                 }
             }
+            "tor" => todo!(),
             _ => unimplemented!(),
         }
         Ok(())

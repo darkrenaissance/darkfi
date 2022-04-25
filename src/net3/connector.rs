@@ -1,13 +1,10 @@
-use async_std::{future::timeout, net::TcpStream};
+use async_std::future::timeout;
 use std::{net::SocketAddr, time::Duration};
 use url::Url;
 
-use crate::{Error, Result};
+use crate::Result;
 
-use super::{
-    transport::{TcpTransport, TlsTransport},
-    Channel, ChannelPtr, SettingsPtr, Transport,
-};
+use super::{Channel, ChannelPtr, SettingsPtr, TcpTransport, TlsTransport, Transport};
 
 /// Create outbound socket connections.
 pub struct Connector {
@@ -29,19 +26,19 @@ impl Connector {
                 match url.scheme() {
                     "tcp" => {
                         let transport = TcpTransport::new(None, 1024);
-                        let stream = transport.dial(url).unwrap().await.unwrap();
-                        Channel::new(Box::new(stream), hosturl).await
+                        let stream = transport.dial(url)?.await?;
+                        Ok(Channel::new(Box::new(stream), hosturl).await)
                     }
                     "tls" => {
                         let transport = TlsTransport::new(None, 1024);
-                        let stream = transport.dial(url).unwrap().await.unwrap();
-                        Channel::new(Box::new(stream), hosturl).await
+                        let stream = transport.dial(url)?.await?;
+                        Ok(Channel::new(Box::new(stream), hosturl).await)
                     }
+                    "tor" => todo!(),
                     _ => unimplemented!(),
                 }
             })
-            .await
-            .unwrap();
-        Ok(result)
+            .await?;
+        result
     }
 }

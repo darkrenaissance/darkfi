@@ -1,13 +1,7 @@
-use async_std::{
-    net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-};
+use async_std::net::{TcpListener, TcpStream};
 use std::{io, net::SocketAddr, pin::Pin};
 
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    prelude::*,
-};
+use futures::prelude::*;
 use log::debug;
 use socket2::{Domain, Socket, Type};
 use url::Url;

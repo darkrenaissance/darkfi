@@ -1,10 +1,7 @@
 use std::error::Error;
 
 use async_trait::async_trait;
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    prelude::*,
-};
+use futures::prelude::*;
 use url::Url;
 
 mod tcp;
