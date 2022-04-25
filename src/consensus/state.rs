@@ -663,9 +663,10 @@ impl ValidatorState {
     }
 
     /// Refresh the participants map, to retain only the active ones.
-    /// Active nodes are considered those that on the epoch the last proposal
-    /// was generated, either voted or joined the previous epoch.
-    /// That ensures we cover the case of chosen leader beign inactive.
+    /// Active nodes are considered those that joined previous epoch
+    /// or on the epoch the last proposal was generated, either voted
+    /// or joined the previous of that epoch. That ensures we cover
+    /// the case of a node joining while the chosen epoch leader is inactive.
     pub fn refresh_participants(&mut self) -> Result<()> {
         // Node checks if it should refresh its participants list
         let epoch = self.current_epoch();
@@ -698,7 +699,8 @@ impl ValidatorState {
             last_epoch = epoch - 1;
         }
 
-        let previous_epoch = last_epoch - 1;
+        let previous_epoch = epoch - 1;
+        let previous_from_last_epoch = last_epoch - 1;
 
         debug!(
             "refresh_participants(): Checking epochs: previous - {:?}, last - {:?}",
@@ -714,7 +716,9 @@ impl ValidatorState {
                     }
                 }
                 None => {
-                    if participant.joined < previous_epoch {
+                    if participant.joined < previous_epoch &&
+                        participant.joined < previous_from_last_epoch
+                    {
                         warn!("refresh_participants(): Inactive participant: {:?}", participant);
                         inactive.push(*index);
                     }
