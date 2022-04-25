@@ -128,7 +128,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub async fn set_default_keypair(&self, public: &PublicKey) -> Result<()> {
+    pub async fn set_default_keypair(&self, public: &PublicKey) -> Result<Keypair> {
         debug!("Set default keypair");
         let mut conn = self.conn.acquire().await?;
 
@@ -143,14 +143,15 @@ impl WalletDb {
             .execute(&mut conn)
             .await?;
 
-        Ok(())
+        let keypair = self.get_default_keypair().await?;
+        Ok(keypair)
     }
 
-    pub async fn get_default_keypair(&self) -> Result<Keypair> {
+    async fn get_default_keypair(&self) -> Result<Keypair> {
         debug!("Returning default keypair");
         let mut conn = self.conn.acquire().await?;
 
-        let is_default = 1;
+        let is_default: u32 = 1;
 
         let row = sqlx::query("SELECT * FROM keys WHERE is_default = ?1;")
             .bind(is_default)
@@ -165,9 +166,26 @@ impl WalletDb {
 
     pub async fn get_default_address(&self) -> Result<Address> {
         debug!("Returning default address");
-        let keypair = self.get_default_keypair().await?;
+        let keypair = self.get_default_keypair_or_create_one().await?;
 
         Ok(Address::from(keypair.public))
+    }
+
+    pub async fn get_default_keypair_or_create_one(&self) -> Result<Keypair> {
+        debug!("Returning default keypair or create one");
+
+        let default_keypair = self.get_default_keypair().await;
+
+        let keypair = if default_keypair.is_err() {
+            let keypairs = self.get_keypairs().await?;
+            let kp = if keypairs.is_empty() { self.keygen().await? } else { keypairs[0] };
+            self.set_default_keypair(&kp.public).await?;
+            kp
+        } else {
+            default_keypair?
+        };
+
+        Ok(keypair)
     }
 
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
@@ -498,7 +516,7 @@ mod tests {
         // set the keypair at index 1 as the default keypair
         wallet.set_default_keypair(&keypair2.public).await?;
         // get default keypair
-        assert_eq!(keypair2, wallet.get_default_keypair().await?);
+        assert_eq!(keypair2, wallet.get_default_keypair_or_create_one().await?);
 
         // get_own_coins()
         let own_coins = wallet.get_own_coins().await?;
