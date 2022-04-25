@@ -2,7 +2,7 @@ use fxhash::{FxHashMap, FxHashSet};
 //use log::debug;
 use tui::widgets::ListState;
 
-use crate::model::NodeInfo;
+use crate::model::SelectableObject;
 
 #[derive(Clone)]
 pub struct View {
@@ -15,9 +15,9 @@ impl View {
         View { id_list, info_list }
     }
 
-    pub fn update(&mut self, infos: FxHashMap<String, NodeInfo>) {
+    pub fn update(&mut self, infos: FxHashMap<String, SelectableObject>) {
         for (id, info) in infos {
-            self.id_list.node_id.insert(id.clone());
+            self.id_list.ids.insert(id.clone());
             self.info_list.infos.insert(id, info);
         }
     }
@@ -26,17 +26,17 @@ impl View {
 #[derive(Clone)]
 pub struct IdListView {
     pub state: ListState,
-    pub node_id: FxHashSet<String>,
+    pub ids: FxHashSet<String>,
 }
 
 impl IdListView {
-    pub fn new(node_id: FxHashSet<String>) -> IdListView {
-        IdListView { state: ListState::default(), node_id }
+    pub fn new(ids: FxHashSet<String>) -> IdListView {
+        IdListView { state: ListState::default(), ids }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.node_id.len() - 1 {
+                if i >= self.ids.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -51,7 +51,7 @@ impl IdListView {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.node_id.len() - 1
+                    self.ids.len() - 1
                 } else {
                     i - 1
                 }
@@ -69,11 +69,11 @@ impl IdListView {
 #[derive(Clone)]
 pub struct InfoListView {
     pub index: usize,
-    pub infos: FxHashMap<String, NodeInfo>,
+    pub infos: FxHashMap<String, SelectableObject>,
 }
 
 impl InfoListView {
-    pub fn new(infos: FxHashMap<String, NodeInfo>) -> InfoListView {
+    pub fn new(infos: FxHashMap<String, SelectableObject>) -> InfoListView {
         let index = 0;
 
         InfoListView { index, infos }

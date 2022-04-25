@@ -20,7 +20,7 @@ pub fn ui<B: Backend>(f: &mut Frame<'_, B>, mut view: View) {
 
     // lines.push(sublist)
     // either have one hashmap w value as enum or have type info in hashset
-    for id in &view.id_list.node_id {
+    for id in &view.id_list.ids {
         let id_span = Span::raw(id.to_string());
         let mut lines = vec![Spans::from(id_span)];
 

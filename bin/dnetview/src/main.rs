@@ -414,7 +414,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
     view.info_list.index = 0;
 
     loop {
-        //view.update(model.info_list.infos.lock().await.clone());
+        view.update(model.infos.lock().await.clone());
         terminal.draw(|f| {
             ui::ui(f, view.clone());
         })?;
