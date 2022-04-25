@@ -17,6 +17,7 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     crypto::{
+        address::Address,
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
@@ -40,10 +41,8 @@ pub struct ConsensusState {
     /// Orphan votes pool, in case a vote reaches a node before the
     /// corresponding block
     pub orphan_votes: Vec<Vote>,
-    /// Node participation identity
-    pub participant: Option<Participant>,
     /// Validators currently participating in the consensus
-    pub participants: BTreeMap<u64, Participant>,
+    pub participants: BTreeMap<Address, Participant>,
     /// Validators to be added on the next epoch as participants
     pub pending_participants: Vec<Participant>,
     /// Last slot participants where refreshed
@@ -60,7 +59,6 @@ impl ConsensusState {
             genesis_block,
             proposals: vec![],
             orphan_votes: vec![],
-            participant: None,
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,
@@ -71,8 +69,8 @@ impl ConsensusState {
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusRequest {
-    /// Validator ID
-    pub id: u64,
+    /// Validator wallet address
+    pub address: Address,
 }
 
 impl net::Message for ConsensusRequest {
@@ -99,11 +97,11 @@ pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
-    /// Validator ID
-    pub id: u64,
+    /// Node wallet address
+    pub address: Address,
     /// Secret key, to sign messages
     pub secret: SecretKey,
-    /// Validator public key
+    /// Node public key
     pub public: PublicKey,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: ConsensusState,
@@ -117,10 +115,9 @@ pub struct ValidatorState {
 
 impl ValidatorState {
     // TODO: Clock sync
-    // TODO: ID shouldn't be done like this
     pub fn new(
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
-        id: u64,
+        address: Address,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
     ) -> Result<ValidatorStatePtr> {
@@ -132,7 +129,7 @@ impl ValidatorState {
         let participating = false;
 
         let state = Arc::new(RwLock::new(ValidatorState {
-            id,
+            address,
             secret,
             public,
             consensus,
@@ -201,7 +198,7 @@ impl ValidatorState {
     /// Find epoch leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating
     /// in the network.
-    pub fn epoch_leader(&mut self) -> u64 {
+    pub fn epoch_leader(&mut self) -> Address {
         let epoch = self.current_epoch();
         // DefaultHasher is used to hash the epoch number
         // because it produces a number string which then can be modulated by the len.
@@ -211,12 +208,13 @@ impl ValidatorState {
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
         // Since BTreeMap orders by key in asceding order, each node will have
         // the same key in calculated position.
-        self.consensus.participants.iter().nth(pos as usize).unwrap().1.id
+        self.consensus.participants.iter().nth(pos as usize).unwrap().1.address
     }
 
     /// Check if we're the current epoch leader
     pub fn is_epoch_leader(&mut self) -> bool {
-        self.id == self.epoch_leader()
+        let address = self.address;
+        address == self.epoch_leader()
     }
 
     /// Generate a block proposal for the current epoch, containing all
@@ -241,7 +239,7 @@ impl ValidatorState {
         Ok(Some(BlockProposal::new(
             self.public,
             signed_proposal,
-            self.id,
+            self.address,
             prev_hash,
             epoch,
             unproposed_txs,
@@ -312,10 +310,11 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.epoch_leader();
-        if leader != proposal.id {
+        if leader != proposal.address {
             warn!(
                 "Received proposal not from epoch leader ({}), but from ({})",
-                leader, proposal.id
+                leader,
+                proposal.address.to_string()
             );
             return Ok(None)
         }
@@ -330,7 +329,7 @@ impl ValidatorState {
             .as_bytes(),
             &proposal.signature,
         ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.id);
+            warn!("Proposer ({}) signature could not be verified", proposal.address.to_string());
             return Ok(None)
         }
 
@@ -384,7 +383,13 @@ impl ValidatorState {
         }
 
         let signed_hash = self.secret.sign(&serialize(&proposal_hash));
-        Ok(Some(Vote::new(self.public, signed_hash, proposal_hash, proposal.block.sl, self.id)))
+        Ok(Some(Vote::new(
+            self.public,
+            signed_hash,
+            proposal_hash,
+            proposal.block.sl,
+            self.address,
+        )))
     }
 
     /// Verify if the provided chain is notarized excluding the last block.
@@ -449,7 +454,7 @@ impl ValidatorState {
         };
 
         if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
-            warn!(target: "consensus", "Voter ({}), signature couldn't be verified", vote.id);
+            warn!(target: "consensus", "Voter ({}), signature couldn't be verified", vote.address.to_string());
             return Ok((false, None))
         }
 
@@ -459,15 +464,15 @@ impl ValidatorState {
         let node_count = self.consensus.participants.len();
 
         // Checking that the voter can actually vote.
-        match self.consensus.participants.get(&vote.id) {
+        match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 if self.current_epoch() <= participant.joined {
-                    warn!(target: "consensus", "Voter ({}) joined after current epoch.", vote.id);
+                    warn!(target: "consensus", "Voter ({}) joined after current epoch.", vote.address.to_string());
                     return Ok((false, None))
                 }
             }
             None => {
-                warn!(target: "consensus", "Voter ({}) is not a participant!", vote.id);
+                warn!(target: "consensus", "Voter ({}) is not a participant!", vote.address.to_string());
                 return Ok((false, None))
             }
         }
@@ -513,9 +518,9 @@ impl ValidatorState {
         }
 
         // Updating participant vote
-        let mut participant = match self.consensus.participants.get(&vote.id) {
+        let mut participant = match self.consensus.participants.get(&vote.address) {
             Some(p) => p.clone(),
-            None => Participant::new(vote.id, vote.sl),
+            None => Participant::new(vote.address, vote.sl),
         };
 
         match participant.voted {
@@ -527,7 +532,7 @@ impl ValidatorState {
             None => participant.voted = Some(vote.sl),
         }
 
-        self.consensus.participants.insert(participant.id, participant);
+        self.consensus.participants.insert(participant.address, participant);
         Ok((true, Some(to_broadcast)))
     }
 
@@ -646,12 +651,6 @@ impl ValidatorState {
         Ok(finalized)
     }
 
-    /// Append node participant identity to the pending participants list.
-    pub fn append_self_participant(&mut self, participant: Participant) {
-        self.consensus.participant = Some(participant.clone());
-        self.append_participant(participant);
-    }
-
     /// Append a new participant to the pending participants list.
     pub fn append_participant(&mut self, participant: Participant) -> bool {
         if self.consensus.pending_participants.contains(&participant) {
@@ -677,7 +676,7 @@ impl ValidatorState {
 
         debug!("refresh_participants(): Adding pending participants");
         for participant in &self.consensus.pending_participants {
-            self.consensus.participants.insert(participant.id, participant.clone());
+            self.consensus.participants.insert(participant.address, participant.clone());
         }
 
         if self.consensus.participants.is_empty() {
@@ -711,7 +710,10 @@ impl ValidatorState {
             match participant.voted {
                 Some(epoch) => {
                     if epoch < last_epoch {
-                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
+                        warn!(
+                            "refresh_participants(): Inactive participant: {:?}",
+                            participant.address.to_string()
+                        );
                         inactive.push(*index);
                     }
                 }
@@ -719,7 +721,10 @@ impl ValidatorState {
                     if participant.joined < previous_epoch &&
                         participant.joined < previous_from_last_epoch
                     {
-                        warn!("refresh_participants(): Inactive participant: {:?}", participant);
+                        warn!(
+                            "refresh_participants(): Inactive participant: {:?}",
+                            participant.address.to_string()
+                        );
                         inactive.push(*index);
                     }
                 }
@@ -732,10 +737,8 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let mut participant = self.consensus.participant.clone().unwrap();
-            participant.joined = epoch;
-            self.consensus.participant = Some(participant.clone());
-            self.consensus.participants.insert(participant.id, participant.clone());
+            let participant = Participant::new(self.address, self.current_epoch());
+            self.consensus.participants.insert(participant.address, participant.clone());
         }
 
         self.consensus.refreshed = epoch;
@@ -753,7 +756,6 @@ impl ValidatorState {
             genesis_block,
             proposals: vec![],
             orphan_votes: vec![],
-            participant: None,
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,

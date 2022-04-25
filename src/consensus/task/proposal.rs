@@ -37,8 +37,9 @@ pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
     }
 
     // Node signals the network that it will start participating
-    let participant = Participant::new(state.read().await.id, state.read().await.current_epoch());
-    state.write().await.append_self_participant(participant.clone());
+    let participant =
+        Participant::new(state.read().await.address, state.read().await.current_epoch());
+    state.write().await.append_participant(participant.clone());
 
     match p2p.broadcast(participant).await {
         Ok(()) => info!("Consensus participation message broadcasted successfully."),

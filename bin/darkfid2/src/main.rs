@@ -7,7 +7,6 @@ use easy_parallel::Parallel;
 use futures_lite::future;
 use lazy_init::Lazy;
 use log::{error, info};
-use rand::Rng;
 use serde_derive::Deserialize;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use structopt::StructOpt;
@@ -257,12 +256,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             return Err(Error::UnsupportedChain)
         }
     };
-    // TODO: Is this ok?
-    let mut rng = rand::thread_rng();
-    let id: u64 = rng.gen();
+
+    // TODO: sqldb init cleanup
+    Client::new(wallet.clone()).await?;
+    let address = wallet.get_default_address().await?;
 
     // Initialize validator state
-    let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
+    let state = ValidatorState::new(&sled_db, address, genesis_ts, genesis_data)?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");

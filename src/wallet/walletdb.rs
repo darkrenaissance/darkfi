@@ -162,11 +162,11 @@ impl WalletDb {
 
         Ok(Keypair { secret, public })
     }
-    
+
     pub async fn get_default_address(&self) -> Result<Address> {
         debug!("Returning default address");
         let keypair = self.get_default_keypair().await?;
-        
+
         Ok(Address::from(keypair.public))
     }
 

@@ -25,7 +25,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         let response_sub = channel.subscribe_msg::<ConsensusResponse>().await?;
 
         // Node creates a `ConsensusRequest` and sends it
-        let request = ConsensusRequest { id: state.read().await.id };
+        let request = ConsensusRequest { address: state.read().await.address };
         channel.send(request).await?;
 
         // Node stores response data. Extra validations can be added here.

@@ -12,7 +12,7 @@ enum AddressType {
     Payment = 0,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Address(pub [u8; 37]);
 
 impl Address {

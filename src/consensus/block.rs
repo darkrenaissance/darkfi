@@ -4,7 +4,7 @@ use log::debug;
 
 use super::{Metadata, StreamletMetadata, Timestamp, Tx};
 use crate::{
-    crypto::{keypair::PublicKey, schnorr::Signature},
+    crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
     util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
@@ -109,8 +109,8 @@ pub struct BlockProposal {
     pub public_key: PublicKey,
     /// Block signature
     pub signature: Signature,
-    /// Leader ID
-    pub id: u64,
+    /// Leader address
+    pub address: Address,
     /// Block data
     pub block: BlockInfo,
 }
@@ -120,7 +120,7 @@ impl BlockProposal {
     pub fn new(
         public_key: PublicKey,
         signature: Signature,
-        id: u64,
+        address: Address,
         st: blake3::Hash,
         sl: u64,
         txs: Vec<Tx>,
@@ -128,7 +128,7 @@ impl BlockProposal {
         sm: StreamletMetadata,
     ) -> Self {
         let block = BlockInfo::new(st, sl, txs, metadata, sm);
-        Self { public_key, signature, id, block }
+        Self { public_key, signature, address, block }
     }
 
     /// Produce proposal hash using `st`, `sl`, `txs`, and `metadata`.
@@ -156,7 +156,7 @@ impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
         self.public_key == other.public_key &&
             self.signature == other.signature &&
-            self.id == other.id &&
+            self.address == other.address &&
             self.block.st == other.block.st &&
             self.block.sl == other.block.sl &&
             self.block.txs == other.block.txs &&
