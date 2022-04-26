@@ -194,6 +194,7 @@ blockchain = [
 	"crypto",
 	"tx",
 	"net",
+	"node",
 	"util",
 ]
 
