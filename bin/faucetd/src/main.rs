@@ -9,7 +9,6 @@ use futures_lite::future;
 use lazy_init::Lazy;
 use log::{debug, error, info};
 use num_bigint::BigUint;
-use rand::Rng;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -310,12 +309,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
-    // TODO: Is this ok?
-    let mut rng = rand::thread_rng();
-    let id: u64 = rng.gen();
+    // TODO: sqldb init cleanup
+    Client::new(wallet.clone()).await?;
+    let address = wallet.get_default_address().await?;
 
     // Initialize validator state
-    let state = ValidatorState::new(&sled_db, id, genesis_ts, genesis_data)?;
+    let state = ValidatorState::new(&sled_db, address, genesis_ts, genesis_data)?;
 
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
