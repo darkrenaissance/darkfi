@@ -63,7 +63,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let rpc_listener_taks =
         executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
 
-    let net_settings = settings.net; 
+    let net_settings = settings.net;
 
     //
     //Raft

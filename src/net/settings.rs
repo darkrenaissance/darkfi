@@ -46,7 +46,7 @@ impl Default for Settings {
 pub struct SettingsOpt {
     /// P2P accept address
     #[structopt(long = "accept")]
-    pub inbound: Option<SocketAddr>,     
+    pub inbound: Option<SocketAddr>,
 
     /// Connection slots
     #[structopt(long = "slots", default_value = "0")]
@@ -56,11 +56,11 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub external_addr: Option<SocketAddr>,
 
-    /// Peer nodes to connect to 
+    /// Peer nodes to connect to
     #[structopt(long)]
     pub peers: Vec<SocketAddr>,
 
-    /// Seed nodes to connect to 
+    /// Seed nodes to connect to
     #[structopt(long)]
     pub seeds: Vec<SocketAddr>,
 

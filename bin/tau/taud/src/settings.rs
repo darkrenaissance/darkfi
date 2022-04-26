@@ -29,4 +29,3 @@ pub struct Args {
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
 }
-
