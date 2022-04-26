@@ -7,6 +7,7 @@ use crate::crypto::{
 };
 
 /// In-memory state extension for state transition validations
+#[derive(Clone)]
 pub struct MemoryState {
     /// Canonical state
     pub canon: State,
@@ -45,7 +46,16 @@ impl ProgramState for MemoryState {
 }
 
 impl MemoryState {
-    pub async fn apply(&mut self, update: StateUpdate) {
+    pub fn new(canon_state: State) -> Self {
+        Self {
+            canon: canon_state.clone(),
+            tree: canon_state.tree,
+            merkle_roots: vec![],
+            nullifiers: vec![],
+        }
+    }
+
+    pub fn apply(&mut self, update: StateUpdate) {
         debug!(target: "state_apply", "(in-memory) Extend nullifier set");
         let mut nfs = update.nullifiers.clone();
         self.nullifiers.append(&mut nfs);

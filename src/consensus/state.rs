@@ -23,7 +23,10 @@ use crate::{
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
-    node::{Client, State},
+    node::{
+        state::{state_transition, StateUpdate},
+        Client, MemoryState, State,
+    },
     util::serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
@@ -805,6 +808,54 @@ impl ValidatorState {
         };
 
         self.consensus = consensus;
+        Ok(())
+    }
+
+    // ==========================
+    // State transition functions
+    // ==========================
+
+    /// Validate state transitions for given transactions and state and
+    /// return a vector of [`StateUpdate`]
+    pub fn validate_state_transitions(state: MemoryState, txs: &[Tx]) -> Result<Vec<StateUpdate>> {
+        let mut ret = vec![];
+        let mut st = state.clone();
+
+        for (i, tx) in txs.iter().enumerate() {
+            let update = match state_transition(&st, tx.0.clone()) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!("validate_state_transition(): Failed for tx {}: {}", i, e);
+                    return Err(e.into())
+                }
+            };
+            st.apply(update.clone());
+            ret.push(update);
+        }
+
+        Ok(ret)
+    }
+
+    /// Apply a vector of [`StateUpdate`] to the canonical state.
+    pub async fn update_canon_state(
+        &self,
+        updates: Vec<StateUpdate>,
+        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
+    ) -> Result<()> {
+        let secret_keys: Vec<SecretKey> =
+            self.client.get_keypairs().await?.iter().map(|x| x.secret).collect();
+
+        debug!("update_canon_state(): Acquiring state machine lock");
+        let mut state = self.state_machine.lock().await;
+        for update in updates {
+            state
+                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
+                .await?;
+        }
+        drop(state);
+        debug!("update_canon_state(): Dropped state machine lock");
+
+        debug!("update_canon_state(): Successfully applied state updates");
         Ok(())
     }
 }

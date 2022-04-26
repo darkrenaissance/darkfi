@@ -8,7 +8,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        keypair::{Keypair, PublicKey, SecretKey},
+        keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
         types::DrkTokenId,
@@ -194,31 +194,6 @@ impl Client {
         }
 
         Err(ClientFailed::NotEnoughValue(amount))
-    }
-
-    // TODO: Should this function run on finalized blocks and iterate over its transactions?
-    async fn update_state(
-        secret_keys: Vec<SecretKey>,
-        tx: Transaction,
-        state: Arc<Mutex<State>>,
-        wallet: WalletPtr,
-        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
-    ) -> Result<()> {
-        debug!("update_state(): Begin state update");
-        debug!("update_state(): Acquiring state lock");
-        let update;
-        {
-            let state = &*state.lock().await;
-            update = state_transition(state, tx)?;
-        }
-
-        debug!("update_state(): Trying to apply the new state");
-        let mut state = state.lock().await;
-        state.apply(update, secret_keys, notify, wallet).await?;
-        drop(state);
-        debug!("update_state(): Successfully updated state");
-
-        Ok(())
     }
 
     pub async fn init_db(&self) -> Result<()> {
