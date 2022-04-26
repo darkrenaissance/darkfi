@@ -100,6 +100,14 @@ struct Args {
     /// Connect to peer for the syncing protocol (repeatable flag)
     sync_peer: Vec<SocketAddr>,
 
+    #[structopt(long)]
+    /// Whitelisted cashier address (repeatable flag)
+    cashier_pub: Vec<String>,
+
+    #[structopt(long)]
+    /// Whitelisted faucet address (repeatable flag)
+    faucet_pub: Vec<String>,
+
     #[structopt(long, default_value = "600")]
     /// Airdrop timeout limit in seconds
     airdrop_timeout: i64,
@@ -194,7 +202,8 @@ impl Faucetd {
             }
         };
 
-        let amount = match decode_base10(params[1].as_str().unwrap(), 8, true) {
+        let amount = params[1].as_f64().unwrap().to_string();
+        let amount = match decode_base10(&amount, 8, true) {
             Ok(v) => v,
             Err(_) => {
                 error!("airdrop(): Failed parsing amount from string");
@@ -320,11 +329,34 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // TODO: sqldb init cleanup
     // Initialize client
-    let client = Arc::new(Client::new(wallet).await?);
+    let client = Arc::new(Client::new(wallet.clone()).await?);
+
+    // Parse cashier addresses
+    let mut cashier_pubkeys = vec![];
+    for i in args.cashier_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        cashier_pubkeys.push(pk);
+    }
+
+    // Parse faucet addresses
+    let mut faucet_pubkeys = vec![wallet.get_default_keypair().await?.public];
+    for i in args.faucet_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        faucet_pubkeys.push(pk);
+    }
 
     // Initialize validator state
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        client,
+        cashier_pubkeys,
+        faucet_pubkeys,
+    )
+    .await?;
 
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
