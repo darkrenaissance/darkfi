@@ -121,8 +121,7 @@ const LEAD_COIN_COMMIT2_X_OFFSET : usize = 12;
 const LEAD_COIN_COMMIT2_Y_OFFSET : usize = 13;
 
 #[derive(Debug,Default)]
-pub struct LeadContract
-{
+pub struct LeadContract {
     // witness
     pub path : Option<[MerkleNode;MERKLE_DEPTH_ORCHARD]>,
     pub root_sk : Option<pallas::Scalar>, // coins merkle tree secret key of coin1
@@ -135,10 +134,10 @@ pub struct LeadContract
     // public advices
     //
     //TODO implement two version of load_private one or point, other for base
-    // or templated load_private. then you would be able to read (x,y) from cm_c1
-    pub cm_c1 : Option<pallas::Base>, //TODO can't you read the x, y from the cell?
+    // or templated load_private. then you would be able to read (x,y) from cm_c
     pub cm_c1_x : Option<pallas::Base>,
     pub cm_c1_y : Option<pallas::Base>,
+    //
     pub cm_c2_x : Option<pallas::Base>,
     pub cm_c2_y : Option<pallas::Base>,
     //
@@ -339,11 +338,6 @@ impl Circuit<pallas::Base> for LeadContract {
         //let cm_c1_point : pallas::Point = pallas::Point::from(1);
         //let cm_c1 : AssignedCell<pallas::Point, pallas::Point> = cm_c1_point;
 
-        let cm_c1 = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.cm_c1,
-        )?;
 
         let cm_c1_x = self.load_private(
             layouter.namespace(|| ""),
@@ -590,8 +584,8 @@ impl Circuit<pallas::Base> for LeadContract {
         let coin_commit_x : AssignedCell<Fp, Fp> = coin_commit.inner().x();
         let coin_commit_y : AssignedCell<Fp, Fp> = coin_commit.inner().y();
 
-        let cm1_zero_out_x = ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_x, cm_c1_x)?;
-        let cm1_zero_out_y = ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_y, cm_c1_y)?;
+        let cm1_zero_out_x = ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_x.clone(), cm_c1_x)?;
+        let cm1_zero_out_y = ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_y.clone(), cm_c1_y)?;
 
         // constrain coin's pub key x value
         layouter.constrain_instance(
@@ -667,8 +661,22 @@ impl Circuit<pallas::Base> for LeadContract {
             path,
         );
 
+        let coin_commit_hash :  AssignedCell<Fp, Fp>  = {
+            let poseidon_message = [coin_commit_x.clone(), coin_commit_y.clone()];
+
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
+            )?;
+
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         let computed_final_root =
-            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), cm_c1)?;
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin_commit_hash  )?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
