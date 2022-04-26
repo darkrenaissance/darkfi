@@ -108,6 +108,14 @@ impl Blockchain {
         self.get_blocks_by_hash(&hashes)
     }
 
+    /// Retrieve n blocks after start slot.
+    pub fn get_blocks_after(&self, slot: u64, n: u64) -> Result<Vec<BlockInfo>> {
+        debug!("get_blocks_after(): {:?} - {:?}", slot, n);
+        let hashes = self.order.get_after(slot, n)?;
+
+        self.get_blocks_by_hash(&hashes)
+    }
+
     /// Check if the given [`BlockInfo`] is in the database
     pub fn has_block(&self, info: &BlockInfo) -> Result<bool> {
         let hashes = match self.order.get(&[info.sl], true) {

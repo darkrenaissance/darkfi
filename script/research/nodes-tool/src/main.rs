@@ -2,10 +2,10 @@ use std::{fs::File, io::Write};
 
 use darkfi::{
     blockchain::{
-        Blockchain,
         blockstore::{BlockOrderStore, BlockStore},
         metadatastore::StreamletMetadataStore,
         txstore::TxStore,
+        Blockchain,
     },
     consensus::{
         block::{Block, BlockProposal, ProposalChain},
@@ -17,23 +17,25 @@ use darkfi::{
         vote::Vote,
         TESTNET_GENESIS_HASH_BYTES,
     },
+    node::Client,
     util::expand_path,
+    wallet::walletdb::init_wallet,
     Result,
 };
 
 #[derive(Debug)]
 struct ParticipantInfo {
-    _id: u64,
+    _address: String,
     _joined: u64,
     _voted: Option<u64>,
 }
 
 impl ParticipantInfo {
     pub fn new(participant: &Participant) -> ParticipantInfo {
-        let _id = participant.id;
+        let _address = participant.address.to_string();
         let _joined = participant.joined;
         let _voted = participant.voted;
-        ParticipantInfo { _id, _joined, _voted }
+        ParticipantInfo { _address, _joined, _voted }
     }
 }
 
@@ -41,15 +43,15 @@ impl ParticipantInfo {
 struct VoteInfo {
     _proposal: blake3::Hash,
     _sl: u64,
-    _id: u64,
+    _address: String,
 }
 
 impl VoteInfo {
     pub fn new(vote: &Vote) -> VoteInfo {
         let _proposal = vote.proposal;
         let _sl = vote.sl;
-        let _id = vote.id;
-        VoteInfo { _proposal, _sl, _id }
+        let _address = vote.address.to_string();
+        VoteInfo { _proposal, _sl, _address }
     }
 }
 
@@ -109,7 +111,7 @@ impl MetadataInfo {
 
 #[derive(Debug)]
 struct ProposalInfo {
-    _id: u64,
+    _address: String,
     _st: blake3::Hash,
     _sl: u64,
     _txs: Vec<Tx>,
@@ -119,13 +121,13 @@ struct ProposalInfo {
 
 impl ProposalInfo {
     pub fn new(proposal: &BlockProposal) -> ProposalInfo {
-        let _id = proposal.id;
+        let _address = proposal.address.to_string();
         let _st = proposal.block.st;
         let _sl = proposal.block.sl;
         let _txs = proposal.block.txs.clone();
         let _metadata = MetadataInfo::new(&proposal.block.metadata);
         let _sm = StreamletMetadataInfo::new(&proposal.block.sm);
-        ProposalInfo { _id, _st, _sl, _txs, _metadata, _sm }
+        ProposalInfo { _address, _st, _sl, _txs, _metadata, _sm }
     }
 }
 
@@ -336,17 +338,17 @@ impl BlockchainInfo {
 
 #[derive(Debug)]
 struct StateInfo {
-    _id: u64,
+    _address: String,
     _consensus: ConsensusInfo,
     _blockchain: BlockchainInfo,
 }
 
 impl StateInfo {
     pub fn new(state: &ValidatorState) -> StateInfo {
-        let _id = state.id;
+        let _address = state.address.to_string();
         let _consensus = ConsensusInfo::new(&state.consensus);
         let _blockchain = BlockchainInfo::new(&state.blockchain);
-        StateInfo { _id, _consensus, _blockchain }
+        StateInfo { _address, _consensus, _blockchain }
     }
 }
 
@@ -356,16 +358,27 @@ async fn main() -> Result<()> {
     let genesis_ts = Timestamp(1648383795);
     let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
     for i in 0..nodes {
-        let path = format!("~/.config/darkfi/validatord_db_{:?}", i);
+        // Initialize or load wallet
+        let path = format!("../../../tmp/node{:?}/wallet.db", i);
+        let pass = "changeme";
+        let wallet = init_wallet(&path, &pass).await?;
+        Client::new(wallet.clone()).await?;
+        let address = wallet.get_default_address().await?;
+
+        // Initialize or load sled database
+        let path = format!("../../../tmp/node{:?}/blockchain/testnet", i);
         let db_path = expand_path(&path).unwrap();
         let sled_db = sled::open(&db_path)?;
-        println!("Export data from sled database: {:?}", db_path);
-        let state = ValidatorState::new(&sled_db, i, genesis_ts, genesis_data)?;
+
+        // Data export
+        println!("Exporting data for node{:?} - {:?}", i, address.to_string());
+        let state = ValidatorState::new(&sled_db, address, genesis_ts, genesis_data)?;
         let info = StateInfo::new(&*state.read().await);
         let info_string = format!("{:#?}", info);
-        let path = format!("validatord_state_{:?}", i);
+        let path = format!("node{:?}_testnet_db", i);
         let mut file = File::create(path)?;
         file.write(info_string.as_bytes())?;
+        drop(sled_db);
     }
 
     Ok(())

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../../"
-features = ["blockchain"]
+features = ["blockchain", "node", "wallet"]
 
 [dependencies]
 

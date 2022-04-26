@@ -140,6 +140,27 @@ impl BlockOrderStore {
         Ok(ret)
     }
 
+    /// Retrieve n hashes after given slot.
+    pub fn get_after(&self, slot: u64, n: u64) -> Result<Vec<blake3::Hash>> {
+        let mut ret = vec![];
+
+        let mut key = slot;
+        let mut counter = 0;
+        while counter <= n {
+            if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
+                let key_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+                key = u64::from_be_bytes(key_bytes);
+                let block_hash = deserialize(&found.1)?;
+                ret.push(block_hash);
+                counter = counter + 1;
+            } else {
+                break
+            }
+        }
+
+        Ok(ret)
+    }
+
     /// Retrieve the last block hash in the tree, based on the Ord
     /// implementation for Vec<u8>.
     pub fn get_last(&self) -> Result<Option<(u64, blake3::Hash)>> {

@@ -405,6 +405,7 @@ impl ValidatorState {
 
     /// Given a proposal, find the index of the chain it extends.
     pub fn find_extended_chain_index(&mut self, proposal: &BlockProposal) -> Result<i64> {
+        let mut fork = None;
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
             let hash = last.hash();
@@ -416,6 +417,23 @@ impl ValidatorState {
                 debug!("find_extended_chain_index(): Proposal already received");
                 return Ok(-2)
             }
+
+            if proposal.block.st == last.block.st && proposal.block.sl > last.block.sl {
+                fork = Some(chain.clone());
+            }
+        }
+
+        match fork {
+            Some(mut chain) => {
+                debug!("Proposal to fork a forkchain was received.");
+                chain.proposals.pop(); // removing last block to create the fork
+                if chain.proposals.len() > 0 {
+                    // if len is 0 we will verify against blockchain last block
+                    self.consensus.proposals.push(chain);
+                    return Ok(self.consensus.proposals.len() as i64 - 1)
+                }
+            }
+            None => (),
         }
 
         let (last_sl, last_block) = self.blockchain.last()?.unwrap();
@@ -486,7 +504,7 @@ impl ValidatorState {
         };
 
         if proposal.is_none() {
-            warn!(target: "consensus", "Received vote for unknown proposal.");
+            debug!(target: "consensus", "Received vote for unknown proposal.");
             if !self.consensus.orphan_votes.contains(vote) {
                 self.consensus.orphan_votes.push(vote.clone());
             }
@@ -679,7 +697,7 @@ impl ValidatorState {
             self.consensus.participants.insert(participant.address, participant.clone());
         }
 
-        if self.consensus.participants.is_empty() {
+        if self.consensus.pending_participants.is_empty() {
             debug!(
                 "refresh_participants(): Didn't manage to add any participant, pending were empty."
             );
@@ -702,8 +720,8 @@ impl ValidatorState {
         let previous_from_last_epoch = last_epoch - 1;
 
         debug!(
-            "refresh_participants(): Checking epochs: previous - {:?}, last - {:?}",
-            previous_epoch, last_epoch
+            "refresh_participants(): Node {:?} checking epochs: previous - {:?}, last - {:?}, previous from last - {:?}",
+            self.address.to_string(), previous_epoch, last_epoch, previous_from_last_epoch
         );
 
         for (index, participant) in self.consensus.participants.clone().iter() {
@@ -711,8 +729,10 @@ impl ValidatorState {
                 Some(epoch) => {
                     if epoch < last_epoch {
                         warn!(
-                            "refresh_participants(): Inactive participant: {:?}",
-                            participant.address.to_string()
+                            "refresh_participants(): Inactive participant: {:?} (joined {:?}, voted {:?})",
+                            participant.address.to_string(),
+                            participant.joined,
+                            participant.voted
                         );
                         inactive.push(*index);
                     }
@@ -722,8 +742,10 @@ impl ValidatorState {
                         participant.joined < previous_from_last_epoch
                     {
                         warn!(
-                            "refresh_participants(): Inactive participant: {:?}",
-                            participant.address.to_string()
+                            "refresh_participants(): Inactive participant: {:?} (joined {:?}, voted {:?})",
+                            participant.address.to_string(),
+                            participant.joined,
+                            participant.voted
                         );
                         inactive.push(*index);
                     }
