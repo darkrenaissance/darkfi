@@ -1,5 +1,5 @@
 use async_std::net::{TcpListener, TcpStream};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use async_channel::Receiver;
 use async_executor::Executor;
@@ -16,7 +16,7 @@ use darkfi::{
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config},
-        path::get_config_path,
+        path::{expand_path, get_config_path},
     },
     Error, Result,
 };
@@ -103,7 +103,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
-    let datastore_path = PathBuf::from(&settings.datastore);
+    let datastore_path = expand_path(&settings.datastore)?;
 
     let net_settings = settings.net;
     //
