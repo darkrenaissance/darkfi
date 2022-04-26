@@ -1,8 +1,10 @@
 use async_std::future::timeout;
 use std::time::Duration;
+
+use log::error;
 use url::Url;
 
-use crate::Result;
+use crate::{Error, Result};
 
 use super::{Channel, ChannelPtr, SettingsPtr, TcpTransport, TlsTransport, Transport};
 
@@ -24,13 +26,39 @@ impl Connector {
                 match connect_url.scheme() {
                     "tcp" => {
                         let transport = TcpTransport::new(None, 1024);
-                        let stream = transport.dial(connect_url.clone())?.await?;
-                        Ok(Channel::new(Box::new(stream), connect_url).await)
+                        let stream = transport.dial(connect_url.clone());
+
+                        if let Err(err) = stream {
+                            error!("Setup failed: {}", err);
+                            return Err(Error::ConnectFailed)
+                        }
+
+                        let stream = stream?.await;
+
+                        if let Err(err) = stream {
+                            error!("Connection failed: {}", err);
+                            return Err(Error::ConnectFailed)
+                        }
+
+                        Ok(Channel::new(Box::new(stream?), connect_url).await)
                     }
                     "tls" => {
                         let transport = TlsTransport::new(None, 1024);
-                        let stream = transport.dial(connect_url.clone())?.await?;
-                        Ok(Channel::new(Box::new(stream), connect_url).await)
+                        let stream = transport.dial(connect_url.clone());
+
+                        if let Err(err) = stream {
+                            error!("Setup failed: {}", err);
+                            return Err(Error::ConnectFailed)
+                        }
+
+                        let stream = stream?.await;
+
+                        if let Err(err) = stream {
+                            error!("Connection failed: {}", err);
+                            return Err(Error::ConnectFailed)
+                        }
+
+                        Ok(Channel::new(Box::new(stream?), connect_url).await)
                     }
                     "tor" => todo!(),
                     _ => unimplemented!(),

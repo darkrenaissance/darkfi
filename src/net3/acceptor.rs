@@ -1,6 +1,8 @@
 use async_std::{stream::StreamExt, sync::Arc};
+use std::net::SocketAddr;
 
 use futures_rustls::TlsStream;
+use log::error;
 use smol::Executor;
 use url::Url;
 
@@ -10,6 +12,12 @@ use crate::{
 };
 
 use super::{Channel, ChannelPtr, TcpTransport, TlsTransport, Transport};
+
+/// A helper function to convert peer addr to Url and add scheme
+fn peer_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
+    let url = Url::parse(&format!("{}://{}", scheme, addr.to_string()))?;
+    Ok(url)
+}
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -64,28 +72,78 @@ impl Acceptor {
         match accept_url.scheme() {
             "tcp" => {
                 let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(accept_url)?.await?;
+                let listener = transport.listen_on(accept_url);
+
+                if let Err(err) = listener {
+                    error!("Setup failed: {}", err);
+                    return Err(Error::OperationFailed)
+                }
+
+                let listener = listener?.await;
+
+                if let Err(err) = listener {
+                    error!("Bind listener failed: {}", err);
+                    return Err(Error::OperationFailed)
+                }
+
+                let listener = listener?;
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
-                    let stream = stream?;
-                    let mut peer_addr = Url::parse(&stream.peer_addr()?.to_string())?;
-                    peer_addr.set_scheme("tcp")?;
-                    let channel = Channel::new(Box::new(stream), peer_addr).await;
-                    self.channel_subscriber.notify(Ok(channel)).await;
+                    let result: Result<()> = {
+                        let stream = stream?;
+                        let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tcp")?;
+                        let channel = Channel::new(Box::new(stream), peer_addr).await;
+                        self.channel_subscriber.notify(Ok(channel)).await;
+                        Ok(())
+                    };
+
+                    if let Err(err) = result {
+                        error!("Error listening for connections: {}", err);
+                    }
                 }
             }
             "tls" => {
                 let transport = TlsTransport::new(None, 1024);
-                let (acceptor, listener) = transport.listen_on(accept_url)?.await?;
+
+                let listener = transport.listen_on(accept_url);
+
+                if let Err(err) = listener {
+                    error!("Setup failed: {}", err);
+                    return Err(Error::OperationFailed)
+                }
+
+                let listener = listener?.await;
+
+                if let Err(err) = listener {
+                    error!("Bind listener failed: {}", err);
+                    return Err(Error::OperationFailed)
+                }
+
+                let (acceptor, listener) = listener?;
+
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {
-                    let stream = stream?;
-                    let mut peer_addr = Url::parse(&stream.peer_addr()?.to_string())?;
-                    peer_addr.set_scheme("tls")?;
-                    let stream = acceptor.accept(stream).await?;
-                    let channel =
-                        Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
-                    self.channel_subscriber.notify(Ok(channel)).await;
+                    let result: Result<()> = {
+                        let stream = stream?;
+                        let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tls")?;
+
+                        let stream = acceptor.accept(stream).await;
+
+                        if let Err(err) = stream {
+                            error!("Error wraping the connection with tls: {}", err);
+                            return Err(Error::ServiceStopped)
+                        }
+
+                        let stream = stream?;
+                        let channel =
+                            Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
+                        self.channel_subscriber.notify(Ok(channel)).await;
+                        Ok(())
+                    };
+
+                    if let Err(err) = result {
+                        error!("Error listening for connections: {}", err);
+                    }
                 }
             }
             "tor" => todo!(),
@@ -106,20 +164,4 @@ impl Acceptor {
             }
         }
     }
-
-    ///// Single attempt to accept an incoming connection. Stops after one
-    ///// attempt.
-    //async fn tick_accept(&self, listener: &TcpListener) -> Result<ChannelPtr> {
-    //    let (stream, peer_addr) = match listener.accept().await {
-    //        Ok((s, a)) => (s, a),
-    //        Err(err) => {
-    //            error!("Error listening for connections: {}", err);
-    //            return Err(Error::ServiceStopped)
-    //        }
-    //    };
-    //    info!("Accepted client: {}", peer_addr);
-
-    //    let channel = Channel::new(Box::new(stream), peer_addr).await;
-    //    Ok(channel)
-    //}
 }
