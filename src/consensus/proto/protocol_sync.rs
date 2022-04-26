@@ -1,17 +1,18 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error, warn};
 
 use crate::{
     consensus::{
         block::{BlockInfo, BlockOrder, BlockResponse},
-        ValidatorStatePtr,
+        ValidatorState, ValidatorStatePtr,
     },
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
+    node::MemoryState,
     Result,
 };
 
@@ -85,8 +86,32 @@ impl ProtocolSync {
             if !self.consensus_mode {
                 let info_copy = (*info).clone();
                 if !self.state.read().await.blockchain.has_block(&info_copy)? {
+                    debug!("handle_receive_block(): Starting state transition validation");
+                    let canon_state_clone =
+                        self.state.read().await.state_machine.lock().await.clone();
+                    let mem_state = MemoryState::new(canon_state_clone);
+                    let state_updates =
+                        match ValidatorState::validate_state_transitions(mem_state, &info.txs) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                warn!("handle_receive_block(): State transition fail: {}", e);
+                                continue
+                            }
+                        };
+                    debug!("ProtocolSync::handle_receive_block(): All state transitions passed");
+
+                    debug!("ProtocolSync::handle_receive_block(): Updating canon state machine");
+                    match self.state.write().await.update_canon_state(state_updates, None).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!("Failed updating canon state machine: {}", e);
+                            continue
+                        }
+                    }
+
                     debug!("ProtocolSync::handle_receive_block(): Appending block to ledger");
                     self.state.write().await.blockchain.add(&[info_copy.clone()])?;
+
                     self.state.write().await.remove_txs(info_copy.txs.clone())?;
                     self.p2p.broadcast(info_copy).await?;
                 }
