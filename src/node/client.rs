@@ -31,7 +31,7 @@ use crate::{
 /// This includes, receiving, broadcasting, and building.
 pub struct Client {
     pub main_keypair: Mutex<Keypair>,
-    wallet: WalletPtr,
+    pub wallet: WalletPtr,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
 }

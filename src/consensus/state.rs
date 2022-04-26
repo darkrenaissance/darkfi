@@ -5,8 +5,9 @@ use std::{
     time::Duration,
 };
 
-use async_std::sync::{Arc, RwLock};
+use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
+use lazy_init::Lazy;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
@@ -22,6 +23,7 @@ use crate::{
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
+    node::{Client, State},
     util::serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
@@ -107,6 +109,10 @@ pub struct ValidatorState {
     pub consensus: ConsensusState,
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
+    /// Canonical state machine
+    pub state_machine: Arc<Mutex<State>>,
+    /// Client providing wallet access
+    pub client: Client,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Tx>,
     /// Participation flag
@@ -115,11 +121,13 @@ pub struct ValidatorState {
 
 impl ValidatorState {
     // TODO: Clock sync
-    pub fn new(
+    pub async fn new(
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
-        address: Address,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
+        client: Client,
+        cashier_pubkeys: Vec<PublicKey>,
+        faucet_pubkeys: Vec<PublicKey>,
     ) -> Result<ValidatorStatePtr> {
         let secret = SecretKey::random(&mut OsRng);
         let public = PublicKey::from_secret(secret);
@@ -128,12 +136,25 @@ impl ValidatorState {
         let unconfirmed_txs = vec![];
         let participating = false;
 
+        let address = client.wallet.get_default_address().await?;
+        let state_machine = Arc::new(Mutex::new(State {
+            tree: client.get_tree().await?,
+            merkle_roots: blockchain.merkle_roots.clone(),
+            nullifiers: blockchain.nullifiers.clone(),
+            cashier_pubkeys,
+            faucet_pubkeys,
+            mint_vk: Lazy::new(),
+            burn_vk: Lazy::new(),
+        }));
+
         let state = Arc::new(RwLock::new(ValidatorState {
             address,
             secret,
             public,
             consensus,
             blockchain,
+            state_machine,
+            client,
             unconfirmed_txs,
             participating,
         }));

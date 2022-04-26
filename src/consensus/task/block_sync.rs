@@ -36,8 +36,8 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             channel.send(order).await?;
 
             // Node stores response data. Extra validations can be added here.
-            let response = response_sub.receive().await?;
-            state.write().await.blockchain.add(&response.blocks)?;
+            let resp = response_sub.receive().await?;
+            state.write().await.blockchain.add(&resp.blocks)?;
 
             let last_received = state.read().await.blockchain.last()?.unwrap();
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);
