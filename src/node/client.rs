@@ -149,10 +149,8 @@ impl Client {
         Ok((tx, coins))
     }
 
-    // TODO: This was changed so it does not broadcast transactions anymore.
-    // Instead, it returns the transaction itself, which is then able to be
-    // arbitrarily broadcasted. Rename the function from send() to a better name.
-    pub async fn send(
+    /// Build a transaction given the required parameters and state machine.
+    pub async fn build_transaction(
         &self,
         pubkey: PublicKey,
         amount: u64,
@@ -179,22 +177,23 @@ impl Client {
         Ok(tx)
     }
 
-    pub async fn transfer(
-        &self,
-        token_id: DrkTokenId,
-        pubkey: PublicKey,
-        amount: u64,
-        state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
-        debug!("transfer(): Start transfer {}", amount);
-        if self.wallet.token_id_exists(token_id).await? {
-            self.send(pubkey, amount, token_id, false, state).await?;
-            debug!("transfer(): Finish transfer {}", amount);
-            return Ok(())
-        }
-
-        Err(ClientFailed::NotEnoughValue(amount))
-    }
+    // TODO
+    // pub async fn transfer(
+    // &self,
+    // token_id: DrkTokenId,
+    // pubkey: PublicKey,
+    // amount: u64,
+    // state: Arc<Mutex<State>>,
+    // ) -> ClientResult<()> {
+    // debug!("transfer(): Start transfer {}", amount);
+    // if self.wallet.token_id_exists(token_id).await? {
+    // self.send(pubkey, amount, token_id, false, state).await?;
+    // debug!("transfer(): Finish transfer {}", amount);
+    // return Ok(())
+    // }
+    //
+    //      Err(ClientFailed::NotEnoughValue(amount))
+    //}
 
     pub async fn init_db(&self) -> Result<()> {
         self.wallet.init_db().await

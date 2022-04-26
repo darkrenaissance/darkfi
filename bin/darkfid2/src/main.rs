@@ -360,7 +360,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     }
 
     // Consensus protocol
-    if args.consensus {
+    if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
         consensus_p2p.clone().unwrap().start(ex.clone()).await?;
         let _ex = ex.clone();
@@ -374,6 +374,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
         info!("Starting consensus protocol task");
         ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
+    } else {
+        info!("Not starting consensus P2P network");
     }
 
     // Wait for SIGINT
