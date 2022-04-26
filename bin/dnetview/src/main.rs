@@ -30,7 +30,7 @@ use dnetview::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     ui,
-    util::{generate_id, make_connect_id, make_node_id, make_session_id},
+    util::{generate_id, make_connect_id, make_empty_id, make_node_id, make_session_id},
     view::{ConnectInfoView, IdListView, InfoListView, NodeInfoView, SessionInfoView, View},
 };
 
@@ -220,14 +220,16 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
     let session_id = make_session_id(node_id.clone(), &session_type)?;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let connections = &inbound["connected"];
+    let mut connect_count = 0;
 
     match connections.as_object() {
         Some(connect) => {
             match connect.is_empty() {
                 true => {
+                    connect_count += 1;
                     // channel is empty. initialize with empty values
                     // TODO: fix this
-                    let connect_id = generate_id()?;
+                    let connect_id = make_empty_id(node_id.clone(), &session_type, connect_count)?;
                     let addr = "Null".to_string();
                     let msg = "Null".to_string();
                     let status = "Null".to_string();
@@ -305,15 +307,17 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let slots = &outbound["slots"];
     let session_id = make_session_id(node_id.clone(), &session_type)?;
+    let mut slot_count = 0;
 
     match slots.as_array() {
         Some(slots) => {
             for slot in slots {
+                slot_count += 1;
                 match slot["channel"].is_null() {
                     true => {
                         // channel is empty. initialize with empty values
                         // TODO: fix this
-                        let connect_id = generate_id()?;
+                        let connect_id = make_empty_id(node_id.clone(), &session_type, slot_count)?;
                         let is_empty = true;
                         let addr = "Null".to_string();
                         let state = &slot["state"];

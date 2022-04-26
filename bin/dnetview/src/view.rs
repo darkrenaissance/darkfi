@@ -92,8 +92,20 @@ impl View {
                             nodes.push(names);
                             //nodes.push(node);
                         }
-                        SelectableObject::Session(info) => self.session_info.clone().render(info),
-                        SelectableObject::Connect(info) => self.connect_info.clone().render(info),
+                        SelectableObject::Session(info) => {
+                            let name_span = Span::raw(&info.session_name);
+                            let lines = vec![Spans::from(name_span)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+                            //self.session_info.clone().render(info),
+                        }
+                        SelectableObject::Connect(info) => {
+                            let name_span = Span::raw(&info.connect_id);
+                            let lines = vec![Spans::from(name_span)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+                            //self.connect_info.clone().render(info),
+                        }
                     }
                     //
                 }

@@ -45,6 +45,35 @@ pub fn generate_id() -> Result<String> {
     Ok(serial::serialize_hex(&id))
 }
 
+pub fn make_empty_id(node_id: String, session: &Session, count: u64) -> Result<String> {
+    let mut num = 0_u64;
+
+    match session {
+        Session::Inbound => {
+            for i in ['i', 'n'] {
+                num += i as u64;
+            }
+        }
+        Session::Outbound => {
+            for i in ['o', 'u', 't'] {
+                num += i as u64;
+            }
+        }
+        Session::Manual => {
+            for i in ['m', 'a', 'n'] {
+                num += i as u64;
+            }
+        }
+    }
+
+    for i in node_id.chars() {
+        num += i as u64
+    }
+
+    num += count;
+
+    Ok(serial::serialize_hex(&num))
+}
 //pub fn is_empty_outbound(slots: Vec<Slot>) -> bool {
 //    return slots.iter().all(|slot| slot.is_empty);
 //}
