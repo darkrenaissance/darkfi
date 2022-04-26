@@ -306,6 +306,16 @@ fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Valu
             })
             .collect(),
 
+        "month" => tasks
+            .into_iter()
+            .filter(|task| {
+                let date = task["created_at"].as_i64().unwrap();
+                let task_month = NaiveDateTime::from_timestamp(date, 0).month();
+                let this_month = Local::today().month();
+                task_month == this_month
+            })
+            .collect(),
+
         _ if filter.contains("assign:") | filter.contains("project:") => {
             let kv: Vec<&str> = filter.split(':').collect();
             let key = kv[0];
