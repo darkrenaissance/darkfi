@@ -352,7 +352,7 @@ impl<T: std::fmt::Display> From<crate::net3::transport::TransportError<T>> for E
     }
 }
 
-#[cfg(feature = "net3")]
+#[cfg(feature = "async-std")]
 impl From<async_std::future::TimeoutError> for Error {
     fn from(_err: async_std::future::TimeoutError) -> Self {
         Self::TimeoutError
