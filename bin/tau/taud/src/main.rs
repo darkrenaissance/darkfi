@@ -32,7 +32,7 @@ use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
     month_tasks::MonthTasks,
-    settings::{Args, Command, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
 };
 
@@ -63,14 +63,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let rpc_listener_taks =
         executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
 
-    let net_settings = match settings.command {
-        Some(Command::Net(s)) => s,
-        None => {
-            warn!("run without connecting to raft and p2p network");
-            rpc_listener_taks.await?;
-            return Ok(())
-        }
-    };
+    let net_settings = settings.net; 
 
     //
     //Raft
@@ -124,7 +117,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     // blocking
-    raft.start(net_settings, executor.clone(), shutdown.clone()).await?;
+    raft.start(net_settings.into(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }

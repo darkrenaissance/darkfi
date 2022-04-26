@@ -30,7 +30,7 @@ use crate::{
     privmsg::Privmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
-    settings::{Args, Command, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
 async fn process_user_input(
@@ -105,10 +105,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let datastore_path = PathBuf::from(&settings.datastore);
 
-    let net_settings = match settings.command {
-        Command::Net(s) => s,
-    };
-
+    let net_settings = settings.net;
     //
     //Raft
     //
@@ -168,7 +165,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     // blocking
-    raft.start(net_settings, executor.clone(), shutdown.clone()).await?;
+    raft.start(net_settings.into(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }
