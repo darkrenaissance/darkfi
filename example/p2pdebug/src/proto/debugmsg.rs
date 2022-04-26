@@ -8,7 +8,7 @@ use fxhash::FxHashSet;
 use log::debug;
 
 use darkfi::{
-    net2 as net,
+    net3 as net,
     util::serial::{SerialDecodable, SerialEncodable},
     Result,
 };
@@ -47,16 +47,16 @@ impl SeenDebugmsgIds {
     }
 }
 
-pub struct ProtocolDebugmsg<T: net::Transport> {
+pub struct ProtocolDebugmsg {
     notify_queue_sender: Sender<Arc<Debugmsg>>,
     debugmsg_sub: net::MessageSubscription<Debugmsg>,
-    jobsman: net::ProtocolJobsManagerPtr<T>,
+    jobsman: net::ProtocolJobsManagerPtr,
     seen_ids: SeenDebugmsgIdsPtr,
-    p2p: net::P2pPtr<T>,
+    p2p: net::P2pPtr,
 }
 
 #[async_trait]
-impl<T: net::Transport> net::ProtocolBase for ProtocolDebugmsg<T> {
+impl net::ProtocolBase for ProtocolDebugmsg {
     /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
@@ -73,12 +73,12 @@ impl<T: net::Transport> net::ProtocolBase for ProtocolDebugmsg<T> {
     }
 }
 
-impl<T: net::Transport> ProtocolDebugmsg<T> {
+impl ProtocolDebugmsg {
     pub async fn init(
-        channel: net::ChannelPtr<T>,
+        channel: net::ChannelPtr,
         notify_queue_sender: Sender<Arc<Debugmsg>>,
         seen_ids: SeenDebugmsgIdsPtr,
-        p2p: net::P2pPtr<T>,
+        p2p: net::P2pPtr,
     ) -> net::ProtocolBasePtr {
         let message_subsystem = channel.get_message_subsystem();
         message_subsystem.add_dispatch::<Debugmsg>().await;

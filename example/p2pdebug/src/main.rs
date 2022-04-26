@@ -3,13 +3,12 @@ use std::sync::Arc;
 use async_executor::Executor;
 use clap::Parser;
 use easy_parallel::Parallel;
+use rand::{rngs::OsRng, Rng, RngCore};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
-use rand::{rngs::OsRng, Rng, RngCore};
 
-use darkfi::net2 as net;
 use darkfi::{
-    cli_desc,
+    cli_desc, net3 as net,
     util::{cli::log_config, sleep},
     Result,
 };
@@ -33,6 +32,9 @@ struct Args {
     /// broadcast messages
     #[clap(short, long)]
     broadcast: bool,
+    /// communicate using tls protocol by default is tcp
+    #[clap(long)]
+    tls: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -50,11 +52,11 @@ struct MockP2p {
 }
 
 impl MockP2p {
-    async fn new(node_number: u8, _broadcast: bool) -> Result<(net::P2pPtr<impl net::Transport>, Self)> {
+    async fn new(node_number: u8, _broadcast: bool, scheme: &str) -> Result<(net::P2pPtr, Self)> {
         let seed_addrs: Vec<Url> = vec![
-            Url::parse("tcp://127.0.0.1:11001")?,
-            Url::parse("tcp://127.0.0.1:11002")?,
-            Url::parse("tcp://127.0.0.1:11003")?,
+            Url::parse(&format!("{}://127.0.0.1:11001", scheme))?,
+            Url::parse(&format!("{}://127.0.0.1:11002", scheme))?,
+            Url::parse(&format!("{}://127.0.0.1:11003", scheme))?,
         ];
 
         let state: State;
@@ -67,7 +69,7 @@ impl MockP2p {
                 address = Some(seed_addrs[node_number as usize].clone());
 
                 let net_settings = net::Settings { inbound: address.clone(), ..Default::default() };
-                let p2p = net::P2p::<net::TcpTransport>::new(net_settings).await;
+                let p2p = net::P2p::new(net_settings).await;
 
                 broadcast = false;
                 state = State::Seed;
@@ -76,7 +78,7 @@ impl MockP2p {
             }
             3..=20 => {
                 let random_port: u32 = rand::thread_rng().gen_range(11007..49151);
-                address = Some(format!("tcp://127.0.0.1:{}", random_port).parse()?);
+                address = Some(format!("{}://127.0.0.1:{}", scheme, random_port).parse()?);
 
                 let net_settings = net::Settings {
                     inbound: address.clone(),
@@ -85,7 +87,7 @@ impl MockP2p {
                     ..Default::default()
                 };
 
-                let p2p = net::P2p::<net::TcpTransport>::new(net_settings).await;
+                let p2p = net::P2p::new(net_settings).await;
 
                 state = State::Inbound;
 
@@ -100,7 +102,7 @@ impl MockP2p {
                     ..Default::default()
                 };
 
-                let p2p = net::P2p::<net::TcpTransport>::new(net_settings).await;
+                let p2p = net::P2p::new(net_settings).await;
                 state = State::Outbound;
 
                 p2p
@@ -112,7 +114,7 @@ impl MockP2p {
         Ok((p2p, Self { node_number, state, broadcast, address }))
     }
 
-    async fn run(&self, p2p: net::P2pPtr<impl net::Transport>, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn run(&self, p2p: net::P2pPtr, executor: Arc<Executor<'_>>) -> Result<()> {
         let state = self.state.clone();
         let node_number = self.node_number;
         let address = self.address.clone();
@@ -125,7 +127,7 @@ impl MockP2p {
 
         let registry = p2p.protocol_registry();
         registry
-            .register(!net::SESSION_SEED, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, p2p| {
                 let sender = sender_clone.clone();
                 let seen_debugmsg_ids = seen_debugmsg_ids_clone.clone();
                 async move { ProtocolDebugmsg::init(channel, sender, seen_debugmsg_ids, p2p).await }
@@ -171,7 +173,7 @@ impl MockP2p {
                     let msg = receiver.recv().await.unwrap();
                     println!(
                         "receive {:?} {:?} node #{} address {:?}",
-                        msg, state, node_number, address_cloned 
+                        msg, state, node_number, address_cloned
                     );
                     seen_debugmsg_ids_clone.add_seen(msg.id).await;
                 }
@@ -184,7 +186,9 @@ impl MockP2p {
 }
 
 async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
-    let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast).await?;
+    let scheme = if args.tls { "tls" } else { "tcp" };
+
+    let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, scheme).await?;
     mock_p2p.run(p2p.clone(), executor).await
 }
 
