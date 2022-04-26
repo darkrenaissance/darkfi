@@ -115,7 +115,7 @@ pub struct ValidatorState {
     /// Canonical state machine
     pub state_machine: Arc<Mutex<State>>,
     /// Client providing wallet access
-    pub client: Client,
+    pub client: Arc<Client>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Tx>,
     /// Participation flag
@@ -128,7 +128,7 @@ impl ValidatorState {
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
-        client: Client,
+        client: Arc<Client>,
         cashier_pubkeys: Vec<PublicKey>,
         faucet_pubkeys: Vec<PublicKey>,
     ) -> Result<ValidatorStatePtr> {
