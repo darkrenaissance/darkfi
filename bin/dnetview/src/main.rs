@@ -31,7 +31,7 @@ use dnetview::{
     options::ProgramOptions,
     ui,
     util::{generate_id, make_connect_id, make_node_id, make_session_id},
-    view::{IdListView, InfoListView, View},
+    view::{ConnectInfoView, IdListView, InfoListView, NodeInfoView, SessionInfoView, View},
 };
 
 struct DNetView {
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
     terminal.clear()?;
 
     let ids = Mutex::new(FxHashSet::default());
-    let infos = Mutex::new(FxHashMap::default());
+    let infos = Mutex::new(Vec::new());
 
     let model = Arc::new(Model::new(ids, infos));
 
@@ -180,10 +180,11 @@ async fn parse_data(
     let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
     let node = SelectableObject::Node(node_info.clone());
 
+    // we might simplify things by making this a Vec<SelectableObject>
     update_model(model.clone(), sessions.clone(), node_info, node).await?;
 
-    debug!("IDS: {:?}", model.ids.lock().await);
-    debug!("INFOS: {:?}", model.infos.lock().await);
+    //debug!("IDS: {:?}", model.ids.lock().await);
+    //debug!("INFOS: {:?}", model.infos.lock().await);
 
     Ok(())
 }
@@ -194,19 +195,27 @@ async fn update_model(
     node_info: NodeInfo,
     node: SelectableObject,
 ) -> Result<()> {
+    model.ids.lock().await.insert(node_info.node_id.clone());
+    model.infos.lock().await.push(node);
+
     for session in sessions.clone() {
-        model.ids.lock().await.insert(session.session_id);
+        model.ids.lock().await.insert(session.clone().session_id);
+
+        let session_obj = SelectableObject::Session(session.clone());
+        model.infos.lock().await.push(session_obj);
+
         for connect in session.children {
-            model.ids.lock().await.insert(connect.connect_id);
+            model.ids.lock().await.insert(connect.clone().connect_id);
+            let connect_obj = SelectableObject::Connect(connect.clone());
+            model.infos.lock().await.push(connect_obj);
         }
     }
-    model.ids.lock().await.insert(node_info.node_id.clone());
-    model.infos.lock().await.insert(node_info.node_id.clone(), node);
 
     Ok(())
 }
 
 async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_name = "Inbound".to_string();
     let session_type = Session::Inbound;
     let session_id = make_session_id(node_id.clone(), &session_type)?;
     let mut connects: Vec<ConnectInfo> = Vec::new();
@@ -254,8 +263,12 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
                     }
                 }
             }
-            let session_info =
-                SessionInfo::new(session_id.clone(), node_id.clone(), connects.clone());
+            let session_info = SessionInfo::new(
+                session_name,
+                session_id.clone(),
+                node_id.clone(),
+                connects.clone(),
+            );
             Ok(session_info)
         }
         None => Err(Error::ValueIsNotObject),
@@ -264,6 +277,7 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
 
 // TODO: placeholder for now
 async fn parse_manual(_manual: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_name = "Manual".to_string();
     let session_type = Session::Manual;
     let mut connects: Vec<ConnectInfo> = Vec::new();
 
@@ -280,12 +294,13 @@ async fn parse_manual(_manual: &Value, node_id: String) -> Result<SessionInfo> {
     let connect_info =
         ConnectInfo::new(connect_id, addr, is_empty, msg, status, state, msg_log, parent);
     connects.push(connect_info.clone());
-    let session_info = SessionInfo::new(session_id, node_id, connects.clone());
+    let session_info = SessionInfo::new(session_name, session_id, node_id, connects.clone());
 
     Ok(session_info)
 }
 
 async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo> {
+    let session_name = "Outbound".to_string();
     let session_type = Session::Outbound;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let slots = &outbound["slots"];
@@ -347,7 +362,8 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                     }
                 }
             }
-            let session_info = SessionInfo::new(session_id, node_id, connects.clone());
+            let session_info =
+                SessionInfo::new(session_name, session_id, node_id, connects.clone());
             Ok(session_info)
         }
         None => Err(Error::ValueIsNotObject),
@@ -361,15 +377,29 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
 
     let id_list = IdListView::new(FxHashSet::default());
     let info_list = InfoListView::new(FxHashMap::default());
-    let mut view = View::new(id_list.clone(), info_list.clone());
 
+    let node_view = NodeInfoView::default();
+    let session_view = SessionInfoView::default();
+    let connect_view = ConnectInfoView::default();
+
+    let mut view = View::new(
+        id_list.clone(),
+        info_list,
+        node_view.clone(),
+        session_view.clone(),
+        connect_view.clone(),
+    );
     view.id_list.state.select(Some(0));
     view.info_list.index = 0;
 
     loop {
-        view.update(model.infos.lock().await.clone());
+        //debug!("MODEL: {:?}", model.infos.lock().await.clone());
+        //debug!("VIEW BEFORE UPDATE: {:?}", &view.id_list.ids);
+        let mut view = view.clone().update(model.infos.lock().await.clone())?;
+        //debug!("VIEW AFTER UPDATE: {:?}", view.clone().id_list.ids);
+
         terminal.draw(|f| {
-            ui::ui(f, view.clone());
+            view.clone().render(f);
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {
@@ -378,10 +408,10 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.id_list.next();
+                    view.clone().id_list.next();
                 }
                 Key::Char('k') => {
-                    view.id_list.previous();
+                    view.clone().id_list.previous();
                 }
                 _ => (),
             }

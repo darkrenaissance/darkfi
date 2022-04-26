@@ -19,14 +19,12 @@ pub enum SelectableObject {
 
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
-    pub infos: Mutex<FxHashMap<String, SelectableObject>>,
+    pub infos: Mutex<Vec<SelectableObject>>,
+    //pub infos: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
 impl Model {
-    pub fn new(
-        ids: Mutex<FxHashSet<String>>,
-        infos: Mutex<FxHashMap<String, SelectableObject>>,
-    ) -> Model {
+    pub fn new(ids: Mutex<FxHashSet<String>>, infos: Mutex<Vec<SelectableObject>>) -> Model {
         Model { ids, infos }
     }
 }
@@ -46,14 +44,20 @@ impl NodeInfo {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
 pub struct SessionInfo {
+    pub session_name: String,
     pub session_id: String,
     pub parent: String,
     pub children: Vec<ConnectInfo>,
 }
 
 impl SessionInfo {
-    pub fn new(session_id: String, parent: String, children: Vec<ConnectInfo>) -> SessionInfo {
-        SessionInfo { session_id, parent, children }
+    pub fn new(
+        session_name: String,
+        session_id: String,
+        parent: String,
+        children: Vec<ConnectInfo>,
+    ) -> SessionInfo {
+        SessionInfo { session_name, session_id, parent, children }
     }
 }
 
