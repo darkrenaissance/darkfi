@@ -2,6 +2,7 @@ use std::{
     env::{temp_dir, var},
     fs::{self, File},
     io::{self, Read, Write},
+    net::SocketAddr,
     ops::Index,
     process::Command,
 };
@@ -9,17 +10,18 @@ use std::{
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use clap::{Parser, Subcommand};
 use log::error;
+use prettytable::{cell, format, row, Cell, Row, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use darkfi::{util::cli::UrlConfig, Error, Result};
+use darkfi::{Error, Result};
 
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml");
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TauConfig {
-    /// The address where taud should bind its RPC socket
-    pub rpc_listen: UrlConfig,
+    /// JSON-RPC listen URL
+    pub rpc_listen: SocketAddr,
 }
 
 #[derive(Subcommand)]
@@ -117,6 +119,9 @@ pub struct CliTau {
     pub config: Option<String>,
     #[clap(subcommand)]
     pub command: Option<CliTauSubCommands>,
+    #[clap(multiple_values = true)]
+    /// Search criteria (zero or more)
+    pub filter: Vec<String>,
 }
 
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
@@ -264,4 +269,153 @@ pub fn get_from_task(task: Value, value: &str) -> Result<String> {
         result.push_str(vec_values.index(i).as_str().unwrap());
     }
     Ok(result)
+}
+
+fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Value>> {
+    let filter = match filter {
+        Some(f) => f,
+        None => "all".to_string(),
+    };
+
+    let mut filtered_tasks: Vec<Value> = match filter.as_str() {
+        "all" => tasks,
+
+        "open" => tasks
+            .into_iter()
+            .filter(|task| {
+                let events = task["events"].as_array().unwrap().to_owned();
+
+                let state = match events.last() {
+                    Some(s) => s["action"].as_str().unwrap(),
+                    None => "open",
+                };
+                state == "open"
+            })
+            .collect(),
+
+        "pause" => tasks
+            .into_iter()
+            .filter(|task| {
+                let events = task["events"].as_array().unwrap().to_owned();
+
+                let state = match events.last() {
+                    Some(s) => s["action"].as_str().unwrap(),
+                    None => "open",
+                };
+                state == "pause"
+            })
+            .collect(),
+
+        _ if filter.contains("assign:") | filter.contains("project:") => {
+            let kv: Vec<&str> = filter.split(':').collect();
+            let key = kv[0];
+            let value = kv[1];
+
+            tasks
+                .into_iter()
+                .filter(|task| {
+                    task[key]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|s| s.as_str().unwrap())
+                        .any(|x| x == value)
+                })
+                .collect()
+        }
+
+        _ if filter.contains("rank>") | filter.contains("rank<") => {
+            let kv: Vec<&str> = if filter.contains('>') {
+                filter.split('>').collect()
+            } else {
+                filter.split('<').collect()
+            };
+            let key = kv[0];
+            let value = kv[1].parse::<f32>()?;
+
+            tasks
+                .into_iter()
+                .filter(|task| {
+                    let rank = task[key].as_f64().unwrap_or(0.0) as f32;
+                    if filter.contains('>') {
+                        rank > value
+                    } else {
+                        rank < value
+                    }
+                })
+                .collect()
+        }
+
+        _ => tasks,
+    };
+
+    filtered_tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
+
+    Ok(filtered_tasks)
+}
+
+pub fn list_tasks(rep: Value, filter: Vec<String>) -> Result<()> {
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
+
+    let tasks: Vec<Value> = serde_json::from_value(rep)?;
+
+    // we match up to 3 filters to keep things simple and avoid using loops
+    let tasks = match filter.len() {
+        1 => sort_and_filter(tasks, Some(filter[0].clone()))?,
+        2 => {
+            let res = sort_and_filter(tasks, Some(filter[0].clone()))?;
+            sort_and_filter(res, Some(filter[1].clone()))?
+        }
+        3 => {
+            let res1 = sort_and_filter(tasks, Some(filter[0].clone()))?;
+            let res2 = sort_and_filter(res1, Some(filter[1].clone()))?;
+            sort_and_filter(res2, Some(filter[2].clone()))?
+        }
+        _ => sort_and_filter(tasks, None)?,
+    };
+
+    let (max_rank, min_rank) = if !tasks.is_empty() {
+        (
+            serde_json::from_value(tasks[0]["rank"].clone())?,
+            serde_json::from_value(tasks[tasks.len() - 1]["rank"].clone())?,
+        )
+    } else {
+        (0.0, 0.0)
+    };
+
+    for task in tasks {
+        let events: Vec<Value> = serde_json::from_value(task["events"].clone())?;
+        let state = match events.last() {
+            Some(s) => s["action"].as_str().unwrap(),
+            None => "open",
+        };
+
+        let rank = task["rank"].as_f64().unwrap_or(0.0) as f32;
+
+        let (max_style, min_style, mid_style, gen_style) = if state == "open" {
+            ("bFC", "Fb", "Fc", "")
+        } else {
+            ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
+        };
+
+        table.add_row(Row::new(vec![
+            Cell::new(&task["id"].to_string()).style_spec(gen_style),
+            Cell::new(task["title"].as_str().unwrap()).style_spec(gen_style),
+            Cell::new(&get_from_task(task.clone(), "project")?).style_spec(gen_style),
+            Cell::new(&get_from_task(task.clone(), "assign")?).style_spec(gen_style),
+            Cell::new(&timestamp_to_date(task["due"].clone(), "date")).style_spec(gen_style),
+            if rank == max_rank {
+                Cell::new(&rank.to_string()).style_spec(max_style)
+            } else if rank == min_rank {
+                Cell::new(&rank.to_string()).style_spec(min_style)
+            } else {
+                Cell::new(&rank.to_string()).style_spec(mid_style)
+            },
+        ]));
+    }
+    table.printstd();
+
+    Ok(())
 }
