@@ -77,13 +77,17 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         if state.nullifier_exists(nullifier) {
             error!(target: "state_transition", "Duplicate nullifier found (input {})", i);
             debug!(target: "state_transition", "nullifier: {:?}", nullifier);
+            return Err(VerifyFailed::NullifierExists(i))
         }
     }
 
     debug!(target: "state_transition", "Verifying zk proofs");
     match tx.verify(state.mint_vk(), state.burn_vk()) {
         Ok(()) => debug!(target: "state_transition", "Verified successfully"),
-        Err(e) => error!(target: "state_transition", "Failed verifying zk proofs: {}", e),
+        Err(e) => {
+            error!(target: "state_transition", "Failed verifying zk proofs: {}", e);
+            return Err(VerifyFailed::ProofVerifyFailed(e.to_string()))
+        }
     }
 
     // Gather all the nullifiers

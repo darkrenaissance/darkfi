@@ -285,6 +285,9 @@ pub enum VerifyFailed {
     #[error("Invalid Merkle root for input {0}")]
     InvalidMerkle(usize),
 
+    #[error("Nullifier already exists for input {0}")]
+    NullifierExists(usize),
+
     #[error("Invalid signature for input {0}")]
     InputSignature(usize),
 
@@ -302,6 +305,9 @@ pub enum VerifyFailed {
 
     #[error("Burn proof verification failure for input {0}")]
     BurnProof(usize),
+
+    #[error("Failed verifying zk proofs: {0}")]
+    ProofVerifyFailed(String),
 
     #[error("Internal error: {0}")]
     InternalError(String),
