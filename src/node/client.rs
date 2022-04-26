@@ -165,6 +165,10 @@ impl Client {
             return Err(ClientFailed::InvalidAmount(0))
         }
 
+        if !self.wallet.token_id_exists(token_id).await? && !clear_input {
+            return Err(ClientFailed::NotEnoughValue(amount))
+        }
+
         let (tx, coins) =
             self.build_slab_from_tx(pubkey, amount, token_id, clear_input, state).await?;
         for coin in coins.iter() {
@@ -176,24 +180,6 @@ impl Client {
         debug!("send(): Sent {}", amount);
         Ok(tx)
     }
-
-    // TODO
-    // pub async fn transfer(
-    // &self,
-    // token_id: DrkTokenId,
-    // pubkey: PublicKey,
-    // amount: u64,
-    // state: Arc<Mutex<State>>,
-    // ) -> ClientResult<()> {
-    // debug!("transfer(): Start transfer {}", amount);
-    // if self.wallet.token_id_exists(token_id).await? {
-    // self.send(pubkey, amount, token_id, false, state).await?;
-    // debug!("transfer(): Finish transfer {}", amount);
-    // return Ok(())
-    // }
-    //
-    //      Err(ClientFailed::NotEnoughValue(amount))
-    //}
 
     pub async fn init_db(&self) -> Result<()> {
         self.wallet.init_db().await

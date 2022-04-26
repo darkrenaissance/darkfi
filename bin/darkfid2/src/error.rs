@@ -13,6 +13,11 @@ pub enum RpcError {
     KeypairNotFound = -32105,
     InvalidKeypair = -32106,
     UnknownSlot = -32107,
+    TxBuildFail = -32108,
+    NetworkNameError = -32109,
+    ParseError = -32110,
+    TxBroadcastFail = -32111,
+    NotYetSynced = -32112,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -24,6 +29,11 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::KeypairNotFound => "Keypair not found",
         RpcError::InvalidKeypair => "Invalid keypair",
         RpcError::UnknownSlot => "Did not find slot",
+        RpcError::TxBuildFail => "Failed building transaction",
+        RpcError::NetworkNameError => "Unknown network name",
+        RpcError::ParseError => "Parse error",
+        RpcError::TxBroadcastFail => "Failed broadcasting transaction",
+        RpcError::NotYetSynced => "Blockchain not yet synced",
     };
 
     (e as i64, msg.to_string())
