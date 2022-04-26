@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -24,7 +24,11 @@ use darkfi::{
         util::Timestamp,
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
-    crypto::token_list::{DrkTokenList, TokenList},
+    crypto::{
+        address::Address,
+        keypair::PublicKey,
+        token_list::{DrkTokenList, TokenList},
+    },
     net,
     net::P2pPtr,
     node::Client,
@@ -122,6 +126,14 @@ struct Args {
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
     sync_seed: Vec<SocketAddr>,
+
+    #[structopt(long)]
+    /// Whitelisted cashier address (repeatable flag)
+    cashier_pub: Vec<String>,
+
+    #[structopt(long)]
+    /// Whitelisted fauced address (repeatable flag)
+    faucet_pub: Vec<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -239,9 +251,32 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Initialize Client
     let client = Arc::new(Client::new(wallet).await?);
 
+    // Parse cashier addresses
+    let mut cashier_pubkeys = vec![];
+    for i in args.cashier_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        cashier_pubkeys.push(pk);
+    }
+
+    // Parse fauced addresses
+    let mut faucet_pubkeys = vec![];
+    for i in args.faucet_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        faucet_pubkeys.push(pk);
+    }
+
     // Initialize validator state
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        client,
+        cashier_pubkeys,
+        faucet_pubkeys,
+    )
+    .await?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");
