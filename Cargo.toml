@@ -318,11 +318,11 @@ path = "example/tx.rs"
 required-features = ["node"]
 
 [[example]]
-<<<<<<< HEAD
 name = "zk"
 path = "example/zk.rs"
 required-features = ["crypto"]
-=======
+
+[[example]]
 name = "gt"
 path = "example/gt.rs"
 required-features = ["node"]
@@ -331,5 +331,3 @@ required-features = ["node"]
 name = "lead"
 path = "example/lead.rs"
 required-features = ["node"]
-
->>>>>>> miscellaneous changes to lead circuit, major change replace point by coordinate, or sum of coordinate, fix typos...
