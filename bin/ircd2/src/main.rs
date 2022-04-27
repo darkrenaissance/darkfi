@@ -1,5 +1,8 @@
-use async_std::net::{TcpListener, TcpStream};
-use std::{net::SocketAddr, sync::Arc};
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+};
+use std::net::SocketAddr;
 
 use async_channel::Receiver;
 use async_executor::Executor;
@@ -33,11 +36,14 @@ use crate::{
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
+pub type SeenMsgId = Arc<Mutex<Vec<u32>>>;
+
 async fn process_user_input(
     mut line: String,
     peer_addr: SocketAddr,
     conn: &mut IrcServerConnection,
     sender: async_channel::Sender<Privmsg>,
+    seen_msg_id: SeenMsgId,
 ) -> Result<()> {
     if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
@@ -51,7 +57,7 @@ async fn process_user_input(
 
     debug!("Received '{}' from {}", line, peer_addr);
 
-    if let Err(e) = conn.update(line, sender).await {
+    if let Err(e) = conn.update(line, sender, seen_msg_id).await {
         warn!("Connection error: {} for {}", e, peer_addr);
         return Err(Error::ChannelStopped)
     }
@@ -64,6 +70,7 @@ async fn process(
     stream: TcpStream,
     peer_addr: SocketAddr,
     sender: async_channel::Sender<Privmsg>,
+    seen_msg_id: SeenMsgId,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
@@ -75,6 +82,15 @@ async fn process(
         futures::select! {
             privmsg = receiver.recv().fuse() => {
                 let msg = privmsg?;
+
+                let mut smi = seen_msg_id.lock().await;
+                if smi.contains(&msg.id) {
+                   continue
+                }
+
+                smi.push(msg.id);
+                drop(smi);
+
                 debug!("ABOUT TO SEND: {:?}", msg);
                 let irc_msg = format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
                                       msg.nickname,
@@ -91,7 +107,7 @@ async fn process(
                     return Ok(())
                 }
 
-                process_user_input(line, peer_addr, &mut conn, sender.clone()).await?;
+                process_user_input(line, peer_addr, &mut conn, sender.clone(), seen_msg_id.clone()).await?;
             }
         };
     }
@@ -104,6 +120,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     info!("Listening on {}", local_addr);
 
     let datastore_path = expand_path(&settings.datastore)?;
+
+    let seen_msg_id: SeenMsgId = Arc::new(Mutex::new(vec![]));
 
     let net_settings = settings.net;
     //
@@ -149,7 +167,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
             info!("Accepted client: {}", peer_addr);
 
             executor_cloned
-                .spawn(process(commits.clone(), stream, peer_addr, raft_sender.clone()))
+                .spawn(process(
+                    commits.clone(),
+                    stream,
+                    peer_addr,
+                    raft_sender.clone(),
+                    seen_msg_id.clone(),
+                ))
                 .detach();
         }
     });

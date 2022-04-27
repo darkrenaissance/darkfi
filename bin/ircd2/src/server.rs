@@ -32,6 +32,7 @@ impl IrcServerConnection {
         &mut self,
         line: String,
         sender: async_channel::Sender<Privmsg>,
+        seen_msg_id: crate::SeenMsgId,
     ) -> Result<()> {
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
@@ -91,6 +92,10 @@ impl IrcServerConnection {
                     channel: channel.to_string(),
                     message: message.to_string(),
                 };
+
+                let mut smi = seen_msg_id.lock().await;
+                smi.push(random_id);
+                drop(smi);
 
                 sender.send(protocol_msg).await?;
             }
