@@ -37,6 +37,7 @@ pub trait ProgramState {
 
 /// A struct representing a state update.
 /// This gets applied on top of an existing state.
+#[derive(Clone)]
 pub struct StateUpdate {
     /// All nullifiers in a transaction
     pub nullifiers: Vec<Nullifier>,
@@ -109,6 +110,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
 }
 
 /// Struct holding the state which we can apply a [`StateUpdate`] onto.
+#[derive(Clone)]
 pub struct State {
     /// The entire Merkle tree state
     pub tree: BridgeTree<MerkleNode, 32>,

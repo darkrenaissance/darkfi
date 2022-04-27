@@ -146,7 +146,7 @@ impl WalletDb {
         Ok(keypair)
     }
 
-    async fn get_default_keypair(&self) -> Result<Keypair> {
+    pub async fn get_default_keypair(&self) -> Result<Keypair> {
         debug!("Returning default keypair");
         let mut conn = self.conn.acquire().await?;
 

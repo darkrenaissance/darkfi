@@ -1,5 +1,5 @@
 ## JSON-RPC listen URL
-#rpc_listen="127.0.0.1:8857"
+#rpc_listen="127.0.0.1:11055"
 
 ## Sets Datastore Path
 #datastore="~/.config/tau"

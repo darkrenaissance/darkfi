@@ -15,7 +15,7 @@ use crate::{
     Result,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VerifyingKey {
     pub params: Params<vesta::Affine>,
     pub vk: plonk::VerifyingKey<vesta::Affine>,
@@ -29,7 +29,7 @@ impl VerifyingKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ProvingKey {
     pub params: Params<vesta::Affine>,
     pub pk: plonk::ProvingKey<vesta::Affine>,

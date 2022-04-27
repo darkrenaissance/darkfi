@@ -1,8 +1,8 @@
 ## JSON-RPC listen URL
-#rpc_listen="127.0.0.1:8857"
+#rpc_listen="127.0.0.1:11055"
 
 ## IRC listen URL
-#irc_listen="127.0.0.1:8855"
+#irc_listen="127.0.0.1:11066"
 
 ## Sets Datastore Path
 #datastore="~/.config/ircd"
@@ -13,7 +13,7 @@
 #inbound="127.0.0.1:11002" 
 
 ## Connection slots
-#outbound_connections=0 
+#outbound_connections=5
 
 ## P2P external address
 #external_addr="127.0.0.1:11002"

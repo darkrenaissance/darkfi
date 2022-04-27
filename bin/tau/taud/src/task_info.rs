@@ -123,14 +123,14 @@ impl TaskInfo {
 
     pub fn activate(&self, path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "TaskInfo::activate()");
-        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
+        let mut mt = MonthTasks::load_or_create(Some(&self.created_at), path)?;
         mt.add(&self.ref_id);
         mt.save(path)
     }
 
     pub fn deactivate(&self, path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "TaskInfo::deactivate()");
-        let mut mt = MonthTasks::load_or_create(&self.created_at, path)?;
+        let mut mt = MonthTasks::load_or_create(Some(&self.created_at), path)?;
         mt.remove(&self.ref_id);
         mt.save(path)
     }

@@ -8,7 +8,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        keypair::{Keypair, PublicKey, SecretKey},
+        keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
         types::DrkTokenId,
@@ -31,7 +31,7 @@ use crate::{
 /// This includes, receiving, broadcasting, and building.
 pub struct Client {
     pub main_keypair: Mutex<Keypair>,
-    wallet: WalletPtr,
+    pub wallet: WalletPtr,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
 }
@@ -149,10 +149,8 @@ impl Client {
         Ok((tx, coins))
     }
 
-    // TODO: This was changed so it does not broadcast transactions anymore.
-    // Instead, it returns the transaction itself, which is then able to be
-    // arbitrarily broadcasted. Rename the function from send() to a better name.
-    pub async fn send(
+    /// Build a transaction given the required parameters and state machine.
+    pub async fn build_transaction(
         &self,
         pubkey: PublicKey,
         amount: u64,
@@ -167,6 +165,10 @@ impl Client {
             return Err(ClientFailed::InvalidAmount(0))
         }
 
+        if !self.wallet.token_id_exists(token_id).await? && !clear_input {
+            return Err(ClientFailed::NotEnoughValue(amount))
+        }
+
         let (tx, coins) =
             self.build_slab_from_tx(pubkey, amount, token_id, clear_input, state).await?;
         for coin in coins.iter() {
@@ -177,48 +179,6 @@ impl Client {
 
         debug!("send(): Sent {}", amount);
         Ok(tx)
-    }
-
-    pub async fn transfer(
-        &self,
-        token_id: DrkTokenId,
-        pubkey: PublicKey,
-        amount: u64,
-        state: Arc<Mutex<State>>,
-    ) -> ClientResult<()> {
-        debug!("transfer(): Start transfer {}", amount);
-        if self.wallet.token_id_exists(token_id).await? {
-            self.send(pubkey, amount, token_id, false, state).await?;
-            debug!("transfer(): Finish transfer {}", amount);
-            return Ok(())
-        }
-
-        Err(ClientFailed::NotEnoughValue(amount))
-    }
-
-    // TODO: Should this function run on finalized blocks and iterate over its transactions?
-    async fn update_state(
-        secret_keys: Vec<SecretKey>,
-        tx: Transaction,
-        state: Arc<Mutex<State>>,
-        wallet: WalletPtr,
-        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
-    ) -> Result<()> {
-        debug!("update_state(): Begin state update");
-        debug!("update_state(): Acquiring state lock");
-        let update;
-        {
-            let state = &*state.lock().await;
-            update = state_transition(state, tx)?;
-        }
-
-        debug!("update_state(): Trying to apply the new state");
-        let mut state = state.lock().await;
-        state.apply(update, secret_keys, notify, wallet).await?;
-        drop(state);
-        debug!("update_state(): Successfully updated state");
-
-        Ok(())
     }
 
     pub async fn init_db(&self) -> Result<()> {

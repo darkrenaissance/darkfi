@@ -8,6 +8,7 @@ use crate::{
 
 const SLED_NULLIFIER_TREE: &[u8] = b"_nullifiers";
 
+#[derive(Clone)]
 pub struct NullifierStore(sled::Tree);
 
 impl NullifierStore {

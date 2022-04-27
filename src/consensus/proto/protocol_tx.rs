@@ -1,14 +1,15 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, warn};
 
 use crate::{
-    consensus::{Tx, ValidatorStatePtr},
+    consensus::{Tx, ValidatorState, ValidatorStatePtr},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
+    node::MemoryState,
     Result,
 };
 
@@ -47,6 +48,17 @@ impl ProtocolTx {
             debug!("ProtocolTx::handle_receive_tx() recv: {:?}", tx);
 
             let tx_copy = (*tx).clone();
+
+            debug!("ProtocolTx::handle_receive_tx(): Starting state transition validation");
+            let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
+            let mem_state = MemoryState::new(canon_state_clone);
+            match ValidatorState::validate_state_transitions(mem_state, &[tx_copy.clone()]) {
+                Ok(_) => debug!("ProtocolTx::handle_receive_tx(): State transition valid"),
+                Err(e) => {
+                    warn!("ProtocolTx::handle_receive_tx(): State transition fail: {}", e);
+                    continue
+                }
+            }
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()) {

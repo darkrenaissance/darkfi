@@ -18,10 +18,10 @@ pub struct Args {
     #[structopt(long)]
     pub config: Option<String>,
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "127.0.0.1:8857")]
+    #[structopt(long = "rpc", default_value = "127.0.0.1:11055")]
     pub rpc_listen: SocketAddr,
     /// IRC listen URL
-    #[structopt(long = "irc", default_value = "127.0.0.1:8855")]
+    #[structopt(long = "irc", default_value = "127.0.0.1:11066")]
     pub irc_listen: SocketAddr,
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/ircd")]

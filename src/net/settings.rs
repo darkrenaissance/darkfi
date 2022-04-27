@@ -41,7 +41,6 @@ impl Default for Settings {
 
 /// Defines the network settings.
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
-#[serde(default)]
 #[structopt()]
 pub struct SettingsOpt {
     /// P2P accept address
@@ -49,43 +48,45 @@ pub struct SettingsOpt {
     pub inbound: Option<SocketAddr>,
 
     /// Connection slots
-    #[structopt(long = "slots", default_value = "0")]
-    pub outbound_connections: u32,
+    #[structopt(long = "slots")]
+    pub outbound_connections: Option<u32>,
 
     /// P2P external address
     #[structopt(long)]
     pub external_addr: Option<SocketAddr>,
 
     /// Peer nodes to connect to
+    #[serde(default)]
     #[structopt(long)]
     pub peers: Vec<SocketAddr>,
 
     /// Seed nodes to connect to
+    #[serde(default)]
     #[structopt(long)]
     pub seeds: Vec<SocketAddr>,
 
-    #[structopt(skip = 0 as u32)]
-    pub manual_attempt_limit: u32,
-    #[structopt(skip = 8 as u32)]
-    pub seed_query_timeout_seconds: u32,
-    #[structopt(skip = 10 as u32)]
-    pub connect_timeout_seconds: u32,
-    #[structopt(skip = 4 as u32)]
-    pub channel_handshake_seconds: u32,
-    #[structopt(skip = 10 as u32)]
-    pub channel_heartbeat_seconds: u32,
+    #[structopt(skip)]
+    pub manual_attempt_limit: Option<u32>,
+    #[structopt(skip)]
+    pub seed_query_timeout_seconds: Option<u32>,
+    #[structopt(skip)]
+    pub connect_timeout_seconds: Option<u32>,
+    #[structopt(skip)]
+    pub channel_handshake_seconds: Option<u32>,
+    #[structopt(skip)]
+    pub channel_heartbeat_seconds: Option<u32>,
 }
 
 impl Into<Settings> for SettingsOpt {
     fn into(self) -> Settings {
         Settings {
             inbound: self.inbound,
-            outbound_connections: self.outbound_connections,
-            manual_attempt_limit: self.manual_attempt_limit,
-            seed_query_timeout_seconds: self.seed_query_timeout_seconds,
-            connect_timeout_seconds: self.connect_timeout_seconds,
-            channel_handshake_seconds: self.channel_handshake_seconds,
-            channel_heartbeat_seconds: self.channel_heartbeat_seconds,
+            outbound_connections: self.outbound_connections.unwrap_or(0),
+            manual_attempt_limit: self.manual_attempt_limit.unwrap_or(0),
+            seed_query_timeout_seconds: self.seed_query_timeout_seconds.unwrap_or(8),
+            connect_timeout_seconds: self.connect_timeout_seconds.unwrap_or(10),
+            channel_handshake_seconds: self.channel_handshake_seconds.unwrap_or(4),
+            channel_heartbeat_seconds: self.channel_heartbeat_seconds.unwrap_or(10),
             external_addr: self.external_addr,
             peers: self.peers,
             seeds: self.seeds,

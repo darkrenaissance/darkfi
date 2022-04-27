@@ -1,11 +1,10 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use easy_parallel::Parallel;
 use futures_lite::future;
-use lazy_init::Lazy;
 use log::{error, info};
 use serde_derive::Deserialize;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -14,9 +13,7 @@ use structopt_toml::StructOptToml;
 use url::Url;
 
 use darkfi::{
-    async_daemonize,
-    blockchain::{NullifierStore, RootStore},
-    cli_desc,
+    async_daemonize, cli_desc,
     consensus::{
         proto::{
             ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
@@ -27,10 +24,14 @@ use darkfi::{
         util::Timestamp,
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
     },
-    crypto::token_list::{DrkTokenList, TokenList},
+    crypto::{
+        address::Address,
+        keypair::PublicKey,
+        token_list::{DrkTokenList, TokenList},
+    },
     net,
     net::P2pPtr,
-    node::{Client, State},
+    node::Client,
     rpc::{
         jsonrpc,
         jsonrpc::{
@@ -44,7 +45,7 @@ use darkfi::{
         expand_path,
         path::get_config_path,
     },
-    wallet::walletdb::{init_wallet, WalletPtr},
+    wallet::walletdb::init_wallet,
     Error, Result,
 };
 
@@ -126,6 +127,14 @@ struct Args {
     /// Connect to seed for the syncing protocol (repeatable flag)
     sync_seed: Vec<SocketAddr>,
 
+    #[structopt(long)]
+    /// Whitelisted cashier address (repeatable flag)
+    cashier_pub: Vec<String>,
+
+    #[structopt(long)]
+    /// Whitelisted fauced address (repeatable flag)
+    faucet_pub: Vec<String>,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -137,11 +146,10 @@ struct Args {
 
 pub struct Darkfid {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
-    client: Client,
     consensus_p2p: Option<P2pPtr>,
     sync_p2p: Option<P2pPtr>,
+    client: Arc<Client>,
     validator_state: ValidatorStatePtr,
-    state: Arc<Mutex<State>>,
     drk_tokenlist: DrkTokenList,
     btc_tokenlist: TokenList,
     eth_tokenlist: TokenList,
@@ -151,6 +159,7 @@ pub struct Darkfid {
 // JSON-RPC methods
 mod rpc_blockchain;
 mod rpc_misc;
+mod rpc_tx;
 mod rpc_wallet;
 
 #[async_trait]
@@ -165,6 +174,7 @@ impl RequestHandler for Darkfid {
         match req.method.as_str() {
             Some("ping") => return self.pong(req.id, params).await,
             Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
+            Some("tx.transfer") => return self.transfer(req.id, params).await,
             Some("wallet.keygen") => return self.keygen(req.id, params).await,
             Some("wallet.get_key") => return self.get_key(req.id, params).await,
             Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
@@ -180,8 +190,6 @@ impl RequestHandler for Darkfid {
 
 impl Darkfid {
     pub async fn new(
-        db: &sled::Db,
-        wallet: WalletPtr,
         validator_state: ValidatorStatePtr,
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
@@ -195,30 +203,14 @@ impl Darkfid {
             TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.min.json"))?;
         let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
-        // Initialize Client
-        let client = Client::new(wallet).await?;
-        let tree = client.get_tree().await?;
-        let merkle_roots = RootStore::new(db)?;
-        let nullifiers = NullifierStore::new(db)?;
-
-        // Initialize State
-        let state = Arc::new(Mutex::new(State {
-            tree,
-            merkle_roots,
-            nullifiers,
-            cashier_pubkeys: vec![],
-            faucet_pubkeys: vec![],
-            mint_vk: Lazy::new(),
-            burn_vk: Lazy::new(),
-        }));
+        let client = validator_state.read().await.client.clone();
 
         Ok(Self {
             synced: Mutex::new(false),
-            client,
             consensus_p2p,
             sync_p2p,
+            client,
             validator_state,
-            state,
             drk_tokenlist,
             btc_tokenlist,
             eth_tokenlist,
@@ -258,11 +250,35 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     };
 
     // TODO: sqldb init cleanup
-    Client::new(wallet.clone()).await?;
-    let address = wallet.get_default_address().await?;
+    // Initialize Client
+    let client = Arc::new(Client::new(wallet).await?);
+
+    // Parse cashier addresses
+    let mut cashier_pubkeys = vec![];
+    for i in args.cashier_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        cashier_pubkeys.push(pk);
+    }
+
+    // Parse fauced addresses
+    let mut faucet_pubkeys = vec![];
+    for i in args.faucet_pub {
+        let addr = Address::from_str(&i)?;
+        let pk = PublicKey::try_from(addr)?;
+        faucet_pubkeys.push(pk);
+    }
 
     // Initialize validator state
-    let state = ValidatorState::new(&sled_db, address, genesis_ts, genesis_data)?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        client,
+        cashier_pubkeys,
+        faucet_pubkeys,
+    )
+    .await?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");
@@ -357,9 +373,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     };
 
     // Initialize program state
-    let darkfid =
-        Darkfid::new(&sled_db, wallet, state.clone(), consensus_p2p.clone(), sync_p2p.clone())
-            .await?;
+    let darkfid = Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone()).await?;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server
@@ -383,7 +397,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     }
 
     // Consensus protocol
-    if args.consensus {
+    if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
         consensus_p2p.clone().unwrap().start(ex.clone()).await?;
         let _ex = ex.clone();
@@ -397,6 +411,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
         info!("Starting consensus protocol task");
         ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
+    } else {
+        info!("Not starting consensus P2P network");
     }
 
     // Wait for SIGINT

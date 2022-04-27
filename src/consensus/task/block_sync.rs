@@ -1,11 +1,13 @@
 use crate::{
     consensus::{
         block::{BlockOrder, BlockResponse},
-        ValidatorStatePtr,
+        ValidatorState, ValidatorStatePtr,
     },
-    net, Result,
+    net,
+    node::MemoryState,
+    Result,
 };
-use log::{info, warn};
+use log::{debug, info, warn};
 
 /// async task used for block syncing.
 pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
@@ -35,9 +37,31 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             let order = BlockOrder { sl: last.0, block: last.1 };
             channel.send(order).await?;
 
-            // Node stores response data. Extra validations can be added here.
-            let response = response_sub.receive().await?;
-            state.write().await.blockchain.add(&response.blocks)?;
+            // Node stores response data.
+            let resp = response_sub.receive().await?;
+
+            // Verify state transitions for all blocks and their respective transactions.
+            debug!("block_sync_task(): Starting state transition validations");
+            let mut canon_updates = vec![];
+            let canon_state_clone = state.read().await.state_machine.lock().await.clone();
+            let mut mem_state = MemoryState::new(canon_state_clone);
+            for block in &resp.blocks {
+                let mut state_updates =
+                    ValidatorState::validate_state_transitions(mem_state.clone(), &block.txs)?;
+
+                for update in &state_updates {
+                    mem_state.apply(update.clone());
+                }
+
+                canon_updates.append(&mut state_updates);
+            }
+            debug!("block_sync_task(): All state transitions passed");
+
+            debug!("block_sync_task(): Updating canon state");
+            state.write().await.update_canon_state(canon_updates, None).await?;
+
+            debug!("block_sync_task(): Appending blocks to ledger");
+            state.write().await.blockchain.add(&resp.blocks)?;
 
             let last_received = state.read().await.blockchain.last()?.unwrap();
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);

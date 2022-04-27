@@ -8,6 +8,7 @@ use crate::{
 
 const SLED_ROOTS_TREE: &[u8] = b"_merkleroots";
 
+#[derive(Clone)]
 pub struct RootStore(sled::Tree);
 
 impl RootStore {

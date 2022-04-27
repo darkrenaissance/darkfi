@@ -1188,6 +1188,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "blake3",
  "chrono",
  "ctrlc-async",
  "darkfi",
@@ -1970,8 +1971,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.1.0-beta.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7524b798b8b3689a198cd87ee1d22fe3ca007a51d35c4093f32d75c0efc30abe"
+source = "git+https://github.com/parazyd/halo2?branch=clone-impls-keys#a6d7785ddc86e897b917d8450055d0d6b2494b5d"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec 0.22.3",
@@ -1990,8 +1990,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.1.0-beta.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0240b05b791cccfd6451b010b19711280e63b87f495bd84df0103f35c9139e7"
+source = "git+https://github.com/parazyd/halo2?branch=clone-impls-keys#a6d7785ddc86e897b917d8450055d0d6b2494b5d"
 dependencies = [
  "backtrace",
  "blake2b_simd 1.0.0",
