@@ -14,7 +14,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    msgs: Arc<Mutex<Vec<u32>>>,
+    msgs: Arc<Mutex<Vec<u64>>>,
 }
 
 impl ProtocolRaft {
@@ -23,6 +23,7 @@ impl ProtocolRaft {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
+        msgs: Arc<Mutex<Vec<u64>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<NetMsg>().await;
@@ -35,7 +36,7 @@ impl ProtocolRaft {
             msg_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolRaft", channel),
             p2p,
-            msgs: Arc::new(Mutex::new(vec![])),
+            msgs,
         })
     }
 
@@ -75,7 +76,9 @@ impl ProtocolRaft {
                 // then the local node will only handle the msg if its method
                 // is LogRequest
                 (None, Some(_)) => {
-                    if msg.method != NetMsgMethod::LogRequest {
+                    if msg.method != NetMsgMethod::LogRequest &&
+                        msg.method != NetMsgMethod::SyncResponse
+                    {
                         continue
                     }
                 }

@@ -21,6 +21,20 @@ pub enum Role {
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct SyncRequest {
+    logs_len: u64,
+    last_term: u64,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct SyncResponse {
+    logs: Logs,
+    commit_length: u64,
+    leader_id: NodeId,
+    wipe: bool,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct VoteRequest {
     node_id: NodeId,
     current_term: u64,
@@ -139,7 +153,7 @@ impl MapLength {
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct NetMsg {
-    id: u32,
+    id: u64,
     recipient_id: Option<NodeId>,
     method: NetMsgMethod,
     payload: Vec<u8>,
@@ -153,6 +167,9 @@ pub enum NetMsgMethod {
     VoteResponse = 2,
     VoteRequest = 3,
     BroadcastRequest = 4,
+    // this only used for listener node
+    SyncRequest = 5,
+    SyncResponse = 6,
 }
 
 impl Encodable for NetMsgMethod {
@@ -163,6 +180,8 @@ impl Encodable for NetMsgMethod {
             Self::VoteResponse => 2,
             Self::VoteRequest => 3,
             Self::BroadcastRequest => 4,
+            Self::SyncRequest => 5,
+            Self::SyncResponse => 6,
         };
         (len as u8).encode(s)
     }
@@ -176,7 +195,9 @@ impl Decodable for NetMsgMethod {
             1 => Self::LogRequest,
             2 => Self::VoteResponse,
             3 => Self::VoteRequest,
-            _ => Self::BroadcastRequest,
+            4 => Self::BroadcastRequest,
+            5 => Self::SyncRequest,
+            _ => Self::SyncResponse,
         })
     }
 }
