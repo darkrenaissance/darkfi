@@ -26,7 +26,6 @@ members = [
 	"bin/faucetd",
 	#"bin/gatewayd",
 	"bin/ircd",
-	"bin/ircd2",
 	"bin/dnetview",
 	"bin/daod",
 	"bin/dao-cli",

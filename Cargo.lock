@@ -2155,26 +2155,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ircd"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "async-trait",
- "clap 3.1.12",
- "darkfi",
- "easy-parallel",
- "futures",
- "fxhash",
- "log",
- "rand",
- "serde_json",
- "simplelog",
- "smol",
-]
-
-[[package]]
 name = "ircd2"
 version = "0.3.0"
 dependencies = [
