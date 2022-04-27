@@ -33,10 +33,10 @@ $(BINS): token_lists $(BINDEPS)
 check: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
-fix: token_lists:
+fix: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
-clippy: token_lists:
+clippy: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
 # zkas source files which we want to compile for tests
