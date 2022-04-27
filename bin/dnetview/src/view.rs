@@ -84,21 +84,22 @@ impl View {
                             let names = ListItem::new(lines);
                             nodes.push(names);
                             for child in &info.children {
-                                //let name_span = Span::raw(&child.session_name);
-                                let name =
-                                    Span::styled(format!("    {}", child.session_name), style);
-                                let lines = vec![Spans::from(name)];
-                                let names = ListItem::new(lines);
-                                nodes.push(names);
-                                for child in &child.children {
-                                    //let name_span = Span::raw(&child.connect_id);
-                                    let name = Span::styled(
-                                        format!("        {}", child.connect_id),
-                                        style,
-                                    );
+                                if !child.children.iter().all(|session| session.is_empty) {
+                                    //let name_span = Span::raw(&child.session_name);
+                                    let name =
+                                        Span::styled(format!("    {}", child.session_name), style);
                                     let lines = vec![Spans::from(name)];
                                     let names = ListItem::new(lines);
                                     nodes.push(names);
+                                    for child in &child.children {
+                                        //let name_span = Span::raw(&child.connect_id);
+                                        let name =
+                                            Span::styled(format!("        {}", child.addr), style);
+                                        let lines = vec![Spans::from(name)];
+                                        let names = ListItem::new(lines);
+                                        nodes.push(names);
+                                    }
+                                    // thing
                                 }
                             }
                         }
