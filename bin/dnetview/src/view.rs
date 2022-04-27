@@ -67,6 +67,7 @@ impl View {
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
         //debug!("VIEW AT RENDER {:?}", self.id_list.ids);
         //let mut nodes = Vec::new();
+        let style = Style::default();
         let list_margin = 2;
         let list_direction = Direction::Horizontal;
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
@@ -78,27 +79,28 @@ impl View {
                 Some(obj) => {
                     match obj {
                         SelectableObject::Node(info) => {
-                            //debug!("FOUND NODE: {:?}", info);
                             let name_span = Span::raw(&info.node_name);
                             let lines = vec![Spans::from(name_span)];
-                            //lines.push(Spans::from(name_span));
                             let names = ListItem::new(lines);
                             nodes.push(names);
-                            //for child in &info.children {
-                            //    let name_span = Span::raw(&child.session_name);
-                            //    let lines = vec![Spans::from(name_span)];
-                            //    let names = ListItem::new(lines);
-                            //    nodes.push(names);
-                            //    for child in &child.children {
-                            //        let name_span = Span::raw(&child.connect_id);
-                            //        let lines = vec![Spans::from(name_span)];
-                            //        let names = ListItem::new(lines);
-                            //        nodes.push(names);
-                            //    }
-                            //    // thing
-                            //}
-
-                            //nodes.push(node);
+                            for child in &info.children {
+                                //let name_span = Span::raw(&child.session_name);
+                                let name =
+                                    Span::styled(format!("    {}", child.session_name), style);
+                                let lines = vec![Spans::from(name)];
+                                let names = ListItem::new(lines);
+                                nodes.push(names);
+                                for child in &child.children {
+                                    //let name_span = Span::raw(&child.connect_id);
+                                    let name = Span::styled(
+                                        format!("        {}", child.connect_id),
+                                        style,
+                                    );
+                                    let lines = vec![Spans::from(name)];
+                                    let names = ListItem::new(lines);
+                                    nodes.push(names);
+                                }
+                            }
                         }
                         SelectableObject::Session(info) => {
                             //let name_span = Span::raw(&info.session_name);
