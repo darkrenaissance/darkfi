@@ -1,4 +1,4 @@
-//use crate::model::SelectableObject;
+////use crate::model::SelectableObject;
 //use crate::view::View;
 //use log::debug;
 //
@@ -33,32 +33,32 @@
 //                        //let mut lines = vec![Spans::from(name_span)];
 //                        //let id = &node_info.node_id;
 //                        //let name = &node_info.node_name;
-//                        for child in &node_info.children {
-//                            match child.session_name.as_str() {
-//                                "Outgoing" => {
-//                                    lines.push(Spans::from(Span::styled(
-//                                        "   Outgoing",
-//                                        Style::default(),
-//                                    )));
-//                                }
-//                                "Incoming" => {
-//                                    lines.push(Spans::from(Span::styled(
-//                                        "   Outgoing",
-//                                        Style::default(),
-//                                    )));
-//                                }
-//                                "Manual" => {
-//                                    lines.push(Spans::from(Span::styled(
-//                                        "   Outgoing",
-//                                        Style::default(),
-//                                    )));
-//                                }
-//                                _ => {}
-//                            }
-//                            for child in &child.children {
-//                                // do something
-//                            }
-//                        }
+//                        //for child in &node_info.children {
+//                        //    match child.session_name.as_str() {
+//                        //        "Outgoing" => {
+//                        //            lines.push(Spans::from(Span::styled(
+//                        //                "   Outgoing",
+//                        //                Style::default(),
+//                        //            )));
+//                        //        }
+//                        //        "Incoming" => {
+//                        //            lines.push(Spans::from(Span::styled(
+//                        //                "   Outgoing",
+//                        //                Style::default(),
+//                        //            )));
+//                        //        }
+//                        //        "Manual" => {
+//                        //            lines.push(Spans::from(Span::styled(
+//                        //                "   Outgoing",
+//                        //                Style::default(),
+//                        //            )));
+//                        //        }
+//                        //        _ => {}
+//                        //    }
+//                        //    for child in &child.children {
+//                        //        // do something
+//                        //    }
+//                        //}
 //                        //if !node.outbound.iter().all(|node| node.is_empty) {
 //                        //    lines.push(Spans::from(Span::styled("   Outgoing", Style::default())));
 //                        //}

@@ -388,7 +388,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
 
     let mut view = View::new(
         id_list.clone(),
-        info_list,
+        info_list.clone(),
         node_view.clone(),
         session_view.clone(),
         connect_view.clone(),
@@ -397,10 +397,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
     view.info_list.index = 0;
 
     loop {
-        //debug!("MODEL: {:?}", model.infos.lock().await.clone());
-        //debug!("VIEW BEFORE UPDATE: {:?}", &view.id_list.ids);
-        let mut view = view.clone().update(model.infos.lock().await.clone())?;
-        //debug!("VIEW AFTER UPDATE: {:?}", view.clone().id_list.ids);
+        view.update(model.infos.lock().await.clone())?;
 
         terminal.draw(|f| {
             view.clone().render(f);
@@ -412,10 +409,12 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.clone().id_list.next();
+                    view.id_list.next();
+                    //debug!("ID LIST STATE {:?}", view.id_list.state);
                 }
                 Key::Char('k') => {
-                    view.clone().id_list.previous();
+                    view.id_list.previous();
+                    //debug!("ID LIST STATE {:?}", view.id_list.state);
                 }
                 _ => (),
             }

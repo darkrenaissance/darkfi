@@ -36,38 +36,32 @@ impl View {
         View { id_list, info_list, node_info, session_info, connect_info }
     }
 
-    pub fn update(mut self, model: Vec<SelectableObject>) -> Result<View> {
+    pub fn update(&mut self, model: Vec<SelectableObject>) -> Result<()> {
         for obj in model {
             let obj_clone = obj.clone();
             match obj {
                 SelectableObject::Node(node) => {
                     let node1 = node.clone();
-                    //self.node_info.clone().update(node1.clone())?;
+                    self.node_info.clone().update(node1.clone())?;
                     self.id_list.ids.insert(node1.clone().node_id);
                     self.info_list.infos.insert(node.node_id, obj_clone);
                 }
                 SelectableObject::Session(session) => {
                     let session1 = session.clone();
-                    //self.session_info.clone().update(session1.clone())?;
+                    self.session_info.clone().update(session1.clone())?;
                     self.id_list.ids.insert(session1.clone().session_id);
                     self.info_list.infos.insert(session1.clone().session_id, obj_clone);
                 }
                 SelectableObject::Connect(connect) => {
                     let connect1 = connect.clone();
-                    //self.connect_info.clone().update(connect)?;
+                    self.connect_info.clone().update(connect)?;
                     self.id_list.ids.insert(connect1.clone().connect_id);
                     self.info_list.infos.insert(connect1.clone().connect_id, obj_clone);
                 }
             }
         }
 
-        let id_list = self.id_list;
-        let info_list = self.info_list;
-        let node_info = self.node_info;
-        let session_info = self.session_info;
-        let connect_info = self.connect_info;
-
-        Ok(View { id_list, info_list, node_info, session_info, connect_info })
+        Ok(())
     }
 
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
@@ -90,20 +84,34 @@ impl View {
                             //lines.push(Spans::from(name_span));
                             let names = ListItem::new(lines);
                             nodes.push(names);
+                            //for child in &info.children {
+                            //    let name_span = Span::raw(&child.session_name);
+                            //    let lines = vec![Spans::from(name_span)];
+                            //    let names = ListItem::new(lines);
+                            //    nodes.push(names);
+                            //    for child in &child.children {
+                            //        let name_span = Span::raw(&child.connect_id);
+                            //        let lines = vec![Spans::from(name_span)];
+                            //        let names = ListItem::new(lines);
+                            //        nodes.push(names);
+                            //    }
+                            //    // thing
+                            //}
+
                             //nodes.push(node);
                         }
                         SelectableObject::Session(info) => {
-                            let name_span = Span::raw(&info.session_name);
-                            let lines = vec![Spans::from(name_span)];
-                            let names = ListItem::new(lines);
-                            nodes.push(names);
+                            //let name_span = Span::raw(&info.session_name);
+                            //let lines = vec![Spans::from(name_span)];
+                            //let names = ListItem::new(lines);
+                            //nodes.push(names);
                             //self.session_info.clone().render(info),
                         }
                         SelectableObject::Connect(info) => {
-                            let name_span = Span::raw(&info.connect_id);
-                            let lines = vec![Spans::from(name_span)];
-                            let names = ListItem::new(lines);
-                            nodes.push(names);
+                            //let name_span = Span::raw(&info.connect_id);
+                            //let lines = vec![Spans::from(name_span)];
+                            //let names = ListItem::new(lines);
+                            //nodes.push(names);
                             //self.connect_info.clone().render(info),
                         }
                     }
@@ -271,6 +279,7 @@ impl IdListView {
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
+                debug!("INDEX: {}", i);
                 if i >= self.ids.len() - 1 {
                     0
                 } else {
@@ -279,6 +288,8 @@ impl IdListView {
             }
             None => 0,
         };
+        debug!("NEW INDEX: {}", i);
+        debug!("IDS LEN: {}", self.ids.len());
         self.state.select(Some(i));
     }
 
@@ -288,11 +299,14 @@ impl IdListView {
                 if i == 0 {
                     self.ids.len() - 1
                 } else {
+                    debug!("NEW INDEX {}", i);
                     i - 1
                 }
             }
             None => 0,
         };
+        debug!("INDEX: {}", i);
+        debug!("IDS LEN: {}", self.ids.len());
         self.state.select(Some(i));
     }
 
