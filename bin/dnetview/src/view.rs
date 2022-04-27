@@ -135,9 +135,6 @@ impl View {
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
         f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
-        //for node in nodes {
-        //    f.render_stateful_widget(node, slice[0], &mut self.id_list.state);
-        //}
     }
 }
 

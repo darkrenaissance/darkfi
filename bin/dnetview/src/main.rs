@@ -29,7 +29,6 @@ use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
-    ui,
     util::{generate_id, make_connect_id, make_empty_id, make_node_id, make_session_id},
     view::{ConnectInfoView, IdListView, InfoListView, NodeInfoView, SessionInfoView, View},
 };
