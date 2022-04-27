@@ -1,3 +1,4 @@
+use async_std::sync::Arc;
 use std::{fs::File, io::Write};
 
 use darkfi::{
@@ -357,13 +358,13 @@ async fn main() -> Result<()> {
     let nodes = 4;
     let genesis_ts = Timestamp(1648383795);
     let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
+    let pass = "changeme";
     for i in 0..nodes {
         // Initialize or load wallet
         let path = format!("../../../tmp/node{:?}/wallet.db", i);
-        let pass = "changeme";
         let wallet = init_wallet(&path, &pass).await?;
-        Client::new(wallet.clone()).await?;
         let address = wallet.get_default_address().await?;
+        let client = Arc::new(Client::new(wallet).await?);
 
         // Initialize or load sled database
         let path = format!("../../../tmp/node{:?}/blockchain/testnet", i);
@@ -372,7 +373,8 @@ async fn main() -> Result<()> {
 
         // Data export
         println!("Exporting data for node{:?} - {:?}", i, address.to_string());
-        let state = ValidatorState::new(&sled_db, address, genesis_ts, genesis_data)?;
+        let state =
+            ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
         let info = StateInfo::new(&*state.read().await);
         let info_string = format!("{:#?}", info);
         let path = format!("node{:?}_testnet_db", i);

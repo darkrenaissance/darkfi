@@ -14,7 +14,8 @@ make BINS=darkfid2
 pids=()
 
 # Starting node 0 (seed) in background
-./darkfid2 \
+LOG_TARGETS="!sled,!net" ./darkfid2 \
+    -v \
     --consensus \
     --consensus-p2p-accept 127.0.0.1:6000 \
     --consensus-p2p-external 127.0.0.1:6000 \
@@ -34,7 +35,8 @@ sleep 20
 bound=$(($nodes-2))
 for i in $(eval echo "{1..$bound}")
 do
-  ./darkfid2 \
+  LOG_TARGETS="!sled,!net" ./darkfid2 \
+    -v \
     --consensus \
     --consensus-seed 127.0.0.1:6000 \
     --sync-seed 127.0.0.1:6020 \
@@ -64,7 +66,8 @@ function ctrl_c() {
 
 bound=$(($nodes-1))
 # Starting last node
-./darkfid2 \
+LOG_TARGETS="!sled,!net" ./darkfid2 \
+    -v \
     --consensus \
     --consensus-seed 127.0.0.1:6000 \
     --sync-seed 127.0.0.1:6020 \

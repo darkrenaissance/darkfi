@@ -118,8 +118,8 @@ pub struct ValidatorState {
     pub client: Arc<Client>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Tx>,
-    /// Participation flag
-    pub participating: bool,
+    /// Participating start epoch
+    pub participating: Option<u64>,
 }
 
 impl ValidatorState {
@@ -137,7 +137,7 @@ impl ValidatorState {
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let unconfirmed_txs = vec![];
-        let participating = false;
+        let participating = None;
 
         let address = client.wallet.get_default_address().await?;
         let state_machine = Arc::new(Mutex::new(State {
@@ -217,6 +217,12 @@ impl ValidatorState {
         let diff = next_epoch_start - current_time;
 
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
+    }
+
+    /// Set participating epoch to next.
+    pub fn set_participating(&mut self) -> Result<()> {
+        self.participating = Some(self.current_epoch() + 1);
+        Ok(())
     }
 
     /// Find epoch leader, using a simple hash method.
@@ -326,8 +332,13 @@ impl ValidatorState {
     /// and proceed with voting on it.
     pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         // Node hasn't started participating
-        if !self.participating {
-            return Ok(None)
+        match self.participating {
+            Some(start) => {
+                if self.current_epoch() < start {
+                    return Ok(None)
+                }
+            }
+            None => return Ok(None),
         }
 
         // Node refreshes participants records
@@ -480,9 +491,15 @@ impl ValidatorState {
     /// Finally, we check if the notarization of the proposal can finalize
     /// parent proposals in its chain.
     pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
+        let current_epoch = self.current_epoch();
         // Node hasn't started participating
-        if !self.participating {
-            return Ok((false, None))
+        match self.participating {
+            Some(start) => {
+                if current_epoch < start {
+                    return Ok((false, None))
+                }
+            }
+            None => return Ok((false, None)),
         }
 
         let mut encoded_proposal = vec![];
@@ -508,10 +525,23 @@ impl ValidatorState {
         // Checking that the voter can actually vote.
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
-                if self.current_epoch() <= participant.joined {
+                let mut participant = participant.clone();
+                if current_epoch <= participant.joined {
                     warn!(target: "consensus", "Voter ({}) joined after current epoch.", vote.address.to_string());
                     return Ok((false, None))
                 }
+
+                // Updating participant vote
+                match participant.voted {
+                    Some(voted) => {
+                        if vote.sl > voted {
+                            participant.voted = Some(vote.sl);
+                        }
+                    }
+                    None => participant.voted = Some(vote.sl),
+                }
+
+                self.consensus.participants.insert(participant.address, participant);
             }
             None => {
                 warn!(target: "consensus", "Voter ({}) is not a participant!", vote.address.to_string());
@@ -559,22 +589,6 @@ impl ValidatorState {
             }
         }
 
-        // Updating participant vote
-        let mut participant = match self.consensus.participants.get(&vote.address) {
-            Some(p) => p.clone(),
-            None => Participant::new(vote.address, vote.sl),
-        };
-
-        match participant.voted {
-            Some(voted) => {
-                if vote.sl > voted {
-                    participant.voted = Some(vote.sl);
-                }
-            }
-            None => participant.voted = Some(vote.sl),
-        }
-
-        self.consensus.participants.insert(participant.address, participant);
         Ok((true, Some(to_broadcast)))
     }
 
@@ -762,8 +776,9 @@ impl ValidatorState {
                     }
                 }
                 None => {
-                    if participant.joined < previous_epoch &&
-                        participant.joined < previous_from_last_epoch
+                    if (previous_epoch == last_epoch && participant.joined < previous_epoch) ||
+                        (previous_epoch != last_epoch &&
+                            participant.joined < previous_from_last_epoch)
                     {
                         warn!(
                             "refresh_participants(): Inactive participant: {:?} (joined {:?}, voted {:?})",
