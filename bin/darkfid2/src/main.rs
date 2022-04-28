@@ -410,7 +410,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         .detach();
 
         info!("Starting consensus protocol task");
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), state)).detach();
+        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();
     } else {
         info!("Not starting consensus P2P network");
     }

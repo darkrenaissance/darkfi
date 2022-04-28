@@ -78,7 +78,7 @@ impl ProtocolSync {
 
             debug!("ProtocolSync::handle_receive_block() received block");
 
-            // Node stores finalized flock, if it doesn't exist (checking by slot),
+            // Node stores finalized block, if it doesn't exist (checking by slot),
             // and removes its transactions from the unconfirmed_txs vector.
             // Consensus-mode enabled nodes have already performed these steps,
             // during proposal finalization.

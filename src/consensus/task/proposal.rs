@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// async task used for participating in the consensus protocol
-pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
+pub async fn proposal_task(p2p: net::P2pPtr, sync_p2p: net::P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next epoch end,
     // so it can start syncing latest state.
     let mut seconds_until_next_epoch = state.read().await.next_epoch_start();
@@ -89,7 +89,29 @@ pub async fn proposal_task(p2p: net::P2pPtr, state: ValidatorStatePtr) {
                             let vote = v.unwrap();
                             let result = state.write().await.receive_vote(&vote);
                             match result {
-                                Ok(_) => info!(target: "consensus", "Vote saved successfully."),
+                                Ok((_, to_broadcast)) => {
+                                    info!(target: "consensus", "Vote saved successfully.");
+                                    // Broadcast finalized blocks info, if any
+                                    match to_broadcast {
+                                        Some(blocks) => {
+                                            debug!("handle_receive_vote(): Broadcasting finalized blocks");
+                                            for info in blocks {
+                                                let result = sync_p2p.broadcast(info).await;
+                                                match result {
+                                                    Ok(()) => {
+                                                        info!(target: "consensus", "Finalized block broadcasted successfully.")
+                                                    }
+                                                    Err(e) => {
+                                                        error!(target: "consensus", "Failed broadcasting finalized block: {}", e)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            debug!("handle_receive_vote(): No finalized blocks to broadcast");
+                                        }
+                                    }
+                                }
                                 Err(e) => {
                                     error!(target: "consensus", "Vote save failed: {}", e)
                                 }
