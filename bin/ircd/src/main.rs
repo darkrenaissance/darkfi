@@ -51,7 +51,10 @@ fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
         return Err(Error::ChannelStopped)
     }
 
-    assert!(&line[(line.len() - 2)..] == "\r\n");
+    if &line[(line.len() - 2)..] != "\r\n" {
+        warn!("Closing connection.");
+        return Err(Error::ChannelStopped)
+    }
     // Remove CRLF
     line.pop();
     line.pop();
@@ -109,7 +112,10 @@ async fn process(
                     return Ok(())
                 }
                 info!("Receive msg from IRC server");
-                let irc_msg = clean_input(line, &peer_addr)?;
+                let irc_msg = match clean_input(line, &peer_addr) {
+                    Ok(m) => m,
+                    Err(e) => return Err(e)
+                };
                 broadcast_msg(irc_msg, peer_addr,&mut conn).await?;
             }
         };
