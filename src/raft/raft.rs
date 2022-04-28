@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     BroadcastMsgRequest, DataStore, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
-    NetMsgMethod, NodeId, ProtocolRaft, Role, VoteRequest, VoteResponse,
+    NetMsgMethod, NodeId, ProtocolRaft, Role, SyncRequest, SyncResponse, VoteRequest, VoteResponse,
 };
 
 const HEARTBEATTIMEOUT: u64 = 100;
@@ -124,12 +124,16 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let registry = p2p.protocol_registry();
 
+        let seen_net_msg = Arc::new(Mutex::new(vec![]));
         let self_id = self.id.clone();
         registry
             .register(net::SESSION_ALL, move |channel, p2p| {
                 let self_id = self_id.clone();
                 let sender = p2p_snd.clone();
-                async move { ProtocolRaft::init(self_id, channel, sender, p2p).await }
+                let seen_net_msg_cloned = seen_net_msg.clone();
+                async move {
+                    ProtocolRaft::init(self_id, channel, sender, p2p, seen_net_msg_cloned).await
+                }
             })
             .await;
 
@@ -179,15 +183,56 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         });
 
+        if self.id.is_none() {
+            let last_term =
+                if !self.logs.0.is_empty() { self.logs.0.last().unwrap().term } else { 0 };
+
+            let sync_request = SyncRequest { logs_len: self.logs.len(), last_term };
+
+            info!("send sync request");
+            self.send(None, &serialize(&sync_request), NetMsgMethod::SyncRequest, None).await?;
+
+            loop {
+                select! {
+                    msg =  receive_queues.recv().fuse() => {
+                        let msg = msg?;
+                        if msg.method == NetMsgMethod::SyncResponse {
+                            info!("receive sync response");
+                            let sr: SyncResponse = deserialize(&msg.payload)?;
+                            if sr.wipe {
+                                self.set_commit_length(&0)?;
+                                self.push_logs(&sr.logs)?;
+                            } else {
+                                for log in sr.logs.0.iter() {
+                                    self.push_log(log)?;
+                                }
+                            }
+
+                            if !self.logs.is_empty() {
+                                self.set_current_term(&self.logs.0.last().unwrap().term.clone())?;
+                            }
+
+                            if self.commit_length > sr.commit_length {
+                                self.set_commit_length(&0)?;
+                            }
+
+                            for i in self.commit_length..sr.commit_length {
+                                self.push_commit(&self.logs.get(i)?.msg).await?;
+                            }
+                            self.set_commit_length(&sr.commit_length)?;
+
+                            self.current_leader = Some(sr.leader_id);
+
+                            break
+                        }},
+                        _ = stop_signal.recv().fuse() => break,
+                }
+            }
+        }
+
         let mut rng = rand::thread_rng();
 
         let broadcast_msg_rv = self.broadcast_msg.1.clone();
-
-        // send data form datastore through broadcast_commits channel
-        let commits = self.datastore.commits.get_all()?;
-        for commit in commits {
-            self.broadcast_commits.0.send(commit).await?;
-        }
 
         loop {
             let timeout: Duration = if self.role == Role::Leader {
@@ -200,7 +245,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
             select! {
                 m =  receive_queues.recv().fuse() => result = self.handle_method(m?).await,
-                m =  broadcast_msg_rv.recv().fuse() => result = self.broadcast_msg(&m?).await,
+                m =  broadcast_msg_rv.recv().fuse() => result = self.broadcast_msg(&m?,None).await,
                 _ = task::sleep(timeout).fuse() => {
                     result = if self.role == Role::Leader {
                         self.send_heartbeat().await
@@ -233,29 +278,30 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.broadcast_msg.0.clone()
     }
 
-    async fn broadcast_msg(&mut self, msg: &T) -> Result<()> {
+    async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
         if self.role == Role::Leader {
             let msg = serialize(msg);
             let log = Log { msg, term: self.current_term };
             self.push_log(&log)?;
 
             self.acked_length.insert(&self.id.clone().unwrap(), self.logs.len());
-
-            let nodes = self.nodes.lock().await.clone();
-            for node in nodes.iter() {
-                self.update_logs(node.0).await?;
-            }
         } else {
             let b_msg = BroadcastMsgRequest(serialize(msg));
             self.send(
                 self.current_leader.clone(),
                 &serialize(&b_msg),
                 NetMsgMethod::BroadcastRequest,
+                msg_id,
             )
             .await?;
         }
 
-        info!(target: "raft", "has id: {} {:?}  broadcast a msg", self.id.is_some(), self.role);
+        info!(target: "raft",
+         "Node has id: {}, Node status: {:?}, broadcast a msg id: {:?} ",
+         self.id.is_some(),
+         self.role, msg_id
+        );
+
         Ok(())
     }
 
@@ -280,8 +326,14 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             NetMsgMethod::BroadcastRequest => {
                 let vr: BroadcastMsgRequest = deserialize(&msg.payload)?;
                 let d: T = deserialize(&vr.0)?;
-                self.broadcast_msg(&d).await?;
+                self.broadcast_msg(&d, Some(msg.id)).await?;
             }
+            NetMsgMethod::SyncRequest => {
+                info!("receive sync request");
+                let sr: SyncRequest = deserialize(&msg.payload)?;
+                self.receive_sync_request(&sr, msg.id).await?;
+            }
+            NetMsgMethod::SyncResponse => {}
         }
 
         debug!(
@@ -291,13 +343,64 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         );
         Ok(())
     }
+
+    async fn receive_sync_request(&self, sr: &SyncRequest, msg_id: u64) -> Result<()> {
+        if self.id.is_none() {
+            return Ok(())
+        }
+
+        if self.role == Role::Leader {
+            let mut wipe = false;
+
+            let logs = if sr.logs_len == 0 {
+                self.logs.clone()
+            } else if self.logs.len() >= sr.logs_len &&
+                self.logs.get(sr.logs_len - 1)?.term == sr.last_term
+            {
+                self.logs.slice_from(sr.logs_len).unwrap()
+            } else {
+                wipe = true;
+                self.logs.clone()
+            };
+
+            let sync_response = SyncResponse {
+                logs,
+                commit_length: self.commit_length,
+                leader_id: self.id.clone().unwrap(),
+                wipe,
+            };
+
+            info!("send sync response");
+            for _ in 0..2 {
+                self.send(
+                    self.current_leader.clone(),
+                    &serialize(&sync_response),
+                    NetMsgMethod::SyncResponse,
+                    None,
+                )
+                .await?;
+            }
+        } else {
+            self.send(
+                self.current_leader.clone(),
+                &serialize(sr),
+                NetMsgMethod::SyncRequest,
+                Some(msg_id),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     async fn send(
         &self,
         recipient_id: Option<NodeId>,
         payload: &[u8],
         method: NetMsgMethod,
+        msg_id: Option<u64>,
     ) -> Result<()> {
-        let random_id = OsRng.next_u32();
+        let random_id = if msg_id.is_some() { msg_id.unwrap() } else { OsRng.next_u64() };
 
         debug!(
         target: "raft",
@@ -313,8 +416,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     async fn send_heartbeat(&self) -> Result<()> {
         if self.role == Role::Leader {
-            let nodes = self.nodes.lock().await.clone();
-            for node in nodes.iter() {
+            let nodes = self.nodes.lock().await;
+            let nodes_cloned = nodes.clone();
+            drop(nodes);
+            for node in nodes_cloned.iter() {
                 self.update_logs(node.0).await?;
             }
         }
@@ -344,7 +449,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&request);
-        self.send(None, &payload, NetMsgMethod::VoteRequest).await
+        self.send(None, &payload, NetMsgMethod::VoteRequest, None).await
     }
 
     async fn receive_vote_request(&mut self, vr: VoteRequest) -> Result<()> {
@@ -383,7 +488,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         let payload = serialize(&response);
-        self.send(Some(vr.node_id), &payload, NetMsgMethod::VoteResponse).await
+        self.send(Some(vr.node_id), &payload, NetMsgMethod::VoteResponse, None).await
     }
 
     async fn receive_vote_response(&mut self, vr: VoteResponse) -> Result<()> {
@@ -391,16 +496,17 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             self.votes_received.push(vr.node_id);
 
             let nodes = self.nodes.lock().await;
-            if self.votes_received.len() >= ((nodes.len() + 1) / 2) {
+            let nodes_cloned = nodes.clone();
+            drop(nodes);
+
+            if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone().unwrap());
-                for node in nodes.iter() {
+                for node in nodes_cloned.iter() {
                     self.sent_length.insert(node.0, self.logs.len());
                     self.acked_length.insert(node.0, 0);
-                    self.update_logs(node.0).await?;
                 }
             }
-            drop(nodes);
         } else if vr.current_term > self.current_term {
             self.set_current_term(&vr.current_term)?;
             self.role = Role::Follower;
@@ -441,7 +547,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&request);
-        self.send(Some(node_id.clone()), &payload, NetMsgMethod::LogRequest).await
+        self.send(Some(node_id.clone()), &payload, NetMsgMethod::LogRequest, None).await
     }
 
     async fn receive_log_request(&mut self, lr: LogRequest) -> Result<()> {
@@ -455,7 +561,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             self.current_leader = Some(lr.leader_id.clone());
         }
 
-        let ok = (self.logs.len() >= lr.prefix_len) &&
+        let mut ok = (self.logs.len() >= lr.prefix_len) &&
             (lr.prefix_len == 0 || self.logs.get(lr.prefix_len - 1)?.term == lr.prefix_term);
 
         let mut ack = 0;
@@ -463,6 +569,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         if lr.current_term == self.current_term && ok {
             self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix).await?;
             ack = lr.prefix_len + lr.suffix.len();
+        } else {
+            ok = false;
         }
 
         if self.id.is_none() {
@@ -477,7 +585,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         };
 
         let payload = serialize(&response);
-        self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse).await
+        self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse, None).await
     }
 
     async fn receive_log_response(&mut self, lr: LogResponse) -> Result<()> {
@@ -488,7 +596,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.commit_log().await?;
             } else if self.sent_length.get(&lr.node_id)? > 0 {
                 self.sent_length.insert(&lr.node_id, self.sent_length.get(&lr.node_id)? - 1);
-                self.update_logs(&lr.node_id).await?;
             }
         } else if lr.current_term > self.current_term {
             self.set_current_term(&lr.current_term)?;
@@ -523,20 +630,20 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let nodes = nodes_ptr.clone();
         drop(nodes_ptr);
 
-        let ready: Vec<u64> = self
-            .logs
-            .0
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| self.acks(nodes.clone(), *i as u64).len() >= min_acks)
-            .map(|(i, _)| i as u64)
-            .collect();
+        let mut ready: Vec<u64> = vec![];
+
+        for len in 1..(self.logs.len() + 1) {
+            if self.acks(nodes.clone(), len).len() >= min_acks {
+                ready.push(len);
+            }
+        }
 
         if ready.is_empty() {
             return Ok(())
         }
 
         let max_ready = *ready.iter().max().unwrap();
+
         if max_ready > self.commit_length && self.logs.get(max_ready - 1)?.term == self.current_term
         {
             for i in self.commit_length..max_ready {
@@ -563,7 +670,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         if prefix_len + suffix.len() > self.logs.len() {
-            for i in (self.logs.len() - prefix_len)..(suffix.len() - 1) {
+            for i in (self.logs.len() - prefix_len)..suffix.len() {
                 self.push_log(&suffix.get(i)?)?;
             }
         }

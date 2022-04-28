@@ -1,72 +1,49 @@
-use std::{net::SocketAddr, sync::Arc};
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+};
+use std::net::SocketAddr;
 
 use async_channel::Receiver;
 use async_executor::Executor;
-use async_std::net::{TcpListener, TcpStream};
-use clap::Parser;
 use easy_parallel::Parallel;
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::future;
+use structopt_toml::StructOptToml;
 
 use darkfi::{
-    cli_desc, net,
+    async_daemonize,
+    raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
-    util::cli::log_config,
+    util::{
+        cli::{log_config, spawn_config},
+        path::{expand_path, get_config_path},
+    },
     Error, Result,
 };
 
-pub(crate) mod proto;
-pub(crate) mod rpc;
-pub(crate) mod server;
+pub mod privmsg;
+pub mod rpc;
+pub mod server;
+pub mod settings;
 
 use crate::{
-    proto::privmsg::{Privmsg, ProtocolPrivmsg, SeenPrivmsgIds, SeenPrivmsgIdsPtr},
+    privmsg::Privmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
-#[derive(Parser)]
-#[clap(name = "ircd", about = cli_desc!(), version)]
-struct Args {
-    /// Accept address
-    #[clap(short, long)]
-    accept: Option<SocketAddr>,
-
-    /// Seed node (repeatable)
-    #[clap(short, long)]
-    seed: Vec<SocketAddr>,
-
-    /// Manual connection (repeatable)
-    #[clap(short, long)]
-    connect: Vec<SocketAddr>,
-
-    /// Connection slots
-    #[clap(long, default_value_t = 0)]
-    slots: u32,
-
-    /// External address
-    #[clap(short, long)]
-    external: Option<SocketAddr>,
-
-    /// IRC listen address
-    #[clap(short = 'r', long, default_value = "127.0.0.1:6667")]
-    irc: SocketAddr,
-
-    /// RPC listen address
-    #[clap(long, default_value = "127.0.0.1:8000")]
-    rpc: SocketAddr,
-
-    /// Verbosity level
-    #[clap(short, parse(from_occurrences))]
-    verbose: u8,
-}
+pub type SeenMsgId = Arc<Mutex<Vec<u32>>>;
 
 async fn process_user_input(
     mut line: String,
     peer_addr: SocketAddr,
     conn: &mut IrcServerConnection,
-    p2p: net::P2pPtr,
+    sender: async_channel::Sender<Privmsg>,
+    seen_msg_id: SeenMsgId,
 ) -> Result<()> {
     if line.is_empty() {
         warn!("Received empty line from {}. Closing connection.", peer_addr);
@@ -80,7 +57,7 @@ async fn process_user_input(
 
     debug!("Received '{}' from {}", line, peer_addr);
 
-    if let Err(e) = conn.update(line, p2p.clone()).await {
+    if let Err(e) = conn.update(line, sender, seen_msg_id).await {
         warn!("Connection error: {} for {}", e, peer_addr);
         return Err(Error::ChannelStopped)
     }
@@ -89,28 +66,37 @@ async fn process_user_input(
 }
 
 async fn process(
-    receiver: Receiver<Arc<Privmsg>>,
+    receiver: Receiver<Privmsg>,
     stream: TcpStream,
     peer_addr: SocketAddr,
-    p2p: net::P2pPtr,
-    seen_privmsg_ids: SeenPrivmsgIdsPtr,
+    sender: async_channel::Sender<Privmsg>,
+    seen_msg_id: SeenMsgId,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
     let mut reader = BufReader::new(reader);
-    let mut conn = IrcServerConnection::new(writer, seen_privmsg_ids);
+    let mut conn = IrcServerConnection::new(writer);
 
     loop {
         let mut line = String::new();
         futures::select! {
             privmsg = receiver.recv().fuse() => {
-                let msg = privmsg.expect("internal message queue error");
+                let msg = privmsg?;
+
+                let mut smi = seen_msg_id.lock().await;
+                if smi.contains(&msg.id) {
+                   continue
+                }
+
+                smi.push(msg.id);
+                drop(smi);
+
                 debug!("ABOUT TO SEND: {:?}", msg);
                 let irc_msg = format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
-                    msg.nickname,
-                    msg.channel,
-                    msg.message,
-                );
+                                      msg.nickname,
+                                      msg.channel,
+                                      msg.message,
+                                      );
 
                 conn.reply(&irc_msg).await?;
             }
@@ -121,121 +107,89 @@ async fn process(
                     return Ok(())
                 }
 
-                process_user_input(line, peer_addr, &mut conn, p2p.clone()).await?;
+                process_user_input(line, peer_addr, &mut conn, sender.clone(), seen_msg_id.clone()).await?;
             }
         };
     }
 }
 
-async fn start(executor: Arc<Executor<'_>>, args: Args, net_settings: net::Settings) -> Result<()> {
-    let listener = TcpListener::bind(args.irc).await?;
+async_daemonize!(realmain);
+async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+    let listener = TcpListener::bind(settings.irc_listen).await?;
     let local_addr = listener.local_addr()?;
     info!("Listening on {}", local_addr);
 
+    let datastore_path = expand_path(&settings.datastore)?;
+
+    let seen_msg_id: SeenMsgId = Arc::new(Mutex::new(vec![]));
+
+    let net_settings = settings.net;
+    //
+    //Raft
+    //
+    let datastore_raft = datastore_path.join("ircd.db");
+
+    let mut raft = Raft::<Privmsg>::new(net_settings.inbound, datastore_raft)?;
+
+    let raft_sender = raft.get_broadcast();
+    let commits = raft.get_commits();
+
+    //
+    // RPC interface
+    //
     let rpc_config = RpcServerConfig {
-        socket_addr: args.rpc,
+        socket_addr: settings.rpc_listen,
         // TODO: Use net/transport:
         use_tls: false,
         identity_path: Default::default(),
         identity_pass: Default::default(),
     };
-
-    //
-    // Privmsg protocol
-    //
-    let seen_privmsg_ids = SeenPrivmsgIds::new();
-    let seen_privmsg_ids_clone = seen_privmsg_ids.clone();
-
-    let (sender, receiver) = async_channel::unbounded();
-    let sender_clone = sender.clone();
-
-    let p2p = net::P2p::new(net_settings).await;
-    let registry = p2p.protocol_registry();
-    registry
-        .register(!net::SESSION_SEED, move |channel, p2p| {
-            let sender = sender_clone.clone();
-            let seen_privmsg_ids = seen_privmsg_ids_clone.clone();
-            async move { ProtocolPrivmsg::init(channel, sender, seen_privmsg_ids, p2p).await }
-        })
-        .await;
-
-    //
-    // P2P network main instance
-    //
-    p2p.clone().start(executor.clone()).await?;
-    let executor_clone = executor.clone();
-    let p2p_clone = p2p.clone();
-    executor
-        .spawn(async move {
-            if let Err(e) = p2p_clone.run(executor_clone).await {
-                error!("P2P run failed: {}", e);
-            }
-        })
-        .detach();
-
-    //
-    // RPC interface
-    let executor_clone = executor.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface { p2p: p2p.clone(), addr: args.rpc });
-    executor
-        .spawn(async move { listen_and_serve(rpc_config, rpc_interface, executor_clone.clone()).await })
-        .detach();
+    let executor_cloned = executor.clone();
+    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listen });
+    let rpc_task = executor.spawn(async move {
+        listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
+    });
 
     //
     // IRC instance
     //
-    loop {
-        let (stream, peer_addr) = match listener.accept().await {
-            Ok((s, a)) => (s, a),
-            Err(e) => {
-                error!("Failed listening for connections: {}", e);
-                return Err(Error::ServiceStopped)
-            }
-        };
+    let executor_cloned = executor.clone();
+    let irc_task: smol::Task<Result<()>> = executor.spawn(async move {
+        loop {
+            let (stream, peer_addr) = match listener.accept().await {
+                Ok((s, a)) => (s, a),
+                Err(e) => {
+                    error!("Failed listening for connections: {}", e);
+                    return Err(Error::ServiceStopped)
+                }
+            };
 
-        info!("Accepted client: {}", peer_addr);
+            info!("Accepted client: {}", peer_addr);
 
-        let p2p_clone = p2p.clone();
-        executor
-            .spawn(process(
-                receiver.clone(),
-                stream,
-                peer_addr,
-                p2p_clone,
-                seen_privmsg_ids.clone(),
-            ))
-            .detach();
-    }
-}
+            executor_cloned
+                .spawn(process(
+                    commits.clone(),
+                    stream,
+                    peer_addr,
+                    raft_sender.clone(),
+                    seen_msg_id.clone(),
+                ))
+                .detach();
+        }
+    });
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    ctrlc_async::set_async_handler(async move {
+        warn!(target: "ircd", "ircd start Exit Signal");
+        // cleaning up tasks running in the background
+        signal.send(()).await.unwrap();
+        rpc_task.cancel().await;
+        irc_task.cancel().await;
+    })
+    .unwrap();
 
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    // blocking
+    raft.start(net_settings.into(), executor.clone(), shutdown.clone()).await?;
 
-    let net_settings = net::Settings {
-        inbound: args.accept,
-        outbound_connections: args.slots,
-        external_addr: args.external,
-        peers: args.connect.clone(),
-        seeds: args.seed.clone(),
-        ..Default::default()
-    };
-
-    let ex = Arc::new(Executor::new());
-    let ex_clone = ex.clone();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-    let (_, result) = Parallel::new()
-        .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on the current thread.
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex_clone.clone(), args, net_settings).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
+    Ok(())
 }

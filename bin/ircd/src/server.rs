@@ -3,13 +3,12 @@ use futures::{io::WriteHalf, AsyncWriteExt};
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
 
-use darkfi::{net, Error, Result};
+use darkfi::{Error, Result};
 
-use crate::proto::privmsg::{Privmsg, SeenPrivmsgIdsPtr};
+use crate::privmsg::Privmsg;
 
 pub struct IrcServerConnection {
     write_stream: WriteHalf<TcpStream>,
-    seen_privmsg_ids: SeenPrivmsgIdsPtr,
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
@@ -18,10 +17,9 @@ pub struct IrcServerConnection {
 }
 
 impl IrcServerConnection {
-    pub fn new(write_stream: WriteHalf<TcpStream>, seen_ids: SeenPrivmsgIdsPtr) -> Self {
+    pub fn new(write_stream: WriteHalf<TcpStream>) -> Self {
         Self {
             write_stream,
-            seen_privmsg_ids: seen_ids,
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
@@ -30,7 +28,12 @@ impl IrcServerConnection {
         }
     }
 
-    pub async fn update(&mut self, line: String, p2p: net::P2pPtr) -> Result<()> {
+    pub async fn update(
+        &mut self,
+        line: String,
+        sender: async_channel::Sender<Privmsg>,
+        seen_msg_id: crate::SeenMsgId,
+    ) -> Result<()> {
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
         // that for now to keep the protocol simple and focused.
@@ -82,7 +85,6 @@ impl IrcServerConnection {
                 info!("Message {}: {}", channel, message);
 
                 let random_id = OsRng.next_u32();
-                self.seen_privmsg_ids.add_seen(random_id).await;
 
                 let protocol_msg = Privmsg {
                     id: random_id,
@@ -91,7 +93,11 @@ impl IrcServerConnection {
                     message: message.to_string(),
                 };
 
-                p2p.broadcast(protocol_msg).await?;
+                let mut smi = seen_msg_id.lock().await;
+                smi.push(random_id);
+                drop(smi);
+
+                sender.send(protocol_msg).await?;
             }
             "QUIT" => {
                 // Close the connection
