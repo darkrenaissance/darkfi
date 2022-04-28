@@ -143,7 +143,7 @@ pub struct LeadContract {
     //
     pub cm_pos : Option<u32>,
     //
-    pub sn_c1 : Option<pallas::Base>,
+    //pub sn_c1 : Option<pallas::Base>,
     pub slot : Option<pallas::Base>,
     pub mau_rho: Option<pallas::Scalar>,
     pub mau_y: Option<pallas::Scalar>,
@@ -367,12 +367,13 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             self.cm_pos
         )?;
-         */
+
         let sn_c1 = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
             self.sn_c1,
         )?;
+        */
 
         /*
         let eta = self.load_private(
