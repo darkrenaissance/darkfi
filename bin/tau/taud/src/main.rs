@@ -1,10 +1,12 @@
 use async_std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use std::fs::create_dir_all;
 
 use async_executor::Executor;
+use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
 use easy_parallel::Parallel;
 use futures::{select, FutureExt};
-use log::{info, warn};
+use log::{error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
@@ -17,6 +19,7 @@ use darkfi::{
         cli::{log_config, spawn_config},
         expand_path,
         path::get_config_path,
+        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     },
     Error, Result,
 };
@@ -34,7 +37,14 @@ use crate::{
     month_tasks::MonthTasks,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
+    util::{load, save},
 };
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable, Serialize, Deserialize)]
+pub struct MsgPayload {
+    nonce: Vec<u8>,
+    payload: Vec<u8>,
+}
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -43,6 +53,23 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // mkdir datastore_path if not exists
     create_dir_all(datastore_path.join("month"))?;
     create_dir_all(datastore_path.join("task"))?;
+
+    let mut rng = crypto_box::rand_core::OsRng;
+
+    let secret_key = match load::<[u8; KEY_SIZE]>(&datastore_path.join("secret_key")) {
+        Ok(t) => SecretKey::try_from(t)?,
+        Err(_) => {
+            info!(target: "tau", "generating a new secret key");
+            let secret = SecretKey::generate(&mut rng);
+            let sk_string = secret.as_bytes();
+            save::<[u8; KEY_SIZE]>(&datastore_path.join("secret_key"), sk_string)
+                .map_err(Error::from)?;
+            secret
+        }
+    };
+
+    let public_key = secret_key.public_key();
+    let msg_box = Box::new(&public_key, &secret_key);
 
     //
     // RPC
@@ -69,7 +96,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //Raft
     //
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<TaskInfo>::new(net_settings.inbound, datastore_raft)?;
+    let mut raft = Raft::<Vec<u8>>::new(net_settings.inbound, datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
@@ -83,7 +110,15 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
         for task in tasks {
             info!(target: "tau", "send local task {:?}", task);
-            initial_sync_raft_sender.send(task).await.map_err(Error::from)?;
+
+            let nonce = crypto_box::generate_nonce(&mut rng);
+            let payload = &serialize(&task)[..];
+            let encrypted_payload = msg_box.encrypt(&nonce, payload).unwrap();
+
+            let msg = MsgPayload { nonce: nonce.to_vec(), payload: encrypted_payload };
+            let ser_msg = serialize(&msg);
+
+            initial_sync_raft_sender.send(ser_msg).await.map_err(Error::from)?;
         }
 
         loop {
@@ -93,12 +128,36 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     if let Some(tk) = task {
                         info!(target: "tau", "save the received task {:?}", tk);
                         tk.save(&datastore_path_cloned)?;
-                        raft_sender.send(tk).await.map_err(Error::from)?;
+
+                        let nonce = crypto_box::generate_nonce(&mut rng);
+                        let payload = &serialize(&tk)[..];
+                        let encrypted_payload = msg_box.encrypt(&nonce, payload).unwrap();
+
+                        let msg = MsgPayload {
+                            nonce: nonce.to_vec(),
+                            payload: encrypted_payload,
+                        };
+                        let ser_msg = serialize(&msg);
+
+                        raft_sender.send(ser_msg).await.map_err(Error::from)?;
                     }
                 }
                 task = commits.recv().fuse() => {
                     let task = task.map_err(Error::from)?;
+
+                    let recv: MsgPayload = deserialize(&task)?;
+                    let nonce = recv.nonce.as_slice();
+                    let message = match msg_box.decrypt(nonce.try_into().unwrap(), &recv.payload[..]){
+                        Ok(m) => m,
+                        Err(_) => {
+                            error!("Invalid secret or public key");
+                            vec![]
+                        },
+                    };
+
+                    let task: TaskInfo = deserialize(&message)?;
                     info!(target: "tau", "receive update from the commits {:?}", task);
+                    
                     task.save(&datastore_path_cloned)?;
                 }
 
