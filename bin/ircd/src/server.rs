@@ -5,7 +5,7 @@ use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{Error, Result};
 
-use crate::privmsg::Privmsg;
+use crate::{privmsg::Privmsg, SeenMsgIds};
 
 pub struct IrcServerConnection {
     write_stream: WriteHalf<TcpStream>,
@@ -14,10 +14,16 @@ pub struct IrcServerConnection {
     is_registered: bool,
     nickname: String,
     _channels: Vec<String>,
+    seen_msg_id: SeenMsgIds,
+    p2p_sender: async_channel::Sender<Privmsg>,
 }
 
 impl IrcServerConnection {
-    pub fn new(write_stream: WriteHalf<TcpStream>) -> Self {
+    pub fn new(
+        write_stream: WriteHalf<TcpStream>,
+        seen_msg_id: SeenMsgIds,
+        p2p_sender: async_channel::Sender<Privmsg>,
+    ) -> Self {
         Self {
             write_stream,
             is_nick_init: false,
@@ -25,21 +31,18 @@ impl IrcServerConnection {
             is_registered: false,
             nickname: "".to_string(),
             _channels: vec![],
+            seen_msg_id,
+            p2p_sender,
         }
     }
 
-    pub async fn update(
-        &mut self,
-        line: String,
-        sender: async_channel::Sender<Privmsg>,
-        seen_msg_id: crate::SeenMsgId,
-    ) -> Result<()> {
+    pub async fn update(&mut self, line: String) -> Result<()> {
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
         // that for now to keep the protocol simple and focused.
         let command = tokens.next().ok_or(Error::MalformedPacket)?;
 
-        debug!("Received command: {}", command);
+        info!("Received command: {}", command);
 
         match command {
             "USER" => {
@@ -93,11 +96,11 @@ impl IrcServerConnection {
                     message: message.to_string(),
                 };
 
-                let mut smi = seen_msg_id.lock().await;
+                let mut smi = self.seen_msg_id.lock().await;
                 smi.push(random_id);
                 drop(smi);
 
-                sender.send(protocol_msg).await?;
+                self.p2p_sender.send(protocol_msg).await?;
             }
             "QUIT" => {
                 // Close the connection

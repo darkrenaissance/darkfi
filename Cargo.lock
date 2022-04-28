@@ -2155,8 +2155,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ircd2"
-version = "0.3.0"
+name = "ircd"
+version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-executor",

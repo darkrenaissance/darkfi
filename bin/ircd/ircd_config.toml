@@ -4,6 +4,9 @@
 ## IRC listen URL
 #irc_listen="127.0.0.1:11066"
 
+## Plugin listen URL
+#plugin_listen="127.0.0.1:11077"
+
 ## Sets Datastore Path
 #datastore="~/.config/ircd"
 

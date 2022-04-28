@@ -1,6 +1,6 @@
 [package]
-name = "ircd2"
-version = "0.3.0"
+name = "ircd"
+version = "0.1.0"
 homepage = "https://dark.fi"
 description = "P2P IRC daemon"
 authors = ["darkfi <dev@dark.fi>"]

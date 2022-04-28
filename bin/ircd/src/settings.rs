@@ -23,6 +23,9 @@ pub struct Args {
     /// IRC listen URL
     #[structopt(long = "irc", default_value = "127.0.0.1:11066")]
     pub irc_listen: SocketAddr,
+    /// Plugin listen URL
+    #[structopt(long)]
+    pub plugin_listen: Option<SocketAddr>,
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/ircd")]
     pub datastore: String,
