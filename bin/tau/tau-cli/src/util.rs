@@ -2,7 +2,7 @@ use std::{
     env::{temp_dir, var},
     fs::{self, File},
     io::{self, Read, Write},
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     ops::Index,
     process::Command,
 };
@@ -22,6 +22,12 @@ pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml")
 pub struct TauConfig {
     /// JSON-RPC listen URL
     pub rpc_listen: SocketAddr,
+}
+
+impl Default for TauConfig {
+    fn default() -> Self {
+        Self { rpc_listen: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 11055) }
+    }
 }
 
 #[derive(Subcommand)]

@@ -4,15 +4,8 @@ use async_std::{
 };
 use std::net::SocketAddr;
 
-use async_channel::Receiver;
+use async_channel::{Receiver, Sender};
 use async_executor::Executor;
-use easy_parallel::Parallel;
-use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
-use log::{debug, error, info, warn};
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use smol::future;
-use structopt_toml::StructOptToml;
-
 use darkfi::{
     async_daemonize,
     raft::Raft,
@@ -23,6 +16,12 @@ use darkfi::{
     },
     Error, Result,
 };
+use easy_parallel::Parallel;
+use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
+use log::{debug, error, info, warn};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::future;
+use structopt_toml::StructOptToml;
 
 pub mod privmsg;
 pub mod rpc;
@@ -36,28 +35,41 @@ use crate::{
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
-pub type SeenMsgId = Arc<Mutex<Vec<u32>>>;
+pub type SeenMsgIds = Arc<Mutex<Vec<u32>>>;
 
-async fn process_user_input(
-    mut line: String,
-    peer_addr: SocketAddr,
-    conn: &mut IrcServerConnection,
-    sender: async_channel::Sender<Privmsg>,
-    seen_msg_id: SeenMsgId,
-) -> Result<()> {
+fn build_irc_msg(msg: &Privmsg) -> String {
+    debug!("ABOUT TO SEND: {:?}", msg);
+    let irc_msg =
+        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", msg.nickname, msg.channel, msg.message,);
+    irc_msg
+}
+
+fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
     if line.is_empty() {
-        warn!("Received empty line from {}. Closing connection.", peer_addr);
+        warn!("Received empty line from {}. ", peer_addr);
+        warn!("Closing connection.");
         return Err(Error::ChannelStopped)
     }
 
-    assert!(&line[(line.len() - 2)..] == "\r\n");
+    if &line[(line.len() - 2)..] != "\r\n" {
+        warn!("Closing connection.");
+        return Err(Error::ChannelStopped)
+    }
     // Remove CRLF
     line.pop();
     line.pop();
 
-    debug!("Received '{}' from {}", line, peer_addr);
+    Ok(line)
+}
 
-    if let Err(e) = conn.update(line, sender, seen_msg_id).await {
+async fn broadcast_msg(
+    irc_msg: String,
+    peer_addr: SocketAddr,
+    conn: &mut IrcServerConnection,
+) -> Result<()> {
+    info!("Send msg to IRC server '{}' from {}", irc_msg, peer_addr);
+
+    if let Err(e) = conn.update(irc_msg).await {
         warn!("Connection error: {} for {}", e, peer_addr);
         return Err(Error::ChannelStopped)
     }
@@ -66,48 +78,45 @@ async fn process_user_input(
 }
 
 async fn process(
-    receiver: Receiver<Privmsg>,
+    raft_receiver: Receiver<Privmsg>,
     stream: TcpStream,
     peer_addr: SocketAddr,
-    sender: async_channel::Sender<Privmsg>,
-    seen_msg_id: SeenMsgId,
+    raft_sender: Sender<Privmsg>,
+    seen_msg_id: SeenMsgIds,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
     let mut reader = BufReader::new(reader);
-    let mut conn = IrcServerConnection::new(writer);
+    let mut conn = IrcServerConnection::new(writer, seen_msg_id.clone(), raft_sender);
 
     loop {
         let mut line = String::new();
         futures::select! {
-            privmsg = receiver.recv().fuse() => {
+            privmsg = raft_receiver.recv().fuse() => {
+                info!("Receive msg from raft");
                 let msg = privmsg?;
 
                 let mut smi = seen_msg_id.lock().await;
                 if smi.contains(&msg.id) {
                    continue
                 }
-
                 smi.push(msg.id);
                 drop(smi);
 
-                debug!("ABOUT TO SEND: {:?}", msg);
-                let irc_msg = format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
-                                      msg.nickname,
-                                      msg.channel,
-                                      msg.message,
-                                      );
-
+                let irc_msg = build_irc_msg(&msg);
                 conn.reply(&irc_msg).await?;
             }
-
             err = reader.read_line(&mut line).fuse() => {
                 if let Err(e) = err {
                     warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
                     return Ok(())
                 }
-
-                process_user_input(line, peer_addr, &mut conn, sender.clone(), seen_msg_id.clone()).await?;
+                info!("Receive msg from IRC server");
+                let irc_msg = match clean_input(line, &peer_addr) {
+                    Ok(m) => m,
+                    Err(e) => return Err(e)
+                };
+                broadcast_msg(irc_msg, peer_addr,&mut conn).await?;
             }
         };
     }
@@ -117,29 +126,25 @@ async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let listener = TcpListener::bind(settings.irc_listen).await?;
     let local_addr = listener.local_addr()?;
-    info!("Listening on {}", local_addr);
+    info!("IRC listening on {}", local_addr);
 
-    let datastore_path = expand_path(&settings.datastore)?;
+    let seen_msg_id: SeenMsgIds = Arc::new(Mutex::new(vec![]));
 
-    let seen_msg_id: SeenMsgId = Arc::new(Mutex::new(vec![]));
-
-    let net_settings = settings.net;
     //
     //Raft
     //
+    let datastore_path = expand_path(&settings.datastore)?;
+    let net_settings = settings.net;
     let datastore_raft = datastore_path.join("ircd.db");
-
     let mut raft = Raft::<Privmsg>::new(net_settings.inbound, datastore_raft)?;
-
     let raft_sender = raft.get_broadcast();
-    let commits = raft.get_commits();
+    let raft_receiver = raft.get_commits();
 
     //
     // RPC interface
     //
     let rpc_config = RpcServerConfig {
         socket_addr: settings.rpc_listen,
-        // TODO: Use net/transport:
         use_tls: false,
         identity_path: Default::default(),
         identity_pass: Default::default(),
@@ -164,11 +169,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 }
             };
 
-            info!("Accepted client: {}", peer_addr);
+            info!("IRC Accepted client: {}", peer_addr);
 
             executor_cloned
                 .spawn(process(
-                    commits.clone(),
+                    raft_receiver.clone(),
                     stream,
                     peer_addr,
                     raft_sender.clone(),

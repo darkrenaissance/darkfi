@@ -1,4 +1,4 @@
-use log::warn;
+use log::debug;
 use sled::Batch;
 
 use crate::{
@@ -130,7 +130,7 @@ impl BlockOrderStore {
                 ret.push(Some(hash));
             } else {
                 if strict {
-                    warn!("BlockOrderStore::get() Slot {} not found", i);
+                    debug!("BlockOrderStore::get() Slot {} not found", i);
                     return Err(Error::SlotNotFound(*i))
                 }
                 ret.push(None);

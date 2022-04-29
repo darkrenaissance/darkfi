@@ -168,7 +168,10 @@ async fn main() -> Result<()> {
 
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
-    let config: TauConfig = Config::<TauConfig>::load(config_path)?;
+    let config: TauConfig = match Config::<TauConfig>::load(config_path) {
+        Ok(c) => c,
+        Err(_) => TauConfig::default(),
+    };
 
     start(args, config).await
 }

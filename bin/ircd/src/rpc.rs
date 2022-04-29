@@ -40,14 +40,4 @@ impl JsonRpcInterface {
     async fn pong(&self, id: Value, _params: Value) -> JsonResult {
         jsonrpc::response(json!("pong"), id).into()
     }
-
-    // TODO
-    // RPCAPI:
-    // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    //async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-    //    let resp = self.p2p.get_info().await;
-    //    jsonrpc::response(resp, id).into()
-    //}
 }
