@@ -78,20 +78,25 @@ impl View {
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
         for info in self.info_list.infos.values() {
+            self.active_ids.ids.insert(info.node_name.to_string());
             let name_span = Span::raw(&info.node_name);
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
             for child in &info.children {
-                let name = Span::styled(format!("    {}", child.session_name), style);
-                let lines = vec![Spans::from(name)];
-                let names = ListItem::new(lines);
-                nodes.push(names);
-                for child in &child.children {
-                    let name = Span::styled(format!("        {}", child.addr), style);
+                if !child.is_empty == true {
+                    self.active_ids.ids.insert(child.session_name.to_string());
+                    let name = Span::styled(format!("    {}", child.session_name), style);
                     let lines = vec![Spans::from(name)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
+                    for child in &child.children {
+                        self.active_ids.ids.insert(child.addr.to_string());
+                        let name = Span::styled(format!("        {}", child.addr), style);
+                        let lines = vec![Spans::from(name)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                    }
                 }
             }
         }
@@ -102,10 +107,18 @@ impl View {
             .constraints(list_cnstrnts)
             .split(f.size());
 
+        debug!("DISPLAY NODES LEN: {}", nodes.len());
+        debug!("ACTIVE IDS LEN: {}", self.active_ids.ids.len());
+        debug!("ALL IDS LEN: {}", self.all_ids.ids.len());
+
+        debug!("DISPLAY NODES {:?}", nodes);
+        debug!("ACTIVE IDS {:?}", self.active_ids.ids);
+        debug!("ALL IDS {:?}", self.all_ids.ids);
+
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
+        f.render_stateful_widget(nodes, slice[0], &mut self.all_ids.state);
     }
 }
 

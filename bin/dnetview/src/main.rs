@@ -303,6 +303,7 @@ async fn parse_manual(_manual: &Value, node_id: String) -> Result<SessionInfo> {
         ConnectInfo::new(connect_id, addr, is_empty, msg, status, state, msg_log, parent);
     connects.push(connect_info.clone());
     let is_empty = is_empty_session(connects.clone());
+    //let is_empty = false;
     let session_info =
         SessionInfo::new(session_name, session_id, node_id, connects.clone(), is_empty);
 
@@ -414,12 +415,12 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.active_ids.next();
+                    view.all_ids.next();
                     //view.info_list.next();
                     //debug!("ID LIST STATE {:?}", view.all_ids.state);
                 }
                 Key::Char('k') => {
-                    view.active_ids.previous();
+                    view.all_ids.previous();
                     //view.info_list.previous();
                     //debug!("ID LIST STATE {:?}", view.id_list.state);
                 }
