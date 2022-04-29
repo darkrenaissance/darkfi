@@ -19,6 +19,7 @@ use darkfi::{
     },
     crypto::{
         merkle_node::MerkleNode,
+        //point_node::PointNode
         keypair::{Keypair, PublicKey, SecretKey},
         types::*,
         constants::{
@@ -33,6 +34,9 @@ use darkfi::{
 use pasta_curves::group::Curve;
 use pasta_curves::arithmetic::CurveAffine;
 //use halo2_proofs::arithmetic::CurveAffine;
+use pasta_curves::group::ff::PrimeField;
+use pasta_curves::group::GroupEncoding;
+
 
 #[derive(Debug,Default,Clone,Copy)]
 pub struct Coin
@@ -59,9 +63,6 @@ fn main()
 {
     let k = 13;
     //
-    //TODO calculate commitment here
-    //this is the commitment of the first coin
-    //TODO construct a tree of multiple coins
     const LEN : usize = 10;
     let mut rng = thread_rng();
     let mut sks : Vec<u64> = vec![];
@@ -74,6 +75,7 @@ fn main()
         sks.push(sk.clone());
         let node = MerkleNode(pallas::Base::from(sk));
         tree.append(&node.clone());
+        tree.witness();
         let (leaf_pos, path) = tree.authentication_path(&node).unwrap();
         root_sks.push(tree.root().clone());
         path_sks.push(path.as_slice().try_into().unwrap());
@@ -132,8 +134,9 @@ fn main()
         let c_cm2_blind = pallas::Base::from(0); //tmp val
         let c_cm : pallas::Point  = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
         //TODO (fix) which affine coefficient point to be used a/b ?
-        let c_cm_node = MerkleNode(*c_cm.to_affine().coordinates().unwrap().x()); //CurveAffine::a()
+        let c_cm_node = MerkleNode(pallas::Base::from_repr(c_cm.to_bytes()).unwrap());
         tree_cm.append(&c_cm_node.clone());
+        tree_cm.witness();
         let (leaf_pos, c_cm_path) = tree_cm.authentication_path(&c_cm_node).unwrap();
         let c_root_cm = tree_cm.root();
         // lead coin commitment
@@ -179,7 +182,7 @@ fn main()
         .to_affine()
         .coordinates()
         .unwrap();
-    //TODO root_cm need to be converted to Fp
+
     let c2 = pedersen_commitment_scalar(mod_r_p(coin.nonce.unwrap()), coin.root_cm.unwrap())
         .to_affine()
         .coordinates()
@@ -188,11 +191,12 @@ fn main()
     let c3 = coin.cm.unwrap().to_affine().coordinates().unwrap();
     let c4 = coin.cm2.unwrap().to_affine().coordinates().unwrap();
 
-    //TODO (fix) public key is a commitemnet of the root of secret key, and the timestamp
     let c7 = coin.pk.unwrap().to_affine().coordinates().unwrap();
     let c8 = coin.sn.unwrap().to_affine().coordinates().unwrap();
+
     //TODO (fix) this need to be replaced by computed final path as pallas::Base
     let c5 = coin.path.unwrap();
+
     let c6 = pallas::Base::from(0);
     // ===============
 
@@ -230,7 +234,7 @@ fn main()
     ];
 
     let mut vec_inputs = vec![public_inputs];
-    //TODO
+
     let prover = MockProver::run(k, &contract, vec_inputs).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 }
