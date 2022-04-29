@@ -179,9 +179,8 @@ async fn parse_data(
 
     let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
 
-    update_ids(model.clone(), node_id.clone()).await;
     update_node_info(model.clone(), node_info.clone(), node_id.clone()).await;
-    update_select_info(model.clone(), sessions.clone(), node_info.clone()).await?;
+    update_selectable_and_ids(model.clone(), sessions.clone(), node_info.clone()).await?;
 
     //debug!("IDS: {:?}", model.ids.lock().await);
     //debug!("INFOS: {:?}", model.infos.lock().await);
@@ -197,19 +196,22 @@ async fn update_node_info(model: Arc<Model>, node: NodeInfo, id: String) {
     model.node_info.lock().await.insert(id, node);
 }
 
-async fn update_select_info(
+async fn update_selectable_and_ids(
     model: Arc<Model>,
     sessions: Vec<SessionInfo>,
     node_info: NodeInfo,
 ) -> Result<()> {
     let node_obj = SelectableObject::Node(node_info.clone());
     model.select_info.lock().await.insert(node_info.node_id.clone(), node_obj);
+    update_ids(model.clone(), node_info.node_id.clone()).await;
     for session in sessions.clone() {
         let session_obj = SelectableObject::Session(session.clone());
         model.select_info.lock().await.insert(session.clone().session_id, session_obj);
+        update_ids(model.clone(), session.clone().session_id).await;
         for connect in session.children {
             let connect_obj = SelectableObject::Connect(connect.clone());
             model.select_info.lock().await.insert(connect.clone().connect_id, connect_obj);
+            update_ids(model.clone(), connect.clone().connect_id).await;
         }
     }
     Ok(())
