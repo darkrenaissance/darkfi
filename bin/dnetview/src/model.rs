@@ -19,13 +19,17 @@ pub enum SelectableObject {
 
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
-    pub infos: Mutex<Vec<SelectableObject>>,
-    //pub infos: Mutex<FxHashMap<String, SelectableObject>>,
+    pub node_info: Mutex<FxHashMap<String, NodeInfo>>,
+    pub select_info: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
 impl Model {
-    pub fn new(ids: Mutex<FxHashSet<String>>, infos: Mutex<Vec<SelectableObject>>) -> Model {
-        Model { ids, infos }
+    pub fn new(
+        ids: Mutex<FxHashSet<String>>,
+        node_info: Mutex<FxHashMap<String, NodeInfo>>,
+        select_info: Mutex<FxHashMap<String, SelectableObject>>,
+    ) -> Model {
+        Model { ids, node_info, select_info }
     }
 }
 

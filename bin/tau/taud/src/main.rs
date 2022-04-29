@@ -157,7 +157,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
                     let task: TaskInfo = deserialize(&message)?;
                     info!(target: "tau", "receive update from the commits {:?}", task);
-                    
                     task.save(&datastore_path_cloned)?;
                 }
 

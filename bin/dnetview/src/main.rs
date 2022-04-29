@@ -30,7 +30,7 @@ use dnetview::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     util::{generate_id, make_connect_id, make_empty_id, make_node_id, make_session_id},
-    view::{ConnectInfoView, IdListView, InfoListView, NodeInfoView, SessionInfoView, View},
+    view::{IdListView, NodeInfoView, View},
 };
 
 struct DNetView {
@@ -107,9 +107,10 @@ async fn main() -> Result<()> {
     terminal.clear()?;
 
     let ids = Mutex::new(FxHashSet::default());
-    let infos = Mutex::new(Vec::new());
+    let node_info = Mutex::new(FxHashMap::default());
+    let select_info = Mutex::new(FxHashMap::default());
 
-    let model = Arc::new(Model::new(ids, infos));
+    let model = Arc::new(Model::new(ids, node_info, select_info));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -172,15 +173,15 @@ async fn parse_data(
     let out_session = parse_outbound(outbound, node_id.clone()).await?;
     let man_session = parse_manual(manual, node_id.clone()).await?;
 
-    sessions.push(in_session);
-    sessions.push(out_session);
-    sessions.push(man_session);
+    sessions.push(in_session.clone());
+    sessions.push(out_session.clone());
+    sessions.push(man_session.clone());
 
     let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
-    let node = SelectableObject::Node(node_info.clone());
 
-    // we might simplify things by making this a Vec<SelectableObject>
-    update_model(model.clone(), sessions.clone(), node_info, node).await?;
+    update_ids(model.clone(), node_id.clone()).await;
+    update_node_info(model.clone(), node_info.clone(), node_id.clone()).await;
+    update_select_info(model.clone(), sessions.clone(), node_info.clone()).await?;
 
     //debug!("IDS: {:?}", model.ids.lock().await);
     //debug!("INFOS: {:?}", model.infos.lock().await);
@@ -188,28 +189,29 @@ async fn parse_data(
     Ok(())
 }
 
-async fn update_model(
+async fn update_ids(model: Arc<Model>, id: String) {
+    model.ids.lock().await.insert(id);
+}
+
+async fn update_node_info(model: Arc<Model>, node: NodeInfo, id: String) {
+    model.node_info.lock().await.insert(id, node);
+}
+
+async fn update_select_info(
     model: Arc<Model>,
     sessions: Vec<SessionInfo>,
     node_info: NodeInfo,
-    node: SelectableObject,
 ) -> Result<()> {
-    model.ids.lock().await.insert(node_info.node_id.clone());
-    model.infos.lock().await.push(node);
-
+    let node_obj = SelectableObject::Node(node_info.clone());
+    model.select_info.lock().await.insert(node_info.node_id.clone(), node_obj);
     for session in sessions.clone() {
-        model.ids.lock().await.insert(session.clone().session_id);
-
         let session_obj = SelectableObject::Session(session.clone());
-        model.infos.lock().await.push(session_obj);
-
+        model.select_info.lock().await.insert(session.clone().session_id, session_obj);
         for connect in session.children {
-            model.ids.lock().await.insert(connect.clone().connect_id);
             let connect_obj = SelectableObject::Connect(connect.clone());
-            model.infos.lock().await.push(connect_obj);
+            model.select_info.lock().await.insert(connect.clone().connect_id, connect_obj);
         }
     }
-
     Ok(())
 }
 
@@ -379,24 +381,17 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
     terminal.clear()?;
 
     let id_list = IdListView::new(FxHashSet::default());
-    let info_list = InfoListView::new(FxHashMap::default());
+    let info_list = NodeInfoView::new(FxHashMap::default());
+    let selectable = FxHashMap::default();
 
-    let node_view = NodeInfoView::default();
-    let session_view = SessionInfoView::default();
-    let connect_view = ConnectInfoView::default();
-
-    let mut view = View::new(
-        id_list.clone(),
-        info_list.clone(),
-        node_view.clone(),
-        session_view.clone(),
-        connect_view.clone(),
-    );
+    let mut view = View::new(id_list.clone(), info_list.clone(), selectable);
     view.id_list.state.select(Some(0));
     view.info_list.index = 0;
 
     loop {
-        view.update(model.infos.lock().await.clone())?;
+        view.update_ids(model.ids.lock().await.clone());
+        view.update_node_info(model.node_info.lock().await.clone());
+        view.update_selectable(model.select_info.lock().await.clone());
 
         terminal.draw(|f| {
             view.clone().render(f);
@@ -409,10 +404,12 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                 }
                 Key::Char('j') => {
                     view.id_list.next();
-                    //debug!("ID LIST STATE {:?}", view.id_list.state);
+                    //view.info_list.next();
+                    debug!("ID LIST STATE {:?}", view.id_list.state);
                 }
                 Key::Char('k') => {
                     view.id_list.previous();
+                    //view.info_list.previous();
                     //debug!("ID LIST STATE {:?}", view.id_list.state);
                 }
                 _ => (),
