@@ -17,34 +17,52 @@ use crate::model::{ConnectInfo, Model, NodeInfo, SelectableObject, SessionInfo};
 
 #[derive(Debug, Clone)]
 pub struct View {
-    pub id_list: IdListView,
+    pub all_ids: IdListView,
+    pub active_ids: IdListView,
     pub info_list: NodeInfoView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
 
 impl View {
     pub fn new(
-        id_list: IdListView,
+        all_ids: IdListView,
+        active_ids: IdListView,
         info_list: NodeInfoView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { id_list, info_list, selectables }
+        View { all_ids, active_ids, info_list, selectables }
     }
 
-    pub fn update_ids(&mut self, ids: FxHashSet<String>) {
-        // TODO: check if it's active
-        for id in ids {
-            self.id_list.ids.insert(id);
+    pub fn init_active_ids(&mut self) {
+        for (id, node) in &self.info_list.infos {
+            self.active_ids.ids.insert(id.to_string());
+            for session in &node.children {
+                if session.is_empty == false {
+                    self.active_ids.ids.insert(session.session_id.to_string());
+                    for connection in &session.children {
+                        self.active_ids.ids.insert(connection.connect_id.to_string());
+                    }
+                }
+            }
         }
+        //debug!("ACTIVE IDS {:?}", self.active_ids.ids);
+        //debug!("ALL IDS {:?}", self.all_ids.ids);
     }
 
-    pub fn update_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
+    pub fn init_ids(&mut self, ids: FxHashSet<String>) {
+        for id in ids {
+            self.all_ids.ids.insert(id);
+        }
+        self.init_active_ids();
+    }
+
+    pub fn init_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
         for (id, node) in nodes {
             self.info_list.infos.insert(id, node);
         }
     }
 
-    pub fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+    pub fn init_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
         // TODO: remove unactive selectables
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
@@ -87,7 +105,7 @@ impl View {
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
+        f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
     }
 }
 

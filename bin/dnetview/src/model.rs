@@ -52,6 +52,7 @@ pub struct SessionInfo {
     pub session_id: String,
     pub parent: String,
     pub children: Vec<ConnectInfo>,
+    pub is_empty: bool,
 }
 
 impl SessionInfo {
@@ -60,8 +61,9 @@ impl SessionInfo {
         session_id: String,
         parent: String,
         children: Vec<ConnectInfo>,
+        is_empty: bool,
     ) -> SessionInfo {
-        SessionInfo { session_name, session_id, parent, children }
+        SessionInfo { session_name, session_id, parent, children, is_empty }
     }
 }
 

@@ -29,7 +29,7 @@ use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
-    util::{generate_id, make_connect_id, make_empty_id, make_node_id, make_session_id},
+    util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
     view::{IdListView, NodeInfoView, View},
 };
 
@@ -268,11 +268,14 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
                     }
                 }
             }
+            let is_empty = is_empty_session(connects.clone());
+
             let session_info = SessionInfo::new(
                 session_name,
                 session_id.clone(),
                 node_id.clone(),
                 connects.clone(),
+                is_empty,
             );
             Ok(session_info)
         }
@@ -299,7 +302,9 @@ async fn parse_manual(_manual: &Value, node_id: String) -> Result<SessionInfo> {
     let connect_info =
         ConnectInfo::new(connect_id, addr, is_empty, msg, status, state, msg_log, parent);
     connects.push(connect_info.clone());
-    let session_info = SessionInfo::new(session_name, session_id, node_id, connects.clone());
+    let is_empty = is_empty_session(connects.clone());
+    let session_info =
+        SessionInfo::new(session_name, session_id, node_id, connects.clone(), is_empty);
 
     Ok(session_info)
 }
@@ -369,8 +374,11 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                     }
                 }
             }
+
+            let is_empty = is_empty_session(connects.clone());
+
             let session_info =
-                SessionInfo::new(session_name, session_id, node_id, connects.clone());
+                SessionInfo::new(session_name, session_id, node_id, connects.clone(), is_empty);
             Ok(session_info)
         }
         None => Err(Error::ValueIsNotObject),
@@ -382,18 +390,19 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
 
     terminal.clear()?;
 
-    let id_list = IdListView::new(FxHashSet::default());
+    let all_ids = IdListView::new(FxHashSet::default());
+    let active_ids = IdListView::new(FxHashSet::default());
     let info_list = NodeInfoView::new(FxHashMap::default());
     let selectable = FxHashMap::default();
 
-    let mut view = View::new(id_list.clone(), info_list.clone(), selectable);
-    view.id_list.state.select(Some(0));
+    let mut view = View::new(all_ids.clone(), active_ids.clone(), info_list.clone(), selectable);
+    view.all_ids.state.select(Some(0));
     view.info_list.index = 0;
 
     loop {
-        view.update_ids(model.ids.lock().await.clone());
-        view.update_node_info(model.node_info.lock().await.clone());
-        view.update_selectable(model.select_info.lock().await.clone());
+        view.init_ids(model.ids.lock().await.clone());
+        view.init_node_info(model.node_info.lock().await.clone());
+        view.init_selectable(model.select_info.lock().await.clone());
 
         terminal.draw(|f| {
             view.clone().render(f);
@@ -405,12 +414,12 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.id_list.next();
+                    view.active_ids.next();
                     //view.info_list.next();
-                    debug!("ID LIST STATE {:?}", view.id_list.state);
+                    //debug!("ID LIST STATE {:?}", view.all_ids.state);
                 }
                 Key::Char('k') => {
-                    view.id_list.previous();
+                    view.active_ids.previous();
                     //view.info_list.previous();
                     //debug!("ID LIST STATE {:?}", view.id_list.state);
                 }

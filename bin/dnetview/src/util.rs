@@ -1,4 +1,4 @@
-use crate::model::Session;
+use crate::model::{ConnectInfo, Session};
 use darkfi::{util::serial, Result};
 use rand::{thread_rng, Rng};
 
@@ -74,6 +74,7 @@ pub fn make_empty_id(node_id: String, session: &Session, count: u64) -> Result<S
 
     Ok(serial::serialize_hex(&num))
 }
-//pub fn is_empty_outbound(slots: Vec<Slot>) -> bool {
-//    return slots.iter().all(|slot| slot.is_empty);
-//}
+
+pub fn is_empty_session(connects: Vec<ConnectInfo>) -> bool {
+    return connects.iter().all(|conn| conn.is_empty)
+}
