@@ -2,7 +2,7 @@ use async_std::{stream::StreamExt, sync::Arc};
 use std::net::SocketAddr;
 
 use futures_rustls::TlsStream;
-use log::error;
+use log::{error, info};
 use smol::Executor;
 use url::Url;
 
@@ -92,6 +92,8 @@ impl Acceptor {
                     let result: Result<()> = {
                         let stream = stream?;
                         let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tcp")?;
+                        info!("Accepted client: {}", peer_addr);
+
                         let channel = Channel::new(Box::new(stream), peer_addr).await;
                         self.channel_subscriber.notify(Ok(channel)).await;
                         Ok(())
@@ -99,6 +101,7 @@ impl Acceptor {
 
                     if let Err(err) = result {
                         error!("Error listening for connections: {}", err);
+                        return Err(Error::ServiceStopped)
                     }
                 }
             }
@@ -126,7 +129,7 @@ impl Acceptor {
                     let result: Result<()> = {
                         let stream = stream?;
                         let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tls")?;
-
+                        info!("Accepted client: {}", peer_addr);
                         let stream = acceptor.accept(stream).await;
 
                         if let Err(err) = stream {
@@ -143,6 +146,7 @@ impl Acceptor {
 
                     if let Err(err) = result {
                         error!("Error listening for connections: {}", err);
+                        return Err(Error::ServiceStopped)
                     }
                 }
             }
