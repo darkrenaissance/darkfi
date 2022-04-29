@@ -403,6 +403,7 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
     loop {
         view.init_ids(model.ids.lock().await.clone());
         view.init_node_info(model.node_info.lock().await.clone());
+        view.init_active_ids();
         view.init_selectable(model.select_info.lock().await.clone());
 
         terminal.draw(|f| {
@@ -415,14 +416,10 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.all_ids.next();
-                    //view.info_list.next();
-                    //debug!("ID LIST STATE {:?}", view.all_ids.state);
+                    view.active_ids.next();
                 }
                 Key::Char('k') => {
-                    view.all_ids.previous();
-                    //view.info_list.previous();
-                    //debug!("ID LIST STATE {:?}", view.id_list.state);
+                    view.active_ids.previous();
                 }
                 _ => (),
             }

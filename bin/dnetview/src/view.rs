@@ -33,27 +33,10 @@ impl View {
         View { all_ids, active_ids, info_list, selectables }
     }
 
-    pub fn init_active_ids(&mut self) {
-        for (id, node) in &self.info_list.infos {
-            self.active_ids.ids.insert(id.to_string());
-            for session in &node.children {
-                if session.is_empty == false {
-                    self.active_ids.ids.insert(session.session_id.to_string());
-                    for connection in &session.children {
-                        self.active_ids.ids.insert(connection.connect_id.to_string());
-                    }
-                }
-            }
-        }
-        //debug!("ACTIVE IDS {:?}", self.active_ids.ids);
-        //debug!("ALL IDS {:?}", self.all_ids.ids);
-    }
-
     pub fn init_ids(&mut self, ids: FxHashSet<String>) {
         for id in ids {
             self.all_ids.ids.insert(id);
         }
-        self.init_active_ids();
     }
 
     pub fn init_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
@@ -63,14 +46,26 @@ impl View {
     }
 
     pub fn init_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
-        // TODO: remove unactive selectables
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
     }
 
+    pub fn init_active_ids(&mut self) {
+        for info in self.info_list.infos.values() {
+            self.active_ids.ids.insert(info.node_id.to_string());
+            for child in &info.children {
+                if !child.is_empty == true {
+                    self.active_ids.ids.insert(child.session_id.to_string());
+                    for child in &child.children {
+                        self.active_ids.ids.insert(child.connect_id.to_string());
+                    }
+                }
+            }
+        }
+    }
+
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
-        //debug!("VIEW AT RENDER {:?}", self.id_list.ids);
         let mut nodes = Vec::new();
         let style = Style::default();
         let list_margin = 2;
@@ -78,20 +73,17 @@ impl View {
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
         for info in self.info_list.infos.values() {
-            self.active_ids.ids.insert(info.node_name.to_string());
             let name_span = Span::raw(&info.node_name);
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
             for child in &info.children {
                 if !child.is_empty == true {
-                    self.active_ids.ids.insert(child.session_name.to_string());
                     let name = Span::styled(format!("    {}", child.session_name), style);
                     let lines = vec![Spans::from(name)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
                     for child in &child.children {
-                        self.active_ids.ids.insert(child.addr.to_string());
                         let name = Span::styled(format!("        {}", child.addr), style);
                         let lines = vec![Spans::from(name)];
                         let names = ListItem::new(lines);
@@ -107,18 +99,10 @@ impl View {
             .constraints(list_cnstrnts)
             .split(f.size());
 
-        debug!("DISPLAY NODES LEN: {}", nodes.len());
-        debug!("ACTIVE IDS LEN: {}", self.active_ids.ids.len());
-        debug!("ALL IDS LEN: {}", self.all_ids.ids.len());
-
-        debug!("DISPLAY NODES {:?}", nodes);
-        debug!("ACTIVE IDS {:?}", self.active_ids.ids);
-        debug!("ALL IDS {:?}", self.all_ids.ids);
-
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.all_ids.state);
+        f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
     }
 }
 
