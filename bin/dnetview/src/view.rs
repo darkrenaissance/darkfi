@@ -77,15 +77,35 @@ impl View {
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
-            for child in &info.children {
-                if !child.is_empty == true {
-                    let name = Span::styled(format!("    {}", child.session_name), style);
+            for session in &info.children {
+                if !session.is_empty == true {
+                    let name = Span::styled(format!("    {}", session.session_name), style);
                     let lines = vec![Spans::from(name)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
-                    for child in &child.children {
-                        let name = Span::styled(format!("        {}", child.addr), style);
-                        let lines = vec![Spans::from(name)];
+                    for connection in &session.children {
+                        let mut lines: Vec<Spans> = Vec::new();
+                        let name = Span::styled(format!("        {}", connection.addr), style);
+                        match connection.last_status.as_str() {
+                            "recv" => {
+                                let msg = Span::styled(
+                                    format!("                    [R: {}]", connection.last_msg),
+                                    style,
+                                );
+                                lines.push(Spans::from(vec![name, msg]));
+                            }
+                            "sent" => {
+                                let msg = Span::styled(
+                                    format!("                    [S: {}]", connection.last_msg),
+                                    style,
+                                );
+                                lines.push(Spans::from(vec![name, msg]));
+                            }
+                            _ => {
+                                // TODO
+                            }
+                        }
+
                         let names = ListItem::new(lines);
                         nodes.push(names);
                     }
@@ -103,6 +123,20 @@ impl View {
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
         f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
+
+        // TODO: render another stateful widget that shares the same state
+        // but displays SelectableObject on the right
+        self.render_info(f, slice);
+    }
+
+    fn render_info<B: Backend>(self, f: &mut Frame<'_, B>, slice: Vec<Rect>) {
+        let span = vec![];
+        let graph = Paragraph::new(span)
+            .block(Block::default().borders(Borders::ALL))
+            .style(Style::default());
+
+        //f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
+        f.render_widget(graph, slice[1]);
     }
 }
 
@@ -119,7 +153,6 @@ impl IdListView {
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                debug!("INDEX: {}", i);
                 if i >= self.ids.len() - 1 {
                     0
                 } else {
@@ -128,8 +161,6 @@ impl IdListView {
             }
             None => 0,
         };
-        debug!("NEW INDEX: {}", i);
-        debug!("IDS LEN: {}", self.ids.len());
         self.state.select(Some(i));
     }
 
@@ -139,14 +170,11 @@ impl IdListView {
                 if i == 0 {
                     self.ids.len() - 1
                 } else {
-                    debug!("NEW INDEX {}", i);
                     i - 1
                 }
             }
             None => 0,
         };
-        debug!("INDEX: {}", i);
-        debug!("IDS LEN: {}", self.ids.len());
         self.state.select(Some(i));
     }
 
