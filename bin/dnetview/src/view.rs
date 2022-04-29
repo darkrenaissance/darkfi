@@ -45,150 +45,50 @@ impl View {
     }
 
     pub fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+        // TODO: remove unactive selectables
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
     }
 
-    // we only need to update NodeInfo
-    //pub fn update(&mut self, model: Vec<SelectableObject>) -> Result<()> {
-    //    for obj in model {
-    //        let obj_clone = obj.clone();
-    //        match obj {
-    //            SelectableObject::Node(node) => {
-    //                let node1 = node.clone();
-    //                self.id_list.ids.insert(node1.clone().node_id);
-    //                self.info_list.infos.insert(node.node_id, obj_clone);
-    //            }
-    //            SelectableObject::Session(session) => {
-    //                let session1 = session.clone();
-    //                // only write to the id list if not empty
-    //                if !session.children.iter().all(|session| session.is_empty) {
-    //                    self.id_list.ids.insert(session1.clone().session_id);
-    //                }
-    //                //self.id_list.ids.insert(session1.clone().session_id);
-    //                self.info_list.infos.insert(session1.clone().session_id, obj_clone);
-    //            }
-    //            SelectableObject::Connect(connect) => {
-    //                let connect1 = connect.clone();
-    //                self.id_list.ids.insert(connect1.clone().connect_id);
-    //                self.info_list.infos.insert(connect1.clone().connect_id, obj_clone);
-    //            }
-    //        }
-    //    }
-    //    //debug!("INFO LIST VIEW {:?}", self.info_list.infos);
-
-    //    Ok(())
-    //}
-
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
         //debug!("VIEW AT RENDER {:?}", self.id_list.ids);
-        //let mut nodes = Vec::new();
+        let mut nodes = Vec::new();
         let style = Style::default();
         let list_margin = 2;
         let list_direction = Direction::Horizontal;
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
-        //let mut nodes = Vec::new();
-
-        // this would return node info
-        // for the left list
         for info in self.info_list.infos.values() {
-            debug!("FOUND INFO: {:?}", info);
-            // test
-        }
-
-        //for id in self.id_list.ids {
-        //    match self.info_list.infos.get(&id) {
-        //        Some(obj) => {
-        //            match obj {
-        //                SelectableObject::Node(info) => {
-        //                    //let node_name = info.node_name.clone();
-        //                    //draw_node(info.clone(), nodes.clone(), node_name);
-        //                    let name_span = Span::raw(&info.node_name);
-        //                    let lines = vec![Spans::from(name_span)];
-        //                    let names = ListItem::new(lines);
-        //                    nodes.push(names);
-        //                    for child in &info.children {
-        //                        //if !child.children.iter().all(|session| session.is_empty) {
-        //                        //let name_span = Span::raw(&child.session_name);
-        //                        let name =
-        //                            Span::styled(format!("    {}", child.session_name), style);
-        //                        let lines = vec![Spans::from(name)];
-        //                        let names = ListItem::new(lines);
-        //                        nodes.push(names);
-        //                        for child in &child.children {
-        //                            //let name_span = Span::raw(&child.connect_id);
-        //                            let name =
-        //                                Span::styled(format!("        {}", child.addr), style);
-        //                            let lines = vec![Spans::from(name)];
-        //                            let names = ListItem::new(lines);
-        //                            nodes.push(names);
-        //                        }
-        //                        // thing
-        //                        //}
-        //                    }
-        //                }
-        //                SelectableObject::Session(info) => {
-        //                    //let name_span = Span::raw(&info.session_name);
-        //                    //let lines = vec![Spans::from(name_span)];
-        //                    //let names = ListItem::new(lines);
-        //                    //nodes.push(names);
-        //                    //self.session_info.clone().render(info),
-        //                }
-        //                SelectableObject::Connect(info) => {
-        //                    //let name_span = Span::raw(&info.connect_id);
-        //                    //let lines = vec![Spans::from(name_span)];
-        //                    //let names = ListItem::new(lines);
-        //                    //nodes.push(names);
-        //                    //self.connect_info.clone().render(info),
-        //                }
-        //            }
-        //            //
-        //        }
-        //        None => {
-        //            // TODO
-        //        } //
-        //    }
-        //    //
-        //}
-        //let slice = Layout::default()
-        //    .direction(list_direction)
-        //    .margin(list_margin)
-        //    .constraints(list_cnstrnts)
-        //    .split(f.size());
-
-        //let nodes =
-        //    List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
-
-        //f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
-    }
-}
-
-fn draw_node(info: NodeInfo, mut nodes: Vec<ListItem>, node_name: String) {
-    let style = Style::default();
-    let name_span = Span::raw(node_name);
-    let lines = vec![Spans::from(name_span)];
-    let names = ListItem::new(lines);
-    nodes.push(names);
-    for child in &info.children {
-        if !child.children.iter().all(|session| session.is_empty) {
-            //let name_span = Span::raw(&child.session_name);
-            let name = Span::styled(format!("    {}", child.session_name), style);
-            let lines = vec![Spans::from(name)];
+            let name_span = Span::raw(&info.node_name);
+            let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
-            for child in &child.children {
-                //let name_span = Span::raw(&child.connect_id);
-                let name = Span::styled(format!("        {}", child.addr), style);
+            for child in &info.children {
+                let name = Span::styled(format!("    {}", child.session_name), style);
                 let lines = vec![Spans::from(name)];
                 let names = ListItem::new(lines);
                 nodes.push(names);
+                for child in &child.children {
+                    let name = Span::styled(format!("        {}", child.addr), style);
+                    let lines = vec![Spans::from(name)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                }
             }
-            // thing
         }
+
+        let slice = Layout::default()
+            .direction(list_direction)
+            .margin(list_margin)
+            .constraints(list_cnstrnts)
+            .split(f.size());
+
+        let nodes =
+            List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
+
+        f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
     }
-    //nodes // thing
 }
 
 #[derive(Debug, Clone)]
