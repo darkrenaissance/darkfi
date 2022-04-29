@@ -2266,6 +2266,7 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
+ "futures-rustls",
  "fxhash",
  "log",
  "rand",
@@ -2275,6 +2276,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "url",
 ]
 
 [[package]]

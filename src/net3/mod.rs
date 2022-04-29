@@ -89,7 +89,7 @@ pub mod settings;
 pub mod transport;
 
 pub use acceptor::{Acceptor, AcceptorPtr};
-pub use channel::{Channel, ChannelPtr};
+pub use channel::{Channel, ChannelPtr, Stream};
 pub use connector::Connector;
 pub use hosts::{Hosts, HostsPtr};
 pub use message::Message;

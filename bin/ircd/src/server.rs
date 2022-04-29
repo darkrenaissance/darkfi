@@ -1,14 +1,13 @@
-use async_std::net::TcpStream;
 use futures::{io::WriteHalf, AsyncWriteExt};
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{Error, Result};
 
-use crate::{privmsg::Privmsg, SeenMsgIds};
+use crate::{privmsg::Privmsg, SeenMsgIds, Stream};
 
 pub struct IrcServerConnection {
-    write_stream: WriteHalf<TcpStream>,
+    write_stream: WriteHalf<Box<dyn Stream>>,
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
@@ -20,7 +19,7 @@ pub struct IrcServerConnection {
 
 impl IrcServerConnection {
     pub fn new(
-        write_stream: WriteHalf<TcpStream>,
+        write_stream: WriteHalf<Box<dyn Stream>>,
         seen_msg_id: SeenMsgIds,
         p2p_sender: async_channel::Sender<Privmsg>,
     ) -> Self {
