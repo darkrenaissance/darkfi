@@ -17,3 +17,5 @@
     - [Anonymous voting](zkas/examples/voting.md)
 - [Miscellaneous tools](misc/misc.md)
   - [vanityaddr](misc/vanityaddr.md)
+  - [ircd](misc/ircd.md)
+  - [tau](misc/tau.md)
