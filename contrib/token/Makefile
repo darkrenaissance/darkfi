@@ -3,6 +3,7 @@
 DLTOOL = wget -nv --show-progress -O-
 
 LISTS = \
+	darkfi_token_list \
 	bitcoin_token_list \
 	erc20_token_list \
 	solana_token_list
@@ -17,6 +18,9 @@ all: $(LISTS_MIN)
 
 .json.min.json:
 	jq -r -c < $< > $@
+
+darkfi_token_list.json:
+	git checkout -- $@
 
 bitcoin_token_list.json:
 	git checkout -- $@

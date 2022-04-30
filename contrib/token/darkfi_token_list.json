@@ -1,0 +1,12 @@
+{
+  "name": "DarkFi Token List",
+  "tokens": [
+    {
+      "chainId": 1,
+      "address": "4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM",
+      "symbol": "DRK",
+      "name": "Dark",
+      "decimals": 8
+    }
+  ]
+}
