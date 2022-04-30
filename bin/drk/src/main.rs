@@ -13,7 +13,7 @@ use darkfi::{
         jsonrpc,
         jsonrpc::{JsonRequest, JsonResult},
     },
-    util::cli::log_config,
+    util::{cli::log_config, NetworkName},
     Error::JsonRpcError,
     Result,
 };
@@ -71,6 +71,24 @@ enum DrkSubcommand {
         #[clap(long)]
         /// Get all addresses in the wallet
         all_addresses: bool,
+    },
+
+    /// Transfer of value
+    Transfer {
+        /// Recipient address
+        #[clap(parse(try_from_str))]
+        recipient: Address,
+
+        /// Amount to transfer
+        amount: f64,
+
+        /// Coin network
+        #[clap(short, long, default_value = "darkfi", parse(try_from_str))]
+        network: NetworkName,
+
+        /// Token ID
+        #[clap(short, long)]
+        token_id: String,
     },
 }
 
@@ -212,6 +230,31 @@ impl Drk {
         println!("Wallet addresses:\n{:#?}", rep);
         Ok(())
     }
+
+    async fn tx_transfer(
+        &self,
+        network: NetworkName,
+        token_id: String,
+        recipient: Address,
+        amount: f64,
+    ) -> Result<()> {
+        println!("Attempting to transfer {} tokens to {}", amount, recipient);
+
+        let req = jsonrpc::request(
+            json!("tx.transfer"),
+            json!([network.to_string(), token_id, recipient.to_string(), amount]),
+        );
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error building and sending transaction: {}", e);
+                return Err(e)
+            }
+        };
+
+        println!("Success! Transaction ID: {}", rep);
+        Ok(())
+    }
 }
 
 #[async_std::main]
@@ -249,6 +292,10 @@ async fn main() -> Result<()> {
 
             eprintln!("Run 'drk wallet -h' to see the subcommand usage.");
             exit(2);
+        }
+
+        DrkSubcommand::Transfer { recipient, amount, network, token_id } => {
+            drk.tx_transfer(network, token_id, recipient, amount).await
         }
     }
 }

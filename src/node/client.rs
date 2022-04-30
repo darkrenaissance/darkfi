@@ -142,8 +142,6 @@ impl Client {
         debug!("build_slab_from_tx(): Successful state transition");
 
         debug!("build_slab_from_tx(): Broadcasting transaction");
-        // TODO: Send to some channel, let's not p2p here
-        //self.p2p.broadcast(Tx(Transaction)).await?;
         debug!("build_slab_from_tx(): Broadcasted successfully");
 
         Ok((tx, coins))
