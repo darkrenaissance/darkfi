@@ -160,9 +160,9 @@ impl State {
 
                     wallet.put_own_coin(own_coin).await?;
 
-                    let pubkey = PublicKey::from_secret(*secret);
-                    debug!(target: "state_apply", "Send a notification");
                     if let Some(ch) = notify.clone() {
+                        debug!(target: "state_apply", "Send a notification");
+                        let pubkey = PublicKey::from_secret(*secret);
                         ch.send((pubkey, note.value)).await?;
                     }
                 }
