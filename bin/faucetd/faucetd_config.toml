@@ -7,31 +7,31 @@
 ## uncommenting, or by using the command-line.
 
 # Chain to use (testnet, mainnet)
-chain = "testnet"
+#chain = "testnet"
 
 # Path to the wallet database
-wallet_path = "~/.config/darkfi/faucetd_wallet.db"
+#wallet_path = "~/.config/darkfi/faucetd_wallet.db"
 
 # Password for the wallet database
-wallet_pass = "changeme"
+#wallet_pass = "changeme"
 
 # Path to the blockchain database directory
-database = "~/.config/darkfi/faucetd_blockchain"
+#database = "~/.config/darkfi/faucetd_blockchain"
 
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8981"
+#rpc_listen = "tcp://127.0.0.1:8340"
 
 # P2P accept address for the syncing protocol
-sync_p2p_accept = "0.0.0.0:8342"
+#sync_p2p_accept = "0.0.0.0:8342"
 
 # P2P external address for the syncing protocol
-sync_p2p_external = "0.0.0.0:8342"
+#sync_p2p_external = "0.0.0.0:8342"
 
 # Connection slots for the syncing protocol
-sync_slots = 8
+#sync_slots = 8
 
 # Seed nodes to connect to for the syncing protocol
-sync_seed = []
+#sync_seed = []
 
 # Peers to connect to for the syncing protocol
-sync_peer = []
+#sync_peer = []
