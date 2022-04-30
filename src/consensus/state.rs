@@ -462,7 +462,7 @@ impl ValidatorState {
             Some(mut chain) => {
                 debug!("Proposal to fork a forkchain was received.");
                 chain.proposals.pop(); // removing last block to create the fork
-                if !chain.proposals.len.is_empty() {
+                if !chain.proposals.is_empty() {
                     // if len is 0 we will verify against blockchain last block
                     self.consensus.proposals.push(chain);
                     return Ok(self.consensus.proposals.len() as i64 - 1)
