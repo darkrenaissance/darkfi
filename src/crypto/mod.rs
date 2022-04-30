@@ -6,6 +6,7 @@ pub mod keypair;
 //pub mod loader;
 pub mod burn_proof;
 pub mod merkle_node;
+//pub mod point_node;
 pub mod mint_proof;
 pub mod note;
 pub mod nullifier;

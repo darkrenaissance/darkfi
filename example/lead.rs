@@ -48,6 +48,7 @@ pub struct Coin
     sl : Option<pallas::Base>, //slot id
     tau : Option<pallas::Base>,
     nonce : Option<pallas::Base>,
+    nonce_cm : Option<pallas::Point>,
     sn : Option<pallas::Point>, // coin's serial number
     //sk : Option<SecretKey>,
     pk : Option<pallas::Point>,
@@ -97,6 +98,7 @@ fn main()
     //
     let mut tree_cm = BridgeTree::<MerkleNode, 32>::new(LEN);
     let zerou64 : u64 = 0;
+
     for i in 0..LEN {
         let c_v = pallas::Base::from(u64::try_from(i*2).unwrap());
         //random sampling of the same size of prf,
@@ -107,23 +109,8 @@ fn main()
 
         let c_tau  = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
         let c_root_sk : MerkleNode  = root_sks[i];
-        // =========================
-        //TODO 512 secret-key/public-key to cop with pallas curves
-        // =========================
-        //note! sk is used in MerkleNode takes pallas::Base as input
-        //while the pallas::base is 512, the SecretKey is  of size 256, a larger keyring is needed
-        //TODO what is the endianess of this keyring
-        //let sk_bits = vec![];
-        //sk_bits.append(&mut c_sk.to_le_bytes().to_vec());
-        //sk_bits.append(&mut zerou64.to_le_bytes().to_vec());
-        //sk_bits.append(&mut zerou64.to_le_bytes().to_vec());
-        //sk_bits.append(&mut zerou64.to_le_bytes().to_vec());
-        //let c_pk = PublicKey::from_secret(SecretKey::from_bytes(sk_bits.as_slice().try_into().unwrap()).unwrap());
-        let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
-        //
-        // TODO (fix) no use random value for the secret key as random pallas base
-        // =======================
 
+        let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
 
         let c_seed  = pallas::Base::from(seeds[i]);
         let c_sn  = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
@@ -133,14 +120,21 @@ fn main()
         let c_cm1_blind = pallas::Base::from(0); //tmp val
         let c_cm2_blind = pallas::Base::from(0); //tmp val
         let c_cm : pallas::Point  = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
-        //TODO (fix) which affine coefficient point to be used a/b ?
-        let c_cm_node = MerkleNode(pallas::Base::from_repr(c_cm.to_bytes()).unwrap());
+        //TODO this return run time error! assertion error, it's out of range most likely
+        //let c_cm_base_bytes : [u8; 32] = c_cm.to_bytes();
+        /*
+        let c_cm_base_bytes : [u8; 32] = c_cm.to_affine()
+            .coordinates()
+            .unwrap()
+            .x().to_repr();
+        let c_cm_base : pallas::Base = pallas::Base::from_repr(c_cm_base_bytes).unwrap();
+        */
+        let c_cm_node = MerkleNode(pallas::Base::from(1)); // this is temporary, shouldn't pass of course
         tree_cm.append(&c_cm_node.clone());
         tree_cm.witness();
         let (leaf_pos, c_cm_path) = tree_cm.authentication_path(&c_cm_node).unwrap();
         let c_root_cm = tree_cm.root();
         // lead coin commitment
-        //TODO this c_v can be
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
         let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
         let lead_coin_msg = [*c_pk_pt.x(), *c_pk_pt.y(), c_v, *c_seed2_pt.x(), *c_seed2_pt.y()];
@@ -156,6 +150,7 @@ fn main()
             sl: Some(c_sl),
             tau: Some(c_tau),
             nonce: Some(c_seed),
+            nonce_cm: Some(c_seed2),
             sn:  Some(c_sn),
             //sk: Some(c_sk),
             pk: Some(c_pk),
@@ -174,67 +169,70 @@ fn main()
     // ================
     let coin_idx  = 0;
     let coin = coins[coin_idx];
-    let c0 = pedersen_commitment_scalar(mod_r_p(coin.nonce.unwrap()), coin.root_cm.unwrap())
+
+
+    let po_nonce = coin.nonce_cm
+        .unwrap()
         .to_affine()
         .coordinates()
         .unwrap();
-    let c1 = pedersen_commitment_scalar(mod_r_p(coin.tau.unwrap()), coin.root_cm.unwrap())
+
+    let po_nonce = coin.nonce_cm.unwrap()
         .to_affine()
         .coordinates()
         .unwrap();
 
-    let c2 = pedersen_commitment_scalar(mod_r_p(coin.nonce.unwrap()), coin.root_cm.unwrap())
+    let po_tau = pedersen_commitment_scalar(mod_r_p(coin.tau.unwrap()), coin.root_cm.unwrap())
         .to_affine()
         .coordinates()
         .unwrap();
-   //
-    let c3 = coin.cm.unwrap().to_affine().coordinates().unwrap();
-    let c4 = coin.cm2.unwrap().to_affine().coordinates().unwrap();
 
-    let c7 = coin.pk.unwrap().to_affine().coordinates().unwrap();
-    let c8 = coin.sn.unwrap().to_affine().coordinates().unwrap();
+    let po_cm = coin.cm.unwrap().to_affine().coordinates().unwrap();
+    let po_cm2 = coin.cm2.unwrap().to_affine().coordinates().unwrap();
 
-    //TODO (fix) this need to be replaced by computed final path as pallas::Base
-    let c5 = coin.path.unwrap();
+    let po_pk = coin.pk.unwrap().to_affine().coordinates().unwrap();
+    let po_sn = coin.sn.unwrap().to_affine().coordinates().unwrap();
 
-    let c6 = pallas::Base::from(0);
+
+    let po_path = coin.path.unwrap();
+
+    let po_cmp = pallas::Base::from(0);
     // ===============
-
     let path_sk = path_sks[coin_idx];
-    let contract = LeadContract {
-        path: coin.path,
-        root_sk: coin.root_sk,
-        path_sk: Some(path_sk),
-        coin_timestamp: coin.tau, //
-        coin_nonce: coin.nonce,
-        coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
-        value: coin.value,
-        coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
-        cm_c1_x: Some(*c3.x()),
-        cm_c1_y: Some(*c3.y()),
-        cm_c2_x: Some(*c4.x()),
-        cm_c2_y: Some(*c4.y()),
-        cm_pos : Some(u32::try_from(coin_idx).unwrap()),
-        //sn_c1: Some(coin.sn.unwrap()),
-        slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mau_rho.clone()),
-        mau_y: Some(mau_y.clone()),
-        root_cm: Some(coin.root_cm.unwrap()),
-    };
 
-    let mut public_inputs = vec![*c0.x(), *c0.y(),
-                                 *c1.x(), *c1.y(),
-                                 *c2.x(), *c2.y(),
-                                 *c7.x(), *c7.y(),
-                                 *c8.x(), *c8.y(),
-                                 *c3.x(), *c3.y(),
-                                 *c4.x(), *c4.y(),
-                                 c5[31].inner(), //TODO (res) how the path is structured assumed root is last node in the path.
-                                 c6,
+   let contract = LeadContract {
+       path: coin.path,
+       root_sk: coin.root_sk,
+       path_sk: Some(path_sk),
+       coin_timestamp: coin.tau, //
+       coin_nonce: coin.nonce,
+       coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
+       value: coin.value,
+       coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
+       cm_c1_x: Some(*po_cm.x()),
+       cm_c1_y: Some(*po_cm.y()),
+       cm_c2_x: Some(*po_cm2.x()),
+       cm_c2_y: Some(*po_cm2.y()),
+       cm_pos : Some(u32::try_from(coin_idx).unwrap()),
+       //sn_c1: Some(coin.sn.unwrap()),
+       slot: Some(coin.sl.unwrap()),
+       mau_rho: Some(mau_rho.clone()),
+       mau_y: Some(mau_y.clone()),
+       root_cm: Some(coin.root_cm.unwrap()),
+   };
+
+    let mut public_inputs : Vec<pallas::Base> = vec![
+        *po_nonce.x(), *po_nonce.y(),
+        *po_pk.x(), *po_pk.y(),
+        *po_sn.x(), *po_sn.y(),
+        *po_cm.x(), *po_cm.y(),
+        *po_cm2.x(), *po_cm2.y(),
+        po_path[31].inner(), //TODO (res) how the path is structured assumed root is last node in the path.
+        po_cmp,
     ];
 
-    let mut vec_inputs = vec![public_inputs];
-
-    let prover = MockProver::run(k, &contract, vec_inputs).unwrap();
+    let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();
+    //
     assert_eq!(prover.verify(), Ok(()));
+    //
 }

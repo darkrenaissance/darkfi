@@ -102,7 +102,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
         eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
 
         layouter.constrain_instance(greater_than.0.cell(), config.primary, 0)?;
-
         Ok(())
     }
 }
@@ -120,7 +119,9 @@ fn main() {
         f: Some(f),
     };
 
-    let mut public_inputs = vec![c];
+    let mut public_inputs : Vec<pallas::Base> = vec![
+          c,
+    ];
 
     let prover = MockProver::run(k, &circuit, vec![public_inputs]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
