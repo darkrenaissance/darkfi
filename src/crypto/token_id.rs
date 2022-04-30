@@ -7,10 +7,7 @@ pub fn generate_id(network: &NetworkName, token_str: &str) -> Result<DrkTokenId>
     let mut net_bytes: Vec<u8> = network.to_string().as_bytes().to_vec();
     // TODO: Check for fixed length token_str
     let mut token_bytes = match network {
-        NetworkName::DarkFi => {
-            let bytes = bs58::decode(token_str).into_vec()?;
-            return Ok(DrkTokenId::from_repr(bytes.try_into().unwrap()).unwrap())
-        }
+        NetworkName::DarkFi => bs58::decode(token_str).into_vec()?,
         NetworkName::Bitcoin => bs58::decode(token_str).into_vec()?,
         NetworkName::Ethereum => hex::decode(token_str.strip_prefix("0x").unwrap())?,
         NetworkName::Solana => bs58::decode(token_str).into_vec()?,
