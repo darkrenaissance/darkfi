@@ -152,7 +152,7 @@ impl BlockOrderStore {
                 key = u64::from_be_bytes(key_bytes);
                 let block_hash = deserialize(&found.1)?;
                 ret.push(block_hash);
-                counter = counter + 1;
+                counter += 1;
             } else {
                 break
             }

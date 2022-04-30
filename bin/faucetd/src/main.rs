@@ -284,7 +284,7 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<Address, i64>>>, timeout: i64)
         let im_map = map.lock().await;
         for (k, v) in im_map.iter() {
             if now - *v > timeout {
-                prune.push(k.clone());
+                prune.push(k);
             }
         }
         drop(im_map);

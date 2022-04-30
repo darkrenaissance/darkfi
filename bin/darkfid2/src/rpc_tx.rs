@@ -43,7 +43,7 @@ impl Darkfid {
         let address = params[2].as_str().unwrap();
         let amount = params[3].as_f64().unwrap();
 
-        if *self.synced.lock().await == false {
+        if !(*self.synced.lock().await) {
             error!("transfer(): Blockchain is not yet synced");
             return server_error(RpcError::NotYetSynced, id)
         }

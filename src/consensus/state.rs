@@ -462,7 +462,7 @@ impl ValidatorState {
             Some(mut chain) => {
                 debug!("Proposal to fork a forkchain was received.");
                 chain.proposals.pop(); // removing last block to create the fork
-                if chain.proposals.len() > 0 {
+                if !chain.proposals.len.is_empty() {
                     // if len is 0 we will verify against blockchain last block
                     self.consensus.proposals.push(chain);
                     return Ok(self.consensus.proposals.len() as i64 - 1)
@@ -799,7 +799,7 @@ impl ValidatorState {
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
             let participant = Participant::new(self.address, self.current_epoch());
-            self.consensus.participants.insert(participant.address, participant.clone());
+            self.consensus.participants.insert(participant.address, participant);
         }
 
         self.consensus.refreshed = epoch;
@@ -834,7 +834,7 @@ impl ValidatorState {
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(state: MemoryState, txs: &[Tx]) -> Result<Vec<StateUpdate>> {
         let mut ret = vec![];
-        let mut st = state.clone();
+        let mut st = state;
 
         for (i, tx) in txs.iter().enumerate() {
             let update = match state_transition(&st, tx.0.clone()) {
