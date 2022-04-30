@@ -21,6 +21,7 @@ use crate::{
         address::Address,
         keypair::{PublicKey, SecretKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
+        token_list::DrkTokenList,
     },
     net,
     node::{
@@ -855,6 +856,7 @@ impl ValidatorState {
     pub async fn update_canon_state(
         &self,
         updates: Vec<StateUpdate>,
+        tokenlist: &DrkTokenList,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
     ) -> Result<()> {
         let secret_keys: Vec<SecretKey> =
@@ -864,7 +866,13 @@ impl ValidatorState {
         let mut state = self.state_machine.lock().await;
         for update in updates {
             state
-                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
+                .apply(
+                    update,
+                    secret_keys.clone(),
+                    notify.clone(),
+                    self.client.wallet.clone(),
+                    tokenlist,
+                )
                 .await?;
         }
         drop(state);

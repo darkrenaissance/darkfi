@@ -9,7 +9,7 @@ use darkfi::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        token_id::generate_id2,
+        token_id::generate_id,
         OwnCoin, OwnCoins,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
@@ -143,7 +143,7 @@ fn main() -> Result<()> {
     };
 
     let token_id =
-        generate_id2("So11111111111111111111111111111111111111112", &NetworkName::Solana)?;
+        generate_id(&NetworkName::Solana, "So11111111111111111111111111111111111111112")?;
 
     let builder = TransactionBuilder {
         clear_inputs: vec![TransactionBuilderClearInputInfo {

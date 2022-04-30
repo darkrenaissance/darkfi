@@ -46,6 +46,9 @@ pub enum Error {
     #[error("Could not parse token parameter")]
     TokenParseError,
 
+    #[error(transparent)]
+    TryFromSliceError(#[from] std::array::TryFromSliceError),
+
     // ===============
     // Encoding errors
     // ===============
@@ -79,6 +82,10 @@ pub enum Error {
     #[cfg(feature = "bs58")]
     #[error(transparent)]
     Bs58DecodeError(#[from] bs58::decode::Error),
+
+    #[cfg(feature = "hex")]
+    #[error(transparent)]
+    HexDecodeError(#[from] hex::FromHexError),
 
     #[error("Bad operation type byte")]
     BadOperationType,

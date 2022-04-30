@@ -1,74 +1,27 @@
-use sha2::{Digest, Sha256};
+use group::ff::PrimeField;
 
 use super::types::DrkTokenId;
-use crate::{
-    util::{
-        serial::{deserialize, serialize},
-        NetworkName,
-    },
-    Result,
-};
+use crate::{util::NetworkName, Result};
 
-/// Hash the external token ID and NetworkName param.
-/// If it fails, change the last 4 bytes and hash it again.
-/// Keep repeating until it works.
-pub fn generate_id(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
-    let mut id_string = network.to_string();
-    id_string.push_str(tkn_str);
-
-    let mut data: Vec<u8> = serialize(&id_string);
-
-    let token_id = match deserialize::<DrkTokenId>(&data) {
-        Ok(v) => v,
-        Err(_) => {
-            let mut counter = 0;
-            loop {
-                data.truncate(28);
-                let serialized_counter = serialize(&counter);
-                data.extend(serialized_counter.iter());
-                let mut hasher = Sha256::new();
-                hasher.update(&data);
-                let hash = hasher.finalize();
-                let token_id = deserialize::<DrkTokenId>(&hash);
-                if token_id.is_err() {
-                    counter += 1;
-                    continue
-                }
-
-                return Ok(token_id.unwrap())
-            }
+pub fn generate_id(network: &NetworkName, token_str: &str) -> Result<DrkTokenId> {
+    let mut net_bytes: Vec<u8> = network.to_string().as_bytes().to_vec();
+    // TODO: Check for fixed length token_str
+    let mut token_bytes = match network {
+        NetworkName::DarkFi => {
+            let bytes = bs58::decode(token_str).into_vec()?;
+            return Ok(DrkTokenId::from_repr(bytes.try_into().unwrap()).unwrap())
         }
+        NetworkName::Bitcoin => bs58::decode(token_str).into_vec()?,
+        NetworkName::Ethereum => hex::decode(token_str.strip_prefix("0x").unwrap())?,
+        NetworkName::Solana => bs58::decode(token_str).into_vec()?,
     };
 
-    Ok(token_id)
-}
+    net_bytes.append(&mut token_bytes);
 
-/// YOLO
-pub fn generate_id2(tkn_str: &str, network: &NetworkName) -> Result<DrkTokenId> {
-    let mut num = 0_u64;
+    // Since our circuit is built to take a 2^64-1 range, we take the first 64
+    // bits of the hash and make an unsigned integer from it, which we can then
+    // cast into pallas::Base.
+    let data: [u8; 8] = blake3::hash(&net_bytes).as_bytes()[0..8].try_into()?;
 
-    match network {
-        NetworkName::Solana => {
-            for i in ['s', 'o', 'l'] {
-                num += i as u64;
-            }
-        }
-        NetworkName::Bitcoin => {
-            for i in ['b', 't', 'c'] {
-                num += i as u64;
-            }
-        }
-        NetworkName::Ethereum => {
-            for i in ['e', 't', 'h'] {
-                num += i as u64;
-            }
-        }
-        NetworkName::Empty => unimplemented!(),
-    }
-
-    for i in tkn_str.chars() {
-        num += i as u64;
-    }
-
-    Ok(DrkTokenId::from(num))
+    Ok(DrkTokenId::from(u64::from_le_bytes(data)))
 }

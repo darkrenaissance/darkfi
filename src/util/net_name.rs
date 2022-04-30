@@ -9,15 +9,18 @@ use crate::{
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum NetworkName {
+    DarkFi,
     Solana,
     Bitcoin,
     Ethereum,
-    Empty,
 }
 
 impl std::fmt::Display for NetworkName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::DarkFi => {
+                write!(f, "DarkFi")
+            }
             Self::Solana => {
                 write!(f, "Solana")
             }
@@ -26,9 +29,6 @@ impl std::fmt::Display for NetworkName {
             }
             Self::Ethereum => {
                 write!(f, "Ethereum")
-            }
-            Self::Empty => {
-                write!(f, "No Supported Network")
             }
         }
     }
@@ -39,6 +39,7 @@ impl FromStr for NetworkName {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "drk" | "darkfi" => Ok(NetworkName::DarkFi),
             "sol" | "solana" => Ok(NetworkName::Solana),
             "btc" | "bitcoin" => Ok(NetworkName::Bitcoin),
             "eth" | "ethereum" => Ok(NetworkName::Ethereum),

@@ -23,7 +23,7 @@ use darkfi::{
         Timestamp, Tx, ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_HASH_BYTES,
     },
-    crypto::{address::Address, keypair::PublicKey, types::DrkTokenId},
+    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList, types::DrkTokenId},
     net,
     net::P2pPtr,
     node::Client,
@@ -358,6 +358,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     )
     .await?;
 
+    let tokenlist = DrkTokenList::new(&[
+        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
+        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
+        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
+        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
+    ])?;
+
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
     let network_settings = net::Settings {
@@ -374,10 +381,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     info!("Registering block sync P2P protocols...");
     let _state = state.clone();
+    let _tokenlist = tokenlist.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let state = _state.clone();
-            async move { ProtocolSync::init(channel, state, p2p, false).await.unwrap() }
+            let tokenlist = _tokenlist.clone();
+            async move { ProtocolSync::init(channel, state, tokenlist, p2p, false).await.unwrap() }
         })
         .await;
 
@@ -415,7 +424,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    match block_sync_task(sync_p2p.clone(), state.clone()).await {
+    match block_sync_task(sync_p2p.clone(), state.clone(), &tokenlist).await {
         Ok(()) => *faucetd.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }

@@ -11,6 +11,7 @@ use crate::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
+        token_list::DrkTokenList,
         OwnCoin,
     },
     tx::Transaction,
@@ -137,6 +138,7 @@ impl State {
         secret_keys: Vec<SecretKey>,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
+        tokenlist: &DrkTokenList,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
         self.nullifiers.insert(&update.nullifiers)?;
@@ -158,7 +160,7 @@ impl State {
                     let own_coin =
                         OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
 
-                    wallet.put_own_coin(own_coin).await?;
+                    wallet.put_own_coin(own_coin, tokenlist).await?;
 
                     if let Some(ch) = notify.clone() {
                         debug!(target: "state_apply", "Send a notification");

@@ -1,272 +1,77 @@
+use std::str::FromStr;
+
 use fxhash::FxHashMap;
+use group::ff::PrimeField;
 use serde_json::Value;
 
-use crate::{
-    crypto::{token_id::generate_id2, types::DrkTokenId},
-    util::NetworkName,
-    Error, Result,
-};
+use super::{token_id::generate_id, types::DrkTokenId};
+use crate::{util::NetworkName, Result};
 
-pub const ETH_NATIVE_TOKEN_ID: &str = "0x0000000000000000000000000000000000000000";
-
-#[derive(Debug, Clone)]
-pub struct TokenList {
-    tokens: Vec<Value>,
+#[derive(Clone, Debug)]
+pub struct TokenInfo {
+    pub net_address: String,
+    pub drk_address: DrkTokenId,
+    pub name: String,
+    pub decimals: u64,
 }
+
+#[derive(Clone)]
+pub struct TokenList(pub FxHashMap<String, TokenInfo>);
 
 impl TokenList {
-    pub fn new(data: &[u8]) -> Result<Self> {
+    /// Create a new `TokenList` given a standard JSON object (as bytes)
+    pub fn new(network_name: &str, data: &[u8]) -> Result<Self> {
         let tokenlist: Value = serde_json::from_slice(data)?;
-        let tokens = tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
-        Ok(Self { tokens })
+
+        let mut map = FxHashMap::default();
+        for i in tokenlist["tokens"].as_array().unwrap() {
+            let net_address = i["address"].as_str().unwrap().to_string();
+            let decimals = i["decimals"].as_u64().unwrap();
+            let name = i["name"].as_str().unwrap().to_string();
+            let drk_address = generate_id(&NetworkName::from_str(network_name)?, &net_address)?;
+
+            let info = TokenInfo { net_address, drk_address, decimals, name };
+            let ticker = i["symbol"].as_str().unwrap().to_uppercase().to_string();
+            map.insert(ticker, info);
+        }
+
+        Ok(Self(map))
     }
 
-    pub fn get_symbols(&self) -> Result<Vec<String>> {
-        let mut symbols: Vec<String> = Vec::new();
-        for item in self.tokens.iter() {
-            let symbol = item["symbol"].as_str().unwrap();
-            symbols.push(symbol.to_string());
+    /// Tries to find the address and name of a given ticker in
+    /// the hashmap.
+    pub fn get(&self, ticker: String) -> Option<TokenInfo> {
+        if let Some(info) = self.0.get(&ticker) {
+            return Some(info.clone())
         }
-        Ok(symbols)
-    }
 
-    pub fn search_id(&self, symbol: &str) -> Result<Option<String>> {
-        for item in self.tokens.iter() {
-            if item["symbol"] == symbol.to_uppercase() {
-                let address = item["address"].clone();
-                let address = address.as_str().ok_or(Error::TokenParseError)?;
-                return Ok(Some(address.to_string()))
-            }
-        }
-        Ok(None)
-    }
-
-    pub fn search_decimal(&self, symbol: &str) -> Result<Option<usize>> {
-        for item in self.tokens.iter() {
-            if item["symbol"] == symbol.to_uppercase() {
-                let decimals = item["decimals"].clone();
-                let decimals = decimals.as_u64().ok_or(Error::TokenParseError)?;
-                let decimals = decimals as usize;
-                return Ok(Some(decimals))
-            }
-        }
-        Ok(None)
+        None
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DrkTokenList {
-    pub tokens: FxHashMap<NetworkName, FxHashMap<String, DrkTokenId>>,
+    pub by_net: FxHashMap<NetworkName, TokenList>,
+    pub by_addr: FxHashMap<String, (NetworkName, TokenInfo)>,
 }
 
 impl DrkTokenList {
-    pub fn new(sol_list: &TokenList, eth_list: &TokenList, btc_list: &TokenList) -> Result<Self> {
-        let sol_symbols = sol_list.get_symbols()?;
-        let eth_symbols = eth_list.get_symbols()?;
-        let btc_symbols = btc_list.get_symbols()?;
+    pub fn new(data: &[(&str, &[u8])]) -> Result<Self> {
+        let mut by_net = FxHashMap::default();
+        let mut by_addr = FxHashMap::default();
 
-        let sol_tokens: FxHashMap<String, DrkTokenId> = sol_symbols
-            .iter()
-            .filter_map(|symbol| {
-                Self::generate_hash_pair(sol_list, &NetworkName::Solana, symbol).ok()
-            })
-            .collect();
-
-        let eth_tokens: FxHashMap<String, DrkTokenId> = eth_symbols
-            .iter()
-            .filter_map(|symbol| {
-                Self::generate_hash_pair(eth_list, &NetworkName::Ethereum, symbol).ok()
-            })
-            .collect();
-
-        let btc_tokens: FxHashMap<String, DrkTokenId> = btc_symbols
-            .iter()
-            .filter_map(|symbol| {
-                Self::generate_hash_pair(btc_list, &NetworkName::Bitcoin, symbol).ok()
-            })
-            .collect();
-
-        let mut tokens: FxHashMap<NetworkName, FxHashMap<String, DrkTokenId>> =
-            FxHashMap::default();
-
-        tokens.insert(NetworkName::Solana, sol_tokens);
-        tokens.insert(NetworkName::Ethereum, eth_tokens);
-        tokens.insert(NetworkName::Bitcoin, btc_tokens);
-
-        Ok(Self { tokens })
-    }
-
-    fn generate_hash_pair(
-        token_list: &TokenList,
-        network_name: &NetworkName,
-        symbol: &str,
-    ) -> Result<(String, DrkTokenId)> {
-        if let Some(token_id) = &token_list.search_id(symbol)? {
-            return Ok((symbol.to_string(), generate_id2(token_id, network_name)?))
-        };
-
-        Err(Error::UnsupportedToken)
-    }
-
-    pub fn symbol_from_id(&self, id: &DrkTokenId) -> Result<Option<(NetworkName, String)>> {
-        for (network, tokens) in self.tokens.iter() {
-            for (key, val) in tokens.iter() {
-                if val == id {
-                    return Ok(Some((network.clone(), key.clone())))
-                }
+        for (name, json) in data {
+            let net_name = NetworkName::from_str(name)?;
+            let tokenlist = TokenList::new(name, json)?;
+            for (_, token) in tokenlist.0.iter() {
+                by_addr.insert(
+                    bs58::encode(token.drk_address.to_repr()).into_string(),
+                    (net_name.clone(), token.clone()),
+                );
             }
+            by_net.insert(net_name, tokenlist);
         }
 
-        Ok(None)
-    }
-}
-
-pub fn assign_id(
-    network: &NetworkName,
-    token: &str,
-    sol_tokenlist: &TokenList,
-    eth_tokenlist: &TokenList,
-    btc_tokenlist: &TokenList,
-) -> Result<String> {
-    match network {
-        NetworkName::Solana => {
-            // (== 44) can represent a Solana base58 token mint address
-            if token.len() == 44 {
-                Ok(token.to_string())
-            } else {
-                let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, sol_tokenlist)
-            }
-        }
-        NetworkName::Bitcoin => {
-            if token.len() == 34 {
-                Ok(token.to_string())
-            } else {
-                let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, btc_tokenlist)
-            }
-        }
-        NetworkName::Ethereum => {
-            // (== 42) can represent a erc20 token mint address
-            if token.len() == 42 {
-                Ok(token.to_string())
-            } else if token == "eth" {
-                Ok(ETH_NATIVE_TOKEN_ID.to_string())
-            } else {
-                let tok_lower = token.to_lowercase();
-                symbol_to_id(&tok_lower, eth_tokenlist)
-            }
-        }
-        _ => Err(Error::UnsupportedCoinNetwork),
-    }
-}
-
-pub fn symbol_to_id(token: &str, tokenlist: &TokenList) -> Result<String> {
-    let vec: Vec<char> = token.chars().collect();
-    let mut counter = 0;
-    for c in vec {
-        if c.is_alphabetic() {
-            counter += 1;
-        }
-    }
-    if counter == token.len() {
-        if let Some(id) = tokenlist.search_id(token)? {
-            Ok(id)
-        } else {
-            Err(Error::TokenParseError)
-        }
-    } else {
-        Ok(token.to_string())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn _get_sol_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../tests/data/solanatokenlisttest.json");
-        let sol_tokenlist: Value = serde_json::from_slice(file_contents)?;
-
-        let tokens = sol_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
-
-        let sol_tokenlist = TokenList { tokens };
-        Ok(sol_tokenlist)
-    }
-
-    fn _get_eth_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../tests/data/erc20tokenlisttest.json");
-        let eth_tokenlist: Value = serde_json::from_slice(file_contents)?;
-
-        let tokens = eth_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
-
-        let eth_tokenlist = TokenList { tokens };
-        Ok(eth_tokenlist)
-    }
-
-    fn _get_btc_tokens() -> Result<TokenList> {
-        let file_contents = include_bytes!("../../contrib/token/bitcoin_token_list.json");
-        let btc_tokenlist: Value = serde_json::from_slice(file_contents)?;
-
-        let tokens = btc_tokenlist["tokens"].as_array().ok_or(Error::TokenParseError)?.clone();
-
-        let btc_tokenlist = TokenList { tokens };
-        Ok(btc_tokenlist)
-    }
-
-    #[test]
-    pub fn test_get_symbols() -> Result<()> {
-        let tokens = _get_sol_tokens()?;
-        let symbols = tokens.get_symbols()?;
-        assert_eq!(symbols.len(), 5);
-        assert_eq!("MILLI", symbols[0]);
-        assert_eq!("ZI", symbols[1]);
-        assert_eq!("SOLA", symbols[2]);
-        assert_eq!("SOL", symbols[3]);
-        assert_eq!("USDC", symbols[4]);
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_get_id_from_symbols() -> Result<()> {
-        let tokens = _get_sol_tokens()?;
-        let symbol = &tokens.get_symbols()?[3];
-        let id = tokens.search_id(symbol)?;
-        assert!(id.is_some());
-        assert_eq!(id.unwrap(), "So11111111111111111111111111111111111111112");
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_hashmap() -> Result<()> {
-        let sol_tokens = _get_sol_tokens()?;
-        let sol_tokens2 = _get_sol_tokens()?;
-        let eth_tokens = _get_eth_tokens()?;
-        let eth_tokens2 = _get_eth_tokens()?;
-        let btc_tokens = _get_btc_tokens()?;
-        let btc_tokens2 = _get_btc_tokens()?;
-
-        let drk_token = DrkTokenList::new(&sol_tokens, &eth_tokens, &btc_tokens)?;
-
-        assert_eq!(drk_token.tokens[&NetworkName::Solana].len(), 5);
-        assert_eq!(drk_token.tokens[&NetworkName::Ethereum].len(), 3);
-        assert_eq!(drk_token.tokens[&NetworkName::Bitcoin].len(), 1);
-
-        assert_eq!(
-            drk_token.tokens[&NetworkName::Solana]["SOL"],
-            generate_id2(&sol_tokens2.search_id("SOL")?.unwrap(), &NetworkName::Solana)?
-        );
-
-        assert_eq!(
-            drk_token.tokens[&NetworkName::Bitcoin]["BTC"],
-            generate_id2(&btc_tokens2.search_id("BTC")?.unwrap(), &NetworkName::Bitcoin)?
-        );
-
-        assert_eq!(
-            drk_token.tokens[&NetworkName::Ethereum]["WBTC"],
-            generate_id2(&eth_tokens2.search_id("WBTC")?.unwrap(), &NetworkName::Ethereum)?
-        );
-
-        Ok(())
+        Ok(Self { by_net, by_addr })
     }
 }

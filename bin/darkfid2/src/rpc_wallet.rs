@@ -1,6 +1,7 @@
 use fxhash::FxHashMap;
-use log::error;
+use log::{error, warn};
 use num_bigint::BigUint;
+use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
 
 use darkfi::{
@@ -15,8 +16,7 @@ use darkfi::{
             JsonResult,
         },
     },
-    util::{decode_base10, encode_base10},
-    Result,
+    util::{decode_base10, encode_base10, NetworkName},
 };
 
 use super::Darkfid;
@@ -199,45 +199,60 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
     pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let result: Result<FxHashMap<String, (String, String)>> = async {
-            let balances = self.client.get_balances().await?;
-            let mut symbols: FxHashMap<String, (String, String)> = FxHashMap::default();
-
-            for b in balances.list.iter() {
-                let network: String;
-                let symbol: String;
-
-                let mut amount = BigUint::from(b.value);
-
-                if let Some((net, sym)) = self.drk_tokenlist.symbol_from_id(&b.token_id)? {
-                    network = net.to_string();
-                    symbol = sym;
-                } else {
-                    // TODO: SQL needs to have the mint address for show, not the internal hash.
-                    // TODO: SQL needs to have the network name
-                    network = String::from("UNKNOWN");
-                    symbol = format!("{:?}", b.token_id);
-                }
-
-                if let Some(prev) = symbols.get(&symbol) {
-                    let prev_amnt = decode_base10(&prev.0, 8, true)?;
-                    amount += prev_amnt;
-                }
-
-                let amount = encode_base10(amount, 8);
-                symbols.insert(symbol, (amount, network));
-            }
-
-            Ok(symbols)
-        }
-        .await;
-
-        match result {
-            Ok(res) => jsonrpc::response(json!(res), id).into(),
+        let balances = match self.client.get_balances().await {
+            Ok(v) => v,
             Err(e) => {
                 error!("Failed fetching balances from wallet: {}", e);
-                jsonrpc::error(InternalError, None, id).into()
+                return jsonrpc::error(InternalError, None, id).into()
             }
+        };
+
+        // k: ticker/drk_addr, v: (amount, network, net_addr, drk_addr)
+        let mut ret: FxHashMap<String, (String, String, String, String)> = FxHashMap::default();
+
+        for balance in balances.list {
+            let drk_addr = bs58::encode(balance.token_id.to_repr()).into_string();
+            let mut amount = BigUint::from(balance.value);
+
+            let (net_name, net_addr) =
+                if let Some((net, tok)) = self.tokenlist.by_addr.get(&drk_addr) {
+                    (net, tok.net_address.clone())
+                } else {
+                    warn!("Could not find network name and token info for {}", drk_addr);
+                    (&NetworkName::DarkFi, "unknown".to_string())
+                };
+
+            let mut ticker = None;
+            for (k, v) in self.tokenlist.by_net[net_name].0.iter() {
+                if v.net_address == net_addr {
+                    ticker = Some(k.clone());
+                    break
+                }
+            }
+
+            if ticker.is_none() {
+                ticker = Some(drk_addr.clone())
+            }
+
+            let ticker = ticker.unwrap();
+
+            if let Some(prev) = ret.get(&ticker) {
+                // TODO: We shouldn't be hardcoding everything to 8 decimals.
+                let prev_amnt = match decode_base10(&prev.0, 8, false) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("Failed to decode_base10(): {}", e);
+                        return jsonrpc::error(InternalError, None, id).into()
+                    }
+                };
+
+                amount += prev_amnt;
+            }
+
+            let amount = encode_base10(amount, 8);
+            ret.insert(ticker, (amount, net_name.to_string(), net_addr, drk_addr));
         }
+
+        jsonrpc::response(json!(ret), id).into()
     }
 }

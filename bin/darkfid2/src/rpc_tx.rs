@@ -5,14 +5,11 @@ use serde_json::{json, Value};
 
 use darkfi::{
     consensus::Tx,
-    crypto::{address::Address, keypair::PublicKey},
+    crypto::{address::Address, keypair::PublicKey, token_id::generate_id},
     rpc::{
         jsonrpc,
         jsonrpc::{
-            ErrorCode::{
-                InternalError, InvalidAddressParam, InvalidAmountParam, InvalidParams,
-                InvalidTokenIdParam,
-            },
+            ErrorCode::{InternalError, InvalidAddressParam, InvalidAmountParam, InvalidParams},
             JsonResult,
         },
     },
@@ -88,12 +85,17 @@ impl Darkfid {
             }
         };
 
-        let token_id = if let Some(token_id) =
-            self.drk_tokenlist.tokens[&network].get(&token.to_uppercase())
+        let token_id = if let Some(tok) = self.tokenlist.by_net[&network].get(token.to_uppercase())
         {
-            token_id
+            tok.drk_address
         } else {
-            return jsonrpc::error(InvalidTokenIdParam, None, id).into()
+            match generate_id(&network, &token) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("transfer(): Failed generate_id(): {}", e);
+                    return jsonrpc::error(InternalError, None, id).into()
+                }
+            }
         };
 
         let tx = match self
@@ -101,7 +103,7 @@ impl Darkfid {
             .build_transaction(
                 pubkey,
                 amount,
-                *token_id,
+                token_id,
                 false,
                 self.validator_state.read().await.state_machine.clone(),
             )

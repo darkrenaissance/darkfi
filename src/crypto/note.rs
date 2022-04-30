@@ -1,5 +1,3 @@
-use std::io;
-
 use crypto_api_chachapoly::ChachaPolyIetf;
 use rand::rngs::OsRng;
 
@@ -9,49 +7,22 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         types::*,
     },
-    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
-pub const NOTE_PLAINTEXT_SIZE: usize = 32 +    // serial
-    8 +     // value
-    32 +    // token_id
-    32 +    // coin_blind
-    32; // value_blind
+/// Plaintext size is serial + value + token_id + coin_blind + value_blind
+pub const NOTE_PLAINTEXT_SIZE: usize = 32 + 8 + 32 + 32 + 32;
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
     pub token_id: DrkTokenId,
     pub coin_blind: DrkCoinBlind,
     pub value_blind: DrkValueBlind,
-}
-
-impl Encodable for Note {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.serial.encode(&mut s)?;
-        len += self.value.encode(&mut s)?;
-        len += self.token_id.encode(&mut s)?;
-        len += self.coin_blind.encode(&mut s)?;
-        len += self.value_blind.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Note {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self {
-            serial: Decodable::decode(&mut d)?,
-            value: Decodable::decode(&mut d)?,
-            token_id: Decodable::decode(&mut d)?,
-            coin_blind: Decodable::decode(&mut d)?,
-            value_blind: Decodable::decode(d)?,
-        })
-    }
 }
 
 impl Note {
@@ -76,28 +47,10 @@ impl Note {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
     ephem_public: PublicKey,
-}
-
-impl Encodable for EncryptedNote {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        s.write_slice(&self.ciphertext)?;
-        len += ENC_CIPHERTEXT_SIZE;
-        len += self.ephem_public.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for EncryptedNote {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut ciphertext = [0u8; ENC_CIPHERTEXT_SIZE];
-        d.read_slice(&mut ciphertext[..])?;
-        Ok(Self { ciphertext, ephem_public: Decodable::decode(d)? })
-    }
 }
 
 impl EncryptedNote {
