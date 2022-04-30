@@ -254,15 +254,20 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
                             node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
                         let status =
                             node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
-                        // TODO: state, msg log
+                        // TODO: state
                         let id = node.unwrap().get("random_id").unwrap().as_u64().unwrap();
                         let connect_id = make_connect_id(id)?;
                         let state = "state".to_string();
                         let is_empty = false;
                         let parent = session_id.clone();
-                        let msg_log = Vec::new();
+                        let msg_values = node.unwrap().get("log").unwrap().as_array().unwrap();
+                        let mut msgs: Vec<(String, String)> = Vec::new();
+                        for msg in msg_values {
+                            let msg: (String, String) = serde_json::from_value(msg.clone())?;
+                            msgs.push(msg);
+                        }
                         let connect_info = ConnectInfo::new(
-                            connect_id, addr, is_empty, msg, status, state, msg_log, parent,
+                            connect_id, addr, is_empty, msg, status, state, msgs, parent,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -353,14 +358,17 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                         let last_msg = channel["last_msg"].as_str().unwrap().to_string();
                         let last_status = channel["last_status"].as_str().unwrap().to_string();
                         let id = channel["random_id"].as_u64().unwrap();
+                        let msg_values = channel["log"].as_array().unwrap();
                         let connect_id = make_connect_id(id)?;
                         let is_empty = false;
                         let addr = &slot["addr"];
                         let state = &slot["state"];
                         let parent = session_id.clone();
-                        // TODO: deserialize msg_log
-                        let _msg_log = channel["log"].as_array().unwrap();
-                        let msg_log = Vec::new();
+                        let mut msgs: Vec<(String, String)> = Vec::new();
+                        for msg in msg_values {
+                            let msg: (String, String) = serde_json::from_value(msg.clone())?;
+                            msgs.push(msg);
+                        }
                         let connect_info = ConnectInfo::new(
                             connect_id,
                             addr.as_str().unwrap().to_string(),
@@ -368,7 +376,7 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                             last_msg,
                             last_status,
                             state.as_str().unwrap().to_string(),
-                            msg_log,
+                            msgs,
                             parent,
                         );
                         connects.push(connect_info.clone());

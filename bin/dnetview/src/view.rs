@@ -121,8 +121,8 @@ impl View {
             .constraints(list_cnstrnts)
             .split(f.size());
 
-        debug!("NODE INFO LENGTH {:?}", nodes.len());
-        debug!("ACTIVE IDS LENGTH {:?}", self.active_ids.ids.len());
+        //debug!("NODE INFO LENGTH {:?}", nodes.len());
+        //debug!("ACTIVE IDS LENGTH {:?}", self.active_ids.ids.len());
 
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
@@ -139,6 +139,15 @@ impl View {
         let graph = Paragraph::new(span)
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default());
+
+        for info in self.selectables.values() {
+            match info {
+                SelectableObject::Node(node) => {}
+                SelectableObject::Session(session) => {}
+                SelectableObject::Connect(connect) => {}
+            }
+            //
+        }
 
         //f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
         f.render_widget(graph, slice[1]);

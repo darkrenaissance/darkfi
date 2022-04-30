@@ -75,7 +75,7 @@ pub struct ConnectInfo {
     pub last_msg: String,
     pub last_status: String,
     pub state: String,
-    pub msg_log: Vec<String>,
+    pub msg_log: Vec<(String, String)>,
     pub parent: String,
 }
 
@@ -87,7 +87,7 @@ impl ConnectInfo {
         last_msg: String,
         last_status: String,
         state: String,
-        msg_log: Vec<String>,
+        msg_log: Vec<(String, String)>,
         parent: String,
     ) -> ConnectInfo {
         ConnectInfo { connect_id, addr, is_empty, last_msg, last_status, state, msg_log, parent }
