@@ -23,7 +23,7 @@ use darkfi::{
         Timestamp, Tx, ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_HASH_BYTES,
     },
-    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList, types::DrkTokenId},
+    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
     net,
     net::P2pPtr,
     node::Client,
@@ -40,7 +40,7 @@ use darkfi::{
         decode_base10, expand_path,
         path::get_config_path,
         serial::serialize,
-        sleep,
+        sleep, NetworkName,
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -130,6 +130,7 @@ pub struct Faucetd {
     sync_p2p: P2pPtr,
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
+    tokenlist: DrkTokenList,
     airdrop_timeout: i64,
     airdrop_limit: BigUint,
     airdrop_map: Arc<Mutex<HashMap<Address, i64>>>,
@@ -155,6 +156,7 @@ impl Faucetd {
     pub async fn new(
         validator_state: ValidatorStatePtr,
         sync_p2p: P2pPtr,
+        tokenlist: DrkTokenList,
         timeout: i64,
         limit: BigUint,
     ) -> Result<Self> {
@@ -165,6 +167,7 @@ impl Faucetd {
             sync_p2p,
             client,
             validator_state,
+            tokenlist,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
@@ -181,7 +184,7 @@ impl Faucetd {
             return jsonrpc::error(InvalidParams, None, id).into()
         }
 
-        if *self.synced.lock().await == false {
+        if !(*self.synced.lock().await) {
             error!("airdrop(): Blockchain is not yet synced");
             return jsonrpc::error(InternalError, None, id).into()
         }
@@ -225,8 +228,9 @@ impl Faucetd {
         };
         drop(map);
 
-        // TODO: Token ID decision
-        let token_id = DrkTokenId::from(1);
+        let token_id =
+            self.tokenlist.by_net[&NetworkName::DarkFi].get("DRK".to_string()).unwrap().drk_address;
+
         let amnt: u64 = match amount.try_into() {
             Ok(v) => v,
             Err(e) => {
@@ -284,7 +288,7 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<Address, i64>>>, timeout: i64)
         let im_map = map.lock().await;
         for (k, v) in im_map.iter() {
             if now - *v > timeout {
-                prune.push(k.clone());
+                prune.push(*k);
             }
         }
         drop(im_map);
@@ -402,8 +406,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let airdrop_limit = decode_base10(&args.airdrop_limit, 8, true)?;
 
     // Initialize program state
-    let faucetd =
-        Faucetd::new(state.clone(), sync_p2p.clone(), airdrop_timeout, airdrop_limit).await?;
+    let faucetd = Faucetd::new(
+        state.clone(),
+        sync_p2p.clone(),
+        tokenlist.clone(),
+        airdrop_timeout,
+        airdrop_limit,
+    )
+    .await?;
     let faucetd = Arc::new(faucetd);
 
     // Task to periodically clean up the hashmap of airdrops.

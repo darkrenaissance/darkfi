@@ -1,5 +1,3 @@
-use group::ff::PrimeField;
-
 use super::types::DrkTokenId;
 use crate::{util::NetworkName, Result};
 

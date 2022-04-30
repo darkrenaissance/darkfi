@@ -89,7 +89,7 @@ impl Darkfid {
         {
             tok.drk_address
         } else {
-            match generate_id(&network, &token) {
+            match generate_id(&network, token) {
                 Ok(v) => v,
                 Err(e) => {
                     error!("transfer(): Failed generate_id(): {}", e);
