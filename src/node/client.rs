@@ -141,9 +141,6 @@ impl Client {
         state_transition(state, tx.clone())?;
         debug!("build_slab_from_tx(): Successful state transition");
 
-        debug!("build_slab_from_tx(): Broadcasting transaction");
-        debug!("build_slab_from_tx(): Broadcasted successfully");
-
         Ok((tx, coins))
     }
 

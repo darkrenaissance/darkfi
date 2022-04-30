@@ -232,15 +232,15 @@ impl WalletDb {
     }
 
     pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, 32>) -> Result<()> {
-        debug!("Attempting to write merkle tree");
+        debug!("put_tree(): Attempting to write merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let tree_bytes = bincode::serialize(tree)?;
 
-        debug!("Deleting old row");
+        debug!("put_tree(): Deleting old row");
         sqlx::query("DELETE FROM tree;").execute(&mut conn).await?;
 
-        debug!("Inserting new tree");
+        debug!("put_tree(): Inserting new tree");
         sqlx::query("INSERT INTO tree (tree) VALUES (?1);")
             .bind(tree_bytes)
             .execute(&mut conn)

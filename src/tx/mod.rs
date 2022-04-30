@@ -87,20 +87,24 @@ impl Transaction {
 
         // Add values from the inputs
         for (i, input) in self.inputs.iter().enumerate() {
-            if verify_burn_proof(burn_vk, &input.burn_proof, &input.revealed).is_err() {
-                error!("tx::verify(): Failed to verify burn proof {}", i);
-                return Err(VerifyFailed::BurnProof(i))
+            match verify_burn_proof(burn_vk, &input.burn_proof, &input.revealed) {
+                Ok(()) => valcom_total += &input.revealed.value_commit,
+                Err(e) => {
+                    error!("tx::verify(): Failed to verify burn proof {}: {}", i, e);
+                    return Err(VerifyFailed::BurnProof(i))
+                }
             }
-            valcom_total += &input.revealed.value_commit;
         }
 
         // Subtract values from the outputs
         for (i, output) in self.outputs.iter().enumerate() {
-            if verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed).is_err() {
-                error!("tx::verify(): Failed to verify mint proof {}", i);
-                return Err(VerifyFailed::MintProof(i))
+            match verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed) {
+                Ok(()) => valcom_total -= &output.revealed.value_commit,
+                Err(e) => {
+                    error!("tx::verify(): Failed to verify mint proof {}: {}", i, e);
+                    return Err(VerifyFailed::MintProof(i))
+                }
             }
-            valcom_total -= &output.revealed.value_commit;
         }
 
         // If the accumulator is not back in its initial state,
