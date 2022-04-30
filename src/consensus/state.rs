@@ -32,7 +32,7 @@ use crate::{
 };
 
 /// `2 * DELTA` represents epoch time
-pub const DELTA: u64 = 10;
+pub const DELTA: u64 = 30;
 
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
