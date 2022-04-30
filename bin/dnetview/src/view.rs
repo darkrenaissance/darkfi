@@ -84,28 +84,30 @@ impl View {
                     let names = ListItem::new(lines);
                     nodes.push(names);
                     for connection in &session.children {
-                        let mut lines: Vec<Spans> = Vec::new();
+                        let mut info = Vec::new();
                         let name = Span::styled(format!("        {}", connection.addr), style);
+                        info.push(name);
                         match connection.last_status.as_str() {
                             "recv" => {
                                 let msg = Span::styled(
                                     format!("                    [R: {}]", connection.last_msg),
                                     style,
                                 );
-                                lines.push(Spans::from(vec![name, msg]));
+                                info.push(msg);
                             }
                             "sent" => {
                                 let msg = Span::styled(
                                     format!("                    [S: {}]", connection.last_msg),
                                     style,
                                 );
-                                lines.push(Spans::from(vec![name, msg]));
+                                info.push(msg);
                             }
                             _ => {
                                 // TODO
                             }
                         }
 
+                        let lines = vec![Spans::from(info)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
                     }
@@ -118,6 +120,9 @@ impl View {
             .margin(list_margin)
             .constraints(list_cnstrnts)
             .split(f.size());
+
+        debug!("NODE INFO LENGTH {:?}", nodes.len());
+        debug!("ACTIVE IDS LENGTH {:?}", self.active_ids.ids.len());
 
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
