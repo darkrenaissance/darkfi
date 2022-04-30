@@ -94,11 +94,11 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
-    sync_seed: Vec<SocketAddr>,
+    sync_p2p_seed: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// Connect to peer for the syncing protocol (repeatable flag)
-    sync_peer: Vec<SocketAddr>,
+    sync_p2p_peer: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -364,8 +364,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         inbound: args.sync_p2p_accept,
         outbound_connections: args.sync_slots,
         external_addr: args.sync_p2p_external,
-        peers: args.sync_peer.clone(),
-        seeds: args.sync_seed.clone(),
+        peers: args.sync_p2p_peer.clone(),
+        seeds: args.sync_p2p_seed.clone(),
         ..Default::default()
     };
 

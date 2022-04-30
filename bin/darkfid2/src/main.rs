@@ -101,11 +101,11 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to peer for the consensus protocol (repeatable flag)
-    consensus_peer: Vec<SocketAddr>,
+    consensus_p2p_peer: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// Connect to seed for the consensus protocol (repeatable flag)
-    consensus_seed: Vec<SocketAddr>,
+    consensus_p2p_seed: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// P2P accept address for the syncing protocol
@@ -121,11 +121,11 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to peer for the syncing protocol (repeatable flag)
-    sync_peer: Vec<SocketAddr>,
+    sync_p2p_peer: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
-    sync_seed: Vec<SocketAddr>,
+    sync_p2p_seed: Vec<SocketAddr>,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -286,8 +286,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             inbound: args.sync_p2p_accept,
             outbound_connections: args.sync_slots,
             external_addr: args.sync_p2p_external,
-            peers: args.sync_peer.clone(),
-            seeds: args.sync_seed.clone(),
+            peers: args.sync_p2p_peer.clone(),
+            seeds: args.sync_p2p_seed.clone(),
             ..Default::default()
         };
 
@@ -323,8 +323,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                 inbound: args.consensus_p2p_accept,
                 outbound_connections: args.consensus_slots,
                 external_addr: args.consensus_p2p_external,
-                peers: args.consensus_peer.clone(),
-                seeds: args.consensus_seed.clone(),
+                peers: args.consensus_p2p_peer.clone(),
+                seeds: args.consensus_p2p_seed.clone(),
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;
