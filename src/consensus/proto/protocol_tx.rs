@@ -10,6 +10,7 @@ use crate::{
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     node::MemoryState,
+    util::serial::serialize,
     Result,
 };
 
@@ -54,6 +55,21 @@ impl ProtocolTx {
             debug!("ProtocolTx::handle_receive_tx() recv: {:?}", tx);
 
             let tx_copy = (*tx).clone();
+            let tx_hash = blake3::hash(&serialize(&tx_copy));
+
+            let tx_in_txstore =
+                match self.state.read().await.blockchain.transactions.contains(tx_hash) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("handle_receive_tx(): Failed querying txstore: {}", e);
+                        continue
+                    }
+                };
+
+            if self.state.read().await.unconfirmed_txs.contains(&tx_copy) || tx_in_txstore {
+                debug!("ProtocolTx::handle_receive_tx(): We have already seen this tx.");
+                continue
+            }
 
             debug!("ProtocolTx::handle_receive_tx(): Starting state transition validation");
             let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();

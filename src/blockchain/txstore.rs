@@ -35,6 +35,11 @@ impl TxStore {
         Ok(ret)
     }
 
+    /// Check if the txstore contains a given transaction.
+    pub fn contains(&self, txid: blake3::Hash) -> Result<bool> {
+        Ok(self.0.contains_key(txid.as_bytes())?)
+    }
+
     /// Fetch requested transactions from the txstore. The `strict` param
     /// will make the function fail if a transaction has not been found.
     pub fn get(&self, tx_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Tx>>> {
