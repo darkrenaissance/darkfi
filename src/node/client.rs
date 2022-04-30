@@ -23,7 +23,7 @@ use crate::{
     },
     util::serial::Encodable,
     wallet::walletdb::{Balances, WalletPtr},
-    zk::circuit::MintContract,
+    zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,
 };
 
@@ -222,6 +222,6 @@ impl Client {
     }
 
     fn build_burn_pk() -> ProvingKey {
-        ProvingKey::build(11, &MintContract::default())
+        ProvingKey::build(11, &BurnContract::default())
     }
 }
