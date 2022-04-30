@@ -139,7 +139,7 @@ impl Drk {
                 }
             };
 
-            Address::from_str(rep.as_str().unwrap())?
+            Address::from_str(rep.as_array().unwrap()[0].as_str().unwrap())?
         };
 
         println!("Requesting airdrop for {}", addr);

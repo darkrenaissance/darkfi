@@ -194,16 +194,19 @@ impl Darkfid {
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
     ) -> Result<Self> {
-        // Parse token lists
+        debug!("Parsing token lists...");
         let btc_tokenlist =
             TokenList::new(include_bytes!("../../../contrib/token/bitcoin_token_list.min.json"))?;
         let eth_tokenlist =
             TokenList::new(include_bytes!("../../../contrib/token/erc20_token_list.min.json"))?;
         let sol_tokenlist =
             TokenList::new(include_bytes!("../../../contrib/token/solana_token_list.min.json"))?;
+        debug!("Creating drk tokenlist");
         let drk_tokenlist = DrkTokenList::new(&sol_tokenlist, &eth_tokenlist, &btc_tokenlist)?;
 
+        debug!("Waiting for validator state lock");
         let client = validator_state.read().await.client.clone();
+        debug!("Released validator state lock");
 
         Ok(Self {
             synced: Mutex::new(false),
