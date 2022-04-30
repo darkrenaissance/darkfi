@@ -12,7 +12,7 @@ use halo2_proofs::{
 };
 use pasta_curves::{pallas, Fp, vesta, Fq};
 
-const WORD_BITS: u32 = 64;
+const WORD_BITS: u32 = 24;
 
 #[derive(Clone)]
 struct ZkConfig {

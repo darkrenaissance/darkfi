@@ -76,6 +76,15 @@ impl ArithmeticChip {
             vec![s_sub * (lhs - rhs - out)]
         });
 
+        cs.create_gate("pow", |cs| {
+            let lhs = cs.query_advice(a_col, Rotation::cur());
+            let rhs = cs.query_advice(b_col, Rotation::cur());
+            let out = cs.query_advice(a_col, Rotation::next());
+            let s_sub = cs.query_selector(s_sub);
+
+            vec![s_sub * (lhs - rhs - out)]
+        });
+
         ArithmeticChipConfig { a_col, b_col, s_add, s_mul, s_sub }
     }
 

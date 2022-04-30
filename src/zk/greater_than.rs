@@ -3,16 +3,20 @@ use std::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
+    plonk::{Advice, Column, Instance, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
+
 use pasta_curves::pallas;
+
 
 #[derive(Clone, Debug)]
 pub struct GreaterThanConfig {
-    advice: [Column<Advice>; 2],
+    pub advice: [Column<Advice>; 2],
+    pub instance: Column<Instance>,
     s_gt: Selector,
 }
+
 
 pub struct GreaterThanChip<F: FieldExt, const WORD_BITS: u32> {
     config: GreaterThanConfig,
@@ -37,9 +41,10 @@ impl<F: FieldExt, const WORD_BITS: u32> GreaterThanChip<F, WORD_BITS> {
         Self { config, _marker: PhantomData }
     }
 
+    /*
     pub fn configure(meta: &mut ConstraintSystem<F>) -> <Self as Chip<F>>::Config {
-        let constant = meta.fixed_column();
-        meta.enable_constant(constant);
+        //let constant = meta.fixed_column();
+        //meta.enable_constant(constant);
 
         let advice = [meta.advice_column(), meta.advice_column()];
 
@@ -66,6 +71,61 @@ impl<F: FieldExt, const WORD_BITS: u32> GreaterThanChip<F, WORD_BITS> {
         });
 
         GreaterThanConfig { advice, s_gt }
+    }
+
+    pub fn configure(meta: &mut ConstraintSystem<F>) -> <Self as Chip<F>>::Config {
+        let advice = [meta.advice_column(), meta.advice_column()];
+
+
+        let s_gt = meta.selector();
+
+        meta.create_gate("greater than", |meta| {
+            let lhs = meta.query_advice(advice[0], Rotation::cur());
+            let rhs = meta.query_advice(advice[1], Rotation::cur());
+
+            // This value is `lhs - rhs` if `lhs !> rhs` and `2^W - (lhs - rhs)` if `lhs > rhs`
+            let helper = meta.query_advice(advice[0], Rotation::next());
+
+            let is_greater = meta.query_advice(advice[1], Rotation::next());
+            let s_gt = meta.query_selector(s_gt);
+
+            vec![
+                s_gt * (lhs - rhs + helper -
+                    Expression::Constant(F::from(2_u64.pow(WORD_BITS))) * is_greater),
+            ]
+        });
+
+        GreaterThanConfig { advice, s_gt }
+    }
+     */
+    pub fn configure(meta: &mut ConstraintSystem<F>,
+                     advice : [Column<Advice>; 2],
+                     instance: Column<Instance>) -> <Self as Chip<F>>::Config {
+
+
+        for column in &advice {
+            meta.enable_equality(*column);
+        }
+
+        let s_gt = meta.selector();
+
+        meta.create_gate("greater than", |meta| {
+            let lhs = meta.query_advice(advice[0], Rotation::cur());
+            let rhs = meta.query_advice(advice[1], Rotation::cur());
+
+            // This value is `lhs - rhs` if `lhs !> rhs` and `2^W - (lhs - rhs)` if `lhs > rhs`
+            let helper = meta.query_advice(advice[0], Rotation::next());
+
+            let is_greater = meta.query_advice(advice[1], Rotation::next());
+            let s_gt = meta.query_selector(s_gt);
+
+            vec![
+                s_gt * (lhs - rhs + helper -
+                    Expression::Constant(F::from(2_u64.pow(WORD_BITS))) * is_greater),
+            ]
+        });
+
+        GreaterThanConfig { advice, instance, s_gt }
     }
 }
 

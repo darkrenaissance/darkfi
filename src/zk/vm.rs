@@ -144,6 +144,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
             meta.advice_column(),
             meta.advice_column(),
             meta.advice_column(),
+            //meta.advice_column(),
+            //meta.advice_column(),
         ];
 
         // Fixed columns for the Sinsemilla generator lookup table
@@ -204,7 +206,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
 
         // Configuration for the GreaterThan chip
-        let greaterthan_config = GreaterThanChip::<pallas::Base, 24>::configure(meta);
+        let greaterthan_config = GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
 
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.
