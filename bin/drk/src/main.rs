@@ -1,492 +1,254 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{process::exit, str::FromStr, time::Instant};
 
-use clap::{IntoApp, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use log::{debug, error};
-use prettytable::{cell, format, row, Table};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
-    rpc::{jsonrpc, jsonrpc::JsonResult},
-    util::{
-        cli::{log_config, spawn_config, Config, UrlConfig},
-        join_config_path,
-        path::expand_path,
-        NetworkName,
+    cli_desc,
+    crypto::address::Address,
+    rpc::{
+        jsonrpc,
+        jsonrpc::{JsonRequest, JsonResult},
     },
-    Error, Result,
+    util::cli::log_config,
+    Error::JsonRpcError,
+    Result,
 };
 
-/// The configuration for drk
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct DrkConfig {
-    /// The URL where darkfid RPC is listening on
-    pub darkfid_rpc_url: UrlConfig,
-    /// Socks5 server url. eg. `socks5://127.0.0.1:9050` used for tor and nym protocols
-    pub socks_url: UrlConfig,
+#[derive(Parser)]
+#[clap(name = "drk", about = cli_desc!(), version)]
+#[clap(arg_required_else_help(true))]
+struct Args {
+    #[clap(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
+
+    #[clap(short, long, default_value = "tcp://127.0.0.1:8340")]
+    /// darkfid JSON-RPC endpoint
+    endpoint: Url,
+
+    #[clap(subcommand)]
+    command: DrkSubcommand,
 }
 
 #[derive(Subcommand)]
-pub enum CliDrkSubCommands {
-    /// Say hello to the RPC
-    Hello {},
-    /// Show what features the cashier supports
-    Features {},
-    /// Wallet operations
-    Wallet {
-        /// Initialize a new wallet
+enum DrkSubcommand {
+    /// Send a ping request to the RPC
+    Ping,
+
+    /// Send an airdrop request to the faucet
+    Airdrop {
+        #[clap(long, parse(try_from_str))]
+        /// Address where the airdrop should be requested
+        /// (default is darkfid's wallet default)
+        address: Option<Address>,
+
         #[clap(long)]
-        create: bool,
-        /// Generate wallet keypair
-        #[clap(long)]
-        keygen: bool,
-        /// Get default wallet address
-        #[clap(long)]
-        address: bool,
-        /// Get wallet addresses
-        #[clap(long)]
-        addresses: bool,
-        /// Set default address
-        #[clap(long, value_name = "ADDRESS")]
-        set_default_address: Option<String>,
-        /// Export default address
-        #[clap(long, value_name = "PATH")]
-        export_keypair: Option<String>,
-        /// Import address
-        #[clap(long, value_name = "PATH")]
-        import_keypair: Option<String>,
-        /// Get wallet balances
-        #[clap(long)]
-        balances: bool,
-    },
-    /// Get hexidecimal ID for token symbol
-    Id {
-        /// Which network to use (bitcoin/solana/...)
-        #[clap(long)]
-        network: String,
-        /// Which token to query (btc/sol/usdc/...)
-        #[clap(parse(try_from_str))]
-        token: String,
-    },
-    /// Withdraw Dark tokens for clear tokens
-    Withdraw {
-        /// Which network to use (bitcoin/solana/...)
-        #[clap(long)]
-        network: String,
-        /// Which token to receive (btc/sol/usdc/...)
-        #[clap(parse(try_from_str))]
-        token_sym: String,
-        /// Recipient address
-        #[clap(parse(try_from_str))]
-        address: String,
-        /// Amount to withdraw
-        #[clap(parse(try_from_str))]
-        amount: u64,
-    },
-    /// Transfer Dark tokens to address
-    Transfer {
-        /// Which network to use (bitcoin/solana/...)
-        #[clap(long)]
-        network: String,
-        /// Which token to transfer (btc/sol/usdc/...)
-        #[clap(parse(try_from_str))]
-        token_sym: String,
-        /// Recipient address
-        #[clap(parse(try_from_str))]
-        address: String,
-        /// Amount to transfer
-        #[clap(parse(try_from_str))]
+        /// JSON-RPC endpoint of the faucet
+        endpoint: Url,
+
+        /// f64 amount requested for airdrop
         amount: f64,
     },
-    /// Deposit clear tokens for Dark tokens
-    Deposit {
-        /// Which network to use (bitcoin/solana/...)
+
+    /// Wallet operations
+    Wallet {
         #[clap(long)]
-        network: String,
-        /// Which token to deposit (btc/sol/usdc/...)
-        #[clap(parse(try_from_str))]
-        token_sym: String,
+        /// Generate a new keypair in the wallet
+        keygen: bool,
+
+        #[clap(long)]
+        /// Query the wallet for known balances
+        balance: bool,
+
+        #[clap(long)]
+        /// Get the default address in the wallet
+        address: bool,
+
+        #[clap(long)]
+        /// Get all addresses in the wallet
+        all_addresses: bool,
     },
 }
 
-/// Drk cli
-#[derive(Parser)]
-#[clap(name = "drk")]
-#[clap(author, version, about)]
-#[clap(arg_required_else_help(true))]
-pub struct CliDrk {
-    /// Sets a custom config file
-    #[clap(short, long)]
-    pub config: Option<String>,
-    /// Increase verbosity
-    #[clap(short, parse(from_occurrences))]
-    pub verbose: u8,
-    #[clap(subcommand)]
-    pub command: Option<CliDrkSubCommands>,
-}
-
-const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../drk_config.toml");
-
 struct Drk {
-    url: Url,
-    socks_url: Url,
+    pub rpc_endpoint: Url,
 }
 
 impl Drk {
-    pub fn new(url: Url, socks_url: Url) -> Self {
-        Self { url, socks_url }
-    }
+    async fn request(&self, r: JsonRequest, endpoint: Option<Url>) -> Result<Value> {
+        debug!(target: "rpc", "--> {}", serde_json::to_string(&r)?);
 
-    // Retrieve cashier features and error if they
-    // don't support the network
-    async fn check_network(&self, network: &NetworkName) -> Result<()> {
-        let features = self.features().await?;
+        let ep =
+            if endpoint.is_some() { endpoint.unwrap().clone() } else { self.rpc_endpoint.clone() };
 
-        if features.as_object().is_none() &&
-            features.as_object().unwrap()["networks"].as_array().is_none() &&
-            features.as_object().unwrap()["networks"].as_array().unwrap().is_empty()
-        {
-            return Err(Error::UnsupportedCoinNetwork)
-        }
-
-        for nets in features.as_object().unwrap()["networks"].as_array().unwrap() {
-            for (net, _) in nets.as_object().unwrap() {
-                if network == &NetworkName::from_str(net.as_str())? {
-                    return Ok(())
-                }
-            }
-        }
-
-        Err(Error::UnsupportedCoinNetwork)
-    }
-
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult =
-            match jsonrpc::send_request(&self.url, json!(r), Some(self.socks_url.clone())).await {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
+        let reply = match jsonrpc::send_request(&ep, json!(r), None).await {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
 
         match reply {
             JsonResult::Resp(r) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
+                debug!(target: "rpc", "<-- {}", serde_json::to_string(&r)?);
                 Ok(r.result)
             }
 
             JsonResult::Err(e) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
+                debug!(target: "rpc", "<-- {}", serde_json::to_string(&e)?);
+                Err(JsonRpcError(e.error.message.to_string()))
             }
 
             JsonResult::Notif(n) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
+                debug!(target: "rpc", "<-- {}", serde_json::to_string(&n)?);
+                Err(JsonRpcError("Unexpected reply".to_string()))
             }
         }
     }
 
-    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
-    async fn say_hello(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("say_hello"), json!([]));
-        Ok(self.request(req).await?)
+    async fn ping(&self) -> Result<()> {
+        let start = Instant::now();
+
+        let req = jsonrpc::request(json!("ping"), json!([]));
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Got an error: {}", e);
+                return Err(e)
+            }
+        };
+
+        let latency = Instant::now() - start;
+        println!("Got reply: {}", rep);
+        println!("Latency: {:?}", latency);
+        Ok(())
     }
 
-    // --> {"jsonrpc": "2.0", "method": "create_wallet", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn create_wallet(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("create_wallet"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "key_gen", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn key_gen(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("key_gen"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "get_key", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
-    async fn get_key(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_key"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "get_keys", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC, ...]", "id":
-    // 42}
-    async fn get_keys(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_keys"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "set_default_address", "params":
-    // "[vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC]", "id": 42}
-    // <-- {"jsonrpc": "2.0", "result":
-    // true, "id": 42}
-    async fn set_default_address(&self, address: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("set_default_address"), json!([address]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "export_keypair", "params": "[path/]", "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn export_keypair(&self, path: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("export_keypair"), json!([path]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "import_keypair", "params": "[path/]", "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn import_keypair(&self, path: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("import_keypair"), json!([path]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "get_key", "params": ["solana", "usdc"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", "id": 42}
-    async fn get_token_id(&self, network: &str, token: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_token_id"), json!([network, token]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"method": "get_balances", "params": []}
-    // <-- {"result": "get_balances": "[ {"btc": (value, network)}, .. ]"}
-    async fn get_balances(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("get_balances"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "features", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": ["network": "btc", "sol"], "id": 42}
-    async fn features(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("features"), json!([]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "deposit", "params": ["solana", "usdc"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", "id": 42}
-    async fn deposit(&self, network: &str, token: &str) -> Result<Value> {
-        let req = jsonrpc::request(json!("deposit"), json!([network, token]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "withdraw",
-    //      "params": ["solana", "usdc", "Ht5G1RhkcKnpLVLMhqJc5aqZ4wYUEbxbtZwGCVbgU7DL", 13.37"],
-    // "id": 42} <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
-    async fn withdraw(
-        &self,
-        network: &str,
-        token: &str,
-        address: &str,
-        amount: &str,
-    ) -> Result<Value> {
-        let req = jsonrpc::request(json!("withdraw"), json!([network, token, address, amount]));
-        Ok(self.request(req).await?)
-    }
-
-    // --> {"jsonrpc": "2.0", "method": "transfer",
-    //      "params": ["dusdc", "vdNS7oBj7KvsMWWmo9r96SV4SqATLrGsH2a3PGpCfJC", 13.37], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "txID", "id": 42}
-    async fn transfer(
-        &self,
-        network: &str,
-        token: &str,
-        address: &str,
-        amount: &str,
-    ) -> Result<Value> {
-        let req = jsonrpc::request(json!("transfer"), json!([network, token, address, amount]));
-        Ok(self.request(req).await?)
-    }
-}
-
-async fn start(config: &DrkConfig, options: CliDrk) -> Result<()> {
-    let client = Drk::new(
-        Url::try_from(config.darkfid_rpc_url.clone())?,
-        Url::try_from(config.socks_url.clone())?,
-    );
-
-    match options.command {
-        Some(CliDrkSubCommands::Hello {}) => {
-            let reply = client.say_hello().await?;
-            println!("Server replied: {}", &reply.to_string());
-            return Ok(())
-        }
-        Some(CliDrkSubCommands::Features {}) => {
-            let reply = client.features().await?;
-            println!("Features: {}", &reply.to_string());
-            return Ok(())
-        }
-        Some(CliDrkSubCommands::Wallet {
-            create,
-            keygen,
-            address,
-            balances,
-            addresses,
-            export_keypair,
-            import_keypair,
-            set_default_address,
-        }) => {
-            if create {
-                let reply = client.create_wallet().await?;
-                if reply.as_bool().unwrap() {
-                    println!("Wallet created successfully.")
-                } else {
-                    println!("Server replied: {}", &reply.to_string());
+    async fn airdrop(&self, address: Option<Address>, endpoint: Url, amount: f64) -> Result<()> {
+        let addr = if address.is_some() {
+            address.unwrap()
+        } else {
+            let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
+            let rep = match self.request(req, None).await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Error while fetching default key from wallet: {}", e);
+                    return Err(e)
                 }
-                return Ok(())
+            };
+
+            Address::from_str(rep.as_str().unwrap())?
+        };
+
+        println!("Requesting airdrop for {}", addr);
+        let req = jsonrpc::request(json!("airdrop"), json!([json!(addr.to_string()), amount]));
+        let rep = match self.request(req, Some(endpoint)).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed requesting airdrop: {}", e);
+                return Err(e)
             }
+        };
 
-            if keygen {
-                let reply = client.key_gen().await?;
-                if reply.as_bool().unwrap() {
-                    println!("Key generation successful.")
-                } else {
-                    println!("Server replied: {}", &reply.to_string());
-                }
-                return Ok(())
-            }
-
-            if address {
-                let reply = client.get_key().await?;
-                println!("Wallet address: {}", &reply.to_string());
-                return Ok(())
-            }
-
-            if addresses {
-                let reply = client.get_keys().await?;
-                println!("Wallet addresses: ");
-                if reply.as_array().is_some() {
-                    for (i, address) in reply.as_array().unwrap().iter().enumerate() {
-                        if i == 0 {
-                            println!("- [X] {}", address);
-                        } else {
-                            println!("- [ ] {}", address);
-                        }
-                    }
-                } else {
-                    println!("Empty!!",);
-                }
-                return Ok(())
-            }
-
-            if balances {
-                let reply = client.get_balances().await?;
-
-                if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-                    let mut table = Table::new();
-                    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-                    table.set_titles(row!["token", "amount", "network"]);
-
-                    for (tkn, data) in reply.as_object().unwrap() {
-                        table.add_row(row![
-                            tkn,
-                            data[0].as_str().unwrap(),
-                            data[1].as_str().unwrap()
-                        ]);
-                    }
-
-                    table.printstd();
-                } else {
-                    println!("Balances: {}", 0);
-                }
-
-                return Ok(())
-            }
-
-            if set_default_address.is_some() {
-                let default_address = set_default_address.unwrap();
-                client.set_default_address(&default_address).await?;
-                return Ok(())
-            }
-
-            if export_keypair.is_some() {
-                let path = export_keypair.unwrap();
-                client.export_keypair(&path).await?;
-                return Ok(())
-            }
-
-            if import_keypair.is_some() {
-                let path = import_keypair.unwrap();
-                client.import_keypair(&path).await?;
-                return Ok(())
-            }
-        }
-        Some(CliDrkSubCommands::Id { network, token }) => {
-            let network = network.to_lowercase();
-            client.check_network(&NetworkName::from_str(&network)?).await?;
-
-            let reply = client.get_token_id(&network, &token).await?;
-
-            println!("Token ID: {}", &reply.to_string());
-            return Ok(())
-        }
-        Some(CliDrkSubCommands::Deposit { network, token_sym }) => {
-            let network = network.to_lowercase();
-
-            client.check_network(&NetworkName::from_str(&network)?).await?;
-
-            let reply = client.deposit(&network, &token_sym).await?;
-
-            println!("Deposit your coins to the following address: {}", &reply.to_string());
-
-            return Ok(())
-        }
-        Some(CliDrkSubCommands::Transfer { network, token_sym, address, amount }) => {
-            let network = network.to_lowercase();
-
-            client.check_network(&NetworkName::from_str(&network)?).await?;
-
-            client.transfer(&network, &token_sym, &address, &amount.to_string()).await?;
-
-            println!("{} {} Transfered successfully", amount, token_sym.to_uppercase(),);
-
-            return Ok(())
-        }
-
-        Some(CliDrkSubCommands::Withdraw { network, token_sym, address, amount }) => {
-            let network = network.to_lowercase();
-
-            client.check_network(&NetworkName::from_str(&network)?).await?;
-
-            let reply =
-                client.withdraw(&network, &token_sym, &address, &amount.to_string()).await?;
-
-            println!("{}", &reply.to_string());
-
-            return Ok(())
-        }
-        None => {}
+        println!("Success! Transaction ID: {}", rep);
+        Ok(())
     }
 
-    Ok(())
+    async fn wallet_keygen(&self) -> Result<()> {
+        let req = jsonrpc::request(json!("wallet.keygen"), json!([]));
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error while generating new key in wallet: {}", e);
+                return Err(e)
+            }
+        };
+
+        println!("New address: {}", rep);
+        Ok(())
+    }
+
+    async fn wallet_balance(&self) -> Result<()> {
+        let req = jsonrpc::request(json!("wallet.get_balances"), json!([]));
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error fetching balances from wallet: {}", e);
+                return Err(e)
+            }
+        };
+
+        // TODO: Better representation
+        println!("Balances:\n{:#?}", rep);
+        Ok(())
+    }
+
+    async fn wallet_address(&self) -> Result<()> {
+        let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error fetching default keypair from wallet: {}", e);
+                return Err(e)
+            }
+        };
+
+        println!("Default wallet address: {}", rep);
+        Ok(())
+    }
+
+    async fn wallet_all_addresses(&self) -> Result<()> {
+        let req = jsonrpc::request(json!("wallet.get_key"), json!([-1]));
+        let rep = match self.request(req, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error fetching keypairs from wallet: {}", e);
+                return Err(e)
+            }
+        };
+
+        println!("Wallet addresses:\n{:#?}", rep);
+        Ok(())
+    }
 }
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = CliDrk::parse();
-    let matches =
-        CliDrk::command().propagate_version(true).arg_required_else_help(true).get_matches();
+    let args = Args::parse();
 
-    let config_path = if args.config.is_some() {
-        expand_path(&args.config.clone().unwrap())?
-    } else {
-        join_config_path(&PathBuf::from("drk.toml"))?
-    };
-
-    // Spawn config file if it's not in place already.
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
-
-    let verbosity_level = matches.occurrences_of("verbose");
-
-    let (lvl, conf) = log_config(verbosity_level)?;
-
+    let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let config = Config::<DrkConfig>::load(config_path)?;
+    let drk = Drk { rpc_endpoint: args.endpoint };
 
-    start(&config, args).await
+    match args.command {
+        DrkSubcommand::Ping => drk.ping().await,
+
+        DrkSubcommand::Airdrop { address, endpoint, amount } => {
+            drk.airdrop(address, endpoint, amount).await
+        }
+
+        DrkSubcommand::Wallet { keygen, balance, address, all_addresses } => {
+            if keygen {
+                return drk.wallet_keygen().await
+            }
+
+            if balance {
+                return drk.wallet_balance().await
+            }
+
+            if address {
+                return drk.wallet_address().await
+            }
+
+            if all_addresses {
+                return drk.wallet_all_addresses().await
+            }
+
+            eprintln!("Run 'drk wallet -h' to see the subcommand usage.");
+            exit(2);
+        }
+    }
 }

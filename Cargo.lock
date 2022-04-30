@@ -1493,8 +1493,6 @@ dependencies = [
  "clap 3.1.12",
  "darkfi",
  "log",
- "prettytable-rs",
- "serde",
  "serde_json",
  "simplelog",
  "url",
