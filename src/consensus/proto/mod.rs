@@ -1,7 +1,3 @@
-// TODO: FIXME: Handle ? in these modules' loops. There should be no
-// uncaught and unhandled errors that could potentially break out of
-// the loops.
-
 /// Participant announce protocol
 mod protocol_participant;
 pub use protocol_participant::ProtocolParticipant;

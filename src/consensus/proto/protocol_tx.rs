@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::{debug, error, warn};
 
 use crate::{
     consensus::{Tx, ValidatorState, ValidatorStatePtr},
@@ -43,7 +43,13 @@ impl ProtocolTx {
     async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolTx::handle_receive_tx() [START]");
         loop {
-            let tx = self.tx_sub.receive().await?;
+            let tx = match self.tx_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolTx::handle_receive_tx(): recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolTx::handle_receive_tx() recv: {:?}", tx);
 
@@ -62,7 +68,13 @@ impl ProtocolTx {
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()) {
-                self.p2p.broadcast(tx_copy).await?;
+                match self.p2p.broadcast(tx_copy).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("handle_receive_tx(): p2p broadcast fail: {}", e);
+                        continue
+                    }
+                };
             }
         }
     }

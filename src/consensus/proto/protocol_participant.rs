@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 
 use crate::{
     consensus::{Participant, ValidatorStatePtr},
@@ -42,13 +42,25 @@ impl ProtocolParticipant {
     async fn handle_receive_participant(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolParticipant::handle_receive_participant() [START]");
         loop {
-            let participant = self.participant_sub.receive().await?;
+            let participant = match self.participant_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolParticipant::handle_receive_participant(): recv error: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolParticipant::handle_receive_participant() recv: {:?}", participant);
 
             let participant_copy = (*participant).clone();
             if self.state.write().await.append_participant(participant_copy.clone()) {
-                self.p2p.broadcast(participant_copy).await?;
+                match self.p2p.broadcast(participant_copy).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("ProtocolParticipant::handle_receive_participant(): p2p broadcast failed: {}", e);
+                        continue
+                    }
+                }
             }
         }
     }

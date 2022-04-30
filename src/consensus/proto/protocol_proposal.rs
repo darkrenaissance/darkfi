@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::{debug, error, warn};
 
 use crate::{
     consensus::{BlockProposal, ValidatorState, ValidatorStatePtr},
@@ -43,7 +43,13 @@ impl ProtocolProposal {
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolProposal::handle_receive_proposal() [START]");
         loop {
-            let proposal = self.proposal_sub.receive().await?;
+            let proposal = match self.proposal_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolProposal::handle_receive_proposal(): recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolProposal::handle_receive_proposal() recv: {:?}", proposal);
 
@@ -69,11 +75,27 @@ impl ProtocolProposal {
                         debug!("Node did not vote for the proposed block.");
                     } else {
                         let vote = v.unwrap();
-                        self.state.write().await.receive_vote(&vote)?;
+                        match self.state.write().await.receive_vote(&vote) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("receive_vote() error: {}", e);
+                                continue
+                            }
+                        };
                         // Broadcast block to rest of nodes
-                        self.p2p.broadcast(proposal_copy).await?;
+                        match self.p2p.broadcast(proposal_copy).await {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!("handle_receive_proposal(): proposal broadcast fail: {}", e);
+                            }
+                        };
                         // Broadcast vote
-                        self.p2p.broadcast(vote).await?;
+                        match self.p2p.broadcast(vote).await {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!("handle_receive_proposal(): vote broadcast fail: {}", e);
+                            }
+                        };
                     }
                 }
                 Err(e) => {

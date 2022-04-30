@@ -57,24 +57,47 @@ impl ProtocolSync {
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolSync::handle_receive_request() [START]");
         loop {
-            let order = self.request_sub.receive().await?;
+            let order = match self.request_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSync::handle_receive_request(): recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolSync::handle_receive_request() received {:?}", order);
 
             // Extra validations can be added here
             let key = order.sl;
-            let blocks = self.state.read().await.blockchain.get_blocks_after(key, BATCH)?;
+            let blocks = match self.state.read().await.blockchain.get_blocks_after(key, BATCH) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSync::handle_receive_request(): get_blocks_after fail: {}", e);
+                    continue
+                }
+            };
             debug!("ProtocolSync::handle_receive_request(): Found {} blocks", blocks.len());
 
             let response = BlockResponse { blocks };
-            self.channel.send(response).await?;
+            match self.channel.send(response).await {
+                Ok(()) => {}
+                Err(e) => {
+                    error!("ProtocolSync::handle_receive_request(): channel send fail: {}", e)
+                }
+            };
         }
     }
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolSync::handle_receive_block() [START]");
         loop {
-            let info = self.block_sub.receive().await?;
+            let info = match self.block_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolSync::handle_receive_block() received block");
 
@@ -85,7 +108,16 @@ impl ProtocolSync {
             // Extra validations can be added here.
             if !self.consensus_mode {
                 let info_copy = (*info).clone();
-                if !self.state.read().await.blockchain.has_block(&info_copy)? {
+
+                let has_block = match self.state.read().await.blockchain.has_block(&info_copy) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("handle_receive_block(): failed checking for has_block(): {}", e);
+                        continue
+                    }
+                };
+
+                if !has_block {
                     debug!("handle_receive_block(): Starting state transition validation");
                     let canon_state_clone =
                         self.state.read().await.state_machine.lock().await.clone();
@@ -104,16 +136,35 @@ impl ProtocolSync {
                     match self.state.write().await.update_canon_state(state_updates, None).await {
                         Ok(()) => {}
                         Err(e) => {
-                            error!("Failed updating canon state machine: {}", e);
+                            error!("handle_receive_block(): Canon statemachine update fail: {}", e);
                             continue
                         }
                     }
 
                     debug!("ProtocolSync::handle_receive_block(): Appending block to ledger");
-                    self.state.write().await.blockchain.add(&[info_copy.clone()])?;
+                    match self.state.write().await.blockchain.add(&[info_copy.clone()]) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("handle_receive_block(): blockchain.add() fail: {}", e);
+                            continue
+                        }
+                    };
 
-                    self.state.write().await.remove_txs(info_copy.txs.clone())?;
-                    self.p2p.broadcast(info_copy).await?;
+                    match self.state.write().await.remove_txs(info_copy.txs.clone()) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!("handle_receive_block(): remove_txs() fail: {}", e);
+                            continue
+                        }
+                    };
+
+                    match self.p2p.broadcast(info_copy).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!("handle_receive_block(): p2p broadcast fail: {}", e);
+                            continue
+                        }
+                    };
                 }
             }
         }

@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 
 use crate::{
     consensus::{
@@ -44,14 +44,28 @@ impl ProtocolSyncConsensus {
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolSyncConsensus::handle_receive_request() [START]");
         loop {
-            let order = self.request_sub.receive().await?;
+            let order = match self.request_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSyncConsensus::handle_receive_request() recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolSyncConsensuss::handle_receive_request() received {:?}", order);
 
             // Extra validations can be added here.
             let consensus = self.state.read().await.consensus.clone();
             let response = ConsensusResponse { consensus };
-            self.channel.send(response).await?;
+            match self.channel.send(response).await {
+                Ok(()) => {}
+                Err(e) => {
+                    error!(
+                        "ProtocolSyncConsensus::handle_receive_request() channel send fail: {}",
+                        e
+                    );
+                }
+            };
         }
     }
 }

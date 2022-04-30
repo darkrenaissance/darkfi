@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 
 use crate::{
     consensus::{ValidatorStatePtr, Vote},
@@ -45,21 +45,47 @@ impl ProtocolVote {
     async fn handle_receive_vote(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolVote::handle_receive_vote() [START]");
         loop {
-            let vote = self.vote_sub.receive().await?;
+            let vote = match self.vote_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolVote::handle_receive_vote(): recv fail: {}", e);
+                    continue
+                }
+            };
 
             debug!("ProtocolVote::handle_receive_vote() recv: {:?}", vote);
 
             let vote_copy = (*vote).clone();
 
-            let (voted, to_broadcast) = self.state.write().await.receive_vote(&vote_copy)?;
+            let (voted, to_broadcast) = match self.state.write().await.receive_vote(&vote_copy) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("handle_receive_vote(): receive_vote() fail: {}", e);
+                    continue
+                }
+            };
+
             if voted {
-                self.consensus_p2p.broadcast(vote_copy).await?;
+                match self.consensus_p2p.broadcast(vote_copy).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("handle_receive_vote(): consensus p2p broadcast fail: {}", e);
+                        continue
+                    }
+                };
+
                 // Broadcast finalized blocks info, if any
                 match to_broadcast {
                     Some(blocks) => {
                         debug!("handle_receive_vote(): Broadcasting finalized blocks");
                         for info in blocks {
-                            self.sync_p2p.broadcast(info).await?;
+                            match self.sync_p2p.broadcast(info).await {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    error!("handle_receive_vote(): sync p2p broadcast fail: {}", e);
+                                    continue
+                                }
+                            };
                         }
                     }
                     None => {
