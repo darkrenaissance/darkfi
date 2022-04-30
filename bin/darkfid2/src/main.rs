@@ -5,7 +5,7 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use easy_parallel::Parallel;
 use futures_lite::future;
-use log::{error, info};
+use log::{debug, error, info};
 use serde_derive::Deserialize;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use structopt::StructOpt;
