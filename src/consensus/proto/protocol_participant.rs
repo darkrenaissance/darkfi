@@ -54,13 +54,10 @@ impl ProtocolParticipant {
 
             let participant_copy = (*participant).clone();
             if self.state.write().await.append_participant(participant_copy.clone()) {
-                match self.p2p.broadcast(participant_copy).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        error!("ProtocolParticipant::handle_receive_participant(): p2p broadcast failed: {}", e);
-                        continue
-                    }
-                }
+                if let Err(e) = self.p2p.broadcast(participant_copy).await {
+                    error!("ProtocolParticipant::handle_receive_participant(): p2p broadcast failed: {}", e);
+                    continue
+                };
             }
         }
     }

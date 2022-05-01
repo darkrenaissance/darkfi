@@ -60,8 +60,6 @@ impl ProtocolTx {
                 }
             };
 
-            debug!("ProtocolTx::handle_receive_tx() recv: {:?}", tx);
-
             let tx_copy = (*tx).clone();
             let tx_hash = blake3::hash(&serialize(&tx_copy));
 
@@ -92,12 +90,9 @@ impl ProtocolTx {
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()) {
-                match self.p2p.broadcast(tx_copy).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        error!("handle_receive_tx(): p2p broadcast fail: {}", e);
-                        continue
-                    }
+                if let Err(e) = self.p2p.broadcast(tx_copy).await {
+                    error!("handle_receive_tx(): p2p broadcast fail: {}", e);
+                    continue
                 };
             }
         }

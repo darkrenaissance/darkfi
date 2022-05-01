@@ -79,11 +79,8 @@ impl ProtocolSync {
             debug!("ProtocolSync::handle_receive_request(): Found {} blocks", blocks.len());
 
             let response = BlockResponse { blocks };
-            match self.channel.send(response).await {
-                Ok(()) => {}
-                Err(e) => {
-                    error!("ProtocolSync::handle_receive_request(): channel send fail: {}", e)
-                }
+            if let Err(e) = self.channel.send(response).await {
+                error!("ProtocolSync::handle_receive_request(): channel send fail: {}", e)
             };
         }
     }
@@ -133,37 +130,27 @@ impl ProtocolSync {
                     debug!("ProtocolSync::handle_receive_block(): All state transitions passed");
 
                     debug!("ProtocolSync::handle_receive_block(): Updating canon state machine");
-                    match self.state.write().await.update_canon_state(state_updates, None).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            error!("handle_receive_block(): Canon statemachine update fail: {}", e);
-                            continue
-                        }
-                    }
+                    if let Err(e) =
+                        self.state.write().await.update_canon_state(state_updates, None).await
+                    {
+                        error!("handle_receive_block(): Canon statemachine update fail: {}", e);
+                        continue
+                    };
 
                     debug!("ProtocolSync::handle_receive_block(): Appending block to ledger");
-                    match self.state.write().await.blockchain.add(&[info_copy.clone()]) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            error!("handle_receive_block(): blockchain.add() fail: {}", e);
-                            continue
-                        }
+                    if let Err(e) = self.state.write().await.blockchain.add(&[info_copy.clone()]) {
+                        error!("handle_receive_block(): blockchain.add() fail: {}", e);
+                        continue
                     };
 
-                    match self.state.write().await.remove_txs(info_copy.txs.clone()) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            error!("handle_receive_block(): remove_txs() fail: {}", e);
-                            continue
-                        }
+                    if let Err(e) = self.state.write().await.remove_txs(info_copy.txs.clone()) {
+                        error!("handle_receive_block(): remove_txs() fail: {}", e);
+                        continue
                     };
 
-                    match self.p2p.broadcast(info_copy).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            error!("handle_receive_block(): p2p broadcast fail: {}", e);
-                            continue
-                        }
+                    if let Err(e) = self.p2p.broadcast(info_copy).await {
+                        error!("handle_receive_block(): p2p broadcast fail: {}", e);
+                        continue
                     };
                 }
             }
