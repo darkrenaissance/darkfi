@@ -6,11 +6,11 @@ use crate::{
 };
 
 mod datastore;
-mod p2p;
+mod protocol_raft;
 mod raft;
 
 use datastore::DataStore;
-use p2p::ProtocolRaft;
+use protocol_raft::ProtocolRaft;
 pub use raft::Raft;
 
 #[derive(PartialEq, Eq, Debug)]

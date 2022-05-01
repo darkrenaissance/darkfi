@@ -5,7 +5,7 @@ use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
 use easy_parallel::Parallel;
 use futures::{select, FutureExt};
-use log::{error, info, warn, debug};
+use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
@@ -49,7 +49,7 @@ fn encrypt_task(
     task: &TaskInfo,
     secret_key: &SecretKey,
     rng: &mut crypto_box::rand_core::OsRng,
-    ) -> Result<EncryptedTask> {
+) -> Result<EncryptedTask> {
     debug!("start encrypting task");
     let public_key = secret_key.public_key();
     let msg_box = Box::new(&public_key, &secret_key);
@@ -61,7 +61,7 @@ fn encrypt_task(
         Err(e) => {
             error!("Unable to encrypt task: {}", e);
             return Err(Error::OperationFailed)
-        },
+        }
     };
 
     let nonce = nonce.to_vec();
@@ -76,7 +76,7 @@ fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> Option<
     let nonce = encrypt_task.nonce.as_slice();
     let decrypted_task = match msg_box.decrypt(nonce.into(), &encrypt_task.payload[..]) {
         Ok(m) => m,
-        Err(_) => return None 
+        Err(_) => return None,
     };
 
     deserialize(&decrypted_task).ok()
@@ -100,7 +100,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         secret
     } else {
         if settings.key.is_some() {
-            let sk_str = settings.key.unwrap();  
+            let sk_str = settings.key.unwrap();
             save::<String>(&datastore_path.join("secret_key"), &sk_str)?;
             let sk_bytes = hex::decode(sk_str)?;
             let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
