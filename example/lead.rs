@@ -27,7 +27,7 @@ use darkfi::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
+//use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 //use halo2_proofs::arithmetic::CurveAffine;
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 

@@ -1,7 +1,7 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointShort, NonIdentityPoint, Point,
+        FixedPoint, FixedPointShort,
     },
     poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     primitives::poseidon::{ConstantLength, P128Pow5T3},
@@ -17,7 +17,6 @@ use halo2_gadgets::{
 
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
-    plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 
@@ -26,8 +25,7 @@ use pasta_curves::{pallas, Fp};
 use crate::crypto::{
     constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        util::gen_const_array,
-        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+        util::gen_const_array, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
     },
     merkle_node::MerkleNode,
 };
@@ -38,7 +36,7 @@ use crate::zk::{
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
 
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
+//use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 //use halo2_proofs::arithmetic::CurveAffine;
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 
