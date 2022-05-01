@@ -490,7 +490,7 @@ impl ValidatorState {
     /// removed from the node's unconfirmed tx list.
     /// Finally, we check if the notarization of the proposal can finalize
     /// parent proposals in its chain.
-    pub fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
+    pub async fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
         let current_epoch = self.current_epoch();
         // Node hasn't started participating
         match self.participating {
@@ -578,7 +578,7 @@ impl ValidatorState {
         if !proposal.block.sm.notarized && proposal.block.sm.votes.len() > (2 * node_count / 3) {
             debug!("receive_vote(): Notarized a block");
             proposal.block.sm.notarized = true;
-            match self.chain_finalization(chain_idx) {
+            match self.chain_finalization(chain_idx).await {
                 Ok(v) => {
                     to_broadcast = v;
                 }
@@ -627,7 +627,7 @@ impl ValidatorState {
     ///   blockchain) all proposals up to the middle block.
     /// When fork chain proposals are finalized, the rest of fork chains not
     /// starting by those proposals are removed.
-    pub fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
+    pub async fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
         let chain = &mut self.consensus.proposals[chain_index as usize];
 
         if chain.proposals.len() < 3 {
@@ -674,6 +674,13 @@ impl ValidatorState {
         };
 
         for proposal in &finalized {
+            // TODO: Is this the right place? We're already doing this in protocol_sync.
+            // TODO: These state transitions have already been checked.
+            let canon_state_clone = self.state_machine.lock().await.clone();
+            let mem_st = MemoryState::new(canon_state_clone);
+            let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
+            self.update_canon_state(state_updates, None).await?;
+
             self.remove_txs(proposal.txs.clone())?;
         }
 

@@ -57,13 +57,14 @@ impl ProtocolVote {
 
             let vote_copy = (*vote).clone();
 
-            let (voted, to_broadcast) = match self.state.write().await.receive_vote(&vote_copy) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("handle_receive_vote(): receive_vote() fail: {}", e);
-                    continue
-                }
-            };
+            let (voted, to_broadcast) =
+                match self.state.write().await.receive_vote(&vote_copy).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("handle_receive_vote(): receive_vote() fail: {}", e);
+                        continue
+                    }
+                };
 
             if voted {
                 match self.consensus_p2p.broadcast(vote_copy).await {

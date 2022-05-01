@@ -87,7 +87,7 @@ pub async fn proposal_task(p2p: net::P2pPtr, sync_p2p: net::P2pPtr, state: Valid
                             debug!("proposal_task(): Node did not vote for the proposed block");
                         } else {
                             let vote = v.unwrap();
-                            let result = state.write().await.receive_vote(&vote);
+                            let result = state.write().await.receive_vote(&vote).await;
                             match result {
                                 Ok((_, to_broadcast)) => {
                                     info!(target: "consensus", "Vote saved successfully.");

@@ -75,7 +75,7 @@ impl ProtocolProposal {
                         debug!("Node did not vote for the proposed block.");
                     } else {
                         let vote = v.unwrap();
-                        match self.state.write().await.receive_vote(&vote) {
+                        match self.state.write().await.receive_vote(&vote).await {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("receive_vote() error: {}", e);
