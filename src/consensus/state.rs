@@ -24,7 +24,7 @@ use crate::{
     },
     net,
     node::{
-        state::{state_transition, StateUpdate},
+        state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
     tx::Transaction,
@@ -33,7 +33,7 @@ use crate::{
 };
 
 /// `2 * DELTA` represents epoch time
-pub const DELTA: u64 = 30;
+pub const DELTA: u64 = 20;
 
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -150,6 +150,10 @@ impl ValidatorState {
             mint_vk: Lazy::new(),
             burn_vk: Lazy::new(),
         }));
+
+        // Create zk proof verification keys
+        let _ = state_machine.lock().await.mint_vk();
+        let _ = state_machine.lock().await.burn_vk();
 
         let state = Arc::new(RwLock::new(ValidatorState {
             address,
@@ -506,18 +510,18 @@ impl ValidatorState {
         let mut encoded_proposal = vec![];
 
         if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
-            error!(target: "consensus", "Proposal encoding failed: {:?}", e);
+            error!("consensus: Proposal encoding failed: {:?}", e);
             return Ok((false, None))
         };
 
+        let va = vote.address.to_string();
         if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
-            warn!(target: "consensus", "Voter ({}), signature couldn't be verified", vote.address.to_string());
+            warn!("consensus: Voter ({}), signature couldn't be verified", va);
             return Ok((false, None))
         }
 
         // Node refreshes participants records
         self.refresh_participants()?;
-
         let node_count = self.consensus.participants.len();
 
         // Checking that the voter can actually vote.
@@ -525,7 +529,7 @@ impl ValidatorState {
             Some(participant) => {
                 let mut participant = participant.clone();
                 if current_epoch <= participant.joined {
-                    warn!(target: "consensus", "Voter ({}) joined after current epoch.", vote.address.to_string());
+                    warn!("consensus: Voter ({}) joined after current epoch.", va);
                     return Ok((false, None))
                 }
 
@@ -542,7 +546,7 @@ impl ValidatorState {
                 self.consensus.participants.insert(participant.address, participant);
             }
             None => {
-                warn!(target: "consensus", "Voter ({}) is not a participant!", vote.address.to_string());
+                warn!("consensus: Voter ({}) is not a participant!", vote.address.to_string());
                 return Ok((false, None))
             }
         }
@@ -550,7 +554,7 @@ impl ValidatorState {
         let proposal = match self.find_proposal(&vote.proposal) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "consensus", "find_proposal() failed: {}", e);
+                error!("consensus: find_proposal() failed: {}", e);
                 return Err(e)
             }
         };
@@ -581,7 +585,7 @@ impl ValidatorState {
                     to_broadcast = v;
                 }
                 Err(e) => {
-                    error!(target: "consensus", "Block finalization failed: {}", e);
+                    error!("consensus: Block finalization failed: {}", e);
                     return Err(e)
                 }
             }

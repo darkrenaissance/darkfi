@@ -103,7 +103,7 @@ pub fn create_mint_proof(
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
     let proof = Proof::create(pk, &[c], &public_inputs, &mut OsRng)?;
-    debug!("Prove: [{:?}]", start.elapsed());
+    debug!("Prove mint: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))
 }
@@ -113,6 +113,9 @@ pub fn verify_mint_proof(
     proof: &Proof,
     revealed: &MintRevealedValues,
 ) -> Result<()> {
+    let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    Ok(proof.verify(vk, &public_inputs)?)
+    proof.verify(vk, &public_inputs)?;
+    debug!("Verify mint: [{:?}]", start.elapsed());
+    Ok(())
 }

@@ -67,33 +67,24 @@ impl ProtocolVote {
                 };
 
             if voted {
-                match self.consensus_p2p.broadcast(vote_copy).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        error!("handle_receive_vote(): consensus p2p broadcast fail: {}", e);
-                        continue
-                    }
+                if let Err(e) = self.consensus_p2p.broadcast(vote_copy).await {
+                    error!("handle_receive_vote(): consensus p2p broadcast fail: {}", e);
+                    continue
                 };
 
                 // Broadcast finalized blocks info, if any
-                match to_broadcast {
-                    Some(blocks) => {
-                        debug!("handle_receive_vote(): Broadcasting finalized blocks");
-                        for info in blocks {
-                            match self.sync_p2p.broadcast(info).await {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    error!("handle_receive_vote(): sync p2p broadcast fail: {}", e);
-                                    continue
-                                }
-                            };
+                if let Some(blocks) = to_broadcast {
+                    debug!("handle_receive_vote(): Broadcasting finalized blocks");
+                    for info in blocks {
+                        if let Err(e) = self.sync_p2p.broadcast(info).await {
+                            error!("handle_receive_vote(): sync p2p broadcast fail: {}", e);
+                            // TODO: Should we quit broadcasting if one fails?
+                            continue
                         }
                     }
-                    None => {
-                        debug!("handle_receive_vote(): No finalized blocks to broadcast");
-                        continue
-                    }
-                }
+                } else {
+                    debug!("handle_receive_vote(): No finalized blocks to broadcast");
+                };
             }
         }
     }

@@ -152,7 +152,7 @@ pub fn create_burn_proof(
     let start = Instant::now();
     let public_inputs = revealed.make_outputs();
     let proof = Proof::create(pk, &[c], &public_inputs, &mut OsRng)?;
-    debug!("Prove: [{:?}]", start.elapsed());
+    debug!("Prove burn: [{:?}]", start.elapsed());
 
     Ok((proof, revealed))
 }
@@ -162,6 +162,9 @@ pub fn verify_burn_proof(
     proof: &Proof,
     revealed: &BurnRevealedValues,
 ) -> Result<()> {
+    let start = Instant::now();
     let public_inputs = revealed.make_outputs();
-    Ok(proof.verify(vk, &public_inputs)?)
+    proof.verify(vk, &public_inputs)?;
+    debug!("Verify burn: [{:?}]", start.elapsed());
+    Ok(())
 }
