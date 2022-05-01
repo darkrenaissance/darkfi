@@ -8,7 +8,6 @@ use crate::{
         block::{BlockInfo, BlockOrder, BlockResponse},
         ValidatorState, ValidatorStatePtr,
     },
-    crypto::token_list::DrkTokenList,
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -26,7 +25,6 @@ pub struct ProtocolSync {
     block_sub: MessageSubscription<BlockInfo>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
-    tokenlist: DrkTokenList,
     p2p: P2pPtr,
     consensus_mode: bool,
 }
@@ -35,7 +33,6 @@ impl ProtocolSync {
     pub async fn init(
         channel: ChannelPtr,
         state: ValidatorStatePtr,
-        tokenlist: DrkTokenList,
         p2p: P2pPtr,
         consensus_mode: bool,
     ) -> Result<ProtocolBasePtr> {
@@ -52,7 +49,6 @@ impl ProtocolSync {
             block_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
-            tokenlist,
             p2p,
             consensus_mode,
         }))
@@ -137,13 +133,7 @@ impl ProtocolSync {
                     debug!("ProtocolSync::handle_receive_block(): All state transitions passed");
 
                     debug!("ProtocolSync::handle_receive_block(): Updating canon state machine");
-                    match self
-                        .state
-                        .write()
-                        .await
-                        .update_canon_state(state_updates, &self.tokenlist, None)
-                        .await
-                    {
+                    match self.state.write().await.update_canon_state(state_updates, None).await {
                         Ok(()) => {}
                         Err(e) => {
                             error!("handle_receive_block(): Canon statemachine update fail: {}", e);

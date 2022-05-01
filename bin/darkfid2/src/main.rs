@@ -146,7 +146,6 @@ pub struct Darkfid {
     sync_p2p: Option<P2pPtr>,
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
-    tokenlist: DrkTokenList,
 }
 
 // JSON-RPC methods
@@ -186,20 +185,12 @@ impl Darkfid {
         validator_state: ValidatorStatePtr,
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
-        tokenlist: DrkTokenList,
     ) -> Result<Self> {
         debug!("Waiting for validator state lock");
         let client = validator_state.read().await.client.clone();
         debug!("Released validator state lock");
 
-        Ok(Self {
-            synced: Mutex::new(false),
-            consensus_p2p,
-            sync_p2p,
-            client,
-            validator_state,
-            tokenlist,
-        })
+        Ok(Self { synced: Mutex::new(false), consensus_p2p, sync_p2p, client, validator_state })
     }
 }
 
@@ -233,9 +224,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
+    debug!("Parsing token lists...");
+    let tokenlist = Arc::new(DrkTokenList::new(&[
+        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
+        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
+        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
+        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
+    ])?);
+    debug!("Finished parsing token lists");
+
     // TODO: sqldb init cleanup
     // Initialize Client
-    let client = Arc::new(Client::new(wallet).await?);
+    let client = Arc::new(Client::new(wallet, tokenlist).await?);
 
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];
@@ -264,15 +264,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     )
     .await?;
 
-    debug!("Parsing token lists...");
-    let tokenlist = DrkTokenList::new(&[
-        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
-        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
-        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
-        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
-    ])?;
-    debug!("Finished parsing token lists");
-
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");
         let sync_network_settings = net::Settings {
@@ -288,13 +279,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         let registry = p2p.protocol_registry();
 
         let _state = state.clone();
-        let _tokenlist = tokenlist.clone();
         registry
             .register(net::SESSION_ALL, move |channel, p2p| {
                 let state = _state.clone();
-                let tokenlist = _tokenlist.clone();
                 async move {
-                    ProtocolSync::init(channel, state, tokenlist, p2p, args.consensus)
+                    ProtocolSync::init(channel, state, p2p, args.consensus)
                         .await
                         .unwrap()
                 }
@@ -372,9 +361,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     };
 
     // Initialize program state
-    let darkfid =
-        Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone(), tokenlist.clone())
-            .await?;
+    let darkfid = Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone()).await?;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server
@@ -392,7 +379,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    match block_sync_task(sync_p2p.clone().unwrap(), state.clone(), &tokenlist).await {
+    match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
         Ok(()) => *darkfid.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }

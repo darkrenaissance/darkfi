@@ -130,7 +130,6 @@ pub struct Faucetd {
     sync_p2p: P2pPtr,
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
-    tokenlist: DrkTokenList,
     airdrop_timeout: i64,
     airdrop_limit: BigUint,
     airdrop_map: Arc<Mutex<HashMap<Address, i64>>>,
@@ -156,7 +155,6 @@ impl Faucetd {
     pub async fn new(
         validator_state: ValidatorStatePtr,
         sync_p2p: P2pPtr,
-        tokenlist: DrkTokenList,
         timeout: i64,
         limit: BigUint,
     ) -> Result<Self> {
@@ -167,7 +165,6 @@ impl Faucetd {
             sync_p2p,
             client,
             validator_state,
-            tokenlist,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
@@ -228,8 +225,10 @@ impl Faucetd {
         };
         drop(map);
 
-        let token_id =
-            self.tokenlist.by_net[&NetworkName::DarkFi].get("DRK".to_string()).unwrap().drk_address;
+        let token_id = self.client.tokenlist.by_net[&NetworkName::DarkFi]
+            .get("DRK".to_string())
+            .unwrap()
+            .drk_address;
 
         let amnt: u64 = match amount.try_into() {
             Ok(v) => v,
@@ -331,9 +330,16 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
+    let tokenlist = Arc::new(DrkTokenList::new(&[
+        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
+        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
+        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
+        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
+    ])?);
+
     // TODO: sqldb init cleanup
     // Initialize client
-    let client = Arc::new(Client::new(wallet.clone()).await?);
+    let client = Arc::new(Client::new(wallet.clone(), tokenlist).await?);
 
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];
@@ -362,13 +368,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     )
     .await?;
 
-    let tokenlist = DrkTokenList::new(&[
-        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
-        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
-        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
-        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
-    ])?;
-
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
     let network_settings = net::Settings {
@@ -385,12 +384,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     info!("Registering block sync P2P protocols...");
     let _state = state.clone();
-    let _tokenlist = tokenlist.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let state = _state.clone();
-            let tokenlist = _tokenlist.clone();
-            async move { ProtocolSync::init(channel, state, tokenlist, p2p, false).await.unwrap() }
+            async move { ProtocolSync::init(channel, state, p2p, false).await.unwrap() }
         })
         .await;
 
@@ -406,14 +403,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let airdrop_limit = decode_base10(&args.airdrop_limit, 8, true)?;
 
     // Initialize program state
-    let faucetd = Faucetd::new(
-        state.clone(),
-        sync_p2p.clone(),
-        tokenlist.clone(),
-        airdrop_timeout,
-        airdrop_limit,
-    )
-    .await?;
+    let faucetd =
+        Faucetd::new(state.clone(), sync_p2p.clone(), airdrop_timeout, airdrop_limit).await?;
     let faucetd = Arc::new(faucetd);
 
     // Task to periodically clean up the hashmap of airdrops.
@@ -434,7 +425,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    match block_sync_task(sync_p2p.clone(), state.clone(), &tokenlist).await {
+    match block_sync_task(sync_p2p.clone(), state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }

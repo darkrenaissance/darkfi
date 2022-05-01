@@ -3,7 +3,6 @@ use crate::{
         block::{BlockOrder, BlockResponse},
         ValidatorState, ValidatorStatePtr,
     },
-    crypto::token_list::DrkTokenList,
     net,
     node::MemoryState,
     Result,
@@ -11,11 +10,7 @@ use crate::{
 use log::{debug, info, warn};
 
 /// async task used for block syncing.
-pub async fn block_sync_task(
-    p2p: net::P2pPtr,
-    state: ValidatorStatePtr,
-    tokenlist: &DrkTokenList,
-) -> Result<()> {
+pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
     info!("Starting blockchain sync...");
 
     // we retrieve p2p network connected channels, so we can use it to
@@ -63,7 +58,7 @@ pub async fn block_sync_task(
             debug!("block_sync_task(): All state transitions passed");
 
             debug!("block_sync_task(): Updating canon state");
-            state.write().await.update_canon_state(canon_updates, tokenlist, None).await?;
+            state.write().await.update_canon_state(canon_updates, None).await?;
 
             debug!("block_sync_task(): Appending blocks to ledger");
             state.write().await.blockchain.add(&resp.blocks)?;

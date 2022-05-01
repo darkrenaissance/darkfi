@@ -1,3 +1,4 @@
+use async_std::sync::Arc;
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -138,7 +139,7 @@ impl State {
         secret_keys: Vec<SecretKey>,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
-        tokenlist: &DrkTokenList,
+        tokenlist: Arc<DrkTokenList>,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
         self.nullifiers.insert(&update.nullifiers)?;
@@ -160,7 +161,7 @@ impl State {
                     let own_coin =
                         OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
 
-                    wallet.put_own_coin(own_coin, tokenlist).await?;
+                    wallet.put_own_coin(own_coin, tokenlist.clone()).await?;
 
                     if let Some(ch) = notify.clone() {
                         debug!(target: "state_apply", "Send a notification");

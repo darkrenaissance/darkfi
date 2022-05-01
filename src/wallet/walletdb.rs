@@ -285,7 +285,11 @@ impl WalletDb {
         Ok(own_coins)
     }
 
-    pub async fn put_own_coin(&self, own_coin: OwnCoin, tokenlist: &DrkTokenList) -> Result<()> {
+    pub async fn put_own_coin(
+        &self,
+        own_coin: OwnCoin,
+        tokenlist: Arc<DrkTokenList>,
+    ) -> Result<()> {
         debug!("Putting own coin into wallet database");
 
         let coin = serialize(&own_coin.coin.to_bytes());

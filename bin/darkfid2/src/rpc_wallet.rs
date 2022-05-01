@@ -215,7 +215,7 @@ impl Darkfid {
             let mut amount = BigUint::from(balance.value);
 
             let (net_name, net_addr) =
-                if let Some((net, tok)) = self.tokenlist.by_addr.get(&drk_addr) {
+                if let Some((net, tok)) = self.client.tokenlist.by_addr.get(&drk_addr) {
                     (net, tok.net_address.clone())
                 } else {
                     warn!("Could not find network name and token info for {}", drk_addr);
@@ -223,7 +223,7 @@ impl Darkfid {
                 };
 
             let mut ticker = None;
-            for (k, v) in self.tokenlist.by_net[net_name].0.iter() {
+            for (k, v) in self.client.tokenlist.by_net[net_name].0.iter() {
                 if v.net_address == net_addr {
                     ticker = Some(k.clone());
                     break

@@ -85,18 +85,18 @@ impl Darkfid {
             }
         };
 
-        let token_id = if let Some(tok) = self.tokenlist.by_net[&network].get(token.to_uppercase())
-        {
-            tok.drk_address
-        } else {
-            match generate_id(&network, token) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("transfer(): Failed generate_id(): {}", e);
-                    return jsonrpc::error(InternalError, None, id).into()
+        let token_id =
+            if let Some(tok) = self.client.tokenlist.by_net[&network].get(token.to_uppercase()) {
+                tok.drk_address
+            } else {
+                match generate_id(&network, token) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("transfer(): Failed generate_id(): {}", e);
+                        return jsonrpc::error(InternalError, None, id).into()
+                    }
                 }
-            }
-        };
+            };
 
         let tx = match self
             .client
