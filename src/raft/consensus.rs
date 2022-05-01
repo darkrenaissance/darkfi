@@ -20,7 +20,7 @@ use super::{
         Broadcast, BroadcastMsgRequest, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
         NetMsgMethod, NodeId, Role, Sender, SyncRequest, SyncResponse, VoteRequest, VoteResponse,
     },
-    DataStore, ProtocolRaft,
+    DataStore,
 };
 
 const HEARTBEATTIMEOUT: u64 = 100;
@@ -48,10 +48,7 @@ async fn load_node_ids_loop(
     }
 }
 
-async fn p2p_recv_send_loop(
-    p2p_recv: async_channel::Receiver<NetMsg>,
-    p2p: net::P2pPtr,
-) -> Result<()> {
+async fn p2p_send_loop(p2p_recv: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
         let msg: NetMsg = match p2p_recv.recv().await {
             Ok(m) => m,
@@ -74,7 +71,7 @@ pub struct Raft<T> {
     // this will be derived from the ip
     // if the node doesn't have an id then will become a listener and doesn't have the right
     // to request/response votes or response a confirmation for log
-    id: Option<NodeId>,
+    pub id: Option<NodeId>,
 
     // these five vars should be on local storage
     current_term: u64,
@@ -159,39 +156,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     pub async fn start(
         &mut self,
-        net_settings: net::Settings,
+        p2p: net::P2pPtr,
+        p2p_recv_channel: async_channel::Receiver<NetMsg>,
         executor: Arc<Executor<'_>>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
-        // P2p setup
-        let (p2p_snd, receive_queues) = async_channel::unbounded::<NetMsg>();
-
-        let p2p = net::P2p::new(net_settings).await;
-        let p2p = p2p.clone();
-
-        let registry = p2p.protocol_registry();
-
-        let seen_net_msg = Arc::new(Mutex::new(vec![]));
-        let self_id = self.id.clone();
-        registry
-            .register(net::SESSION_ALL, move |channel, p2p| {
-                let self_id = self_id.clone();
-                let sender = p2p_snd.clone();
-                let seen_net_msg_cloned = seen_net_msg.clone();
-                async move {
-                    ProtocolRaft::init(self_id, channel, sender, p2p, seen_net_msg_cloned).await
-                }
-            })
-            .await;
-
-        // P2p start
-        p2p.clone().start(executor.clone()).await?;
-
-        let executor_cloned = executor.clone();
-        let p2p_task = executor_cloned.spawn(p2p.clone().run(executor.clone()));
-
-        let p2p_recv = self.sender.1.clone();
-        let p2p_recv_task = executor.spawn(p2p_recv_send_loop(p2p_recv.clone(), p2p.clone()));
+        let receiver = self.sender.1.clone();
+        let p2p_send_task = executor.spawn(p2p_send_loop(receiver.clone(), p2p.clone()));
 
         let load_ips_task =
             executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
@@ -206,7 +177,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             info!("send sync request");
             self.send(None, &serialize(&sync_request), NetMsgMethod::SyncRequest, None).await?;
 
-            self.waiting_for_sync(receive_queues.clone(), stop_signal.clone()).await?;
+            self.waiting_for_sync(p2p_recv_channel.clone(), stop_signal.clone()).await?;
         }
 
         let mut rng = rand::thread_rng();
@@ -223,7 +194,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let result: Result<()>;
 
             select! {
-                m =  receive_queues.recv().fuse() => result = self.handle_method(m?).await,
+                m =  p2p_recv_channel.recv().fuse() => result = self.handle_method(m?).await,
                 m =  broadcast_msg_rv.recv().fuse() => result = self.broadcast_msg(&m?,None).await,
                 _ = task::sleep(timeout).fuse() => {
                     result = if self.role == Role::Leader {
@@ -243,8 +214,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         warn!(target: "raft", "Raft start() Exit Signal");
         load_ips_task.cancel().await;
-        p2p_recv_task.cancel().await;
-        p2p_task.cancel().await;
+        p2p_send_task.cancel().await;
         self.datastore.cancel().await?;
         Ok(())
     }

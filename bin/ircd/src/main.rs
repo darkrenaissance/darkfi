@@ -14,9 +14,9 @@ use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    async_daemonize,
+    async_daemonize, net,
     net::transport::{TcpTransport, Transport},
-    raft::Raft,
+    raft::{NetMsg, ProtocolRaft, Raft},
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
         cli::{log_config, spawn_config},
@@ -138,6 +138,32 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let raft_sender = raft.get_broadcast();
     let raft_receiver = raft.get_commits();
 
+    // P2p setup
+    let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
+
+    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p = p2p.clone();
+
+    let registry = p2p.protocol_registry();
+
+    let seen_net_msg = Arc::new(Mutex::new(vec![]));
+    let raft_node_id = raft.id.clone();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let raft_node_id = raft_node_id.clone();
+            let sender = p2p_send_channel.clone();
+            let seen_net_msg_cloned = seen_net_msg.clone();
+            async move {
+                ProtocolRaft::init(raft_node_id, channel, sender, p2p, seen_net_msg_cloned).await
+            }
+        })
+        .await;
+
+    p2p.clone().start(executor.clone()).await?;
+
+    let executor_cloned = executor.clone();
+    let p2p_run_task = executor_cloned.spawn(p2p.clone().run(executor.clone()));
+
     //
     // RPC interface
     //
@@ -148,7 +174,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         identity_pass: Default::default(),
     };
     let executor_cloned = executor.clone();
-    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listen });
+    let rpc_interface = Arc::new(JsonRpcInterface { addr: settings.rpc_listen, p2p: p2p.clone() });
     let rpc_task = executor.spawn(async move {
         listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
     });
@@ -182,6 +208,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         Ok(())
     });
 
+    // Run once receive exit signal
     let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
         warn!(target: "ircd", "ircd start Exit Signal");
@@ -189,11 +216,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         signal.send(()).await.unwrap();
         rpc_task.cancel().await;
         irc_task.cancel().await;
+        p2p_run_task.cancel().await;
     })
     .unwrap();
 
     // blocking
-    raft.start(net_settings.into(), executor.clone(), shutdown.clone()).await?;
+    raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }
