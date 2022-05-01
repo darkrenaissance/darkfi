@@ -166,6 +166,7 @@ impl RequestHandler for Darkfid {
         match req.method.as_str() {
             Some("ping") => return self.pong(req.id, params).await,
             Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
+            Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
             Some("tx.transfer") => return self.transfer(req.id, params).await,
             Some("wallet.keygen") => return self.keygen(req.id, params).await,
             Some("wallet.get_key") => return self.get_key(req.id, params).await,

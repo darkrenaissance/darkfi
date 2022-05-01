@@ -1,11 +1,14 @@
 use log::{debug, error};
 use serde_json::{json, Value};
 
-use darkfi::rpc::{
-    jsonrpc,
-    jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams},
-        JsonResult,
+use darkfi::{
+    crypto::merkle_node::MerkleNode,
+    rpc::{
+        jsonrpc,
+        jsonrpc::{
+            ErrorCode::{InternalError, InvalidParams},
+            JsonResult,
+        },
     },
 };
 
@@ -44,5 +47,22 @@ impl Darkfid {
         // TODO: Return block as JSON
         debug!("{:#?}", blocks[0]);
         jsonrpc::response(json!(true), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the blockchain database for all available merkle roots.
+    // --> {"jsonrpc": "2.0", "method": "blockchain.merkle_roots", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [..., ..., ...], "id": 1}
+    pub async fn merkle_roots(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let roots: Vec<MerkleNode> =
+            match self.validator_state.read().await.blockchain.merkle_roots.get_all() {
+                Ok(v) => v.iter().map(|x| x.unwrap()).collect(),
+                Err(e) => {
+                    error!("Failed getting merkle roots from rootstore: {}", e);
+                    return jsonrpc::error(InternalError, None, id).into()
+                }
+            };
+
+        jsonrpc::response(json!(roots), id).into()
     }
 }

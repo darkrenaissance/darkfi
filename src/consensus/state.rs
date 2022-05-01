@@ -505,12 +505,9 @@ impl ValidatorState {
 
         let mut encoded_proposal = vec![];
 
-        match vote.proposal.encode(&mut encoded_proposal) {
-            Ok(_) => (),
-            Err(e) => {
-                error!(target: "consensus", "Proposal encoding failed: {:?}", e);
-                return Ok((false, None))
-            }
+        if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
+            error!(target: "consensus", "Proposal encoding failed: {:?}", e);
+            return Ok((false, None))
         };
 
         if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
@@ -665,11 +662,11 @@ impl ValidatorState {
 
         chain.proposals.drain(0..(consecutive - 1));
 
-        info!(target: "consensus", "Adding {} finalized block to canonical chain", finalized.len());
+        info!("consensus: Adding {} finalized block to canonical chain", finalized.len());
         let blockhashes = match self.blockchain.add(&finalized) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "consensus", "Failed appending finalized blocks to canonical chain: {}", e);
+                error!("consensus: Failed appending finalized blocks to canonical chain: {}", e);
                 return Err(e)
             }
         };
@@ -682,7 +679,6 @@ impl ValidatorState {
             let mem_st = MemoryState::new(canon_state_clone);
             let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
             self.update_canon_state(state_updates, None).await?;
-
             self.remove_txs(proposal.txs.clone())?;
         }
 

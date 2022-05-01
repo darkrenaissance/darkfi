@@ -142,15 +142,21 @@ impl State {
         tokenlist: Arc<DrkTokenList>,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
+        debug!("Existing nullifiers: {:#?}", self.nullifiers.get_all()?);
+        debug!("Update's nullifiers: {:#?}", update.nullifiers);
         self.nullifiers.insert(&update.nullifiers)?;
 
         debug!(target: "state_apply", "Update Merkle tree and witnesses");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
             let node = MerkleNode(coin.0);
+            debug!("Current merkle tree: {:#?}", self.tree);
             self.tree.append(&node);
+            debug!("Merkle tree after append: {:#?}", self.tree);
 
             // Keep track of all Merkle roots that have existed
+            debug!("Existing merkle roots: {:#?}", self.merkle_roots.get_all()?);
+            debug!("New merkle root: {:#?}", self.tree.root());
             self.merkle_roots.insert(&[self.tree.root()])?;
 
             for secret in secret_keys.iter() {
