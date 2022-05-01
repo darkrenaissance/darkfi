@@ -1,4 +1,3 @@
-use clap::{CommandFactory, Parser};
 use log::error;
 use prettytable::{cell, format, row, table};
 use serde_json::{json, Value};
@@ -6,11 +5,12 @@ use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
 use darkfi::{
     util::{
-        cli::{log_config, spawn_config, Config},
+        cli::{log_config, spawn_config},
         path::get_config_path,
     },
     Result,
 };
+use structopt_toml::StructOptToml;
 
 mod jsonrpc;
 mod util;
@@ -19,17 +19,17 @@ use crate::{
     jsonrpc::{add, get_by_id, get_state, list, set_comment, set_state, update},
     util::{
         desc_in_editor, due_as_timestamp, get_comments, get_events, get_from_task, list_tasks,
-        set_title, timestamp_to_date, CliTau, CliTauSubCommands, TaskInfo, TauConfig,
+        set_title, timestamp_to_date, CliTau, CliTauSubCommands, TaskInfo, CONFIG_FILE,
         CONFIG_FILE_CONTENTS,
     },
 };
 
-async fn start(options: CliTau, config: TauConfig) -> Result<()> {
-    let rpc_addr = &format!("tcp://{}", &config.rpc_listen.clone());
+async fn start(options: CliTau) -> Result<()> {
+    let rpc_addr = &format!("tcp://{}", &options.rpc_listen.clone());
 
-    if !options.filter.is_empty() {
+    if !options.filters.is_empty() {
         let rep = list(rpc_addr, json!([])).await?;
-        list_tasks(rep, options.filter)?;
+        list_tasks(rep, options.filters)?;
     } else {
         match options.command {
             Some(CliTauSubCommands::Add { title, desc, assign, project, due, rank }) => {
@@ -157,21 +157,13 @@ async fn start(options: CliTau, config: TauConfig) -> Result<()> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let args = CliTau::parse();
-    let matches = CliTau::command().get_matches();
-    let verbosity_level = matches.occurrences_of("verbose");
+    let args = CliTau::from_args_with_toml("").unwrap();
+    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
+    spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
+    let args = CliTau::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
 
-    let (lvl, conf) = log_config(verbosity_level)?;
+    let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let config_path = get_config_path(args.config.clone(), "taud_config.toml")?;
-
-    spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
-
-    let config: TauConfig = match Config::<TauConfig>::load(config_path) {
-        Ok(c) => c,
-        Err(_) => TauConfig::default(),
-    };
-
-    start(args, config).await
+    start(args).await
 }

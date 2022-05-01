@@ -2,35 +2,26 @@ use std::{
     env::{temp_dir, var},
     fs::{self, File},
     io::{self, Read, Write},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     ops::Index,
     process::Command,
 };
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-use clap::{Parser, Subcommand};
+use clap::Subcommand;
 use log::error;
 use prettytable::{cell, format, row, Cell, Row, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use darkfi::{Error, Result};
+use structopt::StructOpt;
+use structopt_toml::StructOptToml;
 
-pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../../taud_config.toml");
+pub const CONFIG_FILE: &str = "taud_config.toml";
+pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../taud_config.toml");
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TauConfig {
-    /// JSON-RPC listen URL
-    pub rpc_listen: SocketAddr,
-}
-
-impl Default for TauConfig {
-    fn default() -> Self {
-        Self { rpc_listen: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 11055) }
-    }
-}
-
-#[derive(Subcommand)]
+#[derive(Subcommand, Deserialize, Debug, StructOpt)]
 pub enum CliTauSubCommands {
     /// Add a new task
     Add {
@@ -113,21 +104,24 @@ pub struct TaskInfo {
 }
 
 /// Tau cli
-#[derive(Parser)]
-#[clap(name = "tau")]
-#[clap(author, version, about)]
+#[derive(Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "tau")]
 pub struct CliTau {
     /// Increase verbosity
-    #[clap(short, parse(from_occurrences))]
+    #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+    /// JSON-RPC listen URL
+    #[structopt(long = "rpc", default_value = "127.0.0.1:11055")]
+    pub rpc_listen: SocketAddr,
     /// Sets a custom config file
-    #[clap(short, long)]
+    #[structopt(short, long)]
     pub config: Option<String>,
-    #[clap(subcommand)]
+    #[structopt(subcommand)]
     pub command: Option<CliTauSubCommands>,
-    #[clap(multiple_values = true)]
+    #[structopt(multiple = true)]
     /// Search criteria (zero or more)
-    pub filter: Vec<String>,
+    pub filters: Vec<String>,
 }
 
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
@@ -277,19 +271,25 @@ pub fn get_from_task(task: Value, value: &str) -> Result<String> {
     Ok(result)
 }
 
-fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Value>> {
+fn filter_tasks(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Value>> {
     let filter = match filter {
         Some(f) => f,
         None => "all".to_string(),
     };
 
-    let mut filtered_tasks: Vec<Value> = match filter.as_str() {
+    let filtered_tasks: Vec<Value> = match filter.as_str() {
         "all" => tasks,
 
         "open" => tasks
             .into_iter()
             .filter(|task| {
-                let events = task["events"].as_array().unwrap().to_owned();
+                let events = match task["events"].as_array() {
+                    Some(t) => t.to_owned(),
+                    None => {
+                        error!("Value is not an array!");
+                        vec![]
+                    }
+                };
 
                 let state = match events.last() {
                     Some(s) => s["action"].as_str().unwrap(),
@@ -302,7 +302,13 @@ fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Valu
         "pause" => tasks
             .into_iter()
             .filter(|task| {
-                let events = task["events"].as_array().unwrap().to_owned();
+                let events = match task["events"].as_array() {
+                    Some(t) => t.to_owned(),
+                    None => {
+                        error!("Value is not an array!");
+                        vec![]
+                    }
+                };
 
                 let state = match events.last() {
                     Some(s) => s["action"].as_str().unwrap(),
@@ -330,12 +336,16 @@ fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Valu
             tasks
                 .into_iter()
                 .filter(|task| {
-                    task[key]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|s| s.as_str().unwrap())
-                        .any(|x| x == value)
+                    match task[key].as_array() {
+                        Some(t) => t.to_owned(),
+                        None => {
+                            error!("Value is not an array!");
+                            vec![]
+                        }
+                    }
+                    .iter()
+                    .map(|s| s.as_str().unwrap())
+                    .any(|x| x == value)
                 })
                 .collect()
         }
@@ -365,32 +375,22 @@ fn sort_and_filter(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Valu
         _ => tasks,
     };
 
-    filtered_tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
-
     Ok(filtered_tasks)
 }
 
-pub fn list_tasks(rep: Value, filter: Vec<String>) -> Result<()> {
+pub fn list_tasks(rep: Value, filters: Vec<String>) -> Result<()> {
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
     table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
-    let tasks: Vec<Value> = serde_json::from_value(rep)?;
+    let mut tasks: Vec<Value> = serde_json::from_value(rep)?;
 
-    // we match up to 3 filters to keep things simple and avoid using loops
-    let tasks = match filter.len() {
-        1 => sort_and_filter(tasks, Some(filter[0].clone()))?,
-        2 => {
-            let res = sort_and_filter(tasks, Some(filter[0].clone()))?;
-            sort_and_filter(res, Some(filter[1].clone()))?
-        }
-        3 => {
-            let res1 = sort_and_filter(tasks, Some(filter[0].clone()))?;
-            let res2 = sort_and_filter(res1, Some(filter[1].clone()))?;
-            sort_and_filter(res2, Some(filter[2].clone()))?
-        }
-        _ => sort_and_filter(tasks, None)?,
-    };
+    for filter in filters {
+        let temp = tasks;
+        tasks = filter_tasks(temp, Some(filter))?;
+    }
+
+    tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
 
     let (max_rank, min_rank) = if !tasks.is_empty() {
         (
