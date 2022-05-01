@@ -28,4 +28,10 @@ pub struct Args {
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+    /// Generate a new secret key
+    #[structopt(long)]
+    pub key_gen: bool,
+    /// Load a secret key
+    #[structopt(long)]
+    pub key: Option<String>,
 }

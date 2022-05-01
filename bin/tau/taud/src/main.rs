@@ -1,6 +1,5 @@
 use async_std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use std::fs::create_dir_all;
+use std::{fs::create_dir_all, process::exit};
 
 use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
@@ -40,8 +39,8 @@ use crate::{
     util::{load, save},
 };
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable, Serialize, Deserialize)]
-pub struct MsgPayload {
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct EncryptedTask {
     nonce: Vec<u8>,
     payload: Vec<u8>,
 }
@@ -56,20 +55,43 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let mut rng = crypto_box::rand_core::OsRng;
 
-    let secret_key = match load::<[u8; KEY_SIZE]>(&datastore_path.join("secret_key")) {
-        Ok(t) => SecretKey::try_from(t)?,
-        Err(_) => {
+    let secret_key = match settings.key_gen {
+        true => {
             info!(target: "tau", "generating a new secret key");
             let secret = SecretKey::generate(&mut rng);
-            let sk_string = secret.as_bytes();
-            save::<[u8; KEY_SIZE]>(&datastore_path.join("secret_key"), sk_string)
-                .map_err(Error::from)?;
+            let sk_string = hex::encode(secret.as_bytes());
+            save::<String>(&datastore_path.join("secret_key"), &sk_string)?;
             secret
         }
-    };
+        false => {
+            if settings.key.is_some() {
+                let sk_string = hex::decode(settings.key.unwrap())
+                    .map_err(|_| Error::DecodeError("Error decoding key from arguments"))?;
 
-    let public_key = secret_key.public_key();
-    let msg_box = Box::new(&public_key, &secret_key);
+                let sk_bytes: [u8; KEY_SIZE] = sk_string
+                    .try_into()
+                    .map_err(|_| Error::ParseFailed("Could not convert key to bytes"))?;
+
+                SecretKey::try_from(sk_bytes)?
+            } else {
+                let loaded_key = match load::<String>(&datastore_path.join("secret_key")) {
+                    Ok(key) => key,
+                    Err(_) => {
+                        error!("Could not load secret key from file, please run \"taud --help\" for more information");
+                        exit(1)
+                    }
+                };
+                let sk_string = hex::decode(loaded_key)
+                    .map_err(|_| Error::DecodeError("Error decoding secret key from file"))?;
+
+                let sk_bytes: [u8; KEY_SIZE] = sk_string
+                    .try_into()
+                    .map_err(|_| Error::ParseFailed("Could not convert key to bytes"))?;
+
+                SecretKey::try_from(sk_bytes)?
+            }
+        }
+    };
 
     //
     // RPC
@@ -96,7 +118,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //Raft
     //
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<Vec<u8>>::new(net_settings.inbound, datastore_raft)?;
+    let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound, datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
@@ -110,15 +132,23 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
         for task in tasks {
             info!(target: "tau", "send local task {:?}", task);
+            let public_key = secret_key.public_key();
+            let msg_box = Box::new(&public_key, &secret_key);
 
             let nonce = crypto_box::generate_nonce(&mut rng);
             let payload = &serialize(&task)[..];
-            let encrypted_payload = msg_box.encrypt(&nonce, payload).unwrap();
+            let encrypted_payload = match msg_box.encrypt(&nonce, payload) {
+                Ok(p) => p,
+                Err(_) => {
+                    error!("Could not encrypt task");
+                    continue
+                }
+            };
 
-            let msg = MsgPayload { nonce: nonce.to_vec(), payload: encrypted_payload };
-            let ser_msg = serialize(&msg);
+            let encrypted_task =
+                EncryptedTask { nonce: nonce.to_vec(), payload: encrypted_payload };
 
-            initial_sync_raft_sender.send(ser_msg).await.map_err(Error::from)?;
+            initial_sync_raft_sender.send(encrypted_task).await.map_err(Error::from)?;
         }
 
         loop {
@@ -129,37 +159,43 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                         info!(target: "tau", "save the received task {:?}", tk);
                         tk.save(&datastore_path_cloned)?;
 
+                        let public_key = secret_key.public_key();
+                        let msg_box = Box::new(&public_key, &secret_key);
+
                         let nonce = crypto_box::generate_nonce(&mut rng);
                         let payload = &serialize(&tk)[..];
-                        let encrypted_payload = msg_box.encrypt(&nonce, payload).unwrap();
-
-                        let msg = MsgPayload {
-                            nonce: nonce.to_vec(),
-                            payload: encrypted_payload,
+                        let encrypted_payload = match msg_box.encrypt(&nonce, payload) {
+                            Ok(p) => p,
+                            Err(_) => {
+                                error!("Could not encrypt task");
+                                continue
+                            }
                         };
-                        let ser_msg = serialize(&msg);
 
-                        raft_sender.send(ser_msg).await.map_err(Error::from)?;
+                        let encrypted_task =
+                            EncryptedTask { nonce: nonce.to_vec(), payload: encrypted_payload };
+
+                        raft_sender.send(encrypted_task).await.map_err(Error::from)?;
                     }
                 }
                 task = commits.recv().fuse() => {
-                    let task = task.map_err(Error::from)?;
+                    let recv = task.map_err(Error::from)?;
 
-                    let recv: MsgPayload = deserialize(&task)?;
+                    let public_key = secret_key.public_key();
+                    let msg_box = Box::new(&public_key, &secret_key);
+
                     let nonce = recv.nonce.as_slice();
-                    let message = match msg_box.decrypt(nonce.try_into().unwrap(), &recv.payload[..]){
+                    let decrypted_task = match msg_box.decrypt(nonce.try_into().unwrap(), &recv.payload[..]) {
                         Ok(m) => m,
                         Err(_) => {
                             error!("Invalid secret or public key");
-                            vec![]
-                        },
+                            continue
+                        }
                     };
-
-                    let task: TaskInfo = deserialize(&message)?;
+                    let task: TaskInfo = deserialize(&decrypted_task)?;
                     info!(target: "tau", "receive update from the commits {:?}", task);
                     task.save(&datastore_path_cloned)?;
                 }
-
             }
         }
     });

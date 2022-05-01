@@ -1576,24 +1576,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
-name = "encoding_rs"
-version = "0.8.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
-dependencies = [
- "cfg-if 1.0.0",
-]
-
-[[package]]
-name = "encoding_rs_io"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83"
-dependencies = [
- "encoding_rs",
-]
-
-[[package]]
 name = "enum-iterator"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3949,6 +3931,8 @@ dependencies = [
  "serde_json",
  "simplelog",
  "smol",
+ "structopt",
+ "structopt-toml",
  "url",
 ]
 
@@ -3966,9 +3950,8 @@ dependencies = [
  "ctrlc-async",
  "darkfi",
  "easy-parallel",
- "encoding_rs",
- "encoding_rs_io",
  "futures",
+ "hex",
  "log",
  "num_cpus",
  "rand",
