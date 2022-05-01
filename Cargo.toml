@@ -327,7 +327,7 @@ name = "gt"
 path = "example/gt.rs"
 required-features = ["node"]
 
-[[example]]
-name = "lead"
-path = "example/lead.rs"
-required-features = ["node"]
+#[[example]]
+#name = "lead"
+#path = "example/lead.rs"
+#required-features = ["node"]

@@ -467,12 +467,12 @@ mod tests {
         let wallet = WalletDb::new("sqlite::memory:", WPASS).await?;
         let keypair = Keypair::random(&mut OsRng);
 
-        let tokenlist = DrkTokenList::new(&[
+        let tokenlist = Arc::new(DrkTokenList::new(&[
             ("drk", include_bytes!("../../contrib/token/darkfi_token_list.min.json")),
             ("btc", include_bytes!("../../contrib/token/bitcoin_token_list.min.json")),
             ("eth", include_bytes!("../../contrib/token/erc20_token_list.min.json")),
             ("sol", include_bytes!("../../contrib/token/solana_token_list.min.json")),
-        ])?;
+        ])?);
 
         // init_db()
         wallet.init_db().await?;
@@ -491,19 +491,19 @@ mod tests {
         let c3 = dummy_coin(&keypair.secret, 11, &token_id);
 
         // put_own_coin()
-        wallet.put_own_coin(c0, &tokenlist).await?;
+        wallet.put_own_coin(c0, tokenlist.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c0.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c1, &tokenlist).await?;
+        wallet.put_own_coin(c1, tokenlist.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c1.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c2, &tokenlist).await?;
+        wallet.put_own_coin(c2, tokenlist.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c2.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c3, &tokenlist).await?;
+        wallet.put_own_coin(c3, tokenlist).await?;
         tree1.append(&MerkleNode::from_coin(&c3.coin));
         tree1.witness();
 
