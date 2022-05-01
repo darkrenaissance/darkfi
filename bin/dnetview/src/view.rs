@@ -1,4 +1,4 @@
-use darkfi::error::Result;
+use darkfi::error::{Error, Result};
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -63,10 +63,16 @@ impl View {
                 }
             }
         }
+        //debug!("ACTIVE IDS VEC: {:?}", self.active_ids.ids);
+    }
+
+    pub fn init_node_list(&mut self) {
+        //
     }
 
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
         let mut nodes = Vec::new();
+        let mut ids = Vec::new();
         let style = Style::default();
         let list_margin = 2;
         let list_direction = Direction::Horizontal;
@@ -77,12 +83,14 @@ impl View {
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
+            ids.push(&info.node_id);
             for session in &info.children {
                 if !session.is_empty == true {
                     let name = Span::styled(format!("    {}", session.session_name), style);
                     let lines = vec![Spans::from(name)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
+                    ids.push(&session.session_id);
                     for connection in &session.children {
                         let mut info = Vec::new();
                         let name = Span::styled(format!("        {}", connection.addr), style);
@@ -110,6 +118,7 @@ impl View {
                         let lines = vec![Spans::from(info)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
+                        ids.push(&connection.connect_id);
                     }
                 }
             }
@@ -121,35 +130,60 @@ impl View {
             .constraints(list_cnstrnts)
             .split(f.size());
 
-        //debug!("NODE INFO LENGTH {:?}", nodes.len());
-        //debug!("ACTIVE IDS LENGTH {:?}", self.active_ids.ids.len());
-
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
         f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
 
-        // TODO: render another stateful widget that shares the same state
-        // but displays SelectableObject on the right
-        self.render_info(f, slice);
+        ids.dedup();
+        // get the id at the current index
+        match self.active_ids.state.selected() {
+            Some(i) => {
+                match ids.get(i) {
+                    Some(i) => {
+                        self.clone().render_info(f, slice.clone(), i.to_string());
+                        // found id
+                    }
+                    None => {
+                        // TODO: Error
+                    }
+                }
+            }
+            None => {
+                // TODO: nothing is selected
+            }
+        }
     }
 
-    fn render_info<B: Backend>(self, f: &mut Frame<'_, B>, slice: Vec<Rect>) {
-        let span = vec![];
-        let graph = Paragraph::new(span)
+    fn render_info<B: Backend>(mut self, f: &mut Frame<'_, B>, slice: Vec<Rect>, selected: String) {
+        let style = Style::default();
+        //let mut infos = Vec::new();
+        let mut spans = Vec::new();
+
+        let info = self.selectables.get(&selected);
+
+        match info {
+            Some(SelectableObject::Node(node)) => {
+                let name_span = Spans::from("Node Info");
+                spans.push(name_span);
+            }
+            Some(SelectableObject::Session(session)) => {
+                let name_span = Spans::from("Session Info");
+                spans.push(name_span);
+            }
+            Some(SelectableObject::Connect(connect)) => {
+                let name_span = Spans::from("Connect Info");
+                spans.push(name_span);
+            }
+            None => {
+                // TODO
+            }
+        }
+
+        let graph = Paragraph::new(spans)
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default());
 
-        for info in self.selectables.values() {
-            match info {
-                SelectableObject::Node(node) => {}
-                SelectableObject::Session(session) => {}
-                SelectableObject::Connect(connect) => {}
-            }
-            //
-        }
-
-        //f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
         f.render_widget(graph, slice[1]);
     }
 }
