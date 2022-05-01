@@ -6,7 +6,7 @@ use log::debug;
 
 use crate::{net, Result};
 
-use super::{NetMsg, NetMsgMethod, NodeId};
+use super::primitives::{NetMsg, NetMsgMethod, NodeId};
 
 pub struct ProtocolRaft {
     id: Option<NodeId>,

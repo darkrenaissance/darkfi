@@ -16,16 +16,16 @@ use crate::{
 };
 
 use super::{
-    BroadcastMsgRequest, DataStore, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
-    NetMsgMethod, NodeId, ProtocolRaft, Role, SyncRequest, SyncResponse, VoteRequest, VoteResponse,
+    primitives::{
+        Broadcast, BroadcastMsgRequest, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
+        NetMsgMethod, NodeId, Role, Sender, SyncRequest, SyncResponse, VoteRequest, VoteResponse,
+    },
+    DataStore, ProtocolRaft,
 };
 
 const HEARTBEATTIMEOUT: u64 = 100;
 const TIMEOUT: u64 = 300;
 const TIMEOUT_NODES: u64 = 300;
-
-pub type Broadcast<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
-type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, SocketAddr>>>,

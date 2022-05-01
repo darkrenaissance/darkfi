@@ -8,7 +8,7 @@ use crate::{
     Result,
 };
 
-use super::{Log, NodeId};
+use super::primitives::{Log, NodeId};
 
 const SLED_LOGS_TREE: &[u8] = b"_logs";
 const SLED_COMMITS_TREE: &[u8] = b"_commits";
