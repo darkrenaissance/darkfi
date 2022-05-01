@@ -8,8 +8,9 @@ use crate::{
 pub type Broadcast<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
 pub type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Role {
+    Listener,
     Follower,
     Candidate,
     Leader,

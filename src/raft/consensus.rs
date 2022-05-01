@@ -30,9 +30,9 @@ const TIMEOUT_NODES: u64 = 300;
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, SocketAddr>>>,
     p2p: net::P2pPtr,
-    self_id: Option<NodeId>,
+    role: Role,
 ) -> Result<()> {
-    if self_id.is_none() {
+    if role == Role::Listener {
         return Ok(())
     }
     loop {
@@ -134,13 +134,16 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let sender = async_channel::unbounded::<NetMsg>();
 
+        let id = addr.map(NodeId::from);
+        let role = if id.is_some() { Role::Follower } else { Role::Listener };
+
         Ok(Self {
-            id: addr.map(NodeId::from),
+            id,
             current_term,
             voted_for,
             logs,
             commit_length,
-            role: Role::Follower,
+            role,
             current_leader: None,
             votes_received: vec![],
             sent_length: MapLength(HashMap::new()),
@@ -191,10 +194,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let p2p_recv_task = executor.spawn(p2p_recv_send_loop(p2p_recv.clone(), p2p.clone()));
 
         let load_ips_task =
-            executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.id.clone()));
+            executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
 
         // Sync listener node
-        if self.id.is_none() {
+        if self.role == Role::Listener {
             let last_term =
                 if !self.logs.0.is_empty() { self.logs.0.last().unwrap().term } else { 0 };
 
@@ -272,11 +275,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             .await?;
         }
 
-        info!(target: "raft",
-         "Node has id: {}, Node status: {:?}, broadcast a msg id: {:?} ",
-         self.id.is_some(),
-         self.role, msg_id
-        );
+        info!(target: "raft", "Role: {:?}, broadcast a msg id: {:?} ", self.role, msg_id);
 
         Ok(())
     }
@@ -312,19 +311,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             NetMsgMethod::SyncResponse => {}
         }
 
-        debug!(
-        target: "raft",
-        "Node has id: {} {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
-        self.id.is_some(), self.role, msg.id, &msg.recipient_id.is_some(), &msg.method
-        );
+        debug!(target: "raft", "Role: {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
+        self.role, msg.id, &msg.recipient_id.is_some(), &msg.method);
         Ok(())
     }
 
     async fn receive_sync_request(&self, sr: &SyncRequest, msg_id: u64) -> Result<()> {
-        if self.id.is_none() {
-            return Ok(())
-        }
-
         if self.role == Role::Leader {
             let mut wipe = false;
 
@@ -407,11 +399,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let random_id = if msg_id.is_some() { msg_id.unwrap() } else { OsRng.next_u64() };
 
-        debug!(
-        target: "raft",
-        "Node has id: {} {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
-        self.id.is_some(), self.role, random_id, &recipient_id.is_some(), &method
-        );
+        debug!(target: "raft","Role: {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
+        self.role, random_id, &recipient_id.is_some(), &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
         self.sender.0.send(net_msg).await?;
@@ -452,8 +441,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn send_vote_request(&mut self) -> Result<()> {
-        // this will prevent the listener node to become a candidate
-        if self.id.is_none() {
+        if self.role == Role::Listener {
             return Ok(())
         }
 
@@ -478,7 +466,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_vote_request(&mut self, vr: VoteRequest) -> Result<()> {
-        if self.id.is_none() {
+        if self.role == Role::Listener {
             return Ok(())
         }
 
@@ -517,6 +505,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_vote_response(&mut self, vr: VoteResponse) -> Result<()> {
+        if self.role == Role::Listener {
+            return Ok(())
+        }
+
         if self.role == Role::Candidate && vr.current_term == self.current_term && vr.ok {
             self.votes_received.push(vr.node_id);
 
@@ -582,7 +574,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         if lr.current_term == self.current_term {
-            self.role = Role::Follower;
+            if self.role != Role::Listener {
+                self.role = Role::Follower;
+            }
             self.current_leader = Some(lr.leader_id.clone());
         }
 
@@ -598,7 +592,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             ok = false;
         }
 
-        if self.id.is_none() {
+        if self.role == Role::Listener {
             return Ok(())
         }
 
@@ -624,7 +618,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         } else if lr.current_term > self.current_term {
             self.set_current_term(&lr.current_term)?;
-            self.role = Role::Follower;
+            if self.role != Role::Listener {
+                self.role = Role::Follower;
+            }
             self.set_voted_for(&None)?;
         }
 

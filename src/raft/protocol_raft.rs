@@ -6,7 +6,7 @@ use log::debug;
 
 use crate::{net, Result};
 
-use super::primitives::{NetMsg, NetMsgMethod, NodeId};
+use super::primitives::{NetMsg, NodeId};
 
 pub struct ProtocolRaft {
     id: Option<NodeId>,
@@ -73,17 +73,9 @@ impl ProtocolRaft {
                 // and response with a VoteResponse
                 (Some(_), None) => {}
                 // if the local node's id is None but the recipient's id is not None
-                // then the local node will only handle the msg if its method
-                // is LogRequest
-                (None, Some(_)) => {
-                    if msg.method != NetMsgMethod::LogRequest &&
-                        msg.method != NetMsgMethod::SyncResponse
-                    {
-                        continue
-                    }
-                }
+                (None, Some(_)) => {}
                 // if the local node's id and msg recipient's id are both None then reject
-                // the msg becuase the local node doesn't have the right to vote
+                // the msg becuase the local node is listener
                 (None, None) => continue,
             }
 
