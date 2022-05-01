@@ -7,18 +7,15 @@ use std::net::SocketAddr;
 use async_channel::{Receiver, Sender};
 use async_executor::Executor;
 use easy_parallel::Parallel;
-use futures::{
-    io::BufReader, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, FutureExt, StreamExt,
-};
-use futures_rustls::TlsStream;
-use log::{debug, error, info, warn};
+use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt, StreamExt};
+use log::{debug, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize,
-    net::transport::{TcpTransport, TlsTransport, Transport},
+    net::transport::{TcpTransport, Transport},
     raft::Raft,
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
@@ -39,12 +36,6 @@ use crate::{
     server::IrcServerConnection,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
-
-// TODO should using Stream from net3 instead
-pub trait Stream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
-
-impl Stream for TcpStream {}
-impl<T: Stream> Stream for TlsStream<T> {}
 
 pub type SeenMsgIds = Arc<Mutex<Vec<u32>>>;
 
@@ -90,7 +81,7 @@ async fn broadcast_msg(
 
 async fn process(
     raft_receiver: Receiver<Privmsg>,
-    stream: Box<dyn Stream>,
+    stream: TcpStream,
     peer_addr: SocketAddr,
     raft_sender: Sender<Privmsg>,
     seen_msg_id: SeenMsgIds,
@@ -169,55 +160,23 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let irc_task: smol::Task<Result<()>> = executor.spawn(async move {
         let irc_listen_url = url::Url::parse(&settings.irc_listen)?;
 
-        match irc_listen_url.scheme() {
-            "tcp" => {
-                let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(irc_listen_url.clone()).unwrap().await.unwrap();
-                let mut incoming = listener.incoming();
-                info!("IRC start a TCP connection {}", &irc_listen_url.to_string());
-                while let Some(stream) = incoming.next().await {
-                    let stream = stream.unwrap();
-                    let peer_addr = stream.peer_addr()?;
-                    info!("IRC Accepted TCP connection {}", peer_addr);
-                    executor_cloned
-                        .spawn(process(
-                            raft_receiver.clone(),
-                            Box::new(stream),
-                            peer_addr,
-                            raft_sender.clone(),
-                            seen_msg_id.clone(),
-                        ))
-                        .detach();
-                }
-            }
-
-            "tls" => {
-                let transport = TlsTransport::new(None, 1024);
-                let (acceptor, listener) =
-                    transport.listen_on(irc_listen_url.clone()).unwrap().await.unwrap();
-                let mut incoming = listener.incoming();
-                info!("IRC bind a TLS connection {}", &irc_listen_url.to_string());
-                while let Some(stream) = incoming.next().await {
-                    let stream = stream.unwrap();
-                    let peer_addr = stream.peer_addr()?;
-                    info!("IRC Accepted TLS connection {}", peer_addr);
-                    let stream = acceptor.accept(stream).await?;
-                    executor_cloned
-                        .spawn(process(
-                            raft_receiver.clone(),
-                            Box::new(TlsStream::Server(stream)),
-                            peer_addr,
-                            raft_sender.clone(),
-                            seen_msg_id.clone(),
-                        ))
-                        .detach();
-                }
-            }
-
-            x => {
-                error!("Transport protocol '{}' isn't implemented", x);
-                return Err(Error::UnsupportedTransport(x.to_string()))
-            }
+        let transport = TcpTransport::new(None, 1024);
+        let listener = transport.listen_on(irc_listen_url.clone()).unwrap().await.unwrap();
+        let mut incoming = listener.incoming();
+        info!("IRC start a TCP connection {}", &irc_listen_url.to_string());
+        while let Some(stream) = incoming.next().await {
+            let stream = stream.unwrap();
+            let peer_addr = stream.peer_addr()?;
+            info!("IRC Accepted TCP connection {}", peer_addr);
+            executor_cloned
+                .spawn(process(
+                    raft_receiver.clone(),
+                    stream,
+                    peer_addr,
+                    raft_sender.clone(),
+                    seen_msg_id.clone(),
+                ))
+                .detach();
         }
 
         Ok(())
