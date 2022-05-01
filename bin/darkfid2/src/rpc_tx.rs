@@ -4,7 +4,6 @@ use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
-    consensus::Tx,
     crypto::{address::Address, keypair::PublicKey, token_id::generate_id},
     rpc::{
         jsonrpc,
@@ -117,7 +116,7 @@ impl Darkfid {
         };
 
         if let Some(sync_p2p) = &self.sync_p2p {
-            match sync_p2p.broadcast(Tx(tx.clone())).await {
+            match sync_p2p.broadcast(tx.clone()).await {
                 Ok(()) => {}
                 Err(e) => {
                     error!("transfer(): Failed broadcasting transaction: {}", e);

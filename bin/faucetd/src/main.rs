@@ -20,7 +20,7 @@ use darkfi::{
     consensus::{
         proto::{ProtocolSync, ProtocolTx},
         task::block_sync_task,
-        Timestamp, Tx, ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES,
+        Timestamp, ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_HASH_BYTES,
     },
     crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
@@ -257,7 +257,7 @@ impl Faucetd {
         };
 
         // Broadcast transaction to the network.
-        match self.sync_p2p.broadcast(Tx(tx.clone())).await {
+        match self.sync_p2p.broadcast(tx.clone()).await {
             Ok(()) => {}
             Err(e) => {
                 error!("airdrop(): Failed broadcasting transaction: {}", e);

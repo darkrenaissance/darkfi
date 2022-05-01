@@ -13,7 +13,7 @@ use rand::rngs::OsRng;
 
 use super::{
     Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata,
-    Timestamp, Tx, Vote,
+    Timestamp, Vote,
 };
 use crate::{
     blockchain::Blockchain,
@@ -27,6 +27,7 @@ use crate::{
         state::{state_transition, StateUpdate},
         Client, MemoryState, State,
     },
+    tx::Transaction,
     util::serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
@@ -117,7 +118,7 @@ pub struct ValidatorState {
     /// Client providing wallet access
     pub client: Arc<Client>,
     /// Pending transactions
-    pub unconfirmed_txs: Vec<Tx>,
+    pub unconfirmed_txs: Vec<Transaction>,
     /// Participating start epoch
     pub participating: Option<u64>,
 }
@@ -168,7 +169,7 @@ impl ValidatorState {
     /// The node retrieves a transaction and appends it to the unconfirmed
     /// transactions list. Additional validity rules must be defined by the
     /// protocol for transactions.
-    pub fn append_tx(&mut self, tx: Tx) -> bool {
+    pub fn append_tx(&mut self, tx: Transaction) -> bool {
         if self.unconfirmed_txs.contains(&tx) {
             debug!("append_tx(): We already have this tx");
             return false
@@ -280,7 +281,7 @@ impl ValidatorState {
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
     /// of provided index chain.
-    pub fn unproposed_txs(&self, index: i64) -> Vec<Tx> {
+    pub fn unproposed_txs(&self, index: i64) -> Vec<Transaction> {
         let mut unproposed_txs = self.unconfirmed_txs.clone();
 
         // If index is -1 (canonical blockchain) a new fork will be generated,
@@ -610,7 +611,7 @@ impl ValidatorState {
     }
 
     /// Remove provided transactions vector from unconfirmed_txs if they exist.
-    pub fn remove_txs(&mut self, transactions: Vec<Tx>) -> Result<()> {
+    pub fn remove_txs(&mut self, transactions: Vec<Transaction>) -> Result<()> {
         for tx in transactions {
             if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {
                 self.unconfirmed_txs.remove(pos);
@@ -664,7 +665,7 @@ impl ValidatorState {
 
         chain.proposals.drain(0..(consecutive - 1));
 
-        info!(target: "consensus", "Adding finalized block to canonical chain");
+        info!(target: "consensus", "Adding {} finalized block to canonical chain", finalized.len());
         let blockhashes = match self.blockchain.add(&finalized) {
             Ok(v) => v,
             Err(e) => {
@@ -676,6 +677,7 @@ impl ValidatorState {
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
             // TODO: These state transitions have already been checked.
+            debug!(target: "consensus", "Applying state transition for finalized block");
             let canon_state_clone = self.state_machine.lock().await.clone();
             let mem_st = MemoryState::new(canon_state_clone);
             let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
@@ -839,12 +841,15 @@ impl ValidatorState {
 
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
-    pub fn validate_state_transitions(state: MemoryState, txs: &[Tx]) -> Result<Vec<StateUpdate>> {
+    pub fn validate_state_transitions(
+        state: MemoryState,
+        txs: &[Transaction],
+    ) -> Result<Vec<StateUpdate>> {
         let mut ret = vec![];
         let mut st = state;
 
         for (i, tx) in txs.iter().enumerate() {
-            let update = match state_transition(&st, tx.0.clone()) {
+            let update = match state_transition(&st, tx.clone()) {
                 Ok(v) => v,
                 Err(e) => {
                     warn!("validate_state_transition(): Failed for tx {}: {}", i, e);

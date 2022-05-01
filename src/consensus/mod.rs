@@ -2,10 +2,6 @@
 pub mod block;
 pub use block::{Block, BlockInfo, BlockProposal, ProposalChain};
 
-/// Transactions
-pub mod tx;
-pub use tx::Tx;
-
 /// Consensus metadata
 pub mod metadata;
 pub use metadata::{Metadata, StreamletMetadata};

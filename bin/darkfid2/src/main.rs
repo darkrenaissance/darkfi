@@ -142,7 +142,7 @@ struct Args {
 
 pub struct Darkfid {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
-    consensus_p2p: Option<P2pPtr>,
+    _consensus_p2p: Option<P2pPtr>,
     sync_p2p: Option<P2pPtr>,
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
@@ -190,7 +190,13 @@ impl Darkfid {
         let client = validator_state.read().await.client.clone();
         debug!("Released validator state lock");
 
-        Ok(Self { synced: Mutex::new(false), consensus_p2p, sync_p2p, client, validator_state })
+        Ok(Self {
+            synced: Mutex::new(false),
+            _consensus_p2p: consensus_p2p,
+            sync_p2p,
+            client,
+            validator_state,
+        })
     }
 }
 

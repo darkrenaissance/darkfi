@@ -4,21 +4,29 @@ use async_trait::async_trait;
 use log::{debug, error, warn};
 
 use crate::{
-    consensus::{Tx, ValidatorState, ValidatorStatePtr},
+    consensus::{ValidatorState, ValidatorStatePtr},
+    net,
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     node::MemoryState,
+    tx::Transaction,
     util::serial::serialize,
     Result,
 };
 
 pub struct ProtocolTx {
-    tx_sub: MessageSubscription<Tx>,
+    tx_sub: MessageSubscription<Transaction>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
+}
+
+impl net::Message for Transaction {
+    fn name() -> &'static str {
+        "tx"
+    }
 }
 
 impl ProtocolTx {
@@ -29,9 +37,9 @@ impl ProtocolTx {
     ) -> Result<ProtocolBasePtr> {
         debug!("Adding ProtocolTx to the protocol registry");
         let msg_subsystem = channel.get_message_subsystem();
-        msg_subsystem.add_dispatch::<Tx>().await;
+        msg_subsystem.add_dispatch::<Transaction>().await;
 
-        let tx_sub = channel.subscribe_msg::<Tx>().await?;
+        let tx_sub = channel.subscribe_msg::<Transaction>().await?;
 
         Ok(Arc::new(Self {
             tx_sub,

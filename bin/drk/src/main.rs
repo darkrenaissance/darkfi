@@ -48,7 +48,7 @@ enum DrkSubcommand {
 
         #[clap(long)]
         /// JSON-RPC endpoint of the faucet
-        endpoint: Url,
+        faucet_endpoint: Url,
 
         /// f64 amount requested for airdrop
         amount: f64,
@@ -269,8 +269,8 @@ async fn main() -> Result<()> {
     match args.command {
         DrkSubcommand::Ping => drk.ping().await,
 
-        DrkSubcommand::Airdrop { address, endpoint, amount } => {
-            drk.airdrop(address, endpoint, amount).await
+        DrkSubcommand::Airdrop { address, faucet_endpoint, amount } => {
+            drk.airdrop(address, faucet_endpoint, amount).await
         }
 
         DrkSubcommand::Wallet { keygen, balance, address, all_addresses } => {

@@ -1,7 +1,7 @@
 use sled::Batch;
 
 use crate::{
-    consensus::Tx,
+    tx::Transaction,
     util::serial::{deserialize, serialize},
     Error, Result,
 };
@@ -17,11 +17,11 @@ impl TxStore {
         Ok(Self(tree))
     }
 
-    /// Insert a slice of [`Tx`] into the txstore. With sled, the
+    /// Insert a slice of [`Transaction`] into the txstore. With sled, the
     /// operation is done as a batch.
     /// The transactions are hashed with BLAKE3 and this hash is
     /// used as the key, while value is the serialized tx itself.
-    pub fn insert(&self, txs: &[Tx]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(txs.len());
         let mut batch = Batch::default();
         for i in txs {
@@ -42,8 +42,12 @@ impl TxStore {
 
     /// Fetch requested transactions from the txstore. The `strict` param
     /// will make the function fail if a transaction has not been found.
-    pub fn get(&self, tx_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Tx>>> {
-        let mut ret: Vec<Option<Tx>> = Vec::with_capacity(tx_hashes.len());
+    pub fn get(
+        &self,
+        tx_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Transaction>>> {
+        let mut ret: Vec<Option<Transaction>> = Vec::with_capacity(tx_hashes.len());
 
         for i in tx_hashes {
             if let Some(found) = self.0.get(i.as_bytes())? {
@@ -63,7 +67,7 @@ impl TxStore {
 
     /// Retrieve all transactions.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Tx)>>> {
+    pub fn get_all(&self) -> Result<Vec<Option<(blake3::Hash, Transaction)>>> {
         let mut txs = vec![];
         let iterator = self.0.into_iter().enumerate();
         for (_, r) in iterator {
