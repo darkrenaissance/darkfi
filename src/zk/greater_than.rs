@@ -3,12 +3,11 @@ use std::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region},
-    plonk::{Advice, Column, Instance, ConstraintSystem, Error, Expression, Selector},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Instance, Selector},
     poly::Rotation,
 };
 
 use pasta_curves::pallas;
-
 
 #[derive(Clone, Debug)]
 pub struct GreaterThanConfig {
@@ -16,7 +15,6 @@ pub struct GreaterThanConfig {
     pub instance: Column<Instance>,
     s_gt: Selector,
 }
-
 
 pub struct GreaterThanChip<F: FieldExt, const WORD_BITS: u32> {
     config: GreaterThanConfig,
@@ -98,11 +96,11 @@ impl<F: FieldExt, const WORD_BITS: u32> GreaterThanChip<F, WORD_BITS> {
         GreaterThanConfig { advice, s_gt }
     }
      */
-    pub fn configure(meta: &mut ConstraintSystem<F>,
-                     advice : [Column<Advice>; 2],
-                     instance: Column<Instance>) -> <Self as Chip<F>>::Config {
-
-
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        advice: [Column<Advice>; 2],
+        instance: Column<Instance>,
+    ) -> <Self as Chip<F>>::Config {
         for column in &advice {
             meta.enable_equality(*column);
         }

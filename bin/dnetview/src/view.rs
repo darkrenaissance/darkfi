@@ -1,7 +1,5 @@
 use darkfi::error::{Error, Result};
 use fxhash::{FxHashMap, FxHashSet};
-use log::debug;
-use serde::{Deserialize, Serialize};
 use tui::widgets::ListState;
 
 use tui::{
@@ -13,46 +11,48 @@ use tui::{
     Frame,
 };
 
-use crate::model::{ConnectInfo, Model, NodeInfo, SelectableObject, SessionInfo};
+use crate::model::{NodeInfo, SelectableObject};
 
 #[derive(Debug, Clone)]
 pub struct View {
-    pub all_ids: IdListView,
     pub active_ids: IdListView,
-    pub info_list: NodeInfoView,
+    pub node_info: NodeInfoView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
 
 impl View {
     pub fn new(
-        all_ids: IdListView,
         active_ids: IdListView,
-        info_list: NodeInfoView,
+        node_info: NodeInfoView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { all_ids, active_ids, info_list, selectables }
+        View { active_ids, node_info, selectables }
     }
 
-    pub fn init_ids(&mut self, ids: FxHashSet<String>) {
-        for id in ids {
-            self.all_ids.ids.insert(id);
-        }
+    pub fn update(
+        &mut self,
+        nodes: FxHashMap<String, NodeInfo>,
+        selectables: FxHashMap<String, SelectableObject>,
+    ) {
+        self.update_node_info(nodes);
+        self.update_selectable(selectables);
+        self.update_active_ids();
     }
 
-    pub fn init_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
+    fn update_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
         for (id, node) in nodes {
-            self.info_list.infos.insert(id, node);
+            self.node_info.infos.insert(id, node);
         }
     }
 
-    pub fn init_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+    fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
     }
 
-    pub fn init_active_ids(&mut self) {
-        for info in self.info_list.infos.values() {
+    fn update_active_ids(&mut self) {
+        for info in self.node_info.infos.values() {
             self.active_ids.ids.insert(info.node_id.to_string());
             for child in &info.children {
                 if !child.is_empty == true {
@@ -63,11 +63,6 @@ impl View {
                 }
             }
         }
-        //debug!("ACTIVE IDS VEC: {:?}", self.active_ids.ids);
-    }
-
-    pub fn init_node_list(&mut self) {
-        //
     }
 
     pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
@@ -78,7 +73,7 @@ impl View {
         let list_direction = Direction::Horizontal;
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
-        for info in self.info_list.infos.values() {
+        for info in self.node_info.infos.values() {
             let name_span = Span::raw(&info.node_name);
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);

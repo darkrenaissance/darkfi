@@ -399,20 +399,15 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
 
     terminal.clear()?;
 
-    let all_ids = IdListView::new(FxHashSet::default());
     let active_ids = IdListView::new(FxHashSet::default());
     let info_list = NodeInfoView::new(FxHashMap::default());
     let selectable = FxHashMap::default();
 
-    let mut view = View::new(all_ids.clone(), active_ids.clone(), info_list.clone(), selectable);
-    view.all_ids.state.select(Some(0));
-    view.info_list.index = 0;
+    let mut view = View::new(active_ids.clone(), info_list.clone(), selectable);
+    view.active_ids.state.select(Some(0));
 
     loop {
-        view.init_ids(model.ids.lock().await.clone());
-        view.init_node_info(model.node_info.lock().await.clone());
-        view.init_active_ids();
-        view.init_selectable(model.select_info.lock().await.clone());
+        view.update(model.node_info.lock().await.clone(), model.select_info.lock().await.clone());
 
         terminal.draw(|f| {
             view.clone().render(f);

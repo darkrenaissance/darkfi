@@ -206,7 +206,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
 
         // Configuration for the GreaterThan chip
-        let greaterthan_config = GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
+        let greaterthan_config =
+            GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
 
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.

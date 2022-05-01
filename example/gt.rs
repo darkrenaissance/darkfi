@@ -1,5 +1,5 @@
 use darkfi::zk::{
-    arith_chip::{ArithmeticChipConfig, ArithmeticChip},
+    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
@@ -10,7 +10,7 @@ use halo2_proofs::{
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use pasta_curves::{pallas, Fp, vesta, Fq};
+use pasta_curves::{pallas, vesta, Fp, Fq};
 
 const WORD_BITS: u32 = 24;
 
@@ -20,10 +20,8 @@ struct ZkConfig {
     advices: [Column<Advice>; 3],
     evenbits_config: EvenBitsConfig,
     greaterthan_config: GreaterThanConfig,
-    arith_config: ArithmeticChipConfig
+    arith_config: ArithmeticChipConfig,
 }
-
-
 
 impl ZkConfig {
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, WORD_BITS> {
@@ -54,7 +52,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        Self { y: None, v: None, f:None }
+        Self { y: None, v: None, f: None }
     }
 
     fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
@@ -69,7 +67,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
         }
 
         let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
-        let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(meta, [advices[1], advices[2]], primary);
+        let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
+            meta,
+            [advices[1], advices[2]],
+            primary,
+        );
         let arith_config = ArithmeticChip::configure(meta);
 
         ZkConfig { primary, advices, evenbits_config, greaterthan_config, arith_config }
@@ -91,13 +93,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let v = self.load_private(layouter.namespace(|| "Witness v"), config.advices[0], self.v)?;
         let f = self.load_private(layouter.namespace(|| "Witness t"), config.advices[0], self.f)?;
 
-
-        let t = ar_chip.mul(layouter.namespace(|| "target value"),  v, f)?;
+        let t = ar_chip.mul(layouter.namespace(|| "target value"), v, f)?;
 
         eb_chip.decompose(layouter.namespace(|| "y range check"), y.clone())?;
         eb_chip.decompose(layouter.namespace(|| "t range check"), t.clone())?;
 
-        let (helper, greater_than) = gt_chip.greater_than(layouter.namespace(|| "y > t"), y.into(), t.into())?;
+        let (helper, greater_than) =
+            gt_chip.greater_than(layouter.namespace(|| "y > t"), y.into(), t.into())?;
 
         eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
 
@@ -113,15 +115,9 @@ fn main() {
     let f = pallas::Base::from(1);
     //
     let c = pallas::Base::from(0);
-    let circuit = ZkCircuit {
-        y: Some(y),
-        v: Some(v),
-        f: Some(f),
-    };
+    let circuit = ZkCircuit { y: Some(y), v: Some(v), f: Some(f) };
 
-    let mut public_inputs : Vec<pallas::Base> = vec![
-          c,
-    ];
+    let mut public_inputs: Vec<pallas::Base> = vec![c];
 
     let prover = MockProver::run(k, &circuit, vec![public_inputs]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
