@@ -25,7 +25,8 @@ use pasta_curves::{pallas, Fp};
 use crate::crypto::{
     constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        util::gen_const_array, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+        util::gen_const_array,
+        OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
     },
     merkle_node::MerkleNode,
 };

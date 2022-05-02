@@ -52,7 +52,7 @@ fn encrypt_task(
 ) -> Result<EncryptedTask> {
     debug!("start encrypting task");
     let public_key = secret_key.public_key();
-    let msg_box = Box::new(&public_key, &secret_key);
+    let msg_box = Box::new(&public_key, secret_key);
 
     let nonce = crypto_box::generate_nonce(rng);
     let payload = &serialize(task)[..];
@@ -71,7 +71,7 @@ fn encrypt_task(
 fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> Option<TaskInfo> {
     debug!("start decrypting task");
     let public_key = secret_key.public_key();
-    let msg_box = Box::new(&public_key, &secret_key);
+    let msg_box = Box::new(&public_key, secret_key);
 
     let nonce = encrypt_task.nonce.as_slice();
     let decrypted_task = match msg_box.decrypt(nonce.into(), &encrypt_task.payload[..]) {
@@ -98,25 +98,23 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         let sk_string = hex::encode(secret.as_bytes());
         save::<String>(&datastore_path.join("secret_key"), &sk_string)?;
         secret
+    } else if settings.key.is_some() {
+        let sk_str = settings.key.unwrap();
+        save::<String>(&datastore_path.join("secret_key"), &sk_str)?;
+        let sk_bytes = hex::decode(sk_str)?;
+        let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
+        SecretKey::try_from(sk_bytes)?
     } else {
-        if settings.key.is_some() {
-            let sk_str = settings.key.unwrap();
-            save::<String>(&datastore_path.join("secret_key"), &sk_str)?;
-            let sk_bytes = hex::decode(sk_str)?;
-            let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
-            SecretKey::try_from(sk_bytes)?
-        } else {
-            let loaded_key = match load::<String>(&datastore_path.join("secret_key")) {
-                Ok(key) => key,
-                Err(_) => {
-                    error!("Could not load secret key from file, please run \"taud --help\" for more information");
-                    return Ok(())
-                }
-            };
-            let sk_bytes = hex::decode(loaded_key)?;
-            let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
-            SecretKey::try_from(sk_bytes)?
-        }
+        let loaded_key = match load::<String>(&datastore_path.join("secret_key")) {
+            Ok(key) => key,
+            Err(_) => {
+                error!("Could not load secret key from file, please run \"taud --help\" for more information");
+                return Ok(())
+            }
+        };
+        let sk_bytes = hex::decode(loaded_key)?;
+        let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
+        SecretKey::try_from(sk_bytes)?
     };
 
     //
@@ -135,7 +133,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone()));
 
     let executor_cloned = executor.clone();
-    let rpc_listener_taks =
+    let rpc_listener_task =
         executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
 
     let net_settings = settings.net;
@@ -220,7 +218,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         warn!(target: "tau", "taud start() Exit Signal");
         // cleaning up tasks running in the background
         signal.send(()).await.unwrap();
-        rpc_listener_taks.cancel().await;
+        rpc_listener_task.cancel().await;
         recv_update.cancel().await;
         p2p_run_task.cancel().await;
     })
