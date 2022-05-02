@@ -3,7 +3,7 @@ use std::io;
 use log::debug;
 
 use crate::{
-    consensus::{block::BlockInfo, util::Timestamp, Block, BlockProposal},
+    consensus::{Block, BlockInfo, Timestamp},
     impl_vec,
     util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
     Result,
@@ -24,6 +24,7 @@ pub use rootstore::RootStore;
 pub mod txstore;
 pub use txstore::TxStore;
 
+/// Structure holding all sled trees that comprise the concept of Blockchain.
 pub struct Blockchain {
     /// Blocks sled tree
     pub blocks: BlockStore,
@@ -40,19 +41,24 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
+    /// Instantiate a new `Blockchain` with the given `sled` database.
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let transactions = TxStore::new(db)?;
         let streamlet_metadata = StreamletMetadataStore::new(db, genesis_ts, genesis_data)?;
+        let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
         Ok(Self { blocks, order, transactions, streamlet_metadata, nullifiers, merkle_roots })
     }
 
-    /// Batch insert [`BlockInfo`]s.
-    pub fn add(&mut self, blocks: &[BlockInfo]) -> Result<Vec<blake3::Hash>> {
+    /// Insert a given slice of [`BlockInfo`] into the blockchain database.
+    /// This functions wraps all the logic of separating the block into specific
+    /// data that can be fed into the different trees of the database.
+    /// Upon success, the functions returns a vector of the block hashes that
+    /// were given and appended to the ledger.
+    pub fn add(&self, blocks: &[BlockInfo]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(blocks.len());
 
         for block in blocks {
@@ -67,19 +73,35 @@ impl Blockchain {
             // Store block order
             self.order.insert(&[block.sl], &[blockhash[0]])?;
 
-            // Store Streamlet metadata
+            // Store streamlet metadata
             self.streamlet_metadata.insert(&[blockhash[0]], &[block.sm.clone()])?;
+
+            // NOTE: The nullifiers and Merkle roots are applied in the state
+            // transition apply function.
         }
 
         Ok(ret)
     }
 
-    /// Retrieve blocks by given hashes. Fails if any of them are not found.
-    pub fn get_blocks_by_hash(&self, blockhashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
-        let mut ret = Vec::with_capacity(blockhashes.len());
+    /// Check if the given [`BlockInfo`] is in the database and all trees.
+    pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
+        let blockhash = match self.order.get(&[block.sl], true) {
+            Ok(v) => v[0].unwrap(),
+            Err(_) => return Ok(false),
+        };
 
-        let blocks = self.blocks.get(blockhashes, true)?;
-        let metadata = self.streamlet_metadata.get(blockhashes, true)?;
+        // TODO: Check if we have all transactions
+
+        // Check provided info produces the same hash
+        return Ok(blockhash == block.blockhash())
+    }
+
+    /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them are not found.
+    pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+        let mut ret = Vec::with_capacity(hashes.len());
+
+        let blocks = self.blocks.get(hashes, true)?;
+        let metadata = self.streamlet_metadata.get(hashes, true)?;
 
         for (i, block) in blocks.iter().enumerate() {
             let block = block.clone().unwrap();
@@ -95,7 +117,7 @@ impl Blockchain {
         Ok(ret)
     }
 
-    /// Retrieve blocks by given slots.
+    /// Retrieve [`BlockInfo`]s by given slots. Does not fail if any of them are not found.
     pub fn get_blocks_by_slot(&self, slots: &[u64]) -> Result<Vec<BlockInfo>> {
         debug!("get_blocks_by_slot(): {:?}", slots);
         let blockhashes = self.order.get(slots, false)?;
@@ -108,35 +130,15 @@ impl Blockchain {
         self.get_blocks_by_hash(&hashes)
     }
 
-    /// Retrieve n blocks after start slot.
+    /// Retrieve n blocks after given start slot.
     pub fn get_blocks_after(&self, slot: u64, n: u64) -> Result<Vec<BlockInfo>> {
-        debug!("get_blocks_after(): {:?} - {:?}", slot, n);
+        debug!("get_blocks_after(): {} -> {}", slot, n);
         let hashes = self.order.get_after(slot, n)?;
-
         self.get_blocks_by_hash(&hashes)
     }
 
-    /// Check if the given [`BlockInfo`] is in the database
-    pub fn has_block(&self, info: &BlockInfo) -> Result<bool> {
-        let hashes = match self.order.get(&[info.sl], true) {
-            Ok(v) => v,
-            Err(_) => return Ok(false),
-        };
-
-        if let Some(found) = &hashes[0] {
-            // Check provided info produces the same hash
-            // TODO: This BlockProposal::to_proposal_hash function should be in a better place.
-            let blockhash =
-                BlockProposal::to_proposal_hash(info.st, info.sl, &info.txs, &info.metadata);
-
-            return Ok(&blockhash == found)
-        }
-
-        Ok(false)
-    }
-
-    /// Retrieve the last block slot and hash
-    pub fn last(&self) -> Result<Option<(u64, blake3::Hash)>> {
+    /// Retrieve the last block slot and hash.
+    pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
     }
 }

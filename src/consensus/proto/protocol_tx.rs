@@ -64,7 +64,7 @@ impl ProtocolTx {
             let tx_hash = blake3::hash(&serialize(&tx_copy));
 
             let tx_in_txstore =
-                match self.state.read().await.blockchain.transactions.contains(tx_hash) {
+                match self.state.read().await.blockchain.transactions.contains(&tx_hash) {
                     Ok(v) => v,
                     Err(e) => {
                         error!("handle_receive_tx(): Failed querying txstore: {}", e);

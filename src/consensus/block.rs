@@ -38,6 +38,11 @@ impl Block {
 
         Self::new(genesis_data, 0, vec![], metadata)
     }
+
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
+    }
 }
 
 /// Auxiliary structure used for blockchain syncing.
@@ -79,6 +84,19 @@ impl BlockInfo {
         sm: StreamletMetadata,
     ) -> Self {
         Self { st, sl, txs, metadata, sm }
+    }
+
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        let block: Block = self.clone().into();
+        block.blockhash()
+    }
+}
+
+impl From<BlockInfo> for Block {
+    fn from(b: BlockInfo) -> Self {
+        let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        Self { st: b.st, sl: b.sl, txs: txids, metadata: b.metadata }
     }
 }
 

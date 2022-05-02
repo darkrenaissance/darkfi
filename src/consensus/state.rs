@@ -207,7 +207,7 @@ impl ValidatorState {
             return Ok(epoch)
         }
 
-        let (last_sl, _) = self.blockchain.last()?.unwrap();
+        let (last_sl, _) = self.blockchain.last()?;
         Ok(last_sl)
     }
 
@@ -327,7 +327,7 @@ impl ValidatorState {
 
         let hash = match longest_notarized_chain {
             Some(chain) => chain.proposals.last().unwrap().hash(),
-            None => self.blockchain.last()?.unwrap().1,
+            None => self.blockchain.last()?.1,
         };
 
         Ok((hash, index))
@@ -476,7 +476,7 @@ impl ValidatorState {
             None => (),
         }
 
-        let (last_sl, last_block) = self.blockchain.last()?.unwrap();
+        let (last_sl, last_block) = self.blockchain.last()?;
         if proposal.block.st != last_block || proposal.block.sl <= last_sl {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)

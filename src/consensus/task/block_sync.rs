@@ -29,7 +29,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
         // Node sends the last known block hash of the canonical blockchain
         // and loops until the response is the same block (used to utilize
         // batch requests).
-        let mut last = state.read().await.blockchain.last()?.unwrap();
+        let mut last = state.read().await.blockchain.last()?;
         info!("Last known block: {:?} - {:?}", last.0, last.1);
 
         loop {
@@ -63,7 +63,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             debug!("block_sync_task(): Appending blocks to ledger");
             state.write().await.blockchain.add(&resp.blocks)?;
 
-            let last_received = state.read().await.blockchain.last()?.unwrap();
+            let last_received = state.read().await.blockchain.last()?;
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);
 
             if last == last_received {

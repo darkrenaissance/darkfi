@@ -56,7 +56,7 @@ impl Darkfid {
     pub async fn merkle_roots(&self, id: Value, _params: &[Value]) -> JsonResult {
         let roots: Vec<MerkleNode> =
             match self.validator_state.read().await.blockchain.merkle_roots.get_all() {
-                Ok(v) => v.iter().map(|x| x.unwrap()).collect(),
+                Ok(v) => v,
                 Err(e) => {
                     error!("Failed getting merkle roots from rootstore: {}", e);
                     return jsonrpc::error(InternalError, None, id).into()
