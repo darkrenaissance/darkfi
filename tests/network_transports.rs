@@ -1,14 +1,14 @@
+use std::{env::var, fs};
+
 use async_std::{
     io,
     io::{ReadExt, WriteExt},
     stream::StreamExt,
     task,
 };
-
-use darkfi::net::transport::{TcpTransport, TlsTransport, TorTransport, Transport};
-
-use std::{env::var, fs};
 use url::Url;
+
+use darkfi::net3::transport::{TcpTransport, TorTransport, Transport};
 
 #[async_std::test]
 async fn tcp_transport() {
@@ -37,11 +37,12 @@ async fn tcp_transport() {
 }
 
 #[async_std::test]
-async fn tls_transport() {
-    let tls = TlsTransport::new(None, 1024);
-    let url = Url::parse("tls://127.0.0.1:5433").unwrap();
+async fn tcp_tls_transport() {
+    let tcp = TcpTransport::new(None, 1024);
+    let url = Url::parse("tcp+tls://127.0.0.1:5433").unwrap();
 
-    let (acceptor, listener) = tls.clone().listen_on(url.clone()).unwrap().await.unwrap();
+    let listener = tcp.clone().listen_on(url.clone()).unwrap().await.unwrap();
+    let (acceptor, listener) = tcp.upgrade_listener(listener).unwrap().await.unwrap();
 
     let _ = task::spawn(async move {
         let mut incoming = listener.incoming();
@@ -55,7 +56,8 @@ async fn tls_transport() {
 
     let payload = b"ohai tls";
 
-    let mut client = tls.dial(url).unwrap().await.unwrap();
+    let client = tcp.dial(url).unwrap().await.unwrap();
+    let mut client = tcp.upgrade_dialer(client).unwrap().await.unwrap();
     client.write_all(payload).await.unwrap();
     let mut buf = vec![0_u8; 8];
     client.read_exact(&mut buf).await.unwrap();
@@ -68,13 +70,13 @@ async fn tls_transport() {
 async fn tor_transport_no_control() {
     let url = Url::parse("socks5://127.0.0.1:9050").unwrap();
     let hurl = var("DARKFI_TOR_LOCAL_ADDRESS")
-        .expect("Please set the env var DARKFI_TOR_LOCAL_ADDRESS to the configured local address in hidden service. \
-        For example: \'export DARKFI_TOR_LOCAL_ADDRESS=\"tcp://127.0.0.1:8080\"\'");
+.expect("Please set the env var DARKFI_TOR_LOCAL_ADDRESS to the configured local address in hidden service. \
+For example: \'export DARKFI_TOR_LOCAL_ADDRESS=\"tcp://127.0.0.1:8080\"\'");
     let hurl = Url::parse(&hurl).unwrap();
 
     let onion = var("DARKFI_TOR_PUBLIC_ADDRESS").expect(
         "Please set the env var DARKFI_TOR_PUBLIC_ADDRESS to the configured onion address. \
-        For example: \'export DARKFI_TOR_PUBLIC_ADDRESS=\"tor://abcdefghij234567.onion\"\'",
+For example: \'export DARKFI_TOR_PUBLIC_ADDRESS=\"tor://abcdefghij234567.onion\"\'",
     );
 
     let tor = TorTransport::new(url, None).unwrap();
@@ -103,7 +105,7 @@ async fn tor_transport_no_control() {
 async fn tor_transport_with_control() {
     let auth_cookie = var("DARKFI_TOR_COOKIE").expect(
         "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
-        For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
+For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
     );
     let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
     let socks_url = Url::parse("socks5://127.0.0.1:9050").unwrap();
@@ -140,7 +142,7 @@ async fn tor_transport_with_control() {
 async fn tor_transport_with_control_dropped() {
     let auth_cookie = var("DARKFI_TOR_COOKIE").expect(
         "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
-        For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
+For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
     );
     let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
     let socks_url = Url::parse("socks5://127.0.0.1:9050").unwrap();

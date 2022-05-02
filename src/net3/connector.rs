@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::{Error, Result};
 
-use super::{Channel, ChannelPtr, SettingsPtr, TcpTransport, TlsTransport, Transport};
+use super::{Channel, ChannelPtr, SettingsPtr, TcpTransport, Transport};
 
 /// Create outbound socket connections.
 pub struct Connector {
@@ -42,8 +42,8 @@ impl Connector {
 
                         Ok(Channel::new(Box::new(stream?), connect_url).await)
                     }
-                    "tls" => {
-                        let transport = TlsTransport::new(None, 1024);
+                    "tcp+tls" => {
+                        let transport = TcpTransport::new(None, 1024);
                         let stream = transport.dial(connect_url.clone());
 
                         if let Err(err) = stream {
@@ -57,6 +57,8 @@ impl Connector {
                             error!("Connection failed: {}", err);
                             return Err(Error::ConnectFailed)
                         }
+
+                        let stream = transport.upgrade_dialer(stream?)?.await;
 
                         Ok(Channel::new(Box::new(stream?), connect_url).await)
                     }

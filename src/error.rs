@@ -96,9 +96,6 @@ pub enum Error {
     #[error("Unsupported network transport: {0}")]
     UnsupportedTransport(String),
 
-    #[error("Transport error: {0}")]
-    TransportError(String),
-
     #[error("Connection failed")]
     ConnectFailed,
 
@@ -189,6 +186,9 @@ pub enum Error {
     #[error("Cashier error: {0}")]
     CashierError(String),
 
+    #[error("Tor error: {0}")]
+    TorError(String),
+
     // ===============
     // Database errors
     // ===============
@@ -273,6 +273,10 @@ pub enum Error {
     #[error("Failed decoding bincode: {0}")]
     ZkasDecoderError(&'static str),
 
+    #[cfg(feature = "regex")]
+    #[error(transparent)]
+    RegexError(#[from] regex::Error),
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================
@@ -354,14 +358,6 @@ impl From<Error> for ClientFailed {
 impl From<VerifyFailed> for ClientFailed {
     fn from(err: VerifyFailed) -> Self {
         Self::VerifyError(err.to_string())
-    }
-}
-
-// TEMP
-#[cfg(feature = "net3")]
-impl<T: std::fmt::Display> From<crate::net3::transport::TransportError<T>> for Error {
-    fn from(err: crate::net3::transport::TransportError<T>) -> Self {
-        Self::TransportError(err.to_string())
     }
 }
 

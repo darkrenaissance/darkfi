@@ -11,11 +11,11 @@ use crate::{
     Error, Result,
 };
 
-use super::{Channel, ChannelPtr, TcpTransport, TlsTransport, Transport};
+use super::{Channel, ChannelPtr, TcpTransport, Transport};
 
 /// A helper function to convert peer addr to Url and add scheme
 fn peer_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
-    let url = Url::parse(&format!("{}://{}", scheme, addr.to_string()))?;
+    let url = Url::parse(&format!("{}://{}", scheme, addr))?;
     Ok(url)
 }
 
@@ -105,8 +105,8 @@ impl Acceptor {
                     }
                 }
             }
-            "tls" => {
-                let transport = TlsTransport::new(None, 1024);
+            "tcp+tls" => {
+                let transport = TcpTransport::new(None, 1024);
 
                 let listener = transport.listen_on(accept_url);
 
@@ -122,7 +122,7 @@ impl Acceptor {
                     return Err(Error::OperationFailed)
                 }
 
-                let (acceptor, listener) = listener?;
+                let (acceptor, listener) = transport.upgrade_listener(listener?)?.await?;
 
                 let mut incoming = listener.incoming();
                 while let Some(stream) = incoming.next().await {

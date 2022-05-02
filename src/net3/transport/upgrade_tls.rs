@@ -1,6 +1,6 @@
-use std::{io, net::SocketAddr, pin::Pin, sync::Arc, time::SystemTime};
+use std::time::SystemTime;
 
-use async_std::net::{TcpListener, TcpStream};
+use async_std::{net::TcpListener, sync::Arc};
 use futures::prelude::*;
 use futures_rustls::{
     rustls,
@@ -13,12 +13,9 @@ use futures_rustls::{
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
-use log::debug;
 use rustls_pemfile::pkcs8_private_keys;
-use socket2::{Domain, Socket, Type};
-use url::Url;
 
-use super::{Transport, TransportError};
+use crate::Result;
 
 const CIPHER_SUITE: &str = "TLS13_CHACHA20_POLY1305_SHA256";
 
@@ -41,10 +38,10 @@ impl ServerCertVerifier for ServerCertificateVerifier {
         _end_entity: &Certificate,
         _intermediates: &[Certificate],
         _server_name: &ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _scrs: &mut dyn Iterator<Item = &[u8]>,
         _ocsp_response: &[u8],
         _now: SystemTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
         // TODO: upsycle
         Ok(ServerCertVerified::assertion())
     }
@@ -61,55 +58,22 @@ impl ClientCertVerifier for ClientCertificateVerifier {
         _end_entity: &Certificate,
         _intermediates: &[Certificate],
         _now: SystemTime,
-    ) -> Result<ClientCertVerified, rustls::Error> {
+    ) -> std::result::Result<ClientCertVerified, rustls::Error> {
         // TODO: upsycle
         Ok(ClientCertVerified::assertion())
     }
 }
 
-#[derive(Clone)]
-pub struct TlsTransport {
-    /// TTL to set for opened sockets, or `None` for default
-    ttl: Option<u32>,
-    /// Size of the listen backlog for listen sockets
-    backlog: i32,
+pub struct TlsUpgrade {
     /// TLS server configuration
     server_config: Arc<ServerConfig>,
     /// TLS client configuration
     client_config: Arc<ClientConfig>,
 }
 
-impl Transport for TlsTransport {
-    type Acceptor = (TlsAcceptor, TcpListener);
-    type Connector = TlsStream<TcpStream>;
-
-    type Error = io::Error;
-
-    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send>>;
-
-    fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
-        if url.scheme() != "tls" {
-            return Err(TransportError::AddrNotSupported(url))
-        }
-
-        debug!(target: "tlstransport", "listening on {}", url);
-        Ok(Box::pin(self.do_listen(url)))
-    }
-
-    fn dial(self, url: Url) -> Result<Self::Dial, TransportError<Self::Error>> {
-        if url.scheme() != "tls" {
-            return Err(TransportError::AddrNotSupported(url))
-        }
-
-        debug!(target: "tlstransport", "dialing {}", url);
-        Ok(Box::pin(self.do_dial(url)))
-    }
-}
-
-impl TlsTransport {
-    pub fn new(ttl: Option<u32>, backlog: i32) -> Self {
-        // On each instantiation, generate a new keypair and certificate
+impl TlsUpgrade {
+    pub fn new() -> Self {
+        // On each instantiation, generate a new keypair and certificate.
         let keypair_pem = ed25519_compact::KeyPair::generate().to_pem();
         let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes()).unwrap();
         let secret_key = rustls::PrivateKey(secret_key[0].clone());
@@ -147,53 +111,29 @@ impl TlsTransport {
                 .unwrap(),
         );
 
-        Self { ttl, backlog, server_config, client_config }
+        Self { server_config, client_config }
     }
 
-    fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
-        let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
-        let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
-
-        if socket_addr.is_ipv6() {
-            socket.set_only_v6(true)?;
-        }
-
-        if let Some(ttl) = self.ttl {
-            socket.set_ttl(ttl)?;
-        }
-
-        Ok(socket)
+    pub async fn upgrade_listener_tls(
+        self,
+        listener: TcpListener,
+    ) -> Result<(TlsAcceptor, TcpListener)> {
+        Ok((TlsAcceptor::from(self.server_config), listener))
     }
 
-    async fn do_listen(self, url: Url) -> Result<(TlsAcceptor, TcpListener), io::Error> {
-        let socket_addr = url.socket_addrs(|| None)?[0];
-        let socket = self.create_socket(socket_addr)?;
-        socket.bind(&socket_addr.into())?;
-        socket.listen(self.backlog)?;
-        socket.set_nonblocking(true)?;
-
-        let listener = TcpListener::from(std::net::TcpListener::from(socket));
-        let acceptor = TlsAcceptor::from(self.server_config);
-        Ok((acceptor, listener))
-    }
-
-    async fn do_dial(self, url: Url) -> Result<TlsStream<TcpStream>, io::Error> {
-        let socket_addr = url.socket_addrs(|| None)?[0];
+    pub async fn upgrade_dialer_tls<IO>(self, stream: IO) -> Result<TlsStream<IO>>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
         let server_name = ServerName::try_from("dark.fi").unwrap();
-        let socket = self.create_socket(socket_addr)?;
-        socket.set_nonblocking(true)?;
-
         let connector = TlsConnector::from(self.client_config);
-
-        match socket.connect(&socket_addr.into()) {
-            Ok(()) => {}
-            Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
-        };
-
-        let stream = TcpStream::from(std::net::TcpStream::from(socket));
         let stream = connector.connect(server_name, stream).await?;
         Ok(TlsStream::Client(stream))
+    }
+}
+
+impl Default for TlsUpgrade {
+    fn default() -> Self {
+        Self::new()
     }
 }

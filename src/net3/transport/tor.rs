@@ -1,16 +1,3 @@
-use super::{Transport, TransportError};
-use async_std::{
-    net::{TcpListener, TcpStream},
-    sync::Arc,
-};
-use fast_socks5::{
-    client::{Config, Socks5Stream},
-    Result, SocksError,
-};
-use futures::prelude::*;
-
-use regex::Regex;
-use socket2::{Domain, Socket, Type};
 use std::{
     io,
     io::{BufRead, BufReader, Write},
@@ -18,7 +5,20 @@ use std::{
     pin::Pin,
     time::Duration,
 };
+
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::Arc,
+};
+use fast_socks5::client::{Config, Socks5Stream};
+use futures::prelude::*;
+use futures_rustls::{TlsAcceptor, TlsStream};
+use regex::Regex;
+use socket2::{Domain, Socket, Type};
 use url::Url;
+
+use super::{TlsUpgrade, Transport};
+use crate::{Error, Result};
 
 /// Implements communication through the tor proxy service.
 ///
@@ -63,21 +63,6 @@ struct TorController {
     auth: String,
 }
 
-/// Wraps the errors, because dialing and listening use different communication
-#[derive(Debug, thiserror::Error)]
-pub enum TorError {
-    #[error("Transport IO Error: {0}")]
-    IoError(#[from] io::Error),
-    #[error("Socks: {0}")]
-    Socks5Error(#[from] SocksError),
-    #[error("Url parse error: {0}")]
-    UrlParseError(#[from] url::ParseError),
-    #[error("Regex parse error: {0}")]
-    RegexError(#[from] regex::Error),
-    #[error("Unexpected response from tor: {0}")]
-    GeneralError(String),
-}
-
 /// Contains the configuration to communicate with the Tor Controler
 ///
 /// When cloned, the socket is not reopened since we use reference count.
@@ -95,7 +80,7 @@ impl TorController {
     /// Cookie string: `assert_eq!(auth,"886b9177aec471965abd34b6a846dc32cf617dcff0625cba7a414e31dd4b75a0")`
     ///
     /// Password string: `assert_eq!(auth,"\"mypassword\"")`
-    pub fn new(url: Url, auth: String) -> Result<Self, io::Error> {
+    pub fn new(url: Url, auth: String) -> Result<Self> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
@@ -107,7 +92,7 @@ impl TorController {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
+            Err(err) => return Err(err.into()),
         };
         Ok(Self { socket: Arc::new(socket), auth })
     }
@@ -116,17 +101,13 @@ impl TorController {
     /// # Arguments
     ///
     /// * `url` - url that the hidden service maps to.
-    pub fn create_ehs(&self, url: Url) -> Result<Url, TorError> {
+    pub fn create_ehs(&self, url: Url) -> Result<Url> {
         let local_socket = self.socket.try_clone()?;
         let mut stream = std::net::TcpStream::from(local_socket);
 
         stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-        let host = url
-            .host()
-            .ok_or_else(|| TorError::GeneralError("No host on url for listening".to_string()))?;
-        let port = url
-            .port()
-            .ok_or_else(|| TorError::GeneralError("No port on url for listening".to_string()))?;
+        let host = url.host().unwrap();
+        let port = url.port().unwrap();
 
         let payload = format!(
             "AUTHENTICATE {a}\r\nADD_ONION NEW:BEST Flags=DiscardPK Port={p},{h}:{p}\r\n",
@@ -144,10 +125,9 @@ impl TorController {
             }
         }
         let re = Regex::new(r"250-ServiceID=(\w+*)")?;
-        let cap: Result<regex::Captures<'_>, TorError> =
-            re.captures(&repl).ok_or_else(|| TorError::GeneralError(repl.clone()));
-        let hurl =
-            cap?.get(1).map_or(Err(TorError::GeneralError(repl.clone())), |m| Ok(m.as_str()))?;
+        //let cap: Result<regex::Captures<'_>> =
+        let cap = re.captures(&repl).ok_or_else(|| Error::TorError(repl.clone()));
+        let hurl = cap?.get(1).map_or(Err(Error::TorError(repl.clone())), |m| Ok(m.as_str()))?;
         let hurl = format!("tcp://{}.onion:{}", &hurl, port);
         Ok(Url::parse(&hurl)?)
     }
@@ -164,7 +144,7 @@ impl TorTransport {
     /// services that live as long as the TorTransport.
     /// It is a tuple of the control socket url and authentication cookie as string
     /// represented in hex.
-    pub fn new(socks_url: Url, control_info: Option<(Url, String)>) -> Result<Self, TorError> {
+    pub fn new(socks_url: Url, control_info: Option<(Url, String)>) -> Result<Self> {
         match control_info {
             Some(info) => {
                 let (url, auth) = info;
@@ -181,16 +161,16 @@ impl TorTransport {
     /// # Arguments
     ///
     /// * `url` - url that the hidden service maps to.
-    pub fn create_ehs(&self, url: Url) -> Result<Url, TorError> {
+    pub fn create_ehs(&self, url: Url) -> Result<Url> {
         self.tor_controller
             .as_ref()
             .ok_or_else(|| {
-                TorError::GeneralError("No controller configured for this transport".to_string())
+                Error::TorError("No controller configured for this transport".to_string())
             })?
             .create_ehs(url)
     }
 
-    pub async fn do_dial(self, url: Url) -> Result<Socks5Stream<TcpStream>, TorError> {
+    pub async fn do_dial(self, url: Url) -> Result<Socks5Stream<TcpStream>> {
         let socks_url_str = self.socks_url.socket_addrs(|| None)?[0].to_string();
         let host = url.host().unwrap().to_string();
         let port = url.port().unwrap_or(80);
@@ -222,7 +202,7 @@ impl TorTransport {
         Ok(socket)
     }
 
-    pub async fn do_listen(self, url: Url) -> Result<TcpListener, TorError> {
+    pub async fn do_listen(self, url: Url) -> Result<TcpListener> {
         let socket_addr = url.socket_addrs(|| None)?[0];
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
@@ -236,19 +216,35 @@ impl Transport for TorTransport {
     type Acceptor = TcpListener;
     type Connector = Socks5Stream<TcpStream>;
 
-    type Error = TorError;
+    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor>> + Send>>;
+    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector>> + Send>>;
 
-    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send>>;
+    type TlsListener = Pin<Box<dyn Future<Output = Result<(TlsAcceptor, Self::Acceptor)>> + Send>>;
+    type TlsDialer = Pin<Box<dyn Future<Output = Result<TlsStream<Self::Connector>>> + Send>>;
 
-    fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
-        if url.scheme() != "tcp" {
-            return Err(TransportError::AddrNotSupported(url))
+    fn listen_on(self, url: Url) -> Result<Self::Listener> {
+        match url.scheme() {
+            "tor" | "tor+tls" => {}
+            x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
         Ok(Box::pin(self.do_listen(url)))
     }
 
-    fn dial(self, url: Url) -> Result<Self::Dial, TransportError<Self::Error>> {
+    fn upgrade_listener(self, acceptor: Self::Acceptor) -> Result<Self::TlsListener> {
+        let tlsupgrade = TlsUpgrade::new();
+        Ok(Box::pin(tlsupgrade.upgrade_listener_tls(acceptor)))
+    }
+
+    fn dial(self, url: Url) -> Result<Self::Dial> {
+        match url.scheme() {
+            "tor" | "tor+tls" => {}
+            x => return Err(Error::UnsupportedTransport(x.to_string())),
+        }
         Ok(Box::pin(self.do_dial(url)))
+    }
+
+    fn upgrade_dialer(self, connector: Self::Connector) -> Result<Self::TlsDialer> {
+        let tlsupgrade = TlsUpgrade::new();
+        Ok(Box::pin(tlsupgrade.upgrade_dialer_tls(connector)))
     }
 }
