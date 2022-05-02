@@ -1,21 +1,21 @@
 use async_std::{
-    net::TcpStream,
+    net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
 };
+
 use std::net::SocketAddr;
 
 use async_channel::{Receiver, Sender};
 use async_executor::Executor;
 use easy_parallel::Parallel;
-use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt, StreamExt};
-use log::{debug, info, warn};
+use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
+use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
-    net::transport::{TcpTransport, Transport},
     raft::{NetMsg, ProtocolRaft, Raft},
     rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{
@@ -182,21 +182,26 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // IRC instance
     //
+    let listener = TcpListener::bind(settings.irc_listen).await?;
+    let local_addr = listener.local_addr()?;
+    info!("IRC listening on {}", local_addr);
     let executor_cloned = executor.clone();
+    let raft_receiver_cloned = raft_receiver.clone();
     let irc_task: smol::Task<Result<()>> = executor.spawn(async move {
-        let irc_listen_url = url::Url::parse(&settings.irc_listen)?;
+        loop {
+            let (stream, peer_addr) = match listener.accept().await {
+                Ok((s, a)) => (s, a),
+                Err(e) => {
+                    error!("Failed listening for connections: {}", e);
+                    return Err(Error::ServiceStopped)
+                }
+            };
 
-        let transport = TcpTransport::new(None, 1024);
-        let listener = transport.listen_on(irc_listen_url.clone()).unwrap().await.unwrap();
-        let mut incoming = listener.incoming();
-        info!("IRC start a TCP connection {}", &irc_listen_url.to_string());
-        while let Some(stream) = incoming.next().await {
-            let stream = stream.unwrap();
-            let peer_addr = stream.peer_addr()?;
-            info!("IRC Accepted TCP connection {}", peer_addr);
+            info!("IRC Accepted client: {}", peer_addr);
+
             executor_cloned
                 .spawn(process(
-                    raft_receiver.clone(),
+                    raft_receiver_cloned.clone(),
                     stream,
                     peer_addr,
                     raft_sender.clone(),
@@ -204,8 +209,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 ))
                 .detach();
         }
-
-        Ok(())
     });
 
     // Run once receive exit signal

@@ -48,9 +48,9 @@ async fn load_node_ids_loop(
     }
 }
 
-async fn p2p_send_loop(p2p_recv: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
+async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
-        let msg: NetMsg = match p2p_recv.recv().await {
+        let msg: NetMsg = match receiver.recv().await {
             Ok(m) => m,
             Err(e) => {
                 error!(target: "raft", "error occurred while receiving a msg: {}", e);
@@ -346,13 +346,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             self.set_current_term(&self.logs.0.last().unwrap().term.clone())?;
         }
 
-        if self.commit_length > sr.commit_length {
-            self.set_commit_length(&0)?;
-        }
-
         for i in self.commit_length..sr.commit_length {
             self.push_commit(&self.logs.get(i)?.msg).await?;
         }
+
         self.set_commit_length(&sr.commit_length)?;
 
         self.current_leader = Some(sr.leader_id.clone());
@@ -380,12 +377,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     async fn waiting_for_sync(
         &mut self,
-        receive_queues: async_channel::Receiver<NetMsg>,
+        p2p_recv_channel: async_channel::Receiver<NetMsg>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
         loop {
             select! {
-                msg =  receive_queues.recv().fuse() => {
+                msg =  p2p_recv_channel.recv().fuse() => {
                     let msg = msg?;
                     if msg.method == NetMsgMethod::SyncResponse {
                         let sr: SyncResponse = deserialize(&msg.payload)?;

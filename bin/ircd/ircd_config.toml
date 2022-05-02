@@ -2,7 +2,7 @@
 #rpc_listen="127.0.0.1:11055"
 
 ## IRC listen URL
-#irc_listen="tcp://127.0.0.1:11066"
+#irc_listen="127.0.0.1:11066"
 
 ## Sets Datastore Path
 #datastore="~/.config/ircd"
