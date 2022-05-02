@@ -1,5 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use std::{fs::File, io, io::Read, path::PathBuf};
+use std::{collections::hash_map::Entry, fs::File, io, io::Read, path::PathBuf};
 
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
@@ -107,10 +107,10 @@ async fn main() -> Result<()> {
     terminal.clear()?;
 
     let ids = Mutex::new(FxHashSet::default());
-    let node_info = Mutex::new(FxHashMap::default());
-    let select_info = Mutex::new(FxHashMap::default());
-
-    let model = Arc::new(Model::new(ids, node_info, select_info));
+    let nodes = Mutex::new(FxHashMap::default());
+    let selectables = Mutex::new(FxHashMap::default());
+    let msg_log = Mutex::new(FxHashMap::default());
+    let model = Arc::new(Model::new(ids, nodes, selectables, msg_log));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -123,6 +123,7 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 run_rpc(&config, ex2.clone(), model.clone()).await?;
+                // msg_log
                 render(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
@@ -177,10 +178,11 @@ async fn parse_data(
     sessions.push(out_session.clone());
     sessions.push(man_session.clone());
 
-    let node_info = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
+    let nodes = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
 
-    update_node_info(model.clone(), node_info.clone(), node_id.clone()).await;
-    update_selectable_and_ids(model.clone(), sessions.clone(), node_info.clone()).await?;
+    update_nodes(model.clone(), nodes.clone(), node_id.clone()).await;
+    update_selectable_and_ids(model.clone(), sessions.clone(), nodes.clone()).await?;
+    update_msgs(model.clone(), sessions.clone()).await?;
 
     //debug!("IDS: {:?}", model.ids.lock().await);
     //debug!("INFOS: {:?}", model.infos.lock().await);
@@ -188,29 +190,52 @@ async fn parse_data(
     Ok(())
 }
 
+async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> Result<()> {
+    for session in sessions {
+        for connection in session.children {
+            if !model.msg_log.lock().await.contains_key(&connection.connect_id) {
+                model.msg_log.lock().await.insert(connection.connect_id, connection.msg_log);
+            } else {
+                match model.msg_log.lock().await.entry(connection.connect_id) {
+                    Entry::Vacant(e) => {
+                        e.insert(connection.msg_log);
+                    }
+                    Entry::Occupied(mut e) => {
+                        for msg in connection.msg_log {
+                            e.get_mut().push(msg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    //debug!("MSGS: {:?}", model.msg_log.lock().await);
+    Ok(())
+}
+
 async fn update_ids(model: Arc<Model>, id: String) {
     model.ids.lock().await.insert(id);
 }
 
-async fn update_node_info(model: Arc<Model>, node: NodeInfo, id: String) {
-    model.node_info.lock().await.insert(id, node);
+async fn update_nodes(model: Arc<Model>, node: NodeInfo, id: String) {
+    model.nodes.lock().await.insert(id, node);
 }
 
 async fn update_selectable_and_ids(
     model: Arc<Model>,
     sessions: Vec<SessionInfo>,
-    node_info: NodeInfo,
+    nodes: NodeInfo,
 ) -> Result<()> {
-    let node_obj = SelectableObject::Node(node_info.clone());
-    model.select_info.lock().await.insert(node_info.node_id.clone(), node_obj);
-    update_ids(model.clone(), node_info.node_id.clone()).await;
+    let node_obj = SelectableObject::Node(nodes.clone());
+    model.selectables.lock().await.insert(nodes.node_id.clone(), node_obj);
+    update_ids(model.clone(), nodes.node_id.clone()).await;
     for session in sessions.clone() {
         let session_obj = SelectableObject::Session(session.clone());
-        model.select_info.lock().await.insert(session.clone().session_id, session_obj);
+        model.selectables.lock().await.insert(session.clone().session_id, session_obj);
         update_ids(model.clone(), session.clone().session_id).await;
         for connect in session.children {
             let connect_obj = SelectableObject::Connect(connect.clone());
-            model.select_info.lock().await.insert(connect.clone().connect_id, connect_obj);
+            model.selectables.lock().await.insert(connect.clone().connect_id, connect_obj);
             update_ids(model.clone(), connect.clone().connect_id).await;
         }
     }
@@ -261,6 +286,9 @@ async fn parse_inbound(inbound: &Value, node_id: String) -> Result<SessionInfo> 
                         let is_empty = false;
                         let parent = session_id.clone();
                         let msg_values = node.unwrap().get("log").unwrap().as_array().unwrap();
+                        // append to existing values
+                        //let mut writer = msg_log.write().unwrap();
+                        //writer.insert(connect_id, connect.clone());
                         let mut msgs: Vec<(String, String)> = Vec::new();
                         for msg in msg_values {
                             let msg: (String, String) = serde_json::from_value(msg.clone())?;
@@ -364,6 +392,7 @@ async fn parse_outbound(outbound: &Value, node_id: String) -> Result<SessionInfo
                         let addr = &slot["addr"];
                         let state = &slot["state"];
                         let parent = session_id.clone();
+                        // append to existing values
                         let mut msgs: Vec<(String, String)> = Vec::new();
                         for msg in msg_values {
                             let msg: (String, String) = serde_json::from_value(msg.clone())?;
@@ -402,15 +431,20 @@ async fn render<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Re
     let active_ids = IdListView::new(FxHashSet::default());
     let info_list = NodeInfoView::new(FxHashMap::default());
     let selectable = FxHashMap::default();
+    let msg_log = FxHashMap::default();
 
-    let mut view = View::new(active_ids.clone(), info_list.clone(), selectable);
+    let mut view = View::new(active_ids.clone(), info_list.clone(), selectable, msg_log);
     view.active_ids.state.select(Some(0));
 
     loop {
-        view.update(model.node_info.lock().await.clone(), model.select_info.lock().await.clone());
+        view.update(
+            model.nodes.lock().await.clone(),
+            model.selectables.lock().await.clone(),
+            model.msg_log.lock().await.clone(),
+        );
 
         terminal.draw(|f| {
-            view.clone().render(f);
+            view.render(f);
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {

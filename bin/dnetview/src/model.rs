@@ -19,20 +19,23 @@ pub enum SelectableObject {
 
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
-    pub node_info: Mutex<FxHashMap<String, NodeInfo>>,
-    pub select_info: Mutex<FxHashMap<String, SelectableObject>>,
+    pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
+    pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
+    pub msg_log: Mutex<FxHashMap<String, Vec<(String, String)>>>,
 }
 
 impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
-        node_info: Mutex<FxHashMap<String, NodeInfo>>,
-        select_info: Mutex<FxHashMap<String, SelectableObject>>,
+        nodes: Mutex<FxHashMap<String, NodeInfo>>,
+        selectables: Mutex<FxHashMap<String, SelectableObject>>,
+        msg_log: Mutex<FxHashMap<String, Vec<(String, String)>>>,
     ) -> Model {
-        Model { ids, node_info, select_info }
+        Model { ids, nodes, selectables, msg_log }
     }
 }
 
+// TODO: tidy variable names to avoid redudancies like NodeInfo.node_id
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
 pub struct NodeInfo {
     pub node_id: String,

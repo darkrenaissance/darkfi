@@ -12,36 +12,41 @@ use tui::{
 };
 
 use crate::model::{NodeInfo, SelectableObject};
+//use log::debug;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct View {
     pub active_ids: IdListView,
-    pub node_info: NodeInfoView,
+    pub nodes: NodeInfoView,
     pub selectables: FxHashMap<String, SelectableObject>,
+    pub msg_log: FxHashMap<String, Vec<(String, String)>>,
 }
 
 impl View {
     pub fn new(
         active_ids: IdListView,
-        node_info: NodeInfoView,
+        nodes: NodeInfoView,
         selectables: FxHashMap<String, SelectableObject>,
+        msg_log: FxHashMap<String, Vec<(String, String)>>,
     ) -> View {
-        View { active_ids, node_info, selectables }
+        View { active_ids, nodes, selectables, msg_log }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
         selectables: FxHashMap<String, SelectableObject>,
+        msg_log: FxHashMap<String, Vec<(String, String)>>,
     ) {
-        self.update_node_info(nodes);
+        self.update_nodes(nodes);
         self.update_selectable(selectables);
         self.update_active_ids();
+        self.update_msg_log(msg_log);
     }
 
-    fn update_node_info(&mut self, nodes: FxHashMap<String, NodeInfo>) {
+    fn update_nodes(&mut self, nodes: FxHashMap<String, NodeInfo>) {
         for (id, node) in nodes {
-            self.node_info.infos.insert(id, node);
+            self.nodes.infos.insert(id, node);
         }
     }
 
@@ -52,7 +57,7 @@ impl View {
     }
 
     fn update_active_ids(&mut self) {
-        for info in self.node_info.infos.values() {
+        for info in self.nodes.infos.values() {
             self.active_ids.ids.insert(info.node_id.to_string());
             for child in &info.children {
                 if !child.is_empty == true {
@@ -65,7 +70,13 @@ impl View {
         }
     }
 
-    pub fn render<B: Backend>(mut self, f: &mut Frame<'_, B>) {
+    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(String, String)>>) {
+        for (id, msg) in msg_log {
+            self.msg_log.insert(id, msg);
+        }
+    }
+
+    pub fn render<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
         let mut nodes = Vec::new();
         let mut ids = Vec::new();
         let style = Style::default();
@@ -73,7 +84,7 @@ impl View {
         let list_direction = Direction::Horizontal;
         let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
 
-        for info in self.node_info.infos.values() {
+        for info in self.nodes.infos.values() {
             let name_span = Span::raw(&info.node_name);
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
@@ -136,7 +147,7 @@ impl View {
             Some(i) => {
                 match ids.get(i) {
                     Some(i) => {
-                        self.clone().render_info(f, slice.clone(), i.to_string());
+                        self.render_info(f, slice.clone(), i.to_string());
                         // found id
                     }
                     None => {
@@ -150,10 +161,16 @@ impl View {
         }
     }
 
-    fn render_info<B: Backend>(mut self, f: &mut Frame<'_, B>, slice: Vec<Rect>, selected: String) {
+    fn render_info<B: Backend>(
+        &mut self,
+        f: &mut Frame<'_, B>,
+        slice: Vec<Rect>,
+        selected: String,
+    ) {
         let style = Style::default();
         //let mut infos = Vec::new();
         let mut spans = Vec::new();
+        //let mut msgs = Vec::new();
 
         let info = self.selectables.get(&selected);
 
@@ -167,8 +184,31 @@ impl View {
                 spans.push(name_span);
             }
             Some(SelectableObject::Connect(connect)) => {
-                let name_span = Spans::from("Connect Info");
-                spans.push(name_span);
+                let log = self.msg_log.get(&connect.connect_id);
+                match log {
+                    Some(values) => {
+                        for (k, v) in values {
+                            match k.as_str() {
+                                "send" => {
+                                    let msg_log =
+                                        Spans::from(Span::styled(format!("S: {}", v), style));
+                                    spans.push(msg_log);
+                                }
+                                "recv" => {
+                                    let msg_log =
+                                        Spans::from(Span::styled(format!("R: {}", v), style));
+                                    spans.push(msg_log);
+                                }
+                                _ => {
+                                    // TODO
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        // TODO
+                    }
+                }
             }
             None => {
                 // TODO
