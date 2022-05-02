@@ -12,7 +12,7 @@ use super::primitives::{Log, NodeId};
 
 const SLED_LOGS_TREE: &[u8] = b"_logs";
 const SLED_COMMITS_TREE: &[u8] = b"_commits";
-const SLED_COMMITS_LENGTH_TREE: &[u8] = b"_commit_length";
+const _SLED_COMMITS_LENGTH_TREE: &[u8] = b"_commit_length";
 const SLED_VOTED_FOR_TREE: &[u8] = b"_voted_for";
 const SLED_CURRENT_TERM_TREE: &[u8] = b"_current_term";
 
@@ -20,7 +20,6 @@ pub struct DataStore<T> {
     _db: sled::Db,
     pub logs: DataTree<Log>,
     pub commits: DataTree<T>,
-    pub commits_length: DataTree<u64>,
     pub voted_for: DataTree<Option<NodeId>>,
     pub current_term: DataTree<u64>,
 }
@@ -30,11 +29,10 @@ impl<T: Encodable + Decodable> DataStore<T> {
         let _db = sled::open(db_path)?;
         let logs = DataTree::new(&_db, SLED_LOGS_TREE)?;
         let commits = DataTree::new(&_db, SLED_COMMITS_TREE)?;
-        let commits_length = DataTree::new(&_db, SLED_COMMITS_LENGTH_TREE)?;
         let voted_for = DataTree::new(&_db, SLED_VOTED_FOR_TREE)?;
         let current_term = DataTree::new(&_db, SLED_CURRENT_TERM_TREE)?;
 
-        Ok(Self { _db, logs, commits, commits_length, voted_for, current_term })
+        Ok(Self { _db, logs, commits, voted_for, current_term })
     }
     pub async fn cancel(&self) -> Result<()> {
         debug!(target: "raft", "DataStore flush");

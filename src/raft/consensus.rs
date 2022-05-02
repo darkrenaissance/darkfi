@@ -118,8 +118,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let datastore = DataStore::new(db_path_str)?;
             current_term = datastore.current_term.get_last()?.unwrap_or(0);
             voted_for = datastore.voted_for.get_last()?.flatten();
+            // TODO using sled instead of memory
             logs = Logs(datastore.logs.get_all()?);
-            commit_length = datastore.commits_length.get_last()?.unwrap_or(0);
+            commit_length = datastore.commits.get_all()?.len() as u64;
             datastore
         } else {
             DataStore::new(db_path_str)?
@@ -675,7 +676,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     fn set_commit_length(&mut self, i: &u64) -> Result<()> {
         self.commit_length = *i;
-        self.datastore.commits_length.insert(i)
+        Ok(())
     }
     fn set_current_term(&mut self, i: &u64) -> Result<()> {
         self.current_term = *i;
