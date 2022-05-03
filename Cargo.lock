@@ -3928,6 +3928,7 @@ dependencies = [
  "log",
  "num_cpus",
  "prettytable-rs",
+ "rand",
  "serde",
  "serde_json",
  "simplelog",

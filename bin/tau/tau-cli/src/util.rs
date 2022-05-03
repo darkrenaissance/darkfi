@@ -11,6 +11,7 @@ use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 use clap::Subcommand;
 use log::error;
 use prettytable::{cell, format, row, Cell, Row, Table};
+use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -171,8 +172,8 @@ pub fn set_title() -> Result<String> {
 pub fn desc_in_editor() -> Result<Option<String>> {
     // Create a temporary file with some comments inside
     let mut file_path = temp_dir();
-    file_path.push("temp_file");
-    File::create(&file_path)?;
+    let file_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
+    file_path.push(file_name);
     fs::write(
         &file_path,
         "\n# Write task description above this line\n# These lines will be removed\n",
@@ -190,7 +191,8 @@ pub fn desc_in_editor() -> Result<Option<String>> {
 
     // Whatever has been written in temp file, will be read here
     let mut lines = String::new();
-    File::open(file_path)?.read_to_string(&mut lines)?;
+    File::open(&file_path)?.read_to_string(&mut lines)?;
+    fs::remove_file(file_path)?;
 
     // Store only non-comment lines
     let mut description = String::new();
