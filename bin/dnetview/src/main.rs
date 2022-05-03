@@ -454,13 +454,20 @@ async fn render_view<B: Backend>(
             model.selectables.lock().await.clone(),
         );
 
-        // TODO: we can't return errors from inside an anonymous closure :(
+        let mut err: Option<DnetViewError> = None;
+
         terminal.draw(|f| match view.render(f) {
             Ok(()) => {}
             Err(e) => {
-                debug!("{}", e);
+                err = Some(e);
             }
         })?;
+
+        match err {
+            Some(e) => return Err(e),
+            None => {}
+        }
+
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
