@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use async_executor::Executor;
 use clap::Parser;
@@ -9,11 +9,13 @@ use url::Url;
 
 use darkfi::{
     cli_desc, net3 as net,
+    rpc::rpcserver::{listen_and_serve, RpcServerConfig},
     util::{cli::log_config, sleep},
     Result,
 };
 
 pub(crate) mod proto;
+pub(crate) mod rpc;
 
 use crate::proto::debugmsg::{Debugmsg, ProtocolDebugmsg, SeenDebugmsgIds};
 
@@ -35,6 +37,9 @@ struct Args {
     /// communicate using tls protocol by default is tcp
     #[clap(long)]
     tls: bool,
+    /// communicate using tls protocol by default is tcp
+    #[clap(long, default_value = "127.0.0.1:11055")]
+    rpc: SocketAddr,
 }
 
 #[derive(Debug, Clone)]
@@ -114,7 +119,12 @@ impl MockP2p {
         Ok((p2p, Self { node_number, state, broadcast, address }))
     }
 
-    async fn run(&self, p2p: net::P2pPtr, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn run(
+        &self,
+        p2p: net::P2pPtr,
+        rpc_addr: SocketAddr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
         let state = self.state.clone();
         let node_number = self.node_number;
         let address = self.address.clone();
@@ -180,6 +190,22 @@ impl MockP2p {
             })
             .detach();
 
+        // RPC
+        let rpc_config = RpcServerConfig {
+            socket_addr: rpc_addr,
+            use_tls: false,
+            identity_path: Default::default(),
+            identity_pass: Default::default(),
+        };
+
+        let executor_cloned = executor.clone();
+        let rpc_interface = Arc::new(rpc::JsonRpcInterface { addr: rpc_addr, p2p: p2p.clone() });
+        executor
+            .spawn(async move {
+                listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
+            })
+            .detach();
+
         p2p.clone().start(executor.clone()).await?;
         p2p.run(executor).await
     }
@@ -189,7 +215,7 @@ async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
     let scheme = if args.tls { "tls" } else { "tcp" };
 
     let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, scheme).await?;
-    mock_p2p.run(p2p.clone(), executor).await
+    mock_p2p.run(p2p.clone(), args.rpc.clone(), executor).await
 }
 
 fn main() -> Result<()> {
