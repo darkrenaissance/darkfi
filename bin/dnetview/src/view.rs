@@ -1,4 +1,4 @@
-use darkfi::error::{Error, Result};
+//use darkfi::error::{Error, Result};
 use fxhash::{FxHashMap, FxHashSet};
 use tui::widgets::ListState;
 
@@ -16,27 +16,27 @@ use crate::model::{NodeInfo, SelectableObject};
 
 #[derive(Debug)]
 pub struct View {
-    pub active_ids: IdListView,
     pub nodes: NodeInfoView,
-    pub selectables: FxHashMap<String, SelectableObject>,
     pub msg_log: FxHashMap<String, Vec<(String, String)>>,
+    pub active_ids: IdListView,
+    pub selectables: FxHashMap<String, SelectableObject>,
 }
 
 impl View {
     pub fn new(
-        active_ids: IdListView,
         nodes: NodeInfoView,
-        selectables: FxHashMap<String, SelectableObject>,
         msg_log: FxHashMap<String, Vec<(String, String)>>,
+        active_ids: IdListView,
+        selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { active_ids, nodes, selectables, msg_log }
+        View { nodes, msg_log, active_ids, selectables }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        selectables: FxHashMap<String, SelectableObject>,
         msg_log: FxHashMap<String, Vec<(String, String)>>,
+        selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
@@ -58,12 +58,12 @@ impl View {
 
     fn update_active_ids(&mut self) {
         for info in self.nodes.infos.values() {
-            self.active_ids.ids.insert(info.node_id.to_string());
+            self.active_ids.ids.insert(info.id.to_string());
             for child in &info.children {
                 if !child.is_empty == true {
-                    self.active_ids.ids.insert(child.session_id.to_string());
+                    self.active_ids.ids.insert(child.id.to_string());
                     for child in &child.children {
-                        self.active_ids.ids.insert(child.connect_id.to_string());
+                        self.active_ids.ids.insert(child.id.to_string());
                     }
                 }
             }
@@ -77,26 +77,61 @@ impl View {
     }
 
     pub fn render<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
-        let mut nodes = Vec::new();
-        let mut ids = Vec::new();
+        let margin = 2;
+        let direction = Direction::Horizontal;
+        let cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
+
+        let slice = Layout::default()
+            .direction(direction)
+            .margin(margin)
+            .constraints(cnstrnts)
+            .split(f.size());
+
+        let mut id_list = self.render_id_list(f, slice.clone());
+
+        // remove any duplicates
+        id_list.dedup();
+
+        // get the id at the current index
+        match self.active_ids.state.selected() {
+            Some(i) => {
+                match id_list.get(i) {
+                    Some(i) => {
+                        self.render_info(f, slice.clone(), i.to_string());
+                    }
+                    None => {
+                        // TODO: Error
+                    }
+                }
+            }
+            None => {
+                // TODO: nothing is selected
+            }
+        }
+    }
+
+    fn render_id_list<B: Backend>(
+        &mut self,
+        f: &mut Frame<'_, B>,
+        slice: Vec<Rect>,
+    ) -> Vec<String> {
         let style = Style::default();
-        let list_margin = 2;
-        let list_direction = Direction::Horizontal;
-        let list_cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
+        let mut nodes = Vec::new();
+        let mut ids: Vec<String> = Vec::new();
 
         for info in self.nodes.infos.values() {
-            let name_span = Span::raw(&info.node_name);
+            let name_span = Span::raw(&info.name);
             let lines = vec![Spans::from(name_span)];
             let names = ListItem::new(lines);
             nodes.push(names);
-            ids.push(&info.node_id);
+            ids.push(info.id.clone());
             for session in &info.children {
                 if !session.is_empty == true {
-                    let name = Span::styled(format!("    {}", session.session_name), style);
+                    let name = Span::styled(format!("    {}", session.name), style);
                     let lines = vec![Spans::from(name)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
-                    ids.push(&session.session_id);
+                    ids.push(session.id.clone());
                     for connection in &session.children {
                         let mut info = Vec::new();
                         let name = Span::styled(format!("        {}", connection.addr), style);
@@ -124,41 +159,18 @@ impl View {
                         let lines = vec![Spans::from(info)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
-                        ids.push(&connection.connect_id);
+                        ids.push(connection.id.clone());
                     }
                 }
             }
         }
-
-        let slice = Layout::default()
-            .direction(list_direction)
-            .margin(list_margin)
-            .constraints(list_cnstrnts)
-            .split(f.size());
 
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
         f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
 
-        ids.dedup();
-        // get the id at the current index
-        match self.active_ids.state.selected() {
-            Some(i) => {
-                match ids.get(i) {
-                    Some(i) => {
-                        self.render_info(f, slice.clone(), i.to_string());
-                        // found id
-                    }
-                    None => {
-                        // TODO: Error
-                    }
-                }
-            }
-            None => {
-                // TODO: nothing is selected
-            }
-        }
+        return ids
     }
 
     fn render_info<B: Backend>(
@@ -168,23 +180,21 @@ impl View {
         selected: String,
     ) {
         let style = Style::default();
-        //let mut infos = Vec::new();
         let mut spans = Vec::new();
-        //let mut msgs = Vec::new();
 
         let info = self.selectables.get(&selected);
 
         match info {
-            Some(SelectableObject::Node(node)) => {
+            Some(SelectableObject::Node(_node)) => {
                 let name_span = Spans::from("Node Info");
                 spans.push(name_span);
             }
-            Some(SelectableObject::Session(session)) => {
+            Some(SelectableObject::Session(_session)) => {
                 let name_span = Spans::from("Session Info");
                 spans.push(name_span);
             }
             Some(SelectableObject::Connect(connect)) => {
-                let log = self.msg_log.get(&connect.connect_id);
+                let log = self.msg_log.get(&connect.id);
                 match log {
                     Some(values) => {
                         for (k, v) in values {

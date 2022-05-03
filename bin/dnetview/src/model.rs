@@ -20,79 +20,78 @@ pub enum SelectableObject {
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
-    pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
     pub msg_log: Mutex<FxHashMap<String, Vec<(String, String)>>>,
+    pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
 impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
-        selectables: Mutex<FxHashMap<String, SelectableObject>>,
         msg_log: Mutex<FxHashMap<String, Vec<(String, String)>>>,
+        selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
-        Model { ids, nodes, selectables, msg_log }
+        Model { ids, nodes, msg_log, selectables }
     }
 }
 
-// TODO: tidy variable names to avoid redudancies like NodeInfo.node_id
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
 pub struct NodeInfo {
-    pub node_id: String,
-    pub node_name: String,
+    pub id: String,
+    pub name: String,
     pub children: Vec<SessionInfo>,
 }
 
 impl NodeInfo {
-    pub fn new(node_id: String, node_name: String, children: Vec<SessionInfo>) -> NodeInfo {
-        NodeInfo { node_id, node_name, children }
+    pub fn new(id: String, name: String, children: Vec<SessionInfo>) -> NodeInfo {
+        NodeInfo { id, name, children }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
 pub struct SessionInfo {
-    pub session_name: String,
-    pub session_id: String,
+    pub id: String,
+    pub name: String,
     pub parent: String,
-    pub children: Vec<ConnectInfo>,
     pub is_empty: bool,
+    pub children: Vec<ConnectInfo>,
 }
 
 impl SessionInfo {
     pub fn new(
-        session_name: String,
-        session_id: String,
+        id: String,
+        name: String,
+        is_empty: bool,
         parent: String,
         children: Vec<ConnectInfo>,
-        is_empty: bool,
     ) -> SessionInfo {
-        SessionInfo { session_name, session_id, parent, children, is_empty }
+        SessionInfo { id, name, is_empty, parent, children }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
 pub struct ConnectInfo {
-    pub connect_id: String,
+    pub id: String,
     pub addr: String,
+    pub state: String,
+    pub parent: String,
+    pub msg_log: Vec<(String, String)>,
     pub is_empty: bool,
     pub last_msg: String,
     pub last_status: String,
-    pub state: String,
-    pub msg_log: Vec<(String, String)>,
-    pub parent: String,
 }
 
 impl ConnectInfo {
     pub fn new(
-        connect_id: String,
+        id: String,
         addr: String,
+        state: String,
+        parent: String,
+        msg_log: Vec<(String, String)>,
         is_empty: bool,
         last_msg: String,
         last_status: String,
-        state: String,
-        msg_log: Vec<(String, String)>,
-        parent: String,
     ) -> ConnectInfo {
-        ConnectInfo { connect_id, addr, is_empty, last_msg, last_status, state, msg_log, parent }
+        ConnectInfo { id, addr, state, parent, msg_log, is_empty, last_msg, last_status }
     }
 }
