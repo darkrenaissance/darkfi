@@ -27,6 +27,7 @@ use darkfi::{
 
 use dnetview::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
+    error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
@@ -83,7 +84,7 @@ impl DnetView {
 }
 
 #[async_std::main]
-async fn main() -> Result<()> {
+async fn main() -> DnetViewResult<()> {
     let options = ProgramOptions::load()?;
 
     let verbosity_level = options.app.occurrences_of("verbose");
@@ -125,7 +126,7 @@ async fn main() -> Result<()> {
                 poll_and_update_model(&config, ex2.clone(), model.clone()).await?;
                 render_view(&mut terminal, model.clone()).await?;
                 drop(signal);
-                Ok::<(), darkfi::Error>(())
+                Ok(())
             })
         });
 
@@ -138,7 +139,7 @@ async fn poll_and_update_model(
     config: &DnvConfig,
     ex: Arc<Executor<'_>>,
     model: Arc<Model>,
-) -> Result<()> {
+) -> DnetViewResult<()> {
     for node in &config.nodes {
         let client = DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone());
         ex.spawn(poll(client, model.clone())).detach();
@@ -146,15 +147,14 @@ async fn poll_and_update_model(
     Ok(())
 }
 
-async fn poll(client: DnetView, model: Arc<Model>) -> Result<()> {
+async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
     loop {
         let reply = client.get_info().await?;
 
         if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
             parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
         } else {
-            // TODO: error handling
-            //debug!("Reply is empty");
+            return Err(DnetViewError::EmptyRpcReply)
         }
         async_util::sleep(2).await;
     }
@@ -164,7 +164,7 @@ async fn parse_data(
     reply: &serde_json::Map<String, Value>,
     client: &DnetView,
     model: Arc<Model>,
-) -> Result<()> {
+) -> DnetViewResult<()> {
     let _ext_addr = reply.get("external_addr");
     let inbound = &reply["session_inbound"];
     let manual = &reply["session_manual"];
@@ -195,7 +195,7 @@ async fn parse_data(
     Ok(())
 }
 
-async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> Result<()> {
+async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
     for session in sessions {
         for connection in session.children {
             if !model.msg_log.lock().await.contains_key(&connection.id) {
@@ -230,7 +230,7 @@ async fn update_selectable_and_ids(
     model: Arc<Model>,
     sessions: Vec<SessionInfo>,
     node: NodeInfo,
-) -> Result<()> {
+) -> DnetViewResult<()> {
     let node_obj = SelectableObject::Node(node.clone());
     model.selectables.lock().await.insert(node.id.clone(), node_obj);
     update_ids(model.clone(), node.id.clone()).await;
@@ -247,7 +247,7 @@ async fn update_selectable_and_ids(
     Ok(())
 }
 
-async fn parse_inbound(inbound: &Value, node_id: &String) -> Result<SessionInfo> {
+async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
     let name = "Inbound".to_string();
     let session_type = Session::Inbound;
     let parent = node_id.to_string();
@@ -321,12 +321,12 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> Result<SessionInfo>
             let session_info = SessionInfo::new(id, name, is_empty, parent, connects);
             Ok(session_info)
         }
-        None => Err(Error::ValueIsNotObject),
+        None => Err(DnetViewError::ValueIsNotObject),
     }
 }
 
 // TODO: placeholder for now
-async fn parse_manual(_manual: &Value, node_id: &String) -> Result<SessionInfo> {
+async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
     let name = "Manual".to_string();
     let session_type = Session::Manual;
     let mut connects: Vec<ConnectInfo> = Vec::new();
@@ -351,7 +351,7 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> Result<SessionInfo> 
     Ok(session_info)
 }
 
-async fn parse_outbound(outbound: &Value, node_id: &String) -> Result<SessionInfo> {
+async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
     let name = "Outbound".to_string();
     let session_type = Session::Outbound;
     let parent = node_id.to_string();
@@ -427,11 +427,14 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> Result<SessionInf
             let session_info = SessionInfo::new(id, name, is_empty, parent, connects);
             Ok(session_info)
         }
-        None => Err(Error::ValueIsNotObject),
+        None => Err(DnetViewError::ValueIsNotObject),
     }
 }
 
-async fn render_view<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) -> Result<()> {
+async fn render_view<B: Backend>(
+    terminal: &mut Terminal<B>,
+    model: Arc<Model>,
+) -> DnetViewResult<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
@@ -451,8 +454,12 @@ async fn render_view<B: Backend>(terminal: &mut Terminal<B>, model: Arc<Model>) 
             model.selectables.lock().await.clone(),
         );
 
-        terminal.draw(|f| {
-            view.render(f);
+        // TODO: we can't return errors from inside an anonymous closure :(
+        terminal.draw(|f| match view.render(f) {
+            Ok(()) => {}
+            Err(e) => {
+                debug!("{}", e);
+            }
         })?;
         for k in asi.by_ref().keys() {
             match k.unwrap() {

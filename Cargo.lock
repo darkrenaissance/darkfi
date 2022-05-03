@@ -1477,6 +1477,7 @@ dependencies = [
  "simplelog",
  "smol",
  "termion",
+ "thiserror",
  "tui",
  "url",
 ]

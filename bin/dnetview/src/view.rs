@@ -11,7 +11,10 @@ use tui::{
     Frame,
 };
 
-use crate::model::{NodeInfo, SelectableObject};
+use crate::{
+    error::{DnetViewError, DnetViewResult},
+    model::{NodeInfo, SelectableObject},
+};
 //use log::debug;
 
 #[derive(Debug)]
@@ -76,7 +79,7 @@ impl View {
         }
     }
 
-    pub fn render<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
+    pub fn render<B: Backend>(&mut self, f: &mut Frame<'_, B>) -> DnetViewResult<()> {
         let margin = 2;
         let direction = Direction::Horizontal;
         let cnstrnts = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
@@ -87,26 +90,22 @@ impl View {
             .constraints(cnstrnts)
             .split(f.size());
 
-        let mut id_list = self.render_id_list(f, slice.clone());
+        let mut id_list = self.render_id_list(f, slice.clone())?;
 
         // remove any duplicates
         id_list.dedup();
 
         // get the id at the current index
         match self.active_ids.state.selected() {
-            Some(i) => {
-                match id_list.get(i) {
-                    Some(i) => {
-                        self.render_info(f, slice.clone(), i.to_string());
-                    }
-                    None => {
-                        // TODO: Error
-                    }
+            Some(i) => match id_list.get(i) {
+                Some(i) => {
+                    self.render_info(f, slice.clone(), i.to_string())?;
+                    Ok(())
                 }
-            }
-            None => {
-                // TODO: nothing is selected
-            }
+                None => Err(DnetViewError::NoIdAtIndex),
+            },
+            // nothing is selected right now
+            None => Ok(()),
         }
     }
 
@@ -114,7 +113,7 @@ impl View {
         &mut self,
         f: &mut Frame<'_, B>,
         slice: Vec<Rect>,
-    ) -> Vec<String> {
+    ) -> DnetViewResult<Vec<String>> {
         let style = Style::default();
         let mut nodes = Vec::new();
         let mut ids: Vec<String> = Vec::new();
@@ -151,9 +150,7 @@ impl View {
                                 );
                                 info.push(msg);
                             }
-                            _ => {
-                                // TODO
-                            }
+                            _ => return Err(DnetViewError::UnexpectedData),
                         }
 
                         let lines = vec![Spans::from(info)];
@@ -170,7 +167,7 @@ impl View {
 
         f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
 
-        return ids
+        Ok(ids)
     }
 
     fn render_info<B: Backend>(
@@ -178,7 +175,7 @@ impl View {
         f: &mut Frame<'_, B>,
         slice: Vec<Rect>,
         selected: String,
-    ) {
+    ) -> DnetViewResult<()> {
         let style = Style::default();
         let mut spans = Vec::new();
 
@@ -209,20 +206,14 @@ impl View {
                                         Spans::from(Span::styled(format!("R: {}", v), style));
                                     spans.push(msg_log);
                                 }
-                                _ => {
-                                    // TODO
-                                }
+                                _ => return Err(DnetViewError::UnexpectedData),
                             }
                         }
                     }
-                    None => {
-                        // TODO
-                    }
+                    None => return Err(DnetViewError::CannotFindId),
                 }
             }
-            None => {
-                // TODO
-            }
+            None => return Err(DnetViewError::NotSelectableObject),
         }
 
         let graph = Paragraph::new(spans)
@@ -230,6 +221,8 @@ impl View {
             .style(Style::default());
 
         f.render_widget(graph, slice[1]);
+
+        Ok(())
     }
 }
 
