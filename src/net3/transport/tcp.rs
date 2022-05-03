@@ -7,8 +7,11 @@ use log::debug;
 use socket2::{Domain, Socket, Type};
 use url::Url;
 
-use super::{TlsUpgrade, Transport};
+use super::{TlsUpgrade, Transport, TransportStream};
 use crate::{Error, Result};
+
+impl TransportStream for TcpStream {}
+impl<T: TransportStream> TransportStream for TlsStream<T> {}
 
 #[derive(Copy, Clone)]
 pub struct TcpTransport {

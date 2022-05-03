@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
 use url::Url;
@@ -13,6 +14,9 @@ pub use tcp::TcpTransport;
 
 mod tor;
 pub use tor::TorTransport;
+
+/// This used as wrapper for stream return by dial function inside Transport trait
+pub trait TransportStream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
 
 /// The `Transport` trait serves as a base for implementing transport protocols.
 /// Base transports can optionally be upgraded with TLS in order to support encryption.

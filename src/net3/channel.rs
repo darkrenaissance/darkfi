@@ -1,14 +1,10 @@
-use async_std::{
-    net::TcpStream,
-    sync::{Arc, Mutex},
-};
+use async_std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::{
     io::{ReadHalf, WriteHalf},
-    AsyncRead, AsyncReadExt, AsyncWrite,
+    AsyncReadExt,
 };
-use futures_rustls::TlsStream;
 use log::{debug, error, info};
 use rand::Rng;
 use serde_json::json;
@@ -23,6 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
+    TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -58,15 +55,10 @@ impl ChannelInfo {
     }
 }
 
-pub trait Stream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
-
-impl Stream for TcpStream {}
-impl<T: Stream> Stream for TlsStream<T> {}
-
 /// Async channel for communication between nodes.
 pub struct Channel {
-    reader: Mutex<ReadHalf<Box<dyn Stream>>>,
-    writer: Mutex<WriteHalf<Box<dyn Stream>>>,
+    reader: Mutex<ReadHalf<Box<dyn TransportStream>>>,
+    writer: Mutex<WriteHalf<Box<dyn TransportStream>>>,
     address: Url,
     message_subsystem: MessageSubsystem,
     stop_subscriber: SubscriberPtr<Error>,
@@ -79,7 +71,7 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Box<dyn Stream>, address: Url) -> Arc<Self> {
+    pub async fn new(stream: Box<dyn TransportStream>, address: Url) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);

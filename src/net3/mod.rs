@@ -89,7 +89,7 @@ pub mod settings;
 pub mod transport;
 
 pub use acceptor::{Acceptor, AcceptorPtr};
-pub use channel::{Channel, ChannelPtr, Stream};
+pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
 pub use hosts::{Hosts, HostsPtr};
 pub use message::Message;
@@ -98,4 +98,4 @@ pub use p2p::{P2p, P2pPtr};
 pub use protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr};
 pub use session::{SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND, SESSION_SEED};
 pub use settings::{Settings, SettingsPtr};
-pub use transport::{TcpTransport, TorTransport, Transport};
+pub use transport::{TcpTransport, TorTransport, Transport, TransportStream};
