@@ -1,8 +1,6 @@
-use async_std::{stream::StreamExt, sync::Arc};
-use std::net::SocketAddr;
+use async_std::sync::Arc;
 
-use futures_rustls::TlsStream;
-use log::{error, info};
+use log::error;
 use smol::Executor;
 use url::Url;
 
@@ -11,13 +9,7 @@ use crate::{
     Error, Result,
 };
 
-use super::{Channel, ChannelPtr, TcpTransport, Transport};
-
-/// A helper function to convert peer addr to Url and add scheme
-fn peer_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
-    let url = Url::parse(&format!("{}://{}", scheme, addr))?;
-    Ok(url)
-}
+use super::{Channel, ChannelPtr, TcpTransport, Transport, TransportListener, TransportName};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -38,39 +30,12 @@ impl Acceptor {
     /// thread, erroring if a connection problem occurs.
     pub async fn start(
         self: Arc<Self>,
-        accept_addr: Url,
+        accept_url: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        self.accept(accept_addr, executor);
-        Ok(())
-    }
-
-    /// Stop accepting inbound socket connections.
-    pub async fn stop(&self) {
-        // Send stop signal
-        self.task.stop().await;
-    }
-
-    /// Start receiving network messages.
-    pub async fn subscribe(self: Arc<Self>) -> Subscription<Result<ChannelPtr>> {
-        self.channel_subscriber.clone().subscribe().await
-    }
-
-    /// Run the accept loop in a new thread and error if a connection problem
-    /// occurs.
-    fn accept(self: Arc<Self>, accept_addr: Url, executor: Arc<Executor<'_>>) {
-        self.task.clone().start(
-            self.clone().run_accept_loop(accept_addr),
-            |result| self.handle_stop(result),
-            Error::ServiceStopped,
-            executor,
-        );
-    }
-
-    /// Run the accept loop.
-    async fn run_accept_loop(self: Arc<Self>, accept_url: Url) -> Result<()> {
-        match accept_url.scheme() {
-            "tcp" => {
+        let transport_name = TransportName::try_from(accept_url.clone())?;
+        match transport_name {
+            TransportName::Tcp(upgrade) => {
                 let transport = TcpTransport::new(None, 1024);
                 let listener = transport.listen_on(accept_url);
 
@@ -87,71 +52,51 @@ impl Acceptor {
                 }
 
                 let listener = listener?;
-                let mut incoming = listener.incoming();
-                while let Some(stream) = incoming.next().await {
-                    let result: Result<()> = {
-                        let stream = stream?;
-                        let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tcp")?;
-                        info!("Accepted client: {}", peer_addr);
 
-                        let channel = Channel::new(Box::new(stream), peer_addr).await;
-                        self.channel_subscriber.notify(Ok(channel)).await;
-                        Ok(())
-                    };
-
-                    if let Err(err) = result {
-                        error!("Error listening for connections: {}", err);
-                        return Err(Error::ServiceStopped)
+                match upgrade {
+                    None => {
+                        self.accept(Box::new(listener), executor);
                     }
+                    Some(u) if u == "tls" => {
+                        let tls_listener = transport.upgrade_listener(listener)?.await?;
+                        self.accept(Box::new(tls_listener), executor);
+                    }
+                    // TODO hanle unsupported upgrade
+                    Some(_) => todo!(),
                 }
             }
-            "tcp+tls" => {
-                let transport = TcpTransport::new(None, 1024);
+            TransportName::Tor(_upgrade) => todo!(),
+        }
+        Ok(())
+    }
 
-                let listener = transport.listen_on(accept_url);
+    /// Stop accepting inbound socket connections.
+    pub async fn stop(&self) {
+        // Send stop signal
+        self.task.stop().await;
+    }
 
-                if let Err(err) = listener {
-                    error!("Setup failed: {}", err);
-                    return Err(Error::OperationFailed)
-                }
+    /// Start receiving network messages.
+    pub async fn subscribe(self: Arc<Self>) -> Subscription<Result<ChannelPtr>> {
+        self.channel_subscriber.clone().subscribe().await
+    }
 
-                let listener = listener?.await;
+    /// Run the accept loop in a new thread and error if a connection problem
+    /// occurs.
+    fn accept(self: Arc<Self>, listener: Box<dyn TransportListener>, executor: Arc<Executor<'_>>) {
+        self.task.clone().start(
+            self.clone().run_accept_loop(listener),
+            |result| self.handle_stop(result),
+            Error::ServiceStopped,
+            executor,
+        );
+    }
 
-                if let Err(err) = listener {
-                    error!("Bind listener failed: {}", err);
-                    return Err(Error::OperationFailed)
-                }
-
-                let (acceptor, listener) = transport.upgrade_listener(listener?)?.await?;
-
-                let mut incoming = listener.incoming();
-                while let Some(stream) = incoming.next().await {
-                    let result: Result<()> = {
-                        let stream = stream?;
-                        let peer_addr = peer_addr_to_url(stream.peer_addr()?, "tls")?;
-                        info!("Accepted client: {}", peer_addr);
-                        let stream = acceptor.accept(stream).await;
-
-                        if let Err(err) = stream {
-                            error!("Error wraping the connection with tls: {}", err);
-                            return Err(Error::ServiceStopped)
-                        }
-
-                        let stream = stream?;
-                        let channel =
-                            Channel::new(Box::new(TlsStream::Server(stream)), peer_addr).await;
-                        self.channel_subscriber.notify(Ok(channel)).await;
-                        Ok(())
-                    };
-
-                    if let Err(err) = result {
-                        error!("Error listening for connections: {}", err);
-                        return Err(Error::ServiceStopped)
-                    }
-                }
-            }
-            "tor" => todo!(),
-            _ => unimplemented!(),
+    /// Run the accept loop.
+    async fn run_accept_loop(self: Arc<Self>, listener: Box<dyn TransportListener>) -> Result<()> {
+        while let Ok((stream, peer_addr)) = listener.next().await {
+            let channel = Channel::new(stream, peer_addr).await;
+            self.channel_subscriber.notify(Ok(channel)).await;
         }
         Ok(())
     }

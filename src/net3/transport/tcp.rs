@@ -1,17 +1,57 @@
 use async_std::net::{TcpListener, TcpStream};
 use std::{io, net::SocketAddr, pin::Pin};
 
+use async_trait::async_trait;
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
-use log::debug;
+use log::{debug, error};
 use socket2::{Domain, Socket, Type};
 use url::Url;
 
-use super::{TlsUpgrade, Transport, TransportStream};
+use super::{socket_addr_to_url, TlsUpgrade, Transport, TransportListener, TransportStream};
 use crate::{Error, Result};
 
 impl TransportStream for TcpStream {}
 impl<T: TransportStream> TransportStream for TlsStream<T> {}
+
+#[async_trait]
+impl TransportListener for TcpListener {
+    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
+        let (stream, peer_addr) = match self.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(err) => {
+                error!("Error listening for connections: {}", err);
+                return Err(Error::ServiceStopped)
+            }
+        };
+        let url = socket_addr_to_url(peer_addr, "tcp")?;
+        Ok((Box::new(stream), url))
+    }
+}
+
+#[async_trait]
+impl TransportListener for (TlsAcceptor, TcpListener) {
+    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
+        let (stream, peer_addr) = match self.1.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(err) => {
+                error!("Error listening for connections: {}", err);
+                return Err(Error::ServiceStopped)
+            }
+        };
+
+        let stream = self.0.accept(stream).await;
+
+        if let Err(err) = stream {
+            error!("Error wraping the connection with tls: {}", err);
+            return Err(Error::ServiceStopped)
+        }
+
+        let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
+
+        Ok((Box::new(TlsStream::Server(stream?)), url))
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct TcpTransport {
@@ -33,7 +73,7 @@ impl Transport for TcpTransport {
 
     fn listen_on(self, url: Url) -> Result<Self::Listener> {
         match url.scheme() {
-            "tcp" | "tcp+tls" => {}
+            "tcp" | "tcp+tls" | "tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
 
@@ -49,7 +89,7 @@ impl Transport for TcpTransport {
 
     fn dial(self, url: Url) -> Result<Self::Dial> {
         match url.scheme() {
-            "tcp" | "tcp+tls" => {}
+            "tcp" | "tcp+tls" | "tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
 

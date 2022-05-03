@@ -1,5 +1,7 @@
-use async_trait::async_trait;
+use std::net::SocketAddr;
 
+use async_trait::async_trait;
+// TODO remove *
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
 use url::Url;
@@ -15,13 +17,45 @@ pub use tcp::TcpTransport;
 mod tor;
 pub use tor::TorTransport;
 
-/// This used as wrapper for stream return by dial function inside Transport trait
+/// A helper function to convert SocketAddr to Url and add scheme
+pub(crate) fn socket_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
+    let url = Url::parse(&format!("{}://{}", scheme, addr))?;
+    Ok(url)
+}
+
+/// Used as wrapper for stream used by  Transport trait
 pub trait TransportStream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
+
+/// Used as wrapper for listener used by Transport trait
+#[async_trait]
+pub trait TransportListener: Send + Sync + Unpin {
+    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)>;
+}
+
+#[derive(Clone)]
+pub enum TransportName {
+    Tcp(Option<String>),
+    Tor(Option<String>),
+}
+
+impl TryFrom<Url> for TransportName {
+    type Error = crate::Error;
+
+    fn try_from(url: Url) -> Result<Self> {
+        let transport_name = match url.scheme() {
+            "tcp" => Self::Tcp(None),
+            "tcp+tls" | "tls" => Self::Tcp(Some("tls".into())),
+            "tor" => Self::Tor(None),
+            "tor+tls" => Self::Tcp(Some("tls".into())),
+            n => return Err(crate::Error::UnsupportedTransport(n.into())),
+        };
+        Ok(transport_name)
+    }
+}
 
 /// The `Transport` trait serves as a base for implementing transport protocols.
 /// Base transports can optionally be upgraded with TLS in order to support encryption.
 /// The implementation of our TLS authentication can be found in the [`upgrade_tls`] module.
-#[async_trait]
 pub trait Transport {
     type Acceptor;
     type Connector;
