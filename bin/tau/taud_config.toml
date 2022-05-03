@@ -4,6 +4,9 @@
 ## Sets Datastore Path
 #datastore="~/.config/tau"
 
+## Secret key
+#key=""
+
 ## Raft net settings
 [net]
 ## P2P accept address

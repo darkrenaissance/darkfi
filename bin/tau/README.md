@@ -1,6 +1,6 @@
 # Tau
 
-Tasks management app using peer-to-peer network and raft consensus.  
+Encrypted tasks management app using peer-to-peer network and raft consensus.  
 multiple users can collaborate by working on the same tasks, and all users will have synced task list.
 
 
@@ -10,7 +10,7 @@ multiple users can collaborate by working on the same tasks, and all users will 
 % git clone https://github.com/darkrenaissance/darkfi 
 % cd darkfi
 % make BINS="taud tau"
-% make install "BINS=taud tau" PREFIX=/home/XX/.local
+% make install "BINS=taud tau" PREFIX=/home/${USER}/.local
 ```
 
 ## Usage (Local Deployment)
@@ -31,6 +31,23 @@ Note that the above config doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
 node does not participate as a normal node in the p2p network. It simply allows
 new nodes to discover other nodes in the network during the bootstrapping phase.
+
+Also note that for the first time ever running seed node you must run it with 
+`--key-gen`:
+```shell
+% taud --key-gen
+```
+This will generate a new secret key in `/home/${USER}/.config/tau/secret_key` that 
+you can share with nodes you want them to get and decrypt your tasks, otherwise if you
+have already generated or got a copy from a peer place it either in the same directory
+`/home/${USER}/.config/tau/secret_key`, or in the config file.
+	
+	in config file:
+
+		## Secret key
+		key="SECRET_KEY_GOES_HERE"
+
+DO NOT use `--key` in terminal to pass the secret key.
 
 ### Inbound Node
 
