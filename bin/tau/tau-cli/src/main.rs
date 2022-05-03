@@ -60,11 +60,9 @@ async fn start(options: CliTau) -> Result<()> {
 
                 let rank = rank.unwrap_or(0.0);
 
-                add(
-                        rpc_addr,
-                        json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
-                    )
-                        .await?;
+                add(rpc_addr,
+                    json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
+                    ).await?;
             }
 
             Some(CliTauSubCommands::Update { id, key, value }) => {

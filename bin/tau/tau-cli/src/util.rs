@@ -241,22 +241,21 @@ pub fn get_events(rep: Value) -> Result<String> {
 }
 
 pub fn timestamp_to_date(timestamp: Value, dt: &str) -> String {
-    let result = if timestamp.is_u64() {
-        let timestamp = timestamp.as_i64().unwrap();
-        match dt {
-            "date" => {
-                NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
-            }
-            "datetime" => {
-                NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M %A %-d %B").to_string()
-            }
-            _ => "".to_string(),
-        }
-    } else {
-        "".to_string()
-    };
+    let timestamp = timestamp.as_i64().unwrap_or(0);
 
-    result
+    if timestamp <= 0 {
+        return "".to_string()
+    }
+
+    match dt {
+        "date" => {
+            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
+        }
+        "datetime" => {
+            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M %A %-d %B").to_string()
+        }
+        _ => "".to_string(),
+    }
 }
 
 pub fn get_from_task(task: Value, value: &str) -> Result<String> {
@@ -271,53 +270,22 @@ pub fn get_from_task(task: Value, value: &str) -> Result<String> {
     Ok(result)
 }
 
-fn filter_tasks(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Value>> {
-    let filter = match filter {
-        Some(f) => f,
-        None => "all".to_string(),
-    };
+// Helper function to check task's state
+fn check_task_state(task: &Value, state: &str) -> bool {
+    let mut default_events = serde_json::Map::new();
+    default_events.insert("action".into(), "open".into());
+    let default_events: Vec<Value> = vec![Value::from(default_events)];
 
+    let last_event = task["events"].as_array().unwrap_or(&default_events).last().unwrap();
+    let last_state = last_event["action"].as_str().unwrap();
+    state == last_state
+}
+
+fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
     let filtered_tasks: Vec<Value> = match filter.as_str() {
-        "all" => tasks,
-
-        "open" => tasks
-            .into_iter()
-            .filter(|task| {
-                let events = match task["events"].as_array() {
-                    Some(t) => t.to_owned(),
-                    None => {
-                        error!("Value is not an array!");
-                        vec![]
-                    }
-                };
-
-                let state = match events.last() {
-                    Some(s) => s["action"].as_str().unwrap(),
-                    None => "open",
-                };
-                state == "open"
-            })
-            .collect(),
-
-        "pause" => tasks
-            .into_iter()
-            .filter(|task| {
-                let events = match task["events"].as_array() {
-                    Some(t) => t.to_owned(),
-                    None => {
-                        error!("Value is not an array!");
-                        vec![]
-                    }
-                };
-
-                let state = match events.last() {
-                    Some(s) => s["action"].as_str().unwrap(),
-                    None => "open",
-                };
-                state == "pause"
-            })
-            .collect(),
-
+        "open" => tasks.into_iter().filter(|task| check_task_state(task, "open")).collect(),
+        "pause" => tasks.into_iter().filter(|task| check_task_state(task, "pause")).collect(),
+        "stop" => tasks.into_iter().filter(|task| check_task_state(task, "stop")).collect(),
         "month" => tasks
             .into_iter()
             .filter(|task| {
@@ -331,22 +299,11 @@ fn filter_tasks(tasks: Vec<Value>, filter: Option<String>) -> Result<Vec<Value>>
         _ if filter.contains("assign:") | filter.contains("project:") => {
             let kv: Vec<&str> = filter.split(':').collect();
             let key = kv[0];
-            let value = kv[1];
+            let value = Value::from(kv[1]);
 
             tasks
                 .into_iter()
-                .filter(|task| {
-                    match task[key].as_array() {
-                        Some(t) => t.to_owned(),
-                        None => {
-                            error!("Value is not an array!");
-                            vec![]
-                        }
-                    }
-                    .iter()
-                    .map(|s| s.as_str().unwrap())
-                    .any(|x| x == value)
-                })
+                .filter(|task| task[key].as_array().unwrap_or(&vec![]).contains(&value))
                 .collect()
         }
 
@@ -386,8 +343,8 @@ pub fn list_tasks(rep: Value, filters: Vec<String>) -> Result<()> {
     let mut tasks: Vec<Value> = serde_json::from_value(rep)?;
 
     for filter in filters {
-        let temp = tasks;
-        tasks = filter_tasks(temp, Some(filter))?;
+        // TODO need to use iterator or reference instead of copy
+        tasks = apply_filter(tasks, filter)?;
     }
 
     tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
