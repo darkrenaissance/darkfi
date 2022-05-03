@@ -75,11 +75,10 @@ impl TxStore {
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Transaction)>> {
         let mut txs = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, v) = r.unwrap();
-            let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
-            let tx = deserialize(&v)?;
+        for tx in self.0.iter() {
+            let (key, value) = tx.unwrap();
+            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
+            let tx = deserialize(&value)?;
             txs.push((hash_bytes.into(), tx));
         }
 

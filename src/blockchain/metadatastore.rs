@@ -88,16 +88,15 @@ impl StreamletMetadataStore {
     /// (`hash`, `metadata`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, StreamletMetadata)>> {
-        let mut ret = vec![];
+        let mut hashes = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, v) = r.unwrap();
-            let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
-            let m = deserialize(&v)?;
-            ret.push((hash_bytes.into(), m));
+        for hash in self.0.iter() {
+            let (key, value) = hash.unwrap();
+            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
+            let m = deserialize(&value)?;
+            hashes.push((hash_bytes.into(), m));
         }
 
-        Ok(ret)
+        Ok(hashes)
     }
 }

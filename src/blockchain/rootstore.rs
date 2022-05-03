@@ -43,10 +43,9 @@ impl RootStore {
     pub fn get_all(&self) -> Result<Vec<MerkleNode>> {
         let mut roots = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, _) = r.unwrap();
-            let root = deserialize(&k)?;
+        for root in self.0.iter() {
+            let (key, _) = root.unwrap();
+            let root = deserialize(&key)?;
             roots.push(root);
         }
 

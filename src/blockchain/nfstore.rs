@@ -42,15 +42,14 @@ impl NullifierStore {
     /// Retrieve all nullifiers from the store.
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<Nullifier>> {
-        let mut nfs = vec![];
+        let mut nullifiers = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, _) = r.unwrap();
-            let nullifier = deserialize(&k)?;
-            nfs.push(nullifier);
+        for nullifier in self.0.iter() {
+            let (key, _) = nullifier.unwrap();
+            let nullifier = deserialize(&key)?;
+            nullifiers.push(nullifier);
         }
 
-        Ok(nfs)
+        Ok(nullifiers)
     }
 }

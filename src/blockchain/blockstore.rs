@@ -82,11 +82,10 @@ impl BlockStore {
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Block)>> {
         let mut blocks = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, v) = r.unwrap();
-            let hash_bytes: [u8; 32] = k.as_ref().try_into().unwrap();
-            let block = deserialize(&v)?;
+        for block in self.0.iter() {
+            let (key, value) = block.unwrap();
+            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
+            let block = deserialize(&value)?;
             blocks.push((hash_bytes.into(), block));
         }
 
@@ -165,11 +164,10 @@ impl BlockOrderStore {
     pub fn get_all(&self) -> Result<Vec<(u64, blake3::Hash)>> {
         let mut slots = vec![];
 
-        let iterator = self.0.into_iter().enumerate();
-        for (_, r) in iterator {
-            let (k, v) = r.unwrap();
-            let slot_bytes: [u8; 8] = k.as_ref().try_into().unwrap();
-            let hash_bytes: [u8; 32] = v.as_ref().try_into().unwrap();
+        for slot in self.0.iter() {
+            let (key, value) = slot.unwrap();
+            let slot_bytes: [u8; 8] = key.as_ref().try_into().unwrap();
+            let hash_bytes: [u8; 32] = value.as_ref().try_into().unwrap();
             let slot = u64::from_be_bytes(slot_bytes);
             let hash = blake3::Hash::from(hash_bytes);
             slots.push((slot, hash));
