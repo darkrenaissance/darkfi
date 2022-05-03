@@ -39,3 +39,10 @@ and other debug info, tail the file like so:
 ```shell
 tail -f /tmp/dnetview.log
 ```
+
+Or use multitail for colored output:
+
+```shell
+multitail -c /tmp/dnetview.log
+```
+
