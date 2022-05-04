@@ -114,6 +114,15 @@ pub enum Error {
     #[error("Service stopped")]
     ServiceStopped,
 
+    #[error("Create listener bound to {0} failed")]
+    BindFailed(String),
+
+    #[error("Accept a new incoming connection from the listener {0} failed")]
+    AcceptConnectionFailed(String),
+
+    #[error("Accept a new tls connection from the listener {0} failed")]
+    AcceptTlsConnectionFailed(String),
+
     #[error("Operation failed")]
     OperationFailed,
 

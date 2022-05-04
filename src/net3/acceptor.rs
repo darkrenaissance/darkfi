@@ -37,18 +37,18 @@ impl Acceptor {
         match transport_name {
             TransportName::Tcp(upgrade) => {
                 let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(accept_url);
+                let listener = transport.listen_on(accept_url.clone());
 
                 if let Err(err) = listener {
                     error!("Setup failed: {}", err);
-                    return Err(Error::OperationFailed)
+                    return Err(Error::BindFailed(accept_url.clone().to_string()))
                 }
 
                 let listener = listener?.await;
 
                 if let Err(err) = listener {
                     error!("Bind listener failed: {}", err);
-                    return Err(Error::OperationFailed)
+                    return Err(Error::BindFailed(accept_url.to_string()))
                 }
 
                 let listener = listener?;

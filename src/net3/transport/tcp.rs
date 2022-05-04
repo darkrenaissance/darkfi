@@ -21,7 +21,7 @@ impl TransportListener for TcpListener {
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped)
+                return Err(Error::AcceptConnectionFailed(self.local_addr()?.to_string()))
             }
         };
         let url = socket_addr_to_url(peer_addr, "tcp")?;
@@ -36,7 +36,7 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
             Ok((s, a)) => (s, a),
             Err(err) => {
                 error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped)
+                return Err(Error::AcceptConnectionFailed(self.1.local_addr()?.to_string()))
             }
         };
 
@@ -44,7 +44,7 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
 
         if let Err(err) = stream {
             error!("Error wraping the connection with tls: {}", err);
-            return Err(Error::ServiceStopped)
+            return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
         }
 
         let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
