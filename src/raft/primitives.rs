@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io, net::SocketAddr};
 
 use crate::{
+    impl_vec,
     util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Error, Result,
 };
@@ -56,9 +57,6 @@ pub struct LogRequest {
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-pub struct BroadcastMsgRequest(pub Vec<u8>);
-
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct LogResponse {
     pub node_id: NodeId,
     pub current_term: u64,
@@ -71,6 +69,9 @@ impl VoteResponse {
         self.ok = ok;
     }
 }
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct BroadcastMsgRequest(pub Vec<u8>);
 
 #[derive(Clone, Debug, SerialDecodable, SerialEncodable)]
 pub struct Log {
@@ -89,7 +90,7 @@ impl From<SocketAddr> for NodeId {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, SerialDecodable, SerialEncodable)]
 pub struct Logs(pub Vec<Log>);
 
 impl Logs {
@@ -198,32 +199,4 @@ impl Decodable for NetMsgMethod {
     }
 }
 
-impl Encodable for Logs {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for Logs {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-
-fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> Result<usize> {
-    let mut len = 0;
-    len += VarInt(vec.len() as u64).encode(&mut s)?;
-    for c in vec.iter() {
-        len += c.encode(&mut s)?;
-    }
-    Ok(len)
-}
-
-fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> Result<Vec<T>> {
-    let len = VarInt::decode(&mut d)?.0;
-    let mut ret = Vec::with_capacity(len as usize);
-    for _ in 0..len {
-        ret.push(Decodable::decode(&mut d)?);
-    }
-    Ok(ret)
-}
+impl_vec!(Log);

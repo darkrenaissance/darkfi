@@ -61,22 +61,16 @@ impl ProtocolRaft {
             self.p2p.broadcast(msg.clone()).await?;
 
             match (self.id.clone(), msg.recipient_id.clone()) {
-                // if the local node and the msg recipient have ids
-                // then check if the ids are equal
+                // check if the ids are equal when both
+                // the local node and recipient ids are Some(id)
                 (Some(id), Some(m_id)) => {
                     if id != m_id {
                         continue
                     }
                 }
-                // if the msg doesn't have a recipient id then the msg is a VoteRequest
-                // and if the local node's id is not None then it can receive
-                // and response with a VoteResponse
-                (Some(_), None) => {}
-                // if the local node's id is None but the recipient's id is not None
-                (None, Some(_)) => {}
-                // if the local node's id and msg recipient's id are both None then reject
-                // the msg becuase the local node is listener
+                // reject if both local node and recipient ids are None then
                 (None, None) => continue,
+                _ => {}
             }
 
             self.notify_queue_sender.send(msg).await?;

@@ -69,11 +69,9 @@ async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pP
 
 pub struct Raft<T> {
     // this will be derived from the ip
-    // if the node doesn't have an id then will become a listener and doesn't have the right
-    // to request/response votes or response a confirmation for log
     pub id: Option<NodeId>,
 
-    // these five vars should be on local storage
+    // these four vars should be on local storage
     current_term: u64,
     voted_for: Option<NodeId>,
     logs: Logs,
@@ -216,7 +214,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         warn!(target: "raft", "Raft start() Exit Signal");
         load_ips_task.cancel().await;
         p2p_send_task.cancel().await;
-        self.datastore.cancel().await?;
+        self.datastore.flush().await?;
         Ok(())
     }
 
