@@ -27,9 +27,9 @@ use darkfi::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-//use pasta_curves::{arithmetic::CurveAffine, group::Curve};
-//use halo2_proofs::arithmetic::CurveAffine;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
+//use halo2_proofs::arithmetic::CurveAffine;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Coin {
@@ -67,8 +67,9 @@ fn main() {
         sks.push(sk.clone());
         let node = MerkleNode(pallas::Base::from(sk));
         tree.append(&node.clone());
-        tree.witness();
-        let (leaf_pos, path) = tree.authentication_path(&node).unwrap();
+        let leaf_position = tree.witness();
+        //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
+        let  path = tree.authentication_path(leaf_position.unwrap()).unwrap();
         root_sks.push(tree.root().clone());
         path_sks.push(path.as_slice().try_into().unwrap());
     }
@@ -123,8 +124,10 @@ fn main() {
         */
         let c_cm_node = MerkleNode(pallas::Base::from(1)); // this is temporary, shouldn't pass of course
         tree_cm.append(&c_cm_node.clone());
-        tree_cm.witness();
-        let (leaf_pos, c_cm_path) = tree_cm.authentication_path(&c_cm_node).unwrap();
+        let leaf_position = tree_cm.witness();
+        //let (leaf_pos, c_cm_path) = tree_cm.authentication_path(&c_cm_node).unwrap();
+        //let (leaf_pos, c_cm_path) = tree_cm.authentication_path(leaf_position.unwrap()).unwrap();
+        let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap()).unwrap();
         let c_root_cm = tree_cm.root();
         // lead coin commitment
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));

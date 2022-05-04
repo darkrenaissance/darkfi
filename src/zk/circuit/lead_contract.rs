@@ -37,9 +37,9 @@ use crate::zk::{
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
 
-//use pasta_curves::{arithmetic::CurveAffine, group::Curve};
-//use halo2_proofs::arithmetic::CurveAffine;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
+//use halo2_proofs::arithmetic::CurveAffine;
 
 const WORD_BITS: u32 = 24;
 
