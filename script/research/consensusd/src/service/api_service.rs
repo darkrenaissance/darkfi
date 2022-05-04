@@ -86,9 +86,9 @@ impl APIService {
     /// Node checks if its the current slot leader and generates the slot Block (represented as a Vote structure).
     /// --> {"jsonrpc": "2.0", "method": "consensus_task", "params": [1], "id": 0}
     /// <-- {"jsonrpc": "2.0", "result": [PublicKey, Vote], "id": 0}
-    /// TODO: 1, This should be a scheduled task.
-    ///       2. Nodes count not from request.
-    ///       3. Proposed block broadcast.
+    /// Missing: 1, This should be a scheduled task.
+    ///          2. Nodes count not from request.
+    ///          3. Proposed block broadcast.
     async fn consensus_task(&self, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
 
@@ -114,7 +114,7 @@ impl APIService {
                         serde_json::to_value(self.id).unwrap(),
                     ))
                 } else {
-                    // TODO: Proposed block broadcast.
+                    // Missing: Proposed block broadcast.
                     JsonResult::Resp(jsonresp(
                         json!((state.public_key, x)),
                         serde_json::to_value(self.id).unwrap(),
@@ -134,8 +134,8 @@ impl APIService {
     /// Node receives a proposed block, verifies it and stores it in its current state.
     /// --> {"jsonrpc": "2.0", "method": "receive_proposed_block", "params": [PublicKey, Vote, 1], "id": 0}
     /// <-- {"jsonrpc": "2.0", "result": [PublicKey, Vote], "id": 0}
-    /// TODO: 1. Nodes count not from request.
-    ///       2. Vote broadcast.
+    /// Missing: 1. Nodes count not from request.
+    ///          2. Vote broadcast.
     async fn receive_proposed_block(&self, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
 
@@ -166,7 +166,7 @@ impl APIService {
                         serde_json::to_value(self.id).unwrap(),
                     ))
                 } else {
-                    // TODO: Vote broadcast.
+                    // Missing: Vote broadcast.
                     JsonResult::Resp(jsonresp(
                         json!((state.public_key, x)),
                         serde_json::to_value(self.id).unwrap(),
@@ -186,7 +186,7 @@ impl APIService {
     /// Node receives a block vote and perform the consensus protocol corresponding functions, based on its current state.
     /// --> {"jsonrpc": "2.0", "method": "receive_vote", "params": [PublicKey, Vote, 1], "id": 0}
     /// <-- {"jsonrpc": "2.0", "result": true, "id": 0}
-    /// TODO: 1. Nodes count not from request.
+    /// Missing: 1. Nodes count not from request.
     async fn receive_vote(&self, params: Value) -> JsonResult {
         let args = params.as_array().unwrap();
 

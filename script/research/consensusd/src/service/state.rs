@@ -40,7 +40,7 @@ pub struct State {
 
 impl State {
     pub fn new(id: u64, genesis_time: Timestamp, init_block: Block) -> State {
-        // TODO: clock sync
+        // Missing: clock sync
         let secret = SecretKey::random(&mut OsRng);
         State {
             id,

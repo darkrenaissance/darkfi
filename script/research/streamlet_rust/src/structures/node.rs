@@ -40,7 +40,7 @@ pub struct Node {
 
 impl Node {
     pub fn new(id: u64, genesis_time: Instant, init_block: Block) -> Node {
-        // TODO: clock sync
+        // Missing: clock sync
         const K: u32 = 11;
         let secret = SecretKey::random(&mut OsRng);
         Node {

@@ -127,7 +127,7 @@ pub struct ValidatorState {
 
 impl ValidatorState {
     pub fn new(db_path: PathBuf, id: u64, genesis: i64) -> Result<ValidatorStatePtr> {
-        // TODO: clock sync
+        // Missing: clock sync
         let secret = SecretKey::random(&mut OsRng);
         let db = sled::open(db_path)?;
         let public = PublicKey::from_secret(secret);

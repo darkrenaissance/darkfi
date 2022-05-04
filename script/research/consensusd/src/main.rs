@@ -67,8 +67,8 @@ async fn api_service_init(executor: Arc<Executor<'_>>, config: &ConsensusdConfig
 
 /// RPCAPI:
 /// Node checks if its the current slot leader and generates the slot Block (represented as a Vote structure).
-/// TODO: 1. Nodes count not hard coded.
-///       2. Proposed block broadcast.
+/// Missing: 1. Nodes count not hard coded.
+///          2. Proposed block broadcast.
 fn proposal_task(config: &ConsensusdConfig) {
     let state_path = expand_path(&config.state_path).unwrap();
     let id = config.id;
@@ -90,7 +90,7 @@ fn proposal_task(config: &ConsensusdConfig) {
         if proposed_block.is_none() {
             println!("Node is not the epoch leader. Sleeping till next epoch...");
         } else {
-            // TODO: Proposed block broadcast.
+            // Missing: Proposed block broadcast.
             println!("Node is the epoch leader. Proposed block: {:?}", proposed_block);
         }
 
