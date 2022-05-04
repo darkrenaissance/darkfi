@@ -23,15 +23,19 @@ game engine that makes everything run.
 
 ## usage
 
+On first run, dnetview will create a config file in .config/darkfi. You
+must manually enter the RPC ports of the nodes you want to connect to
+and title them as you see fit.
+
+Check the [example config file](dnetview_config.toml) for more details.
+
 Run dnetview as follows:
 
 ```shell
 dnetview -v
 ```
 
-On first run, dnetview will create a config file in .config/darkfi. You
-must manually enter the RPC ports of the nodes you want to connect to
-and title them as you see fit.
+Navigate up and down using `j` and `k`.
 
 Dnetview creates a logging file in /tmp/dnetview.log. To see json data
 and other debug info, tail the file like so:
